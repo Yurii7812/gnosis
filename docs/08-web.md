@@ -46,3 +46,22 @@ Vim ──(TCP/JSON)──► 画面 ……… バッファの全文・カーソ
   （SYN の保存・同期は Vim ごとに動く）。
 - テスト: `cd web && npm test`（実際の Electron + 本物の Vim を xvfb と一時フォルダで動かす。本物の vault や
   設定は書き換えない）。
+
+## Windows
+
+Windows でも動くように作ってあります（Linux は今のまま）。**Windows で実機の確認はまだしていません**（開発は Linux）。
+
+1. Windows 版の Vim（`vim.exe`。`+channel` が効くもの）を入れて、PATH を通す。
+2. Node.js を入れて、`web` フォルダで次を実行する:
+   ```bat
+   npm install
+   npm run rebuild:pty
+   ```
+   `rebuild:pty` は `node-pty`（Windows の擬似端末 ConPTY）を、Electron 用に作り直す。
+3. Vim の設定は Windows 用に用意する。`PKM_VIMRC` で vimrc の場所を指定できる。SYN のプラグインの
+   `runtimepath` は、Windows のパスで書く。
+4. 起動: `web\bin\simple-yurii-note-app.cmd [VAULT_DIR]`、または Vim で `\A`（`:SimpleWeb`）。
+
+環境変数: `PKM_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`PKM_PTY`（`node-pty` / `python`。
+既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `PKM_PTY=node-pty` で動くことを確認済み。
+

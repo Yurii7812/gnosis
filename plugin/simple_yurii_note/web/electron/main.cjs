@@ -50,7 +50,6 @@ function send(channel, ...args) {
 let win = null;
 let bridge = null;
 let server = null;
-let ctl = null;
 
 function startServer() {
   return new Promise((resolve) => {
@@ -72,26 +71,63 @@ function startServer() {
   });
 }
 
+// 擬似端末（Vim を端末の中で動かす部品）。OS で切り替える:
+//   Linux/macOS … 同梱の bridge/ptybridge.py（python3 の pty）。ctl(fd 3) で大きさを変える。
+//   Windows     … node-pty（ConPTY）。Electron 用に再ビルドが要る（npm run rebuild:pty）。
+function startPty(cmd, args, env, cols, rows, onData, onExit) {
+  // PKM_PTY=node-pty / python で切り替えられる（テスト用。既定は Windows だけ node-pty）
+  const kind = process.env.PKM_PTY || (process.platform === "win32" ? "node-pty" : "python");
+  if (kind === "node-pty") {
+    let pty;
+    try { pty = require("node-pty"); } catch (e) {
+      throw new Error("node-pty が読み込めません。`npm install` のあと `npm run rebuild:pty` を実行してください: " + e.message);
+    }
+    const p = pty.spawn(cmd, args, { name: "xterm-256color", cols, rows, env, cwd: os.homedir() });
+    p.onData(onData);
+    p.onExit(({ exitCode }) => onExit(exitCode));
+    return {
+      write: (d) => p.write(d),
+      resize: (c, r) => { try { p.resize(c, r); } catch { /* 終了後は無視 */ } },
+      kill: () => { try { p.kill(); } catch { /* ignore */ } },
+    };
+  }
+  const bridgeArgs = [path.join(WEB, "bridge", "ptybridge.py"), String(cols), String(rows), "--", cmd, ...args];
+  const child = spawn("python3", bridgeArgs, { env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
+  const dec = new StringDecoder("utf8");
+  child.stdout.on("data", (d) => { const t = dec.write(d); if (t) onData(t); });
+  child.stderr.on("data", (d) => { process.stderr.write(d); log("vim/bridge stderr: " + d); });
+  child.on("exit", (code) => onExit(code));
+  const ctl = child.stdio[3];
+  return {
+    write: (d) => child.stdin.write(d),
+    resize: (c, r) => { try { ctl?.write(JSON.stringify({ cols: c, rows: r }) + "\n"); } catch { /* ignore */ } },
+    kill: () => { try { child.kill("SIGKILL"); } catch { /* ignore */ } },
+  };
+}
+
 async function startVim(cols, rows) {
   if (bridge) return;
   const port = await startServer();
-  const args = [path.join(WEB, "bridge", "ptybridge.py"), String(cols), String(rows), "--", "vim", "-u", VIMRC];
+  // Vim の実行ファイル: 既定は PATH の vim（Windows は vim.exe / gvim の console 版）。PKM_VIM で指定できる。
+  const vimCmd = process.env.PKM_VIM || "vim";
+  const args = ["-u", VIMRC];
   if (ROOT) args.push("--cmd", `let g:simple_yurii_note_root='${ROOT.replace(/'/g, "''")}/'`);
   args.push("-S", path.join(WEB, "vim", "gui.vim"));
-  bridge = spawn("python3", args, {
-    env: { ...process.env, SYN_GUI_PORT: String(port), TERM: "xterm-256color", PKM_FILE: OPEN },
-    stdio: ["pipe", "pipe", "pipe", "pipe"],
-  });
-  ctl = bridge.stdio[3];
-  const dec = new StringDecoder("utf8");
-  bridge.stdout.on("data", (d) => { const s = dec.write(d); if (s) send("pty:data", s); });
-  bridge.stderr.on("data", (d) => { process.stderr.write(d); log("vim/bridge stderr: " + d); });
-  bridge.on("exit", (code) => {
-    log("vim exited: code=" + code);
-    send("vim:exit", code);
-    // Vim を終了したら（:q など）アプリも終える。テスト時は呼び出し側が終了を制御する。
-    if (!process.env.PKM_TEST_SCRIPT) app.quit();
-  });
+  const env = { ...process.env, SYN_GUI_PORT: String(port), TERM: "xterm-256color", PKM_FILE: OPEN };
+  try {
+    bridge = startPty(vimCmd, args, env, cols, rows,
+      (t) => send("pty:data", t),
+      (code) => {
+        log("vim exited: code=" + code);
+        send("vim:exit", code);
+        // Vim を終了したら（:q など）アプリも終える。テスト時は呼び出し側が終了を制御する。
+        if (!process.env.PKM_TEST_SCRIPT) app.quit();
+      });
+  } catch (e) {
+    log("start failed: " + (e && e.stack || e));
+    send("pty:data", "\r\n[起動できませんでした] " + String(e && e.message || e) + "\r\n");
+    bridge = null;
+  }
 }
 
 function createWindow() {
@@ -157,7 +193,7 @@ function createWindow() {
       // 窓を壊した状態で Vim が終わっても、アプリが例外を出さないこと（「Object has been destroyed」の回帰確認）
       if (closeWindow) {
         try { win.destroy(); } catch { /* ignore */ }
-        try { bridge?.kill("SIGKILL"); } catch { /* ignore */ }
+        try { bridge?.kill(); } catch { /* ignore */ }
         await new Promise((r) => setTimeout(r, 1500));
         try {
           const cur = JSON.parse(fs.readFileSync(process.env.PKM_TEST_OUT, "utf8"));
@@ -165,15 +201,15 @@ function createWindow() {
           fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(cur, null, 2));
         } catch { /* ignore */ }
       }
-      try { bridge?.kill("SIGKILL"); } catch { /* ignore */ }
+      try { bridge?.kill(); } catch { /* ignore */ }
       setTimeout(() => process.exit(0), 100);
     });
   }
 }
 
 ipcMain.on("vim:start", (_e, cols, rows) => startVim(cols, rows));
-ipcMain.on("pty:write", (_e, data) => { try { bridge?.stdin.write(data); } catch { /* ignore */ } });
-ipcMain.on("pty:resize", (_e, cols, rows) => { try { ctl?.write(JSON.stringify({ cols, rows }) + "\n"); } catch { /* ignore */ } });
+ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* ignore */ } });
+ipcMain.on("pty:resize", (_e, cols, rows) => { try { bridge?.resize(cols, rows); } catch { /* ignore */ } });
 ipcMain.on("app:quit", () => app.quit());
 
 // 画像: ノートのあるフォルダからの相対パスで読む（vault の外は読まない）

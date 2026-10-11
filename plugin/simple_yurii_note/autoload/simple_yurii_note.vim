@@ -10742,7 +10742,12 @@ function! simple_yurii_note#open_web() abort
     call simple_yurii_note#save_current_note()
   endif
   " デスクトップアプリ (Electron) があればそれを使う。パス固定でフォルダ選択不要。
-  let l:electron = l:webdir . '/node_modules/.bin/electron'
+  " Windows は .bin の shim（.cmd）ではなく、実体の electron.exe を直接起動する
+  if has('win32')
+    let l:electron = l:webdir . '/node_modules/electron/dist/electron.exe'
+  else
+    let l:electron = l:webdir . '/node_modules/.bin/electron'
+  endif
   if executable(l:electron) && filereadable(l:webdir . '/electron/main.cjs')
     let l:opts = {'out_io': 'null', 'err_io': 'null'}
     let l:env = {}
