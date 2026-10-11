@@ -29337,6 +29337,13 @@
     state.histIdx = i;
     openNote(state.hist[i], { history: false });
   }
+  function updateNavButtons() {
+    const canBack = state.hist.slice(0, state.histIdx).some((r) => state.notes.has(r));
+    const canFwd = state.hist.slice(state.histIdx + 1).some((r) => state.notes.has(r));
+    const b = $("back-btn"), f = $("fwd-btn");
+    if (b) b.disabled = !canBack;
+    if (f) f.disabled = !canFwd;
+  }
   async function openNote(rel, opts = {}) {
     const { newTab = false, history: history2 = true } = opts;
     if (!state.notes.has(rel)) {
@@ -29362,6 +29369,7 @@
     }
     if (history2) pushHistory(rel);
     state.current = rel;
+    updateNavButtons();
     const n = state.notes.get(rel);
     loadNoteToEditor(n);
     renderTabs();
@@ -29900,6 +29908,8 @@ ${attr}---
   function wireToolbar() {
     $("open-btn").onclick = pickAndOpen;
     $("save-btn").onclick = saveCurrent;
+    $("back-btn").onclick = () => navigateHistory(-1);
+    $("fwd-btn").onclick = () => navigateHistory(1);
     $("new-btn").onclick = () => newNote(false);
     $("new-group-btn").onclick = () => newNote(true);
     $("delete-btn").onclick = deleteCurrent;
@@ -29991,6 +30001,8 @@ ${attr}---
       "delete-btn",
       "theme-btn",
       "modal",
+      "back-btn",
+      "fwd-btn",
       "toast",
       "save-state",
       "open-btn",

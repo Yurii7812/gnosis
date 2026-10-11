@@ -170,6 +170,15 @@ async function main(){
     app.navigateHistory(-1);
     await sleep(100);
     const tabs = {tabsBefore, tabsAfterNav, tabsAfterNew, tabsDedupe, histBack: app.state.current};
+    // 戻る・進むボタン: 履歴があれば有効、ボタンを押すと移動する
+    const backBtn = document.getElementById('back-btn'), fwdBtn = document.getElementById('fwd-btn');
+    const navBefore = {back: backBtn.disabled, fwd: fwdBtn.disabled};
+    const curBeforeBtn = app.state.current;
+    backBtn.click(); await sleep(120);
+    const navAfterBack = {current: app.state.current, fwdEnabled: !fwdBtn.disabled};
+    fwdBtn.click(); await sleep(120);
+    const navAfterFwd = {current: app.state.current};
+    tabs.nav = {navBefore, curBeforeBtn, navAfterBack, navAfterFwd};
     step('palette');
     // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
     app.quickSwitcher(); await sleep(60);
@@ -208,6 +217,10 @@ try {
   if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
+  const nv = t.nav || {};
+  if (nv.navBefore?.back !== false || nv.navBefore?.fwd !== false) { console.error("nav buttons state wrong at start: " + JSON.stringify(nv)); process.exit(1); }
+  if (nv.navAfterBack?.current === nv.curBeforeBtn || !nv.navAfterBack?.fwdEnabled) { console.error("back button did not move: " + JSON.stringify(nv)); process.exit(1); }
+  if (nv.navAfterFwd?.current !== nv.curBeforeBtn) { console.error("forward button did not return: " + JSON.stringify(nv)); process.exit(1); }
   if (t.histBack !== "a.md") { console.error("history back failed: " + JSON.stringify(t)); process.exit(1); }
   const pl = result.palet || {};
   if (!(pl.palAll >= 3 && pl.palFiltered >= 1 && pl.palFiltered < pl.palAll)) { console.error("quick switcher list/filter failed: " + JSON.stringify(pl)); process.exit(1); }

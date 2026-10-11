@@ -209,6 +209,15 @@ function navigateHistory(delta) {
   openNote(state.hist[i], { history: false });
 }
 
+// 戻る・進むボタンの有効／無効を、履歴の位置に合わせる
+function updateNavButtons() {
+  const canBack = state.hist.slice(0, state.histIdx).some((r) => state.notes.has(r));
+  const canFwd = state.hist.slice(state.histIdx + 1).some((r) => state.notes.has(r));
+  const b = $("back-btn"), f = $("fwd-btn");
+  if (b) b.disabled = !canBack;
+  if (f) f.disabled = !canFwd;
+}
+
 // ---------------------------------------------------------------- open note
 
 // 普通のクリックは今のタブの中で移動する（Obsidian と同じ）。
@@ -232,6 +241,7 @@ async function openNote(rel, opts = {}) {
   }
   if (history) pushHistory(rel);
   state.current = rel;
+  updateNavButtons();
   const n = state.notes.get(rel);
   loadNoteToEditor(n);
   renderTabs();
@@ -720,6 +730,8 @@ async function deleteCurrent() {
 function wireToolbar() {
   $("open-btn").onclick = pickAndOpen;
   $("save-btn").onclick = saveCurrent;
+  $("back-btn").onclick = () => navigateHistory(-1);
+  $("fwd-btn").onclick = () => navigateHistory(1);
   $("new-btn").onclick = () => newNote(false);
   $("new-group-btn").onclick = () => newNote(true);
   $("delete-btn").onclick = deleteCurrent;
@@ -769,7 +781,7 @@ function initTheme() {
 function init() {
   for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
     "search", "note-list", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
-    "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal",
+    "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
     "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
     els[id] = $(id);
   }

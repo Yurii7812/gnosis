@@ -103,6 +103,8 @@ kbd {
 /* ---- 中央: タブとエディタ ---- */
 #center { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
 .tabbar { display: flex; align-items: flex-end; background: var(--bg-2); border-bottom: 1px solid var(--line); flex: 0 0 auto; padding: 6px 6px 0; gap: 8px; }
+.nav-btns { display: flex; align-items: center; gap: 2px; padding-bottom: 4px; flex: 0 0 auto; }
+.nav-btns .icon-btn:disabled { opacity: .35; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab {
