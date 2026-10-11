@@ -2500,7 +2500,9 @@ function! simple_yurii_note#jump_up_cursor() abort
   endif
   let l:links = s:section_link_positions('up')
   if len(l:links) >= 1
-    call cursor(l:links[0].lnum, l:links[0].col)
+    " リンクの先頭は `[`（conceal で隠れる）。そこにカーソルを置くと表示上の位置がずれるので、
+    " 表示名の最初の文字（`[` の次）に置く。
+    call cursor(l:links[0].lnum, l:links[0].col + 1)
   else
     call s:jump_to_line(l:up)
   endif
@@ -10743,8 +10745,16 @@ function! simple_yurii_note#open_web() abort
   let l:electron = l:webdir . '/node_modules/.bin/electron'
   if executable(l:electron) && filereadable(l:webdir . '/electron/main.cjs')
     let l:opts = {'out_io': 'null', 'err_io': 'null'}
+    let l:env = {}
     if !empty(l:root)
-      let l:opts.env = {'PKM_ROOT': fnamemodify(l:root, ':p')}
+      let l:env.PKM_ROOT = fnamemodify(l:root, ':p')
+    endif
+    " 今開いているノートを、アプリでも最初に開く
+    if simple_yurii_note#is_vault_note(expand('%:p'))
+      let l:env.PKM_FILE = expand('%:p')
+    endif
+    if !empty(l:env)
+      let l:opts.env = l:env
     endif
     call job_start([l:electron, l:webdir], l:opts)
     echo 'simple_yurii_note app: ' . (empty(l:root) ? '(既定)' : fnamemodify(l:root, ':p'))

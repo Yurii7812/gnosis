@@ -1,1068 +1,162 @@
-import * as vault from "./vault.js";
-import { runSync, parseNote, dumpTitleState, relPath, dirname, basename, stem, normalizePath, UP_MARK, RELATED_MARK, DOWN_MARK } from "./sync.js";
-import { createEditor } from "./editor.js";
-import { buildLocal, drawLocal, layoutGlobal, mountGlobal } from "./graph.js";
+// 画面側。Vim（本体）の状態を、マークダウンの見た目で映し、端末の画面は必要なときだけ見せる。
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { createView } from "./view.js";
 
-const LINK_LINE_RE = /^\s*(\[[^\]]*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$/;
-const INLINE_LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
+const gui = window.gui;
+const $ = (id) => document.getElementById(id);
 
-const state = {
-  root: null,
-  files: new Map(),
-  rels: [],
-  notes: new Map(),
-  titleState: {},
-  tabs: [],
-  mtimes: new Map(),
-  panels: { graph: true, parent: true, related: true, children: true, back: true },
-  graphDepth: 1,
-  sortKey: "name",
-  sortDesc: false,
-  hist: [],
-  histIdx: -1,
-  current: null,
-  parentLines: [],
-  relatedLines: [],
-  backLines: [],
-  fm: [],
-  dirty: false,
-  loading: false,
-};
+const STRIP_ROWS = 3; // 普段は端末の下の 3 行（ステータス行・コマンド行・メッセージ）だけ見せる
+let term = null;
+let fit = null;
+let view = null;
+let cell = { w: 8, h: 18 };
+let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
+let expanded = false;
+let collapseTimer = null;
 
-const els = {};
-let editor = null;
+// ---------------------------------------------------------------- 端末（xterm.js）
 
-function $(id) { return document.getElementById(id); }
+function fullRowsPx() { return cell.h * term.rows; }
 
-// ---------------------------------------------------------------- utilities
-
-function toast(msg) {
-  const t = $("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+function layoutTerm() {
+  // 端末全体の高さは変えず（Vim の画面の大きさを保つ）、見える範囲だけを切り替える
+  $("term").style.height = fullRowsPx() + "px";
+  const stripH = cell.h * STRIP_ROWS;
+  document.documentElement.style.setProperty("--strip-h", stripH + "px");
 }
 
-function parseAll() {
-  state.notes = new Map();
-  for (const rel of state.rels) state.notes.set(rel, parseNote(state.files.get(rel) || "", rel));
-}
-
-function resolver(target, baseDir) {
-  const t = String(target).split("#")[0].trim();
-  if (!t) return null;
-  const cand = t.startsWith("/") ? normalizePath(t.slice(1)) : normalizePath((baseDir ? baseDir + "/" : "") + t);
-  return state.notes.has(cand) ? cand : null;
-}
-
-function linkLines(lines, rel) {
-  const out = [];
-  for (const ln of lines) {
-    const m = INLINE_LINK_RE.exec(ln);
-    if (!m) continue;
-    const target = m[2].split("#")[0].trim();
-    if (!target.toLowerCase().endsWith(".md")) continue;
-    const rp = resolver(target, dirname(rel));
-    if (rp) out.push({ rel: rp, title: state.notes.get(rp)?.title || stem(rp) });
+function measureCell() {
+  const screen = term.element?.querySelector(".xterm-screen");
+  if (screen && term.rows && term.cols) {
+    cell = { w: screen.clientWidth / term.cols, h: screen.clientHeight / term.rows };
   }
-  return out;
 }
 
-function titleOf(rel) { return state.notes.get(rel)?.title || stem(rel); }
+function fitTerm() {
+  // 測るときは端末全体を見せる
+  const wrap = $("termwrap");
+  const was = wrap.classList.contains("expanded");
+  wrap.classList.add("expanded");
+  $("term").style.height = "100%";
+  const dim = fit.proposeDimensions();
+  if (dim && dim.cols > 10 && dim.rows > 3) {
+    if (dim.cols !== term.cols || dim.rows !== term.rows) term.resize(dim.cols, dim.rows);
+  }
+  measureCell();
+  layoutTerm();
+  if (!was) wrap.classList.remove("expanded");
+  return { cols: term.cols, rows: term.rows };
+}
 
-// ---------------------------------------------------------------- vault open
+function setExpanded(on) {
+  if (on === expanded) return;
+  expanded = on;
+  $("termwrap").classList.toggle("expanded", on);
+  $("termwrap").classList.toggle("strip", !on);
+  term.focus();
+}
+
+// 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
+function needsTerminal(s) {
+  const m = (s.mode || "n")[0];
+  return s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
+}
+
+// ---------------------------------------------------------------- 状態の反映
+
+const MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "\x16": "V-BLOCK", R: "REPLACE", c: "COMMAND", t: "TERMINAL", r: "PROMPT", s: "SELECT", S: "S-LINE", "\x13": "S-BLOCK", "!": "SHELL" };
+const MODE_CLASS = { n: "normal", i: "insert", v: "visual", V: "visual", "\x16": "visual", R: "replace", c: "command", t: "command", r: "command", s: "visual", S: "visual", "\x13": "visual", "!": "command" };
+
+function applyState(s) {
+  last = { ...last, ...s, lines: undefined };
+  const m = (s.mode || "n")[0];
+  const el = $("mode");
+  el.textContent = MODE_LABEL[m] || String(s.mode).toUpperCase();
+  el.className = "mode " + (MODE_CLASS[m] || "normal");
+  $("file").textContent = s.file ? s.file.split("/").pop() : "";
+  $("dirty").textContent = s.mod ? "●" : "";
+
+  // 端末の画面が要るときだけ広げる（戻すときは少し待って、ちらつきを防ぐ）
+  if (needsTerminal(s)) {
+    clearTimeout(collapseTimer);
+    collapseTimer = null;
+    setExpanded(true);
+  } else if (expanded && !collapseTimer) {
+    collapseTimer = setTimeout(() => { collapseTimer = null; if (!needsTerminal(last)) setExpanded(false); }, 120);
+  }
+
+  // バッファの内容とカーソルをマークダウンで映す（端末バッファは映さない）
+  if (s.bt === "terminal") return;
+  if (s.lines) view.setText(s.lines.join("\n"));
+  if (s.vtext) view.setVtext(s.vtext);
+  if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
+}
+
+// ---------------------------------------------------------------- 起動
+
+async function imageURL(src) {
+  if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:")) return src;
+  const bytes = await gui.readImage(last.file, src);
+  if (!bytes) return null;
+  return URL.createObjectURL(new Blob([bytes]));
+}
+
+// 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
+function onClick({ pos, link }) {
+  if (pos == null) return;
+  const [l, c] = view.lineColAt(pos);
+  const m = (last.mode || "n")[0];
+  if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
+  else if (m === "i") gui.write(`\x0f:call cursor(${l},${c})\r`);
+}
 
 async function boot() {
-  wireToolbar();
-  // Electron ならパス固定で自動オープン。フォルダ選択は無い。
-  if (vault.isElectron()) {
-    await openVault(null);
-    return;
-  }
-  // ここから下はブラウザで開いた場合。基本は Electron を案内する。
-  const electronUA = /Electron/i.test(navigator.userAgent);
-  const canFSA = typeof window.showDirectoryPicker === "function";
-  $("overlay").hidden = false;
-  $("overlay-open").style.display = "none";
-  $("overlay-pick").style.display = "none";
-  if (electronUA) {
-    $("overlay-msg").innerHTML = "アプリの初期化に失敗しました（preload 未読込）。<br>"
-      + "一度閉じて <b>\\A</b> または <code>npm run app</code> で起動し直してください。";
-    return;
-  }
-  if (!canFSA) {
-    $("overlay-msg").innerHTML = "このアプリは <b>Electron</b> で起動してください。<br>"
-      + "Vim で <b>\\A</b>、または <code>web/bin/simple-yurii-note-app.sh</code>。<br>"
-      + "<small>ブラウザ（Brave / Firefox）ではノートを読み書きできません。</small>";
-    return;
-  }
-  $("overlay-msg").innerHTML = "このアプリは <b>Electron</b> での利用を推奨します。<br>"
-    + "Chrome 系ブラウザで続ける場合だけ、下のボタンでフォルダを選べます。";
-  $("overlay-pick").textContent = "Chrome: フォルダを選ぶ";
-  $("overlay-pick").style.display = "";
-  $("overlay-pick").onclick = pickAndOpen;
-}
+  view = createView({ parent: $("view"), getImageURL: imageURL, onClick });
 
-async function pickAndOpen() {
-  try {
-    const handle = await vault.pickVault();
-    $("overlay").hidden = true;
-    await openVault(handle);
-  } catch (e) {
-    if (e?.name === "AbortError") return;
-    const msg = $("overlay-msg");
-    if (e?.name === "SecurityError" || /security|not allowed|denied/i.test(e?.message || "")) {
-      msg.innerHTML = "ブラウザがフォルダ選択を許可しませんでした。<br>"
-        + "<b>Electron アプリ</b>を使ってください（Vim で <b>\\A</b>）。";
-      $("overlay").hidden = false;
-    } else {
-      msg.textContent = "選択できませんでした: " + (e?.message || e);
-      $("overlay").hidden = false;
-    }
-  }
-}
+  term = new Terminal({
+    fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
+    fontSize: 14,
+    cursorBlink: false,
+    allowProposedApi: true,
+    scrollback: 0,
+    theme: { background: "#ffffff", foreground: "#1f2328", cursor: "#1f2328", cursorAccent: "#ffffff", selectionBackground: "#b6d6ff" },
+  });
+  fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open($("term"));
+  try { await document.fonts.ready; } catch { /* ignore */ }
 
-async function openVault(handle) {
-  state.root = handle;
-  const { files, rels, titleState, mtimes } = await vault.readVault(handle);
-  state.files = files;
-  state.mtimes = mtimes;
-  state.rels = rels;
-  state.titleState = titleState;
-  parseAll();
-  $("toolbar").classList.add("ready");
-  $("vault-name").textContent = vault.isElectron() ? (vault.rootName() || "vault") : handle.name;
-  renderSidebar();
-  const start = state.notes.has("index.md") ? "index.md" : state.rels[0];
-  if (start) openNote(start);
-  window.addEventListener("focus", refreshFromDisk);
-}
+  term.onData((d) => gui.write(d));
+  gui.onData((d) => term.write(d));
+  gui.onState(applyState);
+  gui.onExit(() => { $("mode").textContent = "EXIT"; });
 
-async function refreshFromDisk() {
-  if (!state.root || state.dirty) return;
-  try {
-    const { files, rels, mtimes } = await vault.readVault(state.root);
-    state.files = files; state.rels = rels; state.mtimes = mtimes; parseAll();
-    renderSidebar();
-    if (state.current && !state.dirty) {
-      const n = state.notes.get(state.current);
-      if (n && editor.getDoc() !== n.body.join("\n")) loadNoteToEditor(n);
-    }
-    renderRelations();
-  } catch { /* ignore */ }
-}
+  const { cols, rows } = fitTerm();
+  gui.start(cols, rows);
+  term.focus();
 
-// ---------------------------------------------------------------- sidebar
+  window.addEventListener("resize", () => {
+    const d = fitTerm();
+    gui.resize(d.cols, d.rows);
+  });
+  // どこを押しても、キー入力は端末（Vim）へ戻す
+  document.addEventListener("mousedown", () => setTimeout(() => term.focus(), 0));
+  window.addEventListener("focus", () => term.focus());
 
-// 作成日: ノートの front matter の time 欄（無ければ 0）
-function createdOf(rel) {
-  const n = state.notes.get(rel);
-  const line = (n?.fm || []).find((l) => /^\s*time\s*:/.test(l));
-  if (!line) return 0;
-  const v = line.replace(/^\s*time\s*:\s*/, "").trim().replace(" ", "T");
-  return Date.parse(v) || 0;
-}
-
-// 更新日: ファイルの更新時刻（取れなければ 0）
-function modifiedOf(rel) {
-  return state.mtimes.get(rel) || 0;
-}
-
-const SORT_KEYS = {
-  name: (a, b) => a.title.localeCompare(b.title, "ja"),
-  mtime: (a, b) => a.mtime - b.mtime || a.title.localeCompare(b.title, "ja"),
-  ctime: (a, b) => a.ctime - b.ctime || a.title.localeCompare(b.title, "ja"),
-};
-
-function sortEntries(list) {
-  const cmp = SORT_KEYS[state.sortKey] || SORT_KEYS.name;
-  list.sort((a, b) => (state.sortDesc ? -cmp(a, b) : cmp(a, b)));
-  return list;
-}
-
-function saveSortPref() {
-  try { localStorage.setItem("pkm-sort", JSON.stringify({ key: state.sortKey, desc: state.sortDesc })); } catch { /* ignore */ }
-}
-
-function loadSortPref() {
-  try {
-    const v = JSON.parse(localStorage.getItem("pkm-sort") || "null");
-    if (v && SORT_KEYS[v.key]) { state.sortKey = v.key; state.sortDesc = !!v.desc; }
-  } catch { /* ignore */ }
-  $("sort-key").value = state.sortKey;
-  $("sort-dir").textContent = state.sortDesc ? "逆順" : "正順";
-}
-
-function renderSidebar() {
-  const q = ($("search").value || "").trim().toLowerCase();
-  const words = q ? q.split(/\s+/) : [];
-  const list = [];
-  for (const rel of state.rels) {
-    const n = state.notes.get(rel);
-    const hay = (n.title + " " + n.body.join("\n")).toLowerCase();
-    if (words.length && !words.every((w) => hay.includes(w))) continue;
-    list.push({
-      rel, title: n.title, group: n.attr === "group" || basename(rel) === "index.md",
-      mtime: modifiedOf(rel), ctime: createdOf(rel),
-    });
-  }
-  sortEntries(list);
-  const box = $("note-list");
-  box.innerHTML = "";
-  for (const it of list) {
-    const d = document.createElement("div");
-    d.className = "note-item" + (it.rel === state.current ? " active" : "") + (it.group ? " is-group" : "");
-    d.innerHTML = `<span class="ni-title"></span><span class="ni-file"></span>`;
-    d.querySelector(".ni-title").textContent = it.title || stem(it.rel);
-    d.querySelector(".ni-file").textContent = it.group ? "group" : stem(it.rel);
-    d.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
-    box.appendChild(d);
-  }
-}
-
-function renderTabs() {
-  const box = $("tabs");
-  box.innerHTML = "";
-  for (const rel of state.tabs) {
-    const t = document.createElement("div");
-    t.className = "tab" + (rel === state.current ? " active" : "");
-    const s = document.createElement("span");
-    s.textContent = titleOf(rel);
-    const x = document.createElement("button");
-    x.textContent = "×";
-    x.onclick = (e) => { e.stopPropagation(); closeTab(rel); };
-    t.append(s, x);
-    t.onclick = () => openNote(rel);
-    t.onauxclick = (e) => { if (e.button === 1) { e.preventDefault(); closeTab(rel); } };
-    box.appendChild(t);
-  }
-}
-
-// ---------------------------------------------------------------- history
-
-function pushHistory(rel) {
-  if (state.hist[state.histIdx] === rel) return;
-  state.hist.length = state.histIdx + 1;
-  state.hist.push(rel);
-  if (state.hist.length > 100) state.hist.shift();
-  state.histIdx = state.hist.length - 1;
-}
-
-// Alt+← / Alt+→ : 見たノートの履歴を戻る・進む（消えたノートは飛ばす）
-function navigateHistory(delta) {
-  let i = state.histIdx + delta;
-  while (i >= 0 && i < state.hist.length && !state.notes.has(state.hist[i])) i += delta;
-  if (i < 0 || i >= state.hist.length) return;
-  state.histIdx = i;
-  openNote(state.hist[i], { history: false });
-}
-
-// 戻る・進むボタンの有効／無効を、履歴の位置に合わせる
-function updateNavButtons() {
-  const canBack = state.hist.slice(0, state.histIdx).some((r) => state.notes.has(r));
-  const canFwd = state.hist.slice(state.histIdx + 1).some((r) => state.notes.has(r));
-  const b = $("back-btn"), f = $("fwd-btn");
-  if (b) b.disabled = !canBack;
-  if (f) f.disabled = !canFwd;
-}
-
-// ---------------------------------------------------------------- open note
-
-// 普通のクリックは今のタブの中で移動する（Obsidian と同じ）。
-// Ctrl/Cmd+クリックだけ新しいタブで開く。既に開いているノートはそのタブへ移るだけ。
-async function openNote(rel, opts = {}) {
-  const { newTab = false, history = true } = opts;
-  if (!state.notes.has(rel)) { toast("見つかりません: " + rel); return; }
-  if (state.current === rel) { renderSidebar(); renderTabs(); return; }
-  if (state.dirty) {
-    const ok = await saveCurrent({ autosave: true });
-    if (!ok && !confirm("保存できませんでした（Vim が使用中の可能性）。破棄して移動しますか？")) return;
-    state.dirty = false;
-    updateDirtyUI();
-  }
-  if (state.tabs.includes(rel)) {
-    // 既に開いているタブへ移るだけ（重複させない）
-  } else if (newTab || !state.tabs.includes(state.current)) {
-    state.tabs.push(rel);
-  } else {
-    state.tabs[state.tabs.indexOf(state.current)] = rel;
-  }
-  if (history) pushHistory(rel);
-  state.current = rel;
-  updateNavButtons();
-  const n = state.notes.get(rel);
-  loadNoteToEditor(n);
-  globalView?.setCurrent(rel);
-  renderTabs();
-  renderSidebar();
-  renderRelations();
-  $("title-input").value = n.title;
-  $("title-input").disabled = false;
-  $("empty").hidden = true;
-  $("note-view").hidden = false;
-  updateDirtyUI();
-}
-
-function loadNoteToEditor(n) {
-  state.fm = n.fm.slice();
-  state.parentLines = n.parent.slice();
-  state.relatedLines = n.related.slice();
-  state.backLines = n.back.slice();
-  state.loading = true;
-  editor.setDoc(n.body.join("\n"));
-  state.loading = false;
-  updateStats();
-}
-
-function closeTab(rel) {
-  const i = state.tabs.indexOf(rel);
-  if (i >= 0) state.tabs.splice(i, 1);
-  if (state.current === rel) {
-    const next = state.tabs[Math.max(0, i - 1)];
-    if (next) openNote(next, { history: false });
-    else { state.current = null; $("note-view").hidden = true; $("empty").hidden = false; $("title-input").disabled = true; renderTabs(); renderRelations(); }
-  } else renderTabs();
-}
-
-// ---------------------------------------------------------------- relations panel
-
-function renderRelations() {
-  const rel = state.current;
-  const setList = (boxId, items, { removable = false, addLabel = null, onAdd = null } = {}) => {
-    const box = $(boxId);
-    box.innerHTML = "";
-    const h = document.createElement("div");
-    h.className = "rel-head";
-    h.textContent = box.dataset.label || "";
-    const ul = document.createElement("div");
-    ul.className = "rel-list";
-    for (const it of items) {
-      const row = document.createElement("div");
-      row.className = "rel-item";
-      const a = document.createElement("a");
-      a.textContent = it.title;
-      a.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
-      row.appendChild(a);
-      if (removable) {
-        const b = document.createElement("button");
-        b.textContent = "×"; b.title = "外す";
-        b.onclick = () => { it.remove(); };
-        row.appendChild(b);
-      }
-      ul.appendChild(row);
-    }
-    if (items.length === 0) {
-      const e = document.createElement("div"); e.className = "rel-empty"; e.textContent = "なし"; ul.appendChild(e);
-    }
-    box.append(h, ul);
-    if (addLabel) {
-      const b = document.createElement("button");
-      b.className = "rel-add"; b.textContent = addLabel;
-      b.onclick = onAdd;
-      box.appendChild(b);
-    }
-  };
-
-  renderPanels();
-  if (!rel) {
-    $("rel-parent").innerHTML = ""; $("rel-related").innerHTML = ""; $("rel-children").innerHTML = ""; $("rel-back").innerHTML = "";
-    $("graph-svg").innerHTML = "";
-    return;
-  }
-  const n = state.notes.get(rel);
-
-  const parents = linkLines(state.parentLines, rel).map((it) => ({
-    ...it,
-    remove: () => {
-      const idx = state.parentLines.findIndex((ln) => {
-        const m = INLINE_LINK_RE.exec(ln);
-        return m && resolver(m[2], dirname(rel)) === it.rel;
-      });
-      if (idx >= 0) { state.parentLines.splice(idx, 1); markDirty(); renderRelations(); }
+  // デバッグ・テスト用フック
+  window.__gui = {
+    term, view,
+    state: () => last,
+    send: (d) => gui.write(d),
+    isExpanded: () => expanded,
+    screen: () => {
+      const b = term.buffer.active;
+      const out = [];
+      for (let i = 0; i < term.rows; i++) out.push(b.getLine(i)?.translateToString(true) ?? "");
+      return out;
     },
-  }));
-  setList("rel-parent", parents, { removable: true, addLabel: "＋ 親を追加", onAdd: () => pickNote((r) => addParent(r)) });
-
-  const relatedItems = linkLines(state.relatedLines, rel).map((it) => ({
-    ...it,
-    remove: () => {
-      const idx = state.relatedLines.findIndex((ln) => {
-        const m = INLINE_LINK_RE.exec(ln);
-        return m && resolver(m[2], dirname(rel)) === it.rel;
-      });
-      if (idx >= 0) { state.relatedLines.splice(idx, 1); markDirty(); renderRelations(); }
-    },
-  }));
-  setList("rel-related", relatedItems, { removable: true, addLabel: "＋ 関連を追加", onAdd: () => pickNote((r) => addRelated(r)) });
-
-  const children = linkLines(n.body, rel).map((it) => ({ ...it }));
-  setList("rel-children", children, { addLabel: "＋ 子を追加", onAdd: () => pickNote((r) => addChild(r)) });
-
-  const backs = linkLines(n.back, rel).map((it) => ({ ...it }));
-  setList("rel-back", backs);
-
-  if (state.panels.graph) renderGraph(rel);
-}
-
-// 右パネルの各ブロックを、設定どおりに出す・隠す
-function renderPanels() {
-  for (const el of document.querySelectorAll("#relations [data-panel]")) {
-    el.hidden = !state.panels[el.dataset.panel];
-  }
-  for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
-    cb.checked = !!state.panels[cb.dataset.panel];
-  }
-  $("graph-depth").value = String(state.graphDepth);
-}
-
-function savePanelPref() {
-  try { localStorage.setItem("pkm-panels", JSON.stringify({ panels: state.panels, depth: state.graphDepth })); } catch { /* ignore */ }
-}
-
-function loadPanelPref() {
-  try {
-    const v = JSON.parse(localStorage.getItem("pkm-panels") || "null");
-    if (v?.panels) for (const k of Object.keys(state.panels)) if (typeof v.panels[k] === "boolean") state.panels[k] = v.panels[k];
-    if (v?.depth === 1 || v?.depth === 2) state.graphDepth = v.depth;
-  } catch { /* ignore */ }
-  renderPanels();
-}
-
-// ローカルグラフ: 今のノートを中心に、本文・親・関連・被リンクでつながるノートを描く
-function neighborsOf(rel) {
-  const n = state.notes.get(rel);
-  if (!n) return [];
-  const out = new Set();
-  for (const lines of [n.body, n.parent, n.related, n.back]) {
-    for (const it of linkLines(lines, rel)) if (it.rel !== rel) out.add(it.rel);
-  }
-  return [...out];
-}
-
-function renderGraph(rel) {
-  const svg = $("graph-svg");
-  const model = buildLocal(rel, state.graphDepth, neighborsOf);
-  drawLocal(svg, model, {
-    width: 230, height: 230,
-    label: (r) => titleOf(r),
-    onOpen: (r) => { if (r !== state.current) openNote(r); },
-  });
-}
-
-function addParent(targetRel) {
-  const rel = state.current;
-  const line = `[${titleOf(targetRel)}](${relPath(dirname(rel), targetRel)})`;
-  if (!state.parentLines.some((l) => { const m = INLINE_LINK_RE.exec(l); return m && resolver(m[2], dirname(rel)) === targetRel; })) {
-    state.parentLines.push(line);
-    markDirty(); renderRelations(); toast("親に追加（保存で反映）");
-  }
-}
-
-// zr 相当: ### Related に相互追加（今のノートと相手の両方に書く）。
-// sync は Related を勝手に作らないので、ここで両ノートを明示的に書く。
-async function addRelated(targetRel) {
-  const rel = state.current;
-  if (!rel || rel === targetRel) return;
-  const dupIn = (lines, dir, want) => lines.some((l) => {
-    const m = INLINE_LINK_RE.exec(l);
-    return m && resolver(m[2], dir) === want;
-  });
-  const tn = state.notes.get(targetRel);
-  if (!tn) return;
-  if (!dupIn(state.relatedLines, dirname(rel), targetRel)) {
-    state.relatedLines.push(`[${titleOf(targetRel)}](${relPath(dirname(rel), targetRel)})`);
-  }
-  if (!dupIn(tn.related, dirname(targetRel), rel)) {
-    tn.related.push(`[${titleOf(rel)}](${relPath(dirname(targetRel), rel)})`);
-  }
-  const title = $("title-input").value.trim() || stem(rel);
-  const overrides = new Map([
-    [rel, assembleNote(rel, {
-      fm: setFmTitle(state.fm, title), body: [], parent: state.parentLines,
-      related: state.relatedLines, back: state.backLines,
-    }, editor.getDoc().split("\n"))],
-    [targetRel, assembleNote(targetRel, tn)],
-  ]);
-  await syncAndWrite(overrides);
-  toast("関連に相互追加しました");
-}
-
-function addChild(targetRel) {
-  const rel = state.current;
-  const line = `[${titleOf(targetRel)}](${relPath(dirname(rel), targetRel)})`;
-  const body = editor.getDoc();
-  if (!body.includes(`](${relPath(dirname(rel), targetRel)})`)) {
-    editor.setDoc((body.trimEnd() ? body.trimEnd() + "\n" : "") + line);
-    markDirty(); toast("子に追加（保存で反映）");
-  }
-}
-
-// ---------------------------------------------------------------- 全体グラフ
-
-// 位置は端末ごとに保存する（vault には書かない）。一度決めた位置は動かさない。
-const GRAPH_POS_KEY = "pkm-graph-pos-v2"; // 間隔を広げたので v2（古い詰まった配置は使わない）
-
-function loadGraphPos() {
-  try { return JSON.parse(localStorage.getItem(GRAPH_POS_KEY) || "{}") || {}; } catch { return {}; }
-}
-
-function saveGraphPos(obj) {
-  try { localStorage.setItem(GRAPH_POS_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
-}
-
-function allEdges(rels) {
-  const relSet = new Set(rels);
-  const seen = new Set();
-  const edges = [];
-  for (const r of rels) {
-    for (const nb of neighborsOf(r)) {
-      if (!relSet.has(nb) || nb === r) continue;
-      const k = r < nb ? r + "\u0000" + nb : nb + "\u0000" + r;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      edges.push([r, nb]);
-    }
-  }
-  return edges;
-}
-
-function openGlobalGraph({ relayout = false } = {}) {
-  // 開いた vault があるか。Electron は vault のハンドルが null（パス固定）なので、ハンドルではなく開いたかで判定する
-  if (!state.rels.length) return;
-  const rels = state.rels.slice();
-  const edges = allEdges(rels);
-  const stored = loadGraphPos();
-  if (relayout) for (const r of rels) delete stored[r];
-  // 保存されていない点だけ新しく置く。今ある位置は変えない。
-  const pos = layoutGlobal(rels, edges, stored);
-  const next = {};
-  for (const r of rels) {
-    const p = pos.get(r);
-    if (p) next[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
-  }
-  saveGraphPos(next);
-
-  // 前に付けたイベントを残さないよう、svg は作り直す
-  const old = $("global-svg");
-  const svg = old.cloneNode(false);
-  old.replaceWith(svg);
-  svg.classList.toggle("few", rels.length <= 300);
-  $("gg-count").textContent = `${rels.length} ノート ・ リンク ${edges.length}`;
-
-  // ノートの表示は残したまま、左にグラフを並べる（ノートを見ながらグラフを見られる）
-  $("global-graph").hidden = false;
-  $("split-handle").hidden = false;
-  applySplit();
-  globalView = mountGlobal(svg, rels, edges, pos, {
-    label: (r) => titleOf(r),
-    onOpen: (r) => openNote(r),
-    onMove: (r, p) => {
-      const s = loadGraphPos();
-      s[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
-      saveGraphPos(s);
-    },
-  });
-  globalView.setCurrent(state.current);
-}
-
-let globalView = null;
-
-// グラフとノートの境界（左のグラフの幅の割合）。端末ごとに記憶する。
-const SPLIT_KEY = "pkm-split";
-
-function loadSplit() {
-  try {
-    const v = Number(localStorage.getItem(SPLIT_KEY));
-    if (v >= 0.25 && v <= 0.85) return v;
-  } catch { /* ignore */ }
-  return 0.58;
-}
-
-function applySplit() {
-  const g = $("global-graph");
-  if (g.classList.contains("full")) { g.style.flex = ""; return; }
-  g.style.flex = `0 0 ${(loadSplit() * 100).toFixed(1)}%`;
-}
-
-function wireSplitHandle() {
-  const h = $("split-handle");
-  let dragging = false;
-  h.addEventListener("pointerdown", (e) => { dragging = true; h.classList.add("drag"); h.setPointerCapture(e.pointerId); e.preventDefault(); });
-  h.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    const box = $("workspace").getBoundingClientRect();
-    const ratio = Math.min(0.85, Math.max(0.25, (e.clientX - box.left) / box.width));
-    try { localStorage.setItem(SPLIT_KEY, String(ratio)); } catch { /* ignore */ }
-    applySplit();
-  });
-  const end = (e) => { dragging = false; h.classList.remove("drag"); try { h.releasePointerCapture(e.pointerId); } catch { /* ignore */ } };
-  h.addEventListener("pointerup", end);
-  h.addEventListener("pointercancel", end);
-}
-
-function closeGlobalGraph() {
-  if ($("global-graph").hidden) return;
-  $("global-graph").hidden = true;
-  $("split-handle").hidden = true;
-  $("global-graph").style.flex = "";
-  $("global-graph").classList.remove("full");
-  $("gg-full").classList.remove("on");
-  globalView = null;
-}
-
-// ---------------------------------------------------------------- palette (quick switcher / note picker)
-
-// 検索語（空白区切り）を全部含むほど上位。タイトル先頭一致 > タイトル中 > ファイル名。
-function scoreNote(rel, words) {
-  if (!words.length) return 0;
-  const title = titleOf(rel).toLowerCase();
-  const file = rel.toLowerCase();
-  let score = 0;
-  for (const w of words) {
-    const ti = title.indexOf(w);
-    if (ti >= 0) score += ti === 0 ? 100 : 60 - Math.min(ti, 50);
-    else if (file.includes(w)) score += 20;
-    else return -1;
-  }
-  return score;
-}
-
-// items(query) → [{ rel, title, sub }]。↑↓ で選び、Enter で決定、Esc で閉じる。
-function openPalette({ placeholder, hint, items, onPick }) {
-  const m = $("modal");
-  m.hidden = false;
-  m.innerHTML = "";
-  const box = document.createElement("div");
-  box.className = "modal-box";
-  const inp = document.createElement("input");
-  inp.placeholder = placeholder;
-  const list = document.createElement("div");
-  list.className = "modal-list";
-  let sel = 0;
-  let shown = [];
-  const close = () => { m.hidden = true; };
-  const pick = (it) => { close(); onPick(it.rel); };
-  const render = () => {
-    shown = items(inp.value.trim().toLowerCase()).slice(0, 60);
-    sel = Math.min(sel, Math.max(0, shown.length - 1));
-    list.innerHTML = "";
-    if (hint) {
-      const h = document.createElement("div");
-      h.className = "modal-hint";
-      h.textContent = hint(inp.value.trim());
-      list.appendChild(h);
-    }
-    if (!shown.length) {
-      const e = document.createElement("div");
-      e.className = "modal-empty";
-      e.textContent = "見つかりません";
-      list.appendChild(e);
-      return;
-    }
-    shown.forEach((it, i) => {
-      const d = document.createElement("div");
-      d.className = "modal-item" + (i === sel ? " sel" : "");
-      const t = document.createElement("span");
-      t.textContent = it.title;
-      const f = document.createElement("span");
-      f.className = "mi-file";
-      f.textContent = it.sub || "";
-      d.append(t, f);
-      d.onmousemove = () => { if (sel !== i) { sel = i; mark(); } };
-      d.onclick = () => pick(it);
-      list.appendChild(d);
-    });
-  };
-  const mark = () => {
-    list.querySelectorAll(".modal-item").forEach((el, i) => {
-      el.classList.toggle("sel", i === sel);
-      if (i === sel) el.scrollIntoView({ block: "nearest" });
-    });
-  };
-  inp.oninput = () => { sel = 0; render(); };
-  inp.onkeydown = (e) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); if (shown.length) { sel = (sel + 1) % shown.length; mark(); } }
-    else if (e.key === "ArrowUp") { e.preventDefault(); if (shown.length) { sel = (sel - 1 + shown.length) % shown.length; mark(); } }
-    else if (e.key === "Enter") { e.preventDefault(); if (shown[sel]) pick(shown[sel]); }
-    else if (e.key === "Escape") { e.preventDefault(); close(); }
-  };
-  box.append(inp, list);
-  m.appendChild(box);
-  render();
-  inp.focus();
-  m.onclick = (e) => { if (e.target === m) close(); };
-}
-
-function noteItems(q, { skipCurrent = false } = {}) {
-  const words = q ? q.split(/\s+/) : [];
-  const out = [];
-  for (const rel of state.rels) {
-    if (skipCurrent && rel === state.current) continue;
-    const sc = scoreNote(rel, words);
-    if (sc < 0) continue;
-    out.push({ rel, title: titleOf(rel), sub: stem(rel), sc });
-  }
-  out.sort((x, y) => y.sc - x.sc || x.title.localeCompare(y.title, "ja"));
-  return out;
-}
-
-// 親・関連・子を足すときの選択ダイアログ
-function pickNote(cb) {
-  openPalette({
-    placeholder: "ノートを検索…",
-    items: (q) => noteItems(q, { skipCurrent: true }),
-    onPick: cb,
-  });
-}
-
-// Ctrl+O: ノートへ素早く移動（空欄なら最近見たノート）。Ctrl+Enter 相当は無し（Ctrl+クリックで新タブ）
-function quickSwitcher() {
-  // 開いた vault があるか。Electron は vault のハンドルが null（パス固定）なので、ハンドルではなく開いたかで判定する
-  if (!state.rels.length) return;
-  const recents = () => {
-    const seen = new Set();
-    const out = [];
-    for (let i = state.hist.length - 1; i >= 0; i--) {
-      const r = state.hist[i];
-      if (r === state.current || seen.has(r) || !state.notes.has(r)) continue;
-      seen.add(r);
-      out.push({ rel: r, title: titleOf(r), sub: stem(r) });
-    }
-    return out;
-  };
-  openPalette({
-    placeholder: "ノートを開く…",
-    hint: (q) => (q ? "" : "最近開いたノート"),
-    items: (q) => (q ? noteItems(q) : [...recents(), ...noteItems("").filter((x) => !state.hist.includes(x.rel) && x.rel !== state.current)]),
-    onPick: (rel) => openNote(rel),
-  });
-}
-
-// ---------------------------------------------------------------- save & sync
-
-function markDirty() { state.dirty = true; updateDirtyUI(); scheduleAutosave(); updateStats(); }
-
-// ステータスバー: 本文の文字数（空白を除く）と、本文中の .md リンク数
-function updateStats() {
-  const el = $("stat-count");
-  if (!el) return;
-  if (!state.current || !editor) { el.textContent = ""; return; }
-  const doc = editor.getDoc();
-  const chars = doc.replace(/\s/g, "").length;
-  const links = (doc.match(/\]\([^)]+\.md\)/gi) || []).length;
-  el.textContent = `${chars.toLocaleString()} 文字 ・ リンク ${links}`;
-}
-
-let autosaveTimer = null;
-let autosaveBusy = false;
-const AUTOSAVE_MS = 1200;
-
-function scheduleAutosave() {
-  if (autosaveTimer) clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => { autosaveTimer = null; runAutosave(); }, AUTOSAVE_MS);
-}
-
-async function runAutosave() {
-  if (!state.dirty || !state.current) return;
-  if (autosaveBusy) { scheduleAutosave(); return; }
-  autosaveBusy = true;
-  try { await saveCurrent({ autosave: true }); }
-  finally { autosaveBusy = false; }
-}
-
-function updateDirtyUI() {
-  $("note-view").classList.toggle("dirty", state.dirty);
-  $("save-btn").disabled = !state.dirty;
-  $("save-state").textContent = state.dirty ? "編集中…" : "自動保存済";
-}
-
-function setFmTitle(fm, title) {
-  const out = fm.slice();
-  for (let i = 0; i < out.length; i++) {
-    if (/^\s*title\s*:/.test(out[i])) { out[i] = "title: " + title; return out; }
-  }
-  if (out.length && out[out.length - 1].trim() === "---") out.splice(out.length - 1, 0, "title: " + title);
-  else out.push("title: " + title);
-  return out;
-}
-
-// ノート 1 つ分のテキストを組み立てる（saveCurrent と同じ並び）。
-// bodyLines を渡せばそれを本文に、省略すれば n.body を使う。
-function assembleNote(rel, n, bodyLines) {
-  const lines = [...n.fm, ...(bodyLines !== undefined ? bodyLines : n.body)];
-  if (basename(rel) !== "index.md") {
-    const last = lines[lines.length - 1];
-    if (last === undefined || (last.trim() !== "" && !LINK_LINE_RE.test(last))) lines.push("");
-    lines.push(UP_MARK, ...n.parent);
-    if (n.related.some((l) => l.trim() !== "")) lines.push(RELATED_MARK, ...n.related);
-    lines.push(DOWN_MARK, ...n.back);
-  }
-  while (lines.length && lines[lines.length - 1] === "") lines.pop();
-  return lines.join("\n") + "\n";
-}
-
-async function saveCurrent(opts = {}) {
-  const rel = state.current;
-  if (!rel) return true;
-  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
-  if (await vault.hasSwap(state.root, rel)) {
-    if (opts.autosave) { $("save-state").textContent = "Vim が使用中"; return false; }
-    if (!confirm("Vim がこのノートを開いている可能性があります（.swp あり）。保存しますか？")) return false;
-  }
-  if (!opts.autosave) $("save-state").textContent = "保存中…";
-  const title = $("title-input").value.trim() || stem(rel);
-  const fm = setFmTitle(state.fm, title);
-  const bodyLines = editor.getDoc().split("\n");
-  const raw = assembleNote(rel, { fm, body: [], parent: state.parentLines, related: state.relatedLines, back: state.backLines }, bodyLines);
-  await syncAndWrite(new Map([[rel, raw]]));
-  if (!opts.autosave) toast("保存しました");
-  return true;
-}
-
-// state.files は「最後にディスクと一致していた内容」を保つ。
-// 編集は overrides として渡し、sync 後の最終テキストがディスクと違うものだけ書く。
-async function syncAndWrite(overrides) {
-  if (vault.isElectron()) {
-    // Electron: 生テキストを書いて Python sync に任せる（同期の正は Python）
-    const writes = [];
-    if (overrides) for (const [rel, text] of overrides) writes.push({ rel, text });
-    await vault.apply(state.root, { writes });
-    const rv = await vault.readVault(null);
-    state.mtimes = rv.mtimes;
-    state.files = rv.files;
-    state.rels = rv.rels;
-    state.titleState = rv.titleState;
-    parseAll();
-    renderSidebar();
-    syncSelfFromNotes();
-    renderRelations();
-    renderTabs();
-    state.dirty = false;
-    updateDirtyUI();
-    return;
-  }
-  const input = new Map(state.files);
-  if (overrides) for (const [k, v] of overrides) input.set(k, v);
-  const res = runSync(input, state.titleState);
-  for (const [file, text] of input) {
-    const finalText = res.changed.has(file) ? res.changed.get(file) : text;
-    if (finalText !== state.files.get(file)) {
-      await vault.writeFile(state.root, file, finalText);
-      state.files.set(file, finalText);
-      state.mtimes.set(file, Date.now());
-    }
-  }
-  if (res.titleStateChanged) {
-    await vault.writeFile(state.root, ".pkm_title_state_v2.json", dumpTitleState(res.titleState));
-    state.titleState = res.titleState;
-  }
-  state.rels = [...state.files.keys()].sort();
-  parseAll();
-  renderSidebar();
-  syncSelfFromNotes();
-  renderRelations();
-  renderTabs();
-  state.dirty = false;
-  updateDirtyUI();
-}
-
-function syncSelfFromNotes() {
-  const n = state.notes.get(state.current);
-  if (!n) return;
-  state.fm = n.fm.slice();
-  state.parentLines = n.parent.slice();
-  state.relatedLines = n.related.slice();
-  state.backLines = n.back.slice();
-  const body = n.body.join("\n");
-  if (editor.getDoc() !== body) { state.loading = true; editor.setDoc(body); state.loading = false; }
-}
-
-// ---------------------------------------------------------------- new / delete
-
-function timestampName() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.md`;
-}
-
-function isoNow() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
-async function newNote(isGroup) {
-  let name = timestampName();
-  while (state.files.has(name)) name = timestampName();
-  const t = name.replace(/\.md$/, "");
-  const attr = isGroup ? "attribute: group\n" : "";
-  let text = `---\ntime: ${isoNow()}\ntitle: ${t}\n${attr}---\n\n# ${t}\n\n`;
-  const cur = state.current;
-  const overrides = new Map();
-  if (cur) {
-    text += "\n" + UP_MARK + "\n" + `[${titleOf(cur)}](${cur})` + "\n" + DOWN_MARK + "\n";
-    // 今のノート側に子リンクを足す
-    const link = `[${t}](${relPath(dirname(cur), name)})`;
-    const curNote = state.notes.get(cur);
-    const bodyLines = [...curNote.body];
-    while (bodyLines.length && bodyLines[bodyLines.length - 1].trim() === "") bodyLines.pop();
-    if (bodyLines.length && !LINK_LINE_RE.test(bodyLines[bodyLines.length - 1])) bodyLines.push("");
-    bodyLines.push(link);
-    const lines = [...state.fm, ...bodyLines, UP_MARK, ...state.parentLines];
-    if (state.relatedLines.some((l) => l.trim() !== "")) lines.push(RELATED_MARK, ...state.relatedLines);
-    lines.push(DOWN_MARK, ...state.backLines);
-    overrides.set(cur, lines.join("\n") + "\n");
-  } else {
-    text += "\n" + UP_MARK + "\n" + DOWN_MARK + "\n";
-  }
-  overrides.set(name, text);
-  await syncAndWrite(overrides);
-  openNote(name);
-  toast(isGroup ? "グループを作成しました" : "ノートを作成しました");
-}
-
-async function deleteCurrent() {
-  const rel = state.current;
-  if (!rel) return;
-  if (!confirm(`「${titleOf(rel)}」を削除しますか？（.trash へ移動。git バックアップからも戻せます）`)) return;
-  // 削除直前に保留中の編集を書き出しておく（未保存分が消えないように）
-  if (state.dirty) await saveCurrent({ autosave: true });
-  await vault.deleteFile(state.root, rel);
-  state.files.delete(rel);
-  state.rels = state.rels.filter((r) => r !== rel);
-  state.tabs = state.tabs.filter((r) => r !== rel);
-  state.current = null;
-  await syncAndWrite();
-  const next = state.tabs[state.tabs.length - 1] || (state.notes.has("index.md") ? "index.md" : state.rels[0]);
-  if (next) openNote(next);
-  else { $("note-view").hidden = true; $("empty").hidden = false; }
-  toast(".trash へ移動しました");
-}
-
-// ---------------------------------------------------------------- toolbar wiring
-
-function wireToolbar() {
-  $("open-btn").onclick = pickAndOpen;
-  $("save-btn").onclick = saveCurrent;
-  $("back-btn").onclick = () => navigateHistory(-1);
-  $("fwd-btn").onclick = () => navigateHistory(1);
-  $("new-btn").onclick = () => newNote(false);
-  $("new-group-btn").onclick = () => newNote(true);
-  $("delete-btn").onclick = deleteCurrent;
-  $("theme-btn").onclick = toggleTheme;
-  $("search").oninput = renderSidebar;
-  wireSplitHandle();
-  $("graph-btn").onclick = () => openGlobalGraph();
-  $("gg-close").onclick = () => closeGlobalGraph();
-  $("gg-reset").onclick = () => globalView?.reset();
-  $("gg-full").onclick = () => {
-    const on = $("global-graph").classList.toggle("full");
-    $("gg-full").classList.toggle("on", on);
-    applySplit();
-    setTimeout(() => globalView?.reset(), 0);
-  };
-  $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
-  $("panel-cfg-btn").onclick = () => { $("panel-menu").hidden = !$("panel-menu").hidden; };
-  for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
-    cb.onchange = () => {
-      state.panels[cb.dataset.panel] = cb.checked;
-      savePanelPref(); renderPanels(); renderRelations();
-    };
-  }
-  $("graph-depth").onchange = () => {
-    state.graphDepth = Number($("graph-depth").value) === 2 ? 2 : 1;
-    savePanelPref(); renderRelations();
-  };
-  $("sort-key").onchange = () => { state.sortKey = $("sort-key").value; saveSortPref(); renderSidebar(); };
-  $("sort-dir").onclick = () => {
-    state.sortDesc = !state.sortDesc;
-    $("sort-dir").textContent = state.sortDesc ? "逆順" : "正順";
-    saveSortPref(); renderSidebar();
-  };
-  $("title-input").oninput = markDirty;
-  document.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrent(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); quickSwitcher(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && document.activeElement?.closest?.(".cm-editor") == null) { e.preventDefault(); $("search").focus(); $("search").select(); }
-    if (e.key === "Escape") { $("modal").hidden = true; closeGlobalGraph(); }
-    if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); navigateHistory(-1); }
-    if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); navigateHistory(1); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && state.current) { e.preventDefault(); closeTab(state.current); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") { e.preventDefault(); newNote(false); }
-  });
-  // 自動保存: タブを隠す/閉じる前に書き残す
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state.dirty) saveCurrent({ autosave: true });
-  });
-  window.addEventListener("beforeunload", (e) => {
-    if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
-  });
-}
-
-// ---------------------------------------------------------------- theme
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem("pkm-theme", theme); } catch { /* ignore */ }
-  const b = $("theme-btn");
-  if (b) b.textContent = theme === "dark" ? "☀" : "🌙";
-}
-
-function toggleTheme() {
-  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
-}
-
-function initTheme() {
-  let t = "light";
-  try { t = localStorage.getItem("pkm-theme") || "light"; } catch { /* ignore */ }
-  applyTheme(t);
-}
-
-// ---------------------------------------------------------------- boot
-
-function init() {
-  for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
-    "search", "sort-key", "sort-dir", "note-list", "panel-cfg-btn", "panel-menu", "graph-depth", "graph-svg",
-    "graph-btn", "global-graph", "global-svg", "gg-count", "split-handle", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
-    "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
-    "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
-    els[id] = $(id);
-  }
-  loadSortPref();
-  loadPanelPref();
-  $("rel-parent").dataset.label = "親 (Parent)";
-  $("rel-related").dataset.label = "関連 (Related)";
-  $("rel-children").dataset.label = "子 (本文リンク)";
-  $("rel-back").dataset.label = "被リンク (BackLink)";
-  initTheme();
-
-  editor = createEditor({
-    parent: $("editor"),
-    doc: "",
-    onChange: () => { if (!state.loading) markDirty(); },
-    onSave: saveCurrent,
-    onNavigate: (href, mods) => {
-      if (!href.toLowerCase().endsWith(".md")) return;
-      const rp = resolver(href, dirname(state.current));
-      if (rp) openNote(rp, { newTab: !!mods?.newTab });
-      else toast("リンク先が見つかりません: " + href);
-    },
-    getImageURL: async (src) => {
-      if (/^[a-z]+:\/\//i.test(src)) return src;
-      const rel = normalizePath((dirname(state.current || "") + "/") + src);
-      return vault.objectURL(state.root, rel);
-    },
-    listNotes: () => state.rels.map((rel) => ({ rel, title: titleOf(rel) })),
-  });
-
-  boot();
-
-  // デバッグ・テスト用フック（ローカルアプリなので常時公開）
-  window.simpleYuriiNote = {
-    state, openNote, navigateHistory, closeTab, quickSwitcher, updateStats, openGlobalGraph, closeGlobalGraph, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
-    getEditor: () => editor,
   };
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", boot);

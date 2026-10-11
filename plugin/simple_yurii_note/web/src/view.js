@@ -1,16 +1,9 @@
-// CodeMirror 6 + Obsidian 風ライブプレビュー。
-// カーソルが乗っていない行は Markdown 記法を隠して描画し、実体は生テキストのまま。
-import { EditorState, Compartment } from "@codemirror/state";
-import {
-  EditorView, keymap, Decoration, WidgetType, ViewPlugin,
-  drawSelection, highlightActiveLine, dropCursor, rectangularSelection,
-  crosshairCursor, highlightSpecialChars,
-} from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+// 読み取り専用のマークダウン表示（Obsidian 風ライブプレビューの描画だけ）。
+// 編集は一切しない。本物の Vim のバッファの内容とカーソルを受け取って映す。
+import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { EditorView, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle } from "@codemirror/language";
-import { autocompletion } from "@codemirror/autocomplete";
-import { searchKeymap, highlightSelectionMatches, search } from "@codemirror/search";
+import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 
 class ImageWidget extends WidgetType {
@@ -54,15 +47,13 @@ class TaskWidget extends WidgetType {
     this.pos = pos; // `[` と `]` の間の 1 文字の位置
   }
   eq(o) { return o.checked === this.checked && o.pos === this.pos; }
-  toDOM(view) {
+  toDOM() {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.className = "cm-md-task";
     cb.checked = this.checked;
-    cb.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      view.dispatch({ changes: { from: this.pos, to: this.pos + 1, insert: this.checked ? " " : "x" } });
-    });
+    cb.disabled = false;
+    cb.addEventListener("mousedown", (e) => { e.preventDefault(); }); // 編集は Vim で行う（mx）
     return cb;
   }
   ignoreEvent() { return true; }
@@ -95,7 +86,8 @@ function decorateLine(line, active, inFence, decos, cfg) {
 
   // コードブロックの中身は記法を解釈せず、等幅の背景だけ付ける
   if (inFence) {
-    decos.push(Decoration.line({ class: "cm-md-fence" }).range(base));
+    // ``` の行は小さく薄く、中身は等幅の背景
+    decos.push(Decoration.line({ class: RE.fence.test(text) ? "cm-md-fence cm-md-fence-edge" : "cm-md-fence" }).range(base));
     return;
   }
 
@@ -208,6 +200,23 @@ function decorateLine(line, active, inFence, decos, cfg) {
 function buildDecorations(view, cfg) {
   const doc = view.state.doc;
   const decos = [];
+  // 先頭の front matter（--- で囲まれた部分）。カーソルがあるときは通常どおり、無いときは薄く小さく。
+  let fmEnd = 0;
+  if (doc.lines >= 2 && doc.line(1).text.trim() === "---") {
+    for (let n = 2; n <= doc.lines; n++) {
+      if (doc.line(n).text.trim() === "---") { fmEnd = n; break; }
+    }
+  }
+  if (fmEnd) {
+    // カーソルが front matter の中にあるときだけ中身を見せ、それ以外は畳んで本文だけを見せる
+    let fmActive = false;
+    for (const r of view.state.selection.ranges) {
+      const a = doc.lineAt(r.from).number, b = doc.lineAt(r.to).number;
+      if (a <= fmEnd && b >= 1) fmActive = true;
+    }
+    const cls = fmActive ? "cm-md-fm" : "cm-md-fm cm-md-fm-hide";
+    for (let n = 1; n <= fmEnd; n++) decos.push(Decoration.line({ class: cls }).range(doc.line(n).from));
+  }
   const activeLines = new Set();
   // ``` で囲まれたコードブロックの行番号（開始・終了の行を含む）
   const fenceLines = new Set();
@@ -226,6 +235,7 @@ function buildDecorations(view, cfg) {
     let pos = from;
     while (pos <= to) {
       const line = doc.lineAt(pos);
+      if (line.number <= fmEnd) { if (line.to + 1 > to) break; pos = line.to + 1; continue; }
       decorateLine(line, activeLines.has(line.number), fenceLines.has(line.number), decos, cfg);
       if (line.to + 1 > to) break;
       pos = line.to + 1;
@@ -248,6 +258,96 @@ function livePreview(cfg) {
   });
 }
 
+
+// ---------------------------------------------------------------- Vim のカーソルと選択
+
+// Vim の状態（カーソル位置・モード・ビジュアル範囲）。表示だけに使う。
+const setVim = StateEffect.define();
+const vimField = StateField.define({
+  create: () => ({ pos: 0, mode: "n", visFrom: null, visTo: null }),
+  update(v, tr) {
+    for (const e of tr.effects) if (e.is(setVim)) return e.value;
+    return v;
+  },
+});
+
+// 仮想テキスト（Vim のテキストプロパティ）: [lnum, col(バイト), text, type]。リンクの数字のしるしなど。
+const setVtext = StateEffect.define();
+const vtextField = StateField.define({
+  create: () => [],
+  update(v, tr) {
+    for (const e of tr.effects) if (e.is(setVtext)) return e.value;
+    return v;
+  },
+});
+
+class VTextWidget extends WidgetType {
+  constructor(text, type) { super(); this.text = text; this.type = type; }
+  eq(o) { return o.text === this.text && o.type === this.type; }
+  toDOM() {
+    const s = document.createElement("span");
+    s.className = "cm-vtext cm-vtext-" + String(this.type).replace(/[^A-Za-z0-9_-]/g, "");
+    s.textContent = this.text.replace(/ /g, "\u00a0");
+    return s;
+  }
+  ignoreEvent() { return true; }
+}
+
+const vtextDecorations = EditorView.decorations.compute([vtextField], (state) => {
+  const decos = [];
+  const doc = state.doc;
+  for (const [lnum, col, text, type] of state.field(vtextField)) {
+    if (lnum < 1 || lnum > doc.lines) continue;
+    const ln = doc.line(lnum);
+    decos.push(Decoration.widget({ widget: new VTextWidget(text, type), side: -1 }).range(ln.from + byteColToIndex(ln.text, col)));
+  }
+  return Decoration.set(decos, true);
+});
+
+class CursorWidget extends WidgetType {
+  constructor(kind) { super(); this.kind = kind; }
+  eq(o) { return o.kind === this.kind; }
+  toDOM() {
+    const s = document.createElement("span");
+    s.className = "cm-vim-" + this.kind;
+    if (this.kind === "block") s.textContent = " ";
+    return s;
+  }
+}
+
+const vimDecorations = EditorView.decorations.compute([vimField], (state) => {
+  const v = state.field(vimField);
+  const decos = [];
+  const doc = state.doc;
+  const pos = Math.min(v.pos, doc.length);
+  if (v.visFrom != null) {
+    const from = Math.max(0, Math.min(v.visFrom, v.visTo)), to = Math.min(doc.length, Math.max(v.visFrom, v.visTo));
+    if (to > from) decos.push(Decoration.mark({ class: "cm-vim-visual" }).range(from, to));
+  }
+  const insertLike = v.mode[0] === "i" || v.mode[0] === "R";
+  if (insertLike) {
+    decos.push(Decoration.widget({ widget: new CursorWidget(v.mode[0] === "R" ? "under" : "bar"), side: -1 }).range(pos));
+  } else if (pos < doc.length && doc.sliceString(pos, pos + 1) !== "\n") {
+    decos.push(Decoration.mark({ class: "cm-vim-block" }).range(pos, Math.min(doc.length, pos + 1)));
+  } else {
+    decos.push(Decoration.widget({ widget: new CursorWidget("block"), side: 1 }).range(pos));
+  }
+  return Decoration.set(decos, true);
+});
+
+// Vim の col（1 始まりのバイト位置）を、文字列の添字（UTF-16）に直す
+function byteColToIndex(text, col) {
+  const target = Math.max(0, col - 1);
+  let bytes = 0, idx = 0;
+  for (const ch of text) {
+    if (bytes >= target) break;
+    const c = ch.codePointAt(0);
+    bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+    idx += ch.length;
+  }
+  return idx;
+}
+
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700" },
   { tag: tags.strong, fontWeight: "700" },
@@ -258,82 +358,88 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.quote, color: "var(--fg-dim)" },
 ]);
 
-const readOnlyCompartment = new Compartment();
-
-export function createEditor(opts) {
-  const cfg = {
-    getImageURL: opts.getImageURL || (() => null),
-    listNotes: opts.listNotes || (() => []),
-  };
-
-  const completion = (ctx) => {
-    const before = ctx.matchBefore(/\]\(([^)\s]*)$/);
-    if (!before) return null;
-    const brace = before.text.lastIndexOf("](");
-    const from = before.from + brace + 2;
-    const options = cfg.listNotes().map((n) => ({ label: n.rel, detail: n.title, type: "text" }));
-    return { from, options, validFor: /^[^)\s]*$/ };
-  };
-
+export function createView(opts) {
+  const cfg = { getImageURL: opts.getImageURL || (() => null), listNotes: () => [] };
   const state = EditorState.create({
-    doc: opts.doc || "",
+    doc: "",
     extensions: [
-      highlightSpecialChars(),
-      history(),
-      drawSelection(),
-      dropCursor(),
-      rectangularSelection(),
-      crosshairCursor(),
-      highlightSelectionMatches(),
-      search({ top: true }),
+      EditorView.editable.of(false),
+      EditorState.readOnly.of(true),
       EditorView.lineWrapping,
       markdown({ base: markdownLanguage }),
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       syntaxHighlighting(mdHighlight),
-      autocompletion({ override: [completion], activateOnTyping: true }),
-      keymap.of([
-        ...defaultKeymap,
-        ...historyKeymap,
-        ...searchKeymap,
-        indentWithTab,
-        { key: "Mod-Enter", run: () => { opts.onSave?.(); return true; } },
-        { key: "Mod-s", run: () => { opts.onSave?.(); return true; } },
-      ]),
-      readOnlyCompartment.of([]),
+      vimField,
+      vimDecorations,
+      vtextField,
+      vtextDecorations,
       livePreview(cfg),
-      EditorView.updateListener.of((u) => { if (u.docChanged) opts.onChange?.(u.state.doc.toString()); }),
       EditorView.domEventHandlers({
-        mousedown: (e) => {
+        mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
-          if (el) {
-            e.preventDefault();
-            opts.onNavigate?.(el.getAttribute("data-md-href"), { newTab: e.ctrlKey || e.metaKey || e.button === 1 });
-            return true;
-          }
+          const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+          opts.onClick?.({ pos, link: !!el, doc: view.state.doc });
           return false;
         },
       }),
       EditorView.theme({
         "&": { fontSize: "16px", height: "100%" },
-        ".cm-content": { padding: "20px 28px 40vh", maxWidth: "820px", margin: "0 auto" },
-        ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.75" },
+        ".cm-content": { padding: "32px 28px 40vh", maxWidth: "860px", margin: "0 auto" },
+        ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.8" },
         ".cm-gutters": { display: "none" },
         "&.cm-focused": { outline: "none" },
       }),
     ],
   });
-
   const view = new EditorView({ state, parent: opts.parent });
 
-  return {
+  const api = {
     view,
-    getDoc: () => view.state.doc.toString(),
-    setDoc(text) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+    getText: () => view.state.doc.toString(),
+    // 変わったところだけ差し替える（スクロールや選択を乱さない）
+    setText(text) {
+      const cur = view.state.doc.toString();
+      if (cur === text) return;
+      let a = 0;
+      const max = Math.min(cur.length, text.length);
+      while (a < max && cur.charCodeAt(a) === text.charCodeAt(a)) a++;
+      let b = 0;
+      while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
+      view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) } });
     },
-    focus: () => view.focus(),
-    setReadOnly(ro) {
-      view.dispatch({ effects: readOnlyCompartment.reconfigure(ro ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []) });
+    // 仮想テキスト（リンクの数字のしるしなど）を反映する
+    setVtext(list) {
+      view.dispatch({ effects: setVtext.of(list || []) });
+    },
+    // Vim のカーソル（行・バイト列）、モード、ビジュアルの始点を反映する
+    setVim({ cur, mode, vis }) {
+      const doc = view.state.doc;
+      const lineOf = (l) => doc.line(Math.min(Math.max(1, l), doc.lines));
+      const idxOf = (l, col) => { const ln = lineOf(l); return ln.from + byteColToIndex(ln.text, col); };
+      const pos = idxOf(cur[0], cur[1]);
+      let visFrom = null, visTo = null;
+      if (vis && mode[0] !== "n") {
+        const vp = idxOf(vis[0], vis[1]);
+        if (mode[0] === "V") {
+          const a = lineOf(Math.min(vis[0], cur[0])), b = lineOf(Math.max(vis[0], cur[0]));
+          visFrom = a.from; visTo = Math.min(doc.length, b.to + 1);
+        } else {
+          visFrom = Math.min(vp, pos); visTo = Math.max(vp, pos) + 1;
+        }
+      }
+      view.dispatch({
+        selection: { anchor: pos },
+        effects: [setVim.of({ pos, mode, visFrom, visTo }), EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })],
+      });
+    },
+    lineColAt(pos) {
+      const ln = view.state.doc.lineAt(pos);
+      let bytes = 1;
+      for (const ch of ln.text.slice(0, pos - ln.from)) {
+        const c = ch.codePointAt(0);
+        bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+      }
+      return [ln.number, bytes];
     },
   };
+  return api;
 }

@@ -1,270 +1,81 @@
+/* マークダウンビューア（GitHub 風）の見た目。操作は Vim。 */
 :root {
   --bg: #ffffff;
-  --bg-2: #f6f6f7;
-  --bg-3: #ebebed;
-  --fg: #232326;
-  --fg-dim: #7b7b84;
-  --line: #e4e4e8;
-  --accent: #6f5bd6;
-  --link: #1a6fe0;
-  --accent-soft: rgba(111, 91, 214, .16);
-  --danger: #d1344a;
-  --active: rgba(111, 91, 214, .13);
-  --radius: 7px;
+  --bg-2: #f6f8fa;
+  --bg-3: #eaeef2;
+  --fg: #1f2328;
+  --fg-dim: #656d76;
+  --line: #d0d7de;
+  --link: #0969da;
+  --accent: #0969da;
   --font-body: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", system-ui, sans-serif;
+  color-scheme: light;
   --font-mono: "JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace;
 }
-:root[data-theme="dark"] {
-  --bg: #1e1e20;
-  --bg-2: #252528;
-  --bg-3: #323236;
-  --fg: #dedee2;
-  --fg-dim: #8d8d96;
-  --line: #333338;
-  --accent: #a891ff;
-  --link: #6cb0ff;
-  --accent-soft: rgba(168, 145, 255, .22);
-  --danger: #ef6b7e;
-  --active: rgba(168, 145, 255, .17);
-}
-
 * { box-sizing: border-box; }
-/* hidden 属性を確実に効かせる（.overlay 等の display:flex に負けないように） */
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
-body {
-  background: var(--bg); color: var(--fg);
-  font-family: var(--font-body); font-size: 14px; overflow: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* スクロールバーは細く、目立たせない */
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; overflow: hidden; -webkit-font-smoothing: antialiased; }
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg-dim) 45%, transparent) transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg-dim) 40%, transparent); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--fg-dim) 65%, transparent); background-clip: padding-box; border: 2px solid transparent; }
 
-button {
-  font-family: inherit; font-size: 13px; color: var(--fg);
-  background: var(--bg-3); border: 1px solid transparent;
-  border-radius: var(--radius); padding: 5px 10px; cursor: pointer;
-}
-button:hover { background: color-mix(in srgb, var(--bg-3) 80%, var(--fg) 8%); }
-button.primary { background: var(--accent); color: #fff; }
-button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-button:disabled { opacity: .4; cursor: default; }
-.icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; padding: 0; background: transparent; color: var(--fg-dim);
-  font-size: 15px; line-height: 1;
-}
-.icon-btn:hover { background: var(--bg-3); color: var(--fg); }
-.text-btn { background: transparent; color: var(--fg-dim); padding: 4px 8px; font-size: 12px; }
-.text-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
-.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-input {
-  font-family: inherit; font-size: 14px; color: var(--fg);
-  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 9px;
-}
-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-kbd {
-  font-family: var(--font-mono); font-size: 11px; padding: 1px 6px;
-  background: var(--bg-3); border-radius: 4px; border: 1px solid var(--line);
-}
+html { --strip-h: 54px; }
+#stage { position: relative; height: calc(100vh - 24px); overflow: hidden; }
+.view { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); overflow: hidden; }
+.view .cm-editor { height: 100%; }
 
-#app { display: flex; flex-direction: column; height: 100vh; }
-#layout { display: flex; flex: 1 1 auto; min-height: 0; }
-.spacer { flex: 1; }
+/* 端末（本物の Vim の画面）: 普段は下の数行だけ見せ、確認・fzf などのときは全体を見せる */
+#termwrap { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; overflow: hidden; z-index: 5; }
+#termwrap.strip { height: var(--strip-h); border-top: 1px solid var(--line); }
+#termwrap.expanded { top: 0; height: auto; border-top: none; }
+#term { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 6px; }
+#term .xterm-viewport { overflow: hidden !important; }
 
-/* ---- 左: ノート一覧 ---- */
-#sidebar {
-  width: 270px; flex: 0 0 270px; background: var(--bg-2);
-  border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0;
-}
-.side-tools { display: flex; align-items: center; gap: 2px; padding: 8px 8px 2px; }
-.side-head { padding: 6px 8px 8px; }
-.side-head input { width: 100%; background: var(--bg); }
-.side-head input:focus { border-color: var(--fg-dim); box-shadow: none; }
-.sort-row { display: flex; align-items: center; gap: 6px; padding: 0 8px 6px; }
-.sort-row select {
-  flex: 1; min-width: 0; font-family: inherit; font-size: 12.5px; color: var(--fg);
-  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px 6px;
-}
-.sort-row select:focus { outline: none; border-color: var(--fg-dim); }
-.sort-row #sort-dir { background: var(--bg); border: 1px solid var(--line); color: var(--fg); font-size: 12px; padding: 3px 9px; }
-.sort-row #sort-dir:hover { background: var(--bg-3); }
-.note-list { overflow-y: auto; flex: 1; padding: 2px 6px 8px; }
-.note-item {
-  padding: 5px 9px; border-radius: var(--radius); cursor: pointer; display: flex;
-  justify-content: space-between; align-items: baseline; gap: 8px; color: var(--fg);
-}
-.note-item:hover { background: var(--bg-3); }
-.note-item.active { background: var(--bg-3); color: var(--fg); font-weight: 600; }
-.note-item .ni-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note-item.is-group .ni-title { font-weight: 700; }
-.ni-file { color: var(--fg-dim); font-size: 10.5px; font-family: var(--font-mono); flex: 0 0 auto; opacity: .75; }
-.side-foot {
-  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
-  border-top: 1px solid var(--line); color: var(--fg-dim); font-size: 12px;
-}
-
-/* ---- 中央: タブとエディタ ---- */
-#center { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
-.tabbar { display: flex; align-items: flex-end; background: var(--bg-2); border-bottom: 1px solid var(--line); flex: 0 0 auto; padding: 6px 6px 0; gap: 8px; }
-.nav-btns { display: flex; align-items: center; gap: 2px; padding-bottom: 4px; flex: 0 0 auto; }
-.nav-btns .icon-btn:disabled { opacity: .35; }
-.tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; scrollbar-width: none; }
-.tabs::-webkit-scrollbar { display: none; }
-.tab {
-  display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 12px; cursor: pointer;
-  color: var(--fg-dim); white-space: nowrap; font-size: 13px; max-width: 220px;
-  border-radius: 8px 8px 0 0; border: 1px solid transparent; border-bottom: none; position: relative; top: 1px;
-}
-.tab span { overflow: hidden; text-overflow: ellipsis; }
-.tab:hover { background: var(--bg-3); color: var(--fg); }
-.tab.active { background: var(--bg); color: var(--fg); border-color: var(--line); }
-.tab button { background: none; border: none; padding: 0; width: 18px; height: 18px; color: var(--fg-dim); font-size: 14px; border-radius: 4px; opacity: 0; line-height: 1; }
-.tab:hover button, .tab.active button { opacity: 1; }
-.tab button:hover { background: var(--bg-3); color: var(--danger); }
-.tab-actions { display: flex; align-items: center; gap: 2px; padding-bottom: 4px; flex: 0 0 auto; }
-
-#note-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.view-header { padding: 6px 16px 0; display: flex; justify-content: center; flex: 0 0 auto; }
-.title-input {
-  width: 100%; max-width: 760px; text-align: center; font-size: 12.5px; color: var(--fg-dim);
-  padding: 3px 8px; background: transparent; border: 1px solid transparent; box-shadow: none;
-}
-.title-input:hover { border-color: var(--line); }
-.title-input:focus { color: var(--fg); background: var(--bg-2); border-color: var(--accent); }
-.editor { flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--bg); }
-
-#workspace { flex: 1 1 auto; min-height: 0; display: flex; }
-#note-pane { flex: 1 1 42%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.global-graph { flex: 1 1 58%; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; background: var(--bg); border-right: 1px solid var(--line); }
-.global-graph.full { flex: 1 1 100%; border-right: none; }
-.split-handle { flex: 0 0 7px; margin: 0 -3px; cursor: col-resize; position: relative; z-index: 5; }
-.split-handle:hover, .split-handle.drag { background: color-mix(in srgb, var(--fg-dim) 35%, transparent); }
-.global-graph.full ~ .split-handle { display: none; }
-.global-graph.full ~ #note-pane { display: none; }
-.gg-head button.on { color: var(--fg); background: var(--bg-3); }
-.gg-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
-.gg-title { font-weight: 700; font-size: 13px; white-space: nowrap; }
-.gg-count { color: var(--fg-dim); font-size: 12px; white-space: nowrap; }
-.gg-head { flex-wrap: wrap; row-gap: 4px; }
-.gg-head .gg-buttons { display: flex; flex-wrap: wrap; gap: 2px; width: 100%; }
-.gg-head .text-btn { white-space: nowrap; padding: 4px 7px; }
-.gg-head .text-btn { color: var(--fg); }
-.global-svg { flex: 1 1 auto; width: 100%; min-height: 0; display: block; cursor: grab; touch-action: none; --su: 1; }
-.global-svg:active { cursor: grabbing; }
-/* 線・点・文字は、ズームしても画面のピクセルで一定の大きさにする */
-.global-svg .lg-edge { stroke: var(--fg-dim); stroke-width: 1.2; opacity: .45; vector-effect: non-scaling-stroke; }
-.global-svg .lg-node circle { r: calc(var(--rr, 4) * var(--su) * 1px); fill: var(--bg); stroke: var(--fg-dim); stroke-width: 1.6; vector-effect: non-scaling-stroke; cursor: pointer; }
-.global-svg .lg-node:hover circle { fill: var(--link); stroke: var(--link); }
-.global-svg .lg-label { font-size: calc(12px * var(--su)); fill: var(--fg); transform: translate(calc(9px * var(--su)), calc(4px * var(--su))); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.global-svg .lg-node:hover .lg-label { display: block !important; font-weight: 700; fill: var(--link); }
-.global-svg .lg-node.cur .lg-label { font-weight: 700; fill: var(--link); }
-.global-svg .lg-node.cur circle { fill: var(--link); stroke: var(--link); }
-.gg-hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: max-content; max-width: 92%; text-align: center; color: var(--fg-dim); font-size: 11.5px; background: var(--bg-2); padding: 3px 10px; border-radius: 10px; opacity: .85; pointer-events: none; }
-
-.empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--fg-dim); }
-.empty-box { text-align: center; }
-.empty-title { font-size: 17px; margin-bottom: 10px; color: var(--fg); }
-.empty-hint { font-size: 13px; line-height: 2; }
-
-/* ---- 右: 関連 ---- */
-#relations {
-  width: 250px; flex: 0 0 250px; background: var(--bg-2);
-  border-left: 1px solid var(--line); overflow-y: auto; padding: 12px 10px; min-height: 0;
-}
-.rel-block { margin-bottom: 18px; }
-.rel-tools { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; }
-.rel-tools-title { font-size: 12px; color: var(--fg-dim); font-weight: 700; padding-left: 4px; }
-.panel-menu {
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px;
-  margin-bottom: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); font-size: 12.5px;
-}
-.panel-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; cursor: pointer; }
-.panel-menu label:hover { background: var(--bg-3); }
-.panel-menu input { width: 14px; height: 14px; margin: 0; accent-color: var(--fg-dim); }
-.rel-head-row { display: flex; align-items: center; gap: 6px; margin: 0 6px 6px; }
-.rel-head-row .rel-head { margin: 0; }
-.rel-head-row select { font-family: inherit; font-size: 11.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; }
-.graph-svg { width: 100%; height: 230px; display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
-.lg-edge { stroke: var(--fg-dim); stroke-width: 1; opacity: .45; }
-.lg-node circle { fill: var(--bg-3); stroke: var(--fg-dim); stroke-width: 1.2; cursor: pointer; }
-.lg-node.d0 circle { fill: var(--link); stroke: var(--link); }
-.lg-node.d1 circle { fill: var(--bg-2); stroke: var(--link); }
-.lg-node.d2 circle { fill: var(--bg-2); stroke: var(--fg-dim); }
-.lg-node:hover circle { stroke: var(--link); stroke-width: 2; }
-.lg-label { font-size: 10.5px; fill: var(--fg); pointer-events: none; font-family: var(--font-body); }
-.lg-node.d0 .lg-label { font-weight: 700; }
-.rel-head { font-size: 11px; color: var(--fg-dim); margin: 0 6px 6px; font-weight: 700; letter-spacing: .04em; }
-.rel-list { display: flex; flex-direction: column; gap: 1px; }
-.rel-item { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 6px; }
-.rel-item:hover { background: var(--bg-3); }
-.rel-item a { color: var(--fg); cursor: pointer; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rel-item a:hover { color: var(--link); }
-.rel-item button { background: none; border: none; color: var(--fg-dim); padding: 0 4px; opacity: 0; }
-.rel-item:hover button { opacity: 1; }
-.rel-item button:hover { color: var(--danger); background: none; }
-.rel-empty { color: var(--fg-dim); font-size: 12px; padding: 2px 6px; opacity: .7; }
-.rel-add { width: 100%; margin-top: 4px; font-size: 12px; background: transparent; color: var(--fg-dim); text-align: left; padding: 3px 6px; }
-.rel-add:hover { background: var(--bg-3); color: var(--accent); }
-
-/* ---- ステータスバー ---- */
+/* ---- ステータスバー（モード表示） ---- */
 #statusbar {
-  display: flex; align-items: center; gap: 12px; height: 24px; padding: 0 12px; flex: 0 0 auto;
-  background: var(--bg-2); border-top: 1px solid var(--line); color: var(--fg-dim); font-size: 11.5px;
+  display: flex; align-items: center; gap: 12px; height: 24px; padding: 0 12px 0 0;
+  background: var(--bg-2); border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-dim);
 }
-.save-state { min-width: 6em; }
-#note-view.dirty ~ * .x {}
+.mode { font-family: var(--font-mono); font-weight: 700; font-size: 11.5px; letter-spacing: .04em; padding: 0 12px; height: 100%; display: flex; align-items: center; color: #fff; background: #1a7f37; }
+.mode.insert { background: #0969da; }
+.mode.visual { background: #8250df; }
+.mode.replace { background: #cf222e; }
+.mode.command { background: #bf8700; }
+.file { color: var(--fg); }
+.dirty { color: #bf8700; font-size: 10px; }
 
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.overlay-box { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 26px 30px; max-width: 440px; text-align: center; }
-.overlay-box h2 { margin: 0 0 10px; font-size: 18px; }
-.overlay-box .hint { color: var(--fg-dim); font-size: 12px; margin-top: 14px; }
-#overlay-open { margin-top: 8px; padding: 9px 22px; }
+/* ---- Vim のカーソル・ビジュアル選択（表示用） ---- */
+.cm-vim-block { background: color-mix(in srgb, var(--fg) 55%, transparent); color: var(--bg); border-radius: 1px; }
+span.cm-vim-block { display: inline-block; width: .6em; }
+span.cm-vim-bar { display: inline-block; width: 0; border-left: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; margin-left: -1px; }
+span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; }
+.cm-vim-visual { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 
-/* ---- クイックスイッチャー / 選択ダイアログ ---- */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; z-index: 90; }
-.modal-box { width: 560px; max-width: 92vw; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
-.modal-box input { width: 100%; margin-bottom: 6px; border: none; border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; font-size: 15px; padding: 10px 12px; background: transparent; box-shadow: none; }
-.modal-list { max-height: 52vh; overflow-y: auto; }
-.modal-item { padding: 8px 12px; border-radius: 7px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-.modal-item .mi-file { color: var(--fg-dim); font-size: 11px; font-family: var(--font-mono); }
-.modal-item.sel { background: var(--accent); color: #fff; }
-.modal-item.sel .mi-file { color: rgba(255,255,255,.75); }
-.modal-hint { color: var(--fg-dim); font-size: 11.5px; padding: 8px 12px 4px; }
-.modal-empty { color: var(--fg-dim); padding: 14px 12px; text-align: center; }
-
-.toast {
-  position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%) translateY(20px);
-  background: var(--fg); color: var(--bg); font-size: 13px;
-  padding: 8px 16px; border-radius: 20px; opacity: 0; pointer-events: none;
-  transition: .2s; z-index: 200;
-}
-.toast.show { opacity: .94; transform: translateX(-50%) translateY(0); }
-
-/* ---- ライブプレビュー (Markdown) ---- */
-.cm-md-h1 { font-size: 1.85em; font-weight: 700; line-height: 1.35; padding-top: .35em; }
-.cm-md-h2 { font-size: 1.45em; font-weight: 700; line-height: 1.4; padding-top: .3em; }
-.cm-md-h3 { font-size: 1.22em; font-weight: 700; padding-top: .2em; }
+/* ---- 本文（マークダウンの見た目） ---- */
+.cm-content { font-size: 16px; }
+.cm-scroller { line-height: 1.8; }
+.cm-md-h1 { font-size: 2em; font-weight: 700; line-height: 1.3; padding-bottom: .3em; margin-top: .5em; border-bottom: 1px solid var(--line); }
+.cm-md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.35; padding-bottom: .3em; margin-top: .6em; border-bottom: 1px solid var(--line); }
+.cm-md-h3 { font-size: 1.25em; font-weight: 700; margin-top: .4em; }
 .cm-md-h4, .cm-md-h5, .cm-md-h6 { font-weight: 700; }
 .cm-md-bold { font-weight: 700; }
 .cm-md-em { font-style: italic; }
 .cm-md-strike { text-decoration: line-through; color: var(--fg-dim); }
-.cm-md-code { font-family: var(--font-mono); font-size: .92em; background: var(--bg-3); padding: 1px 5px; border-radius: 4px; }
+.cm-md-code { font-family: var(--font-mono); font-size: .88em; background: color-mix(in srgb, var(--fg-dim) 18%, transparent); padding: .15em .4em; border-radius: 6px; }
 .cm-md-link { color: var(--link); }
-.cm-md-link-md { cursor: pointer; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--link) 45%, transparent); }
-.cm-md-link-md:hover { border-bottom-color: var(--link); }
-.cm-md-quote { border-left: 3px solid var(--accent); padding-left: 12px !important; color: var(--fg-dim); margin-left: 2px; }
-.cm-md-hr { border-bottom: 1px solid var(--line); line-height: .6; }
-.cm-md-img img { max-width: 100%; border-radius: 8px; display: block; margin: 6px 0; }
+.cm-md-link-md { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); }
+.cm-md-link-md:hover { text-decoration-color: var(--link); }
+.cm-md-quote { border-left: 4px solid var(--line); padding-left: 14px !important; color: var(--fg-dim); margin-left: 2px; }
+.cm-md-hr { border-bottom: 2px solid var(--line); line-height: .5; }
+.cm-md-img img { max-width: 100%; border-radius: 6px; display: block; margin: 8px 0; }
 .cm-md-bullet { color: var(--fg-dim); display: inline-block; width: 1.1em; text-align: center; }
 .cm-md-li { padding-left: 4px; }
 .cm-md-task { width: 15px; height: 15px; margin: 0 6px 0 2px; vertical-align: -2px; accent-color: var(--accent); cursor: pointer; }
 .cm-md-task-done { color: var(--fg-dim); text-decoration: line-through; }
-.cm-md-fence { background: var(--bg-2); font-family: var(--font-mono); font-size: .92em; }
+.cm-md-fence { background: var(--bg-2); font-family: var(--font-mono); font-size: .88em; }
+.cm-md-fence-edge { font-size: 11px; color: var(--fg-dim); line-height: 1.4; }
+.cm-md-fm-hide { display: none !important; }
+.cm-md-fm { color: var(--fg-dim); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--bg-2); }
 .cm-activeLine { background: transparent; }
-.cm-selectionBackground, ::selection { background: var(--accent-soft); }
+
+/* Vim の仮想テキスト（リンクの数字のしるし）: 目立つ小さなバッジ */
+.cm-vtext { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #bc4c00; background: color-mix(in srgb, #bc4c00 12%, transparent); border-radius: 4px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; user-select: none; }

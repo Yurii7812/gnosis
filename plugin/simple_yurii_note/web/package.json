@@ -1,28 +1,24 @@
 {
   "name": "simple-yurii-note-app",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "simple_yurii_note を閲覧・編集するシンプルなアプリ (Electron + ブラウザ)",
+  "description": "simple_yurii_note をマークダウンビューアの見た目で使うアプリ（本物の Vim を中で動かす・Electron）",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "app": "electron .",
     "build": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --log-level=warning",
     "watch": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --watch",
-    "test": "node test/browser_smoke.mjs && node test/fsapi_test.mjs",
-    "test:browser": "node test/browser_smoke.mjs",
-    "test:fs": "node test/fsapi_test.mjs",
-    "test:diff": "node test/sync_diff.mjs"
+    "test": "node test/gui_e2e.mjs"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.18.4",
-    "@codemirror/commands": "^6.7.1",
     "@codemirror/lang-markdown": "^6.3.1",
     "@codemirror/language": "^6.10.8",
-    "@codemirror/search": "^6.5.8",
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.35.0",
-    "@lezer/highlight": "^1.2.1"
+    "@lezer/highlight": "^1.2.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0"
   },
   "devDependencies": {
     "electron": "^44.4.5",

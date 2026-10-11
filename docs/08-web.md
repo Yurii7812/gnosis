@@ -1,76 +1,48 @@
-# 08 アプリ (Electron / ブラウザ)
+# 08 アプリ（マークダウン表示で使う本物の Vim）
 
-ノートを閲覧・編集する。**既定は Electron デスクトップアプリ**。
-vault のパスは固定でフォルダ選択は不要。ブラウザでも開ける（File System Access API）。
+SYN を、**マークダウンのビューアの見た目**で使うデスクトップアプリ（Electron）。
+中身は**本物の Vim**（`~/.vimrc-simple-yurii-note`、SYN・fzf・vim-surround などのプラグイン入り）。
+機能を作り直していないので、操作は Vim で使っているものと同じ（`zn`・Tab・数字キー・`\ua`・`\l` ほか全部）。
+**Vim との違いは、バッファがマークダウンとして描画されることだけ**（見出し・箇条書き・チェックボックス・
+引用・画像・リンク。カーソルのある行は生の Markdown）。
+
+過去の Obsidian 風アプリ（サイドバー・タブ・グラフ付き）は、git タグ `app-obsidian-style` と
+`~/.archive-projects/simple-yurii-note-app-obsidian/` に残してある。
 
 ## 起動
 
-- Vim から: `:SimpleWeb` または `\A`。
-  - Electron（`web/node_modules/.bin/electron`）があればそれを起動。
-    現在の PKM ルートを `PKM_ROOT` で渡す。
-  - 無ければブラウザで `web/index.html` を開くフォールバック（ただし下記のとおり
-    実質 Chrome 系のみ）。
-- 直接: `cd web && npm run app`、または `web/bin/simple-yurii-note-app.sh [VAULT_DIR]`。
-  - アプリメニュー用: `~/.local/share/applications/simple-yurii-note.desktop`
-    （`~/.local/bin/simple-yurii-note-app` 経由）。
-- `\w` は other.vim の `:wa`（保存）なので使わない。
+- Vim から: `\A` または `:SimpleWeb`。今の root と、今開いているノートを渡して起動する。
+- 直接: `web/bin/simple-yurii-note-app.sh [VAULT_DIR]`（引数なしなら Vim が前回の root を使う）。
+  アプリメニュー: `~/.local/share/applications/simple-yurii-note.desktop`。
+- 初回だけ `cd web && npm install && npm run build`。
 
-## 見た目
+## 画面
 
-- **ライトが既定**。ツールバー右の 🌙/☀ でダークと切替（`localStorage` に記憶）。
-- Obsidian 風の装飾はしない。左に一覧、中央に編集、右にリンク。できる限りシンプル。
+- 上: マークダウン表示（読み取り専用）。カーソル・ビジュアル選択・リンクの数字のしるし（1〜9, 0, g1 など）
+  も、Vim のものをそのまま映す。リンクをクリックするとそのリンクへ移る。
+- 下: 本物の Vim の画面の下 3 行（ステータス行・コマンド行・メッセージ）。確認（`confirm`）・fzf・
+  ポップアップ・Enter 待ち（`:ls` など）のときは、端末の画面全体に広がり、終わると戻る。
+- 一番下: モード表示（NORMAL / INSERT / VISUAL / V-LINE / V-BLOCK / REPLACE / COMMAND …）。
+- 色は常にライト。
 
-## 編集モデル（ノートを壊さない）
+## 仕組み
 
-本文だけをライブプレビュー（CodeMirror 6、生 Markdown を保持）で編集する。
-front matter はタイトル欄、`### Parent` は右パネルのリスト、`### BackLink` は読み取り専用。
-保存時に `### Parent` / `### BackLink` の見出しを WYSIWYG に食わせないので壊れない。
-
-## 保存と同期
-
-- **自動保存**（既定。編集が止まって約 1.2 秒。タブ切替/非表示/移動時にも保存）。手動は `Ctrl+S`。
-- 削除（`.trash` へ移動）の直前にも保留中の編集を書き出す（未保存分が消えないように）。
-- **同期の正は Python** `note_format_v2.py` の `simple_sync()`。
-  - Electron: main プロセスが保存後に `python3 note_format_v2.py update ROOT` を実行。
-  - ブラウザ: `web/src/sync.js` の JS 移植を実行（サーバーも Python も呼べないため）。
-- Vim が同じノートを開いている（`.swp` あり）ときは自動保存を止めて警告。
-  `Ctrl+S` で強制保存は可能。
-
-## 構成
-
-| パス | 役割 |
-| --- | --- |
-| `web/electron/main.cjs` | Electron main。ウィンドウ + IPC + Python sync 呼び出し |
-| `web/electron/preload.cjs` | `window.pkm` を公開（contextIsolation） |
-| `web/electron/fsapi.cjs` | vault の fs 操作 + Python sync（electron 非依存・テスト可能） |
-| `web/index.html` | 画面の骨組み。`bundle.js` を読む |
-| `web/styles.css` | ライト/ダークのテーマ（CSS 変数） |
-| `web/bundle.js` | esbuild で固めたレンダラ本体（コミット対象） |
-| `web/src/app.js` | 状態管理と UI |
-| `web/src/editor.js` | CodeMirror 6 + ライブプレビュー |
-| `web/src/vault.js` | 読み書きの入口。Electron は `window.pkm`、ブラウザは FSA |
-| `web/src/sync.js` | `simple_sync` の JS 移植（ブラウザ用。正は Python） |
-| `web/test/fsapi_test.mjs` | fsapi + Python sync の単体テスト |
-| `web/test/browser_smoke.mjs` | headless Chromium の E2E（JS sync == Python sync） |
-| `web/test/sync_diff.mjs` | JS sync と Python sync の差分テスト |
-
-## 開発
-
-```bash
-cd web
-npm install
-npm run build     # src/*.js -> bundle.js
-npm test          # fsapi_test + browser_smoke
+```
+Vim ──(擬似端末)──► xterm.js …… 端末の画面（メッセージ・質問・fzf）
+Vim ──(TCP/JSON)──► 画面 ……… バッファの全文・カーソル・モード・仮想テキスト（数字のしるし）
+キー入力 ──► 擬似端末 ──► Vim
 ```
 
-- `bundle.js` はコミットする。`node_modules/` はコミットしない。
-- Electron の起動確認（ヘッドレス）:
-  `xvfb-run -a node_modules/.bin/electron . --no-sandbox`（`PKM_ROOT` で vault 指定）。
+- `web/bridge/ptybridge.py` … Vim を擬似端末で動かす（Node は pty を直接扱えない）。
+- `web/vim/gui.vim` … Vim に `-S` で読ませ、状態を JSON で送る。`ttimeoutlen=20`（Esc をすぐ効かせる）だけ
+  端末版と違う。
+- `web/electron/main.cjs` … 擬似端末と TCP を持つ。画像は、ノートのあるフォルダからの相対パスで読む。
+- `web/src/view.js` … 読み取り専用のマークダウン描画（CodeMirror 6）。`web/src/app.js` … 端末と状態の反映。
+- 環境変数: `PKM_ROOT`（root）、`PKM_FILE`（最初に開くノート）、`PKM_VIMRC`（使う vimrc）。
 
-## 既知の制約
+## 注意
 
-- **ブラウザは実質 Chrome 系のみ**。この環境の **Brave は `file://` で
-  `showDirectoryPicker` が undefined** で、ブラウザ経路は動かない（なので Electron 既定）。
-  Firefox も FSA 非対応。`file://` では IndexedDB が応答しないことがあり、
-  毎回フォルダ選択になる（`vault.js` でタイムアウトしてフォールバック）。
-- ハブ (`\1`〜`\9`) は Vim の状態ファイルが vault 外にあり、アプリからは未対応。
+- アプリの Vim と、ターミナルで開いている Vim は別のプロセス。同じノートを両方で開いて編集しない
+  （SYN の保存・同期は Vim ごとに動く）。
+- テスト: `cd web && npm test`（実際の Electron + 本物の Vim を xvfb と一時フォルダで動かす。本物の vault や
+  設定は書き換えない）。
