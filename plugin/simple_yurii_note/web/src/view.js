@@ -230,13 +230,8 @@ function buildDecorations(view, cfg) {
     }
   }
   if (fmEnd) {
-    // カーソルが front matter の中にあるときだけ中身を見せ、それ以外は畳んで本文だけを見せる
-    let fmActive = false;
-    for (const r of view.state.selection.ranges) {
-      const a = doc.lineAt(r.from).number, b = doc.lineAt(r.to).number;
-      if (a <= fmEnd && b >= 1) fmActive = true;
-    }
-    const cls = fmActive ? "cm-md-fm" : "cm-md-fm cm-md-fm-hide";
+    // YAML（front matter）は畳まず、小さな等幅で常に表示する
+    const cls = "cm-md-fm";
     for (let n = 1; n <= fmEnd; n++) decos.push(Decoration.line({ class: cls }).range(doc.line(n).from));
   }
   const activeLines = new Set();

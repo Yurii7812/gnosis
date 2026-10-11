@@ -32615,12 +32615,7 @@ ${h2.join(`
       }
     }
     if (fmEnd) {
-      let fmActive = false;
-      for (const r of view2.state.selection.ranges) {
-        const a = doc2.lineAt(r.from).number, b2 = doc2.lineAt(r.to).number;
-        if (a <= fmEnd && b2 >= 1) fmActive = true;
-      }
-      const cls = fmActive ? "cm-md-fm" : "cm-md-fm cm-md-fm-hide";
+      const cls = "cm-md-fm";
       for (let n = 1; n <= fmEnd; n++) decos.push(Decoration.line({ class: cls }).range(doc2.line(n).from));
     }
     const activeLines = /* @__PURE__ */ new Set();
