@@ -2498,14 +2498,8 @@ function! simple_yurii_note#jump_up_cursor() abort
     echo 'Parent: section not found'
     return
   endif
-  let l:links = s:section_link_positions('up')
-  if len(l:links) >= 1
-    " リンクの先頭は `[`（conceal で隠れる）。そこにカーソルを置くと表示上の位置がずれるので、
-    " 表示名の最初の文字（`[` の次）に置く。
-    call cursor(l:links[0].lnum, l:links[0].col + 1)
-  else
-    call s:jump_to_line(l:up)
-  endif
+  " 「### Parent」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
+  call s:jump_to_line(l:up)
   normal! zv
 endfunction
 
