@@ -8245,7 +8245,9 @@ function! simple_yurii_note#add_link_to_parent() abort
     let l:e = l:parent + 1
     while l:e < len(l:lines) && l:lines[l:e] !~# '^###\s'
       if stridx(l:lines[l:e], '](' . l:bare) >= 0
-        echo 'simple_yurii_note: Parent に既にあります'
+        " 自分の Parent には既にある。相手側（相手の本文）のリンクだけ、足りなければ足す
+        call s:zap_add_child_link(l:bare)
+        echo 'simple_yurii_note: Parent に既にあります（相手側を確認しました）'
         return
       endif
       let l:e += 1
