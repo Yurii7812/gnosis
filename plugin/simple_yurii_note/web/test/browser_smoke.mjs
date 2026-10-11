@@ -223,10 +223,10 @@ async function main(){
     });
     const gNodes = document.querySelectorAll('#global-svg .lg-node').length;
     const gEdges = document.querySelectorAll('#global-svg .lg-edge').length;
-    const posKeyed = Object.keys(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}')).length;
-    const firstPos = JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}'));
+    const posKeyed = Object.keys(JSON.parse(localStorage.getItem('pkm-graph-pos-v2')||'{}')).length;
+    const firstPos = JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos-v2')||'{}'));
     app.openGlobalGraph(); await sleep(60);
-    const stable = firstPos === JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}'));
+    const stable = firstPos === JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos-v2')||'{}'));
     app.closeGlobalGraph();
     const globalInfo = {hitOk, gNodes, gEdges, posKeyed, stable, hiddenAfter: document.getElementById('global-graph').hidden, rels: app.state.rels.length};
     tabs.global = globalInfo;

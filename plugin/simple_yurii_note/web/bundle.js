@@ -29276,7 +29276,7 @@
         pos.set(r, { x: (rand() - 0.5) * SPAN, y: (rand() - 0.5) * SPAN });
       }
     }
-    const K = 46;
+    const K = 110;
     const CELL = K * 2;
     const iters = movable.length > 2e3 ? 90 : 160;
     for (let it = 0; it < iters; it++) {
@@ -29315,7 +29315,7 @@
           const q = pos.get(o);
           const ex = q.x - p.x, ey = q.y - p.y;
           const d = Math.sqrt(ex * ex + ey * ey) || 1;
-          const f = (d - K) * 0.08;
+          const f = (d - K * 0.8) * 0.08;
           dx += ex / d * f;
           dy += ey / d * f;
         }
@@ -29333,7 +29333,14 @@
   }
   function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
     svg.innerHTML = "";
+    const deg = new Map(nodes.map((r) => [r, 0]));
+    for (const [a, b] of edges) {
+      if (deg.has(a)) deg.set(a, deg.get(a) + 1);
+      if (deg.has(b)) deg.set(b, deg.get(b) + 1);
+    }
+    const order = [...nodes].sort((x, y) => deg.get(y) - deg.get(x) || label(x).localeCompare(label(y), "ja"));
     let view = { x: 0, y: 0, w: 800, h: 600 };
+    const size = () => ({ cw: svg.clientWidth || 800, ch: svg.clientHeight || 600 });
     const fit = () => {
       let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
       for (const p of pos.values()) {
@@ -29346,21 +29353,14 @@
         minx = miny = -100;
         maxx = maxy = 100;
       }
-      const pad = 40;
-      const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600;
+      const pad = 70;
+      const { cw, ch } = size();
       const cW = Math.max(200, maxx - minx + pad * 2), cH = Math.max(200, maxy - miny + pad * 2);
-      const k = Math.max(0.6, cW / (cw * 0.7), cH / (ch * 0.7));
+      const k = Math.max(0.7, cW / cw, cH / ch);
       const w = cw * k, h = ch * k;
       const mx = (minx + maxx) / 2, my = (miny + maxy) / 2;
       view = { x: mx - w / 2, y: my - h / 2, w, h };
     };
-    const apply2 = () => {
-      svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
-      const cw = svg.clientWidth || 800;
-      svg.style.setProperty("--lfs", (11 * view.w / cw).toFixed(2) + "px");
-    };
-    fit();
-    apply2();
     const gEdges = el("g", { class: "lg-edges" });
     const lines = [];
     for (const [a, b] of edges) {
@@ -29372,14 +29372,22 @@
     svg.appendChild(gEdges);
     const gNodes = el("g", { class: "lg-nodes" });
     const nodeEls = /* @__PURE__ */ new Map();
+    const labelEls = /* @__PURE__ */ new Map();
+    const texts = /* @__PURE__ */ new Map();
     for (const r of nodes) {
+      const d = deg.get(r);
       const g = el("g", { class: "lg-node d2" });
-      g.appendChild(el("circle", { r: 4 }));
-      const t2 = el("text", { x: 7, y: 3.5, class: "lg-label" });
-      t2.textContent = label(r);
+      const c = el("circle", {});
+      c.style.setProperty("--rr", Math.min(10, 3.5 + 1.5 * Math.sqrt(d)).toFixed(2));
+      g.appendChild(c);
+      const t2 = el("text", { x: 0, y: 0, class: "lg-label" });
+      const name2 = label(r);
+      t2.textContent = name2;
       g.appendChild(t2);
       gNodes.appendChild(g);
       nodeEls.set(r, g);
+      labelEls.set(r, t2);
+      texts.set(r, name2);
     }
     svg.appendChild(gNodes);
     const syncPos = () => {
@@ -29395,7 +29403,80 @@
         ln.setAttribute("y2", pb.y);
       }
     };
+    let curRel = null;
+    const cullLabels = () => {
+      const { cw, ch } = size();
+      const su = view.w / cw;
+      const grid = /* @__PURE__ */ new Map();
+      const CELL = 140;
+      const fits = (x0, y0, x1, y1) => {
+        for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) {
+          for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) {
+            for (const q of grid.get(gx + "," + gy) || []) {
+              if (x0 < q[2] && q[0] < x1 && y0 < q[3] && q[1] < y1) return false;
+            }
+          }
+        }
+        return true;
+      };
+      const put = (x0, y0, x1, y1) => {
+        for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) {
+          for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) {
+            const k = gx + "," + gy;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push([x0, y0, x1, y1]);
+          }
+        }
+      };
+      const FS = 12, H = FS + 3;
+      const widthOf = (s) => {
+        let w = 0;
+        for (const ch2 of s) w += ch2.charCodeAt(0) > 11904 ? FS : FS * 0.58;
+        return w + 8;
+      };
+      const seq = curRel ? [curRel, ...order.filter((r) => r !== curRel)] : order;
+      for (const r of seq) {
+        const p = pos.get(r), t2 = labelEls.get(r);
+        if (!p || !t2) continue;
+        const sx = (p.x - view.x) / su, sy = (p.y - view.y) / su;
+        if (sx < -200 || sx > cw + 200 || sy < -40 || sy > ch + 40) {
+          t2.style.display = "none";
+          continue;
+        }
+        const x0 = sx + 8, x1 = x0 + widthOf(texts.get(r)), y0 = sy - H / 2, y1 = sy + H / 2;
+        if (fits(x0, y0, x1, y1)) {
+          put(x0, y0, x1, y1);
+          t2.style.display = "";
+        } else t2.style.display = "none";
+      }
+    };
+    let raf = 0;
+    const apply2 = () => {
+      svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+      const { cw } = size();
+      svg.style.setProperty("--su", (view.w / cw).toFixed(4));
+      if (!raf) raf = requestAnimationFrame(() => {
+        raf = 0;
+        cullLabels();
+      });
+    };
+    fit();
     syncPos();
+    apply2();
+    let last2 = size();
+    const ro = new ResizeObserver(() => {
+      const n = size();
+      if (!n.cw || !n.ch || n.cw === last2.cw && n.ch === last2.ch) return;
+      const su = view.w / last2.cw;
+      const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+      view.w = n.cw * su;
+      view.h = n.ch * su;
+      view.x = cx - view.w / 2;
+      view.y = cy - view.h / 2;
+      last2 = n;
+      apply2();
+    });
+    ro.observe(svg);
     const clientToSvg = (e) => {
       const pt = svg.createSVGPoint();
       pt.x = e.clientX;
@@ -29405,7 +29486,7 @@
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
       const m = clientToSvg(e);
-      const k = e.deltaY > 0 ? 1.1 : 1 / 1.1;
+      const k = e.deltaY > 0 ? 1.12 : 1 / 1.12;
       view = { x: m.x - (m.x - view.x) * k, y: m.y - (m.y - view.y) * k, w: view.w * k, h: view.h * k };
       apply2();
     }, { passive: false });
@@ -29433,7 +29514,7 @@
       } else {
         view.x = drag.vx - dx;
         view.y = drag.vy - dy;
-        apply2();
+        svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
       }
     });
     const end = (e) => {
@@ -29445,24 +29526,26 @@
       } catch {
       }
       if (d.kind === "node") {
-        if (d.moved) onMove?.(d.rel, pos.get(d.rel));
-        else onOpen?.(d.rel);
-      }
+        if (d.moved) {
+          onMove?.(d.rel, pos.get(d.rel));
+          apply2();
+        } else onOpen?.(d.rel);
+      } else if (d.moved) apply2();
     };
     svg.addEventListener("pointerup", end);
     svg.addEventListener("pointercancel", end);
-    let curRel = null;
     return {
       reset() {
         fit();
         apply2();
       },
       positions: () => pos,
-      // 今開いているノートを強調する
+      // 今開いているノートを強調し、そのタイトルを必ず出す
       setCurrent(rel) {
         if (curRel && nodeEls.get(curRel)) nodeEls.get(curRel).classList.remove("cur");
         curRel = rel;
         if (rel && nodeEls.get(rel)) nodeEls.get(rel).classList.add("cur");
+        apply2();
       }
     };
   }
@@ -29967,7 +30050,7 @@
       toast("\u5B50\u306B\u8FFD\u52A0\uFF08\u4FDD\u5B58\u3067\u53CD\u6620\uFF09");
     }
   }
-  var GRAPH_POS_KEY = "pkm-graph-pos";
+  var GRAPH_POS_KEY = "pkm-graph-pos-v2";
   function loadGraphPos() {
     try {
       return JSON.parse(localStorage.getItem(GRAPH_POS_KEY) || "{}") || {};
@@ -30015,6 +30098,8 @@
     svg.classList.toggle("few", rels.length <= 300);
     $("gg-count").textContent = `${rels.length} \u30CE\u30FC\u30C8 \u30FB \u30EA\u30F3\u30AF ${edges.length}`;
     $("global-graph").hidden = false;
+    $("split-handle").hidden = false;
+    applySplit();
     globalView = mountGlobal(svg, rels, edges, pos, {
       label: (r) => titleOf(r),
       onOpen: (r) => openNote(r),
@@ -30027,9 +30112,58 @@
     globalView.setCurrent(state.current);
   }
   var globalView = null;
+  var SPLIT_KEY = "pkm-split";
+  function loadSplit() {
+    try {
+      const v = Number(localStorage.getItem(SPLIT_KEY));
+      if (v >= 0.25 && v <= 0.85) return v;
+    } catch {
+    }
+    return 0.58;
+  }
+  function applySplit() {
+    const g = $("global-graph");
+    if (g.classList.contains("full")) {
+      g.style.flex = "";
+      return;
+    }
+    g.style.flex = `0 0 ${(loadSplit() * 100).toFixed(1)}%`;
+  }
+  function wireSplitHandle() {
+    const h = $("split-handle");
+    let dragging = false;
+    h.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      h.classList.add("drag");
+      h.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    h.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const box = $("workspace").getBoundingClientRect();
+      const ratio = Math.min(0.85, Math.max(0.25, (e.clientX - box.left) / box.width));
+      try {
+        localStorage.setItem(SPLIT_KEY, String(ratio));
+      } catch {
+      }
+      applySplit();
+    });
+    const end = (e) => {
+      dragging = false;
+      h.classList.remove("drag");
+      try {
+        h.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+    };
+    h.addEventListener("pointerup", end);
+    h.addEventListener("pointercancel", end);
+  }
   function closeGlobalGraph() {
     if ($("global-graph").hidden) return;
     $("global-graph").hidden = true;
+    $("split-handle").hidden = true;
+    $("global-graph").style.flex = "";
     $("global-graph").classList.remove("full");
     $("gg-full").classList.remove("on");
     globalView = null;
@@ -30406,12 +30540,14 @@ ${attr}---
     $("delete-btn").onclick = deleteCurrent;
     $("theme-btn").onclick = toggleTheme;
     $("search").oninput = renderSidebar;
+    wireSplitHandle();
     $("graph-btn").onclick = () => openGlobalGraph();
     $("gg-close").onclick = () => closeGlobalGraph();
     $("gg-reset").onclick = () => globalView?.reset();
     $("gg-full").onclick = () => {
       const on = $("global-graph").classList.toggle("full");
       $("gg-full").classList.toggle("on", on);
+      applySplit();
       setTimeout(() => globalView?.reset(), 0);
     };
     $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
@@ -30528,6 +30664,7 @@ ${attr}---
       "global-graph",
       "global-svg",
       "gg-count",
+      "split-handle",
       "tabs",
       "title-input",
       "editor",

@@ -143,6 +143,9 @@ kbd {
 #note-pane { flex: 1 1 42%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .global-graph { flex: 1 1 58%; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; background: var(--bg); border-right: 1px solid var(--line); }
 .global-graph.full { flex: 1 1 100%; border-right: none; }
+.split-handle { flex: 0 0 7px; margin: 0 -3px; cursor: col-resize; position: relative; z-index: 5; }
+.split-handle:hover, .split-handle.drag { background: color-mix(in srgb, var(--fg-dim) 35%, transparent); }
+.global-graph.full ~ .split-handle { display: none; }
 .global-graph.full ~ #note-pane { display: none; }
 .gg-head button.on { color: var(--fg); background: var(--bg-3); }
 .gg-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
@@ -152,15 +155,15 @@ kbd {
 .gg-head .gg-buttons { display: flex; flex-wrap: wrap; gap: 2px; width: 100%; }
 .gg-head .text-btn { white-space: nowrap; padding: 4px 7px; }
 .gg-head .text-btn { color: var(--fg); }
-.global-svg { flex: 1 1 auto; width: 100%; min-height: 0; display: block; cursor: grab; touch-action: none; }
+.global-svg { flex: 1 1 auto; width: 100%; min-height: 0; display: block; cursor: grab; touch-action: none; --su: 1; }
 .global-svg:active { cursor: grabbing; }
-.global-svg .lg-edge { stroke: var(--fg-dim); stroke-width: .9; opacity: .32; }
-.global-svg .lg-node circle { fill: var(--bg-3); stroke: var(--fg-dim); stroke-width: 1; cursor: pointer; }
+/* 線・点・文字は、ズームしても画面のピクセルで一定の大きさにする */
+.global-svg .lg-edge { stroke: var(--fg-dim); stroke-width: 1.2; opacity: .45; vector-effect: non-scaling-stroke; }
+.global-svg .lg-node circle { r: calc(var(--rr, 4) * var(--su) * 1px); fill: var(--bg); stroke: var(--fg-dim); stroke-width: 1.6; vector-effect: non-scaling-stroke; cursor: pointer; }
 .global-svg .lg-node:hover circle { fill: var(--link); stroke: var(--link); }
-.global-svg .lg-label { font-size: var(--lfs, 11px); fill: var(--fg); }
-/* タイトルは常に出す。ホバーとカレントのノートは強調する */
-.global-svg .lg-label { paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
-.global-svg .lg-node:hover .lg-label, .global-svg .lg-node.cur .lg-label { font-weight: 700; fill: var(--link); }
+.global-svg .lg-label { font-size: calc(12px * var(--su)); fill: var(--fg); transform: translate(calc(9px * var(--su)), calc(4px * var(--su))); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.global-svg .lg-node:hover .lg-label { display: block !important; font-weight: 700; fill: var(--link); }
+.global-svg .lg-node.cur .lg-label { font-weight: 700; fill: var(--link); }
 .global-svg .lg-node.cur circle { fill: var(--link); stroke: var(--link); }
 .gg-hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: max-content; max-width: 92%; text-align: center; color: var(--fg-dim); font-size: 11.5px; background: var(--bg-2); padding: 3px 10px; border-radius: 10px; opacity: .85; pointer-events: none; }
 

@@ -501,7 +501,7 @@ function addChild(targetRel) {
 // ---------------------------------------------------------------- 全体グラフ
 
 // 位置は端末ごとに保存する（vault には書かない）。一度決めた位置は動かさない。
-const GRAPH_POS_KEY = "pkm-graph-pos";
+const GRAPH_POS_KEY = "pkm-graph-pos-v2"; // 間隔を広げたので v2（古い詰まった配置は使わない）
 
 function loadGraphPos() {
   try { return JSON.parse(localStorage.getItem(GRAPH_POS_KEY) || "{}") || {}; } catch { return {}; }
@@ -552,6 +552,8 @@ function openGlobalGraph({ relayout = false } = {}) {
 
   // ノートの表示は残したまま、左にグラフを並べる（ノートを見ながらグラフを見られる）
   $("global-graph").hidden = false;
+  $("split-handle").hidden = false;
+  applySplit();
   globalView = mountGlobal(svg, rels, edges, pos, {
     label: (r) => titleOf(r),
     onOpen: (r) => openNote(r),
@@ -566,9 +568,44 @@ function openGlobalGraph({ relayout = false } = {}) {
 
 let globalView = null;
 
+// グラフとノートの境界（左のグラフの幅の割合）。端末ごとに記憶する。
+const SPLIT_KEY = "pkm-split";
+
+function loadSplit() {
+  try {
+    const v = Number(localStorage.getItem(SPLIT_KEY));
+    if (v >= 0.25 && v <= 0.85) return v;
+  } catch { /* ignore */ }
+  return 0.58;
+}
+
+function applySplit() {
+  const g = $("global-graph");
+  if (g.classList.contains("full")) { g.style.flex = ""; return; }
+  g.style.flex = `0 0 ${(loadSplit() * 100).toFixed(1)}%`;
+}
+
+function wireSplitHandle() {
+  const h = $("split-handle");
+  let dragging = false;
+  h.addEventListener("pointerdown", (e) => { dragging = true; h.classList.add("drag"); h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const box = $("workspace").getBoundingClientRect();
+    const ratio = Math.min(0.85, Math.max(0.25, (e.clientX - box.left) / box.width));
+    try { localStorage.setItem(SPLIT_KEY, String(ratio)); } catch { /* ignore */ }
+    applySplit();
+  });
+  const end = (e) => { dragging = false; h.classList.remove("drag"); try { h.releasePointerCapture(e.pointerId); } catch { /* ignore */ } };
+  h.addEventListener("pointerup", end);
+  h.addEventListener("pointercancel", end);
+}
+
 function closeGlobalGraph() {
   if ($("global-graph").hidden) return;
   $("global-graph").hidden = true;
+  $("split-handle").hidden = true;
+  $("global-graph").style.flex = "";
   $("global-graph").classList.remove("full");
   $("gg-full").classList.remove("on");
   globalView = null;
@@ -915,12 +952,14 @@ function wireToolbar() {
   $("delete-btn").onclick = deleteCurrent;
   $("theme-btn").onclick = toggleTheme;
   $("search").oninput = renderSidebar;
+  wireSplitHandle();
   $("graph-btn").onclick = () => openGlobalGraph();
   $("gg-close").onclick = () => closeGlobalGraph();
   $("gg-reset").onclick = () => globalView?.reset();
   $("gg-full").onclick = () => {
     const on = $("global-graph").classList.toggle("full");
     $("gg-full").classList.toggle("on", on);
+    applySplit();
     setTimeout(() => globalView?.reset(), 0);
   };
   $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
@@ -985,7 +1024,7 @@ function initTheme() {
 function init() {
   for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
     "search", "sort-key", "sort-dir", "note-list", "panel-cfg-btn", "panel-menu", "graph-depth", "graph-svg",
-    "graph-btn", "global-graph", "global-svg", "gg-count", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
+    "graph-btn", "global-graph", "global-svg", "gg-count", "split-handle", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
     "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
     "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
     els[id] = $(id);

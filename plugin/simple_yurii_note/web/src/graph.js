@@ -144,7 +144,7 @@ export function layoutGlobal(nodes, edges, stored = {}) {
       pos.set(r, { x: (rand() - 0.5) * SPAN, y: (rand() - 0.5) * SPAN });
     }
   }
-  const K = 46; // ノード同士の目安の間隔
+  const K = 110; // ノード同士の目安の間隔（長い日本語タイトルが並んでも読める広さ）
   const CELL = K * 2;
   const iters = movable.length > 2000 ? 90 : 160;
   for (let it = 0; it < iters; it++) {
@@ -180,7 +180,7 @@ export function layoutGlobal(nodes, edges, stored = {}) {
         const q = pos.get(o);
         const ex = q.x - p.x, ey = q.y - p.y;
         const d = Math.sqrt(ex * ex + ey * ey) || 1;
-        const f = (d - K) * 0.08;
+        const f = (d - K * 0.8) * 0.08;
         dx += (ex / d) * f;
         dy += (ey / d) * f;
       }
@@ -199,9 +199,20 @@ export function layoutGlobal(nodes, edges, stored = {}) {
 
 // 全体グラフを描く。pos は rel → {x,y}。パン（背景ドラッグ）・ズーム（ホイール）・
 // ノードのドラッグで位置を変える（onMove で保存）・クリックで開く。
+// 点の大きさと文字は画面のピクセルで一定。つながりの多いノートほど大きく、
+// 重なるタイトルは、つながりの多い順に残し、拡大すると他のタイトルも出る。
 export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
   svg.innerHTML = "";
+  const deg = new Map(nodes.map((r) => [r, 0]));
+  for (const [a, b] of edges) {
+    if (deg.has(a)) deg.set(a, deg.get(a) + 1);
+    if (deg.has(b)) deg.set(b, deg.get(b) + 1);
+  }
+  // 優先順位: つながりの多い順（同じなら名前順）。重なったとき上位のタイトルを残す。
+  const order = [...nodes].sort((x, y) => deg.get(y) - deg.get(x) || label(x).localeCompare(label(y), "ja"));
+
   let view = { x: 0, y: 0, w: 800, h: 600 };
+  const size = () => ({ cw: svg.clientWidth || 800, ch: svg.clientHeight || 600 });
   const fit = () => {
     let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
     for (const p of pos.values()) {
@@ -209,24 +220,15 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
       if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
     }
     if (!Number.isFinite(minx)) { minx = miny = -100; maxx = maxy = 100; }
-    const pad = 40;
-    // 1 単位 = 1 画面ピクセルを基本にし、入り切らないときだけ縮小する（文字の大きさを保つ）
-    const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600;
+    const pad = 70;
+    const { cw, ch } = size();
     const cW = Math.max(200, maxx - minx + pad * 2), cH = Math.max(200, maxy - miny + pad * 2);
-    // 少ない件数は画面の 7 割まで広げて見せる（0.6 倍まで拡大）。多い件数は入る大きさに縮小。
-    const k = Math.max(0.6, cW / (cw * 0.7), cH / (ch * 0.7));
+    // 少ない件数でも画面いっぱいに広げ（最大 0.7 倍まで拡大）、多いときは入る大きさに縮小する
+    const k = Math.max(0.7, cW / cw, cH / ch);
     const w = cw * k, h = ch * k;
     const mx = (minx + maxx) / 2, my = (miny + maxy) / 2;
     view = { x: mx - w / 2, y: my - h / 2, w, h };
   };
-  // 文字は画面のピクセルで一定の大きさにする（ズームしても読みやすさを保つ）
-  const apply = () => {
-    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
-    const cw = svg.clientWidth || 800;
-    svg.style.setProperty("--lfs", (11 * view.w / cw).toFixed(2) + "px");
-  };
-  fit();
-  apply();
 
   const gEdges = el("g", { class: "lg-edges" });
   const lines = [];
@@ -239,16 +241,26 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
   svg.appendChild(gEdges);
   const gNodes = el("g", { class: "lg-nodes" });
   const nodeEls = new Map();
+  const labelEls = new Map();
+  const texts = new Map();
   for (const r of nodes) {
+    const d = deg.get(r);
     const g = el("g", { class: "lg-node d2" });
-    g.appendChild(el("circle", { r: 4 }));
-    const t = el("text", { x: 7, y: 3.5, class: "lg-label" });
-    t.textContent = label(r);
+    const c = el("circle", {});
+    // 点の半径(px) = 3.5 + 1.5√つながり数（上限 10）。実寸への換算は CSS 変数で行う
+    c.style.setProperty("--rr", Math.min(10, 3.5 + 1.5 * Math.sqrt(d)).toFixed(2));
+    g.appendChild(c);
+    const t = el("text", { x: 0, y: 0, class: "lg-label" });
+    const name = label(r);
+    t.textContent = name;
     g.appendChild(t);
     gNodes.appendChild(g);
     nodeEls.set(r, g);
+    labelEls.set(r, t);
+    texts.set(r, name);
   }
   svg.appendChild(gNodes);
+
   const syncPos = () => {
     for (const r of nodes) {
       const p = pos.get(r), g = nodeEls.get(r);
@@ -260,7 +272,77 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
       ln.setAttribute("x2", pb.x); ln.setAttribute("y2", pb.y);
     }
   };
+
+  // 画面上の位置でタイトルの重なりを調べ、上位のものから残す（空間グリッドで高速化）
+  let curRel = null;
+  const cullLabels = () => {
+    const { cw, ch } = size();
+    const su = view.w / cw; // 1 画面ピクセルあたりの座標単位
+    const grid = new Map();
+    const CELL = 140;
+    const fits = (x0, y0, x1, y1) => {
+      for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) {
+        for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) {
+          for (const q of grid.get(gx + "," + gy) || []) {
+            if (x0 < q[2] && q[0] < x1 && y0 < q[3] && q[1] < y1) return false;
+          }
+        }
+      }
+      return true;
+    };
+    const put = (x0, y0, x1, y1) => {
+      for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) {
+        for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) {
+          const k = gx + "," + gy;
+          if (!grid.has(k)) grid.set(k, []);
+          grid.get(k).push([x0, y0, x1, y1]);
+        }
+      }
+    };
+    const FS = 12, H = FS + 3;
+    const widthOf = (s) => {
+      let w = 0;
+      for (const ch2 of s) w += ch2.charCodeAt(0) > 0x2e80 ? FS : FS * 0.58;
+      return w + 8;
+    };
+    // 今開いているノートは最優先で残す
+    const seq = curRel ? [curRel, ...order.filter((r) => r !== curRel)] : order;
+    for (const r of seq) {
+      const p = pos.get(r), t = labelEls.get(r);
+      if (!p || !t) continue;
+      const sx = (p.x - view.x) / su, sy = (p.y - view.y) / su;
+      // 画面外のタイトルは出さない
+      if (sx < -200 || sx > cw + 200 || sy < -40 || sy > ch + 40) { t.style.display = "none"; continue; }
+      const x0 = sx + 8, x1 = x0 + widthOf(texts.get(r)), y0 = sy - H / 2, y1 = sy + H / 2;
+      if (fits(x0, y0, x1, y1)) { put(x0, y0, x1, y1); t.style.display = ""; }
+      else t.style.display = "none";
+    }
+  };
+
+  let raf = 0;
+  const apply = () => {
+    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+    const { cw } = size();
+    svg.style.setProperty("--su", (view.w / cw).toFixed(4));
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; cullLabels(); });
+  };
+  fit();
   syncPos();
+  apply();
+
+  // 画面サイズが変わったら（境界のドラッグ・ウィンドウ変更・全画面）、拡大率と中心を保って描き直す
+  let last = size();
+  const ro = new ResizeObserver(() => {
+    const n = size();
+    if (!n.cw || !n.ch || (n.cw === last.cw && n.ch === last.ch)) return;
+    const su = view.w / last.cw;
+    const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+    view.w = n.cw * su; view.h = n.ch * su;
+    view.x = cx - view.w / 2; view.y = cy - view.h / 2;
+    last = n;
+    apply();
+  });
+  ro.observe(svg);
 
   const clientToSvg = (e) => {
     const pt = svg.createSVGPoint();
@@ -271,7 +353,7 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
   svg.addEventListener("wheel", (e) => {
     e.preventDefault();
     const m = clientToSvg(e);
-    const k = e.deltaY > 0 ? 1.1 : 1 / 1.1;
+    const k = e.deltaY > 0 ? 1.12 : 1 / 1.12;
     view = { x: m.x - (m.x - view.x) * k, y: m.y - (m.y - view.y) * k, w: view.w * k, h: view.h * k };
     apply();
   }, { passive: false });
@@ -299,7 +381,7 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
       syncPos();
     } else {
       view.x = drag.vx - dx; view.y = drag.vy - dy;
-      apply();
+      svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
     }
   });
   const end = (e) => {
@@ -308,22 +390,22 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
     drag = null;
     try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     if (d.kind === "node") {
-      if (d.moved) onMove?.(d.rel, pos.get(d.rel));
+      if (d.moved) { onMove?.(d.rel, pos.get(d.rel)); apply(); }
       else onOpen?.(d.rel);
-    }
+    } else if (d.moved) apply();
   };
   svg.addEventListener("pointerup", end);
   svg.addEventListener("pointercancel", end);
 
-  let curRel = null;
   return {
     reset() { fit(); apply(); },
     positions: () => pos,
-    // 今開いているノートを強調する
+    // 今開いているノートを強調し、そのタイトルを必ず出す
     setCurrent(rel) {
       if (curRel && nodeEls.get(curRel)) nodeEls.get(curRel).classList.remove("cur");
       curRel = rel;
       if (rel && nodeEls.get(rel)) nodeEls.get(rel).classList.add("cur");
+      apply();
     },
   };
 }
