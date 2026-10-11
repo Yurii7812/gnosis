@@ -528,7 +528,8 @@ function allEdges(rels) {
 }
 
 function openGlobalGraph({ relayout = false } = {}) {
-  if (!state.root) return;
+  // 開いた vault があるか。Electron は vault のハンドルが null（パス固定）なので、ハンドルではなく開いたかで判定する
+  if (!state.rels.length) return;
   const rels = state.rels.slice();
   const edges = allEdges(rels);
   const stored = loadGraphPos();
@@ -680,7 +681,8 @@ function pickNote(cb) {
 
 // Ctrl+O: ノートへ素早く移動（空欄なら最近見たノート）。Ctrl+Enter 相当は無し（Ctrl+クリックで新タブ）
 function quickSwitcher() {
-  if (!state.root) return;
+  // 開いた vault があるか。Electron は vault のハンドルが null（パス固定）なので、ハンドルではなく開いたかで判定する
+  if (!state.rels.length) return;
   const recents = () => {
     const seen = new Set();
     const out = [];

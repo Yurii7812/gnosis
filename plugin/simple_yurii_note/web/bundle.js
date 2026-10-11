@@ -29997,7 +29997,7 @@
     return edges;
   }
   function openGlobalGraph({ relayout = false } = {}) {
-    if (!state.root) return;
+    if (!state.rels.length) return;
     const rels = state.rels.slice();
     const edges = allEdges(rels);
     const stored = loadGraphPos();
@@ -30161,7 +30161,7 @@
     });
   }
   function quickSwitcher() {
-    if (!state.root) return;
+    if (!state.rels.length) return;
     const recents = () => {
       const seen = /* @__PURE__ */ new Set();
       const out = [];
