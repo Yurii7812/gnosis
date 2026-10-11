@@ -182,7 +182,8 @@ function decorateLine(line, active, inFence, decos, cfg) {
     const tg = m[2];
     const dispStart = base + a + 1;
     const dispEnd = dispStart + disp.length;
-    const isMd = tg.toLowerCase().endsWith(".md");
+    // `ノート.md#見出し` のようにアンカー（#…）が付いたリンクも、ノートへのリンクとして扱う
+    const isMd = tg.split("#")[0].toLowerCase().endsWith(".md");
     decos.push(Decoration.mark({
       class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
       attributes: isMd ? { "data-md-href": tg } : {},

@@ -41,6 +41,30 @@ for (let round = 0; round < 3; round++) {
   step("vtext short", () => v.setVtext([]));
   step("insert at end of short", () => v.setVim({ cur: [n(B) - 1, 13], mode: "i" }));
 }
+// アンカー（#見出し）つきのリンクも、クリックできるノートのリンク（data-md-href）になること
+step("anchor link is a clickable note link", () => {
+  v.setText("# 見出し\\n\\n[二](n.md#2f)\\n[普通](m.md)\\n[外部](https://example.com/a.md#x)\\n");
+  v.setVim({ cur: [1, 1], mode: "n" });
+  const hrefs = [...document.querySelectorAll("[data-md-href]")].map((e) => e.getAttribute("data-md-href"));
+  if (!hrefs.includes("n.md#2f")) throw new Error("anchor link not clickable: " + JSON.stringify(hrefs));
+  if (!hrefs.includes("m.md")) throw new Error("plain link not clickable: " + JSON.stringify(hrefs));
+});
+// 見出しの下のリンクをクリックした位置が、そのリンクの行に対応すること（見出しに縦の margin があると、
+// CodeMirror が高さに入れられず、下の行がずれて、隣の行のリンクが開いていた）
+step("click position maps to the right line below headings", () => {
+  const doc = "---\\ntime: 2026-10-11 10:00:00\\ntitle: t\\n---\\n\\n# 見出し1\\n\\n## 見出し2\\n\\n[a](n.md#x)\\n### 見出し3\\n[b](m.md)\\n[c](o.md)\\n";
+  v.setText(doc);
+  v.setVim({ cur: [10, 1], mode: "n" });
+  const ed = v.view;
+  for (const href of ["n.md#x", "m.md", "o.md"]) {
+    const el = document.querySelector('[data-md-href="' + href + '"]');
+    if (!el) throw new Error("link element missing: " + href);
+    const r = el.getBoundingClientRect();
+    const pos = ed.posAtCoords({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    const line = pos == null ? "(none)" : ed.state.doc.lineAt(pos).text;
+    if (!line.includes("](" + href + ")")) throw new Error("click at " + href + " maps to line: " + line);
+  }
+});
 setTimeout(() => { document.title = "RESULT=" + JSON.stringify(log); }, 600);
 `);
 fs.writeFileSync(path.join(tmp, "index.html"),

@@ -28,7 +28,8 @@ const mk = (name, title, body, parent) => fs.writeFileSync(path.join(vault, name
   `---\ntime: 2026-10-11 10:00:00\ntitle: ${title}\n---\n\n# ${title}\n\n${body}\n\n### Parent\n${parent}\n### BackLink\n`);
 fs.writeFileSync(path.join(vault, "index.md"), "---\ntime: 2026-10-11 10:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n\n[数学とは何か](m1.md)\n[PKM の設計](p1.md)\n");
 mk("m1.md", "数学とは何か", "数学は**形式**と行動の間。\n\n- 箇条書き\n- [ ] 未完了\n\n[PKM の設計](p1.md) と [一貫性](m2.md)", "[Index](index.md)");
-mk("m2.md", "一貫性", "同じ条件に同じ規則。", "[数学とは何か](m1.md)");
+mk("m2.md", "一貫性", "同じ条件に同じ規則。\n\n## sec\n\n見出しの本文", "[数学とは何か](m1.md)");
+mk("anchor.md", "アンカー", "[二](m2.md#sec)", "[Index](index.md)");
 mk("p1.md", "PKM の設計", "言語化は後回し。", "[Index](index.md)");
 
 // 縦長の PNG（文字より背が高いので、スクロールすると画面に出入りする）
@@ -96,6 +97,17 @@ const scenario = `(async () => {
   await press('\\r', 700);
   R.collapsedAfter = !G.isExpanded();
 
+  // アンカー（#見出し）つきのリンクをクリックして、そのノートが開く（クリック → Vim の Enter）
+  await press(':e anchor.md\\r', 1500);
+  const alink = document.querySelector('[data-md-href="m2.md#sec"]');
+  R.anchor = { found: !!alink };
+  if (alink) {
+    const ar = alink.getBoundingClientRect();
+    alink.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: ar.left + ar.width / 2, clientY: ar.top + ar.height / 2, button: 0 }));
+    await sleep(1800);
+    R.anchor.opened = base(G.state().file);
+  }
+
   // 画像: 画面に出入りしても、読み直さず（Blob を作り直さず）、見えている画像は表示され、全体の高さが跳ばない
   window.__blobs = 0; const origBlob = URL.createObjectURL.bind(URL); URL.createObjectURL = (b) => { window.__blobs++; return origBlob(b); };
   await press(':e img.md\\r', 2500);
@@ -141,6 +153,7 @@ try {
   check(Array.isArray(R.__uncaught) && R.__uncaught.length === 0, "uncaught exception after the window was destroyed: " + JSON.stringify(R.__uncaught));
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
+  check(R.anchor?.found && R.anchor.opened === "m2.md", "clicking an anchor link (m2.md#sec) did not open the note: " + JSON.stringify(R.anchor));
   check(R.images?.file === "img.md", "could not open the image note: " + JSON.stringify(R.images));
   check(R.images && R.images.blobs <= 4, "images were re-read on scroll (blob URLs created: " + R.images?.blobs + ", images: 4)");
   check(R.images && R.images.notLoaded === 0, "visible images were not loaded while scrolling: " + JSON.stringify(R.images));

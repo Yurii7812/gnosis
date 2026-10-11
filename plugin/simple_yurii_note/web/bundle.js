@@ -32570,7 +32570,7 @@ ${h2.join(`
       const tg = m[2];
       const dispStart = base2 + a + 1;
       const dispEnd = dispStart + disp.length;
-      const isMd = tg.toLowerCase().endsWith(".md");
+      const isMd = tg.split("#")[0].toLowerCase().endsWith(".md");
       decos.push(Decoration.mark({
         class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
         attributes: isMd ? { "data-md-href": tg } : {}
