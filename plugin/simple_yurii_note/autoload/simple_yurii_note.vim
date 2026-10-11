@@ -38,6 +38,22 @@ function! s:python_cmd() abort
   return executable('python3') ? 'python3' : 'python'
 endfunction
 
+" 同期・並べ替えの外部プロセスを低優先度で走らせる（CPU/ディスクを独占して
+" デスクトップのカーソルや入力が止まるのを防ぐ）。nice/ionice が無ければ何もしない。
+function! s:low_priority_prefix() abort
+  if has('win32')
+    return ''
+  endif
+  let l:p = ''
+  if executable('nice')
+    let l:p .= 'nice -n 19 '
+  endif
+  if executable('ionice')
+    let l:p .= 'ionice -c3 '
+  endif
+  return l:p
+endfunction
+
 function! s:is_markdown_file(path) abort
   return tolower(fnamemodify(a:path, ':e')) ==# 'md'
 endfunction
@@ -51,7 +67,7 @@ function! s:run_sync(args_list) abort
     echoerr 'simple_yurii_note: Python script not found: ' . g:simple_yurii_note_python
     return ''
   endif
-  let l:cmd = s:python_cmd()
+  let l:cmd = s:low_priority_prefix() . s:python_cmd()
   for a in a:args_list
     let l:cmd .= ' ' . shellescape(a)
   endfor
@@ -6418,12 +6434,106 @@ function! simple_yurii_note#update_md(arg) abort
 endfunction
 
 function! simple_yurii_note#update_all(arg) abort
+  " ノート同期（Parent/BackLink 等）は保存のたびに autosync が済ませているので、
+  " ここでは index.md のよみ順ソートと、紙PKM の再生成だけを行う（どちらも裏で実行）。
+  " 全ノートを再同期したいときは :UpdateMD を使う。
+  if !has('job')
+    call s:update_all_sync(a:arg)
+    return
+  endif
+  let l:root = empty(a:arg) ? simple_yurii_note#ensure_root_and_index() : fnamemodify(s:expand_path(a:arg), ':p')
+  if empty(l:root)
+    return
+  endif
+  if !empty(a:arg)
+    let g:simple_yurii_note_root = l:root
+    if !isdirectory(l:root)
+      call mkdir(l:root, 'p')
+    endif
+    call s:save_persisted_root(l:root)
+    call s:setup_persistent_undo_for_root(l:root)
+  endif
+  if simple_yurii_note#is_vault_note(expand('%:p'))
+    call simple_yurii_note#save_current_note()
+  endif
+  let l:pkm = s:get_pkm_root()
+  let l:paper = s:paper_pkm_script()
+  if !empty(l:pkm) && !empty(s:paper_index_path(l:pkm)) && filereadable(l:paper)
+    let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:paper)
+          \ . ' regen ' . shellescape(l:pkm)
+    call job_start(['/bin/sh', '-c', l:cmd], {
+          \ 'exit_cb': function('s:update_all_done', [l:root]),
+          \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+  else
+    call s:sort_index_async(l:root)
+  endif
+  echo 'simple_yurii_note: UpdateAll（index 並べ替え・紙PKM 再生成）を裏で実行中…'
+endfunction
+
+function! s:update_all_done(root, job, status) abort
+  call s:reload_current()
+  call s:sort_index_async(a:root)
+endfunction
+
+" index.md のよみソートを裏で実行する。ソート中に index.md が変わったり、未保存の
+" 変更があるときは上書きしない。
+function! s:sort_index_async(root) abort
+  if !has('job')
+    call s:sort_index_file(a:root)
+    return
+  endif
+  let l:index = s:index_path(a:root)
+  let l:script = s:sort_yomi_script()
+  if !filereadable(l:index) || !filereadable(l:script)
+    return
+  endif
+  let l:lines = readfile(l:index)
+  if empty(l:lines)
+    return
+  endif
+  let l:in = tempname()
+  let l:out = tempname()
+  let l:rep = tempname()
+  call writefile(l:lines, l:in)
+  let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:script)
+        \ . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
+        \ . ' --report-file ' . shellescape(l:rep)
+        \ . ' < ' . shellescape(l:in) . ' > ' . shellescape(l:out)
+  call job_start(['/bin/sh', '-c', l:cmd], {
+        \ 'exit_cb': function('s:sort_index_done', [l:index, l:lines, l:in, l:out, l:rep]),
+        \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+endfunction
+
+function! s:sort_index_done(index, lines, in, out, rep, job, status) abort
+  let l:new = (a:status == 0 && filereadable(a:out)) ? readfile(a:out) : []
+  call delete(a:in)
+  call delete(a:out)
+  call delete(a:rep)
+  if a:status != 0 || empty(l:new)
+    return
+  endif
+  " ソート中に index.md が書き換わっていたら、古い入力の結果で上書きしない
+  if !filereadable(a:index) || readfile(a:index) !=# a:lines
+    return
+  endif
+  let l:nr = bufnr(a:index)
+  if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+    return
+  endif
+  if len(l:new) != len(a:lines) || l:new ==# a:lines
+    return
+  endif
+  call writefile(l:new, a:index)
+  call s:reload_current()
+endfunction
+
+function! s:update_all_sync(arg) abort
   call simple_yurii_note#update_md(a:arg)
   " 紙PKM（Index・グループ・Folgezettel-Index・専用ノート）も再生成する
   let l:root = s:get_pkm_root()
   let l:paper = s:paper_pkm_script()
   if !empty(l:root) && !empty(s:paper_index_path(l:root)) && filereadable(l:paper)
-    call system(s:python_cmd() . ' ' . shellescape(l:paper) . ' regen ' . shellescape(l:root))
+    call system(s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:paper) . ' regen ' . shellescape(l:root))
     checktime
   endif
   if !empty(l:root)
@@ -6449,7 +6559,7 @@ function! s:sort_index_file(root) abort
     return
   endif
   let l:report = tempname()
-  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
+  let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
         \ . ' --report-file ' . shellescape(l:report)
   let l:out = system(l:cmd, join(l:lines, "\n") . "\n")
   call delete(l:report)
@@ -6512,8 +6622,19 @@ endfunction
 "   - 完了後 checktime で Vim バッファを更新
 " ---------------------------------------------------------------------------
 
+" デバッグログ: /tmp/syn-autosync.on があるときだけ /tmp/syn-autosync.log に追記する。
+" 保存時の同期が走らなかった理由を調べるためのもの（普段は何もしない）。
+function! simple_yurii_note#autosync_log(msg) abort
+  if !filereadable('/tmp/syn-autosync.on')
+    return
+  endif
+  call writefile([strftime('%H:%M:%S') . ' ' . a:msg], '/tmp/syn-autosync.log', 'a')
+endfunction
+
 function! simple_yurii_note#autosync_on_save() abort
+  call simple_yurii_note#autosync_log('autosync_on_save file=' . expand('%:p'))
   if !filereadable(g:simple_yurii_note_python)
+    call simple_yurii_note#autosync_log('  skip: python script not readable: ' . g:simple_yurii_note_python)
     return
   endif
 
@@ -6521,9 +6642,11 @@ function! simple_yurii_note#autosync_on_save() abort
   let l:file = expand('%:p')
   let l:root = s:get_pkm_root()
   if empty(l:root) || !filereadable(s:index_path(l:root))
+    call simple_yurii_note#autosync_log('  skip: root=' . l:root . ' index readable=' . (empty(l:root) ? 0 : filereadable(s:index_path(l:root))))
     return
   endif
   if !s:is_root_note_path(l:file)
+    call simple_yurii_note#autosync_log('  skip: not a root note path (root=' . l:root . ')')
     return
   endif
 
@@ -6551,11 +6674,15 @@ function! simple_yurii_note#autosync_on_save() abort
   let l:py   = s:python_cmd()
   let l:args = [l:py, g:simple_yurii_note_python, 'update_one', l:file, l:root]
 
+  " index.md を保存したときは、同期のあとでよみ順に並べ替える
+  let l:is_index = fnamemodify(l:file, ':p') ==# fnamemodify(s:index_path(l:root), ':p')
+
   if has('job') && has('channel')
     " 非同期実行
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
+    call simple_yurii_note#autosync_log('  start job: ' . l:cmd)
     call job_start(['/bin/sh', '-c', l:cmd], {
-          \ 'exit_cb': function('s:autosync_done'),
+          \ 'exit_cb': l:is_index ? function('s:autosync_index_done', [l:root]) : function('s:autosync_done'),
           \ 'out_io':  'null',
           \ 'err_io':  'null',
           \ })
@@ -6566,12 +6693,21 @@ function! simple_yurii_note#autosync_on_save() abort
     if !v:shell_error
       checktime
     endif
+    if l:is_index
+      call s:sort_index_file(l:root)
+    endif
   endif
 endfunction
 
 function! s:autosync_done(job, status) abort
   " job完了後にバッファを外部変更に合わせる
+  call simple_yurii_note#autosync_log('  job done status=' . a:status)
   call s:reload_current()
+endfunction
+
+function! s:autosync_index_done(root, job, status) abort
+  call s:reload_current()
+  call s:sort_index_async(a:root)
 endfunction
 
 " 任意のファイルパスに対して update_one を起動するヘルパー

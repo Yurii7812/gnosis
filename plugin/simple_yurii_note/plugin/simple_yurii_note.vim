@@ -867,8 +867,17 @@ augroup simple_yurii_note_autosync
 augroup END
 
 function! s:on_write_post() abort
-  if !g:simple_yurii_note_autosync | return | endif
-  call simple_yurii_note#autosync_on_save()
+  if !g:simple_yurii_note_autosync
+    call simple_yurii_note#autosync_log('on_write_post: autosync is off')
+    return
+  endif
+  try
+    call simple_yurii_note#autosync_on_save()
+  catch
+    " silent! update の中で起きた例外は握りつぶされるので、ログに残してから再送出する
+    call simple_yurii_note#autosync_log('  EXCEPTION: ' . v:exception . ' @ ' . v:throwpoint)
+    throw v:exception
+  endtry
 endfunction
 
 function! s:normalize_cmdline(cmdline) abort
