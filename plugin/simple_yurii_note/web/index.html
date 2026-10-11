@@ -25,6 +25,14 @@
         <div class="side-head">
           <input id="search" type="search" placeholder="ノートを絞り込む">
         </div>
+        <div class="sort-row">
+          <select id="sort-key" title="並び替え">
+            <option value="name">名前順</option>
+            <option value="mtime">更新日順</option>
+            <option value="ctime">作成日順</option>
+          </select>
+          <button id="sort-dir" class="text-btn" title="正順 / 逆順の切替">正順</button>
+        </div>
         <div id="note-list" class="note-list"></div>
         <div class="side-foot">
           <span id="vault-name" class="vault-name">vault 未選択</span>

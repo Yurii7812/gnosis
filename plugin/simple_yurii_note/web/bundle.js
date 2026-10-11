@@ -440,16 +440,18 @@
   }
   async function readVault(rootHandle) {
     if (isElectron()) {
-      const { files: files2, rels: rels2, titleState: titleState2 } = await window.pkm.listVault();
-      return { files: new Map(files2), rels: rels2, titleState: titleState2 || {} };
+      const { files: files2, rels: rels2, titleState: titleState2, mtimes: mtimes2 } = await window.pkm.listVault();
+      return { files: new Map(files2), rels: rels2, titleState: titleState2 || {}, mtimes: new Map(Object.entries(mtimes2 || {})) };
     }
     const files = /* @__PURE__ */ new Map();
     const rels = [];
+    const mtimes = /* @__PURE__ */ new Map();
     for await (const ent of walk(rootHandle)) {
       if (!ent.name.toLowerCase().endsWith(".md")) continue;
       try {
         const f = await ent.handle.getFile();
         files.set(ent.rel, await f.text());
+        mtimes.set(ent.rel, f.lastModified || 0);
         rels.push(ent.rel);
       } catch {
       }
@@ -461,7 +463,7 @@
       titleState = JSON.parse(await (await fh.getFile()).text());
     } catch {
     }
-    return { files, rels, titleState };
+    return { files, rels, titleState, mtimes };
   }
   async function getDirHandle(rootHandle, dirPath, create = false) {
     let dir = rootHandle;
@@ -29157,6 +29159,9 @@
     notes: /* @__PURE__ */ new Map(),
     titleState: {},
     tabs: [],
+    mtimes: /* @__PURE__ */ new Map(),
+    sortKey: "name",
+    sortDesc: false,
     hist: [],
     histIdx: -1,
     current: null,
@@ -29247,8 +29252,9 @@
   }
   async function openVault(handle) {
     state.root = handle;
-    const { files, rels, titleState } = await readVault(handle);
+    const { files, rels, titleState, mtimes } = await readVault(handle);
     state.files = files;
+    state.mtimes = mtimes;
     state.rels = rels;
     state.titleState = titleState;
     parseAll();
@@ -29262,9 +29268,10 @@
   async function refreshFromDisk() {
     if (!state.root || state.dirty) return;
     try {
-      const { files, rels } = await readVault(state.root);
+      const { files, rels, mtimes } = await readVault(state.root);
       state.files = files;
       state.rels = rels;
+      state.mtimes = mtimes;
       parseAll();
       renderSidebar();
       if (state.current && !state.dirty) {
@@ -29275,6 +29282,44 @@
     } catch {
     }
   }
+  function createdOf(rel) {
+    const n = state.notes.get(rel);
+    const line = (n?.fm || []).find((l) => /^\s*time\s*:/.test(l));
+    if (!line) return 0;
+    const v = line.replace(/^\s*time\s*:\s*/, "").trim().replace(" ", "T");
+    return Date.parse(v) || 0;
+  }
+  function modifiedOf(rel) {
+    return state.mtimes.get(rel) || 0;
+  }
+  var SORT_KEYS = {
+    name: (a, b) => a.title.localeCompare(b.title, "ja"),
+    mtime: (a, b) => a.mtime - b.mtime || a.title.localeCompare(b.title, "ja"),
+    ctime: (a, b) => a.ctime - b.ctime || a.title.localeCompare(b.title, "ja")
+  };
+  function sortEntries(list) {
+    const cmp = SORT_KEYS[state.sortKey] || SORT_KEYS.name;
+    list.sort((a, b) => state.sortDesc ? -cmp(a, b) : cmp(a, b));
+    return list;
+  }
+  function saveSortPref() {
+    try {
+      localStorage.setItem("pkm-sort", JSON.stringify({ key: state.sortKey, desc: state.sortDesc }));
+    } catch {
+    }
+  }
+  function loadSortPref() {
+    try {
+      const v = JSON.parse(localStorage.getItem("pkm-sort") || "null");
+      if (v && SORT_KEYS[v.key]) {
+        state.sortKey = v.key;
+        state.sortDesc = !!v.desc;
+      }
+    } catch {
+    }
+    $("sort-key").value = state.sortKey;
+    $("sort-dir").textContent = state.sortDesc ? "\u9006\u9806" : "\u6B63\u9806";
+  }
   function renderSidebar() {
     const q = ($("search").value || "").trim().toLowerCase();
     const words = q ? q.split(/\s+/) : [];
@@ -29283,9 +29328,15 @@
       const n = state.notes.get(rel);
       const hay = (n.title + " " + n.body.join("\n")).toLowerCase();
       if (words.length && !words.every((w) => hay.includes(w))) continue;
-      list.push({ rel, title: n.title, group: n.attr === "group" || basename(rel) === "index.md" });
+      list.push({
+        rel,
+        title: n.title,
+        group: n.attr === "group" || basename(rel) === "index.md",
+        mtime: modifiedOf(rel),
+        ctime: createdOf(rel)
+      });
     }
-    list.sort((a, b) => a.title.localeCompare(b.title, "ja"));
+    sortEntries(list);
     const box = $("note-list");
     box.innerHTML = "";
     for (const it of list) {
@@ -29790,6 +29841,7 @@
       if (overrides2) for (const [rel, text] of overrides2) writes.push({ rel, text });
       await apply(state.root, { writes });
       const rv = await readVault(null);
+      state.mtimes = rv.mtimes;
       state.files = rv.files;
       state.rels = rv.rels;
       state.titleState = rv.titleState;
@@ -29810,6 +29862,7 @@
       if (finalText !== state.files.get(file)) {
         await writeFile(state.root, file, finalText);
         state.files.set(file, finalText);
+        state.mtimes.set(file, Date.now());
       }
     }
     if (res.titleStateChanged) {
@@ -29915,6 +29968,17 @@ ${attr}---
     $("delete-btn").onclick = deleteCurrent;
     $("theme-btn").onclick = toggleTheme;
     $("search").oninput = renderSidebar;
+    $("sort-key").onchange = () => {
+      state.sortKey = $("sort-key").value;
+      saveSortPref();
+      renderSidebar();
+    };
+    $("sort-dir").onclick = () => {
+      state.sortDesc = !state.sortDesc;
+      $("sort-dir").textContent = state.sortDesc ? "\u9006\u9806" : "\u6B63\u9806";
+      saveSortPref();
+      renderSidebar();
+    };
     $("title-input").oninput = markDirty;
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -29989,6 +30053,8 @@ ${attr}---
       "toolbar",
       "vault-name",
       "search",
+      "sort-key",
+      "sort-dir",
       "note-list",
       "tabs",
       "title-input",
@@ -30013,6 +30079,7 @@ ${attr}---
     ]) {
       els[id2] = $(id2);
     }
+    loadSortPref();
     $("rel-parent").dataset.label = "\u89AA (Parent)";
     $("rel-related").dataset.label = "\u95A2\u9023 (Related)";
     $("rel-children").dataset.label = "\u5B50 (\u672C\u6587\u30EA\u30F3\u30AF)";

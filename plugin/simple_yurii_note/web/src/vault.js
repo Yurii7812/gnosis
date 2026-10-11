@@ -117,16 +117,18 @@ async function* walk(dirHandle, base = "") {
 
 export async function readVault(rootHandle) {
   if (isElectron()) {
-    const { files, rels, titleState } = await window.pkm.listVault();
-    return { files: new Map(files), rels, titleState: titleState || {} };
+    const { files, rels, titleState, mtimes } = await window.pkm.listVault();
+    return { files: new Map(files), rels, titleState: titleState || {}, mtimes: new Map(Object.entries(mtimes || {})) };
   }
   const files = new Map();
   const rels = [];
+  const mtimes = new Map();
   for await (const ent of walk(rootHandle)) {
     if (!ent.name.toLowerCase().endsWith(".md")) continue;
     try {
       const f = await ent.handle.getFile();
       files.set(ent.rel, await f.text());
+      mtimes.set(ent.rel, f.lastModified || 0);
       rels.push(ent.rel);
     } catch { /* skip */ }
   }
@@ -136,7 +138,7 @@ export async function readVault(rootHandle) {
     const fh = await rootHandle.getFileHandle(TITLE_STATE_FILE);
     titleState = JSON.parse(await (await fh.getFile()).text());
   } catch { /* none */ }
-  return { files, rels, titleState };
+  return { files, rels, titleState, mtimes };
 }
 
 async function getDirHandle(rootHandle, dirPath, create = false) {

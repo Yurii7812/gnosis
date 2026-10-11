@@ -179,6 +179,24 @@ async function main(){
     fwdBtn.click(); await sleep(120);
     const navAfterFwd = {current: app.state.current};
     tabs.nav = {navBefore, curBeforeBtn, navAfterBack, navAfterFwd};
+    step('sort');
+    // 並び替え: 名前順の正順 → 逆順、更新日順・作成日順に切り替えても一覧が崩れない
+    const titlesNow = () => [...document.querySelectorAll('.note-item .ni-title')].map(e => e.textContent);
+    const sortKeyEl = document.getElementById('sort-key'), sortDirEl = document.getElementById('sort-dir');
+    sortKeyEl.value = 'name'; sortKeyEl.dispatchEvent(new Event('change')); await sleep(30);
+    const nameAsc = titlesNow();
+    sortDirEl.click(); await sleep(30);
+    const nameDesc = titlesNow();
+    sortKeyEl.value = 'ctime'; sortKeyEl.dispatchEvent(new Event('change')); await sleep(30);
+    const ctimeDesc = titlesNow();
+    sortDirEl.click(); await sleep(30);
+    const ctimeAsc = titlesNow();
+    sortKeyEl.value = 'mtime'; sortKeyEl.dispatchEvent(new Event('change')); await sleep(30);
+    const mtimeCount = titlesNow().length;
+    const sortInfo = {nameAsc, nameDesc, ctimeDesc, ctimeAsc, mtimeCount, dirLabel: sortDirEl.textContent};
+    // 元に戻す（以降のテストは既定の名前順正順で行う）
+    sortKeyEl.value = 'name'; sortKeyEl.dispatchEvent(new Event('change'));
+    if (sortDirEl.textContent === '逆順') sortDirEl.click();
     step('palette');
     // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
     app.quickSwitcher(); await sleep(60);
@@ -188,7 +206,7 @@ async function main(){
     const palFiltered = document.querySelectorAll('.modal-item').length;
     inp.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter'})); await sleep(200);
     const palet = {palAll, palFiltered, palCurrent: app.state.current, modalHidden: document.getElementById('modal').hidden, stat: document.getElementById('stat-count').textContent};
-    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet});
+    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet, sortInfo});
   }catch(e){ setRes({errs:window.__errs, fatal:String(e&&e.stack||e)}); }
 }
 main();
@@ -217,6 +235,12 @@ try {
   if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
+  const si = result.sortInfo || {};
+  const asc = si.nameAsc || [], desc = si.nameDesc || [];
+  if (asc.length < 3 || JSON.stringify(desc) !== JSON.stringify([...asc].reverse())) { console.error("sort name asc/desc failed: " + JSON.stringify(si)); process.exit(1); }
+  if (JSON.stringify(si.ctimeAsc || []) !== JSON.stringify([...(si.ctimeDesc || [])].reverse())) { console.error("sort ctime asc/desc not reversed: " + JSON.stringify(si)); process.exit(1); }
+  if (si.mtimeCount !== asc.length) { console.error("sort mtime lost items: " + JSON.stringify(si)); process.exit(1); }
+  if (si.dirLabel !== '逆順' && si.dirLabel !== '正順') { console.error("direction label wrong: " + JSON.stringify(si)); process.exit(1); }
   const nv = t.nav || {};
   if (nv.navBefore?.back !== false || nv.navBefore?.fwd !== false) { console.error("nav buttons state wrong at start: " + JSON.stringify(nv)); process.exit(1); }
   if (nv.navAfterBack?.current === nv.curBeforeBtn || !nv.navAfterBack?.fwdEnabled) { console.error("back button did not move: " + JSON.stringify(nv)); process.exit(1); }

@@ -85,10 +85,14 @@ async function readTitleState(root) {
 async function listVault(root) {
   const rels = (await listMd(root)).sort();
   const files = [];
+  const mtimes = {};
   for (const rel of rels) {
-    try { files.push([rel, await readNote(root, rel)]); } catch { /* skip */ }
+    try {
+      files.push([rel, await readNote(root, rel)]);
+      mtimes[rel] = (await fsp.stat(safeJoin(root, rel))).mtimeMs;
+    } catch { /* skip */ }
   }
-  return { files, rels: files.map(([r]) => r).sort(), titleState: await readTitleState(root) };
+  return { files, rels: files.map(([r]) => r).sort(), titleState: await readTitleState(root), mtimes };
 }
 
 function pidAlive(pid) {

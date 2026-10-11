@@ -86,6 +86,14 @@ kbd {
 .side-head { padding: 6px 8px 8px; }
 .side-head input { width: 100%; background: var(--bg); }
 .side-head input:focus { border-color: var(--fg-dim); box-shadow: none; }
+.sort-row { display: flex; align-items: center; gap: 6px; padding: 0 8px 6px; }
+.sort-row select {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 12.5px; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px 6px;
+}
+.sort-row select:focus { outline: none; border-color: var(--fg-dim); }
+.sort-row #sort-dir { background: var(--bg); border: 1px solid var(--line); color: var(--fg); font-size: 12px; padding: 3px 9px; }
+.sort-row #sort-dir:hover { background: var(--bg-3); }
 .note-list { overflow-y: auto; flex: 1; padding: 2px 6px 8px; }
 .note-item {
   padding: 5px 9px; border-radius: var(--radius); cursor: pointer; display: flex;

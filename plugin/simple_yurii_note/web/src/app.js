@@ -12,6 +12,9 @@ const state = {
   notes: new Map(),
   titleState: {},
   tabs: [],
+  mtimes: new Map(),
+  sortKey: "name",
+  sortDesc: false,
   hist: [],
   histIdx: -1,
   current: null,
@@ -119,8 +122,9 @@ async function pickAndOpen() {
 
 async function openVault(handle) {
   state.root = handle;
-  const { files, rels, titleState } = await vault.readVault(handle);
+  const { files, rels, titleState, mtimes } = await vault.readVault(handle);
   state.files = files;
+  state.mtimes = mtimes;
   state.rels = rels;
   state.titleState = titleState;
   parseAll();
@@ -135,8 +139,8 @@ async function openVault(handle) {
 async function refreshFromDisk() {
   if (!state.root || state.dirty) return;
   try {
-    const { files, rels } = await vault.readVault(state.root);
-    state.files = files; state.rels = rels; parseAll();
+    const { files, rels, mtimes } = await vault.readVault(state.root);
+    state.files = files; state.rels = rels; state.mtimes = mtimes; parseAll();
     renderSidebar();
     if (state.current && !state.dirty) {
       const n = state.notes.get(state.current);
@@ -148,6 +152,45 @@ async function refreshFromDisk() {
 
 // ---------------------------------------------------------------- sidebar
 
+// 作成日: ノートの front matter の time 欄（無ければ 0）
+function createdOf(rel) {
+  const n = state.notes.get(rel);
+  const line = (n?.fm || []).find((l) => /^\s*time\s*:/.test(l));
+  if (!line) return 0;
+  const v = line.replace(/^\s*time\s*:\s*/, "").trim().replace(" ", "T");
+  return Date.parse(v) || 0;
+}
+
+// 更新日: ファイルの更新時刻（取れなければ 0）
+function modifiedOf(rel) {
+  return state.mtimes.get(rel) || 0;
+}
+
+const SORT_KEYS = {
+  name: (a, b) => a.title.localeCompare(b.title, "ja"),
+  mtime: (a, b) => a.mtime - b.mtime || a.title.localeCompare(b.title, "ja"),
+  ctime: (a, b) => a.ctime - b.ctime || a.title.localeCompare(b.title, "ja"),
+};
+
+function sortEntries(list) {
+  const cmp = SORT_KEYS[state.sortKey] || SORT_KEYS.name;
+  list.sort((a, b) => (state.sortDesc ? -cmp(a, b) : cmp(a, b)));
+  return list;
+}
+
+function saveSortPref() {
+  try { localStorage.setItem("pkm-sort", JSON.stringify({ key: state.sortKey, desc: state.sortDesc })); } catch { /* ignore */ }
+}
+
+function loadSortPref() {
+  try {
+    const v = JSON.parse(localStorage.getItem("pkm-sort") || "null");
+    if (v && SORT_KEYS[v.key]) { state.sortKey = v.key; state.sortDesc = !!v.desc; }
+  } catch { /* ignore */ }
+  $("sort-key").value = state.sortKey;
+  $("sort-dir").textContent = state.sortDesc ? "逆順" : "正順";
+}
+
 function renderSidebar() {
   const q = ($("search").value || "").trim().toLowerCase();
   const words = q ? q.split(/\s+/) : [];
@@ -156,9 +199,12 @@ function renderSidebar() {
     const n = state.notes.get(rel);
     const hay = (n.title + " " + n.body.join("\n")).toLowerCase();
     if (words.length && !words.every((w) => hay.includes(w))) continue;
-    list.push({ rel, title: n.title, group: n.attr === "group" || basename(rel) === "index.md" });
+    list.push({
+      rel, title: n.title, group: n.attr === "group" || basename(rel) === "index.md",
+      mtime: modifiedOf(rel), ctime: createdOf(rel),
+    });
   }
-  list.sort((a, b) => a.title.localeCompare(b.title, "ja"));
+  sortEntries(list);
   const box = $("note-list");
   box.innerHTML = "";
   for (const it of list) {
@@ -616,6 +662,7 @@ async function syncAndWrite(overrides) {
     if (overrides) for (const [rel, text] of overrides) writes.push({ rel, text });
     await vault.apply(state.root, { writes });
     const rv = await vault.readVault(null);
+    state.mtimes = rv.mtimes;
     state.files = rv.files;
     state.rels = rv.rels;
     state.titleState = rv.titleState;
@@ -636,6 +683,7 @@ async function syncAndWrite(overrides) {
     if (finalText !== state.files.get(file)) {
       await vault.writeFile(state.root, file, finalText);
       state.files.set(file, finalText);
+      state.mtimes.set(file, Date.now());
     }
   }
   if (res.titleStateChanged) {
@@ -737,6 +785,12 @@ function wireToolbar() {
   $("delete-btn").onclick = deleteCurrent;
   $("theme-btn").onclick = toggleTheme;
   $("search").oninput = renderSidebar;
+  $("sort-key").onchange = () => { state.sortKey = $("sort-key").value; saveSortPref(); renderSidebar(); };
+  $("sort-dir").onclick = () => {
+    state.sortDesc = !state.sortDesc;
+    $("sort-dir").textContent = state.sortDesc ? "逆順" : "正順";
+    saveSortPref(); renderSidebar();
+  };
   $("title-input").oninput = markDirty;
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrent(); }
@@ -780,11 +834,12 @@ function initTheme() {
 
 function init() {
   for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
-    "search", "note-list", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
+    "search", "sort-key", "sort-dir", "note-list", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
     "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
     "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
     els[id] = $(id);
   }
+  loadSortPref();
   $("rel-parent").dataset.label = "親 (Parent)";
   $("rel-related").dataset.label = "関連 (Related)";
   $("rel-children").dataset.label = "子 (本文リンク)";
