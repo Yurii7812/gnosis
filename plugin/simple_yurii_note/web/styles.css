@@ -150,6 +150,27 @@ kbd {
   border-left: 1px solid var(--line); overflow-y: auto; padding: 12px 10px; min-height: 0;
 }
 .rel-block { margin-bottom: 18px; }
+.rel-tools { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; }
+.rel-tools-title { font-size: 12px; color: var(--fg-dim); font-weight: 700; padding-left: 4px; }
+.panel-menu {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px;
+  margin-bottom: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); font-size: 12.5px;
+}
+.panel-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; cursor: pointer; }
+.panel-menu label:hover { background: var(--bg-3); }
+.panel-menu input { width: 14px; height: 14px; margin: 0; accent-color: var(--fg-dim); }
+.rel-head-row { display: flex; align-items: center; gap: 6px; margin: 0 6px 6px; }
+.rel-head-row .rel-head { margin: 0; }
+.rel-head-row select { font-family: inherit; font-size: 11.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; }
+.graph-svg { width: 100%; height: 230px; display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.lg-edge { stroke: var(--fg-dim); stroke-width: 1; opacity: .45; }
+.lg-node circle { fill: var(--bg-3); stroke: var(--fg-dim); stroke-width: 1.2; cursor: pointer; }
+.lg-node.d0 circle { fill: var(--link); stroke: var(--link); }
+.lg-node.d1 circle { fill: var(--bg-2); stroke: var(--link); }
+.lg-node.d2 circle { fill: var(--bg-2); stroke: var(--fg-dim); }
+.lg-node:hover circle { stroke: var(--link); stroke-width: 2; }
+.lg-label { font-size: 10.5px; fill: var(--fg); pointer-events: none; font-family: var(--font-body); }
+.lg-node.d0 .lg-label { font-weight: 700; }
 .rel-head { font-size: 11px; color: var(--fg-dim); margin: 0 6px 6px; font-weight: 700; letter-spacing: .04em; }
 .rel-list { display: flex; flex-direction: column; gap: 1px; }
 .rel-item { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 6px; }

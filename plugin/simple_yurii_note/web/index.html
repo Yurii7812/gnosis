@@ -72,10 +72,35 @@
       </section>
 
       <aside id="relations">
-        <div id="rel-parent" class="rel-block"></div>
-        <div id="rel-related" class="rel-block"></div>
-        <div id="rel-children" class="rel-block"></div>
-        <div id="rel-back" class="rel-block"></div>
+        <div class="rel-tools">
+          <span class="rel-tools-title">リンク</span>
+          <span class="spacer"></span>
+          <button id="panel-cfg-btn" class="icon-btn" title="右パネルの表示を選ぶ" aria-label="表示設定">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          </button>
+        </div>
+        <div id="panel-menu" class="panel-menu" hidden>
+          <label><input type="checkbox" data-panel="graph"> ローカルグラフ</label>
+          <label><input type="checkbox" data-panel="parent"> 親 (Parent)</label>
+          <label><input type="checkbox" data-panel="related"> 関連 (Related)</label>
+          <label><input type="checkbox" data-panel="children"> 子 (本文リンク)</label>
+          <label><input type="checkbox" data-panel="back"> 被リンク (BackLink)</label>
+        </div>
+        <div id="rel-graph" class="rel-block graph-block">
+          <div class="rel-head-row">
+            <span class="rel-head">ローカルグラフ</span>
+            <span class="spacer"></span>
+            <select id="graph-depth" title="つながりの深さ">
+              <option value="1">深さ 1</option>
+              <option value="2">深さ 2</option>
+            </select>
+          </div>
+          <svg id="graph-svg" class="graph-svg" role="img" aria-label="ローカルグラフ"></svg>
+        </div>
+        <div id="rel-parent" class="rel-block" data-panel="parent"></div>
+        <div id="rel-related" class="rel-block" data-panel="related"></div>
+        <div id="rel-children" class="rel-block" data-panel="children"></div>
+        <div id="rel-back" class="rel-block" data-panel="back"></div>
       </aside>
     </main>
     <footer id="statusbar">

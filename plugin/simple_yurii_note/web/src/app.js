@@ -1,6 +1,7 @@
 import * as vault from "./vault.js";
 import { runSync, parseNote, dumpTitleState, relPath, dirname, basename, stem, normalizePath, UP_MARK, RELATED_MARK, DOWN_MARK } from "./sync.js";
 import { createEditor } from "./editor.js";
+import { buildLocal, drawLocal } from "./graph.js";
 
 const LINK_LINE_RE = /^\s*(\[[^\]]*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$/;
 const INLINE_LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
@@ -13,6 +14,8 @@ const state = {
   titleState: {},
   tabs: [],
   mtimes: new Map(),
+  panels: { graph: true, parent: true, related: true, children: true, back: true },
+  graphDepth: 1,
   sortKey: "name",
   sortDesc: false,
   hist: [],
@@ -360,8 +363,10 @@ function renderRelations() {
     }
   };
 
+  renderPanels();
   if (!rel) {
     $("rel-parent").innerHTML = ""; $("rel-related").innerHTML = ""; $("rel-children").innerHTML = ""; $("rel-back").innerHTML = "";
+    $("graph-svg").innerHTML = "";
     return;
   }
   const n = state.notes.get(rel);
@@ -395,6 +400,53 @@ function renderRelations() {
 
   const backs = linkLines(n.back, rel).map((it) => ({ ...it }));
   setList("rel-back", backs);
+
+  if (state.panels.graph) renderGraph(rel);
+}
+
+// 右パネルの各ブロックを、設定どおりに出す・隠す
+function renderPanels() {
+  for (const el of document.querySelectorAll("#relations [data-panel]")) {
+    el.hidden = !state.panels[el.dataset.panel];
+  }
+  for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
+    cb.checked = !!state.panels[cb.dataset.panel];
+  }
+  $("graph-depth").value = String(state.graphDepth);
+}
+
+function savePanelPref() {
+  try { localStorage.setItem("pkm-panels", JSON.stringify({ panels: state.panels, depth: state.graphDepth })); } catch { /* ignore */ }
+}
+
+function loadPanelPref() {
+  try {
+    const v = JSON.parse(localStorage.getItem("pkm-panels") || "null");
+    if (v?.panels) for (const k of Object.keys(state.panels)) if (typeof v.panels[k] === "boolean") state.panels[k] = v.panels[k];
+    if (v?.depth === 1 || v?.depth === 2) state.graphDepth = v.depth;
+  } catch { /* ignore */ }
+  renderPanels();
+}
+
+// ローカルグラフ: 今のノートを中心に、本文・親・関連・被リンクでつながるノートを描く
+function neighborsOf(rel) {
+  const n = state.notes.get(rel);
+  if (!n) return [];
+  const out = new Set();
+  for (const lines of [n.body, n.parent, n.related, n.back]) {
+    for (const it of linkLines(lines, rel)) if (it.rel !== rel) out.add(it.rel);
+  }
+  return [...out];
+}
+
+function renderGraph(rel) {
+  const svg = $("graph-svg");
+  const model = buildLocal(rel, state.graphDepth, neighborsOf);
+  drawLocal(svg, model, {
+    width: 230, height: 230,
+    label: (r) => titleOf(r),
+    onOpen: (r) => { if (r !== state.current) openNote(r); },
+  });
 }
 
 function addParent(targetRel) {
@@ -785,6 +837,17 @@ function wireToolbar() {
   $("delete-btn").onclick = deleteCurrent;
   $("theme-btn").onclick = toggleTheme;
   $("search").oninput = renderSidebar;
+  $("panel-cfg-btn").onclick = () => { $("panel-menu").hidden = !$("panel-menu").hidden; };
+  for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
+    cb.onchange = () => {
+      state.panels[cb.dataset.panel] = cb.checked;
+      savePanelPref(); renderPanels(); renderRelations();
+    };
+  }
+  $("graph-depth").onchange = () => {
+    state.graphDepth = Number($("graph-depth").value) === 2 ? 2 : 1;
+    savePanelPref(); renderRelations();
+  };
   $("sort-key").onchange = () => { state.sortKey = $("sort-key").value; saveSortPref(); renderSidebar(); };
   $("sort-dir").onclick = () => {
     state.sortDesc = !state.sortDesc;
@@ -834,12 +897,13 @@ function initTheme() {
 
 function init() {
   for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
-    "search", "sort-key", "sort-dir", "note-list", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
+    "search", "sort-key", "sort-dir", "note-list", "panel-cfg-btn", "panel-menu", "graph-depth", "graph-svg", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
     "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
     "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
     els[id] = $(id);
   }
   loadSortPref();
+  loadPanelPref();
   $("rel-parent").dataset.label = "親 (Parent)";
   $("rel-related").dataset.label = "関連 (Related)";
   $("rel-children").dataset.label = "子 (本文リンク)";

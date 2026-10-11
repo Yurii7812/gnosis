@@ -197,6 +197,21 @@ async function main(){
     // 元に戻す（以降のテストは既定の名前順正順で行う）
     sortKeyEl.value = 'name'; sortKeyEl.dispatchEvent(new Event('change'));
     if (sortDirEl.textContent === '逆順') sortDirEl.click();
+    step('panels');
+    // 右パネル: ローカルグラフの深さ 1 と 2 でノード数が増え、表示設定で親ブロックを隠せる
+    await app.openNote('m1.md'); await sleep(30);
+    const nodesAt = () => document.querySelectorAll('#graph-svg .lg-node').length;
+    const graphD1 = nodesAt();
+    const depthEl = document.getElementById('graph-depth');
+    depthEl.value = '2'; depthEl.dispatchEvent(new Event('change')); await sleep(30);
+    const graphD2 = nodesAt();
+    depthEl.value = '1'; depthEl.dispatchEvent(new Event('change')); await sleep(30);
+    const cbParent = document.querySelector('#panel-menu input[data-panel="parent"]');
+    cbParent.checked = false; cbParent.dispatchEvent(new Event('change')); await sleep(30);
+    const parentHidden = document.getElementById('rel-parent').hidden;
+    cbParent.checked = true; cbParent.dispatchEvent(new Event('change')); await sleep(30);
+    const parentShown = !document.getElementById('rel-parent').hidden;
+    tabs.panels = {graphD1, graphD2, parentHidden, parentShown};
     step('palette');
     // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
     app.quickSwitcher(); await sleep(60);
@@ -206,7 +221,7 @@ async function main(){
     const palFiltered = document.querySelectorAll('.modal-item').length;
     inp.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter'})); await sleep(200);
     const palet = {palAll, palFiltered, palCurrent: app.state.current, modalHidden: document.getElementById('modal').hidden, stat: document.getElementById('stat-count').textContent};
-    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet, sortInfo});
+    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet, sortInfo, panels: tabs.panels});
   }catch(e){ setRes({errs:window.__errs, fatal:String(e&&e.stack||e)}); }
 }
 main();
@@ -235,6 +250,9 @@ try {
   if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
+  const pn = result.panels || {};
+  if (!(pn.graphD1 >= 3 && pn.graphD2 > pn.graphD1)) { console.error("local graph depth 2 did not add nodes: " + JSON.stringify(pn)); process.exit(1); }
+  if (!pn.parentHidden || !pn.parentShown) { console.error("panel toggle failed: " + JSON.stringify(pn)); process.exit(1); }
   const si = result.sortInfo || {};
   const asc = si.nameAsc || [], desc = si.nameDesc || [];
   if (asc.length < 3 || JSON.stringify(desc) !== JSON.stringify([...asc].reverse())) { console.error("sort name asc/desc failed: " + JSON.stringify(si)); process.exit(1); }

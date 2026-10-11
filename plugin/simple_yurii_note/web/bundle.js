@@ -29117,10 +29117,10 @@
         }),
         EditorView.domEventHandlers({
           mousedown: (e) => {
-            const el = e.target?.closest?.("[data-md-href]");
-            if (el) {
+            const el2 = e.target?.closest?.("[data-md-href]");
+            if (el2) {
               e.preventDefault();
-              opts.onNavigate?.(el.getAttribute("data-md-href"), { newTab: e.ctrlKey || e.metaKey || e.button === 1 });
+              opts.onNavigate?.(el2.getAttribute("data-md-href"), { newTab: e.ctrlKey || e.metaKey || e.button === 1 });
               return true;
             }
             return false;
@@ -29149,6 +29149,97 @@
     };
   }
 
+  // src/graph.js
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function buildLocal(center, depth, neighbors) {
+    const nodes = /* @__PURE__ */ new Map([[center, { rel: center, depth: 0 }]]);
+    const ring1 = (neighbors(center) || []).filter((r) => r !== center);
+    for (const r of ring1) if (!nodes.has(r)) nodes.set(r, { rel: r, depth: 1 });
+    if (depth >= 2) {
+      for (const r of ring1) {
+        for (const r2 of neighbors(r) || []) {
+          if (r2 === center || nodes.has(r2)) continue;
+          nodes.set(r2, { rel: r2, depth: 2, via: r });
+        }
+      }
+    }
+    const edges = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const a of nodes.keys()) {
+      for (const b of neighbors(a) || []) {
+        if (!nodes.has(b) || a === b) continue;
+        const k = a < b ? a + "|" + b : b + "|" + a;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        edges.push([a, b]);
+      }
+    }
+    return { nodes: [...nodes.values()], edges };
+  }
+  function layout(model, width, height) {
+    const cx = width / 2, cy = height / 2;
+    const pos = /* @__PURE__ */ new Map();
+    pos.set(model.nodes.find((n) => n.depth === 0).rel, { x: cx, y: cy });
+    const r1 = Math.min(width, height) * 0.3;
+    const r2 = Math.min(width, height) * 0.46;
+    const ones = model.nodes.filter((n) => n.depth === 1);
+    ones.forEach((n, i) => {
+      const a = 2 * Math.PI * i / Math.max(1, ones.length) - Math.PI / 2;
+      pos.set(n.rel, { x: cx + r1 * Math.cos(a), y: cy + r1 * Math.sin(a), a });
+    });
+    const twos = model.nodes.filter((n) => n.depth === 2);
+    const byVia = /* @__PURE__ */ new Map();
+    for (const n of twos) {
+      if (!byVia.has(n.via)) byVia.set(n.via, []);
+      byVia.get(n.via).push(n);
+    }
+    for (const [via, group] of byVia) {
+      const base2 = pos.get(via)?.a ?? 0;
+      const spread = Math.min(0.5, 0.18 * group.length);
+      group.forEach((n, i) => {
+        const off = group.length === 1 ? 0 : (i / (group.length - 1) - 0.5) * 2 * spread;
+        const a = base2 + off;
+        pos.set(n.rel, { x: cx + r2 * Math.cos(a), y: cy + r2 * Math.sin(a) });
+      });
+    }
+    return pos;
+  }
+  function el(name2, attrs = {}) {
+    const e = document.createElementNS(SVG_NS, name2);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    return e;
+  }
+  function drawLocal(svg, model, { width, height, label, onOpen }) {
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.innerHTML = "";
+    const pos = layout(model, width, height);
+    const gEdges = el("g", { class: "lg-edges" });
+    for (const [a, b] of model.edges) {
+      const pa = pos.get(a), pb = pos.get(b);
+      if (!pa || !pb) continue;
+      gEdges.appendChild(el("line", { x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, class: "lg-edge" }));
+    }
+    svg.appendChild(gEdges);
+    const gNodes = el("g", { class: "lg-nodes" });
+    for (const n of model.nodes) {
+      const p = pos.get(n.rel);
+      if (!p) continue;
+      const g = el("g", { class: `lg-node d${n.depth}`, transform: `translate(${p.x},${p.y})` });
+      const r = n.depth === 0 ? 7 : n.depth === 1 ? 5.5 : 4;
+      g.appendChild(el("circle", { r }));
+      const t2 = el("text", { x: 0, y: -r - 4, "text-anchor": "middle", class: "lg-label" });
+      const name2 = label(n.rel);
+      t2.textContent = name2.length > 14 ? name2.slice(0, 13) + "\u2026" : name2;
+      g.appendChild(t2);
+      g.addEventListener("click", () => onOpen(n.rel));
+      const title = el("title");
+      title.textContent = name2;
+      g.appendChild(title);
+      gNodes.appendChild(g);
+    }
+    svg.appendChild(gNodes);
+  }
+
   // src/app.js
   var LINK_LINE_RE2 = /^\s*(\[[^\]]*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$/;
   var INLINE_LINK_RE2 = /\[([^\]]*)\]\(([^)]+)\)/;
@@ -29160,6 +29251,8 @@
     titleState: {},
     tabs: [],
     mtimes: /* @__PURE__ */ new Map(),
+    panels: { graph: true, parent: true, related: true, children: true, back: true },
+    graphDepth: 1,
     sortKey: "name",
     sortDesc: false,
     hist: [],
@@ -29501,11 +29594,13 @@
         box.appendChild(b);
       }
     };
+    renderPanels();
     if (!rel) {
       $("rel-parent").innerHTML = "";
       $("rel-related").innerHTML = "";
       $("rel-children").innerHTML = "";
       $("rel-back").innerHTML = "";
+      $("graph-svg").innerHTML = "";
       return;
     }
     const n = state.notes.get(rel);
@@ -29543,6 +29638,54 @@
     setList("rel-children", children, { addLabel: "\uFF0B \u5B50\u3092\u8FFD\u52A0", onAdd: () => pickNote((r) => addChild(r)) });
     const backs = linkLines(n.back, rel).map((it) => ({ ...it }));
     setList("rel-back", backs);
+    if (state.panels.graph) renderGraph(rel);
+  }
+  function renderPanels() {
+    for (const el2 of document.querySelectorAll("#relations [data-panel]")) {
+      el2.hidden = !state.panels[el2.dataset.panel];
+    }
+    for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
+      cb.checked = !!state.panels[cb.dataset.panel];
+    }
+    $("graph-depth").value = String(state.graphDepth);
+  }
+  function savePanelPref() {
+    try {
+      localStorage.setItem("pkm-panels", JSON.stringify({ panels: state.panels, depth: state.graphDepth }));
+    } catch {
+    }
+  }
+  function loadPanelPref() {
+    try {
+      const v = JSON.parse(localStorage.getItem("pkm-panels") || "null");
+      if (v?.panels) {
+        for (const k of Object.keys(state.panels)) if (typeof v.panels[k] === "boolean") state.panels[k] = v.panels[k];
+      }
+      if (v?.depth === 1 || v?.depth === 2) state.graphDepth = v.depth;
+    } catch {
+    }
+    renderPanels();
+  }
+  function neighborsOf(rel) {
+    const n = state.notes.get(rel);
+    if (!n) return [];
+    const out = /* @__PURE__ */ new Set();
+    for (const lines of [n.body, n.parent, n.related, n.back]) {
+      for (const it of linkLines(lines, rel)) if (it.rel !== rel) out.add(it.rel);
+    }
+    return [...out];
+  }
+  function renderGraph(rel) {
+    const svg = $("graph-svg");
+    const model = buildLocal(rel, state.graphDepth, neighborsOf);
+    drawLocal(svg, model, {
+      width: 230,
+      height: 230,
+      label: (r) => titleOf(r),
+      onOpen: (r) => {
+        if (r !== state.current) openNote(r);
+      }
+    });
   }
   function addParent(targetRel) {
     const rel = state.current;
@@ -29665,9 +29808,9 @@
       });
     };
     const mark = () => {
-      list.querySelectorAll(".modal-item").forEach((el, i) => {
-        el.classList.toggle("sel", i === sel);
-        if (i === sel) el.scrollIntoView({ block: "nearest" });
+      list.querySelectorAll(".modal-item").forEach((el2, i) => {
+        el2.classList.toggle("sel", i === sel);
+        if (i === sel) el2.scrollIntoView({ block: "nearest" });
       });
     };
     inp.oninput = () => {
@@ -29749,16 +29892,16 @@
     updateStats();
   }
   function updateStats() {
-    const el = $("stat-count");
-    if (!el) return;
+    const el2 = $("stat-count");
+    if (!el2) return;
     if (!state.current || !editor) {
-      el.textContent = "";
+      el2.textContent = "";
       return;
     }
     const doc2 = editor.getDoc();
     const chars = doc2.replace(/\s/g, "").length;
     const links = (doc2.match(/\]\([^)]+\.md\)/gi) || []).length;
-    el.textContent = `${chars.toLocaleString()} \u6587\u5B57 \u30FB \u30EA\u30F3\u30AF ${links}`;
+    el2.textContent = `${chars.toLocaleString()} \u6587\u5B57 \u30FB \u30EA\u30F3\u30AF ${links}`;
   }
   var autosaveTimer = null;
   var autosaveBusy = false;
@@ -29968,6 +30111,22 @@ ${attr}---
     $("delete-btn").onclick = deleteCurrent;
     $("theme-btn").onclick = toggleTheme;
     $("search").oninput = renderSidebar;
+    $("panel-cfg-btn").onclick = () => {
+      $("panel-menu").hidden = !$("panel-menu").hidden;
+    };
+    for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
+      cb.onchange = () => {
+        state.panels[cb.dataset.panel] = cb.checked;
+        savePanelPref();
+        renderPanels();
+        renderRelations();
+      };
+    }
+    $("graph-depth").onchange = () => {
+      state.graphDepth = Number($("graph-depth").value) === 2 ? 2 : 1;
+      savePanelPref();
+      renderRelations();
+    };
     $("sort-key").onchange = () => {
       state.sortKey = $("sort-key").value;
       saveSortPref();
@@ -30056,6 +30215,10 @@ ${attr}---
       "sort-key",
       "sort-dir",
       "note-list",
+      "panel-cfg-btn",
+      "panel-menu",
+      "graph-depth",
+      "graph-svg",
       "tabs",
       "title-input",
       "editor",
@@ -30080,6 +30243,7 @@ ${attr}---
       els[id2] = $(id2);
     }
     loadSortPref();
+    loadPanelPref();
     $("rel-parent").dataset.label = "\u89AA (Parent)";
     $("rel-related").dataset.label = "\u95A2\u9023 (Related)";
     $("rel-children").dataset.label = "\u5B50 (\u672C\u6587\u30EA\u30F3\u30AF)";
