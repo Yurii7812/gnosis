@@ -85,13 +85,14 @@ kbd {
 .side-tools { display: flex; align-items: center; gap: 2px; padding: 8px 8px 2px; }
 .side-head { padding: 6px 8px 8px; }
 .side-head input { width: 100%; background: var(--bg); }
+.side-head input:focus { border-color: var(--fg-dim); box-shadow: none; }
 .note-list { overflow-y: auto; flex: 1; padding: 2px 6px 8px; }
 .note-item {
   padding: 5px 9px; border-radius: var(--radius); cursor: pointer; display: flex;
   justify-content: space-between; align-items: baseline; gap: 8px; color: var(--fg);
 }
 .note-item:hover { background: var(--bg-3); }
-.note-item.active { background: var(--active); color: var(--accent); }
+.note-item.active { background: var(--bg-3); color: var(--fg); font-weight: 600; }
 .note-item .ni-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-item.is-group .ni-title { font-weight: 700; }
 .ni-file { color: var(--fg-dim); font-size: 10.5px; font-family: var(--font-mono); flex: 0 0 auto; opacity: .75; }
