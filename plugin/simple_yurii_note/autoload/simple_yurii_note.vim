@@ -8182,6 +8182,44 @@ endfunction
 " zap: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の節の最後へ足す。
 "     文中（本文）に同じリンクがあるときは足さない（子として本文にあるものを親にしない）。
 "     Parent の節が無ければ、末尾に「### Parent」を作って足す。
+" 相手ノート（親にしたノート）の本文の、### Parent の手前に、このノートへのリンクを足す。
+" 相手の本文に既にあれば足さない。相手が開いていて未保存の変更があるときは触らない。
+function! s:zap_add_child_link(rel_target) abort
+  let l:self = expand('%:p')
+  let l:parent_file = fnamemodify(expand('%:p:h') . '/' . a:rel_target, ':p')
+  if !filereadable(l:parent_file)
+    return
+  endif
+  let l:nr = bufnr(l:parent_file)
+  if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+    echohl WarningMsg | echo 'simple_yurii_note: 相手のノートに未保存の変更があるため、相手の本文へは足しませんでした' | echohl NONE
+    return
+  endif
+  " このノートのタイトル（相手のリンクの表示名）
+  let l:mine = filter(getline(1, 12), 'v:val =~# "^title:"')
+  let l:title = empty(l:mine) ? fnamemodify(l:self, ':t:r') : trim(substitute(l:mine[0], '^title:\s*', '', ''))
+  let l:link = s:make_link_from_dir(l:self, l:title, fnamemodify(l:parent_file, ':h'))
+  let l:relself = matchstr(l:link, '](\zs[^)]*\ze)')
+  let l:lines = readfile(l:parent_file)
+  let l:p = index(l:lines, '### Parent')
+  let l:body_end = l:p >= 0 ? l:p : len(l:lines)
+  for l:i in range(0, l:body_end - 1)
+    if stridx(l:lines[l:i], '](' . l:relself) >= 0
+      return
+    endif
+  endfor
+  " 本文の最後の空でない行の後ろ（### Parent の手前）へ入れる
+  let l:at = l:body_end
+  while l:at > 0 && trim(l:lines[l:at - 1]) ==# ''
+    let l:at -= 1
+  endwhile
+  call insert(l:lines, l:link, l:at)
+  call writefile(l:lines, l:parent_file)
+  if l:nr > 0
+    silent! execute 'checktime ' . l:nr
+  endif
+endfunction
+
 function! simple_yurii_note#add_link_to_parent() abort
   let l:link = s:pick_one_link()
   if empty(l:link)
@@ -8233,6 +8271,8 @@ function! simple_yurii_note#add_link_to_parent() abort
   endif
   call s:realtime_sync_apply()
   silent write
+  " 相手（親にしたノート）の本文にも、このノートへのリンクを足す（相手の ### Parent の手前）
+  call s:zap_add_child_link(l:bare)
   echo 'simple_yurii_note: Parent に追加しました'
 endfunction
 
