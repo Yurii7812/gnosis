@@ -6,24 +6,45 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 
+// 画像。画面から外れるとウィジェットは壊されて、戻ると作り直される。そのたびに空白・高さ 0 から
+// 読み直すと「消えて、位置が跳ぶ」ので、読み込んだ URL と大きさを覚えて、すぐ表示・場所を先に確保する。
 class ImageWidget extends WidgetType {
-  constructor(alt, src, getURL) {
+  constructor(alt, src, cfg) {
     super();
     this.alt = alt;
     this.src = src;
-    this.getURL = getURL;
+    this.cfg = cfg;
+    // 大きさが分かっているか。分かった前後で別のウィジェットとみなして、高さを取り直させる。
+    this.sized = !!(cfg.getImageSize && cfg.getImageSize(src));
   }
-  eq(o) { return o.src === this.src && o.alt === this.alt; }
+  eq(o) { return o.src === this.src && o.alt === this.alt && o.sized === this.sized; }
+  // スクロールの長さの見積もり（本文の幅 約 800px に縮めたときの高さ）。分からないうちは 320。
+  get estimatedHeight() {
+    const sz = this.cfg.getImageSize?.(this.src);
+    return sz ? Math.round(sz.h * Math.min(1, 800 / sz.w)) + 16 : 320;
+  }
   toDOM() {
+    const cfg = this.cfg;
     const wrap = document.createElement("span");
     wrap.className = "cm-md-img";
     const img = document.createElement("img");
     img.alt = this.alt;
+    img.decoding = "async";
+    const sz = cfg.getImageSize?.(this.src);
+    if (sz) { img.width = sz.w; img.height = sz.h; } // 読み込む前から、場所を確保する
+    else wrap.style.minHeight = "160px";
+    img.addEventListener("load", () => {
+      wrap.style.minHeight = "";
+      cfg.onImageSize?.(this.src, img.naturalWidth, img.naturalHeight);
+    });
     wrap.appendChild(img);
-    Promise.resolve(this.getURL ? this.getURL(this.src) : null).then((u) => {
+    const set = (u) => {
       if (u) img.src = u;
       else img.replaceWith(document.createTextNode(this.alt || this.src));
-    }).catch(() => {});
+    };
+    const r = cfg.getImageURL ? cfg.getImageURL(this.src) : null;
+    if (typeof r === "string" || r == null) set(r);
+    else Promise.resolve(r).then(set).catch(() => set(null));
     return wrap;
   }
   ignoreEvent() { return true; }
@@ -153,7 +174,7 @@ function decorateLine(line, active, inFence, decos, cfg) {
 
   addSpan(RE.image, (m, a, b) => {
     if (active) return;
-    decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg.getImageURL) }).range(base + a, base + b));
+    decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base + a, base + b));
   });
 
   addSpan(RE.link, (m, a, b) => {
@@ -244,11 +265,14 @@ function buildDecorations(view, cfg) {
   return Decoration.set(decos, true);
 }
 
+// 画像の大きさが分かったとき、装飾（と画像の高さの見積もり）を作り直させる
+const refreshDecorations = StateEffect.define();
+
 function livePreview(cfg) {
   return ViewPlugin.fromClass(class {
     constructor(view) { this.decorations = buildDecorations(view, cfg); }
     update(u) {
-      if (u.docChanged || u.selectionSet || u.viewportChanged) {
+      if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))) {
         this.decorations = buildDecorations(u.view, cfg);
       }
     }
@@ -360,7 +384,7 @@ const mdHighlight = HighlightStyle.define([
 ]);
 
 export function createView(opts) {
-  const cfg = { getImageURL: opts.getImageURL || (() => null), listNotes: () => [] };
+  const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
   const state = EditorState.create({
     doc: "",
     extensions: [
@@ -407,6 +431,8 @@ export function createView(opts) {
       while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
       view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) } });
     },
+    // 画像の大きさが分かったので、高さの見積もりを取り直す
+    refresh() { view.dispatch({ effects: refreshDecorations.of(null) }); },
     // 仮想テキスト（リンクの数字のしるしなど）を反映する
     setVtext(list) {
       view.dispatch({ effects: setVtext.of(list || []) });

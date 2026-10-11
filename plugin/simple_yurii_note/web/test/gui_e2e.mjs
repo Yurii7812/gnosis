@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "..");
@@ -29,6 +30,17 @@ fs.writeFileSync(path.join(vault, "index.md"), "---\ntime: 2026-10-11 10:00:00\n
 mk("m1.md", "数学とは何か", "数学は**形式**と行動の間。\n\n- 箇条書き\n- [ ] 未完了\n\n[PKM の設計](p1.md) と [一貫性](m2.md)", "[Index](index.md)");
 mk("m2.md", "一貫性", "同じ条件に同じ規則。", "[数学とは何か](m1.md)");
 mk("p1.md", "PKM の設計", "言語化は後回し。", "[Index](index.md)");
+
+// 縦長の PNG（文字より背が高いので、スクロールすると画面に出入りする）
+function makePng(w, h, seed) {
+  const crc = (buf) => { let c, t = []; for (let n = 0; n < 256; n++) { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } let x = 0xffffffff; for (const b of buf) x = t[(x ^ b) & 0xff] ^ (x >>> 8); return (x ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const rows = []; for (let y = 0; y < h; y++) { const r = [0]; for (let x = 0; x < w; x++) r.push((x * 3 + seed * 40) & 255, (y / 4 + seed * 20) & 255, 200); rows.push(Buffer.from(r)); }
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]);
+}
+for (const [i, name] of ["a.png", "b.png", "c.png", "d.png"].entries()) fs.writeFileSync(path.join(vault, name), makePng(240, 900, i));
+mk("img.md", "画像", ["a", "b", "c", "d"].map((n) => `## 画像 ${n}\n\n![](${n}.png)\n`).join("\n"), "[Index](index.md)");
 
 const scenario = `(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -84,7 +96,32 @@ const scenario = `(async () => {
   await press('\\r', 700);
   R.collapsedAfter = !G.isExpanded();
 
+  // 画像: 画面に出入りしても、読み直さず（Blob を作り直さず）、見えている画像は表示され、全体の高さが跳ばない
+  window.__blobs = 0; const origBlob = URL.createObjectURL.bind(URL); URL.createObjectURL = (b) => { window.__blobs++; return origBlob(b); };
+  await press(':e img.md\\r', 2500);
+  const sc = document.querySelector('.cm-scroller');
+  const heights = [];
+  let notLoaded = 0;
+  // record=true のときだけ全体の高さを記録する（初めて画面に出る画像の分は、1 周目で高さが確定する）
+  const lookImgs = (record) => {
+    const sr = sc.getBoundingClientRect();
+    const vis = [...document.querySelectorAll('.cm-md-img')].filter((w) => { const r = w.getBoundingClientRect(); return r.bottom > sr.top + 5 && r.top < sr.bottom - 5; });
+    for (const w of vis) { const i = w.querySelector('img'); if (!(i && i.complete && i.naturalWidth > 0)) notLoaded++; }
+    if (record) heights.push(sc.scrollHeight);
+  };
+  await sleep(1200); lookImgs(false);
+  const maxTop = sc.scrollHeight - sc.clientHeight;
+  // 1 周目（上から下まで）: 表示されるかだけ見る
+  for (let y = 0; y <= maxTop + 300; y += 300) { sc.scrollTop = y; await sleep(150); lookImgs(false); }
+  // 2 周目（下から上、さらに上から下）: 全体の高さが跳ばないこと
+  const maxTop2 = sc.scrollHeight - sc.clientHeight;
+  for (let y = maxTop2; y >= 0; y -= 400) { sc.scrollTop = y; await sleep(150); lookImgs(true); }
+  for (let y = 0; y <= maxTop2; y += 500) { sc.scrollTop = y; await sleep(150); lookImgs(true); }
+  await sleep(800); lookImgs(true);
+  R.images = { file: base(G.state().file), blobs: window.__blobs, notLoaded, hMin: Math.min(...heights), hMax: Math.max(...heights), steps: heights.length };
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
+  R.__closeWindow = true;
   return R;
 })()`;
 const scenarioPath = path.join(tmp, "scenario.js");
@@ -101,8 +138,13 @@ try {
   const R = JSON.parse(fs.readFileSync(outPath, "utf8"));
   console.log(JSON.stringify(R, null, 2));
   if (R.fatal) { console.error("fatal: " + R.fatal); process.exit(1); }
+  check(Array.isArray(R.__uncaught) && R.__uncaught.length === 0, "uncaught exception after the window was destroyed: " + JSON.stringify(R.__uncaught));
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
+  check(R.images?.file === "img.md", "could not open the image note: " + JSON.stringify(R.images));
+  check(R.images && R.images.blobs <= 4, "images were re-read on scroll (blob URLs created: " + R.images?.blobs + ", images: 4)");
+  check(R.images && R.images.notLoaded === 0, "visible images were not loaded while scrolling: " + JSON.stringify(R.images));
+  check(R.images && R.images.hMax - R.images.hMin < 400, "scroll height jumped while scrolling: " + JSON.stringify(R.images));
   check(R.start?.file === "index.md" && R.start?.mode === "NORMAL" && R.start?.h1, "start: " + JSON.stringify(R.start));
   check((R.hints || []).includes("1") && (R.hints || []).includes("2"), "link number hints not shown: " + JSON.stringify(R.hints));
   check(R.afterDigit === "m1.md" && R.digitDoc, "digit key did not open the link: " + R.afterDigit);

@@ -21,6 +21,32 @@ const VIMRC = process.env.PKM_VIMRC || path.join(os.homedir(), ".vimrc-simple-yu
 const ROOT = process.env.PKM_ROOT ? path.resolve(process.env.PKM_ROOT) : "";
 const OPEN = process.env.PKM_FILE || "";
 
+// ログ: ~/.local/state/simple-yurii-note-app/app.log （画面のエラー・Vim の標準エラー・終了など）。
+// アプリは Vim から起動するので、標準エラーが捨てられてしまう。何か起きたときの手がかりに残す。
+const LOG_FILE = path.join(os.homedir(), ".local", "state", "simple-yurii-note-app", "app.log");
+function log(msg) {
+  try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    fs.appendFileSync(LOG_FILE, new Date().toISOString() + " " + String(msg).replace(/\n+$/, "") + "\n");
+  } catch { /* ログが書けなくても動かす */ }
+}
+try {
+  if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 1024 * 1024) fs.writeFileSync(LOG_FILE, "");
+} catch { /* ignore */ }
+process.on("unhandledRejection", (e) => log("unhandledRejection: " + (e && e.stack || e)));
+
+// 画面（window）へ送る。窓を閉じたあと・Vim が遅れて終了したときに「Object has been destroyed」で
+// 落ちないよう、窓が生きているときだけ送る。
+const uncaught = [];
+process.removeAllListeners("uncaughtException");
+process.on("uncaughtException", (e) => { uncaught.push(String(e && e.stack || e)); log("uncaughtException: " + (e && e.stack || e)); });
+
+function send(channel, ...args) {
+  try {
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args);
+  } catch (e) { log("send failed (" + channel + "): " + e); }
+}
+
 let win = null;
 let bridge = null;
 let server = null;
@@ -37,7 +63,7 @@ function startServer() {
         while ((i = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, i);
           buf = buf.slice(i + 1);
-          try { win?.webContents.send("vim:state", JSON.parse(line)); } catch { /* 壊れた行は捨てる */ }
+          let st; try { st = JSON.parse(line); } catch { continue; } /* 壊れた行は捨てる */ send("vim:state", st);
         }
       });
       sock.on("error", () => {});
@@ -58,10 +84,11 @@ async function startVim(cols, rows) {
   });
   ctl = bridge.stdio[3];
   const dec = new StringDecoder("utf8");
-  bridge.stdout.on("data", (d) => { const s = dec.write(d); if (s) win?.webContents.send("pty:data", s); });
-  bridge.stderr.on("data", (d) => process.stderr.write(d));
+  bridge.stdout.on("data", (d) => { const s = dec.write(d); if (s) send("pty:data", s); });
+  bridge.stderr.on("data", (d) => { process.stderr.write(d); log("vim/bridge stderr: " + d); });
   bridge.on("exit", (code) => {
-    win?.webContents.send("vim:exit", code);
+    log("vim exited: code=" + code);
+    send("vim:exit", code);
     // Vim を終了したら（:q など）アプリも終える。テスト時は呼び出し側が終了を制御する。
     if (!process.env.PKM_TEST_SCRIPT) app.quit();
   });
@@ -82,6 +109,15 @@ function createWindow() {
     },
   });
   Menu.setApplicationMenu(null);
+  log(`start: root=${ROOT || "(vim default)"} file=${OPEN || "(none)"} vimrc=${VIMRC}`);
+  // 画面（renderer）のエラーと、画面が落ちたことを記録する
+  win.webContents.on("console-message", (...a) => {
+    const d = a[1] && typeof a[1] === "object" ? a[1] : null;
+    const lvl = d ? d.level : a[1];
+    const msg = d ? d.message : a[2];
+    if ((lvl === "error" || lvl === 3) && !/Electron Security Warning/.test(String(msg))) log("renderer error: " + msg);
+  });
+  win.webContents.on("render-process-gone", (_e, det) => log("render-process-gone: " + JSON.stringify(det)));
   win.once("ready-to-show", () => { win.show(); win.focus(); });
   win.loadFile(path.join(WEB, "index.html"));
   win.on("page-title-updated", (e) => e.preventDefault());
@@ -104,7 +140,8 @@ function createWindow() {
       } catch (e) { result = { fatal: String(e && e.stack || e) }; }
       // 結果を先に書く。画面の撮影（任意）は時間制限つきで、固まってもテストを止めない
       const png = result && result.__png;
-      if (result) delete result.__png;
+      const closeWindow = !!(result && result.__closeWindow);
+      if (result) { delete result.__png; delete result.__closeWindow; }
       if (result && typeof result === "object" && !Array.isArray(result)) result.__console = consoleLog.slice(0, 20);
       fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(result, null, 2));
       if (png) {
@@ -114,6 +151,17 @@ function createWindow() {
             new Promise((_, rej) => setTimeout(() => rej(new Error("capture timeout")), 8000)),
           ]);
           fs.writeFileSync(png, img.toPNG());
+        } catch { /* ignore */ }
+      }
+      // 窓を壊した状態で Vim が終わっても、アプリが例外を出さないこと（「Object has been destroyed」の回帰確認）
+      if (closeWindow) {
+        try { win.destroy(); } catch { /* ignore */ }
+        try { bridge?.kill("SIGKILL"); } catch { /* ignore */ }
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          const cur = JSON.parse(fs.readFileSync(process.env.PKM_TEST_OUT, "utf8"));
+          cur.__uncaught = uncaught.slice(0, 5);
+          fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(cur, null, 2));
         } catch { /* ignore */ }
       }
       try { bridge?.kill("SIGKILL"); } catch { /* ignore */ }
@@ -140,5 +188,5 @@ ipcMain.handle("img:read", async (_e, file, src) => {
 });
 
 app.whenReady().then(createWindow);
-app.on("window-all-closed", () => app.quit());
+app.on("window-all-closed", () => { if (!process.env.PKM_TEST_SCRIPT) app.quit(); });
 app.on("before-quit", () => { try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ } });

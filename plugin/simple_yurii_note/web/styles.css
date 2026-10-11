@@ -66,7 +66,7 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-link-md:hover { text-decoration-color: var(--link); }
 .cm-md-quote { border-left: 4px solid var(--line); padding-left: 14px !important; color: var(--fg-dim); margin-left: 2px; }
 .cm-md-hr { border-bottom: 2px solid var(--line); line-height: .5; }
-.cm-md-img img { max-width: 100%; border-radius: 6px; display: block; margin: 8px 0; }
+.cm-md-img img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 8px 0; }
 .cm-md-bullet { color: var(--fg-dim); display: inline-block; width: 1.1em; text-align: center; }
 .cm-md-li { padding-left: 4px; }
 .cm-md-task { width: 15px; height: 15px; margin: 0 6px 0 2px; vertical-align: -2px; accent-color: var(--accent); cursor: pointer; }
@@ -79,3 +79,5 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 
 /* Vim の仮想テキスト（リンクの数字のしるし）: 目立つ小さなバッジ */
 .cm-vtext { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #bc4c00; background: color-mix(in srgb, #bc4c00 12%, transparent); border-radius: 4px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; user-select: none; }
+
+.err { color: #cf222e; font-weight: 700; margin-left: auto; padding-right: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

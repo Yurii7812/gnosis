@@ -32400,26 +32400,45 @@ ${h2.join(`
 
   // src/view.js
   var ImageWidget = class extends WidgetType {
-    constructor(alt, src, getURL) {
+    constructor(alt, src, cfg) {
       super();
       this.alt = alt;
       this.src = src;
-      this.getURL = getURL;
+      this.cfg = cfg;
+      this.sized = !!(cfg.getImageSize && cfg.getImageSize(src));
     }
     eq(o2) {
-      return o2.src === this.src && o2.alt === this.alt;
+      return o2.src === this.src && o2.alt === this.alt && o2.sized === this.sized;
+    }
+    // スクロールの長さの見積もり（本文の幅 約 800px に縮めたときの高さ）。分からないうちは 320。
+    get estimatedHeight() {
+      const sz = this.cfg.getImageSize?.(this.src);
+      return sz ? Math.round(sz.h * Math.min(1, 800 / sz.w)) + 16 : 320;
     }
     toDOM() {
+      const cfg = this.cfg;
       const wrap = document.createElement("span");
       wrap.className = "cm-md-img";
       const img = document.createElement("img");
       img.alt = this.alt;
+      img.decoding = "async";
+      const sz = cfg.getImageSize?.(this.src);
+      if (sz) {
+        img.width = sz.w;
+        img.height = sz.h;
+      } else wrap.style.minHeight = "160px";
+      img.addEventListener("load", () => {
+        wrap.style.minHeight = "";
+        cfg.onImageSize?.(this.src, img.naturalWidth, img.naturalHeight);
+      });
       wrap.appendChild(img);
-      Promise.resolve(this.getURL ? this.getURL(this.src) : null).then((u) => {
+      const set = (u) => {
         if (u) img.src = u;
         else img.replaceWith(document.createTextNode(this.alt || this.src));
-      }).catch(() => {
-      });
+      };
+      const r = cfg.getImageURL ? cfg.getImageURL(this.src) : null;
+      if (typeof r === "string" || r == null) set(r);
+      else Promise.resolve(r).then(set).catch(() => set(null));
       return wrap;
     }
     ignoreEvent() {
@@ -32544,7 +32563,7 @@ ${h2.join(`
     });
     addSpan(RE.image, (m, a, b3) => {
       if (active) return;
-      decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg.getImageURL) }).range(base2 + a, base2 + b3));
+      decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base2 + a, base2 + b3));
     });
     addSpan(RE.link, (m, a, b3) => {
       const disp = m[1];
@@ -32635,13 +32654,14 @@ ${h2.join(`
     }
     return Decoration.set(decos, true);
   }
+  var refreshDecorations = StateEffect.define();
   function livePreview(cfg) {
     return ViewPlugin.fromClass(class {
       constructor(view2) {
         this.decorations = buildDecorations(view2, cfg);
       }
       update(u) {
-        if (u.docChanged || u.selectionSet || u.viewportChanged) {
+        if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some((tr2) => tr2.effects.some((e) => e.is(refreshDecorations)))) {
           this.decorations = buildDecorations(u.view, cfg);
         }
       }
@@ -32750,7 +32770,7 @@ ${h2.join(`
     { tag: tags.quote, color: "var(--fg-dim)" }
   ]);
   function createView(opts) {
-    const cfg = { getImageURL: opts.getImageURL || (() => null), listNotes: () => [] };
+    const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
     const state = EditorState.create({
       doc: "",
       extensions: [
@@ -32795,6 +32815,10 @@ ${h2.join(`
         let b2 = 0;
         while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
         view2.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) } });
+      },
+      // 画像の大きさが分かったので、高さの見積もりを取り直す
+      refresh() {
+        view2.dispatch({ effects: refreshDecorations.of(null) });
       },
       // 仮想テキスト（リンクの数字のしるしなど）を反映する
       setVtext(list) {
@@ -32910,15 +32934,102 @@ ${h2.join(`
       }, 120);
     }
     if (s15.bt === "terminal") return;
-    if (s15.lines) view.setText(s15.lines.join("\n"));
+    if (s15.lines) {
+      view.setText(s15.lines.join("\n"));
+      preloadImages(s15.lines);
+    }
     if (s15.vtext) view.setVtext(s15.vtext);
     if (s15.cur) view.setVim({ cur: s15.cur, mode: s15.mode || "n", vis: s15.vis });
   }
-  async function imageURL(src) {
+  var imgCache = /* @__PURE__ */ new Map();
+  var imgPending = /* @__PURE__ */ new Map();
+  var IMG_CACHE_MAX = 300;
+  function imgKey(file, src) {
+    const i = (file || "").lastIndexOf("/");
+    return (i < 0 ? "" : file.slice(0, i)) + "/" + src;
+  }
+  function imageURL(src, fileOverride) {
     if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:")) return src;
-    const bytes = await gui.readImage(last2.file, src);
-    if (!bytes) return null;
-    return URL.createObjectURL(new Blob([bytes]));
+    const file = fileOverride || last2.file;
+    const key = imgKey(file, src);
+    const c = imgCache.get(key);
+    if (c && c.url) return c.url;
+    if (imgPending.has(key)) return imgPending.get(key);
+    const p = (async () => {
+      const bytes = await gui.readImage(file, src);
+      if (!bytes) return null;
+      const url = URL.createObjectURL(new Blob([bytes]));
+      imgCache.set(key, { ...imgCache.get(key) || {}, url });
+      if (imgCache.size > IMG_CACHE_MAX) {
+        const oldest = imgCache.keys().next().value;
+        const o2 = imgCache.get(oldest);
+        if (o2 && o2.url) URL.revokeObjectURL(o2.url);
+        imgCache.delete(oldest);
+      }
+      return url;
+    })().finally(() => imgPending.delete(key));
+    imgPending.set(key, p);
+    return p;
+  }
+  function imageSize(src) {
+    const c = imgCache.get(imgKey(last2.file, src));
+    return c && c.w ? { w: c.w, h: c.h } : null;
+  }
+  function onImageSize(src, w, h2, fileOverride) {
+    if (!w || !h2) return;
+    const key = imgKey(fileOverride || last2.file, src);
+    imgCache.set(key, { ...imgCache.get(key) || {}, w, h: h2 });
+  }
+  var preloadTimer = null;
+  var PRELOAD_MAX = 24;
+  var PRELOAD_PARALLEL = 4;
+  function preloadImages(lines) {
+    const file = last2.file;
+    const re2 = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+    const seen = /* @__PURE__ */ new Set();
+    const queue = [];
+    for (const ln2 of lines) {
+      re2.lastIndex = 0;
+      let m;
+      while ((m = re2.exec(ln2)) !== null) {
+        const src = m[1];
+        if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:") || seen.has(src)) continue;
+        seen.add(src);
+        const c = imgCache.get(imgKey(file, src));
+        if (!(c && c.w) && queue.length < PRELOAD_MAX) queue.push(src);
+      }
+    }
+    if (!queue.length) return 0;
+    let active = 0;
+    const finish = () => {
+      clearTimeout(preloadTimer);
+      preloadTimer = setTimeout(() => {
+        if (last2.file === file) view.refresh();
+      }, 120);
+    };
+    const pump = () => {
+      while (active < PRELOAD_PARALLEL && queue.length) {
+        const src = queue.shift();
+        active++;
+        Promise.resolve(imageURL(src, file)).then((url) => new Promise((resolve) => {
+          if (!url) return resolve();
+          const im = new Image();
+          im.onload = () => {
+            onImageSize(src, im.naturalWidth, im.naturalHeight, file);
+            resolve();
+          };
+          im.onerror = () => resolve();
+          im.src = url;
+        })).catch(() => {
+        }).finally(() => {
+          active--;
+          if (queue.length) pump();
+          else if (!active) finish();
+        });
+      }
+    };
+    pump();
+    return queue.length;
   }
   function onClick({ pos, link }) {
     if (pos == null) return;
@@ -32927,8 +33038,20 @@ ${h2.join(`
     if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
     else if (m === "i") gui.write(`:call cursor(${l},${c})\r`);
   }
+  function showError(msg) {
+    const el2 = $2("err");
+    if (!el2) return;
+    el2.textContent = "\u30A8\u30E9\u30FC: " + String(msg).slice(0, 160);
+    el2.hidden = false;
+    clearTimeout(showError._t);
+    showError._t = setTimeout(() => {
+      el2.hidden = true;
+    }, 12e3);
+  }
   async function boot() {
-    view = createView({ parent: $2("view"), getImageURL: imageURL, onClick });
+    window.addEventListener("error", (e) => showError(e.message || e.error));
+    window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
+    view = createView({ parent: $2("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
       fontSize: 14,
@@ -32946,7 +33069,14 @@ ${h2.join(`
     }
     term.onData((d) => gui.write(d));
     gui.onData((d) => term.write(d));
-    gui.onState(applyState);
+    gui.onState((s15) => {
+      try {
+        applyState(s15);
+      } catch (e) {
+        console.error("applyState failed: " + (e && e.stack || e));
+        showError(e && e.message || e);
+      }
+    });
     gui.onExit(() => {
       $2("mode").textContent = "EXIT";
     });

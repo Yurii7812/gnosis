@@ -88,18 +88,101 @@ function applyState(s) {
 
   // バッファの内容とカーソルをマークダウンで映す（端末バッファは映さない）
   if (s.bt === "terminal") return;
-  if (s.lines) view.setText(s.lines.join("\n"));
+  if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); }
   if (s.vtext) view.setVtext(s.vtext);
   if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
 }
 
 // ---------------------------------------------------------------- 起動
 
-async function imageURL(src) {
+// 読み込んだ画像を覚える。key は「ノートのあるフォルダ + 書かれたパス」。
+// 画面から外れたウィジェットが作り直されても、読み直さず（Blob を作り直さず）すぐ表示できる。
+const imgCache = new Map(); // key -> { url, w, h }
+const imgPending = new Map(); // key -> Promise<url|null>
+const IMG_CACHE_MAX = 300;
+
+function imgKey(file, src) {
+  const i = (file || "").lastIndexOf("/");
+  return (i < 0 ? "" : file.slice(0, i)) + "/" + src;
+}
+
+function imageURL(src, fileOverride) {
   if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:")) return src;
-  const bytes = await gui.readImage(last.file, src);
-  if (!bytes) return null;
-  return URL.createObjectURL(new Blob([bytes]));
+  const file = fileOverride || last.file;
+  const key = imgKey(file, src);
+  const c = imgCache.get(key);
+  if (c && c.url) return c.url; // すぐ表示（同期）
+  if (imgPending.has(key)) return imgPending.get(key);
+  const p = (async () => {
+    const bytes = await gui.readImage(file, src);
+    if (!bytes) return null;
+    const url = URL.createObjectURL(new Blob([bytes]));
+    imgCache.set(key, { ...(imgCache.get(key) || {}), url });
+    if (imgCache.size > IMG_CACHE_MAX) {
+      const oldest = imgCache.keys().next().value;
+      const o = imgCache.get(oldest);
+      if (o && o.url) URL.revokeObjectURL(o.url);
+      imgCache.delete(oldest);
+    }
+    return url;
+  })().finally(() => imgPending.delete(key));
+  imgPending.set(key, p);
+  return p;
+}
+
+function imageSize(src) {
+  const c = imgCache.get(imgKey(last.file, src));
+  return c && c.w ? { w: c.w, h: c.h } : null;
+}
+
+function onImageSize(src, w, h, fileOverride) {
+  if (!w || !h) return;
+  const key = imgKey(fileOverride || last.file, src);
+  imgCache.set(key, { ...(imgCache.get(key) || {}), w, h });
+}
+
+// ノートを開いたとき、中の画像を先に読んで大きさを調べる。まだ画面に出ていない画像も高さが
+// 正確になり、スクロールしても全体の長さが跳ばない（初めて見る画像でも消えたり跳んだりしない）。
+let preloadTimer = null;
+const PRELOAD_MAX = 24; // 1 ノートで先に調べる画像の上限
+const PRELOAD_PARALLEL = 4; // 同時に読む数
+function preloadImages(lines) {
+  const file = last.file;
+  const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  const seen = new Set();
+  const queue = [];
+  for (const ln of lines) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(ln)) !== null) {
+      const src = m[1];
+      if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:") || seen.has(src)) continue;
+      seen.add(src);
+      const c = imgCache.get(imgKey(file, src));
+      if (!(c && c.w) && queue.length < PRELOAD_MAX) queue.push(src);
+    }
+  }
+  if (!queue.length) return 0;
+  let active = 0;
+  const finish = () => {
+    clearTimeout(preloadTimer);
+    preloadTimer = setTimeout(() => { if (last.file === file) view.refresh(); }, 120);
+  };
+  const pump = () => {
+    while (active < PRELOAD_PARALLEL && queue.length) {
+      const src = queue.shift();
+      active++;
+      Promise.resolve(imageURL(src, file)).then((url) => new Promise((resolve) => {
+        if (!url) return resolve();
+        const im = new Image();
+        im.onload = () => { onImageSize(src, im.naturalWidth, im.naturalHeight, file); resolve(); };
+        im.onerror = () => resolve();
+        im.src = url;
+      })).catch(() => {}).finally(() => { active--; if (queue.length) pump(); else if (!active) finish(); });
+    }
+  };
+  pump();
+  return queue.length;
 }
 
 // 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
@@ -111,8 +194,20 @@ function onClick({ pos, link }) {
   else if (m === "i") gui.write(`\x0f:call cursor(${l},${c})\r`);
 }
 
+// 画面側のエラーを、下のバーに赤く出す（何が起きたか分かるように）。ログにも残る（main 側）。
+function showError(msg) {
+  const el = $("err");
+  if (!el) return;
+  el.textContent = "エラー: " + String(msg).slice(0, 160);
+  el.hidden = false;
+  clearTimeout(showError._t);
+  showError._t = setTimeout(() => { el.hidden = true; }, 12000);
+}
+
 async function boot() {
-  view = createView({ parent: $("view"), getImageURL: imageURL, onClick });
+  window.addEventListener("error", (e) => showError(e.message || e.error));
+  window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
+  view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
 
   term = new Terminal({
     fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -129,7 +224,7 @@ async function boot() {
 
   term.onData((d) => gui.write(d));
   gui.onData((d) => term.write(d));
-  gui.onState(applyState);
+  gui.onState((s) => { try { applyState(s); } catch (e) { console.error("applyState failed: " + (e && e.stack || e)); showError(e && e.message || e); } });
   gui.onExit(() => { $("mode").textContent = "EXIT"; });
 
   const { cols, rows } = fitTerm();
