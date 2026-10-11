@@ -1,7 +1,7 @@
 import * as vault from "./vault.js";
 import { runSync, parseNote, dumpTitleState, relPath, dirname, basename, stem, normalizePath, UP_MARK, RELATED_MARK, DOWN_MARK } from "./sync.js";
 import { createEditor } from "./editor.js";
-import { buildLocal, drawLocal } from "./graph.js";
+import { buildLocal, drawLocal, layoutGlobal, mountGlobal } from "./graph.js";
 
 const LINK_LINE_RE = /^\s*(\[[^\]]*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$/;
 const INLINE_LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
@@ -274,6 +274,7 @@ function updateNavButtons() {
 async function openNote(rel, opts = {}) {
   const { newTab = false, history = true } = opts;
   if (!state.notes.has(rel)) { toast("見つかりません: " + rel); return; }
+  closeGlobalGraph();
   if (state.current === rel) { renderSidebar(); renderTabs(); return; }
   if (state.dirty) {
     const ok = await saveCurrent({ autosave: true });
@@ -495,6 +496,81 @@ function addChild(targetRel) {
     editor.setDoc((body.trimEnd() ? body.trimEnd() + "\n" : "") + line);
     markDirty(); toast("子に追加（保存で反映）");
   }
+}
+
+// ---------------------------------------------------------------- 全体グラフ
+
+// 位置は端末ごとに保存する（vault には書かない）。一度決めた位置は動かさない。
+const GRAPH_POS_KEY = "pkm-graph-pos";
+
+function loadGraphPos() {
+  try { return JSON.parse(localStorage.getItem(GRAPH_POS_KEY) || "{}") || {}; } catch { return {}; }
+}
+
+function saveGraphPos(obj) {
+  try { localStorage.setItem(GRAPH_POS_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+}
+
+function allEdges(rels) {
+  const relSet = new Set(rels);
+  const seen = new Set();
+  const edges = [];
+  for (const r of rels) {
+    for (const nb of neighborsOf(r)) {
+      if (!relSet.has(nb) || nb === r) continue;
+      const k = r < nb ? r + "\u0000" + nb : nb + "\u0000" + r;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      edges.push([r, nb]);
+    }
+  }
+  return edges;
+}
+
+function openGlobalGraph({ relayout = false } = {}) {
+  if (!state.root) return;
+  const rels = state.rels.slice();
+  const edges = allEdges(rels);
+  const stored = loadGraphPos();
+  if (relayout) for (const r of rels) delete stored[r];
+  // 保存されていない点だけ新しく置く。今ある位置は変えない。
+  const pos = layoutGlobal(rels, edges, stored);
+  const next = {};
+  for (const r of rels) {
+    const p = pos.get(r);
+    if (p) next[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+  }
+  saveGraphPos(next);
+
+  // 前に付けたイベントを残さないよう、svg は作り直す
+  const old = $("global-svg");
+  const svg = old.cloneNode(false);
+  old.replaceWith(svg);
+  svg.classList.toggle("few", rels.length <= 300);
+  $("gg-count").textContent = `${rels.length} ノート ・ リンク ${edges.length}`;
+
+  $("note-view").hidden = true;
+  $("empty").hidden = true;
+  $("global-graph").hidden = false;
+  globalView = mountGlobal(svg, rels, edges, pos, {
+    label: (r) => titleOf(r),
+    onOpen: (r) => { closeGlobalGraph(); openNote(r); },
+    onMove: (r, p) => {
+      const s = loadGraphPos();
+      s[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+      saveGraphPos(s);
+    },
+  });
+}
+
+let globalView = null;
+
+function closeGlobalGraph() {
+  if ($("global-graph").hidden) return;
+  $("global-graph").hidden = true;
+  globalView = null;
+  if (state.current) $("note-view").hidden = false;
+  else $("empty").hidden = false;
 }
 
 // ---------------------------------------------------------------- palette (quick switcher / note picker)
@@ -837,6 +913,10 @@ function wireToolbar() {
   $("delete-btn").onclick = deleteCurrent;
   $("theme-btn").onclick = toggleTheme;
   $("search").oninput = renderSidebar;
+  $("graph-btn").onclick = () => openGlobalGraph();
+  $("gg-close").onclick = () => closeGlobalGraph();
+  $("gg-reset").onclick = () => globalView?.reset();
+  $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
   $("panel-cfg-btn").onclick = () => { $("panel-menu").hidden = !$("panel-menu").hidden; };
   for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
     cb.onchange = () => {
@@ -859,7 +939,7 @@ function wireToolbar() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrent(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); quickSwitcher(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && document.activeElement?.closest?.(".cm-editor") == null) { e.preventDefault(); $("search").focus(); $("search").select(); }
-    if (e.key === "Escape") { $("modal").hidden = true; }
+    if (e.key === "Escape") { $("modal").hidden = true; closeGlobalGraph(); }
     if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); navigateHistory(-1); }
     if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); navigateHistory(1); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && state.current) { e.preventDefault(); closeTab(state.current); }
@@ -897,7 +977,8 @@ function initTheme() {
 
 function init() {
   for (const id of ["overlay", "overlay-msg", "overlay-open", "overlay-pick", "toolbar", "vault-name",
-    "search", "sort-key", "sort-dir", "note-list", "panel-cfg-btn", "panel-menu", "graph-depth", "graph-svg", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
+    "search", "sort-key", "sort-dir", "note-list", "panel-cfg-btn", "panel-menu", "graph-depth", "graph-svg",
+    "graph-btn", "global-graph", "global-svg", "gg-count", "tabs", "title-input", "editor", "empty", "note-view", "save-btn",
     "new-btn", "new-group-btn", "delete-btn", "theme-btn", "modal", "back-btn", "fwd-btn",
     "toast", "save-state", "open-btn", "rel-parent", "rel-related", "rel-children", "rel-back"]) {
     els[id] = $(id);
@@ -933,7 +1014,7 @@ function init() {
 
   // デバッグ・テスト用フック（ローカルアプリなので常時公開）
   window.simpleYuriiNote = {
-    state, openNote, navigateHistory, closeTab, quickSwitcher, updateStats, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
+    state, openNote, navigateHistory, closeTab, quickSwitcher, updateStats, openGlobalGraph, closeGlobalGraph, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
     getEditor: () => editor,
   };
 }

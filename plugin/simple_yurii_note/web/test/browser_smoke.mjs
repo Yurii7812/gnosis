@@ -212,6 +212,18 @@ async function main(){
     cbParent.checked = true; cbParent.dispatchEvent(new Event('change')); await sleep(30);
     const parentShown = !document.getElementById('rel-parent').hidden;
     tabs.panels = {graphD1, graphD2, parentHidden, parentShown};
+    step('global');
+    // 全体グラフ: 全ノートが点になり、位置が保存されて次回も同じ場所に出る
+    app.openGlobalGraph(); await sleep(60);
+    const gNodes = document.querySelectorAll('#global-svg .lg-node').length;
+    const gEdges = document.querySelectorAll('#global-svg .lg-edge').length;
+    const posKeyed = Object.keys(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}')).length;
+    const firstPos = JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}'));
+    app.openGlobalGraph(); await sleep(60);
+    const stable = firstPos === JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}'));
+    app.closeGlobalGraph();
+    const globalInfo = {gNodes, gEdges, posKeyed, stable, hiddenAfter: document.getElementById('global-graph').hidden, rels: app.state.rels.length};
+    tabs.global = globalInfo;
     step('palette');
     // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
     app.quickSwitcher(); await sleep(60);
@@ -221,7 +233,7 @@ async function main(){
     const palFiltered = document.querySelectorAll('.modal-item').length;
     inp.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter'})); await sleep(200);
     const palet = {palAll, palFiltered, palCurrent: app.state.current, modalHidden: document.getElementById('modal').hidden, stat: document.getElementById('stat-count').textContent};
-    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet, sortInfo, panels: tabs.panels});
+    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet, sortInfo, panels: tabs.panels, global: tabs.global});
   }catch(e){ setRes({errs:window.__errs, fatal:String(e&&e.stack||e)}); }
 }
 main();
@@ -250,6 +262,10 @@ try {
   if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
+  const gl = result.global || {};
+  if (gl.gNodes !== gl.rels || gl.posKeyed !== gl.rels) { console.error("global graph node/position count wrong: " + JSON.stringify(gl)); process.exit(1); }
+  if (!gl.stable) { console.error("global graph positions moved between opens: " + JSON.stringify(gl)); process.exit(1); }
+  if (!gl.hiddenAfter) { console.error("global graph did not close: " + JSON.stringify(gl)); process.exit(1); }
   const pn = result.panels || {};
   if (!(pn.graphD1 >= 3 && pn.graphD2 > pn.graphD1)) { console.error("local graph depth 2 did not add nodes: " + JSON.stringify(pn)); process.exit(1); }
   if (!pn.parentHidden || !pn.parentShown) { console.error("panel toggle failed: " + JSON.stringify(pn)); process.exit(1); }

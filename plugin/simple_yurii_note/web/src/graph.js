@@ -96,3 +96,227 @@ export function drawLocal(svg, model, { width, height, label, onOpen }) {
   }
   svg.appendChild(gNodes);
 }
+
+// ---------------------------------------------------------------- 全体グラフ
+// 場所が動かないように: 位置は一度決めたら保存し、次回からはそのまま使う。
+// 新しく増えたノートだけを、つながりの近くに置いて少し整える（既存の位置は動かさない）。
+
+// 決まった種から同じ乱数列を出す（同じ入力なら同じ配置になる）
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// nodes: [rel]、edges: [[a,b]]、stored: {rel:{x,y}}。戻り値は rel → {x,y} の全件。
+export function layoutGlobal(nodes, edges, stored = {}) {
+  const pos = new Map();
+  const movable = [];
+  for (const r of nodes) {
+    const s = stored[r];
+    if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) pos.set(r, { x: s.x, y: s.y });
+    else movable.push(r);
+  }
+  if (!movable.length) return pos;
+
+  const adj = new Map();
+  for (const [a, b] of edges) {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a).push(b);
+    adj.get(b).push(a);
+  }
+
+  const rand = rng(7919 + nodes.length);
+  const SPAN = 600;
+  // 初期配置: 既に置いてあるつながりの近く、無ければ決まった乱数で広げる
+  for (const r of movable) {
+    const placed = (adj.get(r) || []).find((x) => pos.has(x));
+    if (placed) {
+      const p = pos.get(placed);
+      pos.set(r, { x: p.x + (rand() - 0.5) * 60, y: p.y + (rand() - 0.5) * 60 });
+    } else {
+      pos.set(r, { x: (rand() - 0.5) * SPAN, y: (rand() - 0.5) * SPAN });
+    }
+  }
+  const K = 46; // ノード同士の目安の間隔
+  const CELL = K * 2;
+  const iters = movable.length > 2000 ? 90 : 160;
+  for (let it = 0; it < iters; it++) {
+    const temp = K * 0.9 * (1 - it / iters) + 0.5;
+    // 空間グリッド: 近いノードだけ斥力を計算する
+    const grid = new Map();
+    for (const r of pos.keys()) {
+      const p = pos.get(r);
+      const key = Math.floor(p.x / CELL) + "," + Math.floor(p.y / CELL);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(r);
+    }
+    const disp = new Map();
+    for (const r of movable) {
+      const p = pos.get(r);
+      let dx = 0, dy = 0;
+      const cx = Math.floor(p.x / CELL), cy = Math.floor(p.y / CELL);
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+          for (const o of grid.get(gx + "," + gy) || []) {
+            if (o === r) continue;
+            const q = pos.get(o);
+            let ex = p.x - q.x, ey = p.y - q.y;
+            let d2 = ex * ex + ey * ey;
+            if (d2 < 0.01) { ex = rand() - 0.5; ey = rand() - 0.5; d2 = 0.25; }
+            const f = (K * K) / d2;
+            dx += ex * f * 0.02;
+            dy += ey * f * 0.02;
+          }
+        }
+      }
+      for (const o of adj.get(r) || []) {
+        const q = pos.get(o);
+        const ex = q.x - p.x, ey = q.y - p.y;
+        const d = Math.sqrt(ex * ex + ey * ey) || 1;
+        const f = (d - K) * 0.08;
+        dx += (ex / d) * f;
+        dy += (ey / d) * f;
+      }
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const s = Math.min(len, temp) / len;
+      disp.set(r, { x: dx * s, y: dy * s });
+    }
+    for (const r of movable) {
+      const p = pos.get(r), d = disp.get(r);
+      p.x += d.x;
+      p.y += d.y;
+    }
+  }
+  return pos;
+}
+
+// 全体グラフを描く。pos は rel → {x,y}。パン（背景ドラッグ）・ズーム（ホイール）・
+// ノードのドラッグで位置を変える（onMove で保存）・クリックで開く。
+export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
+  svg.innerHTML = "";
+  let view = { x: 0, y: 0, w: 800, h: 600 };
+  const fit = () => {
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const p of pos.values()) {
+      if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
+      if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
+    }
+    if (!Number.isFinite(minx)) { minx = miny = -100; maxx = maxy = 100; }
+    const pad = 40;
+    // 1 単位 = 1 画面ピクセルを基本にし、入り切らないときだけ縮小する（文字の大きさを保つ）
+    const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600;
+    const cW = Math.max(200, maxx - minx + pad * 2), cH = Math.max(200, maxy - miny + pad * 2);
+    // 少ない件数は画面の 7 割まで広げて見せる（0.6 倍まで拡大）。多い件数は入る大きさに縮小。
+    const k = Math.max(0.6, cW / (cw * 0.7), cH / (ch * 0.7));
+    const w = cw * k, h = ch * k;
+    const mx = (minx + maxx) / 2, my = (miny + maxy) / 2;
+    view = { x: mx - w / 2, y: my - h / 2, w, h };
+  };
+  // 文字は画面のピクセルで一定の大きさにする（ズームしても読みやすさを保つ）
+  const apply = () => {
+    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+    const cw = svg.clientWidth || 800;
+    svg.style.setProperty("--lfs", (11 * view.w / cw).toFixed(2) + "px");
+  };
+  fit();
+  apply();
+
+  const gEdges = el("g", { class: "lg-edges" });
+  const lines = [];
+  for (const [a, b] of edges) {
+    if (!pos.has(a) || !pos.has(b)) continue;
+    const ln = el("line", { class: "lg-edge" });
+    lines.push([ln, a, b]);
+    gEdges.appendChild(ln);
+  }
+  svg.appendChild(gEdges);
+  const gNodes = el("g", { class: "lg-nodes" });
+  const nodeEls = new Map();
+  for (const r of nodes) {
+    const g = el("g", { class: "lg-node d2" });
+    g.appendChild(el("circle", { r: 4 }));
+    const t = el("text", { x: 7, y: 3.5, class: "lg-label" });
+    t.textContent = label(r);
+    g.appendChild(t);
+    gNodes.appendChild(g);
+    nodeEls.set(r, g);
+  }
+  svg.appendChild(gNodes);
+  const syncPos = () => {
+    for (const r of nodes) {
+      const p = pos.get(r), g = nodeEls.get(r);
+      if (p && g) g.setAttribute("transform", `translate(${p.x},${p.y})`);
+    }
+    for (const [ln, a, b] of lines) {
+      const pa = pos.get(a), pb = pos.get(b);
+      ln.setAttribute("x1", pa.x); ln.setAttribute("y1", pa.y);
+      ln.setAttribute("x2", pb.x); ln.setAttribute("y2", pb.y);
+    }
+  };
+  syncPos();
+
+  const clientToSvg = (e) => {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  };
+  // ホイールでズーム（カーソルの位置を中心に）
+  svg.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const m = clientToSvg(e);
+    const k = e.deltaY > 0 ? 1.1 : 1 / 1.1;
+    view = { x: m.x - (m.x - view.x) * k, y: m.y - (m.y - view.y) * k, w: view.w * k, h: view.h * k };
+    apply();
+  }, { passive: false });
+
+  let drag = null;
+  svg.addEventListener("pointerdown", (e) => {
+    const g = e.target.closest?.(".lg-node");
+    const rel = g ? [...nodeEls.entries()].find(([, v]) => v === g)?.[0] : null;
+    const m = clientToSvg(e);
+    drag = rel
+      ? { kind: "node", rel, moved: false, sx: m.x, sy: m.y }
+      : { kind: "pan", sx: m.x, sy: m.y, vx: view.x, vy: view.y, moved: false };
+    svg.setPointerCapture(e.pointerId);
+  });
+  svg.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const m = clientToSvg(e);
+    const dx = m.x - drag.sx, dy = m.y - drag.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+    if (drag.kind === "node") {
+      if (!drag.moved) return;
+      const p = pos.get(drag.rel);
+      p.x += m.x - (drag.lx ?? drag.sx); p.y += m.y - (drag.ly ?? drag.sy);
+      drag.lx = m.x; drag.ly = m.y;
+      syncPos();
+    } else {
+      view.x = drag.vx - dx; view.y = drag.vy - dy;
+      apply();
+    }
+  });
+  const end = (e) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (d.kind === "node") {
+      if (d.moved) onMove?.(d.rel, pos.get(d.rel));
+      else onOpen?.(d.rel);
+    }
+  };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointercancel", end);
+
+  return {
+    reset() { fit(); apply(); },
+    positions: () => pos,
+  };
+}
