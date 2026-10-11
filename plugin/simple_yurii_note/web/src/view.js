@@ -293,7 +293,8 @@ class VTextWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
-const vtextDecorations = EditorView.decorations.compute([vtextField], (state) => {
+// 依存に "doc" を入れる（文書が入れ替わったとき、前の文書の位置の装飾を残さない）
+const vtextDecorations = EditorView.decorations.compute(["doc", vtextField], (state) => {
   const decos = [];
   const doc = state.doc;
   for (const [lnum, col, text, type] of state.field(vtextField)) {
@@ -315,7 +316,7 @@ class CursorWidget extends WidgetType {
   }
 }
 
-const vimDecorations = EditorView.decorations.compute([vimField], (state) => {
+const vimDecorations = EditorView.decorations.compute(["doc", vimField], (state) => {
   const v = state.field(vimField);
   const decos = [];
   const doc = state.doc;

@@ -101,6 +101,8 @@ try {
   const R = JSON.parse(fs.readFileSync(outPath, "utf8"));
   console.log(JSON.stringify(R, null, 2));
   if (R.fatal) { console.error("fatal: " + R.fatal); process.exit(1); }
+  const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
+  check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.start?.file === "index.md" && R.start?.mode === "NORMAL" && R.start?.h1, "start: " + JSON.stringify(R.start));
   check((R.hints || []).includes("1") && (R.hints || []).includes("2"), "link number hints not shown: " + JSON.stringify(R.hints));
   check(R.afterDigit === "m1.md" && R.digitDoc, "digit key did not open the link: " + R.afterDigit);

@@ -52,9 +52,8 @@ async function startVim(cols, rows) {
   const args = [path.join(WEB, "bridge", "ptybridge.py"), String(cols), String(rows), "--", "vim", "-u", VIMRC];
   if (ROOT) args.push("--cmd", `let g:simple_yurii_note_root='${ROOT.replace(/'/g, "''")}/'`);
   args.push("-S", path.join(WEB, "vim", "gui.vim"));
-  if (OPEN) args.push(OPEN);
   bridge = spawn("python3", args, {
-    env: { ...process.env, SYN_GUI_PORT: String(port), TERM: "xterm-256color" },
+    env: { ...process.env, SYN_GUI_PORT: String(port), TERM: "xterm-256color", PKM_FILE: OPEN },
     stdio: ["pipe", "pipe", "pipe", "pipe"],
   });
   ctl = bridge.stdio[3];
@@ -88,7 +87,15 @@ function createWindow() {
   win.on("page-title-updated", (e) => e.preventDefault());
 
   // テスト用: PKM_TEST_SCRIPT の JS を画面で実行し、結果を PKM_TEST_OUT に書いて終了する
+  const consoleLog = [];
   if (process.env.PKM_TEST_SCRIPT) {
+    win.webContents.on("console-message", (...a) => {
+      const d = a[1] && typeof a[1] === "object" ? a[1] : null;
+      const lvl = d ? d.level : a[1];
+      const msg = d ? d.message : a[2];
+      if (lvl === "error" || lvl === "warning" || lvl === 2 || lvl === 3) consoleLog.push(String(msg).slice(0, 300));
+    });
+    win.webContents.on("render-process-gone", (_e, det) => consoleLog.push("render-process-gone " + JSON.stringify(det)));
     win.webContents.on("did-finish-load", async () => {
       let result;
       try {
@@ -98,6 +105,7 @@ function createWindow() {
       // 結果を先に書く。画面の撮影（任意）は時間制限つきで、固まってもテストを止めない
       const png = result && result.__png;
       if (result) delete result.__png;
+      if (result && typeof result === "object" && !Array.isArray(result)) result.__console = consoleLog.slice(0, 20);
       fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(result, null, 2));
       if (png) {
         try {

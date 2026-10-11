@@ -32685,7 +32685,7 @@ ${h2.join(`
       return true;
     }
   };
-  var vtextDecorations = EditorView.decorations.compute([vtextField], (state) => {
+  var vtextDecorations = EditorView.decorations.compute(["doc", vtextField], (state) => {
     const decos = [];
     const doc2 = state.doc;
     for (const [lnum, col, text, type] of state.field(vtextField)) {
@@ -32710,7 +32710,7 @@ ${h2.join(`
       return s15;
     }
   };
-  var vimDecorations = EditorView.decorations.compute([vimField], (state) => {
+  var vimDecorations = EditorView.decorations.compute(["doc", vimField], (state) => {
     const v2 = state.field(vimField);
     const decos = [];
     const doc2 = state.doc;

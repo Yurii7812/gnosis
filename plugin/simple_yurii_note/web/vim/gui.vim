@@ -17,6 +17,17 @@ endif
 set ttimeout
 set ttimeoutlen=20
 
+" 最初に開くノート（$PKM_FILE）。SYN は起動時に Index を開き直すので、起動が済んだあとで開く。
+function! s:open_start_file(t) abort
+  let l:f = fnamemodify($PKM_FILE, ':p')
+  if filereadable(l:f) && fnamemodify(expand('%:p'), ':p') !=# l:f
+    execute 'silent! edit ' . fnameescape(l:f)
+  endif
+endfunction
+if $PKM_FILE !=# ''
+  autocmd VimEnter * ++once call timer_start(400, function('s:open_start_file'))
+endif
+
 let s:sent_key = ''
 let s:last = ''
 
