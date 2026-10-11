@@ -155,7 +155,22 @@ async function main(){
     const afterAuto = (await readAll(root))['a.md'] || '';
     const autosaveOk = afterAuto.includes('(g.md)') && afterAuto !== beforeAuto && app.state.dirty === false;
     const autoDbg = {dirty: app.state.dirty, dirtyAfterSet, docTail: docAfterSet.slice(-40), has: afterAuto.includes('(g.md)'), changed: afterAuto !== beforeAuto, afterTail: afterAuto.slice(-120)};
-    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg});
+    step('tabs');
+    // 普通のクリック（リンクをたどる）は今のタブの中で移動し、タブを増やさない
+    const tabsBefore = app.state.tabs.length;
+    await app.openNote('b.md'); await app.openNote('g.md'); await app.openNote('r.md');
+    const tabsAfterNav = app.state.tabs.length;
+    // Ctrl+クリック相当は新しいタブ
+    await app.openNote('a.md', {newTab:true});
+    const tabsAfterNew = app.state.tabs.length;
+    // 既に開いているノートは重複させず、そのタブへ移る
+    await app.openNote('r.md');
+    const tabsDedupe = app.state.tabs.length;
+    // 履歴（Alt+←）で一つ前のノートへ戻る
+    app.navigateHistory(-1);
+    await sleep(100);
+    const tabs = {tabsBefore, tabsAfterNav, tabsAfterNew, tabsDedupe, histBack: app.state.current};
+    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs});
   }catch(e){ setRes({errs:window.__errs, fatal:String(e&&e.stack||e)}); }
 }
 main();
@@ -182,7 +197,12 @@ try {
   if (result.errs?.length) { console.error("JS errors"); process.exit(1); }
   if (result.diffKeys?.length) { console.error("file mismatch vs Python"); process.exit(1); }
   if (!result.ui || result.ui.sidebarItems < 4) { console.error("sidebar not rendered"); process.exit(1); }
-  console.log("browser smoke: OK (JS sync == Python sync, UI rendered)");
+  const t = result.tabs || {};
+  if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
+  if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
+  if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
+  if (t.histBack !== "a.md") { console.error("history back failed: " + JSON.stringify(t)); process.exit(1); }
+  console.log("browser smoke: OK (JS sync == Python sync, UI rendered, tabs/history)");
 } finally {
   fs.rmSync(pagePath, { force: true });
   fs.rmSync(pyDir, { recursive: true, force: true });

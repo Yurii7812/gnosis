@@ -29065,7 +29065,7 @@
             const el = e.target?.closest?.("[data-md-href]");
             if (el) {
               e.preventDefault();
-              opts.onNavigate?.(el.getAttribute("data-md-href"));
+              opts.onNavigate?.(el.getAttribute("data-md-href"), { newTab: e.ctrlKey || e.metaKey || e.button === 1 });
               return true;
             }
             return false;
@@ -29104,6 +29104,8 @@
     notes: /* @__PURE__ */ new Map(),
     titleState: {},
     tabs: [],
+    hist: [],
+    histIdx: -1,
     current: null,
     parentLines: [],
     relatedLines: [],
@@ -29239,7 +29241,7 @@
       d.innerHTML = `<span class="ni-title"></span><span class="ni-file"></span>`;
       d.querySelector(".ni-title").textContent = it.title || stem(it.rel);
       d.querySelector(".ni-file").textContent = it.group ? "group" : stem(it.rel);
-      d.onclick = () => openNote(it.rel);
+      d.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
       box.appendChild(d);
     }
   }
@@ -29259,10 +29261,31 @@
       };
       t2.append(s, x);
       t2.onclick = () => openNote(rel);
+      t2.onauxclick = (e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          closeTab(rel);
+        }
+      };
       box.appendChild(t2);
     }
   }
-  async function openNote(rel) {
+  function pushHistory(rel) {
+    if (state.hist[state.histIdx] === rel) return;
+    state.hist.length = state.histIdx + 1;
+    state.hist.push(rel);
+    if (state.hist.length > 100) state.hist.shift();
+    state.histIdx = state.hist.length - 1;
+  }
+  function navigateHistory(delta) {
+    let i = state.histIdx + delta;
+    while (i >= 0 && i < state.hist.length && !state.notes.has(state.hist[i])) i += delta;
+    if (i < 0 || i >= state.hist.length) return;
+    state.histIdx = i;
+    openNote(state.hist[i], { history: false });
+  }
+  async function openNote(rel, opts = {}) {
+    const { newTab = false, history: history2 = true } = opts;
     if (!state.notes.has(rel)) {
       toast("\u898B\u3064\u304B\u308A\u307E\u305B\u3093: " + rel);
       return;
@@ -29278,7 +29301,13 @@
       state.dirty = false;
       updateDirtyUI();
     }
-    if (!state.tabs.includes(rel)) state.tabs.push(rel);
+    if (state.tabs.includes(rel)) {
+    } else if (newTab || !state.tabs.includes(state.current)) {
+      state.tabs.push(rel);
+    } else {
+      state.tabs[state.tabs.indexOf(state.current)] = rel;
+    }
+    if (history2) pushHistory(rel);
     state.current = rel;
     const n = state.notes.get(rel);
     loadNoteToEditor(n);
@@ -29305,7 +29334,7 @@
     if (i >= 0) state.tabs.splice(i, 1);
     if (state.current === rel) {
       const next = state.tabs[Math.max(0, i - 1)];
-      if (next) openNote(next);
+      if (next) openNote(next, { history: false });
       else {
         state.current = null;
         $("note-view").hidden = true;
@@ -29331,7 +29360,7 @@
         row.className = "rel-item";
         const a = document.createElement("a");
         a.textContent = it.title;
-        a.onclick = () => openNote(it.rel);
+        a.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
         row.appendChild(a);
         if (removable) {
           const b = document.createElement("button");
@@ -29713,6 +29742,22 @@ ${attr}---
       if (e.key === "Escape") {
         $("modal").hidden = true;
       }
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        navigateHistory(-1);
+      }
+      if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        navigateHistory(1);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && state.current) {
+        e.preventDefault();
+        closeTab(state.current);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        newNote(false);
+      }
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && state.dirty) saveCurrent({ autosave: true });
@@ -29787,10 +29832,10 @@ ${attr}---
         if (!state.loading) markDirty();
       },
       onSave: saveCurrent,
-      onNavigate: (href) => {
+      onNavigate: (href, mods) => {
         if (!href.toLowerCase().endsWith(".md")) return;
         const rp = resolver(href, dirname(state.current));
-        if (rp) openNote(rp);
+        if (rp) openNote(rp, { newTab: !!mods?.newTab });
         else toast("\u30EA\u30F3\u30AF\u5148\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093: " + href);
       },
       getImageURL: async (src) => {
@@ -29804,6 +29849,8 @@ ${attr}---
     window.simpleYuriiNote = {
       state,
       openNote,
+      navigateHistory,
+      closeTab,
       saveCurrent,
       syncAndWrite,
       pickAndOpen,

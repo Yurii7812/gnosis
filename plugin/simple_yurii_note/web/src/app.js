@@ -12,6 +12,8 @@ const state = {
   notes: new Map(),
   titleState: {},
   tabs: [],
+  hist: [],
+  histIdx: -1,
   current: null,
   parentLines: [],
   relatedLines: [],
@@ -165,7 +167,7 @@ function renderSidebar() {
     d.innerHTML = `<span class="ni-title"></span><span class="ni-file"></span>`;
     d.querySelector(".ni-title").textContent = it.title || stem(it.rel);
     d.querySelector(".ni-file").textContent = it.group ? "group" : stem(it.rel);
-    d.onclick = () => openNote(it.rel);
+    d.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
     box.appendChild(d);
   }
 }
@@ -183,13 +185,36 @@ function renderTabs() {
     x.onclick = (e) => { e.stopPropagation(); closeTab(rel); };
     t.append(s, x);
     t.onclick = () => openNote(rel);
+    t.onauxclick = (e) => { if (e.button === 1) { e.preventDefault(); closeTab(rel); } };
     box.appendChild(t);
   }
 }
 
+// ---------------------------------------------------------------- history
+
+function pushHistory(rel) {
+  if (state.hist[state.histIdx] === rel) return;
+  state.hist.length = state.histIdx + 1;
+  state.hist.push(rel);
+  if (state.hist.length > 100) state.hist.shift();
+  state.histIdx = state.hist.length - 1;
+}
+
+// Alt+← / Alt+→ : 見たノートの履歴を戻る・進む（消えたノートは飛ばす）
+function navigateHistory(delta) {
+  let i = state.histIdx + delta;
+  while (i >= 0 && i < state.hist.length && !state.notes.has(state.hist[i])) i += delta;
+  if (i < 0 || i >= state.hist.length) return;
+  state.histIdx = i;
+  openNote(state.hist[i], { history: false });
+}
+
 // ---------------------------------------------------------------- open note
 
-async function openNote(rel) {
+// 普通のクリックは今のタブの中で移動する（Obsidian と同じ）。
+// Ctrl/Cmd+クリックだけ新しいタブで開く。既に開いているノートはそのタブへ移るだけ。
+async function openNote(rel, opts = {}) {
+  const { newTab = false, history = true } = opts;
   if (!state.notes.has(rel)) { toast("見つかりません: " + rel); return; }
   if (state.current === rel) { renderSidebar(); renderTabs(); return; }
   if (state.dirty) {
@@ -198,7 +223,14 @@ async function openNote(rel) {
     state.dirty = false;
     updateDirtyUI();
   }
-  if (!state.tabs.includes(rel)) state.tabs.push(rel);
+  if (state.tabs.includes(rel)) {
+    // 既に開いているタブへ移るだけ（重複させない）
+  } else if (newTab || !state.tabs.includes(state.current)) {
+    state.tabs.push(rel);
+  } else {
+    state.tabs[state.tabs.indexOf(state.current)] = rel;
+  }
+  if (history) pushHistory(rel);
   state.current = rel;
   const n = state.notes.get(rel);
   loadNoteToEditor(n);
@@ -227,7 +259,7 @@ function closeTab(rel) {
   if (i >= 0) state.tabs.splice(i, 1);
   if (state.current === rel) {
     const next = state.tabs[Math.max(0, i - 1)];
-    if (next) openNote(next);
+    if (next) openNote(next, { history: false });
     else { state.current = null; $("note-view").hidden = true; $("empty").hidden = false; $("title-input").disabled = true; renderTabs(); renderRelations(); }
   } else renderTabs();
 }
@@ -249,7 +281,7 @@ function renderRelations() {
       row.className = "rel-item";
       const a = document.createElement("a");
       a.textContent = it.title;
-      a.onclick = () => openNote(it.rel);
+      a.onclick = (e) => openNote(it.rel, { newTab: e.ctrlKey || e.metaKey });
       row.appendChild(a);
       if (removable) {
         const b = document.createElement("button");
@@ -593,6 +625,10 @@ function wireToolbar() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrent(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); $("search").focus(); $("search").select(); }
     if (e.key === "Escape") { $("modal").hidden = true; }
+    if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); navigateHistory(-1); }
+    if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); navigateHistory(1); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && state.current) { e.preventDefault(); closeTab(state.current); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") { e.preventDefault(); newNote(false); }
   });
   // 自動保存: タブを隠す/閉じる前に書き残す
   document.addEventListener("visibilitychange", () => {
@@ -642,10 +678,10 @@ function init() {
     doc: "",
     onChange: () => { if (!state.loading) markDirty(); },
     onSave: saveCurrent,
-    onNavigate: (href) => {
+    onNavigate: (href, mods) => {
       if (!href.toLowerCase().endsWith(".md")) return;
       const rp = resolver(href, dirname(state.current));
-      if (rp) openNote(rp);
+      if (rp) openNote(rp, { newTab: !!mods?.newTab });
       else toast("リンク先が見つかりません: " + href);
     },
     getImageURL: async (src) => {
@@ -660,7 +696,7 @@ function init() {
 
   // デバッグ・テスト用フック（ローカルアプリなので常時公開）
   window.simpleYuriiNote = {
-    state, openNote, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
+    state, openNote, navigateHistory, closeTab, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
     getEditor: () => editor,
   };
 }

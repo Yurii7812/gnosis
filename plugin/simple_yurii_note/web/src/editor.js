@@ -228,7 +228,7 @@ export function createEditor(opts) {
           const el = e.target?.closest?.("[data-md-href]");
           if (el) {
             e.preventDefault();
-            opts.onNavigate?.(el.getAttribute("data-md-href"));
+            opts.onNavigate?.(el.getAttribute("data-md-href"), { newTab: e.ctrlKey || e.metaKey || e.button === 1 });
             return true;
           }
           return false;
