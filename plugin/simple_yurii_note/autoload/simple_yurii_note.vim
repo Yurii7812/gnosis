@@ -2490,6 +2490,23 @@ function! simple_yurii_note#jump_up() abort
   call s:jump_to_line(l:up)
 endfunction
 
+" \k 用: Parent セクションへカーソルを移すだけで、リンク先は開かない
+" （:JumpParent は従来どおり、リンクが1つならそのノートを開く）。
+function! simple_yurii_note#jump_up_cursor() abort
+  let l:up = s:find_section_line('up')
+  if l:up <= 0
+    echo 'Parent: section not found'
+    return
+  endif
+  let l:links = s:section_link_positions('up')
+  if len(l:links) >= 1
+    call cursor(l:links[0].lnum, l:links[0].col)
+  else
+    call s:jump_to_line(l:up)
+  endif
+  normal! zv
+endfunction
+
 function! simple_yurii_note#jump_down_top() abort
   let l:down = s:find_section_line('down')
   if l:down <= 0

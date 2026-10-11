@@ -447,7 +447,7 @@ nnoremap <silent> <C-O>    <Cmd>call simple_yurii_note#save_before_normal_jump("
 nnoremap <nowait> <silent> \bu <Cmd>call simple_yurii_note#jump_last_link_before_up()<CR>
 " \k / \j / \J（旧 ,, / ,. / ,/）: 1文字目が素の「,」（f/t リピート）と被り
 " timeoutlen 待ちになるため \ 側へ移した。k=上 / j=下 の連想。
-nnoremap <nowait> <silent> \k  <Cmd>call simple_yurii_note#jump_up()<CR>
+nnoremap <nowait> <silent> \k  <Cmd>call simple_yurii_note#jump_up_cursor()<CR>
 nnoremap <nowait> <silent> \j  <Cmd>call simple_yurii_note#jump_down_top()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call simple_yurii_note#jump_down_bottom()<CR>
 
