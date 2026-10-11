@@ -8,33 +8,51 @@
 </head>
 <body>
   <div id="app">
-    <header id="toolbar">
-      <button id="open-btn" title="vault を開く">📂 開く</button>
-      <span id="vault-name" class="vault-name">vault 未選択</span>
-      <span class="spacer"></span>
-      <button id="new-btn" title="子ノートを作成">＋ ノート</button>
-      <button id="new-group-btn" title="グループを作成">＋ グループ</button>
-      <button id="delete-btn" title="このノートを削除">🗑</button>
-      <button id="save-btn" title="保存 (Ctrl+S)" disabled>保存</button>
-      <span id="save-state" class="save-state">—</span>
-      <button id="theme-btn" title="ライト / ダーク切替">🌙</button>
-    </header>
-
     <main id="layout">
       <aside id="sidebar">
+        <div id="toolbar" class="side-tools">
+          <button id="new-btn" class="icon-btn" title="新しいノート (Ctrl+N)" aria-label="新しいノート">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15h6"/></svg>
+          </button>
+          <button id="new-group-btn" class="icon-btn" title="新しいグループ" aria-label="新しいグループ">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+          </button>
+          <span class="spacer"></span>
+          <button id="open-btn" class="icon-btn" title="vault を開く" aria-label="vault を開く">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H7l-4 9z"/><path d="M7 10h15l-3.5 9H3.5"/></svg>
+          </button>
+        </div>
         <div class="side-head">
-          <input id="search" type="search" placeholder="検索 / クイックオープン (Ctrl+O)">
+          <input id="search" type="search" placeholder="ノートを絞り込む">
         </div>
         <div id="note-list" class="note-list"></div>
+        <div class="side-foot">
+          <span id="vault-name" class="vault-name">vault 未選択</span>
+          <span class="spacer"></span>
+          <button id="theme-btn" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">🌙</button>
+        </div>
       </aside>
 
       <section id="center">
-        <div id="tabs" class="tabs"></div>
+        <div class="tabbar">
+          <div id="tabs" class="tabs"></div>
+          <div class="tab-actions">
+            <button id="delete-btn" class="icon-btn" title="このノートを削除" aria-label="削除">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+            </button>
+            <button id="save-btn" class="text-btn" title="保存 (Ctrl+S)" disabled>保存</button>
+          </div>
+        </div>
         <div id="note-view" hidden>
-          <input id="title-input" class="title-input" disabled>
+          <div class="view-header"><input id="title-input" class="title-input" disabled placeholder="タイトル"></div>
           <div id="editor" class="editor"></div>
         </div>
-        <div id="empty" class="empty">📂 を押して vault（~/files/yurii-note）を開いてください。</div>
+        <div id="empty" class="empty">
+          <div class="empty-box">
+            <div class="empty-title">ノートが開かれていません</div>
+            <div class="empty-hint"><kbd>Ctrl</kbd>+<kbd>O</kbd> でノートを開く　<kbd>Ctrl</kbd>+<kbd>N</kbd> で新しいノート</div>
+          </div>
+        </div>
       </section>
 
       <aside id="relations">
@@ -44,6 +62,11 @@
         <div id="rel-back" class="rel-block"></div>
       </aside>
     </main>
+    <footer id="statusbar">
+      <span id="save-state" class="save-state">—</span>
+      <span class="spacer"></span>
+      <span id="stat-count" class="stat"></span>
+    </footer>
   </div>
 
   <div id="overlay" class="overlay" hidden>

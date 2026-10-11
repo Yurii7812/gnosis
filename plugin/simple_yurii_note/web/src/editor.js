@@ -36,7 +36,42 @@ class ImageWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
+class BulletWidget extends WidgetType {
+  eq() { return true; }
+  toDOM() {
+    const sp = document.createElement("span");
+    sp.className = "cm-md-bullet";
+    sp.textContent = "•";
+    return sp;
+  }
+}
+
+// タスクリスト `- [ ]` / `- [x]` のチェックボックス。クリックで [ ] と [x] を切り替える。
+class TaskWidget extends WidgetType {
+  constructor(checked, pos) {
+    super();
+    this.checked = checked;
+    this.pos = pos; // `[` と `]` の間の 1 文字の位置
+  }
+  eq(o) { return o.checked === this.checked && o.pos === this.pos; }
+  toDOM(view) {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "cm-md-task";
+    cb.checked = this.checked;
+    cb.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.dispatch({ changes: { from: this.pos, to: this.pos + 1, insert: this.checked ? " " : "x" } });
+    });
+    return cb;
+  }
+  ignoreEvent() { return true; }
+}
+
 const RE = {
+  bullet: /^(\s*)([-*+])\s+(\[([ xX])\]\s+)?/,
+  ordered: /^(\s*)(\d+[.)])\s+/,
+  fence: /^\s*(```|~~~)/,
   heading: /^(#{1,6})\s+/,
   quote: /^(\s*>+\s?)/,
   hr: /^\s*([-*_])(?:\s*\1){2,}\s*$/,
@@ -53,10 +88,16 @@ function overlaps(occ, a, b) {
   return false;
 }
 
-function decorateLine(line, active, decos, cfg) {
+function decorateLine(line, active, inFence, decos, cfg) {
   const text = line.text;
   const base = line.from;
   const occ = [];
+
+  // コードブロックの中身は記法を解釈せず、等幅の背景だけ付ける
+  if (inFence) {
+    decos.push(Decoration.line({ class: "cm-md-fence" }).range(base));
+    return;
+  }
 
   const h = RE.heading.exec(text);
   if (h) {
@@ -66,8 +107,39 @@ function decorateLine(line, active, decos, cfg) {
       decos.push(Decoration.replace({}).range(base, base + h[0].length));
     }
   }
-  if (RE.quote.test(text)) decos.push(Decoration.line({ class: "cm-md-quote" }).range(base));
-  if (RE.hr.test(text)) decos.push(Decoration.line({ class: "cm-md-hr" }).range(base));
+  const q = RE.quote.exec(text);
+  if (q) {
+    decos.push(Decoration.line({ class: "cm-md-quote" }).range(base));
+    if (!active) {
+      occ.push([0, q[0].length]);
+      decos.push(Decoration.replace({}).range(base, base + q[0].length));
+    }
+  }
+  if (RE.hr.test(text)) {
+    decos.push(Decoration.line({ class: "cm-md-hr" }).range(base));
+    if (!active && text.length > 0) decos.push(Decoration.replace({}).range(base, base + text.length));
+  }
+
+  // 箇条書き: 行頭の `-` `*` `+` を • に、`- [ ]` はチェックボックスにする
+  const b = RE.bullet.exec(text);
+  if (b && !RE.hr.test(text)) {
+    decos.push(Decoration.line({ class: "cm-md-li" }).range(base));
+    if (!active) {
+      const ind = b[1].length;
+      if (b[3]) {
+        const checked = b[4].toLowerCase() === "x";
+        const end = b[0].length;
+        occ.push([ind, end]);
+        decos.push(Decoration.replace({ widget: new TaskWidget(checked, base + ind + 3) }).range(base + ind, base + end));
+        if (checked) decos.push(Decoration.mark({ class: "cm-md-task-done" }).range(base + end, base + text.length));
+      } else {
+        occ.push([ind, ind + 1]);
+        decos.push(Decoration.replace({ widget: new BulletWidget() }).range(base + ind, base + ind + 1));
+      }
+    }
+  } else if (RE.ordered.test(text)) {
+    decos.push(Decoration.line({ class: "cm-md-li" }).range(base));
+  }
 
   const addSpan = (re, handler) => {
     re.lastIndex = 0;
@@ -137,6 +209,14 @@ function buildDecorations(view, cfg) {
   const doc = view.state.doc;
   const decos = [];
   const activeLines = new Set();
+  // ``` で囲まれたコードブロックの行番号（開始・終了の行を含む）
+  const fenceLines = new Set();
+  let inBlock = false;
+  for (let n = 1; n <= doc.lines; n++) {
+    const t = doc.line(n).text;
+    if (RE.fence.test(t)) { fenceLines.add(n); inBlock = !inBlock; }
+    else if (inBlock) fenceLines.add(n);
+  }
   for (const r of view.state.selection.ranges) {
     const a = doc.lineAt(r.from).number;
     const b = doc.lineAt(r.to).number;
@@ -146,7 +226,7 @@ function buildDecorations(view, cfg) {
     let pos = from;
     while (pos <= to) {
       const line = doc.lineAt(pos);
-      decorateLine(line, activeLines.has(line.number), decos, cfg);
+      decorateLine(line, activeLines.has(line.number), fenceLines.has(line.number), decos, cfg);
       if (line.to + 1 > to) break;
       pos = line.to + 1;
     }
@@ -204,7 +284,6 @@ export function createEditor(opts) {
       dropCursor(),
       rectangularSelection(),
       crosshairCursor(),
-      highlightActiveLine(),
       highlightSelectionMatches(),
       search({ top: true }),
       EditorView.lineWrapping,
@@ -236,7 +315,7 @@ export function createEditor(opts) {
       }),
       EditorView.theme({
         "&": { fontSize: "16px", height: "100%" },
-        ".cm-content": { padding: "18px 8px 40vh 8px" },
+        ".cm-content": { padding: "20px 28px 40vh", maxWidth: "820px", margin: "0 auto" },
         ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.75" },
         ".cm-gutters": { display: "none" },
         "&.cm-focused": { outline: "none" },

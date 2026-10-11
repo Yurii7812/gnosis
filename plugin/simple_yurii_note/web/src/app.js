@@ -252,6 +252,7 @@ function loadNoteToEditor(n) {
   state.loading = true;
   editor.setDoc(n.body.join("\n"));
   state.loading = false;
+  updateStats();
 }
 
 function closeTab(rel) {
@@ -388,43 +389,147 @@ function addChild(targetRel) {
   }
 }
 
-// ---------------------------------------------------------------- pick note modal
+// ---------------------------------------------------------------- palette (quick switcher / note picker)
 
-function pickNote(cb) {
+// 検索語（空白区切り）を全部含むほど上位。タイトル先頭一致 > タイトル中 > ファイル名。
+function scoreNote(rel, words) {
+  if (!words.length) return 0;
+  const title = titleOf(rel).toLowerCase();
+  const file = rel.toLowerCase();
+  let score = 0;
+  for (const w of words) {
+    const ti = title.indexOf(w);
+    if (ti >= 0) score += ti === 0 ? 100 : 60 - Math.min(ti, 50);
+    else if (file.includes(w)) score += 20;
+    else return -1;
+  }
+  return score;
+}
+
+// items(query) → [{ rel, title, sub }]。↑↓ で選び、Enter で決定、Esc で閉じる。
+function openPalette({ placeholder, hint, items, onPick }) {
   const m = $("modal");
   m.hidden = false;
   m.innerHTML = "";
   const box = document.createElement("div");
   box.className = "modal-box";
   const inp = document.createElement("input");
-  inp.placeholder = "ノートを検索…";
+  inp.placeholder = placeholder;
   const list = document.createElement("div");
   list.className = "modal-list";
+  let sel = 0;
+  let shown = [];
+  const close = () => { m.hidden = true; };
+  const pick = (it) => { close(); onPick(it.rel); };
   const render = () => {
-    const q = inp.value.trim().toLowerCase();
+    shown = items(inp.value.trim().toLowerCase()).slice(0, 60);
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
     list.innerHTML = "";
-    for (const rel of state.rels) {
-      if (rel === state.current) continue;
-      const t = titleOf(rel).toLowerCase();
-      if (q && !t.includes(q) && !rel.toLowerCase().includes(q)) continue;
-      const d = document.createElement("div");
-      d.className = "modal-item";
-      d.textContent = titleOf(rel) + "  (" + stem(rel) + ")";
-      d.onclick = () => { m.hidden = true; cb(rel); };
-      list.appendChild(d);
+    if (hint) {
+      const h = document.createElement("div");
+      h.className = "modal-hint";
+      h.textContent = hint(inp.value.trim());
+      list.appendChild(h);
     }
+    if (!shown.length) {
+      const e = document.createElement("div");
+      e.className = "modal-empty";
+      e.textContent = "見つかりません";
+      list.appendChild(e);
+      return;
+    }
+    shown.forEach((it, i) => {
+      const d = document.createElement("div");
+      d.className = "modal-item" + (i === sel ? " sel" : "");
+      const t = document.createElement("span");
+      t.textContent = it.title;
+      const f = document.createElement("span");
+      f.className = "mi-file";
+      f.textContent = it.sub || "";
+      d.append(t, f);
+      d.onmousemove = () => { if (sel !== i) { sel = i; mark(); } };
+      d.onclick = () => pick(it);
+      list.appendChild(d);
+    });
   };
-  inp.oninput = render;
+  const mark = () => {
+    list.querySelectorAll(".modal-item").forEach((el, i) => {
+      el.classList.toggle("sel", i === sel);
+      if (i === sel) el.scrollIntoView({ block: "nearest" });
+    });
+  };
+  inp.oninput = () => { sel = 0; render(); };
+  inp.onkeydown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (shown.length) { sel = (sel + 1) % shown.length; mark(); } }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (shown.length) { sel = (sel - 1 + shown.length) % shown.length; mark(); } }
+    else if (e.key === "Enter") { e.preventDefault(); if (shown[sel]) pick(shown[sel]); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); }
+  };
   box.append(inp, list);
   m.appendChild(box);
   render();
   inp.focus();
-  m.onclick = (e) => { if (e.target === m) m.hidden = true; };
+  m.onclick = (e) => { if (e.target === m) close(); };
+}
+
+function noteItems(q, { skipCurrent = false } = {}) {
+  const words = q ? q.split(/\s+/) : [];
+  const out = [];
+  for (const rel of state.rels) {
+    if (skipCurrent && rel === state.current) continue;
+    const sc = scoreNote(rel, words);
+    if (sc < 0) continue;
+    out.push({ rel, title: titleOf(rel), sub: stem(rel), sc });
+  }
+  out.sort((x, y) => y.sc - x.sc || x.title.localeCompare(y.title, "ja"));
+  return out;
+}
+
+// 親・関連・子を足すときの選択ダイアログ
+function pickNote(cb) {
+  openPalette({
+    placeholder: "ノートを検索…",
+    items: (q) => noteItems(q, { skipCurrent: true }),
+    onPick: cb,
+  });
+}
+
+// Ctrl+O: ノートへ素早く移動（空欄なら最近見たノート）。Ctrl+Enter 相当は無し（Ctrl+クリックで新タブ）
+function quickSwitcher() {
+  if (!state.root) return;
+  const recents = () => {
+    const seen = new Set();
+    const out = [];
+    for (let i = state.hist.length - 1; i >= 0; i--) {
+      const r = state.hist[i];
+      if (r === state.current || seen.has(r) || !state.notes.has(r)) continue;
+      seen.add(r);
+      out.push({ rel: r, title: titleOf(r), sub: stem(r) });
+    }
+    return out;
+  };
+  openPalette({
+    placeholder: "ノートを開く…",
+    hint: (q) => (q ? "" : "最近開いたノート"),
+    items: (q) => (q ? noteItems(q) : [...recents(), ...noteItems("").filter((x) => !state.hist.includes(x.rel) && x.rel !== state.current)]),
+    onPick: (rel) => openNote(rel),
+  });
 }
 
 // ---------------------------------------------------------------- save & sync
 
-function markDirty() { state.dirty = true; updateDirtyUI(); scheduleAutosave(); }
+function markDirty() { state.dirty = true; updateDirtyUI(); scheduleAutosave(); updateStats(); }
+
+// ステータスバー: 本文の文字数（空白を除く）と、本文中の .md リンク数
+function updateStats() {
+  const el = $("stat-count");
+  if (!el) return;
+  if (!state.current || !editor) { el.textContent = ""; return; }
+  const doc = editor.getDoc();
+  const chars = doc.replace(/\s/g, "").length;
+  const links = (doc.match(/\]\([^)]+\.md\)/gi) || []).length;
+  el.textContent = `${chars.toLocaleString()} 文字 ・ リンク ${links}`;
+}
 
 let autosaveTimer = null;
 let autosaveBusy = false;
@@ -623,7 +728,8 @@ function wireToolbar() {
   $("title-input").oninput = markDirty;
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrent(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); $("search").focus(); $("search").select(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); quickSwitcher(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && document.activeElement?.closest?.(".cm-editor") == null) { e.preventDefault(); $("search").focus(); $("search").select(); }
     if (e.key === "Escape") { $("modal").hidden = true; }
     if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); navigateHistory(-1); }
     if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); navigateHistory(1); }
@@ -696,7 +802,7 @@ function init() {
 
   // デバッグ・テスト用フック（ローカルアプリなので常時公開）
   window.simpleYuriiNote = {
-    state, openNote, navigateHistory, closeTab, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
+    state, openNote, navigateHistory, closeTab, quickSwitcher, updateStats, saveCurrent, syncAndWrite, pickAndOpen, parseAll,
     getEditor: () => editor,
   };
 }

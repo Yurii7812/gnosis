@@ -170,7 +170,16 @@ async function main(){
     app.navigateHistory(-1);
     await sleep(100);
     const tabs = {tabsBefore, tabsAfterNav, tabsAfterNew, tabsDedupe, histBack: app.state.current};
-    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs});
+    step('palette');
+    // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
+    app.quickSwitcher(); await sleep(60);
+    const palAll = document.querySelectorAll('.modal-item').length;
+    const inp = document.querySelector('.modal-box input');
+    inp.value = '日記'; inp.dispatchEvent(new Event('input')); await sleep(60);
+    const palFiltered = document.querySelectorAll('.modal-item').length;
+    inp.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter'})); await sleep(200);
+    const palet = {palAll, palFiltered, palCurrent: app.state.current, modalHidden: document.getElementById('modal').hidden, stat: document.getElementById('stat-count').textContent};
+    setRes({errs:window.__errs, ui, diffKeys:Object.keys(diff), diff, autosaveOk, autoDbg, tabs, palet});
   }catch(e){ setRes({errs:window.__errs, fatal:String(e&&e.stack||e)}); }
 }
 main();
@@ -195,14 +204,18 @@ try {
   console.log(JSON.stringify(result, null, 2));
   if (result.fatal) process.exit(1);
   if (result.errs?.length) { console.error("JS errors"); process.exit(1); }
-  if (result.diffKeys?.length) { console.error("file mismatch vs Python"); process.exit(1); }
-  if (!result.ui || result.ui.sidebarItems < 4) { console.error("sidebar not rendered"); process.exit(1); }
   const t = result.tabs || {};
   if (t.tabsAfterNav !== t.tabsBefore) { console.error("tabs grew on link navigation: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsAfterNew !== t.tabsBefore + 1) { console.error("newTab did not open a new tab: " + JSON.stringify(t)); process.exit(1); }
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
   if (t.histBack !== "a.md") { console.error("history back failed: " + JSON.stringify(t)); process.exit(1); }
-  console.log("browser smoke: OK (JS sync == Python sync, UI rendered, tabs/history)");
+  const pl = result.palet || {};
+  if (!(pl.palAll >= 3 && pl.palFiltered >= 1 && pl.palFiltered < pl.palAll)) { console.error("quick switcher list/filter failed: " + JSON.stringify(pl)); process.exit(1); }
+  if (pl.palCurrent !== "g.md" || !pl.modalHidden) { console.error("quick switcher Enter did not open the note: " + JSON.stringify(pl)); process.exit(1); }
+  if (!/文字/.test(pl.stat || "")) { console.error("status bar stats missing: " + JSON.stringify(pl)); process.exit(1); }
+  if (result.diffKeys?.length) { console.error("file mismatch vs Python"); process.exit(1); }
+  if (!result.ui || result.ui.sidebarItems < 4) { console.error("sidebar not rendered"); process.exit(1); }
+  console.log("browser smoke: OK (JS sync == Python sync, UI rendered, tabs/history, quick switcher)");
 } finally {
   fs.rmSync(pagePath, { force: true });
   fs.rmSync(pyDir, { recursive: true, force: true });

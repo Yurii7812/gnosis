@@ -13377,32 +13377,6 @@
       return false;
     }
   };
-  function highlightActiveLine() {
-    return activeLineHighlighter;
-  }
-  var lineDeco = /* @__PURE__ */ Decoration.line({ class: "cm-activeLine" });
-  var activeLineHighlighter = /* @__PURE__ */ ViewPlugin.fromClass(class {
-    constructor(view) {
-      this.decorations = this.getDeco(view);
-    }
-    update(update) {
-      if (update.docChanged || update.selectionSet)
-        this.decorations = this.getDeco(update.view);
-    }
-    getDeco(view) {
-      let lastLineStart = -1, deco = [];
-      for (let r of view.state.selection.ranges) {
-        let line = view.lineBlockAt(r.head);
-        if (line.from > lastLineStart) {
-          deco.push(lineDeco.range(line.from));
-          lastLineStart = line.from;
-        }
-      }
-      return Decoration.set(deco);
-    }
-  }, {
-    decorations: (v) => v.decorations
-  });
   var MaxOff = 2e3;
   function rectangleFor(state2, a, b) {
     let startLine = Math.min(a.line, b.line), endLine = Math.max(a.line, b.line);
@@ -28880,7 +28854,45 @@
       return true;
     }
   };
+  var BulletWidget = class extends WidgetType {
+    eq() {
+      return true;
+    }
+    toDOM() {
+      const sp = document.createElement("span");
+      sp.className = "cm-md-bullet";
+      sp.textContent = "\u2022";
+      return sp;
+    }
+  };
+  var TaskWidget = class extends WidgetType {
+    constructor(checked, pos) {
+      super();
+      this.checked = checked;
+      this.pos = pos;
+    }
+    eq(o) {
+      return o.checked === this.checked && o.pos === this.pos;
+    }
+    toDOM(view) {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "cm-md-task";
+      cb.checked = this.checked;
+      cb.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        view.dispatch({ changes: { from: this.pos, to: this.pos + 1, insert: this.checked ? " " : "x" } });
+      });
+      return cb;
+    }
+    ignoreEvent() {
+      return true;
+    }
+  };
   var RE = {
+    bullet: /^(\s*)([-*+])\s+(\[([ xX])\]\s+)?/,
+    ordered: /^(\s*)(\d+[.)])\s+/,
+    fence: /^\s*(```|~~~)/,
     heading: /^(#{1,6})\s+/,
     quote: /^(\s*>+\s?)/,
     hr: /^\s*([-*_])(?:\s*\1){2,}\s*$/,
@@ -28895,10 +28907,14 @@
     for (const [x, y] of occ) if (a < y && x < b) return true;
     return false;
   }
-  function decorateLine(line, active, decos, cfg) {
+  function decorateLine(line, active, inFence, decos, cfg) {
     const text = line.text;
     const base2 = line.from;
     const occ = [];
+    if (inFence) {
+      decos.push(Decoration.line({ class: "cm-md-fence" }).range(base2));
+      return;
+    }
     const h = RE.heading.exec(text);
     if (h) {
       decos.push(Decoration.line({ class: `cm-md-h${Math.min(h[1].length, 6)}` }).range(base2));
@@ -28907,29 +28923,58 @@
         decos.push(Decoration.replace({}).range(base2, base2 + h[0].length));
       }
     }
-    if (RE.quote.test(text)) decos.push(Decoration.line({ class: "cm-md-quote" }).range(base2));
-    if (RE.hr.test(text)) decos.push(Decoration.line({ class: "cm-md-hr" }).range(base2));
+    const q = RE.quote.exec(text);
+    if (q) {
+      decos.push(Decoration.line({ class: "cm-md-quote" }).range(base2));
+      if (!active) {
+        occ.push([0, q[0].length]);
+        decos.push(Decoration.replace({}).range(base2, base2 + q[0].length));
+      }
+    }
+    if (RE.hr.test(text)) {
+      decos.push(Decoration.line({ class: "cm-md-hr" }).range(base2));
+      if (!active && text.length > 0) decos.push(Decoration.replace({}).range(base2, base2 + text.length));
+    }
+    const b = RE.bullet.exec(text);
+    if (b && !RE.hr.test(text)) {
+      decos.push(Decoration.line({ class: "cm-md-li" }).range(base2));
+      if (!active) {
+        const ind = b[1].length;
+        if (b[3]) {
+          const checked = b[4].toLowerCase() === "x";
+          const end = b[0].length;
+          occ.push([ind, end]);
+          decos.push(Decoration.replace({ widget: new TaskWidget(checked, base2 + ind + 3) }).range(base2 + ind, base2 + end));
+          if (checked) decos.push(Decoration.mark({ class: "cm-md-task-done" }).range(base2 + end, base2 + text.length));
+        } else {
+          occ.push([ind, ind + 1]);
+          decos.push(Decoration.replace({ widget: new BulletWidget() }).range(base2 + ind, base2 + ind + 1));
+        }
+      }
+    } else if (RE.ordered.test(text)) {
+      decos.push(Decoration.line({ class: "cm-md-li" }).range(base2));
+    }
     const addSpan = (re, handler) => {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(text)) !== null) {
         const a = m.index;
-        const b = a + m[0].length;
-        if (overlaps(occ, a, b)) continue;
-        occ.push([a, b]);
-        handler(m, a, b);
+        const b2 = a + m[0].length;
+        if (overlaps(occ, a, b2)) continue;
+        occ.push([a, b2]);
+        handler(m, a, b2);
       }
     };
-    if (!active) addSpan(RE.code, (m, a, b) => {
-      decos.push(Decoration.mark({ class: "cm-md-code" }).range(base2 + a + 1, base2 + b - 1));
+    if (!active) addSpan(RE.code, (m, a, b2) => {
+      decos.push(Decoration.mark({ class: "cm-md-code" }).range(base2 + a + 1, base2 + b2 - 1));
       decos.push(Decoration.replace({}).range(base2 + a, base2 + a + 1));
-      decos.push(Decoration.replace({}).range(base2 + b - 1, base2 + b));
+      decos.push(Decoration.replace({}).range(base2 + b2 - 1, base2 + b2));
     });
-    addSpan(RE.image, (m, a, b) => {
+    addSpan(RE.image, (m, a, b2) => {
       if (active) return;
-      decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg.getImageURL) }).range(base2 + a, base2 + b));
+      decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg.getImageURL) }).range(base2 + a, base2 + b2));
     });
-    addSpan(RE.link, (m, a, b) => {
+    addSpan(RE.link, (m, a, b2) => {
       const disp = m[1];
       const tg = m[2];
       const dispStart = base2 + a + 1;
@@ -28941,35 +28986,44 @@
       }).range(dispStart, dispEnd));
       if (!active) {
         decos.push(Decoration.replace({}).range(base2 + a, dispStart));
-        decos.push(Decoration.replace({}).range(dispEnd, base2 + b));
+        decos.push(Decoration.replace({}).range(dispEnd, base2 + b2));
       }
     });
-    if (!active) addSpan(RE.strike, (m, a, b) => {
+    if (!active) addSpan(RE.strike, (m, a, b2) => {
       const inner = m[1];
       const s = base2 + a + 2;
       decos.push(Decoration.mark({ class: "cm-md-strike" }).range(s, s + inner.length));
       decos.push(Decoration.replace({}).range(base2 + a, s));
-      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b));
+      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b2));
     });
-    if (!active) addSpan(RE.bold, (m, a, b) => {
+    if (!active) addSpan(RE.bold, (m, a, b2) => {
       const inner = m[1] || m[2];
       const s = base2 + a + 2;
       decos.push(Decoration.mark({ class: "cm-md-bold" }).range(s, s + inner.length));
       decos.push(Decoration.replace({}).range(base2 + a, s));
-      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b));
+      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b2));
     });
-    if (!active) addSpan(RE.italic, (m, a, b) => {
+    if (!active) addSpan(RE.italic, (m, a, b2) => {
       const inner = m[1] || m[2];
       const s = base2 + a + 1;
       decos.push(Decoration.mark({ class: "cm-md-em" }).range(s, s + inner.length));
       decos.push(Decoration.replace({}).range(base2 + a, s));
-      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b));
+      decos.push(Decoration.replace({}).range(s + inner.length, base2 + b2));
     });
   }
   function buildDecorations(view, cfg) {
     const doc2 = view.state.doc;
     const decos = [];
     const activeLines = /* @__PURE__ */ new Set();
+    const fenceLines = /* @__PURE__ */ new Set();
+    let inBlock = false;
+    for (let n = 1; n <= doc2.lines; n++) {
+      const t2 = doc2.line(n).text;
+      if (RE.fence.test(t2)) {
+        fenceLines.add(n);
+        inBlock = !inBlock;
+      } else if (inBlock) fenceLines.add(n);
+    }
     for (const r of view.state.selection.ranges) {
       const a = doc2.lineAt(r.from).number;
       const b = doc2.lineAt(r.to).number;
@@ -28979,7 +29033,7 @@
       let pos = from;
       while (pos <= to) {
         const line = doc2.lineAt(pos);
-        decorateLine(line, activeLines.has(line.number), decos, cfg);
+        decorateLine(line, activeLines.has(line.number), fenceLines.has(line.number), decos, cfg);
         if (line.to + 1 > to) break;
         pos = line.to + 1;
       }
@@ -29033,7 +29087,6 @@
         dropCursor(),
         rectangularSelection(),
         crosshairCursor(),
-        highlightActiveLine(),
         highlightSelectionMatches(),
         search({ top: true }),
         EditorView.lineWrapping,
@@ -29073,7 +29126,7 @@
         }),
         EditorView.theme({
           "&": { fontSize: "16px", height: "100%" },
-          ".cm-content": { padding: "18px 8px 40vh 8px" },
+          ".cm-content": { padding: "20px 28px 40vh", maxWidth: "820px", margin: "0 auto" },
           ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.75" },
           ".cm-gutters": { display: "none" },
           "&.cm-focused": { outline: "none" }
@@ -29328,6 +29381,7 @@
     state.loading = true;
     editor.setDoc(n.body.join("\n"));
     state.loading = false;
+    updateStats();
   }
   function closeTab(rel) {
     const i = state.tabs.indexOf(rel);
@@ -29483,46 +29537,169 @@
       toast("\u5B50\u306B\u8FFD\u52A0\uFF08\u4FDD\u5B58\u3067\u53CD\u6620\uFF09");
     }
   }
-  function pickNote(cb) {
+  function scoreNote(rel, words) {
+    if (!words.length) return 0;
+    const title = titleOf(rel).toLowerCase();
+    const file = rel.toLowerCase();
+    let score2 = 0;
+    for (const w of words) {
+      const ti = title.indexOf(w);
+      if (ti >= 0) score2 += ti === 0 ? 100 : 60 - Math.min(ti, 50);
+      else if (file.includes(w)) score2 += 20;
+      else return -1;
+    }
+    return score2;
+  }
+  function openPalette({ placeholder, hint, items, onPick }) {
     const m = $("modal");
     m.hidden = false;
     m.innerHTML = "";
     const box = document.createElement("div");
     box.className = "modal-box";
     const inp = document.createElement("input");
-    inp.placeholder = "\u30CE\u30FC\u30C8\u3092\u691C\u7D22\u2026";
+    inp.placeholder = placeholder;
     const list = document.createElement("div");
     list.className = "modal-list";
+    let sel = 0;
+    let shown = [];
+    const close = () => {
+      m.hidden = true;
+    };
+    const pick = (it) => {
+      close();
+      onPick(it.rel);
+    };
     const render = () => {
-      const q = inp.value.trim().toLowerCase();
+      shown = items(inp.value.trim().toLowerCase()).slice(0, 60);
+      sel = Math.min(sel, Math.max(0, shown.length - 1));
       list.innerHTML = "";
-      for (const rel of state.rels) {
-        if (rel === state.current) continue;
-        const t2 = titleOf(rel).toLowerCase();
-        if (q && !t2.includes(q) && !rel.toLowerCase().includes(q)) continue;
+      if (hint) {
+        const h = document.createElement("div");
+        h.className = "modal-hint";
+        h.textContent = hint(inp.value.trim());
+        list.appendChild(h);
+      }
+      if (!shown.length) {
+        const e = document.createElement("div");
+        e.className = "modal-empty";
+        e.textContent = "\u898B\u3064\u304B\u308A\u307E\u305B\u3093";
+        list.appendChild(e);
+        return;
+      }
+      shown.forEach((it, i) => {
         const d = document.createElement("div");
-        d.className = "modal-item";
-        d.textContent = titleOf(rel) + "  (" + stem(rel) + ")";
-        d.onclick = () => {
-          m.hidden = true;
-          cb(rel);
+        d.className = "modal-item" + (i === sel ? " sel" : "");
+        const t2 = document.createElement("span");
+        t2.textContent = it.title;
+        const f = document.createElement("span");
+        f.className = "mi-file";
+        f.textContent = it.sub || "";
+        d.append(t2, f);
+        d.onmousemove = () => {
+          if (sel !== i) {
+            sel = i;
+            mark();
+          }
         };
+        d.onclick = () => pick(it);
         list.appendChild(d);
+      });
+    };
+    const mark = () => {
+      list.querySelectorAll(".modal-item").forEach((el, i) => {
+        el.classList.toggle("sel", i === sel);
+        if (i === sel) el.scrollIntoView({ block: "nearest" });
+      });
+    };
+    inp.oninput = () => {
+      sel = 0;
+      render();
+    };
+    inp.onkeydown = (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (shown.length) {
+          sel = (sel + 1) % shown.length;
+          mark();
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (shown.length) {
+          sel = (sel - 1 + shown.length) % shown.length;
+          mark();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (shown[sel]) pick(shown[sel]);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        close();
       }
     };
-    inp.oninput = render;
     box.append(inp, list);
     m.appendChild(box);
     render();
     inp.focus();
     m.onclick = (e) => {
-      if (e.target === m) m.hidden = true;
+      if (e.target === m) close();
     };
+  }
+  function noteItems(q, { skipCurrent = false } = {}) {
+    const words = q ? q.split(/\s+/) : [];
+    const out = [];
+    for (const rel of state.rels) {
+      if (skipCurrent && rel === state.current) continue;
+      const sc = scoreNote(rel, words);
+      if (sc < 0) continue;
+      out.push({ rel, title: titleOf(rel), sub: stem(rel), sc });
+    }
+    out.sort((x, y) => y.sc - x.sc || x.title.localeCompare(y.title, "ja"));
+    return out;
+  }
+  function pickNote(cb) {
+    openPalette({
+      placeholder: "\u30CE\u30FC\u30C8\u3092\u691C\u7D22\u2026",
+      items: (q) => noteItems(q, { skipCurrent: true }),
+      onPick: cb
+    });
+  }
+  function quickSwitcher() {
+    if (!state.root) return;
+    const recents = () => {
+      const seen = /* @__PURE__ */ new Set();
+      const out = [];
+      for (let i = state.hist.length - 1; i >= 0; i--) {
+        const r = state.hist[i];
+        if (r === state.current || seen.has(r) || !state.notes.has(r)) continue;
+        seen.add(r);
+        out.push({ rel: r, title: titleOf(r), sub: stem(r) });
+      }
+      return out;
+    };
+    openPalette({
+      placeholder: "\u30CE\u30FC\u30C8\u3092\u958B\u304F\u2026",
+      hint: (q) => q ? "" : "\u6700\u8FD1\u958B\u3044\u305F\u30CE\u30FC\u30C8",
+      items: (q) => q ? noteItems(q) : [...recents(), ...noteItems("").filter((x) => !state.hist.includes(x.rel) && x.rel !== state.current)],
+      onPick: (rel) => openNote(rel)
+    });
   }
   function markDirty() {
     state.dirty = true;
     updateDirtyUI();
     scheduleAutosave();
+    updateStats();
+  }
+  function updateStats() {
+    const el = $("stat-count");
+    if (!el) return;
+    if (!state.current || !editor) {
+      el.textContent = "";
+      return;
+    }
+    const doc2 = editor.getDoc();
+    const chars = doc2.replace(/\s/g, "").length;
+    const links = (doc2.match(/\]\([^)]+\.md\)/gi) || []).length;
+    el.textContent = `${chars.toLocaleString()} \u6587\u5B57 \u30FB \u30EA\u30F3\u30AF ${links}`;
   }
   var autosaveTimer = null;
   var autosaveBusy = false;
@@ -29736,6 +29913,10 @@ ${attr}---
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
+        quickSwitcher();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && document.activeElement?.closest?.(".cm-editor") == null) {
+        e.preventDefault();
         $("search").focus();
         $("search").select();
       }
@@ -29851,6 +30032,8 @@ ${attr}---
       openNote,
       navigateHistory,
       closeTab,
+      quickSwitcher,
+      updateStats,
       saveCurrent,
       syncAndWrite,
       pickAndOpen,
