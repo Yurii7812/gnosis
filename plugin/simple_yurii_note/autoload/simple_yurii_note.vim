@@ -4032,7 +4032,15 @@ function! s:find_unique_file_near_current_tree(base, name) abort
     return ''
   endif
 
-  for l:m in globpath(l:search_base, '**/' . a:name, 0, 1)
+  " 名前の [ ] * ? { } \ を glob の記号として解釈させない（[b-a] などは E944 で止まるため）
+  let l:pat = '**/' . escape(a:name, '[]*?{}\')
+  let l:found = []
+  try
+    let l:found = globpath(l:search_base, l:pat, 0, 1)
+  catch
+    let l:found = []
+  endtry
+  for l:m in l:found
     let l:path = fnamemodify(l:m, ':p')
     if has_key(l:seen, l:path)
       continue
