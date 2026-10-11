@@ -8208,12 +8208,8 @@ function! s:zap_add_child_link(rel_target) abort
       return
     endif
   endfor
-  " 本文の最後の空でない行の後ろ（### Parent の手前）へ入れる
-  let l:at = l:body_end
-  while l:at > 0 && trim(l:lines[l:at - 1]) ==# ''
-    let l:at -= 1
-  endwhile
-  call insert(l:lines, l:link, l:at)
+  " ### Parent の直前に入れる（既存の空行はそのまま。Parent が無ければ末尾）
+  call insert(l:lines, l:link, l:body_end)
   call writefile(l:lines, l:parent_file)
   if l:nr > 0
     silent! execute 'checktime ' . l:nr
