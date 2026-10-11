@@ -8179,6 +8179,63 @@ endfunction
 " zA: za と同じだが、追加前に「表示名」を 1 つ入力する（既定は za が使う表示名。
 "     空 Enter / Esc で中止）。Vim 標準の折りたたみ zA は上書きされる。
 "     引数に文字列を渡すと input() を出さずその表示名を使う（テスト・自動化用）。
+" zap: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の節の最後へ足す。
+"     文中（本文）に同じリンクがあるときは足さない（子として本文にあるものを親にしない）。
+"     Parent の節が無ければ、末尾に「### Parent」を作って足す。
+function! simple_yurii_note#add_link_to_parent() abort
+  let l:link = s:pick_one_link()
+  if empty(l:link)
+    echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    return
+  endif
+  let l:parts = s:extract_markdown_link(l:link)
+  let l:target = get(l:parts, 'target', '')
+  if empty(l:target)
+    echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
+    return
+  endif
+  let l:bare = substitute(l:target, '#.*$', '', '')
+  let l:lines = getline(1, '$')
+  let l:parent = index(l:lines, '### Parent')
+  let l:cut = l:parent >= 0 ? l:parent : len(l:lines)
+  " 文中（### Parent より前）にあるリンクは、親に入れない
+  for l:i in range(0, l:cut - 1)
+    let l:body = l:lines[l:i]
+    if stridx(l:body, '](' . l:bare) >= 0 || stridx(l:body, '](' . l:target . ')') >= 0
+      echohl WarningMsg | echo 'simple_yurii_note: 文中にあるので Parent には入れません' | echohl NONE
+      return
+    endif
+  endfor
+  " 親の中に既にあるなら何もしない
+  if l:parent >= 0
+    let l:e = l:parent + 1
+    while l:e < len(l:lines) && l:lines[l:e] !~# '^###\s'
+      if stridx(l:lines[l:e], '](' . l:bare) >= 0
+        echo 'simple_yurii_note: Parent に既にあります'
+        return
+      endif
+      let l:e += 1
+    endwhile
+    " 節の最後の空でない行の直後へ
+    let l:last = l:e - 1
+    while l:last > l:parent && trim(l:lines[l:last]) ==# ''
+      let l:last -= 1
+    endwhile
+    " l:last は 0 始まりの添字。append() は 1 始まりの行番号の後ろに入れるので +1
+    call append(l:last + 1, l:link)
+  else
+    let l:n = line('$')
+    if trim(getline(l:n)) !=# ''
+      call append(l:n, '')
+      let l:n += 1
+    endif
+    call append(l:n, ['### Parent', l:link])
+  endif
+  call s:realtime_sync_apply()
+  silent write
+  echo 'simple_yurii_note: Parent に追加しました'
+endfunction
+
 function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
   let l:link = s:pick_one_link()
   if empty(l:link)

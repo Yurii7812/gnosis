@@ -469,6 +469,7 @@ xnoremap <nowait> <silent> zk  :<C-u>call simple_yurii_note#v2_new_group_visual(
 " za: ca（クリップボードのノートを child に追加）と同じだが、関係ピッカーを
 " 出さず既定の「ノート」関係で固定する
 nnoremap <nowait> <silent> za  <Cmd>call simple_yurii_note#add_clipboard_before_up_note()<CR>
+nnoremap <nowait> <silent> zap <Cmd>call simple_yurii_note#add_link_to_parent()<CR>
 " zA: za と同じだが、追加前に「表示名」を入力する（既定は za が使う表示名。
 "     空 Enter / Esc で中止）。Vim 標準の折りたたみ zA は上書きされる。
 nnoremap <nowait> <silent> zA  <Cmd>call simple_yurii_note#add_clipboard_before_up_note_named()<CR>

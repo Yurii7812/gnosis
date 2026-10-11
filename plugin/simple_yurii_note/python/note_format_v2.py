@@ -1623,6 +1623,23 @@ def simple_sync(root) -> int:
                  if q.name == "index.md"
                  or (nn["fm"] and _GROUP_ATTR_RE.search("\n".join(nn["fm"])))}
 
+    # 親の本文から消えた子リンクを見つける（前回 sync 時点の本文と比べる）。
+    # 消えた子の Parent からは、その親（＝本文から消した側）を外す。手で足した Parent も、
+    # 「本文のリンクを消した」ときだけ対象になる（本文に無い Parent は触らない）。
+    removed_parent_of: dict[Path, set[Path]] = {}
+    for p, n in notes.items():
+        key = keys.get(p)
+        ent = cache.get(key) if key is not None else None
+        if not (isinstance(ent, list) and len(ent) == 7):
+            continue
+        old_targets = {rp for _d, tg in _links_from(ent[3])
+                       for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
+        new_targets = {rp for _d, tg in _links_from(n["body"])
+                       for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
+        for child in old_targets - new_targets:
+            if child in notes:
+                removed_parent_of.setdefault(child, set()).add(p)
+
     changed = 0
     for p, n in notes.items():
         # 本文リンクの表示名をリンク先タイトルに追従させ、消えたファイルへの
@@ -1638,6 +1655,18 @@ def simple_sync(root) -> int:
             rp = res(tg, dirs[p])
             if rp is not None:
                 parent_set.add(rp)
+        # 親の本文からリンクを消した → この子の Parent からその親を外す
+        gone = removed_parent_of.get(p, set())
+        if gone:
+            keep_p: list[str] = []
+            for ln in parent_lines:
+                tgt = _link_target(ln)
+                rp = res(tgt, dirs[p]) if tgt else None
+                if rp is not None and rp in gone:
+                    continue
+                keep_p.append(ln)
+            parent_lines = keep_p
+            parent_set -= gone
         # index.md 側のリンク = 親。
         #   - Index の本文にこのノートがある  → Parent 先頭に [Index] を置く
         #   - 無いのに [Index] が Parent に残っている → 外す（放置させない）
