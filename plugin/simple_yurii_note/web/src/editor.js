@@ -252,8 +252,8 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.link, color: "var(--accent)" },
-  { tag: tags.url, color: "var(--accent)" },
+  { tag: tags.link, color: "var(--link)" },
+  { tag: tags.url, color: "var(--link)" },
   { tag: tags.comment, color: "var(--fg-dim)" },
   { tag: tags.quote, color: "var(--fg-dim)" },
 ]);

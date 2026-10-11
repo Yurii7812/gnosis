@@ -6,6 +6,7 @@
   --fg-dim: #7b7b84;
   --line: #e4e4e8;
   --accent: #6f5bd6;
+  --link: #1a6fe0;
   --accent-soft: rgba(111, 91, 214, .16);
   --danger: #d1344a;
   --active: rgba(111, 91, 214, .13);
@@ -21,6 +22,7 @@
   --fg-dim: #8d8d96;
   --line: #333338;
   --accent: #a891ff;
+  --link: #6cb0ff;
   --accent-soft: rgba(168, 145, 255, .22);
   --danger: #ef6b7e;
   --active: rgba(168, 145, 255, .17);
@@ -142,7 +144,7 @@ kbd {
 .rel-item { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 6px; }
 .rel-item:hover { background: var(--bg-3); }
 .rel-item a { color: var(--fg); cursor: pointer; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rel-item a:hover { color: var(--accent); }
+.rel-item a:hover { color: var(--link); }
 .rel-item button { background: none; border: none; color: var(--fg-dim); padding: 0 4px; opacity: 0; }
 .rel-item:hover button { opacity: 1; }
 .rel-item button:hover { color: var(--danger); background: none; }
@@ -193,9 +195,9 @@ kbd {
 .cm-md-em { font-style: italic; }
 .cm-md-strike { text-decoration: line-through; color: var(--fg-dim); }
 .cm-md-code { font-family: var(--font-mono); font-size: .92em; background: var(--bg-3); padding: 1px 5px; border-radius: 4px; }
-.cm-md-link { color: var(--accent); }
-.cm-md-link-md { cursor: pointer; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
-.cm-md-link-md:hover { border-bottom-color: var(--accent); }
+.cm-md-link { color: var(--link); }
+.cm-md-link-md { cursor: pointer; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--link) 45%, transparent); }
+.cm-md-link-md:hover { border-bottom-color: var(--link); }
 .cm-md-quote { border-left: 3px solid var(--accent); padding-left: 12px !important; color: var(--fg-dim); margin-left: 2px; }
 .cm-md-hr { border-bottom: 1px solid var(--line); line-height: .6; }
 .cm-md-img img { max-width: 100%; border-radius: 8px; display: block; margin: 6px 0; }
