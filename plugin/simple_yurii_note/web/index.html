@@ -62,26 +62,33 @@
             <button id="save-btn" class="text-btn" title="保存 (Ctrl+S)" disabled>保存</button>
           </div>
         </div>
-        <div id="note-view" hidden>
-          <div class="view-header"><input id="title-input" class="title-input" disabled placeholder="タイトル"></div>
-          <div id="editor" class="editor"></div>
-        </div>
-        <div id="global-graph" class="global-graph" hidden>
-          <div class="gg-head">
-            <span class="gg-title">全体グラフ</span>
-            <span id="gg-count" class="gg-count"></span>
-            <span class="spacer"></span>
-            <button id="gg-reset" class="text-btn" title="表示の位置とズームを戻す">表示を戻す</button>
-            <button id="gg-relayout" class="text-btn" title="ノートの配置を作り直す">配置を作り直す</button>
-            <button id="gg-close" class="text-btn" title="閉じる (Esc)">閉じる</button>
+        <div id="workspace">
+          <div id="global-graph" class="global-graph" hidden>
+            <div class="gg-head">
+              <span class="gg-title">全体グラフ</span>
+              <span id="gg-count" class="gg-count"></span>
+              <span class="spacer"></span>
+              <div class="gg-buttons">
+                <button id="gg-full" class="text-btn" title="グラフを全画面にする／ノートと並べる">全画面</button>
+                <button id="gg-reset" class="text-btn" title="表示の位置とズームを戻す">表示を戻す</button>
+                <button id="gg-relayout" class="text-btn" title="ノートの配置を作り直す">配置を作り直す</button>
+                <button id="gg-close" class="text-btn" title="閉じる (Esc)">閉じる</button>
+              </div>
+            </div>
+            <svg id="global-svg" class="global-svg" role="img" aria-label="全体グラフ"></svg>
+            <div class="gg-hint">ドラッグで移動・ノートを動かすと位置を保存・クリックでそのノートを右に開く・ホイールでズーム</div>
           </div>
-          <svg id="global-svg" class="global-svg" role="img" aria-label="全体グラフ"></svg>
-          <div class="gg-hint">ドラッグで移動・ノートを動かすと位置を保存・クリックで開く・ホイールでズーム</div>
-        </div>
-        <div id="empty" class="empty">
-          <div class="empty-box">
-            <div class="empty-title">ノートが開かれていません</div>
-            <div class="empty-hint"><kbd>Ctrl</kbd>+<kbd>O</kbd> でノートを開く　<kbd>Ctrl</kbd>+<kbd>N</kbd> で新しいノート</div>
+          <div id="note-pane">
+            <div id="note-view" hidden>
+              <div class="view-header"><input id="title-input" class="title-input" disabled placeholder="タイトル"></div>
+              <div id="editor" class="editor"></div>
+            </div>
+            <div id="empty" class="empty">
+              <div class="empty-box">
+                <div class="empty-title">ノートが開かれていません</div>
+                <div class="empty-hint"><kbd>Ctrl</kbd>+<kbd>O</kbd> でノートを開く　<kbd>Ctrl</kbd>+<kbd>N</kbd> で新しいノート</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -315,8 +315,15 @@ export function mountGlobal(svg, nodes, edges, pos, { label, onOpen, onMove }) {
   svg.addEventListener("pointerup", end);
   svg.addEventListener("pointercancel", end);
 
+  let curRel = null;
   return {
     reset() { fit(); apply(); },
     positions: () => pos,
+    // 今開いているノートを強調する
+    setCurrent(rel) {
+      if (curRel && nodeEls.get(curRel)) nodeEls.get(curRel).classList.remove("cur");
+      curRel = rel;
+      if (rel && nodeEls.get(rel)) nodeEls.get(rel).classList.add("cur");
+    },
   };
 }

@@ -29451,12 +29451,19 @@
     };
     svg.addEventListener("pointerup", end);
     svg.addEventListener("pointercancel", end);
+    let curRel = null;
     return {
       reset() {
         fit();
         apply2();
       },
-      positions: () => pos
+      positions: () => pos,
+      // 今開いているノートを強調する
+      setCurrent(rel) {
+        if (curRel && nodeEls.get(curRel)) nodeEls.get(curRel).classList.remove("cur");
+        curRel = rel;
+        if (rel && nodeEls.get(rel)) nodeEls.get(rel).classList.add("cur");
+      }
     };
   }
 
@@ -29714,7 +29721,6 @@
       toast("\u898B\u3064\u304B\u308A\u307E\u305B\u3093: " + rel);
       return;
     }
-    closeGlobalGraph();
     if (state.current === rel) {
       renderSidebar();
       renderTabs();
@@ -29737,6 +29743,7 @@
     updateNavButtons();
     const n = state.notes.get(rel);
     loadNoteToEditor(n);
+    globalView?.setCurrent(rel);
     renderTabs();
     renderSidebar();
     renderRelations();
@@ -30007,29 +30014,25 @@
     old.replaceWith(svg);
     svg.classList.toggle("few", rels.length <= 300);
     $("gg-count").textContent = `${rels.length} \u30CE\u30FC\u30C8 \u30FB \u30EA\u30F3\u30AF ${edges.length}`;
-    $("note-view").hidden = true;
-    $("empty").hidden = true;
     $("global-graph").hidden = false;
     globalView = mountGlobal(svg, rels, edges, pos, {
       label: (r) => titleOf(r),
-      onOpen: (r) => {
-        closeGlobalGraph();
-        openNote(r);
-      },
+      onOpen: (r) => openNote(r),
       onMove: (r, p) => {
         const s = loadGraphPos();
         s[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
         saveGraphPos(s);
       }
     });
+    globalView.setCurrent(state.current);
   }
   var globalView = null;
   function closeGlobalGraph() {
     if ($("global-graph").hidden) return;
     $("global-graph").hidden = true;
+    $("global-graph").classList.remove("full");
+    $("gg-full").classList.remove("on");
     globalView = null;
-    if (state.current) $("note-view").hidden = false;
-    else $("empty").hidden = false;
   }
   function scoreNote(rel, words) {
     if (!words.length) return 0;
@@ -30406,6 +30409,11 @@ ${attr}---
     $("graph-btn").onclick = () => openGlobalGraph();
     $("gg-close").onclick = () => closeGlobalGraph();
     $("gg-reset").onclick = () => globalView?.reset();
+    $("gg-full").onclick = () => {
+      const on = $("global-graph").classList.toggle("full");
+      $("gg-full").classList.toggle("on", on);
+      setTimeout(() => globalView?.reset(), 0);
+    };
     $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
     $("panel-cfg-btn").onclick = () => {
       $("panel-menu").hidden = !$("panel-menu").hidden;

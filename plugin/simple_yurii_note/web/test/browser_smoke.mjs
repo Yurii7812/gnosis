@@ -215,6 +215,12 @@ async function main(){
     step('global');
     // 全体グラフ: 全ノートが点になり、位置が保存されて次回も同じ場所に出る
     app.openGlobalGraph(); await sleep(60);
+    // グラフの見出しのボタンが、他の要素に隠れて押せないことがないか（画面の中心の点で確認）
+    const hitOk = ['gg-full','gg-reset','gg-relayout','gg-close'].every((id) => {
+      const b = document.getElementById(id); const r = b.getBoundingClientRect();
+      const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return e === b || b.contains(e);
+    });
     const gNodes = document.querySelectorAll('#global-svg .lg-node').length;
     const gEdges = document.querySelectorAll('#global-svg .lg-edge').length;
     const posKeyed = Object.keys(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}')).length;
@@ -222,7 +228,7 @@ async function main(){
     app.openGlobalGraph(); await sleep(60);
     const stable = firstPos === JSON.stringify(JSON.parse(localStorage.getItem('pkm-graph-pos')||'{}'));
     app.closeGlobalGraph();
-    const globalInfo = {gNodes, gEdges, posKeyed, stable, hiddenAfter: document.getElementById('global-graph').hidden, rels: app.state.rels.length};
+    const globalInfo = {hitOk, gNodes, gEdges, posKeyed, stable, hiddenAfter: document.getElementById('global-graph').hidden, rels: app.state.rels.length};
     tabs.global = globalInfo;
     step('palette');
     // クイックスイッチャー: 開く → 絞り込み → Enter でそのノートへ
@@ -264,6 +270,7 @@ try {
   if (t.tabsDedupe !== t.tabsAfterNew) { console.error("already-open note was duplicated: " + JSON.stringify(t)); process.exit(1); }
   const gl = result.global || {};
   if (gl.gNodes !== gl.rels || gl.posKeyed !== gl.rels) { console.error("global graph node/position count wrong: " + JSON.stringify(gl)); process.exit(1); }
+  if (!gl.hitOk) { console.error('global graph buttons are covered by other elements: ' + JSON.stringify(gl)); process.exit(1); }
   if (!gl.stable) { console.error("global graph positions moved between opens: " + JSON.stringify(gl)); process.exit(1); }
   if (!gl.hiddenAfter) { console.error("global graph did not close: " + JSON.stringify(gl)); process.exit(1); }
   const pn = result.panels || {};

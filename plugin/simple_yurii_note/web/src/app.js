@@ -274,7 +274,6 @@ function updateNavButtons() {
 async function openNote(rel, opts = {}) {
   const { newTab = false, history = true } = opts;
   if (!state.notes.has(rel)) { toast("見つかりません: " + rel); return; }
-  closeGlobalGraph();
   if (state.current === rel) { renderSidebar(); renderTabs(); return; }
   if (state.dirty) {
     const ok = await saveCurrent({ autosave: true });
@@ -294,6 +293,7 @@ async function openNote(rel, opts = {}) {
   updateNavButtons();
   const n = state.notes.get(rel);
   loadNoteToEditor(n);
+  globalView?.setCurrent(rel);
   renderTabs();
   renderSidebar();
   renderRelations();
@@ -549,18 +549,18 @@ function openGlobalGraph({ relayout = false } = {}) {
   svg.classList.toggle("few", rels.length <= 300);
   $("gg-count").textContent = `${rels.length} ノート ・ リンク ${edges.length}`;
 
-  $("note-view").hidden = true;
-  $("empty").hidden = true;
+  // ノートの表示は残したまま、左にグラフを並べる（ノートを見ながらグラフを見られる）
   $("global-graph").hidden = false;
   globalView = mountGlobal(svg, rels, edges, pos, {
     label: (r) => titleOf(r),
-    onOpen: (r) => { closeGlobalGraph(); openNote(r); },
+    onOpen: (r) => openNote(r),
     onMove: (r, p) => {
       const s = loadGraphPos();
       s[r] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
       saveGraphPos(s);
     },
   });
+  globalView.setCurrent(state.current);
 }
 
 let globalView = null;
@@ -568,9 +568,9 @@ let globalView = null;
 function closeGlobalGraph() {
   if ($("global-graph").hidden) return;
   $("global-graph").hidden = true;
+  $("global-graph").classList.remove("full");
+  $("gg-full").classList.remove("on");
   globalView = null;
-  if (state.current) $("note-view").hidden = false;
-  else $("empty").hidden = false;
 }
 
 // ---------------------------------------------------------------- palette (quick switcher / note picker)
@@ -916,6 +916,11 @@ function wireToolbar() {
   $("graph-btn").onclick = () => openGlobalGraph();
   $("gg-close").onclick = () => closeGlobalGraph();
   $("gg-reset").onclick = () => globalView?.reset();
+  $("gg-full").onclick = () => {
+    const on = $("global-graph").classList.toggle("full");
+    $("gg-full").classList.toggle("on", on);
+    setTimeout(() => globalView?.reset(), 0);
+  };
   $("gg-relayout").onclick = () => openGlobalGraph({ relayout: true });
   $("panel-cfg-btn").onclick = () => { $("panel-menu").hidden = !$("panel-menu").hidden; };
   for (const cb of document.querySelectorAll("#panel-menu input[data-panel]")) {
