@@ -65,6 +65,17 @@ step("click position maps to the right line below headings", () => {
     if (!line.includes("](" + href + ")")) throw new Error("click at " + href + " maps to line: " + line);
   }
 });
+// インサートモード中は画像を文字（![](…)）のまま、ノーマルモードでは画像として描く
+step("images are raw text in insert mode and images in normal mode", () => {
+  v.setText("# 題\\n\\n![](img.png)\\n本文\\n");
+  v.setVim({ cur: [4, 1], mode: "i" });
+  const inInsert = document.querySelectorAll(".cm-md-img").length;
+  const rawInsert = document.querySelector(".cm-content").textContent.includes("![](img.png)");
+  v.setVim({ cur: [4, 1], mode: "n" });
+  const inNormal = document.querySelectorAll(".cm-md-img").length;
+  if (inInsert !== 0 || !rawInsert) throw new Error("insert mode: images=" + inInsert + " raw=" + rawInsert);
+  if (inNormal !== 1) throw new Error("normal mode: images=" + inNormal);
+});
 setTimeout(() => { document.title = "RESULT=" + JSON.stringify(log); }, 600);
 `);
 fs.writeFileSync(path.join(tmp, "index.html"),

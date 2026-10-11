@@ -32562,7 +32562,7 @@ ${h2.join(`
       decos.push(Decoration.replace({}).range(base2 + b3 - 1, base2 + b3));
     });
     addSpan(RE.image, (m, a, b3) => {
-      if (active) return;
+      if (active || cfg.insertMode) return;
       decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base2 + a, base2 + b3));
     });
     addSpan(RE.link, (m, a, b3) => {
@@ -32605,6 +32605,8 @@ ${h2.join(`
   function buildDecorations(view2, cfg) {
     const doc2 = view2.state.doc;
     const decos = [];
+    const vmode = view2.state.field(vimField, false)?.mode || "n";
+    cfg.insertMode = vmode[0] === "i" || vmode[0] === "R";
     let fmEnd = 0;
     if (doc2.lines >= 2 && doc2.line(1).text.trim() === "---") {
       for (let n = 2; n <= doc2.lines; n++) {
@@ -32656,7 +32658,8 @@ ${h2.join(`
         this.decorations = buildDecorations(view2, cfg);
       }
       update(u) {
-        if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some((tr2) => tr2.effects.some((e) => e.is(refreshDecorations)))) {
+        const modeChanged = u.startState.field(vimField, false)?.mode !== u.state.field(vimField, false)?.mode;
+        if (u.docChanged || u.selectionSet || u.viewportChanged || modeChanged || u.transactions.some((tr2) => tr2.effects.some((e) => e.is(refreshDecorations)))) {
           this.decorations = buildDecorations(u.view, cfg);
         }
       }

@@ -173,7 +173,9 @@ function decorateLine(line, active, inFence, decos, cfg) {
   });
 
   addSpan(RE.image, (m, a, b) => {
-    if (active) return;
+    // 編集中（インサートモード）は、画像も文字（`![](…)`）のまま見せる。範囲は占有されるので
+    // リンクとしても描かれない。
+    if (active || cfg.insertMode) return;
     decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base + a, base + b));
   });
 
@@ -222,6 +224,9 @@ function decorateLine(line, active, inFence, decos, cfg) {
 function buildDecorations(view, cfg) {
   const doc = view.state.doc;
   const decos = [];
+  // Vim のモード（インサート中は画像を文字のまま見せる）
+  const vmode = view.state.field(vimField, false)?.mode || "n";
+  cfg.insertMode = vmode[0] === "i" || vmode[0] === "R";
   // 先頭の front matter（--- で囲まれた部分）。カーソルがあるときは通常どおり、無いときは薄く小さく。
   let fmEnd = 0;
   if (doc.lines >= 2 && doc.line(1).text.trim() === "---") {
@@ -268,7 +273,8 @@ function livePreview(cfg) {
   return ViewPlugin.fromClass(class {
     constructor(view) { this.decorations = buildDecorations(view, cfg); }
     update(u) {
-      if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))) {
+      const modeChanged = u.startState.field(vimField, false)?.mode !== u.state.field(vimField, false)?.mode;
+      if (u.docChanged || u.selectionSet || u.viewportChanged || modeChanged || u.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))) {
         this.decorations = buildDecorations(u.view, cfg);
       }
     }
