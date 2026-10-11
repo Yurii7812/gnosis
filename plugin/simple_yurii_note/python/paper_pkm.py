@@ -188,6 +188,66 @@ def read_note(path: Path) -> tuple[list[str], list[str]]:
     return parse_note(path.read_text(encoding="utf-8"))
 
 
+def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
+    """紙PKMの自動生成ノートの本文を、手で書いた内容を消さずに作る。
+
+    規則（作り方）は守る。手書きは消さない:
+    - 見出し・画像などの規則の行は、無いものだけを `### Parent` の前に足す（既にあれば足さない）。
+    - `### Parent` の中の規則のリンクは、無いものだけを足す（既存の行は残す）。
+    - `# 見出し` は既存に `# ` 見出しがあれば足さない（タイトルを二重にしない）。
+    - 行を消すことは、しない（削除は手でする）。
+    """
+    gen_head: list[str] = []
+    gen_parent: list[str] = []
+    for ln in generated:
+        if ln.strip() == "### Parent" or gen_parent:
+            gen_parent.append(ln)
+        else:
+            gen_head.append(ln)
+
+    out = list(existing)
+    present = {ln.strip() for ln in out if ln.strip()}
+    h1_exists = any(re.match(r"^# ", ln) for ln in out)
+
+    def _is_heading(ln: str) -> bool:
+        return ln.lstrip().startswith("### ")
+
+    # 1) 見出し・画像など: `### Parent` の前に足す（無ければ末尾）
+    head_add: list[str] = []
+    for ln in gen_head:
+        t = ln.strip()
+        if not t or t in present:
+            continue
+        if t.startswith("# ") and h1_exists:
+            continue
+        head_add.append(ln)
+        present.add(t)
+    if head_add:
+        p = next((k for k, ln in enumerate(out) if ln.strip() == "### Parent"), len(out))
+        ins = list(head_add)
+        if p > 0 and out[p - 1].strip():
+            ins.insert(0, "")
+        if p < len(out) and out[p].strip() == "### Parent":
+            ins.append("")
+        out[p:p] = ins
+
+    # 2) Parent のリンク: 無いものだけを、Parent の節の最後へ足す（節が無ければ作る）
+    parent_links = [ln for ln in gen_parent[1:] if ln.strip() and ln.strip() not in present]
+    if parent_links:
+        p = next((k for k, ln in enumerate(out) if ln.strip() == "### Parent"), None)
+        if p is None:
+            if out and out[-1].strip():
+                out.append("")
+            out += ["### Parent", *parent_links]
+        else:
+            e = next((k for k in range(p + 1, len(out)) if _is_heading(out[k])), len(out))
+            last = e
+            while last > p + 1 and not out[last - 1].strip():
+                last -= 1
+            out[last:last] = parent_links
+    return out
+
+
 def write_note(path: Path, fm: list[str], body: list[str]) -> None:
     text = "---\n" + "\n".join(fm) + "\n---\n" + "\n".join(body).rstrip("\n") + "\n"
     path.write_text(text, encoding="utf-8")
@@ -459,7 +519,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
         if not path.is_file():
             write_note(path, [_time_line(), f"title: {display}",
                               f"{FM_PAPER_FOLGE_INDEX}: {fid}"], [])
-        fm_fi, _b = read_note(path)
+        fm_fi, old_fi_body = read_note(path)
         if fm_value(fm_fi, FM_PAPER_FOLGE_INDEX) is None:
             fm_fi.append(f"{FM_PAPER_FOLGE_INDEX}: {fid}")
         inner = [f"# {display}", ""]
@@ -482,7 +542,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
             inner.append(markdown_link(gd, id_index, path.parent))
         inner += ["### Parent",
                   markdown_link(FOLGE_INDEX[:-3], root / FOLGE_INDEX, path.parent)]
-        write_note(path, fm_fi, inner)
+        write_note(path, fm_fi, merge_note_body(old_fi_body, inner))
 
 
 def _root_id(fid: str) -> str:
@@ -545,12 +605,12 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         inner.append("### Parent")
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
-        fm, _ = read_note(group_path)
+        fm, old_group_body = read_note(group_path)
         fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
         fm.insert(1 if fm else 0, f"title: {display}")
         fm.append("attribute: group")
         fm = _update_yomi(fm, {display: readings[display]})
-        write_note(group_path, fm, inner)
+        write_note(group_path, fm, merge_note_body(old_group_body, inner))
 
     # --- Paper-Zettelkasten-Index のキーワードリンク ------------------------
     inner: list[str] = []
@@ -564,7 +624,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             target = folge[entry["ids"][0]]
             inner.append(markdown_link(display, target, index_path.parent))
 
-    fm, _ = read_note(index_path)
+    fm, old_index_body = read_note(index_path)
     body = [
         f"# {index_display}",
         "",
@@ -574,7 +634,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     if inner:
         # キーワードリンクがあるときだけ Folgezettel-Index との間に空行を置く
         body += ["", *inner]
-    write_note(index_path, fm, body)
+    write_note(index_path, fm, merge_note_body(old_index_body, body))
 
     # --- Folgezettel-Index（最上位IDだけ。各リンクは専用ノート folgezettel-Index-N#N） ---
     folge_index = root / FOLGE_INDEX
@@ -585,10 +645,11 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     if not folge_index.is_file():
         fm_fi = [_time_line(), f"title: {FOLGE_INDEX[:-3]}"]
         write_note(folge_index, fm_fi, [])
-    fm, _ = read_note(folge_index)
-    write_note(folge_index, fm, [f"# {FOLGE_INDEX[:-3]}", "", *inner,
-                                 "### Parent",
-                                 markdown_link(index_display, index_path, folge_index.parent)])
+    fm, old_folge_body = read_note(folge_index)
+    write_note(folge_index, fm, merge_note_body(old_folge_body, [
+        f"# {FOLGE_INDEX[:-3]}", "", *inner,
+        "### Parent",
+        markdown_link(index_display, index_path, folge_index.parent)]))
 
     # --- トピック別Index（B案: `1-Index` グループにノートと `1-仏教` を入れる） ---
     topics = scan_topic_notes(root)
@@ -651,7 +712,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             if disp not in used_t:
                 children.append(markdown_link(disp, tmap[disp][0], gid.parent))
         p_lines = _parent_link_lines(fid, gid.parent, exclude=gid)
-        write_note(gid, fm_g, [f"# {fid}-Index"] + children + ["### Parent"] + p_lines)
+        write_note(gid, fm_g, merge_note_body(read_note(gid)[1], [f"# {fid}-Index"] + children + ["### Parent"] + p_lines))
         # トピックノート自身の Parent（既存の `### Parent` 以降を置き換え）+
         # fm `topic_parent:` は常に持たせる（無ければ追加・手書きで変更可）
         for disp, tpath, tp in tlist:
@@ -718,7 +779,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             if len(e["ids"]) == 1 and e["ids"][0] == fid
         }
         fm = _update_yomi(fm, mapping)
-        write_note(note_path, fm, inner)
+        write_note(note_path, fm, merge_note_body(old_body, inner))
 
     if do_sync:
         jy.clear_memos()
