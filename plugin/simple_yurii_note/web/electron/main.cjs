@@ -118,7 +118,8 @@ function createWindow() {
     if ((lvl === "error" || lvl === 3) && !/Electron Security Warning/.test(String(msg))) log("renderer error: " + msg);
   });
   win.webContents.on("render-process-gone", (_e, det) => log("render-process-gone: " + JSON.stringify(det)));
-  win.once("ready-to-show", () => { win.show(); win.focus(); });
+  // 最大化して開く（前のアプリと同じ）
+  win.once("ready-to-show", () => { win.maximize(); win.show(); win.focus(); });
   win.loadFile(path.join(WEB, "index.html"));
   win.on("page-title-updated", (e) => e.preventDefault());
 
