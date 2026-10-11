@@ -7954,6 +7954,30 @@ endfunction
 "   p     … 今のノートの ### Parent 末尾（相手が親になる）
 "   r     … ### Related へ（今のノートと相手の両方に相互追加）
 " Esc / q / o は「何も置かない」で終わる。
+" za,p: 今のノートの本文の中、### Parent の直前にリンクを入れる。文中に同じリンクが既にあれば入れない。
+" 入れたら、相手（リンク先）の本文の ### Parent の直前にも、今のノートへのリンクを入れる。
+function! s:insert_link_above_parent(link) abort
+  let l:target = s:extract_target(a:link)
+  if empty(l:target)
+    return 0
+  endif
+  let l:bare = substitute(l:target, '#.*$', '', '')
+  let l:lines = getline(1, '$')
+  let l:p = index(l:lines, '### Parent')
+  let l:body_end = l:p >= 0 ? l:p : len(l:lines)
+  for l:i in range(0, l:body_end - 1)
+    if stridx(l:lines[l:i], '](' . l:bare) >= 0 || stridx(l:lines[l:i], '](' . l:target . ')') >= 0
+      echo 'simple_yurii_note: 文中に既にあるので入れません'
+      return 0
+    endif
+  endfor
+  call append(l:body_end, a:link)
+  call s:realtime_sync_apply()
+  silent write
+  call s:zap_add_child_link(l:bare)
+  return 1
+endfunction
+
 function! s:insert_links_at_position(links) abort
   let l:links = a:links
   if empty(l:links)
@@ -7969,14 +7993,16 @@ function! s:insert_links_at_position(links) abort
   endif
   if l:ch ==? 'p'
     " 今のノートの ### Parent 末尾に置く（相手が親になる）。zn / zk の p と同じ。
+    " za,p: 今のノートの本文の中、### Parent の直前にリンクを入れる（Parent の節には入れない）。
+    " 相手（リンク先）の本文にも、今のノートへのリンクを相手の ### Parent の直前に入れる。
     let l:added = 0
     for l:lk in l:links
-      if s:append_link_to_buffer_section('up', l:lk)
+      if s:insert_link_above_parent(l:lk)
         let l:added += 1
       endif
     endfor
     if l:added == 0
-      echo 'simple_yurii_note: Parent に追加できるリンクがありません（重複 or ### Parent 無し）'
+      echo 'simple_yurii_note: 追加できるリンクがありません（文中に既にある or 取れなかった）'
     endif
     return l:added > 0
   endif
@@ -8217,61 +8243,17 @@ function! s:zap_add_child_link(rel_target) abort
 endfunction
 
 function! simple_yurii_note#add_link_to_parent() abort
+  " za,p / zap: カーソル下（またはクリップボード）のリンクを、今のノートの本文の中、### Parent の直前に
+  " 入れる（Parent の節には入れない）。文中に既にあれば入れない。相手の本文にも、このノートへのリンクを
+  " 相手の ### Parent の直前に入れる。
   let l:link = s:pick_one_link()
   if empty(l:link)
     echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
     return
   endif
-  let l:parts = s:extract_markdown_link(l:link)
-  let l:target = get(l:parts, 'target', '')
-  if empty(l:target)
-    echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
-    return
+  if s:insert_link_above_parent(l:link)
+    echo 'simple_yurii_note: 本文（Parent の直前）に追加しました'
   endif
-  let l:bare = substitute(l:target, '#.*$', '', '')
-  let l:lines = getline(1, '$')
-  let l:parent = index(l:lines, '### Parent')
-  let l:cut = l:parent >= 0 ? l:parent : len(l:lines)
-  " 文中（### Parent より前）にあるリンクは、親に入れない
-  for l:i in range(0, l:cut - 1)
-    let l:body = l:lines[l:i]
-    if stridx(l:body, '](' . l:bare) >= 0 || stridx(l:body, '](' . l:target . ')') >= 0
-      echohl WarningMsg | echo 'simple_yurii_note: 文中にあるので Parent には入れません' | echohl NONE
-      return
-    endif
-  endfor
-  " 親の中に既にあるなら何もしない
-  if l:parent >= 0
-    let l:e = l:parent + 1
-    while l:e < len(l:lines) && l:lines[l:e] !~# '^###\s'
-      if stridx(l:lines[l:e], '](' . l:bare) >= 0
-        " 自分の Parent には既にある。相手側（相手の本文）のリンクだけ、足りなければ足す
-        call s:zap_add_child_link(l:bare)
-        echo 'simple_yurii_note: Parent に既にあります（相手側を確認しました）'
-        return
-      endif
-      let l:e += 1
-    endwhile
-    " 節の最後の空でない行の直後へ
-    let l:last = l:e - 1
-    while l:last > l:parent && trim(l:lines[l:last]) ==# ''
-      let l:last -= 1
-    endwhile
-    " l:last は 0 始まりの添字。append() は 1 始まりの行番号の後ろに入れるので +1
-    call append(l:last + 1, l:link)
-  else
-    let l:n = line('$')
-    if trim(getline(l:n)) !=# ''
-      call append(l:n, '')
-      let l:n += 1
-    endif
-    call append(l:n, ['### Parent', l:link])
-  endif
-  call s:realtime_sync_apply()
-  silent write
-  " 相手（親にしたノート）の本文にも、このノートへのリンクを足す（相手の ### Parent の手前）
-  call s:zap_add_child_link(l:bare)
-  echo 'simple_yurii_note: Parent に追加しました'
 endfunction
 
 function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
