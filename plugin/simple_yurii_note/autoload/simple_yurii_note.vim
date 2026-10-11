@@ -6482,30 +6482,35 @@ function! simple_yurii_note#update_all(arg) abort
           \ 'exit_cb': function('s:update_all_done', [l:root]),
           \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
   else
-    call s:sort_index_async(l:root)
+    call s:sort_index_async(l:root, 1)
   endif
   echo 'simple_yurii_note: UpdateAll（index 並べ替え・紙PKM 再生成）を裏で実行中…'
 endfunction
 
 function! s:update_all_done(root, job, status) abort
   call s:reload_current()
-  call s:sort_index_async(a:root)
+  call s:sort_index_async(a:root, 1)
 endfunction
 
 " index.md のよみソートを裏で実行する。ソート中に index.md が変わったり、未保存の
-" 変更があるときは上書きしない。
-function! s:sort_index_async(root) abort
+" 変更があるときは上書きしない。a:1 が真なら、終わったときに完了メッセージを出す
+" （「実行中…」の表示が残り続けないように）。
+function! s:sort_index_async(root, ...) abort
+  let l:notify = a:0 ? a:1 : 0
   if !has('job')
     call s:sort_index_file(a:root)
+    call s:ua_notify(l:notify, 'simple_yurii_note: UpdateAll 完了')
     return
   endif
   let l:index = s:index_path(a:root)
   let l:script = s:sort_yomi_script()
   if !filereadable(l:index) || !filereadable(l:script)
+    call s:ua_notify(l:notify, 'simple_yurii_note: UpdateAll 完了（index なし）')
     return
   endif
   let l:lines = readfile(l:index)
   if empty(l:lines)
+    call s:ua_notify(l:notify, 'simple_yurii_note: UpdateAll 完了（index が空）')
     return
   endif
   let l:in = tempname()
@@ -6517,31 +6522,43 @@ function! s:sort_index_async(root) abort
         \ . ' --report-file ' . shellescape(l:rep)
         \ . ' < ' . shellescape(l:in) . ' > ' . shellescape(l:out)
   call job_start(['/bin/sh', '-c', l:cmd], {
-        \ 'exit_cb': function('s:sort_index_done', [l:index, l:lines, l:in, l:out, l:rep]),
+        \ 'exit_cb': function('s:sort_index_done', [l:index, l:lines, l:in, l:out, l:rep, l:notify]),
         \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
 endfunction
 
-function! s:sort_index_done(index, lines, in, out, rep, job, status) abort
+function! s:ua_notify(notify, msg) abort
+  if a:notify
+    redraw
+    echo a:msg
+  endif
+endfunction
+
+function! s:sort_index_done(index, lines, in, out, rep, notify, job, status) abort
   let l:new = (a:status == 0 && filereadable(a:out)) ? readfile(a:out) : []
   call delete(a:in)
   call delete(a:out)
   call delete(a:rep)
   if a:status != 0 || empty(l:new)
+    call s:ua_notify(a:notify, 'simple_yurii_note: index の並べ替えに失敗しました（pykakasi 未導入?）')
     return
   endif
   " ソート中に index.md が書き換わっていたら、古い入力の結果で上書きしない
   if !filereadable(a:index) || readfile(a:index) !=# a:lines
+    call s:ua_notify(a:notify, 'simple_yurii_note: UpdateAll 完了（index が更新されたため並べ替えは省略）')
     return
   endif
   let l:nr = bufnr(a:index)
   if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+    call s:ua_notify(a:notify, 'simple_yurii_note: UpdateAll 完了（index に未保存の変更があるため並べ替えは省略）')
     return
   endif
   if len(l:new) != len(a:lines) || l:new ==# a:lines
+    call s:ua_notify(a:notify, 'simple_yurii_note: UpdateAll 完了')
     return
   endif
   call writefile(l:new, a:index)
   call s:reload_current()
+  call s:ua_notify(a:notify, 'simple_yurii_note: UpdateAll 完了（index を並べ替えました）')
 endfunction
 
 function! s:update_all_sync(arg) abort
