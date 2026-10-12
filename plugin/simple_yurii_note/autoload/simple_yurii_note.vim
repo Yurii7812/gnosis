@@ -8350,6 +8350,18 @@ function! simple_yurii_note#add_clipboard_before_up_note(...) abort
     echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
     return
   endif
+  if s:is_current_index_buffer()
+    " Index では位置を聞かず、並べ替えもせず、そのまま一番下に足す（表示名の入力は zA）。
+    " 同じノートを別のキーワードで足せるよう、完全に同じ行のときだけ重複扱いにする。
+    if index(getline(1, '$'), l:link) >= 0
+      echo 'simple_yurii_note: 既に追加済みです'
+      return
+    endif
+    call append(line('$'), l:link)
+    call s:realtime_sync_apply()
+    silent write
+    return
+  endif
   call s:insert_links_at_position([l:link])
   call s:realtime_sync_apply()
   silent write
