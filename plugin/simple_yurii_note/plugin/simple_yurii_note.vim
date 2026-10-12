@@ -88,7 +88,7 @@ if !exists('g:simple_yurii_note_markdown_conceal_max_lines')
   let g:simple_yurii_note_markdown_conceal_max_lines = 20000
 endif
 if !exists('g:simple_yurii_note_markdown_conceal_max_line_length')
-  let g:simple_yurii_note_markdown_conceal_max_line_length = 1000
+  let g:simple_yurii_note_markdown_conceal_max_line_length = 0
 endif
 " リンク色は .vimrc 側で設定する想定
 
@@ -622,9 +622,13 @@ function! s:setup_conceal() abort
   endif
 
   let l:max_lines = get(g:, 'simple_yurii_note_markdown_conceal_max_lines', 20000)
+  " 1 行の長さの上限は既定で無し（0）。日本語は strlen がバイト数で 3 倍に数えるため、
+  " 長い段落が 1 つあるだけでファイル全体の conceal が切れていた。極端に長い行の
+  " 負荷は Vim 標準の 'synmaxcol' が抑える。上限を使うなら正の数を設定する。
+  let l:max_len = get(g:, 'simple_yurii_note_markdown_conceal_max_line_length', 0)
   let l:too_large_for_conceal = (l:max_lines > 0 && line('$') > l:max_lines)
-        \ || max(map(getline(1, min([line('$'), 200])), 'strlen(v:val)'))
-        \    > get(g:, 'simple_yurii_note_markdown_conceal_max_line_length', 1000)
+        \ || (l:max_len > 0
+        \     && max(map(getline(1, min([line('$'), 200])), 'strchars(v:val)')) > l:max_len)
 
   if get(g:, 'simple_yurii_note_markdown_conceal_links', 0) && !l:too_large_for_conceal
     setlocal conceallevel=2

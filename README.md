@@ -82,8 +82,8 @@ let g:simple_yurii_note_realtime_backlink_sync = 0
 " 既定 20000 行（1 万行の Index でも表示名だけになる。0 で無制限）。
 " 1 万行の描画は conceal 有無で差が出ないことを実測済み。
 let g:simple_yurii_note_markdown_conceal_max_lines = 20000
-" 長い PDF リンクなど、1 行がこれより長いファイルでは抑止する
-let g:simple_yurii_note_markdown_conceal_max_line_length = 1000
+" 1 行の文字数がこれより長いファイルでは抑止する（既定 0 = 無制限。日本語の長い段落でも効く）
+let g:simple_yurii_note_markdown_conceal_max_line_length = 0
 
 " コマンド実行前に自動保存（既定: 1）
 let g:simple_yurii_note_auto_save_on_command = 1
