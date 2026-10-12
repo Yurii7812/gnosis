@@ -8310,12 +8310,49 @@ endfunction
 
 " za: ca と同じ そっちにとって 側だが、関係は常に既定の「ノート」固定
 " （ピッカーも「相手にも書くか」の質問も出さない）。
-function! simple_yurii_note#add_clipboard_before_up_note() abort
+" Index（index.md）への za / zA。キーワード索引なので、置き場所は聞かずに
+" 「表示名（キーワード）」を聞く。末尾に足して、足した行へカーソルを置く。
+" 並べ替えは勝手にしない（\S / \ua のときだけ）。
+" 同じノートを別のキーワードで何度も足せる（同じ表示名＋同じ行のときだけ重複扱い）。
+" a:1 があれば input() を出さずその表示名を使う（テスト・自動化用）。
+function! s:add_to_index_named(link, ...) abort
+  let l:parts = s:extract_markdown_link(a:link)
+  let l:target = get(l:parts, 'target', '')
+  if empty(l:target)
+    echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
+    return 0
+  endif
+  let l:name = a:0 > 0 ? a:1 : input('表示名（キーワード）: ', get(l:parts, 'text', ''))
+  if empty(trim(l:name))
+    echo 'simple_yurii_note: 中止しました'
+    return 0
+  endif
+  let l:line = '[' . trim(l:name) . '](' . l:target . ')'
+  if index(getline(1, '$'), l:line) >= 0
+    echo 'simple_yurii_note: 同じキーワードで既に追加済みです'
+    call cursor(index(getline(1, '$'), l:line) + 1, 1)
+    return 0
+  endif
+  call append(line('$'), l:line)
+  call s:realtime_sync_apply()
+  silent write
+  let l:lnum = line('$')
+  call cursor(l:lnum, 1)
+  echo 'simple_yurii_note: Index に追加: ' . trim(l:name)
+  return 1
+endfunction
+
+function! simple_yurii_note#add_clipboard_before_up_note(...) abort
   " za: 今のノートに（カーソル下のリンク or クリップボードの）リンクを 1 本足す。
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
+  "     Index では表示名を聞いて、末尾に足し、その行へ移る（並べ替えはしない）。
   let l:link = s:pick_one_link()
   if empty(l:link)
     echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    return
+  endif
+  if s:is_current_index_buffer()
+    call call('s:add_to_index_named', [l:link] + a:000)
     return
   endif
   call s:insert_links_at_position([l:link])
@@ -8415,6 +8452,10 @@ function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
   let l:default = get(l:parts, 'text', '')
   if empty(l:target)
     echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
+    return
+  endif
+  if s:is_current_index_buffer()
+    call call('s:add_to_index_named', [l:link] + a:000)
     return
   endif
   if a:0 > 0
