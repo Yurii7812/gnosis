@@ -8293,18 +8293,26 @@ endfunction
 " za,p: 今のノートの本文の中、### Parent の直前にリンクを入れる。文中に同じリンクが既にあれば入れない。
 " 入れたら、相手（リンク先）の本文の ### Parent の直前にも、今のノートへのリンクを入れる。
 
-function! s:insert_links_at_position(links) abort
+" a:links を置き場所キーで今のノートに入れる。a:1 に Funcref（Done）を渡すと t（見出しの下）
+" が使える: 見出しの選択は非同期なので、入れ終わったあとの処理は Done を選択後に呼ぶ。
+" 戻り値は追加できたか（0/1）。t のときだけ -1（選択待ち。Done は選択後に呼ばれる）。
+function! s:insert_links_core(links, ...) abort
   let l:links = a:links
   if empty(l:links)
     return 0
   endif
-  echo 'h=カーソル直下 / Enter=本文の最後 / p=Parent末尾 / r=Related  (Esc で取り止め)'
+  echo 'h=カーソル直下 / Enter=本文の最後 / '
+        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . 'p=Parent末尾 / r=Related  (Esc で取り止め)'
   let l:ch = nr2char(getchar())
   redraw
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
     echo 'simple_yurii_note: 何も追加しない'
     return 0
+  endif
+  if l:ch ==? 't' && a:0 > 0
+    call s:outline_pick_here(function('s:insert_links_under_heading', [l:links, a:1]))
+    return -1
   endif
   if l:ch ==? 'p'
     " 今のノートの ### Parent 末尾に置く（相手が親になる）。zn / zk の p と同じ。
@@ -8369,6 +8377,28 @@ function! s:insert_links_at_position(links) abort
     call s:ensure_blank_before_up()
   endif
   return l:added > 0
+endfunction
+
+" 見出しが選ばれたあと: その見出しの本文の最後にリンクを入れ、Done を呼ぶ。
+function! s:insert_links_under_heading(links, Done, lnum) abort
+  for l:lk in a:links
+    if !s:buffer_has_link(l:lk)
+      call s:insert_link_under_heading(a:lnum, l:lk)
+    endif
+  endfor
+  call a:Done()
+endfunction
+
+" a:Done があれば、入れ終わったあと（t のときは見出しを選んだあと）に呼ぶ。
+function! s:insert_links_at_position(links, ...) abort
+  if a:0 == 0
+    return s:insert_links_core(a:links)
+  endif
+  let l:r = s:insert_links_core(a:links, a:1)
+  if l:r != -1
+    call a:1()
+  endif
+  return l:r > 0
 endfunction
 
 function! simple_yurii_note#paste_clipboard_link_here() abort
@@ -8511,7 +8541,10 @@ function! simple_yurii_note#add_clipboard_before_up_note(...) abort
     echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
     return
   endif
-  call s:insert_links_at_position([l:link])
+  call s:insert_links_at_position([l:link], function('s:links_added_done'))
+endfunction
+
+function! s:links_added_done() abort
   call s:realtime_sync_apply()
   silent write
 endfunction
@@ -8611,10 +8644,14 @@ function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
     echo 'simple_yurii_note: 中止しました'
     return
   endif
-  call s:insert_links_at_position(['[' . l:name . '](' . l:target . ')'])
+  call s:insert_links_at_position(['[' . l:name . '](' . l:target . ')'],
+        \ function('s:named_links_added_done', [l:name]))
+endfunction
+
+function! s:named_links_added_done(name) abort
   call s:realtime_sync_apply()
   silent write
-  echo 'simple_yurii_note: 表示名 ' . l:name . ' でリンクを追加'
+  echo 'simple_yurii_note: 表示名 ' . a:name . ' でリンクを追加'
 endfunction
 
 " 現ノートがグループ（attribute: group / index.md）かどうか
