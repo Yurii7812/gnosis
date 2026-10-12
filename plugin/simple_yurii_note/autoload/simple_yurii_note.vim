@@ -8556,7 +8556,7 @@ function! simple_yurii_note#add_clipboard_before_up_note(...) abort
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
   let l:link = s:pick_one_link()
   if empty(l:link)
-    echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
   call s:insert_links_at_position([l:link], function('s:links_added_done'))
@@ -8632,7 +8632,7 @@ function! simple_yurii_note#add_link_to_parent() abort
   " 相手（リンク先）の本文に今のノートが無ければ相手の ### Parent の直前に入れる。
   let l:link = s:pick_one_link()
   if empty(l:link)
-    echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
   if s:add_parent_with_reverse(l:link)
@@ -8643,7 +8643,7 @@ endfunction
 function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
   let l:link = s:pick_one_link()
   if empty(l:link)
-    echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
   let l:parts = s:extract_markdown_link(l:link)
@@ -8683,18 +8683,35 @@ endfunction
 " 追加するリンクを 1 行で取り出す。優先は「カーソル下のリンク」、
 " 無ければクリップボード。za / zp 共通。
 function! s:pick_one_link() abort
-  " クリップボード / ヤンクを優先する（カーソルがリンク上にあっても、
-  " コピー／ヤンクしたリンクを貼る）。無ければカーソル下のリンクを使う。
-  for l:raw in split(s:clipboard_text(), "\n")
-    let l:target = s:extract_target(l:raw)
-    if !empty(l:target) && filereadable(simple_yurii_note#resolve_link(l:target))
-      return s:link_from_clipboard_raw(l:raw)
+  " za / zA / zp が足すリンクは、クリップボードかヤンクしたリンク（カーソル下のリンクではない）。
+  " 取得元を全部順に見て、最初に「実在するノートを指すリンク」を返す。システムの
+  " クリップボードがリンクでない文字のときでも、ヤンクしたリンク（"/0 レジスタ）を見落とさない。
+  let l:texts = [s:clipboard_text_external(), getreg('"'), getreg('0'), getreg('+'), getreg('*')]
+  for l:text in l:texts
+    if empty(trim(l:text))
+      continue
     endif
+    " 文中の Markdown リンク [表示名](パス) を全部拾う（行頭でなくてもよい）
+    let l:start = 0
+    while 1
+      let l:m = matchstrpos(l:text, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+      if empty(l:m) || l:m[1] < 0
+        break
+      endif
+      let l:start = l:m[2]
+      let l:target = s:extract_target(l:m[0])
+      if !empty(l:target) && filereadable(simple_yurii_note#resolve_link(l:target))
+        return s:link_from_clipboard_raw(l:m[0])
+      endif
+    endwhile
+    " リンク記法でない行（パスや file:// だけ）
+    for l:raw in split(l:text, "\n")
+      let l:target = s:extract_target(l:raw)
+      if !empty(l:target) && filereadable(simple_yurii_note#resolve_link(l:target))
+        return s:link_from_clipboard_raw(l:raw)
+      endif
+    endfor
   endfor
-  let l:lk = simple_yurii_note#get_link_under_cursor()
-  if !empty(l:lk) && !empty(l:lk.target) && l:lk.target =~? '\.md\(#.*\)\?$'
-    return s:link_from_clipboard_raw(l:lk.target)
-  endif
   return ''
 endfunction
 
@@ -8721,7 +8738,7 @@ function! simple_yurii_note#add_clipboard_as_child_with_parent() abort
   endif
   let l:link = s:pick_one_link()
   if empty(l:link)
-    echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
+    echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
   call s:insert_links_at_position([l:link])
