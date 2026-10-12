@@ -12313,28 +12313,131 @@ function! s:diary_edit_file(file, Fn) abort
   return 1
 endfunction
 
-" その日の日記を作る。月グループ（YYYY-MM）の本文にも足す。月グループが無ければ、
-" グループ「日記」があればその下に月グループも作る。作った日記のファイル名を返す。
+" 本文（### Parent より前）から、そのファイルだけのリンク行を外す
+function! s:diary_op_unlink_body(tgt, lines) abort
+  let l:lines = copy(a:lines)
+  let l:p = index(l:lines, s:v2_up_mark)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  for l:i in range(l:end - 1, 0, -1)
+    if l:lines[l:i] =~# '^\s*\[[^\]]*\](' . escape(a:tgt, '.') . ')\s*$'
+      call remove(l:lines, l:i)
+    endif
+  endfor
+  return l:lines
+endfunction
+
+" ### Parent の中の a:old へのリンク行を a:newlink に差し替える。無ければ Parent の先頭に足す
+function! s:diary_op_parent_swap(old, newlink, lines) abort
+  let l:lines = copy(a:lines)
+  let l:p = index(l:lines, s:v2_up_mark)
+  if l:p < 0
+    return l:lines
+  endif
+  let l:end = len(l:lines)
+  for l:j in range(l:p + 1, len(l:lines) - 1)
+    if l:lines[l:j] =~# '^#'
+      let l:end = l:j
+      break
+    endif
+  endfor
+  for l:j in range(l:p + 1, l:end - 1)
+    if stridx(l:lines[l:j], '](' . a:old . ')') >= 0
+      let l:lines[l:j] = a:newlink
+      return l:lines
+    endif
+  endfor
+  call insert(l:lines, a:newlink, l:p + 1)
+  return l:lines
+endfunction
+
+" グループ a:file の ### Parent に a:tgt へのリンクがあるか
+function! s:diary_parent_has(root, file, tgt) abort
+  let l:lines = readfile(fnamemodify(a:root, ':p') . a:file)
+  let l:p = index(l:lines, s:v2_up_mark)
+  if l:p < 0
+    return 0
+  endif
+  for l:ln in l:lines[l:p + 1 :]
+    if l:ln =~# '^#'
+      break
+    endif
+    if stridx(l:ln, '](' . a:tgt . ')') >= 0
+      return 1
+    endif
+  endfor
+  return 0
+endfunction
+
+" 新しいグループを作る。親（a:parent_file）があれば、親の本文にもリンクを足す。
+function! s:diary_new_group(root, notes, title, parent_file, parent_title, ...) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  let l:file = s:diary_new_filename(a:root)
+  let l:plink = empty(a:parent_file) ? '' : s:diary_link(a:parent_file, a:parent_title)
+  call s:syn_writefile(call('s:diary_new_lines', [a:title, 1, l:plink] + a:000), l:dir . l:file)
+  if !empty(a:parent_file)
+    call s:diary_edit_file(l:dir . a:parent_file,
+          \ function('s:diary_op_add', [s:diary_link(l:file, a:title), '']))
+  endif
+  call add(a:notes, {'file': l:file, 'title': a:title, 'group': 1, 'time': ''})
+  return l:file
+endfunction
+
+" 年越し: 年グループ a:year が無く、それ以前の月グループ（親が「日記」のもの）があるとき、
+" それらを年ごとの年グループ（YYYY）に入れ、新しい年の年グループも作る。
+" 戻り値は新しい年の年グループのファイル名（作らなかったときは ''）。
+function! s:diary_rollover(root, notes, year, top, ...) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  let l:old = {}
+  for l:n in a:notes
+    if l:n.group && l:n.title =~# '^\d\{4}-\d\{2}$' && l:n.title[0 : 3] <# a:year
+          \ && s:diary_parent_has(a:root, l:n.file, a:top)
+      let l:old[l:n.title[0 : 3]] = get(l:old, l:n.title[0 : 3], []) + [l:n]
+    endif
+  endfor
+  if empty(l:old)
+    return ''
+  endif
+  for [l:yr, l:mgs] in items(l:old)
+    let l:yg = s:diary_find_group(a:notes, l:yr)
+    if empty(l:yg)
+      let l:yg = call('s:diary_new_group', [a:root, a:notes, l:yr, a:top, '日記'] + a:000)
+    endif
+    for l:m in sort(copy(l:mgs), {x, y -> x.title ==# y.title ? 0 : x.title ># y.title ? 1 : -1})
+      call s:diary_edit_file(l:dir . a:top, function('s:diary_op_unlink_body', [l:m.file]))
+      call s:diary_edit_file(l:dir . l:yg, function('s:diary_op_add', [s:diary_link(l:m.file, l:m.title), '']))
+      call s:diary_edit_file(l:dir . l:m.file,
+            \ function('s:diary_op_parent_swap', [a:top, s:diary_link(l:yg, l:yr)]))
+    endfor
+  endfor
+  return call('s:diary_new_group', [a:root, a:notes, a:year, a:top, '日記'] + a:000)
+endfunction
+
+" その日の日記を作る。
+"   月グループ（YYYY-MM）が無ければ作る。親は、年グループ（YYYY）があればそれ、無ければ
+"   グループ「日記」。年が替わって最初の日記なら、それまでの月グループを年グループにまとめて、
+"   新しい年の年グループの中に新しい月グループを作る（s:diary_rollover）。
+" 作った日記のファイル名を返す。
 function! s:diary_create(root, date, notes, ...) abort
   let l:dir = fnamemodify(a:root, ':p')
   let l:title = a:date . '-' . s:diary_weekday(a:date)
   let l:month = a:date[0 : 6]
+  let l:year = a:date[0 : 3]
   let l:mg = s:diary_find_group(a:notes, l:month)
   if empty(l:mg)
     let l:top = s:diary_find_group(a:notes, '日記')
-    if !empty(l:top)
-      let l:mg = s:diary_new_filename(a:root)
-      call s:syn_writefile(call('s:diary_new_lines', [l:month, 1, s:diary_link(l:top, '日記')] + a:000), l:dir . l:mg)
-      call s:diary_edit_file(l:dir . l:top, function('s:diary_op_add', [s:diary_link(l:mg, l:month), '']))
-      call add(a:notes, {'file': l:mg, 'title': l:month, 'group': 1, 'time': ''})
+    let l:yg = s:diary_find_group(a:notes, l:year)
+    if empty(l:yg) && !empty(l:top)
+      let l:yg = call('s:diary_rollover', [a:root, a:notes, l:year, l:top] + a:000)
+    endif
+    if !empty(l:yg)
+      let l:mg = call('s:diary_new_group', [a:root, a:notes, l:month, l:yg, l:year] + a:000)
+    else
+      let l:mg = call('s:diary_new_group', [a:root, a:notes, l:month, l:top, '日記'] + a:000)
     endif
   endif
   let l:file = s:diary_new_filename(a:root)
-  let l:parent = empty(l:mg) ? '' : s:diary_link(l:mg, l:month)
-  call s:syn_writefile(call('s:diary_new_lines', [l:title, 0, l:parent] + a:000), l:dir . l:file)
-  if !empty(l:mg)
-    call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
-  endif
+  call s:syn_writefile(call('s:diary_new_lines', [l:title, 0, s:diary_link(l:mg, l:month)] + a:000), l:dir . l:file)
+  call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
   return l:file
 endfunction
 
