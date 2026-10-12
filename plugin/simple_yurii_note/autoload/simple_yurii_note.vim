@@ -12473,11 +12473,9 @@ function! s:diary_adopt_all() abort
     endif
   endfor
   let l:filled = s:diary_backfill(l:root, l:st, l:notes)
-  if l:added > 0 || l:filled > 0
-    call s:diary_state_write(l:st)
-  endif
+  call s:diary_state_write(l:st)
   if l:added > 0 || l:amb > 0 || l:filled > 0
-    echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録、「今日のノート」に ' . l:filled . ' 件追加'
+    echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録、「今日のノート」を ' . l:filled . ' 日分更新'
           \ . (l:amb > 0 ? '（' . l:amb . ' 日分は日付のノートが複数あるため日記は未登録。日記のノートで :YuriiDiaryAdopt）' : '')
   endif
 endfunction
@@ -12492,9 +12490,11 @@ function! s:diary_backfill(root, st, notes) abort
   let l:dir = substitute(fnamemodify(a:root, ':p'), '/$', '', '')
   let l:sec = get(g:, 'simple_yurii_note_diary_section', '今日のノート')
   let l:diaries = values(a:st.days)
-  let l:n_added = 0
+  " 記録（st.notes）に有るかどうかではなく、日記の節に実際にリンクがあるかで判断する
+  " （別の Vim の古いバッファの保存などで節から消えていても、\ua で戻る）。
+  let l:per = {}
   for l:n in a:notes
-    if l:n.group || has_key(a:st.notes, l:n.file) || index(l:diaries, l:n.file) >= 0
+    if l:n.group || index(l:diaries, l:n.file) >= 0
           \ || index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:n.file) >= 0
           \ || s:diary_is_diary_title(l:n.title) || empty(l:n.title) && empty(l:n.time)
       continue
@@ -12509,12 +12509,33 @@ function! s:diary_backfill(root, st, notes) abort
       continue
     endif
     let l:title = empty(l:n.title) ? fnamemodify(l:n.file, ':r') : l:n.title
-    call s:diary_edit_file(l:dir . '/' . l:diary,
-          \ function('s:diary_op_add', [s:diary_link(l:n.file, l:title), l:sec]))
-    let a:st.notes[l:n.file] = l:diary
-    let l:n_added += 1
+    let l:per[l:diary] = get(l:per, l:diary, []) + [[l:n.file, l:title]]
+  endfor
+  let l:n_added = 0
+  for [l:diary, l:items] in items(l:per)
+    let l:f = l:dir . '/' . l:diary
+    let l:Fn = function('s:diary_op_add_many', [l:items, l:sec])
+    if s:diary_edit_file(l:f, l:Fn)
+      let l:n_added += 1
+    endif
+    for l:it in l:items
+      let l:prev = get(a:st.notes, l:it[0], '')
+      if !empty(l:prev) && l:prev !=# l:diary && filereadable(l:dir . '/' . l:prev)
+        call s:diary_edit_file(l:dir . '/' . l:prev, function('s:diary_op_remove', [l:it[0], l:sec]))
+      endif
+      let a:st.notes[l:it[0]] = l:diary
+    endfor
   endfor
   return l:n_added
+endfunction
+
+" items = [[ファイル名, 題], ...] を節に足す（すでにあるものは足さない）
+function! s:diary_op_add_many(items, section, lines) abort
+  let l:lines = copy(a:lines)
+  for l:it in a:items
+    let l:lines = s:diary_op_add(s:diary_link(l:it[0], l:it[1]), a:section, l:lines)
+  endfor
+  return l:lines
 endfunction
 
 function! s:diary_adopt_all_safe() abort
