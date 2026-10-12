@@ -4472,12 +4472,12 @@ function! s:link_from_target(target) abort
   endif
   let l:display_target = s:display_target_from_current_dir(l:target)
   let l:name = fnamemodify(l:display_target, ':t')
-  " md は YAML/H1 タイトルをリンク文字列にする。非mdは拡張子を除いたファイル名
+  " md は YAML/H1 タイトルをリンク文字列にする。非md は拡張子つきのファイル名（.html など）
   let l:title = s:existing_title_for_target(l:display_target)
   if s:is_markdown_target(l:display_target)
     let l:text = empty(l:title) ? fnamemodify(l:name, ':r') : l:title
   else
-    let l:text = fnamemodify(l:name, ':r')
+    let l:text = l:name
   endif
   return '[' . l:text . '](' . l:display_target . ')'
 endfunction
@@ -6416,7 +6416,7 @@ function! s:make_link_from_dir(path, title, base_dir) abort
     let l:file = s:markdown_relative_target(l:path)
   endif
   let l:name = fnamemodify(l:file, ':t')
-  let l:text = empty(a:title) ? fnamemodify(l:name, ':r') : a:title
+  let l:text = empty(a:title) ? (s:is_markdown_target(l:name) ? fnamemodify(l:name, ':r') : l:name) : a:title
   return '[' . l:text . '](' . l:file . ')'
 endfunction
 
@@ -10390,7 +10390,7 @@ endfunction
 
 function! s:csv_branch_link(csv_path) abort
   let l:name = fnamemodify(a:csv_path, ':t')
-  return '[' . fnamemodify(l:name, ':r') . '](' . l:name . ')'
+  return '[' . l:name . '](' . l:name . ')'
 endfunction
 
 function! simple_yurii_note#csv_new() abort
