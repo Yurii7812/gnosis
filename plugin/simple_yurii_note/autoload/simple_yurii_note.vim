@@ -3882,9 +3882,10 @@ function! s:hint_pick(cands) abort
 endfunction
 function! s:hint_ensure_prop_type() abort
   if !has('textprop') | return 0 | endif
-  highlight default link SimpleLinkHint Special
+  " 黄色（Special）だと見づらいので、赤地に白の太字にする
+  highlight default YuriiLinkHint term=bold,reverse cterm=bold ctermfg=231 ctermbg=160 gui=bold guifg=#ffffff guibg=#d70000
   if empty(prop_type_get(s:hint_prop_type))
-    call prop_type_add(s:hint_prop_type, {'highlight': 'SimpleLinkHint'})
+    call prop_type_add(s:hint_prop_type, {'highlight': 'YuriiLinkHint'})
   endif
   return 1
 endfunction
