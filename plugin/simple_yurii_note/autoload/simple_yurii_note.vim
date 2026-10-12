@@ -291,15 +291,30 @@ function! s:file_heading_items(path, ...) abort
   return l:items
 endfunction
 
-" 見出しの一覧表示（fzf の検索対象）。見出しを先頭に置き、その下の本文を
-" 後ろに足す。fzf は行頭・単語境界の一致を高く採点するので、見出しに当たる
-" 候補が上、本文だけに当たる候補が下に並ぶ（見出し優先）。
-function! s:heading_display(it) abort
-  let l:s = repeat('#', a:it.level) . ' ' . a:it.text
-  if !empty(get(a:it, 'body', ''))
-    let l:s .= '  │ ' . a:it.body
-  endif
-  return l:s
+let s:note_root = expand('<sfile>:p:h:h')
+
+" 見出しピッカー（zo / zn→t 共通）。左は見出しだけ。検索は python ヘルパーが
+" 見出しを優先しつつ見出しの下の本文にも当て、右は検索語を強調して出す。
+" a:none が真なら先頭に「（見出しなし）」を足す（zo の解除用）。
+function! s:outline_fzf(items, path, sink, none) abort
+  let l:tsv = tempname()
+  let l:rows = a:none ? ["（見出しなし）\t\t\t\t"] : []
+  for l:it in a:items
+    call add(l:rows, repeat('#', l:it.level) . ' ' . l:it.text . "\t" . l:it.slug
+          \ . "\t" . a:path . "\t" . l:it.lnum . "\t" . get(l:it, 'body', ''))
+  endfor
+  call writefile(l:rows, l:tsv)
+  let l:py = shellescape(s:note_root . '/python/outline_pick.py')
+  let l:filter = 'python3 ' . l:py . ' filter ' . shellescape(l:tsv) . ' {q}'
+  call fzf#run(fzf#wrap({
+        \ 'source': systemlist('python3 ' . l:py . ' filter ' . shellescape(l:tsv) . ' ""'),
+        \ 'sink': a:sink,
+        \ 'options': '--delimiter="\t" --with-nth=1 --no-multi --disabled --ansi'
+        \   . ' --bind ' . shellescape('change:reload:' . l:filter . ' || true')
+        \   . ' --prompt=' . shellescape('見出し> ')
+        \   . ' --preview ' . shellescape('python3 ' . l:py . ' preview {3} {4} {q}')
+        \   . ' --preview-window=right:50%',
+        \ }))
 endfunction
 
 " fragment（スラッグ or 生見出し or HTML アンカー）の行へジャンプ。
@@ -3091,15 +3106,19 @@ function! s:rlp_build_local() abort
 endfunction
 
 function! s:rlp_build_global() abort
-  " タイトルに当たるものを先に、本文だけに当たるものをその後ろに並べる。
-  " それぞれ索引の並び（最近訪問した順）を保つ。
+  " 一覧に出す名前は、最初に開いたページにそのノートへのリンクがあればその表示名、
+  " 無ければタイトル。タイトルに当たるものを先に、本文だけに当たるものをその後ろに
+  " 並べる（検索はタイトルと表示名の両方に当てる）。それぞれ索引の並び（最近訪問した順）。
+  let l:names = s:rlp_origin_names()
   let l:items = []
   let l:rest = []
   for l:c in s:rlp_cands
-    if s:rlp_match(l:c.t)
-      call add(l:items, {'kind': 'note', 'path': l:c.p, 'text': l:c.t, 'label': ''})
-    elseif s:rlp_match(l:c.t . ' ' . l:c.b)
-      call add(l:rest, {'kind': 'note', 'path': l:c.p, 'text': l:c.t, 'label': ''})
+    let l:name = get(l:names, fnamemodify(l:c.p, ':p'), '')
+    let l:row = {'kind': 'note', 'path': l:c.p, 'text': empty(l:name) ? l:c.t : l:name, 'label': ''}
+    if s:rlp_match(l:c.t . ' ' . l:name)
+      call add(l:items, l:row)
+    elseif s:rlp_match(l:c.t . ' ' . l:name . ' ' . l:c.b)
+      call add(l:rest, l:row)
     endif
   endfor
   return l:items + l:rest
@@ -3384,28 +3403,19 @@ function! s:rlp_render() abort
   call s:rlp_preview()
 endfunction
 
-" プレビュー見出しの名前。ノートのタイトルではなく、**そのページでのリンクの表示名**を
-" 出す。ローカルのリンク行は行自身の表示名。全ノート検索の行は、最初に開いた
-" ページ（s:rlp_origin）にそのノートへのリンクがあればその表示名、無ければタイトル。
-function! s:rlp_preview_name(it, path) abort
-  if get(a:it, 'kind', '') ==# 'link' && !empty(get(a:it, 'text', ''))
-    return a:it.text
-  endif
-  if get(a:it, 'kind', '') ==# 'note' && get(s:rlp_origin, 'bufnr', -1) > 0
-    let l:name = get(s:rlp_origin_names(), fnamemodify(a:path, ':p'), '')
-    if !empty(l:name) | return l:name | endif
-  endif
-  return s:get_title(a:path)
-endfunction
-
-" 最初に開いたページのリンク先（絶対パス）→ 表示名。popup を開いている間だけ使うので
-" ナビゲータ起動時に s:rlp_origin_names_cache をリセットする。
+" 最初に開いたページのリンク先（絶対パス）→ そのページでの表示名。左の一覧に
+" 出す名前に使う。popup を開いている間だけ使うので、ナビゲータ起動時に
+" s:rlp_origin_names_cache をリセットする。
 function! s:rlp_origin_names() abort
   if s:rlp_origin_names_cache isnot 0
     return s:rlp_origin_names_cache
   endif
   let l:m = {}
-  let l:base = fnamemodify(get(s:rlp_origin, 'path', ''), ':h')
+  if get(s:rlp_origin, 'bufnr', -1) <= 0 || empty(get(s:rlp_origin, 'path', ''))
+    let s:rlp_origin_names_cache = l:m
+    return l:m
+  endif
+  let l:base = fnamemodify(s:rlp_origin.path, ':h')
   let l:g = s:space_collect(getbufline(s:rlp_origin.bufnr, 1, '$'), l:base)
   for l:key in ['body', 'up', 'down']
     for l:x in get(l:g, l:key, [])
@@ -3447,7 +3457,7 @@ function! s:rlp_preview() abort
   while !empty(l:body) && l:body[0] =~# '^\s*$'
     call remove(l:body, 0)
   endwhile
-  let l:head = s:rlp_preview_name(l:it, l:path) . '   ' . fnamemodify(l:path, ':t')
+  let l:head = s:get_title(l:path) . '   ' . fnamemodify(l:path, ':t')
   let l:rule = repeat('─', max([get(s:rlp_geo, 'pv_w', 46) - 2, 10]))
 
   " 検索語を強調し、最初のヒット行が見えるところまでスクロールする。
@@ -6504,19 +6514,7 @@ function! s:outline_pick_here(Cb) abort
     endif
     return
   endif
-  let l:source = []
-  for l:it in l:items
-    call add(l:source, s:heading_display(l:it)
-          \ . "\t" . l:it.slug . "\t" . l:path . "\t" . l:it.lnum)
-  endfor
-  call fzf#run(fzf#wrap({
-        \ 'source': l:source,
-        \ 'sink': function('s:outline_pick_sink'),
-        \ 'options': '--delimiter="\t" --with-nth=1 --no-multi'
-        \   . ' --prompt=' . shellescape('見出し> ')
-        \   . ' --preview "tail -n +{4} {3} 2>/dev/null | head -40"'
-        \   . ' --preview-window=right:50%',
-        \ }))
+  call s:outline_fzf(l:items, l:path, function('s:outline_pick_sink'), 0)
 endfunction
 
 function! s:outline_pick_sink(line) abort
@@ -7374,20 +7372,7 @@ function! simple_yurii_note#link_to_outline(...) abort
     call s:link_to_outline_fallback(l:items)
     return
   endif
-  let l:source = ['（見出しなし）']
-  for l:it in l:items
-    " 表示（検索対象）は見出しだけ。後ろのフィールドは sink と preview 用。
-    call add(l:source, s:heading_display(l:it)
-          \ . "\t" . l:it.slug . "\t" . l:path . "\t" . l:it.lnum)
-  endfor
-  call fzf#run(fzf#wrap({
-        \ 'source': l:source,
-        \ 'sink': function('s:link_to_outline_sink'),
-        \ 'options': '--delimiter="\t" --with-nth=1 --no-multi'
-        \   . ' --prompt=' . shellescape('見出し> ')
-        \   . ' --preview "tail -n +{4} {3} 2>/dev/null | head -40"'
-        \   . ' --preview-window=right:50%',
-        \ }))
+  call s:outline_fzf(l:items, l:path, function('s:link_to_outline_sink'), 1)
 endfunction
 
 " ---------------------------------------------------------------------------
