@@ -82,8 +82,20 @@ nnoremap <Down> gj
 " <C-o> は InsertLeave/InsertLeavePre を発火するため、fcitx の自動 OFF
 " (InsertLeavePre → fcitx5-remote -c) が走り、日本語入力が終わってしまう。
 " 挿入モードのまま画面行を移動できる <C-g><Up>/<C-g><Down> を使う。
-inoremap <Up> <C-g><Up>
-inoremap <Down> <C-g><Down>
+" <C-g><Up>/<C-g><Down> は論理行単位（折り返した行をひとまとまりで動く）なので、
+" 画面行（折り返した行を 1 行ずつ）で動く関数を <Cmd> で呼ぶ。<Cmd> は挿入モードを
+" 抜けないので InsertLeave も発火せず、IME は維持される。
+function! s:insert_screen_move(down) abort
+  let l:ve = &virtualedit
+  set virtualedit=onemore
+  try
+    execute 'normal! ' . (a:down ? 'gj' : 'gk')
+  finally
+    let &virtualedit = l:ve
+  endtry
+endfunction
+inoremap <silent> <Up> <Cmd>call <SID>insert_screen_move(0)<CR>
+inoremap <silent> <Down> <Cmd>call <SID>insert_screen_move(1)<CR>
 
 " =========================================================
 " 設定編集

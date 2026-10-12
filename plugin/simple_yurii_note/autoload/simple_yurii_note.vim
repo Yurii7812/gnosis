@@ -966,7 +966,7 @@ function! s:guide_template() abort
         \ '- `\w` … 全バッファを保存（`:wa`） ・ `\r` … 画面の残像を消す（`:redraw!`） ・ `gm` … 今のノートを既定アプリで開く',
         \ '- 編集は約1.5秒無操作で自動保存（挿入中も。Esc でも即保存。vault の .md / .csv 対象。バッファを離れるときも即保存。`g:simple_yurii_note_autosave=0` で無効）。`gm` / `\A` / `\tD` / 同期の前は必ず保存してから実行。vault は git で自動バックアップ（2分ごと）。swap は作らない（`.swp` は残らない）',
         \ '- `<C-v>` … システムクリップボードを貼る ・ `<C-c>`（ビジュアル）… システムクリップボードへコピー（wl-paste / wl-copy 経由。Vim の + レジスタは使わない）',
-        \ '- `j` / `k` / `<Up>` / `<Down>` … 表示行で上下（挿入モードは `<C-g><Up>` / `<C-g><Down>` で IME を維持）',
+        \ '- `j` / `k` / `<Up>` / `<Down>` … 表示行で上下（挿入モードでも同じ。挿入モードを抜けないので IME は維持される）',
         \ '',
         \ '## vault の暗号化（gocryptfs）',
         \ '',
@@ -12436,7 +12436,14 @@ function! s:diary_create(root, date, notes, ...) abort
     endif
   endif
   let l:file = s:diary_new_filename(a:root)
-  call s:syn_writefile(call('s:diary_new_lines', [l:title, 0, s:diary_link(l:mg, l:month)] + a:000), l:dir . l:file)
+  let l:lines = call('s:diary_new_lines', [l:title, 0, s:diary_link(l:mg, l:month)] + a:000)
+  " 本文の余白 3 行（真ん中がカーソル位置）のあとに、空の「今日のノート」の節を置く
+  let l:u = index(l:lines, s:v2_up_mark)
+  if l:u >= 0
+    call insert(l:lines, '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート'), l:u)
+    call insert(l:lines, '', l:u + 1)
+  endif
+  call s:syn_writefile(l:lines, l:dir . l:file)
   call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
   return l:file
 endfunction
@@ -12718,9 +12725,25 @@ function! simple_yurii_note#diary_today() abort
     let l:st.days[l:date] = l:diary
     call s:diary_state_write(l:st)
   endif
-  if fnamemodify(expand('%:p'), ':t') ==# l:diary
+  if fnamemodify(expand('%:p'), ':t') !=# l:diary
+    call simple_yurii_note#push_history()
+    execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
+  endif
+  call s:diary_cursor()
+endfunction
+
+" 日記を開いたときのカーソル位置: 「今日のノート」の節の 2 行上
+"   本文 / 空行 / ここにカーソル / 空行 / ## 今日のノート
+" 節が無ければ ### Parent の直前の行。
+function! s:diary_cursor() abort
+  let l:sec = '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート')
+  let l:n = index(getline(1, '$'), l:sec) + 1
+  if l:n <= 0
+    let l:n = index(getline(1, '$'), s:v2_up_mark) + 1
+  endif
+  if l:n <= 0
     return
   endif
-  call simple_yurii_note#push_history()
-  execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
+  call cursor(max([1, l:n - 2]), 1)
+  normal! $
 endfunction
