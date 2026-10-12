@@ -6561,6 +6561,8 @@ function! simple_yurii_note#update_all(arg) abort
   " ノート同期（Parent/BackLink 等）は保存のたびに autosync が済ませているので、
   " ここでは index.md のよみ順ソートと、紙PKM の再生成だけを行う（どちらも裏で実行）。
   " 全ノートを再同期したいときは :UpdateMD を使う。
+  " 日記: 日付で始まる題のノートがその日に 1 つだけなら、その日の日記として登録する。
+  call s:diary_adopt_all_safe()
   if !has('job')
     call s:update_all_sync(a:arg)
     return
@@ -12416,4 +12418,57 @@ function! simple_yurii_note#diary_adopt() abort
   let l:st.days[l:date] = expand('%:t')
   call s:diary_state_write(l:st)
   echo 'simple_yurii_note: ' . l:date . ' の日記に登録: ' . expand('%:t')
+endfunction
+
+" \ua: 日記として登録されていない日付について、題がその日付で始まる（グループでない）
+" ノートがちょうど 1 つならそれを日記として登録する。2 つ以上ある日は曖昧なので登録せず、
+" 件数だけ知らせる（そのノートで :YuriiDiaryAdopt）。
+function! s:diary_adopt_all() abort
+  if !get(g:, 'simple_yurii_note_diary_auto', 1)
+    return
+  endif
+  let l:root = s:get_pkm_root()
+  if empty(l:root) || simple_yurii_note#vault_locked_flag() == 1
+    return
+  endif
+  let l:st = s:diary_state_read()
+  let l:notes = s:diary_scan(l:root)
+  let l:by = {}
+  for l:n in l:notes
+    if l:n.group
+      continue
+    endif
+    let l:d = matchstr(l:n.title, '^\d\{4}-\d\{2}-\d\{2}\ze-')
+    if !empty(l:d)
+      let l:by[l:d] = get(l:by, l:d, []) + [l:n.file]
+    endif
+  endfor
+  let l:added = 0
+  let l:amb = 0
+  for [l:d, l:files] in items(l:by)
+    if !empty(s:diary_find(l:root, l:d, l:st, l:notes))
+      continue
+    endif
+    if len(l:files) == 1
+      let l:st.days[l:d] = l:files[0]
+      let l:added += 1
+    else
+      let l:amb += 1
+    endif
+  endfor
+  if l:added > 0
+    call s:diary_state_write(l:st)
+  endif
+  if l:added > 0 || l:amb > 0
+    echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録'
+          \ . (l:amb > 0 ? '（' . l:amb . ' 日分は日付のノートが複数あるため未登録。日記のノートで :YuriiDiaryAdopt）' : '')
+  endif
+endfunction
+
+function! s:diary_adopt_all_safe() abort
+  try
+    call s:diary_adopt_all()
+  catch
+    echom 'simple_yurii_note: 日記の登録に失敗: ' . v:exception
+  endtry
 endfunction
