@@ -2547,8 +2547,9 @@ function! simple_yurii_note#jump_up_cursor() abort
     return
   endif
   " 「### Parent」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
+  " 見出しを画面の上端に寄せる（zt）。下に来ると Parent の中身が画面の外へ出るため。
   call s:jump_to_line(l:up)
-  normal! zv
+  normal! zt
 endfunction
 
 function! simple_yurii_note#jump_down_top() abort
