@@ -6481,11 +6481,10 @@ function! s:insert_link_under_heading(hl, link) abort
     let l:e -= 1
   endwhile
   let l:prev_link = l:e > a:hl && trim(getline(l:e)) =~# '\]\s*(\S\+)\s*$'
-  if l:end - 1 > l:e
-    silent execute 'keepjumps ' . (l:e + 1) . ',' . (l:end - 1) . 'delete _'
-  endif
+  " 本文の最後の直後にリンクを置く。後ろにある空行（日記の余白など）はそのまま残す。
+  " 空行が無いまま次の見出しが来るときだけ、リンクの後ろに空行を 1 つ足す。
   let l:new = (l:prev_link ? [] : ['']) + [a:link]
-  if l:e + 1 <= line('$')
+  if l:e + 1 <= line('$') && l:e + 1 == l:end
     let l:new += ['']
   endif
   call append(l:e, l:new)
@@ -6539,7 +6538,13 @@ function! s:v2_new_run(attr, ch, head_lnum) abort
   let l:file = s:join_path(l:dir, l:ts . '.md')
 
   " 新ノートを先に作る（sync がリンク先を解決できるように）
-  call s:write_new_note(simple_yurii_note#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
+  " t は見出しの下に直接リンクを置くので、元のノートが日記なら「今日のノート」には重ねない
+  let s:diary_skip_from = (l:ch ==? 't') ? l:cur : ''
+  try
+    call s:write_new_note(simple_yurii_note#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
+  finally
+    let s:diary_skip_from = ''
+  endtry
 
   let l:link = '[' . l:ts . '](' . l:ts . '.md)'
   let l:added = 0
@@ -12180,6 +12185,8 @@ endfunction
 " ---------------------------------------------------------------------------
 
 let s:diary_weekdays = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+" zn→t で作るノートの、リンクを置いた元のノート（日記の「今日のノート」に重ねない判定用）
+let s:diary_skip_from = ''
 
 function! s:diary_state_path() abort
   return s:state_dir() . s:sep() . 'diary_days.json'
@@ -12187,7 +12194,7 @@ endfunction
 
 " {'days': {日付: 日記のファイル名}, 'notes': {ノートのファイル名: 入れた日記のファイル名}}
 function! s:diary_state_read() abort
-  let l:st = {'days': {}, 'notes': {}, 'backfilled': 0}
+  let l:st = {'days': {}, 'notes': {}, 'backfilled': 0, 'no_list': {}}
   let l:p = s:diary_state_path()
   if filereadable(l:p)
     try
@@ -12196,6 +12203,7 @@ function! s:diary_state_read() abort
         let l:st.days = get(l:d, 'days', {})
         let l:st.notes = get(l:d, 'notes', {})
         let l:st.backfilled = get(l:d, 'backfilled', 0)
+        let l:st.no_list = get(l:d, 'no_list', {})
       endif
     catch
     endtry
@@ -12615,6 +12623,14 @@ function! s:diary_place(path, ...) abort
   let l:date = empty(l:tdate) ? s:diary_day_of_time(l:head.time) : l:tdate
   let l:notes = s:diary_scan(l:root)
   let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
+  " zn→t: 日記の見出しの下に直接リンクを置いたノートは、同じ日記の「今日のノート」には
+  " 重ねて載せない（見出しの下だけで十分）。\ua の足し直しでも戻らないよう記録する。
+  if !empty(l:diary) && !empty(s:diary_skip_from)
+        \ && fnamemodify(l:dir . '/' . l:diary, ':p') ==# fnamemodify(s:diary_skip_from, ':p')
+    let l:st.no_list[l:tail] = 1
+    call s:diary_state_write(l:st)
+    return
+  endif
   if empty(l:diary)
     " 日記が見つからない日に、題が日付で始まる別のノート（昔の日記など）があるときは、
     " 重複した日記を作らない。:YuriiDiaryAdopt でその日記を登録すると使える。
@@ -12758,6 +12774,7 @@ function! s:diary_backfill(root, st, notes) abort
     if l:n.group || index(l:diaries, l:n.file) >= 0
           \ || index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:n.file) >= 0
           \ || s:diary_is_diary_title(l:n.title) || empty(l:n.title) && empty(l:n.time)
+          \ || has_key(get(a:st, 'no_list', {}), l:n.file)
       continue
     endif
     let l:tdate = s:diary_title_date(l:n.title)
