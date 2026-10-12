@@ -966,7 +966,7 @@ function! s:guide_template() abort
         \ '- `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加',
         \ '- `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）',
         \ '- `\i` … `index.md` を開く ・ `\A` … ノートアプリ（Electron / ブラウザ）',
-        \ '- `\d` … 今日の日記を開く（無ければ作る。`:YuriiToday`）。日記の「今日のノート」には、作ったノートが自動で入る（`\ua` の最初の1回で過去分もさかのぼって入る。`:YuriiDiaryBackfill`で再実行・`:YuriiDiaryAdopt` で今のノートをその日付の日記に登録）',
+        \ '- `\d` … 今日の日記を開く（無ければ作る。`:YuriiToday`）。日記の「今日のノート」には、作ったノートが自動で入る（`\ua` の最初の1回で過去分もさかのぼって入る。`:SimpleDiaryUpdate` で日記をまとめて更新・`:YuriiDiaryAdopt` で今のノートをその日付の日記に登録）',
         \ '- `\I` … 画像記法のサイズ変更（ビジュアルは選択範囲。旧 `\i`）',
         \ '',
         \ '## 展開・画像・その他',
@@ -12366,6 +12366,28 @@ endfunction
 " a:section が空なら本文の最後（### Parent の直前）に足す。あれば `## 節` に足す。
 " 重複判定は同じ節の中だけ（文中にあっても節に足す）。
 function! s:diary_op_add(link, section, lines) abort
+  let l:lines = s:diary_op_add_raw(a:link, a:section, a:lines)
+  return empty(a:section) ? l:lines : s:diary_section_blank(l:lines, a:section)
+endfunction
+
+" `## 節` の見出しと最初のリンクの間に空行を 1 つ空ける（すでに空行があれば何もしない）。
+" 見出しの直後が空行・次の見出し・節の終わりなら触らない。
+function! s:diary_section_blank(lines, section) abort
+  let l:lines = copy(a:lines)
+  let l:p = index(l:lines, s:v2_up_mark)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  let l:h = index(l:lines[0 : l:end - 1], '## ' . a:section)
+  if l:h >= 0 && l:h + 1 < l:end && trim(l:lines[l:h + 1]) !=# '' && l:lines[l:h + 1] !~# '^#'
+    call insert(l:lines, '', l:h + 1)
+  endif
+  return l:lines
+endfunction
+
+function! s:diary_section_blank_op(section, lines) abort
+  return s:diary_section_blank(a:lines, a:section)
+endfunction
+
+function! s:diary_op_add_raw(link, section, lines) abort
   let l:lines = copy(a:lines)
   let l:tgt = matchstr(a:link, '](\zs[^)]*\ze)')
   let l:p = index(l:lines, s:v2_up_mark)
@@ -12779,7 +12801,7 @@ function! s:diary_adopt_all() abort
     endif
   endfor
   " さかのぼって入れるのは最初の 1 回だけ。以後は作成時に入る（\ua では全体を見直さない）。
-  " もう一度やりたいときは :YuriiDiaryBackfill。
+  " もう一度やりたいときは :SimpleDiaryUpdate。
   let l:filled = 0
   if !l:st.backfilled
     let l:filled = s:diary_backfill(l:root, l:st, l:notes)
@@ -12877,17 +12899,30 @@ function! s:diary_adopt_all_safe() abort
   endtry
 endfunction
 
-" :YuriiDiaryBackfill … 日記の「今日のノート」へ、入っていないノートを全部さかのぼって足し直す
-function! simple_yurii_note#diary_backfill() abort
+" :SimpleDiaryUpdate … 日記まわりをまとめて更新する。
+"   1. 日付で始まる題のノートを日記として登録する（\ua と同じ。曖昧な日は登録しない）
+"   2. 日記が無い日を作り、「今日のノート」に入っていないノートを全部さかのぼって入れる
+"      （zn→t で見出しの下に置いたノートは入れない）
+"   3. 全日記の「今日のノート」の見出しとリンクの間に空行を 1 つ空ける
+function! simple_yurii_note#diary_update() abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
     return
   endif
+  call s:diary_adopt_all_safe()
   let l:st = s:diary_state_read()
   let l:n = s:diary_backfill(l:root, l:st, s:diary_scan(l:root))
   let l:st.backfilled = 1
+  let l:sec = get(g:, 'simple_yurii_note_diary_section', '今日のノート')
+  let l:dir = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:fmt = 0
+  for l:f in uniq(sort(values(l:st.days)))
+    if filereadable(l:dir . '/' . l:f)
+      let l:fmt += s:diary_edit_file(l:dir . '/' . l:f, function('s:diary_section_blank_op', [l:sec]))
+    endif
+  endfor
   call s:diary_state_write(l:st)
-  echo 'simple_yurii_note: 「今日のノート」を ' . l:n . ' 日分更新'
+  echo 'simple_yurii_note: 日記を更新（「今日のノート」に追加 ' . l:n . ' 日分・体裁を整えた日記 ' . l:fmt . ' 件）'
 endfunction
 
 " \d / :YuriiToday … 今日の日記を開く。無ければ作る（日付が変わる時刻は diary_day_start_hour）。
