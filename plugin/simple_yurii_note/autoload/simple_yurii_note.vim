@@ -12168,8 +12168,11 @@ function! s:diary_link(file, title) abort
 endfunction
 
 " Parent の節に親リンクを 1 本入れた新規ノートの内容
-function! s:diary_new_lines(title, is_group, parent_link) abort
+function! s:diary_new_lines(title, is_group, parent_link, ...) abort
   let l:lines = simple_yurii_note#note_template(a:title, a:is_group)
+  if a:0 > 0
+    call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
+  endif
   if !empty(a:parent_link)
     let l:p = index(l:lines, s:v2_up_mark)
     call insert(l:lines, a:parent_link, l:p >= 0 ? l:p + 1 : len(l:lines))
@@ -12310,7 +12313,7 @@ endfunction
 
 " その日の日記を作る。月グループ（YYYY-MM）の本文にも足す。月グループが無ければ、
 " グループ「日記」があればその下に月グループも作る。作った日記のファイル名を返す。
-function! s:diary_create(root, date, notes) abort
+function! s:diary_create(root, date, notes, ...) abort
   let l:dir = fnamemodify(a:root, ':p')
   let l:title = a:date . '-' . s:diary_weekday(a:date) . '-'
   let l:month = a:date[0 : 6]
@@ -12319,13 +12322,14 @@ function! s:diary_create(root, date, notes) abort
     let l:top = s:diary_find_group(a:notes, '日記')
     if !empty(l:top)
       let l:mg = s:diary_new_filename(a:root)
-      call s:syn_writefile(s:diary_new_lines(l:month, 1, s:diary_link(l:top, '日記')), l:dir . l:mg)
+      call s:syn_writefile(call('s:diary_new_lines', [l:month, 1, s:diary_link(l:top, '日記')] + a:000), l:dir . l:mg)
       call s:diary_edit_file(l:dir . l:top, function('s:diary_op_add', [s:diary_link(l:mg, l:month), '']))
+      call add(a:notes, {'file': l:mg, 'title': l:month, 'group': 1, 'time': ''})
     endif
   endif
   let l:file = s:diary_new_filename(a:root)
   let l:parent = empty(l:mg) ? '' : s:diary_link(l:mg, l:month)
-  call s:syn_writefile(s:diary_new_lines(l:title, 0, l:parent), l:dir . l:file)
+  call s:syn_writefile(call('s:diary_new_lines', [l:title, 0, l:parent] + a:000), l:dir . l:file)
   if !empty(l:mg)
     call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
   endif
@@ -12500,6 +12504,8 @@ function! s:diary_backfill(root, st, notes) abort
   " 記録（st.notes）に有るかどうかではなく、日記の節に実際にリンクがあるかで判断する
   " （別の Vim の古いバッファの保存などで節から消えていても、\ua で戻る）。
   let l:per = {}
+  let l:skip = {}
+  let l:made = 0
   for l:n in a:notes
     if l:n.group || index(l:diaries, l:n.file) >= 0
           \ || index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:n.file) >= 0
@@ -12512,6 +12518,19 @@ function! s:diary_backfill(root, st, notes) abort
       continue
     endif
     let l:diary = s:diary_find(a:root, l:date, a:st, a:notes)
+    if empty(l:diary) && !has_key(l:skip, l:date)
+      " 日記の無い日は作る。ただし、その日付で始まる題の別のノート（日記かもしれないもの）
+      " があるときは重複を避けて作らない（そのノートで :YuriiDiaryAdopt）。
+      let l:cand = filter(copy(a:notes), {_, m -> !m.group && m.file !=# l:n.file
+            \ && m.title =~# '^' . l:date . '-' && !has_key(a:st.notes, m.file)})
+      if empty(l:cand)
+        let l:diary = s:diary_create(a:root, l:date, a:notes, l:date . ' 00:00:00')
+        let a:st.days[l:date] = l:diary
+        let l:made += 1
+      else
+        let l:skip[l:date] = 1
+      endif
+    endif
     if empty(l:diary) || l:diary ==# l:n.file
       continue
     endif
@@ -12533,6 +12552,9 @@ function! s:diary_backfill(root, st, notes) abort
       let a:st.notes[l:it[0]] = l:diary
     endfor
   endfor
+  if l:made > 0
+    echom 'simple_yurii_note: 日記を ' . l:made . ' 日分作りました'
+  endif
   return l:n_added
 endfunction
 
