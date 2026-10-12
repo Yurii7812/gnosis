@@ -1404,6 +1404,41 @@ def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict) ->
     return out
 
 
+def _separate_parent_groups(lines: list[str], kind_of) -> list[str]:
+    """Parent の並び規則: グループのリンク行は上、普通のノートのリンク行は下。
+
+    - 分離だけを強制する。文字・空行・並び替えは自由に残る（リンク以外の行は動かさない）。
+    - グループの行が最初のノートの行より下にあれば、グループの塊の末尾へ引き上げる
+      （グループが無ければ最初のノートの行の位置へ）。引き上げる順序は元のまま。
+    - 最後のグループの行と最初のノートの行の間に空行が 1 つも無ければ 1 つ入れる。
+    - どちらかが無いときは何もしない。
+
+    kind_of(行) は、グループへのリンク行なら True、普通のノートへのリンク行なら False、
+    それ以外（文字・空行・ノート以外へのリンク）なら None を返す。冪等。
+    """
+    kinds = [kind_of(ln) for ln in lines]
+    g_idx = [i for i, k in enumerate(kinds) if k is True]
+    n_idx = [i for i, k in enumerate(kinds) if k is False]
+    if not g_idx or not n_idx:
+        return lines
+    out = list(lines)
+    first_n = n_idx[0]
+    stray = [i for i in g_idx if i > first_n]
+    if stray:
+        moved = [out[i] for i in stray]
+        for i in reversed(stray):
+            del out[i]
+        before = [i for i in g_idx if i < first_n]
+        at = before[-1] + 1 if before else first_n
+        out[at:at] = moved
+    kinds = [kind_of(ln) for ln in out]
+    last_g = max(i for i, k in enumerate(kinds) if k is True)
+    first_n = min(i for i, k in enumerate(kinds) if k is False)
+    if not any(ln.strip() == "" for ln in out[last_g + 1:first_n]):
+        out.insert(first_n, "")
+    return out
+
+
 def _prune_dangling(lines: list[str], path: Path, resolver) -> list[str]:
     """存在しない .md へのリンクを掃除する（消えたファイルの残骸を消す）。
 
@@ -1721,6 +1756,17 @@ def simple_sync(root) -> int:
                 continue
             parent_set.add(s)
             parent_lines.append(f"[{titles[s]}]({_rel(p.parent, s)})")
+
+        # Parent の並び: グループは上、普通のノートは下（間に空行）。分離だけを強制し、
+        # それ以外（文字・空行・並び替え）は自由に残す。
+        def _parent_kind(ln: str, p=p):
+            if not _SIMPLE_LINK_LINE_RE.match(ln):
+                return None
+            tg = _link_target(ln)
+            rp = res(tg, dirs[p]) if tg else None
+            return None if rp is None else rp in group_set
+
+        parent_lines = _separate_parent_groups(parent_lines, _parent_kind)
         existing_back: list[Path] = []
         for _d, tg in _links_from(n["back"]):
             rp = res(tg, dirs[p])

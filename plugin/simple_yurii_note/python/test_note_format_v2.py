@@ -1134,6 +1134,109 @@ def test_simple_sync_backlink_has_no_fragment() -> None:
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
+def _parent_region(text: str) -> list[str]:
+    lines = text.split("\n")
+    s = lines.index(UP_MARK) + 1
+    e = next((i for i in range(s, len(lines)) if lines[i].startswith("### ")), len(lines))
+    return lines[s:e]
+
+
+def _sep_vault(root: Path, parent_body: str) -> None:
+    """index.md + group G(group.md) + 普通のノート N1/N2 + 検証対象 X(x.md)。X の Parent を parent_body にする。"""
+    (root / "index.md").write_text(
+        "---\ntime: 2026-01-01 00:00:00\ntitle: Index\n---\n\n# Index\n", encoding="utf-8")
+    (root / "g.md").write_text(
+        "---\ntime: 2026-01-01 00:00:00\ntitle: G\nattribute: group\n---\n\n# G\n\n"
+        f"{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+    (root / "g2.md").write_text(
+        "---\ntime: 2026-01-01 00:00:00\ntitle: G2\nattribute: group\n---\n\n# G2\n\n"
+        f"{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+    _plain_note(root / "n1.md", "N1", "")
+    _plain_note(root / "n2.md", "N2", "")
+    (root / "x.md").write_text(
+        "---\ntime: 2026-01-01 00:00:00\ntitle: X\n---\n\n# X\n\n本文。\n\n"
+        f"{UP_MARK}\n{parent_body}{DOWN_MARK}\n", encoding="utf-8")
+
+
+def test_simple_sync_parent_separates_group_above_notes() -> None:
+    print("simple_sync: Parent は グループ が上、普通のノート が下（間に空行）")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[N1](n1.md)\n[G](g.md)\n[N2](n2.md)\n[G2](g2.md)\n")
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[G](g.md)", "[G2](g2.md)", "", "[N1](n1.md)", "[N2](n2.md)"],
+              f"グループが上・空行・ノートが下（元の順序は保つ）: {region}")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+
+
+def test_simple_sync_parent_inserts_blank_between_group_and_notes() -> None:
+    print("simple_sync: グループとノートの間に空行が無ければ 1 つ入れる")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[G](g.md)\n[N1](n1.md)\n")
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[G](g.md)", "", "[N1](n1.md)"], f"空行が入る: {region}")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+
+
+def test_simple_sync_parent_keeps_free_text_and_extra_blanks() -> None:
+    print("simple_sync: 分離以外（文字・空行・並び替え）は自由に残る")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        body = "メモ\n[G](g.md)\n\n\n途中の文字\n[N2](n2.md)\n[N1](n1.md)\n"
+        _sep_vault(root, body)
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["メモ", "[G](g.md)", "", "", "途中の文字", "[N2](n2.md)", "[N1](n1.md)"],
+              f"既に分離済みなら一切触らない（文字・複数の空行・ノートの並びはそのまま）: {region}")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+
+
+def test_simple_sync_parent_moves_only_stray_groups() -> None:
+    print("simple_sync: 下にはみ出たグループだけを引き上げる（文字は動かさない）")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        body = "[G](g.md)\n\n[N1](n1.md)\n手書きメモ\n[G2](g2.md)\n"
+        _sep_vault(root, body)
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[G](g.md)", "[G2](g2.md)", "", "[N1](n1.md)", "手書きメモ"],
+              f"G2 だけが G の塊へ上がる: {region}")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+
+
+def test_simple_sync_parent_only_notes_or_only_groups_untouched() -> None:
+    print("simple_sync: グループだけ／ノートだけの Parent には何もしない")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[N2](n2.md)\n\n[N1](n1.md)\n")
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[N2](n2.md)", "", "[N1](n1.md)"], f"ノートだけ: {region}")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[G2](g2.md)\n[G](g.md)\n")
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[G2](g2.md)", "[G](g.md)"], f"グループだけ: {region}")
+
+
+def test_simple_sync_parent_auto_group_goes_above_notes() -> None:
+    print("simple_sync: グループの本文リンクで自動で入る Parent も上に分離される")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[N1](n1.md)\n")
+        (root / "g.md").write_text(
+            "---\ntime: 2026-01-01 00:00:00\ntitle: G\nattribute: group\n---\n\n# G\n\n"
+            f"[X](x.md)\n\n{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+        v2.simple_sync(root)
+        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
+        check(region == ["[G](g.md)", "", "[N1](n1.md)"], f"自動で入る G は N1 より上: {region}")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
