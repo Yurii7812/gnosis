@@ -2419,7 +2419,7 @@ function! s:byte_next(line, col) abort
   return a:col + strlen(matchstr(strpart(a:line, a:col - 1), '^.'))
 endfunction
 
-" ←/→ 用の左右移動。conceal で隠れた範囲（[ と ](url)）の上には Vim は
+" ←/→ と h/l 用の左右移動（カウント対応）。conceal で隠れた範囲（[ と ](url)）の上には Vim は
 " カーソルを表示できず（:h concealcursor "cursor position is not always where
 " it's displayed"）、素の l/h では表示カーソルが止まって「動けない」ように
 " 見える。隠れた範囲はまとめて飛び越え、表示されている文字（リンクなら
@@ -2430,7 +2430,17 @@ endfunction
 " そのため隠れた文字から右へ1文字ぶん動かしても画面は動かない（Tab でリンクに
 " 乗った直後の ←/→ が「1回無反応」に見える原因）。隠れた文字から右へは、
 " 画面で1つ動いて見えるよう可視文字を1つ先まで進める。
-function! simple_yurii_note#move_visible(dir) abort
+function! simple_yurii_note#move_visible(dir, ...) abort
+  for l:i in range(a:0 > 0 ? max([a:1, 1]) : 1)
+    let l:before = [line('.'), col('.')]
+    call s:move_visible_once(a:dir)
+    if [line('.'), col('.')] ==# l:before
+      break
+    endif
+  endfor
+endfunction
+
+function! s:move_visible_once(dir) abort
   if &l:conceallevel == 0
     execute 'normal! ' . (a:dir > 0 ? 'l' : 'h')
     return
@@ -2443,7 +2453,9 @@ function! simple_yurii_note#move_visible(dir) abort
   let l:col = col('.')
   let l:on_concealed = synconcealed(l:lnum, l:col)[0]
   if a:dir > 0
-    let l:col += 1
+    " 次の「文字」の先頭へ（col + 1 だと日本語などマルチバイト文字の途中を
+    " 指し、直後の隠れた [ を見逃して [ の上に止まる＝余計に1回押す羽目になる）
+    let l:col = s:byte_next(getline(l:lnum), l:col)
     if l:col > l:last || !synconcealed(l:lnum, l:col)[0]
       if !l:on_concealed
         execute 'normal! l'

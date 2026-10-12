@@ -610,7 +610,7 @@ endfunction
 "   [テキスト](url)  →  テキスト  のみ表示
 "   ノーマルモードではカーソル行でも中身を隠す（concealcursor=n）。
 "   挿入モード（とビジュアル/選択）ではカーソル行を展開し、中身が見える。
-"   隠れた範囲の上にはカーソルを表示できないため、←/→ は隠れた範囲を
+"   隠れた範囲の上にはカーソルを表示できないため、←/→ と h/l は隠れた範囲を
 "   まとめて飛び越える（simple_yurii_note#move_visible）。
 " ---------------------------------------------------------------------------
 
@@ -641,8 +641,10 @@ function! s:setup_conceal() abort
     " 見える。隠れた範囲の上では素の ←/→ が止まって見えるため、
     " move_visible で隠れた範囲をまとめて飛び越える。
     setlocal concealcursor=n
-    nnoremap <buffer><silent> <Right> <Cmd>call simple_yurii_note#move_visible(1)<CR>
-    nnoremap <buffer><silent> <Left>  <Cmd>call simple_yurii_note#move_visible(0)<CR>
+    nnoremap <buffer><silent> <Right> :<C-u>call simple_yurii_note#move_visible(1, v:count1)<CR>
+    nnoremap <buffer><silent> <Left>  :<C-u>call simple_yurii_note#move_visible(0, v:count1)<CR>
+    nnoremap <buffer><silent> l :<C-u>call simple_yurii_note#move_visible(1, v:count1)<CR>
+    nnoremap <buffer><silent> h :<C-u>call simple_yurii_note#move_visible(0, v:count1)<CR>
     " conceal + linebreak の組み合わせで、隠した URL 部分を基準に不自然な折返しが
     " 発生しやすいため、markdown では行折返しを通常の wrap に戻す。
     setlocal nolinebreak
@@ -651,6 +653,8 @@ function! s:setup_conceal() abort
     setlocal concealcursor=
     silent! nunmap <buffer> <Left>
     silent! nunmap <buffer> <Right>
+    silent! nunmap <buffer> h
+    silent! nunmap <buffer> l
     setlocal linebreak
   endif
 
