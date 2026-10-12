@@ -12094,7 +12094,7 @@ function! s:diary_head(lines) abort
 endfunction
 
 function! s:diary_is_diary_title(title) abort
-  return a:title =~# '^\d\{4}-\d\{2}-\d\{2}-\u\u-$'
+  return a:title =~# '^\d\{4}-\d\{2}-\d\{2}-\u\u-\=$'
 endfunction
 
 " 日記以外で、題が日付で始まるもの → その日付。違えば ''
@@ -12317,7 +12317,7 @@ endfunction
 " グループ「日記」があればその下に月グループも作る。作った日記のファイル名を返す。
 function! s:diary_create(root, date, notes, ...) abort
   let l:dir = fnamemodify(a:root, ':p')
-  let l:title = a:date . '-' . s:diary_weekday(a:date) . '-'
+  let l:title = a:date . '-' . s:diary_weekday(a:date)
   let l:month = a:date[0 : 6]
   let l:mg = s:diary_find_group(a:notes, l:month)
   if empty(l:mg)
