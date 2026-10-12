@@ -156,6 +156,7 @@ endif
 " コマンド定義
 " ---------------------------------------------------------------------------
 
+command!          YuriiToday call simple_yurii_note#diary_today()
 command!          YuriiDiaryAdopt call simple_yurii_note#diary_adopt()
 command!          YuriiDiaryBackfill call simple_yurii_note#diary_backfill()
 command! -nargs=? UpdateMD   call simple_yurii_note#update_md(<q-args>)
@@ -315,6 +316,7 @@ nnoremap <silent> \tac :TAC<CR>
 nnoremap <silent> \tdr :TDR<CR>
 nnoremap <silent> \tdc :TDC<CR>
 nnoremap <silent> \ua  :UpdateAll<CR>
+nnoremap <silent> \d   <Cmd>call simple_yurii_note#diary_today()<CR>
 
 nnoremap <silent> \se  <Cmd>call <SID>expand_s_and_open()<CR>
 nnoremap <nowait> <silent> mp  <Cmd>call simple_yurii_note#rename_prefix()<CR>

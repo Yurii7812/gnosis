@@ -904,6 +904,7 @@ function! s:guide_template() abort
         \ '- `za` … リンク 1 本を今のノートに追加（`h`=カーソル直下 / `Enter`=本文の最後 / `p`=Parent末尾 / `r`=Related）',
         \ '- `zA` … `za` と同じだが、追加前に**表示名**を入力する（空 Enter / Esc で中止）',
         \ '- `zp` … `za` と同じ追加＋今のノートを相手の Parent に書く',
+        \ '- `zap` … カーソル下（無ければクリップボード）のリンクを、今のノートの Parent の最後に足す（`za` → `p` と同じ。本文に同じリンクがあっても足す）',
         \ '- 関連: `za` 等で `r` を押すと `### Related` に**相互追加**（両ノートに。セクションはこの時だけ作る。片側で消すと次回同期で両方から消える。BackLink には出ない）',
         \ '- `\P` … カーソル下リンクの Parent に今のノートを確認なしで追加',
         \ '- クリップボードを関係付きで追加: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc`（`\ca`= `ca`、`\at`= `at` の逆方向）',
@@ -929,6 +930,7 @@ function! s:guide_template() abort
         \ '- `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加',
         \ '- `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）',
         \ '- `\i` … `index.md` を開く ・ `\A` … ノートアプリ（Electron / ブラウザ）',
+        \ '- `\d` … 今日の日記を開く（無ければ作る。`:YuriiToday`）。日記の「今日のノート」には、作ったノートが自動で入る（`\ua` の最初の1回で過去分もさかのぼって入る。`:YuriiDiaryBackfill`で再実行・`:YuriiDiaryAdopt` で今のノートをその日付の日記に登録）',
         \ '- `\I` … 画像記法のサイズ変更（ビジュアルは選択範囲。旧 `\i`）',
         \ '',
         \ '## 展開・画像・その他',
@@ -12586,4 +12588,36 @@ function! simple_yurii_note#diary_backfill() abort
   let l:st.backfilled = 1
   call s:diary_state_write(l:st)
   echo 'simple_yurii_note: 「今日のノート」を ' . l:n . ' 日分更新'
+endfunction
+
+" \d / :YuriiToday … 今日の日記を開く。無ければ作る（日付が変わる時刻は diary_day_start_hour）。
+function! simple_yurii_note#diary_today() abort
+  let l:root = simple_yurii_note#ensure_root_and_index()
+  if empty(l:root)
+    return
+  endif
+  let l:dir = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:date = s:diary_day_of_time('')
+  let l:st = s:diary_state_read()
+  let l:notes = s:diary_scan(l:root)
+  let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
+  if empty(l:diary)
+    for l:n in l:notes
+      if !l:n.group && l:n.title =~# '^' . l:date . '-' && !s:diary_is_diary_title(l:n.title)
+        echohl WarningMsg
+        echo 'simple_yurii_note: ' . l:date . ' の日記が見つかりません（' . l:n.file
+              \ . ' が日付で始まっています）。日記なら、そのノートで :YuriiDiaryAdopt'
+        echohl NONE
+        return
+      endif
+    endfor
+    let l:diary = s:diary_create(l:root, l:date, l:notes)
+    let l:st.days[l:date] = l:diary
+    call s:diary_state_write(l:st)
+  endif
+  if fnamemodify(expand('%:p'), ':t') ==# l:diary
+    return
+  endif
+  call simple_yurii_note#push_history()
+  execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
 endfunction
