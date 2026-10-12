@@ -243,8 +243,10 @@ endfunction
 " タイトルと同じ H1・システム見出し（Parent/Related/BackLink 等）・
 " コードフェンス内は一覧に出さない。ただしスラッグの重複番号は GitHub と
 " 同じになるよう、一覧に出さない見出しも含めてファイル順で数える。
-function! s:file_heading_items(path) abort
-  if !filereadable(a:path)
+function! s:file_heading_items(path, ...) abort
+  " a:1 … ファイルではなくこの行リストを読む（未保存のバッファ用）
+  let l:src = a:0 > 0 ? a:1 : (filereadable(a:path) ? readfile(a:path) : [])
+  if empty(l:src)
     return []
   endif
   let l:title = s:get_yaml_title(a:path)
@@ -255,15 +257,22 @@ function! s:file_heading_items(path) abort
   let l:seen = {}
   let l:in_fence = 0
   let l:lnum = 0
-  for l:line in readfile(a:path)
+  " body … 見出しの直下から**次の見出し（レベル問わず）の手前**までの本文を1行に
+  " 潰したもの。検索で「見出しを優先しつつ、その下の文章にもヒットさせる」ために使う。
+  let l:cur = {}
+  for l:line in l:src
     let l:lnum += 1
     if l:line =~# '^\s*```'
       let l:in_fence = !l:in_fence
       continue
     endif
     if l:in_fence || l:line !~# '^\s*#\+\s\+'
+      if !empty(l:cur) && strchars(l:cur.body) < 400 && trim(l:line) !=# ''
+        let l:cur.body .= (empty(l:cur.body) ? '' : ' ') . trim(l:line)
+      endif
       continue
     endif
+    let l:cur = {}
     let l:level = strlen(matchstr(l:line, '^#\+'))
     let l:text = trim(substitute(l:line, '^\s*#\+\s\+', '', ''))
     if empty(l:text)
@@ -276,9 +285,21 @@ function! s:file_heading_items(path) abort
     if s:is_known_section_header_text(l:text)
       continue
     endif
-    call add(l:items, {'text': l:text, 'slug': l:slug, 'level': l:level, 'lnum': l:lnum})
+    let l:cur = {'text': l:text, 'slug': l:slug, 'level': l:level, 'lnum': l:lnum, 'body': ''}
+    call add(l:items, l:cur)
   endfor
   return l:items
+endfunction
+
+" 見出しの一覧表示（fzf の検索対象）。見出しを先頭に置き、その下の本文を
+" 後ろに足す。fzf は行頭・単語境界の一致を高く採点するので、見出しに当たる
+" 候補が上、本文だけに当たる候補が下に並ぶ（見出し優先）。
+function! s:heading_display(it) abort
+  let l:s = repeat('#', a:it.level) . ' ' . a:it.text
+  if !empty(get(a:it, 'body', ''))
+    let l:s .= '  │ ' . a:it.body
+  endif
+  return l:s
 endfunction
 
 " fragment（スラッグ or 生見出し or HTML アンカー）の行へジャンプ。
@@ -3020,6 +3041,28 @@ function! s:rlp_match(hay) abort
   return 1
 endfunction
 
+" リンク先ノートの全文（小文字・空白を潰した1行）。検索のたびに読まないよう
+" パスごとにキャッシュする。.md 以外・読めないものは空。
+let s:rlp_body_cache = {}
+function! s:rlp_link_body(it) abort
+  let l:p = s:resolve_link_for_navigation(a:it.target, s:rlp_base)
+  if !has_key(s:rlp_body_cache, l:p)
+    let s:rlp_body_cache[l:p] = (s:is_markdown_file(l:p) && filereadable(l:p))
+          \ ? tolower(substitute(join(readfile(l:p), ' '), '\s\+', ' ', 'g')) : ''
+  endif
+  return s:rlp_body_cache[l:p]
+endfunction
+
+function! s:rlp_body_match(it) abort
+  if empty(s:rlp_terms) | return 0 | endif
+  let l:b = s:rlp_link_body(a:it)
+  if empty(l:b) | return 0 | endif
+  for l:t in s:rlp_terms
+    if stridx(l:b, l:t) < 0 | return 0 | endif
+  endfor
+  return 1
+endfunction
+
 function! s:rlp_build_local() abort
   let l:items = []
   if !empty(s:rlp_path) && filereadable(s:rlp_path)
@@ -3028,7 +3071,13 @@ function! s:rlp_build_local() abort
   endif
   for [l:key, l:title] in [['body', '文中'], ['up', 'こっちにとって'], ['down', 'そっちにとって']]
     let l:g = get(s:rlp_groups, l:key, [])
+    " リンクの表示名に当たるものを先に、表示名には当たらずリンク先の全文だけに
+    " 当たるものをその後ろに並べる（それぞれ元の並びを保つ）。
     let l:hit = filter(copy(l:g), 's:rlp_match(v:val.label . " " . v:val.text)')
+    if !empty(s:rlp_terms)
+      let l:hit += filter(copy(l:g),
+            \ '!s:rlp_match(v:val.label . " " . v:val.text) && s:rlp_body_match(v:val)')
+    endif
     if empty(l:hit) | continue | endif
     call add(l:items, {'sep': 1, 'title': l:title})
     for l:x in l:hit
@@ -3041,13 +3090,18 @@ function! s:rlp_build_local() abort
 endfunction
 
 function! s:rlp_build_global() abort
+  " タイトルに当たるものを先に、本文だけに当たるものをその後ろに並べる。
+  " それぞれ索引の並び（最近訪問した順）を保つ。
   let l:items = []
+  let l:rest = []
   for l:c in s:rlp_cands
-    if s:rlp_match(l:c.t . ' ' . l:c.b)
+    if s:rlp_match(l:c.t)
       call add(l:items, {'kind': 'note', 'path': l:c.p, 'text': l:c.t, 'label': ''})
+    elseif s:rlp_match(l:c.t . ' ' . l:c.b)
+      call add(l:rest, {'kind': 'note', 'path': l:c.p, 'text': l:c.t, 'label': ''})
     endif
   endfor
-  return l:items
+  return l:items + l:rest
 endfunction
 
 function! s:rlp_refresh() abort
@@ -3765,6 +3819,7 @@ function! simple_yurii_note#note_navigator(scope) abort
 
   let s:rlp_origin = {'bufnr': bufnr('%'), 'pos': getpos('.'), 'path': l:origin_path}
   let s:rlp_stack = []
+  let s:rlp_body_cache = {}
   let s:rlp_crumbs = [fnamemodify(l:origin_path, ':t:r')]
   let s:rlp_scope = 'local'
   let s:rlp_input = 0
@@ -6335,17 +6390,118 @@ function! s:v2_new_interactive(attr) abort
   if empty(l:cur)
     echohl WarningMsg | echo 'simple_yurii_note: 名前付きバッファで実行して' | echohl NONE | return
   endif
-  let l:cur_title = simple_yurii_note#current_title()
-  let l:dir = expand('%:p:h')
-  let l:ts  = simple_yurii_note#timestamp_filename()
-  let l:file = s:join_path(l:dir, l:ts . '.md')
-
-  echo 'h=カーソル直下 / Enter=本文の最後 / p=Parent末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)'
+  echo 'h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / p=Parent末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)'
   let l:ch = nr2char(getchar())
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
     echo 'simple_yurii_note: キャンセル' | return
   endif
+  if l:ch ==? 't'
+    " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
+    " 続きは s:v2_new_run をコールバックで呼ぶ。
+    call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
+    return
+  endif
+  call s:v2_new_run(a:attr, l:ch, 0)
+endfunction
+
+function! s:v2_new_run_t(attr, head_lnum) abort
+  call s:v2_new_run(a:attr, 't', a:head_lnum)
+endfunction
+
+" 見出し行 a:hl の本文の最後に、空行を挟んでリンクを置く。
+"   見出し本文
+"   (空行)
+"   リンク          ← ここ。直前がリンク行なら空行なしで並べる
+"   (空行)
+"   次の見出し
+function! s:insert_link_under_heading(hl, link) abort
+  let l:last = line('$')
+  let l:end = a:hl + 1
+  let l:in_fence = 0
+  while l:end <= l:last
+    let l:t = getline(l:end)
+    if l:t =~# '^\s*```'
+      let l:in_fence = !l:in_fence
+    elseif !l:in_fence && l:t =~# '^\s*#\+\s\+'
+      break
+    endif
+    let l:end += 1
+  endwhile
+  " 本文の最後の非空行 e（本文が空なら見出し行そのもの）
+  let l:e = l:end - 1
+  while l:e > a:hl && trim(getline(l:e)) ==# ''
+    let l:e -= 1
+  endwhile
+  let l:prev_link = l:e > a:hl && trim(getline(l:e)) =~# '\]\s*(\S\+)\s*$'
+  if l:end - 1 > l:e
+    silent execute 'keepjumps ' . (l:e + 1) . ',' . (l:end - 1) . 'delete _'
+  endif
+  let l:new = (l:prev_link ? [] : ['']) + [a:link]
+  if l:e + 1 <= line('$')
+    let l:new += ['']
+  endif
+  call append(l:e, l:new)
+endfunction
+
+" 今のノートの見出しを選ぶ（t モード）。選ばれた見出しの行番号で a:Cb を呼ぶ。
+" 検索は見出しを優先しつつ、その下の本文にもヒットする（zo と同じ）。
+function! s:outline_pick_here(Cb) abort
+  let l:path = expand('%:p')
+  let l:items = s:file_heading_items(l:path, getline(1, '$'))
+  if empty(l:items)
+    echo 'simple_yurii_note: 見出しがありません'
+    return
+  endif
+  let s:outline_pick_cb = a:Cb
+  if !exists('*fzf#run')
+    let l:choices = []
+    let l:i = 1
+    for l:it in l:items
+      call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
+      let l:i += 1
+    endfor
+    let l:sel = inputlist(l:choices)
+    if l:sel > 0 && l:sel <= len(l:items)
+      call s:outline_pick_done(l:items[l:sel - 1].lnum)
+    endif
+    return
+  endif
+  let l:source = []
+  for l:it in l:items
+    call add(l:source, s:heading_display(l:it)
+          \ . "\t" . l:it.slug . "\t" . l:path . "\t" . l:it.lnum)
+  endfor
+  call fzf#run(fzf#wrap({
+        \ 'source': l:source,
+        \ 'sink': function('s:outline_pick_sink'),
+        \ 'options': '--delimiter="\t" --with-nth=1 --no-multi'
+        \   . ' --prompt=' . shellescape('見出し> ')
+        \   . ' --preview "tail -n +{4} {3} 2>/dev/null | head -40"'
+        \   . ' --preview-window=right:50%',
+        \ }))
+endfunction
+
+function! s:outline_pick_sink(line) abort
+  call s:outline_pick_done(str2nr(get(split(a:line, "\t", 1), 3, '0')))
+endfunction
+
+function! s:outline_pick_done(lnum) abort
+  let l:Cb = s:outline_pick_cb
+  unlet s:outline_pick_cb
+  if a:lnum > 0
+    call call(l:Cb, [a:lnum])
+  endif
+endfunction
+
+" zn / zk の続き。a:ch は位置キー、a:head_lnum は t のときの見出し行。
+function! s:v2_new_run(attr, ch, head_lnum) abort
+  let l:ch = a:ch
+  let l:cur = expand('%:p')
+  let l:cur_title = simple_yurii_note#current_title()
+  let l:dir = expand('%:p:h')
+  let l:ts  = simple_yurii_note#timestamp_filename()
+  let l:file = s:join_path(l:dir, l:ts . '.md')
 
   " 新ノートを先に作る（sync がリンク先を解決できるように）
   call s:write_new_note(simple_yurii_note#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
@@ -6356,6 +6512,9 @@ function! s:v2_new_interactive(attr) abort
   setlocal noautoindent nosmartindent
   if l:ch ==? 'h'
     call append(line('.'), l:link)      " カーソル直下（本文）
+    let l:added = 1
+  elseif l:ch ==? 't'
+    call s:insert_link_under_heading(a:head_lnum, l:link)  " 見出しの本文の最後
     let l:added = 1
   elseif l:ch ==? 'p'
     " 今のノートの ### Parent 末尾に置く → 今のノートは**新ノートの子**。
@@ -7181,7 +7340,7 @@ function! simple_yurii_note#link_to_outline(...) abort
   let l:source = ['（見出しなし）']
   for l:it in l:items
     " 表示（検索対象）は見出しだけ。後ろのフィールドは sink と preview 用。
-    call add(l:source, repeat('#', l:it.level) . ' ' . l:it.text
+    call add(l:source, s:heading_display(l:it)
           \ . "\t" . l:it.slug . "\t" . l:path . "\t" . l:it.lnum)
   endfor
   call fzf#run(fzf#wrap({
