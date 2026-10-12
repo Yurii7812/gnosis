@@ -3044,6 +3044,7 @@ endfunction
 " リンク先ノートの全文（小文字・空白を潰した1行）。検索のたびに読まないよう
 " パスごとにキャッシュする。.md 以外・読めないものは空。
 let s:rlp_body_cache = {}
+let s:rlp_origin_names_cache = 0
 function! s:rlp_link_body(it) abort
   let l:p = s:resolve_link_for_navigation(a:it.target, s:rlp_base)
   if !has_key(s:rlp_body_cache, l:p)
@@ -3383,6 +3384,41 @@ function! s:rlp_render() abort
   call s:rlp_preview()
 endfunction
 
+" プレビュー見出しの名前。ノートのタイトルではなく、**そのページでのリンクの表示名**を
+" 出す。ローカルのリンク行は行自身の表示名。全ノート検索の行は、最初に開いた
+" ページ（s:rlp_origin）にそのノートへのリンクがあればその表示名、無ければタイトル。
+function! s:rlp_preview_name(it, path) abort
+  if get(a:it, 'kind', '') ==# 'link' && !empty(get(a:it, 'text', ''))
+    return a:it.text
+  endif
+  if get(a:it, 'kind', '') ==# 'note' && get(s:rlp_origin, 'bufnr', -1) > 0
+    let l:name = get(s:rlp_origin_names(), fnamemodify(a:path, ':p'), '')
+    if !empty(l:name) | return l:name | endif
+  endif
+  return s:get_title(a:path)
+endfunction
+
+" 最初に開いたページのリンク先（絶対パス）→ 表示名。popup を開いている間だけ使うので
+" ナビゲータ起動時に s:rlp_origin_names_cache をリセットする。
+function! s:rlp_origin_names() abort
+  if s:rlp_origin_names_cache isnot 0
+    return s:rlp_origin_names_cache
+  endif
+  let l:m = {}
+  let l:base = fnamemodify(get(s:rlp_origin, 'path', ''), ':h')
+  let l:g = s:space_collect(getbufline(s:rlp_origin.bufnr, 1, '$'), l:base)
+  for l:key in ['body', 'up', 'down']
+    for l:x in get(l:g, l:key, [])
+      let l:p = fnamemodify(s:resolve_link_for_navigation(l:x.target, l:base), ':p')
+      if !has_key(l:m, l:p) && !empty(l:x.text)
+        let l:m[l:p] = l:x.text
+      endif
+    endfor
+  endfor
+  let s:rlp_origin_names_cache = l:m
+  return l:m
+endfunction
+
 function! s:rlp_preview() abort
   if s:rlp_pvwin < 0 | return | endif
   let l:it = s:rlp_sel_item()
@@ -3411,7 +3447,7 @@ function! s:rlp_preview() abort
   while !empty(l:body) && l:body[0] =~# '^\s*$'
     call remove(l:body, 0)
   endwhile
-  let l:head = s:get_title(l:path) . '   ' . fnamemodify(l:path, ':t')
+  let l:head = s:rlp_preview_name(l:it, l:path) . '   ' . fnamemodify(l:path, ':t')
   let l:rule = repeat('─', max([get(s:rlp_geo, 'pv_w', 46) - 2, 10]))
 
   " 検索語を強調し、最初のヒット行が見えるところまでスクロールする。
@@ -3820,6 +3856,7 @@ function! simple_yurii_note#note_navigator(scope) abort
   let s:rlp_origin = {'bufnr': bufnr('%'), 'pos': getpos('.'), 'path': l:origin_path}
   let s:rlp_stack = []
   let s:rlp_body_cache = {}
+  let s:rlp_origin_names_cache = 0
   let s:rlp_crumbs = [fnamemodify(l:origin_path, ':t:r')]
   let s:rlp_scope = 'local'
   let s:rlp_input = 0
