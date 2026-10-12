@@ -6956,18 +6956,47 @@ function! s:do_reload() abort
   if mode() =~# '^[iR]' || index(['o', 'c'], mode(1)) >= 0
     return
   endif
-  " 全バッファの外部変更を検出
-  checktime
-  " 現在バッファが未保存でなければ再読み込み（カーソル位置保持）
+  " 現在バッファが未保存でなければ、ディスクの内容がバッファと**違うときだけ**再読み込みする。
+  " 再読み込み（:edit / autoread）は 'undoreload' のせいで、内容が同じでも undo の 1 段階
+  " になる。保存のたびに同期が走るので、毎回それが積まれ、u の最初の 1 回が空振りして
+  " カーソルが飛んでいた。同期が何も変えなかったときは触らない。
   let l:cur = expand('%:p')
-  if !empty(l:cur) && filereadable(l:cur) && !&modified
-    let l:pos = getpos('.')
-    let l:view = winsaveview()
-    " E823（undoファイル不一致）を抑制しつつ再読み込み
-    silent! execute 'edit ' . fnameescape(l:cur)
-    call winrestview(l:view)
-    call setpos('.', l:pos)
+  if !empty(l:cur) && filereadable(l:cur) && !&modified && &buftype ==# ''
+    if s:disk_differs_from_buffer(l:cur)
+      call s:reload_by_edit(l:cur)
+    endif
   endif
+  " 他のバッファの外部変更を検出（現在バッファは上で済ませたか、変わっていない）
+  call s:checktime_others()
+endfunction
+
+" ディスクのファイルがバッファの内容と違うか。読めない・改行形式が特殊なときは
+" 「違う」とみなして従来どおり再読み込みする。
+function! s:disk_differs_from_buffer(path) abort
+  if &fileformat !=# 'unix' || &bomb || (!empty(&fileencoding) && &fileencoding !~? '^utf-\?8$')
+    return 1
+  endif
+  return readfile(a:path) !=# getline(1, '$')
+endfunction
+
+" 現在バッファ以外の外部変更を検出する。現在バッファは内容が同じなら再読み込みしたく
+" ない（undo の段階が増える）ので、checktime の対象から外す。
+function! s:checktime_others() abort
+  let l:cur = bufnr('%')
+  for l:b in getbufinfo({'bufloaded': 1})
+    if l:b.bufnr != l:cur && empty(getbufvar(l:b.bufnr, '&buftype'))
+      silent! execute 'checktime ' . l:b.bufnr
+    endif
+  endfor
+endfunction
+
+function! s:reload_by_edit(path) abort
+  let l:pos = getpos('.')
+  let l:view = winsaveview()
+  " E823（undoファイル不一致）を抑制しつつ再読み込み
+  silent! execute 'edit ' . fnameescape(a:path)
+  call winrestview(l:view)
+  call setpos('.', l:pos)
 endfunction
 
 " ---------------------------------------------------------------------------
