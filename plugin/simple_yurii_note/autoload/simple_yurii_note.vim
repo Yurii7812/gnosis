@@ -6205,7 +6205,7 @@ function! s:simple_body_append(link) abort
   " Enter で連続で置いても空行が累積しない。既存の空行はそのまま。
   let l:prev = l:up - 1
   if l:prev >= 1 && trim(getline(l:prev)) !=# ''
-        \ && trim(getline(l:prev)) !~# '\]\s*(\S\+)\s*$'
+        \ && (trim(getline(l:prev)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:prev))
     call append(l:prev, ['', a:link])
   else
     call append(l:prev, a:link)
@@ -8487,6 +8487,23 @@ endfunction
 
 " 本文中（`### Parent` の直前の行）にリンクを足す。simple 形式では
 " 「子」は本文リンクなので、BackLink 側ではなくここに入れる。
+" 行 a:lnum が、日記の「今日のノート」の節の中のリンク行か（直近の見出しがその節）。
+" za / zn の Enter で入れるリンクを、一覧と空行 1 つ空けて区別するために使う。
+function! s:in_diary_list(lnum) abort
+  if a:lnum < 1 || trim(getline(a:lnum)) !~# '\]\s*(\S\+)\s*$'
+    return 0
+  endif
+  let l:sec = '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート')
+  let l:i = a:lnum - 1
+  while l:i >= 1
+    if getline(l:i) =~# '^#'
+      return trim(getline(l:i)) ==# l:sec
+    endif
+    let l:i -= 1
+  endwhile
+  return 0
+endfunction
+
 function! s:insert_link_before_up_note(link) abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
@@ -8504,7 +8521,8 @@ function! s:insert_link_before_up_note(link) abort
 
   let l:ins = l:up - 1
   " 本文末尾が散文のときだけ、空行を 1 つ開けてからリンクを置く
-  if l:ins >= 1 && trim(getline(l:ins)) !=# '' && trim(getline(l:ins)) !~# '\]\s*(\S\+)\s*$'
+  if l:ins >= 1 && trim(getline(l:ins)) !=# ''
+        \ && (trim(getline(l:ins)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:ins))
     call append(l:ins, '')
     let l:ins += 1
   endif
@@ -12428,7 +12446,7 @@ function! s:diary_op_add_raw(link, section, lines) abort
   endfor
   for l:j in range(l:h + 1, l:s_end - 1)
     if stridx(l:lines[l:j], '](' . l:tgt . ')') >= 0
-      return s:diary_tail_blank(l:lines, l:h, l:s_end, l:p)
+      return l:lines
     endif
   endfor
   let l:k = l:s_end
@@ -12436,19 +12454,7 @@ function! s:diary_op_add_raw(link, section, lines) abort
     let l:k -= 1
   endwhile
   call insert(l:lines, a:link, l:k)
-  return s:diary_tail_blank(l:lines, l:h, l:s_end + 1, l:p >= 0 ? l:p + 1 : -1)
-endfunction
-
-" 節が ### Parent の直前で終わっているとき、最後のリンクと ### Parent の間に空行を 1 つ空ける
-" （すでに空行があれば何もしない）。s_end/p は呼び出し時点での節の終わり・### Parent の位置。
-function! s:diary_tail_blank(lines, h, s_end, p) abort
-  if a:p < 0 || a:s_end != a:p || a:p <= a:h + 1
-    return a:lines
-  endif
-  if trim(a:lines[a:p - 1]) !=# ''
-    call insert(a:lines, '', a:p)
-  endif
-  return a:lines
+  return l:lines
 endfunction
 
 " 節の中から、そのファイルへのリンク行を外す。リンクが無くなった節は見出しごと消す。
