@@ -221,8 +221,9 @@ def test_topic_index() -> None:
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
         i_folge = topic_text.find("[folgezettel-Index-1]")
         i_gindex = topic_text.find("[1-Index]")
-        check(i_folge != -1 and i_gindex != -1 and i_folge < i_gindex,
-              "トピックノートの Parent は folgezettel-Index-1 + 1-Index")
+        # Parent の並び規則: グループ（1-Index）が上、普通のノート（folgezettel-Index-1）が下
+        check(i_folge != -1 and i_gindex != -1 and i_gindex < i_folge,
+              "トピックノートの Parent は 1-Index（グループ）が上、folgezettel-Index-1 が下")
         folge_text = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
         check("[1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 

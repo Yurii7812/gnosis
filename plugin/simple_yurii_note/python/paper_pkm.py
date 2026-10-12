@@ -669,6 +669,13 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             return [markdown_link(index_display, index_path, base_dir)]
         return []
 
+    def _parent_is_group(fid: str) -> bool:
+        """_parent_link_lines(fid) の先頭がグループ（1-Index か Paper index）か。"""
+        if (id_index_paths.get(fid) or find_id_index(root, fid)) is not None:
+            return True
+        pid = parent_id(fid)
+        return pid is None
+
     for fid in sorted(topics, key=natural_key):
         tlist = topics[fid]
         gid = find_id_index(root, fid)
@@ -739,7 +746,12 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                 p_lines = [markdown_link(parent_disp, tmap[parent_disp][0],
                                          tpath.parent), folge_link]
             else:
-                p_lines = [folge_link] + _parent_link_lines(fid, tpath.parent)
+                head = _parent_link_lines(fid, tpath.parent)
+                if head and _parent_is_group(fid):
+                    # Parent の並び: グループは上、空行、普通のノートは下（sync の規則と同じ）
+                    p_lines = head + ["", folge_link]
+                else:
+                    p_lines = [folge_link] + head
             body_t += ["### Parent"] + p_lines
             write_note(tpath, fm_t, body_t)
 
