@@ -116,9 +116,9 @@ function! s:SimpleFcitxInsertEnter() abort
   endif
 endfunction
 
-command! SimpleFcitxOff call s:SimpleFcitxRun('-c')
-command! SimpleFcitxOn call s:SimpleFcitxRun('-o')
-command! SimpleFcitxStatus echo s:SimpleFcitxState()
+command! YuriiFcitxOff call s:SimpleFcitxRun('-c')
+command! YuriiFcitxOn call s:SimpleFcitxRun('-o')
+command! YuriiFcitxStatus echo s:SimpleFcitxState()
 
 augroup yurii_fcitx_auto_switch
   autocmd!

@@ -70,7 +70,7 @@
 | `mx` | `:ToggleCheckbox` | カーソル行のチェックボックス `[ ]` / `[x]` をトグル |
 | Visual `mx` | `:'<,'>ToggleCheckbox` | 選択範囲の各行にあるチェックボックス `[ ]` / `[x]` をトグル |
 | `p` | | 行単位ヤンクでも改行なしでカーソル直下に貼り付け（Vim標準の `p` を上書き） |
-| `\gi` | `:Gallery` / `:SimpleGallery` / `:GalleryFolder` | 画像リンクを含むMarkdownでは現在Markdown内の画像リンクを開き、画像リンクが無い場所ではIndexフォルダ以下の全画像を開く |
+| `\gi` | `:Gallery` / `:YuriiGallery` / `:GalleryFolder` | 画像リンクを含むMarkdownでは現在Markdown内の画像リンクを開き、画像リンクが無い場所ではIndexフォルダ以下の全画像を開く |
 
 ### ノート変換・管理
 
@@ -92,7 +92,7 @@ filetype [N] →    → 新しい filetype を1文字入力（a-z、大文字に
 
 | キー | コマンド | 動作 |
 |------|----------|------|
-| | `:SimpleIndex` | `index.md` を開く |
+| | `:YuriiIndex` | `index.md` を開く |
 | | `:JumpLastLinkBeforeParent` | `Parent:` 見出しより前にある最後尾のリンクへカーソル移動（無い場合は `Parent:` 内の最初のリンクへ移動） |
 | | `:JumpParent` | Parent リンクが1つだけならリンク先へ直接移動、複数ある場合は `Parent:` 見出しへカーソル移動 |
 | | `:JumpChildTop` | `Child:` セクションの先頭行へカーソル移動 |
@@ -112,9 +112,9 @@ filetype [N] →    → 新しい filetype を1文字入力（a-z、大文字に
 | `:UpdateMD [path]` | PKMルート（省略時は `g:simple_yurii_note_root`）の全ノートのリンクタイトルを一括更新 |
 | `:UpdateAll [path]` | `:UpdateMD` と同じ |
 | `:Gallery [path]` | 指定または現在のMarkdownファイルから画像リンクを抽出してブラウザギャラリーを開く |
-| `:SimpleGallery [path]` | `:Gallery` と同じ |
+| `:YuriiGallery [path]` | `:Gallery` と同じ |
 | `:GalleryFolder [path-or-dir]` | 指定フォルダ、または引数なしではIndexフォルダ以下にあるすべての画像ファイルをサブフォルダ込みでブラウザギャラリーで開く |
-| `:SimpleGalleryFolder [path-or-dir]` | `:GalleryFolder` と同じ |
+| `:YuriiGalleryFolder [path-or-dir]` | `:GalleryFolder` と同じ |
 
 
 ---
@@ -193,7 +193,7 @@ Windows版Vimでも既定ブラウザをWindowsのファイル関連付け経由
 | `g:simple_yurii_note_expand_s_python` | `{plugin}/python/expand_s.py` | S→A 展開スクリプトのパス |
 | `g:simple_yurii_note_gallery_python` | `{plugin}/python/gallery.py` | 画像ギャラリー用ローカルサーバースクリプトのパス |
 | `g:simple_yurii_note_gallery_port` | `8765` | 画像ギャラリー用ローカルサーバーのポート |
-| `g:simple_yurii_note_open_index_on_startup` | `1` | Vim起動時に `SimpleIndex` を自動で開くか |
+| `g:simple_yurii_note_open_index_on_startup` | `1` | Vim起動時に `YuriiIndex` を自動で開くか |
 | `g:yurii_redraw_after_silent_shell` | `1` | silent 化した `:!` コマンド後、端末復帰を待って `redrawstatus` と強制 `redraw!` を実行し、`:!rm %` などの後に画面が黒く残るのを防ぐか |
 | `g:yurii_force_redraw_after_shell` | `0` | `g:yurii_redraw_after_silent_shell` が `0` の場合に、従来互換の `:!` コマンド後 `redraw` を行うか |
 

@@ -969,12 +969,12 @@ function! s:guide_template() abort
         \ '## vault の暗号化（gocryptfs）',
         \ '',
         \ '- vault は `A/note`（平文ビュー）+ `A/.crypt`（暗号実体）の兄弟構成。起動時にパスワードを聞いてマウントし、Vim 終了時に自動ロックする',
-        \ '- `:SimpleMount` … 手動マウント ・ `:SimpleLock` … 手動ロック（アンマウント）',
-        \ '- `:SimpleBackup [出力先]` … プロジェクトフォルダ（`.crypt` 他。`note/` の中身は除く）を vault のパスワードで 7z 化（`<出力先>/<日時>-<名前>.7z`）',
-        \ '- `:SimpleSetPassword` … 未暗号化なら暗号化 init、暗号化済みならパスワード変更（`:SimpleYuriinoteSetPassword` も同じ）',
-        \ '- `:SimpleRemovePassword` … 暗号化を解除して平文に戻す（`A/note` + `A/.crypt` → ノートを `A` 直下へ。`:SimpleYuriinoteRemovePassword` も同じ）',
-        \ '- `:SimpleExitCleanup` … 終了時の後始末（viminfo 書き出し等）',
-        \ '- `:SimpleChooseIndex` / `:SimpleChooseIndexDir` … vault を選び直す（`A/note` があれば必ずそれを root に。切替時に前の vault のバッファを閉じる）',
+        \ '- `:YuriiMount` … 手動マウント ・ `:YuriiLock` … 手動ロック（アンマウント）',
+        \ '- `:YuriiBackup [出力先]` … プロジェクトフォルダ（`.crypt` 他。`note/` の中身は除く）を vault のパスワードで 7z 化（`<出力先>/<日時>-<名前>.7z`）',
+        \ '- `:YuriiSetPassword` … 未暗号化なら暗号化 init、暗号化済みならパスワード変更（`:YuriiSetPassword` も同じ）',
+        \ '- `:YuriiRemovePassword` … 暗号化を解除して平文に戻す（`A/note` + `A/.crypt` → ノートを `A` 直下へ。`:YuriiRemovePassword` も同じ）',
+        \ '- `:YuriiExitCleanup` … 終了時の後始末（viminfo 書き出し等）',
+        \ '- `:YuriiChooseIndex` / `:YuriiChooseIndexDir` … vault を選び直す（`A/note` があれば必ずそれを root に。切替時に前の vault のバッファを閉じる）',
         \ '- 注意: gocryptfs は**空でないマウントポイントを拒否**する。ロック中は vault 内に `.state` 等を作らない。中身とファイル名は暗号化されるが、時刻・サイズ・構造は漏れる',
         \ '',
         \ '## ラベル記法（関係の接尾辞）',
@@ -998,9 +998,9 @@ function! s:guide_template() abort
         \ '',
         \ '## ゴミ箱',
         \ '',
-        \ '- `\tD` … 今のノートをゴミ箱（`.trash/`）へ移す（ソフト削除。`:SimpleTrash` も同じ）',
-        \ '- `\tr` … ゴミ箱を fzf で覗く（プレビュー付き）。`⏎`=開くだけ / `^r`=vault 直下へ復元して開く / `^e`=ゴミ箱を空にする（`:SimpleTrashList`）',
-        \ '- `\tE` … ゴミ箱を全部空にする（完全削除・確認あり。`:SimpleTrashEmpty` も同じ）',
+        \ '- `\tD` … 今のノートをゴミ箱（`.trash/`）へ移す（ソフト削除。`:YuriiTrash` も同じ）',
+        \ '- `\tr` … ゴミ箱を fzf で覗く（プレビュー付き）。`⏎`=開くだけ / `^r`=vault 直下へ復元して開く / `^e`=ゴミ箱を空にする（`:YuriiTrashList`）',
+        \ '- `\tE` … ゴミ箱を全部空にする（完全削除・確認あり。`:YuriiTrashEmpty` も同じ）',
         \ '- `.trash/` はドット始まりなので検索・一覧・同期・リンクには出ない',
         \ '',
         \ '## よみ順ソート（Index）',
@@ -1014,9 +1014,9 @@ function! s:guide_template() abort
         \ '',
         \ '## 紙のPKM（フォルゲゼッテル）',
         \ '',
-        \ '- `\F` … 紙PKM Index（タイムスタンプ名）を作成/オープン（`:SimplePaperIndex`）。Index-write と Folgezettel-Index も作られる',
-        \ '- `\F` … スキャン画像に番号を付けて vault 直下へ移動（`:SimpleScan`。番号付け GUI が開く）',
-        \ '- `\f` … 紙PKM Index を開く（`:SimplePaperIndex`。無ければ作成。更新は `\ua`）',
+        \ '- `\F` … 紙PKM Index（タイムスタンプ名）を作成/オープン（`:YuriiPaperIndex`）。Index-write と Folgezettel-Index も作られる',
+        \ '- `\F` … スキャン画像に番号を付けて vault 直下へ移動（`:YuriiScan`。番号付け GUI が開く）',
+        \ '- `\f` … 紙PKM Index を開く（`:YuriiPaperIndex`。無ければ作成。更新は `\ua`）',
         \ '- `Index-write` … `キーワード(よみ): 1,1a10b,3` の形式で手書き。複数IDのキーワードはグループノート、単一IDは直接リンクとして紙PKM Index に並ぶ（保存で自動再生成）',
         \ '- `\S` … Index-write ではキーワード行もよみ順に並べる（`(…)` が本体のよみと一致すればそれをよみに、修飾語なら本体のよみで並べる）',
         \ '- Folgezettel-Index は存在する全IDの一覧（自然順）。生成物なので `\S` しない',
@@ -1039,13 +1039,13 @@ function! s:guide_template() abort
         \ '',
         \ '### 展開・索引・Web・アウトライン',
         \ '- `:SE` / `:ExpandToT` / `:ExpandLinks` S ノートを展開 ・ `:OutlineEdit` 見出し編集（`:OutlineApply` で反映）',
-        \ '- `:SimpleIndex` Index を開く ・ `:SimpleChooseIndex` / `:SimpleChooseIndexDir` vault 選択',
-        \ '- `:SimpleGuide` このガイドを再生成 ・ `:SimpleWeb` ノートアプリ',
+        \ '- `:YuriiIndex` Index を開く ・ `:YuriiChooseIndex` / `:YuriiChooseIndexDir` vault 選択',
+        \ '- `:YuriiGuide` このガイドを再生成 ・ `:YuriiWeb` ノートアプリ',
         \ '',
         \ '### 暗号・ゴミ箱・紙PKM・画像',
-        \ '- `:SimpleMount` / `:SimpleLock` / `:SimpleSetPassword` / `:SimpleYuriinoteSetPassword` / `:SimpleExitCleanup`',
-        \ '- `:SimpleTrash` ゴミ箱へ ・ `:SimpleTrashList` ゴミ箱一覧 ・ `:SimplePaperIndex` 紙PKM Index ・ `:SimpleScan` スキャン取り込み',
-        \ '- `:SetImageSize` 画像サイズ ・ `:Gallery` / `:SimpleGallery` ・ `:GalleryFolder` / `:SimpleGalleryFolder` 画像ギャラリー',
+        \ '- `:YuriiMount` / `:YuriiLock` / `:YuriiSetPassword` / `:YuriiSetPassword` / `:YuriiExitCleanup`',
+        \ '- `:YuriiTrash` ゴミ箱へ ・ `:YuriiTrashList` ゴミ箱一覧 ・ `:YuriiPaperIndex` 紙PKM Index ・ `:YuriiScan` スキャン取り込み',
+        \ '- `:SetImageSize` 画像サイズ ・ `:Gallery` / `:YuriiGallery` ・ `:GalleryFolder` / `:YuriiGalleryFolder` 画像ギャラリー',
         \ '',
         \ '### Yurii* 統一名（引数なし。既存の名前と同じ動作）',
         \ '- `:Yurii` … 入口（`:Yurii` のあとに Tab で候補を出す）',
@@ -1059,7 +1059,7 @@ function! s:guide_template() abort
         \ '- 表: `:YuriiTableNew` `:YuriiTableAlign` `:YuriiTableRowEdit` `:YuriiTableCsvEdit` `:YuriiTableCsvApplySaved` `:YuriiTableToCsv` `:YuriiCsvToTable` `:YuriiTableCsvNew` `:YuriiTableAddRow` `:YuriiTableAddCol` `:YuriiTableDelRow` `:YuriiTableDelCol`',
         \ '',
         \ '### 表',
-        \ '- `:TN` / `:NewTable` / `:SimpleTable` 新規 ・ `:TA` 整形 ・ `:TRE` 行編集 ・ `:TCSV` / `:TableCsvEdit` CSV 編集 ・ `:TableCsvApplySaved` CSV 反映',
+        \ '- `:TN` / `:NewTable` / `:YuriiTable` 新規 ・ `:TA` 整形 ・ `:TRE` 行編集 ・ `:TCSV` / `:TableCsvEdit` CSV 編集 ・ `:TableCsvApplySaved` CSV 反映',
         \ '- `:TCE` / `:TableToCsv` CSV へ ・ `:CsvToTable` CSV から ・ `:TCN` / `:TableCsvNew` 別 CSV ・ `:TAR` / `:TAC` 行/列追加 ・ `:TDR` / `:TDC` 行/列削除',
         \ '',
         \ '### 同期・その他',
@@ -1193,7 +1193,7 @@ function! simple_yurii_note#refresh_guide() abort
   call s:reload_guide_if_open(l:root)
 endfunction
 
-" 公開: 操作ガイドを作り直す（無ければ作る。:SimpleGuide 用）。
+" 公開: 操作ガイドを作り直す（無ければ作る。:YuriiGuide 用）。
 function! simple_yurii_note#write_guide() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !isdirectory(l:root)
@@ -1431,7 +1431,7 @@ function! s:setup_root_and_index(open_index) abort
   if simple_yurii_note#vault_locked_flag() == 1
     call simple_yurii_note#mount_vault()
     if simple_yurii_note#vault_locked_flag() == 1
-      echom 'simple_yurii_note: vault はロック中。:SimpleMount で解除してください'
+      echom 'simple_yurii_note: vault はロック中。:YuriiMount で解除してください'
       return l:root
     endif
   endif
@@ -4784,9 +4784,9 @@ endfunction
 "   削除は <root>/.trash/ へ「移動」するソフト削除。.trash はドット始まりなので
 "   検索（note_search.py）も同期（note_format_v2.py）も一覧に出さない。
 "   ファイル名はアプリと同じ <日時>_<名前>（衝突時は <日時>_<n>_<名前>）。
-"   \tr / :SimpleTrashList … ゴミ箱を fzf で覗く（プレビュー付き）→ ⏎=開く / ^r=復元 / ^e=空
-"   \tD / :SimpleTrash      … 今のノートをゴミ箱へ
-"   \tE / :SimpleTrashEmpty … ゴミ箱を全部空にする（完全削除・確認あり）
+"   \tr / :YuriiTrashList … ゴミ箱を fzf で覗く（プレビュー付き）→ ⏎=開く / ^r=復元 / ^e=空
+"   \tD / :YuriiTrash      … 今のノートをゴミ箱へ
+"   \tE / :YuriiTrashEmpty … ゴミ箱を全部空にする（完全削除・確認あり）
 " ---------------------------------------------------------------------------
 function! s:trash_dir() abort
   let l:root = s:get_pkm_root()
@@ -4947,7 +4947,7 @@ function! simple_yurii_note#trash_list() abort
         \ }))
 endfunction
 
-" \tE / :SimpleTrashEmpty … ゴミ箱を全部空にする（完全削除・確認あり）。
+" \tE / :YuriiTrashEmpty … ゴミ箱を全部空にする（完全削除・確認あり）。
 function! simple_yurii_note#trash_empty() abort
   let l:dir = s:trash_dir()
   if !isdirectory(l:dir)
@@ -10943,7 +10943,7 @@ endfunction
 " Web app (ブラウザで閲覧・編集)
 "   ノート実体と同じフォルダをブラウザ (Brave/Chrome) から直接読み書きする。
 "   サーバーは立てない。同期ロジックは JS 移植 (web/src/sync.js)。
-"   起動: :SimpleWeb / \A
+"   起動: :YuriiWeb / \A
 " ---------------------------------------------------------------------------
 function! simple_yurii_note#open_web() abort
   " 関数内の <sfile> は信用できない（現在のバッファ名になることがある）。
@@ -11019,7 +11019,7 @@ endfunction
 " vault の暗号（gocryptfs箱・透過）
 "   ・起動時にロック中ならパスワードを聞いてマウント
 "   ・終了時は自動でロック（マウント解除）
-"   ・:SimpleSetPassword でパスワード変更（マウント中でもOK）
+"   ・:YuriiSetPassword でパスワード変更（マウント中でもOK）
 " 暗号実体: <vault>.crypt（vault の隣。中身はみんな暗号化、ファイル名も暗号化）
 " ---------------------------------------------------------------------------
 
@@ -11131,7 +11131,7 @@ endfunction
 "   has_cipher : gocryptfs.conf が読めるか
 "   mounted    : FUSE マウント中か
 "   plain_flat : 直置き型で中身がある（＝平文 vault。旧暗号箱が残っていても暗号扱いしない）
-"   encrypted  : :SimpleSetPassword 用。マウント中 or 暗号箱あり（plain_flat を除く）
+"   encrypted  : :YuriiSetPassword 用。マウント中 or 暗号箱あり（plain_flat を除く）
 "   locked     : ロック中（暗号箱あり・未マウント・平文再作成でない）
 function! s:vault_status() abort
   let l:root = s:vault_clean()
@@ -11182,7 +11182,7 @@ function! s:mount_by_password(cipher, root) abort
   for l:i in range(3)
     let l:pw = inputsecret('vault password: ')
     if empty(l:pw)
-      echom 'simple_yurii_note: マウントせず終了（:SimpleMount で再試行）'
+      echom 'simple_yurii_note: マウントせず終了（:YuriiMount で再試行）'
       return 0
     endif
     let l:pf = s:temp_passfile(l:pw)
@@ -11230,12 +11230,12 @@ function! simple_yurii_note#maybe_mount_interactive() abort
   endif
   call s:adopt_vault_runtime(l:root)
   call simple_yurii_note#reload_vault_buffers()
-  " パスワード待ちの間に他経路の起動タイマー（SimpleIndex 等）はロック中として
+  " パスワード待ちの間に他経路の起動タイマー（YuriiIndex 等）はロック中として
   " 空振りしている。マウントできたここで Index を開き直す。
-  call timer_start(0, {-> execute('SimpleIndex')})
+  call timer_start(0, {-> execute('YuriiIndex')})
 endfunction
 
-" :SimpleMount（手動マウント）
+" :YuriiMount（手動マウント）
 function! simple_yurii_note#mount_vault() abort
   let l:cipher = simple_yurii_note#cipher_dir()
   let l:root = s:vault_clean()
@@ -11288,7 +11288,7 @@ function! simple_yurii_note#before_write_viminfo() abort
   endif
 endfunction
 
-" :SimpleLock（保存フラッシュしてからアンマウント）
+" :YuriiLock（保存フラッシュしてからアンマウント）
 function! simple_yurii_note#lock_vault() abort
   let l:root = s:vault_clean()
   if empty(l:root)
@@ -11317,14 +11317,14 @@ function! simple_yurii_note#lock_vault() abort
   call s:mount_cache_reset()
   if v:shell_error != 0 || simple_yurii_note#vault_mounted(escape(l:root, '\\'), 1) == 1
     echohl WarningMsg
-    echom 'simple_yurii_note: 他アプリが開いていてロック失敗。閉じてから再度 :SimpleLock'
+    echom 'simple_yurii_note: 他アプリが開いていてロック失敗。閉じてから再度 :YuriiLock'
     echohl NONE
     return
   endif
   echom 'simple_yurii_note: vault locked'
 endfunction
 
-" :SimpleBackup [出力先ディレクトリ]
+" :YuriiBackup [出力先ディレクトリ]
 " vault のプロジェクトフォルダ（.crypt・その他全部。note/ の中身は .crypt の複製なので
 " 除く。直置き型は .crypt のみ）を 7z にまとめる。vault のパスワードで暗号化（ファイル名も隠す）し、出力は
 " <出力先>/<YYYYmmddHHMMSS>-<プロジェクト名>.7z。出力先は引数 →
@@ -11458,7 +11458,7 @@ function! simple_yurii_note#quit_unmount() abort
   call s:mount_cache_reset()
 endfunction
 
-" :SimpleSetPassword（inputsecret で旧/新/確認。マウント中でもOK）
+" :YuriiSetPassword（inputsecret で旧/新/確認。マウント中でもOK）
 function! simple_yurii_note#set_password() abort
   let l:root = s:vault_clean()
   if empty(l:root)
@@ -11529,7 +11529,7 @@ function! s:init_encrypted_impl() abort
   endif
   if simple_yurii_note#vault_mounted(escape(l:cur, '\\'), 1) == 1
     echohl WarningMsg
-    echom 'simple_yurii_note: 既にマウント済み（暗号化済み vault）。:SimpleSetPassword はパスワード変更用'
+    echom 'simple_yurii_note: 既にマウント済み（暗号化済み vault）。:YuriiSetPassword はパスワード変更用'
     echohl NONE
     return
   endif
@@ -11649,7 +11649,7 @@ function! s:init_encrypted_impl() abort
   echom 'simple_yurii_note: vault を暗号化しました。閉じるとロックされます（開くときはパスワード）'
 endfunction
 
-" :SimpleRemovePassword（暗号化を解除して平文 vault に戻す）
+" :YuriiRemovePassword（暗号化を解除して平文 vault に戻す）
 "   暗号化 vault（A/note + A/.crypt）を解除し、ノートをプロジェクト直下 A へ戻す。
 "   ロック中ならパスワードを聞いてマウントしてから解除する。
 "   手順: 平文を兄弟の一時 <A>-plain-<ts> へ cp → diff 検証 → アンマウント →
@@ -11935,7 +11935,7 @@ function! simple_yurii_note#guard_vault_write(path) abort
   let l:p = fnamemodify(expand(a:path), ':p')
   if stridx(l:p, fnamemodify(l:root, ':p')) == 0
     echohl ErrorMsg
-    echom 'simple_yurii_note: vault はロック中。:SimpleMount でマウントしてから'
+    echom 'simple_yurii_note: vault はロック中。:YuriiMount でマウントしてから'
     echohl NONE
     throw 'simple_yurii_note: vault locked'
   endif
@@ -11956,7 +11956,7 @@ function! simple_yurii_note#vault_locked_buffer_hint() abort
     if !exists('s:vault_locked_shown') || empty(s:vault_locked_shown)
       let s:vault_locked_shown = 1
       echohl WarningMsg
-      echom 'simple_yurii_note: vault はロック中。編集不可（:SimpleMount でマウント）'
+      echom 'simple_yurii_note: vault はロック中。編集不可（:YuriiMount でマウント）'
       echohl NONE
     endif
   endif

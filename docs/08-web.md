@@ -11,7 +11,7 @@ SYN を、**マークダウンのビューアの見た目**で使うデスクト
 
 ## 起動
 
-- Vim から: `\A` または `:SimpleWeb`。今の root と、今開いているノートを渡して起動する。
+- Vim から: `\A` または `:YuriiWeb`。今の root と、今開いているノートを渡して起動する。
 - 直接: `web/bin/simple-yurii-note-app.sh [VAULT_DIR]`（引数なしなら Vim が前回の root を使う）。
   アプリメニュー: `~/.local/share/applications/simple-yurii-note.desktop`。
 - 初回だけ `cd web && npm install && npm run build`。
@@ -60,7 +60,7 @@ Windows でも動くように作ってあります（Linux は今のまま）。
    `rebuild:pty` は `node-pty`（Windows の擬似端末 ConPTY）を、Electron 用に作り直す。
 3. Vim の設定は Windows 用に用意する。`PKM_VIMRC` で vimrc の場所を指定できる。SYN のプラグインの
    `runtimepath` は、Windows のパスで書く。
-4. 起動: `web\bin\simple-yurii-note-app.cmd [VAULT_DIR]`、または Vim で `\A`（`:SimpleWeb`）。
+4. 起動: `web\bin\simple-yurii-note-app.cmd [VAULT_DIR]`、または Vim で `\A`（`:YuriiWeb`）。
 
 環境変数: `PKM_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`PKM_PTY`（`node-pty` / `python`。
 既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `PKM_PTY=node-pty` で動くことを確認済み。

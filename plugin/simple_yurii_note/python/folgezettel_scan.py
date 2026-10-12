@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """スキャン画像にフォルゲゼッテルIDを付ける GUI（simple_yurii_note 用）。
 
-`\\f`（:SimpleScan）から起動される。流れ::
+`\\f`（:YuriiScan）から起動される。流れ::
 
     1. スキャン画像のあるフォルダを選ぶ
     2. 画像を見ながら ID を手入力（→=次の連番 / ↓=子ID / ↑=直前を編集 /

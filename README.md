@@ -9,7 +9,7 @@ Vim 上で Markdown ノートを運用するための PKM（Personal Knowledge M
 ## デスクトップアプリ
 
 `web/` に、SYN を**マークダウンのビューアの見た目**で使うアプリ（Electron）があります。
-Vim からは `\A` または `:SimpleWeb`。
+Vim からは `\A` または `:YuriiWeb`。
 
 - 中身は**本物の Vim**（あなたの vimrc と SYN などのプラグイン）。機能を作り直していないので、
   `zn`・Tab・数字キー・`\ua`・`\l` など、Vim の操作がそのまま使えます。
@@ -47,7 +47,7 @@ let g:simple_yurii_note_root = expand('~/memo')
 
 ## 使い方（最短）
 
-1. `:SimpleIndex` で `index.md` を開く。
+1. `:YuriiIndex` で `index.md` を開く。
 2. `nf` / `mm` / `nk` で新規ノートを作成する。
 3. `<Tab>` / `<S-Tab>` でリンク移動、`<Enter>` でリンクを開く。
 4. `zt` でタイトル編集、`\bc` / `ta` でリンク操作を行う。
@@ -109,7 +109,7 @@ Normal モードへ戻ったときの英語入力化は、状態取得に失敗�
 - `fcitx5-remote` が無い場合は `fcitx-remote` を使います。
 - 無効化する場合は `let g:yurii_fcitx_auto_switch = 0` を設定してください。
 - コマンドを固定したい場合は `let g:yurii_fcitx_remote_cmd = 'fcitx5-remote'` のように設定してください。
-- 動作確認用に `:SimpleFcitxOff`、`:SimpleFcitxOn`、`:SimpleFcitxStatus` を使えます。`:SimpleFcitxStatus` が `2` を返す状態が「次回 Insert で日本語入力へ戻す」対象です。
+- 動作確認用に `:YuriiFcitxOff`、`:YuriiFcitxOn`、`:YuriiFcitxStatus` を使えます。`:YuriiFcitxStatus` が `2` を返す状態が「次回 Insert で日本語入力へ戻す」対象です。
 
 ---
 
@@ -281,8 +281,8 @@ Normal モードへ戻ったときの英語入力化は、状態取得に失敗�
 
 ### 7) インデックス・ユーティリティ
 
-- `:SimpleIndex` : `index.md` を開く
-- `:SimpleChooseIndexDir` : index ルート選択
+- `:YuriiIndex` : `index.md` を開く
+- `:YuriiChooseIndexDir` : index ルート選択
 - `:SortYomi` : バッファの**リンク行**を表示名のよみ順（五十音 → ローマ字は末尾）に安定ソート（`\S` のノーマルと同じ。主に `index.md`）
 - `\S` : ノーマル=バッファのリンク行 / ビジュアル=選択行をよみ順ソート。よみはリンク先の front matter `yomi:` を優先し、未登録は pykakasi のよみを `yomi:` に自動追加（`zy` で手直し。`pip install --user pykakasi`）
 - `zy` / `zY` : **今開いているノート**のよみを変更（`zy`=空欄から / `zY`=現在のよみを残して。`zY` で全部消して `Enter` は削除）。`yomi:` に表示名が複数あるときは番号で表示名を選んでから編集
@@ -295,7 +295,7 @@ Normal モードへ戻ったときの英語入力化は、状態取得に失敗�
 
 ### 8) Markdown テーブル編集
 
-- 作成: `:TN`, `:NewTable`, `:SimpleTable`
+- 作成: `:TN`, `:NewTable`, `:YuriiTable`
 - 整形: `:TA`
 - 行編集: `:TRE`
 - CSV編集: `:TCSV`, `:TableCsvEdit`, `:TableCsvApplySaved`
@@ -316,7 +316,7 @@ Normal モードへ戻ったときの英語入力化は、状態取得に失敗�
 | 作成 | `:NF`, `:NA`, `:CA` |
 | 更新 | `:UpdateMD`, `:UpdateAll`, `:UpdateALL` |
 | 編集 | `:NT`, `:RP`, `:OutlineEdit` |
-| 移動 | `:SimpleIndex`, `:SimpleChooseIndexDir` |
+| 移動 | `:YuriiIndex`, `:YuriiChooseIndexDir` |
 | 変換 | `:ExpandLinks`（旧 `:SE` / `:ExpandToT`）, `:SortYomi`, `:Linkify`, `:LinkifySelection`, `:PasteLink` |
 
 | テーブル | `:TN`, `:TA`, `:TRE`, `:TCSV`, `:TableToCsv`, `:CsvToTable`, `:TAR`, `:TAC`, `:TDR`, `:TDC` |

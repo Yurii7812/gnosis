@@ -272,7 +272,7 @@ set nowritebackup
 if get(g:, 'simple_yurii_note_open_index_on_startup', 1)
   augroup simple_yurii_note_other_startup_index
     autocmd!
-    autocmd VimEnter * call timer_start(0, {-> execute('SimpleIndex')})
+    autocmd VimEnter * call timer_start(0, {-> execute('YuriiIndex')})
   augroup END
 endif
 

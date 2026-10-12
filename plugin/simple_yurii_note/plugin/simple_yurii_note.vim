@@ -183,13 +183,6 @@ command!          PasteLink  call simple_yurii_note#paste_clipboard_link_here()
 command! -range=0 ToggleCheckbox call simple_yurii_note#toggle_checkbox(<line1>, <line2>, <range>)
 command!          SortYomi   call simple_yurii_note#sort_yomi()
 command! -range=0 -bang SortTime call simple_yurii_note#sort_time(<bang>0, <line1>, <line2>, <range>)
-command!          SimpleIndex call simple_yurii_note#open_index()
-command!          SimpleChooseIndexDir call simple_yurii_note#choose_index_root()
-command!          SimpleGuide call simple_yurii_note#write_guide()
-command!          SimpleChooseIndex call simple_yurii_note#choose_index_root()
-" 紙のPKM（フォルゲゼッテル）: Index 作成/オープンと、スキャン画像の番号付け GUI
-command!          SimplePaperIndex call simple_yurii_note#paper_index()
-command!          SimpleScan call simple_yurii_note#paper_scan()
 
 " 旧名エイリアス（yurii_PKM から移行した習慣用。中身は simple 側）
 command! -nargs=? ExpandLinks call simple_yurii_note#expand_s_under_cursor(<q-args>)
@@ -207,27 +200,7 @@ command! -nargs=? SE         call simple_yurii_note#expand_s_under_cursor(<q-arg
 command!          RP         call simple_yurii_note#rename_prefix()
 command!          OutlineEdit call simple_yurii_note#outline_edit()
 command! -nargs=? Gallery    call simple_yurii_note#open_gallery(<q-args>)
-command! -nargs=? SimpleGallery call simple_yurii_note#open_gallery(<q-args>)
 command! -nargs=? GalleryFolder call simple_yurii_note#open_folder_gallery(<q-args>)
-command! -nargs=? SimpleGalleryFolder call simple_yurii_note#open_folder_gallery(<q-args>)
-command!          SimpleWeb  call simple_yurii_note#open_web()
-" ゴミ箱（ソフト削除）
-command!          SimpleTrash      call simple_yurii_note#trash_current()
-command!          SimpleTrashList  call simple_yurii_note#trash_list()
-command!          SimpleTrashEmpty call simple_yurii_note#trash_empty()
-" vault の gocryptfs パスワード変更（マウント中は不可。閉じてから実行）
-command!          SimpleSetPassword call simple_yurii_note#set_password()
-command!          SimpleYuriinoteSetPassword call simple_yurii_note#set_password()
-" vault の暗号化を解除して平文に戻す（A/note + A/.crypt → A 直下）
-command!          SimpleRemovePassword call simple_yurii_note#remove_password()
-command!          SimpleYuriinoteRemovePassword call simple_yurii_note#remove_password()
-" vault の手動ロック解除 / ロック（gocryptfs）
-command!          SimpleMount call simple_yurii_note#mount_vault()
-command!          SimpleLock  call simple_yurii_note#lock_vault()
-" 暗号箱(.crypt)を vault のパスワードで 7z 化して <出力先>/<日時>-<名前>.7z に出力
-command! -nargs=? -complete=dir SimpleBackup call simple_yurii_note#backup_vault(<q-args>)
-" 終了時に vault 外へ残留させない（recent.json / viminfo を消す）
-command!          SimpleExitCleanup call simple_yurii_note#exit_cleanup()
 " テーブル操作コマンド
 command! -nargs=* TN         call simple_yurii_note#table_new(<q-args>)
 command! -nargs=* NewTable   call simple_yurii_note#table_new(<q-args>)
@@ -245,7 +218,6 @@ command!          TDR        call simple_yurii_note#table_del_row()
 command!          TDC        call simple_yurii_note#table_del_col()
 command!          TAR        call simple_yurii_note#table_add_row()
 command!          TAC        call simple_yurii_note#table_add_col()
-command! -nargs=* SimpleTable call simple_yurii_note#table_new(<q-args>)
 
 " ---- Yurii* の統一別名（既存の名前と同じ動作。既存は残す） ----
 " 入口だけのコマンド（:PlugInstall 等の prefix と同じ役割）。Tab で Yurii* の候補を出す用。
@@ -305,6 +277,8 @@ command!          YuriiSetPassword call simple_yurii_note#set_password()
 command!          YuriiRemovePassword call simple_yurii_note#remove_password()
 command!          YuriiMount call simple_yurii_note#mount_vault()
 command!          YuriiLock call simple_yurii_note#lock_vault()
+" 暗号箱(.crypt)を vault のパスワードで 7z 化して <出力先>/<日時>-<名前>.7z に出力
+command! -nargs=? -complete=dir YuriiBackup call simple_yurii_note#backup_vault(<q-args>)
 command!          YuriiExitCleanup call simple_yurii_note#exit_cleanup()
 command! -nargs=* YuriiTableNew call simple_yurii_note#table_new(<q-args>)
 command!          YuriiTableAlign call simple_yurii_note#table_align_current()
@@ -836,7 +810,7 @@ augroup END
 " vault の暗号（gocryptfs箱）
 "   ・起動時にロック中ならパスワードを聞いてマウント
 "   ・終了時に自動でロック（閉じるとロック）
-"   ・:SimpleSetPassword = パスワード変更
+"   ・:YuriiSetPassword = パスワード変更
 " ---------------------------------------------------------------------------
 augroup simple_yurii_note_vault
   autocmd!
