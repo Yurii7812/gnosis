@@ -8123,7 +8123,7 @@ function! s:insert_links_at_position(links) abort
       endif
     endfor
     if l:added == 0
-      echo 'simple_yurii_note: 追加できるリンクがありません（文中に既にある or 取れなかった）'
+      echo 'simple_yurii_note: 追加できるリンクがありません（Parent に既にある or 取れなかった）'
     endif
     return l:added > 0
   endif
@@ -8364,7 +8364,7 @@ endfunction
 "     空 Enter / Esc で中止）。Vim 標準の折りたたみ zA は上書きされる。
 "     引数に文字列を渡すと input() を出さずその表示名を使う（テスト・自動化用）。
 " zap: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の節の最後へ足す。
-"     文中（本文）に同じリンクがあるときは足さない（子として本文にあるものを親にしない）。
+"     本文に同じリンクがあっても Parent には足す（Parent に既にあるときだけ足さない）。
 "     Parent の節が無ければ、末尾に「### Parent」を作って足す。
 " 相手ノート（親にしたノート）の本文の、### Parent の手前に、このノートへのリンクを足す。
 " 相手の本文に既にあれば足さない。相手が開いていて未保存の変更があるときは触らない。
@@ -8402,22 +8402,14 @@ endfunction
 
 function! s:add_parent_with_reverse(link) abort
   " A（今のノート）の Parent の節の末尾に B（リンク先）を入れる。
-  " A の本文（### Parent より前）に B が既にあれば入れない。
+  " A の本文に B へのリンクが既にあっても入れる（本文で引用しつつ親にもできる。
+  " sync は Parent を消さず、BackLink は Parent と本文のどちらにあっても出さない）。
   " 入れたら、B の本文に A が無ければ、B の ### Parent の直前に A を入れる（s:zap_add_child_link）。
   let l:target = s:extract_target(a:link)
   if empty(l:target)
     return 0
   endif
   let l:bare = substitute(l:target, '#.*$', '', '')
-  let l:lines = getline(1, '$')
-  let l:p = index(l:lines, '### Parent')
-  let l:body_end = l:p >= 0 ? l:p : len(l:lines)
-  for l:i in range(0, l:body_end - 1)
-    if stridx(l:lines[l:i], '](' . l:bare) >= 0
-      echo 'simple_yurii_note: 文中にあるので Parent には入れません'
-      return 0
-    endif
-  endfor
   if !s:append_link_to_buffer_section('up', a:link)
     echo 'simple_yurii_note: Parent に追加できませんでした（重複 or ### Parent 無し）'
     return 0
