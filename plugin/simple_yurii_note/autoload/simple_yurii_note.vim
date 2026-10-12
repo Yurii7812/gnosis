@@ -12203,6 +12203,10 @@ function! s:diary_op_add(link, section, lines) abort
     if l:end > 0 && trim(l:lines[l:end - 1]) !=# ''
       let l:add = [''] + l:add
     endif
+    " 節の最後（### Parent の直前）に空行を 1 つ空ける
+    if l:p >= 0
+      let l:add += ['']
+    endif
     call extend(l:lines, l:add, l:end)
     return l:lines
   endif
@@ -12215,7 +12219,7 @@ function! s:diary_op_add(link, section, lines) abort
   endfor
   for l:j in range(l:h + 1, l:s_end - 1)
     if stridx(l:lines[l:j], '](' . l:tgt . ')') >= 0
-      return l:lines
+      return s:diary_tail_blank(l:lines, l:h, l:s_end, l:p)
     endif
   endfor
   let l:k = l:s_end
@@ -12223,7 +12227,19 @@ function! s:diary_op_add(link, section, lines) abort
     let l:k -= 1
   endwhile
   call insert(l:lines, a:link, l:k)
-  return l:lines
+  return s:diary_tail_blank(l:lines, l:h, l:s_end + 1, l:p >= 0 ? l:p + 1 : -1)
+endfunction
+
+" 節が ### Parent の直前で終わっているとき、最後のリンクと ### Parent の間に空行を 1 つ空ける
+" （すでに空行があれば何もしない）。s_end/p は呼び出し時点での節の終わり・### Parent の位置。
+function! s:diary_tail_blank(lines, h, s_end, p) abort
+  if a:p < 0 || a:s_end != a:p || a:p <= a:h + 1
+    return a:lines
+  endif
+  if trim(a:lines[a:p - 1]) !=# ''
+    call insert(a:lines, '', a:p)
+  endif
+  return a:lines
 endfunction
 
 " 節の中から、そのファイルへのリンク行を外す。リンクが無くなった節は見出しごと消す。
