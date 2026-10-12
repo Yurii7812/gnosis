@@ -970,7 +970,7 @@ function! s:guide_template() abort
         \ '',
         \ '- vault は `A/note`（平文ビュー）+ `A/.crypt`（暗号実体）の兄弟構成。起動時にパスワードを聞いてマウントし、Vim 終了時に自動ロックする',
         \ '- `:SimpleMount` … 手動マウント ・ `:SimpleLock` … 手動ロック（アンマウント）',
-        \ '- `:SimpleBackup [出力先]` … 暗号箱 `.crypt` を vault のパスワードで 7z 化（`<出力先>/<日時>-<名前>.7z`）',
+        \ '- `:SimpleBackup [出力先]` … プロジェクトフォルダ全部（`note/`・`.crypt` 他）を vault のパスワードで 7z 化（`<出力先>/<日時>-<名前>.7z`）',
         \ '- `:SimpleSetPassword` … 未暗号化なら暗号化 init、暗号化済みならパスワード変更（`:SimpleYuriinoteSetPassword` も同じ）',
         \ '- `:SimpleRemovePassword` … 暗号化を解除して平文に戻す（`A/note` + `A/.crypt` → ノートを `A` 直下へ。`:SimpleYuriinoteRemovePassword` も同じ）',
         \ '- `:SimpleExitCleanup` … 終了時の後始末（viminfo 書き出し等）',
@@ -11325,9 +11325,9 @@ function! simple_yurii_note#lock_vault() abort
 endfunction
 
 " :SimpleBackup [出力先ディレクトリ]
-" 暗号箱（.crypt）だけを 7z にまとめる。vault のパスワードで暗号化（ファイル名も
-" 隠す）し、出力は <出力先>/<YYYYmmddHHMMSS>-<プロジェクト名>.7z。
-" 平文の vault（note/ やキャッシュ JSON）は含めない。出力先は引数 →
+" vault のプロジェクトフォルダ（note/・.crypt・その他全部。直置き型は .crypt のみ）を
+" 7z にまとめる。vault のパスワードで暗号化（ファイル名も隠す）し、出力は
+" <出力先>/<YYYYmmddHHMMSS>-<プロジェクト名>.7z。出力先は引数 →
 " g:simple_yurii_note_backup_dir → 聞く、の順。
 function! simple_yurii_note#backup_vault(...) abort
   let l:st = s:vault_status()
@@ -11368,13 +11368,19 @@ function! simple_yurii_note#backup_vault_with(pw, dest) abort
   let l:dest = a:dest
   let l:st = s:vault_status()
   let l:cipher = fnamemodify(l:st.cipher, ':p:h')
-  if stridx(l:dest, l:cipher . s:sep()) == 0 || (!empty(l:st.root) && stridx(l:dest, fnamemodify(l:st.root, ':p')) == 0)
+  " 固める対象。A/note 型なら vault のプロジェクトフォルダ A ごと（note/・.crypt・
+  " その他のファイル全部）。直置き型は暗号箱だけ。
+  let l:target = l:st.layout ==# 'note' ? fnamemodify(l:st.root, ':p:h:h') : l:cipher
+  if stridx(l:dest, l:target . s:sep()) == 0 || l:dest ==# l:target . s:sep()
     echohl ErrorMsg
     echom 'simple_yurii_note: 出力先を vault の中にはできません'
     echohl NONE
     return
   endif
-  let l:proj = l:st.layout ==# 'note' ? fnamemodify(l:st.root, ':h:t') : fnamemodify(l:st.root, ':t')
+  let l:proj = fnamemodify(l:target, ':t')
+  if l:st.layout !=# 'note'
+    let l:proj = fnamemodify(l:st.root, ':t')
+  endif
   let l:out = substitute(l:dest, s:sep() . '\+$', '', '') . s:sep()
         \ . strftime('%Y%m%d%H%M%S') . '-' . l:proj . '.7z'
   if filereadable(l:out)
@@ -11398,9 +11404,9 @@ function! simple_yurii_note#backup_vault_with(pw, dest) abort
   let l:pf2 = tempname()
   call system('install -m 600 /dev/null ' . shellescape(l:pf2))
   call s:syn_writefile([l:pw, l:pw], l:pf2)
-  let l:parent = fnamemodify(l:cipher, ':h')
+  let l:parent = fnamemodify(l:target, ':h')
   let l:res = system('cd ' . shellescape(l:parent) . ' && 7z a -t7z -mhe=on -mx=1 -p '
-        \ . shellescape(l:out) . ' ' . shellescape(fnamemodify(l:cipher, ':t')) . ' < ' . shellescape(l:pf2) . ' 2>&1')
+        \ . shellescape(l:out) . ' ' . shellescape(fnamemodify(l:target, ':t')) . ' < ' . shellescape(l:pf2) . ' 2>&1')
   let l:rc = v:shell_error
   " 終了コード 1 は警告（マウント中の vault がバックアップ中に書き換わって、走査後に
   " 消えたファイルがあった等）。7z は出来ているので失敗扱いにしない。2 以上が失敗。
