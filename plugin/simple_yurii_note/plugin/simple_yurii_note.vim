@@ -861,6 +861,7 @@ augroup END
 
 augroup simple_yurii_note_autosync
   autocmd!
+  autocmd BufReadPost *.md call simple_yurii_note#remember_title()
   autocmd BufWritePost *.md call s:on_write_post()
   if get(g:, 'simple_yurii_note_realtime_link_sync', 0)
     autocmd BufReadPost,BufEnter *.md call simple_yurii_note#realtime_sync_snapshot()

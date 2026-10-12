@@ -1542,7 +1542,10 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
 #   CLI の update / update_one / new / retitle_links が呼ぶのはこちら。
 #   ノートを実際に書き換えるのはこの経路。
 # =============================================================================
-def simple_sync(root) -> int:
+def simple_sync(root, old_titles: dict | None = None) -> int:
+    """old_titles: {ノートのパス: 変更前のタイトル}。タイトルを変えた瞬間に呼び出し側
+    （Vim）が渡す。表示名がこの旧タイトルと同じリンクだけ新タイトルへ追従させる
+    （状態ファイルは持たない）。"""
     root = Path(root).resolve()
     # 内容が前回と同じファイルは、読み込んだテキストのハッシュ照合でパースを省く。
     # 読み込み自体は全ファイル分行う（mtime は信用しない。上記コメント参照）。
@@ -1572,15 +1575,15 @@ def simple_sync(root) -> int:
     _trash_zk_note_images(root, cache, set(keys.values()))
     titles = {p: n["title"] for p, n in notes.items()}
 
-    # 前回 sync 時点のタイトル。本文リンクの表示名を「追従／手書きを残す」の
-    # 判定に使う（§_update_body_link_names）。無いとタイトル変更後のリンクが
-    # 旧タイトルのまま残る。
-    prev_state = _load_title_state(root)
+    # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
+    # 「追従／手書きを残す」と判定するのに使う（§_update_body_link_names）。
+    # 表示名 == 旧タイトルなら自動で付いた名前とみなして新タイトルへ追従し、
+    # それ以外の手書き名は残す。
     prev_titles: dict[Path, str] = {}
-    for p in notes:
-        pid = keys.get(p)
-        if pid is not None and pid in prev_state:
-            prev_titles[p] = prev_state[pid]
+    for tp, ot in (old_titles or {}).items():
+        rp = Path(tp).resolve()
+        if rp in notes and ot:
+            prev_titles[rp] = ot
 
     # リンク先の解決。Path.resolve() は 1 リンクごとに実パス解決（lstat 連鎖）を
     # して重いので、正規化した文字列で辞書を引く（vault 内は symlink 無しが前提。
@@ -1793,16 +1796,11 @@ def simple_sync(root) -> int:
             out_cache[key] = [n["hash"], n["fm"], n["title"], n["body"],
                               n["parent"], n["related"], n["back"]]
         _save_parse_cache(root, out_cache)
-    # 次回の追従判定のため、今回のタイトルを記録する（変化が無ければ書かない）。
-    cur_state = {pid: titles[p] for p in notes
-                 for pid in [keys.get(p)] if pid is not None}
-    if cur_state != prev_state:
-        _save_title_state(root, cur_state)
     return changed
 
 
-def update_one(file_path, root) -> str:
-    changed = simple_sync(root)
+def update_one(file_path, root, old_title: str = "") -> str:
+    changed = simple_sync(root, {file_path: old_title} if old_title else None)
     return f"simple_yurii_note: synced {changed} file(s)" if changed else "simple_yurii_note: no changes"
 
 
@@ -1839,7 +1837,7 @@ def main(argv: list[str]) -> int:
         if len(argv) < 4:
             print("usage: note_format_v2.py update_one FILE ROOT", file=sys.stderr)
             return 2
-        print(update_one(argv[2], argv[3]))
+        print(update_one(argv[2], argv[3], argv[4] if len(argv) > 4 else ""))
         return 0
     if mode == "new":
         if len(argv) < 4:
@@ -1851,8 +1849,10 @@ def main(argv: list[str]) -> int:
         print(str(p))
         return 0
     if mode == "retitle_links":
+        # retitle_links TARGET ROOT [OLD_TITLE [NEW_TITLE]]
         if len(argv) >= 4:
-            simple_sync(argv[3])
+            old = argv[4] if len(argv) > 4 else ""
+            simple_sync(argv[3], {argv[2]: old} if old else None)
         print("simple_yurii_note: retitle via sync")
         return 0
     if mode == "migrate":

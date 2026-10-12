@@ -970,6 +970,7 @@ function! s:guide_template() abort
         \ '',
         \ '- vault は `A/note`（平文ビュー）+ `A/.crypt`（暗号実体）の兄弟構成。起動時にパスワードを聞いてマウントし、Vim 終了時に自動ロックする',
         \ '- `:SimpleMount` … 手動マウント ・ `:SimpleLock` … 手動ロック（アンマウント）',
+        \ '- `:SimpleBackup [出力先]` … 暗号箱 `.crypt` を vault のパスワードで 7z 化（`<出力先>/<日時>-<名前>.7z`）',
         \ '- `:SimpleSetPassword` … 未暗号化なら暗号化 init、暗号化済みならパスワード変更（`:SimpleYuriinoteSetPassword` も同じ）',
         \ '- `:SimpleRemovePassword` … 暗号化を解除して平文に戻す（`A/note` + `A/.crypt` → ノートを `A` 直下へ。`:SimpleYuriinoteRemovePassword` も同じ）',
         \ '- `:SimpleExitCleanup` … 終了時の後始末（viminfo 書き出し等）',
@@ -6770,6 +6771,30 @@ function! simple_yurii_note#autosync_log(msg) abort
   call writefile([strftime('%H:%M:%S') . ' ' . a:msg], '/tmp/syn-autosync.log', 'a')
 endfunction
 
+" バッファのタイトル（Python の _simple_parse_text と同じ規則: frontmatter の title、
+" 無ければファイル名）。タイトル変更前後の比較用。
+function! s:fm_title() abort
+  let l:lines = getline(1, min([40, line('$')]))
+  if !empty(l:lines) && l:lines[0] =~# '^---\s*$'
+    for l:ln in l:lines[1:]
+      if l:ln =~# '^---\s*$'
+        break
+      endif
+      if l:ln =~# '^title:\s*\S'
+        let l:t = trim(matchstr(l:ln, ':\s*\zs.*'))
+        return substitute(l:t, '^[\"'']\|[\"'']$', '', 'g')
+      endif
+    endfor
+  endif
+  return expand('%:t:r')
+endfunction
+
+" 読み込み・保存の時点のタイトルを覚えておく。次の保存でタイトルが変わっていたら、
+" この値が「変更前のタイトル」になり、sync へ渡す（状態ファイルは使わない）。
+function! simple_yurii_note#remember_title() abort
+  let b:syn_prev_title = s:fm_title()
+endfunction
+
 function! simple_yurii_note#autosync_on_save() abort
   call simple_yurii_note#autosync_log('autosync_on_save file=' . expand('%:p'))
   if !filereadable(g:simple_yurii_note_python)
@@ -6812,6 +6837,14 @@ function! simple_yurii_note#autosync_on_save() abort
 
   let l:py   = s:python_cmd()
   let l:args = [l:py, g:simple_yurii_note_python, 'update_one', l:file, l:root]
+  " タイトルを変えた保存なら、変更前のタイトルを渡す（表示名が旧タイトルと同じ
+  " リンクだけ新タイトルへ追従させるため）
+  let l:old_title = get(b:, 'syn_prev_title', '')
+  let l:new_title = s:fm_title()
+  if !empty(l:old_title) && l:old_title !=# l:new_title
+    call add(l:args, l:old_title)
+  endif
+  let b:syn_prev_title = l:new_title
 
   " index.md を保存したときは、同期のあとでよみ順に並べ替える
   let l:is_index = fnamemodify(l:file, ':p') ==# fnamemodify(s:index_path(l:root), ':p')
