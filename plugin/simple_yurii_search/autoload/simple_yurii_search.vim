@@ -171,7 +171,7 @@ endfunction
 function! s:fzf_options(with, accept, prompt) abort
   return '--delimiter="\t" --with-nth=' . a:with . ' --accept-nth=' . a:accept
         \ . ' --height=90% --prompt=' . shellescape(a:prompt)
-        \ . ' --color=hl:red:bold,hl+:red:bold'
+        \ . ' --color=hl:red:bold,hl+:red:bold --wrap-sign=' . shellescape('')
         \ . ' --preview "sed -n ''1,200p'' -- {1}" --preview-window=right:50%'
 endfunction
 
@@ -312,6 +312,7 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
         \ '--delimiter=\t', '--with-nth=' . a:with_nth,
         \ '--prompt=' . a:prompt,
         \ '--bind', 'change:reload:' . l:cmd . ' {q}',
+        \ '--wrap-sign', '',
         \ ]
   if !empty(l:preview)
     " スクロールは fzf に任せない（+{3}/2 は wrap の折返しを考慮せず、長い行の
