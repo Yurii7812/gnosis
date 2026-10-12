@@ -12468,9 +12468,9 @@ endfunction
 
 " まだ日記の節に入れていないノートを、入れるべき日記の「今日のノート」に足す（作成時に
 " 入れそびれた分・機能を入れる前に作った分）。対象は直近 g:simple_yurii_note_diary_backfill_days
-" 日（既定 7、0 で全部）。日記が無い日は作らない（作るのは新規ノートのときだけ）。
+" 日（既定 0 = 全部）。日記が無い日は作らない（作るのは新規ノートのときだけ）。
 function! s:diary_backfill(root, st, notes) abort
-  let l:days = get(g:, 'simple_yurii_note_diary_backfill_days', 7)
+  let l:days = get(g:, 'simple_yurii_note_diary_backfill_days', 0)
   let l:h = get(g:, 'simple_yurii_note_diary_day_start_hour', 5)
   let l:since = l:days > 0 ? strftime('%Y-%m-%d', localtime() - l:days * 86400 - l:h * 3600) : ''
   let l:dir = substitute(fnamemodify(a:root, ':p'), '/$', '', '')
