@@ -224,6 +224,8 @@ command!          SimpleYuriinoteRemovePassword call simple_yurii_note#remove_pa
 " vault の手動ロック解除 / ロック（gocryptfs）
 command!          SimpleMount call simple_yurii_note#mount_vault()
 command!          SimpleLock  call simple_yurii_note#lock_vault()
+" 暗号箱(.crypt)を vault のパスワードで 7z 化して <出力先>/<日時>-<名前>.7z に出力
+command! -nargs=? -complete=dir SimpleBackup call simple_yurii_note#backup_vault(<q-args>)
 " 終了時に vault 外へ残留させない（recent.json / viminfo を消す）
 command!          SimpleExitCleanup call simple_yurii_note#exit_cleanup()
 " テーブル操作コマンド

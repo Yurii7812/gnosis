@@ -11291,6 +11291,95 @@ function! simple_yurii_note#lock_vault() abort
   echom 'simple_yurii_note: vault locked'
 endfunction
 
+" :SimpleBackup [出力先ディレクトリ]
+" 暗号箱（.crypt）だけを 7z にまとめる。vault のパスワードで暗号化（ファイル名も
+" 隠す）し、出力は <出力先>/<YYYYmmddHHMMSS>-<プロジェクト名>.7z。
+" 平文の vault（note/ やキャッシュ JSON）は含めない。出力先は引数 →
+" g:simple_yurii_note_backup_dir → 聞く、の順。
+function! simple_yurii_note#backup_vault(...) abort
+  let l:st = s:vault_status()
+  if !l:st.has_cipher
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 暗号箱がないのでバックアップできません（暗号化されていない vault）'
+    echohl NONE
+    return
+  endif
+  if !executable('7z') || !executable('gocryptfs')
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 7z と gocryptfs が必要です'
+    echohl NONE
+    return
+  endif
+  let l:dest = a:0 && !empty(a:1) ? a:1 : get(g:, 'simple_yurii_note_backup_dir', '')
+  if empty(l:dest)
+    let l:dest = input('バックアップ先ディレクトリ: ', '', 'dir')
+  endif
+  let l:dest = fnamemodify(expand(l:dest), ':p')
+  if empty(l:dest) || l:dest ==# fnamemodify('', ':p') || !isdirectory(l:dest)
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 出力先ディレクトリがありません: ' . l:dest
+    echohl NONE
+    return
+  endif
+  let l:pw = inputsecret('vault password: ')
+  if empty(l:pw)
+    echom 'simple_yurii_note: バックアップを中止'
+    return
+  endif
+  call simple_yurii_note#backup_vault_with(l:pw, l:dest)
+endfunction
+
+" backup_vault の本体（パスワード検証→7z）。テストはここを直接呼ぶ。
+function! simple_yurii_note#backup_vault_with(pw, dest) abort
+  let l:pw = a:pw
+  let l:dest = a:dest
+  let l:st = s:vault_status()
+  let l:cipher = fnamemodify(l:st.cipher, ':p:h')
+  if stridx(l:dest, l:cipher . s:sep()) == 0 || (!empty(l:st.root) && stridx(l:dest, fnamemodify(l:st.root, ':p')) == 0)
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 出力先を vault の中にはできません'
+    echohl NONE
+    return
+  endif
+  let l:proj = l:st.layout ==# 'note' ? fnamemodify(l:st.root, ':h:t') : fnamemodify(l:st.root, ':t')
+  let l:out = substitute(l:dest, s:sep() . '\+$', '', '') . s:sep()
+        \ . strftime('%Y%m%d%H%M%S') . '-' . l:proj . '.7z'
+  if filereadable(l:out)
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 既に存在します: ' . l:out
+    echohl NONE
+    return
+  endif
+  " vault と違うパスワードで固めると復元できなくなるので、先に gocryptfs で検証する
+  let l:pf = s:temp_passfile(l:pw)
+  call system('gocryptfs -fsck -passfile ' . shellescape(l:pf) . ' ' . shellescape(l:cipher) . ' 2>&1')
+  let l:ok = v:shell_error == 0
+  call s:secure_delete(l:pf)
+  if !l:ok
+    echohl ErrorMsg
+    echom 'simple_yurii_note: パスワードが違う（または暗号箱が壊れています）'
+    echohl NONE
+    return
+  endif
+  " 7z は標準入力からパスワードを読む（コマンドラインに出さない）。2 回分を一時ファイルへ。
+  let l:pf2 = tempname()
+  call system('install -m 600 /dev/null ' . shellescape(l:pf2))
+  call s:syn_writefile([l:pw, l:pw], l:pf2)
+  let l:parent = fnamemodify(l:cipher, ':h')
+  let l:res = system('cd ' . shellescape(l:parent) . ' && 7z a -t7z -mhe=on -mx=1 -p '
+        \ . shellescape(l:out) . ' ' . shellescape(fnamemodify(l:cipher, ':t')) . ' < ' . shellescape(l:pf2) . ' 2>&1')
+  let l:rc = v:shell_error
+  call s:secure_delete(l:pf2)
+  if l:rc != 0 || !filereadable(l:out)
+    call delete(l:out)
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 7z 失敗: ' . substitute(l:res, '\n\+', ' ', 'g')[-200:]
+    echohl NONE
+    return
+  endif
+  echom 'simple_yurii_note: バックアップ完了 → ' . l:out
+endfunction
+
 " Vim 終了 = 自動ロック（busy なら静かに諦める）
 function! simple_yurii_note#quit_unmount() abort
   if simple_yurii_note#vault_mounted() != 1
