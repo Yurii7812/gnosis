@@ -8778,6 +8778,7 @@ function! simple_yurii_note#linkify_selection_new_note() abort range
           \ s:v2_down_mark,
           \ ]
     call s:syn_writefile(l:new_content, l:new_file)
+    call s:diary_place_safe(l:new_file, l:new_content)
     " Parent は付けない（2026-10-09〜）。元ノートは sync が新ノートの BackLink に
     " 自動で載せる。後に Parent にしたいだけなら \P で足せる。
   endif
@@ -12011,7 +12012,9 @@ function! s:write_new_note(lines, path) abort
   if filereadable(a:path) || isdirectory(a:path)
     throw 'simple_yurii_note: 既存のファイルを上書きしません: ' . a:path
   endif
-  return s:syn_writefile(a:lines, a:path)
+  let l:ret = s:syn_writefile(a:lines, a:path)
+  call s:diary_place_safe(a:path, a:lines)
+  return l:ret
 endfunction
 
 function! s:syn_writefile(lines, path, ...) abort
@@ -12020,4 +12023,397 @@ function! s:syn_writefile(lines, path, ...) abort
     return writefile(a:lines, a:path)
   endif
   return writefile(a:lines, a:path, a:1)
+endfunction
+
+" ---------------------------------------------------------------------------
+" 日記の「今日のノート」
+"   ノートを作ると、その日の日記ノート（題が YYYY-MM-DD-曜日2文字- だけ）の本文の
+"   `## 今日のノート` の節にリンクを足す。リンクは日記の本文リンクなので、
+"   新ノート側は Parent ではなく BackLink に日記が出る（sync の規則どおり）。
+"   - グループは載せない。日記自身も載せない。
+"   - 題が YYYY-MM-DD-… で始まる日記以外のノート（夢日記など）は、作成時刻に関係なく
+"     題の日付の日記に入れる。題が後から付くので、保存時にも見直して移す。
+"   - それ以外は作成時刻（g:simple_yurii_note_diary_day_start_hour 時区切り）の日付。
+"   - 日記が無ければ自動で作る（月グループ YYYY-MM の下）。
+"   - 日記の本文にすでに文中リンクがあっても、節の中に無ければ足す。
+"   - 日記は .state/diary_days.json に記録するので、題を後から変えても別の日記は作らない。
+" ---------------------------------------------------------------------------
+
+let s:diary_weekdays = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+
+function! s:diary_state_path() abort
+  return s:state_dir() . s:sep() . 'diary_days.json'
+endfunction
+
+" {'days': {日付: 日記のファイル名}, 'notes': {ノートのファイル名: 入れた日記のファイル名}}
+function! s:diary_state_read() abort
+  let l:st = {'days': {}, 'notes': {}}
+  let l:p = s:diary_state_path()
+  if filereadable(l:p)
+    try
+      let l:d = json_decode(join(readfile(l:p), "\n"))
+      if type(l:d) == v:t_dict
+        let l:st.days = get(l:d, 'days', {})
+        let l:st.notes = get(l:d, 'notes', {})
+      endif
+    catch
+    endtry
+  endif
+  return l:st
+endfunction
+
+function! s:diary_state_write(st) abort
+  call s:syn_writefile([json_encode(a:st)], s:diary_state_path())
+endfunction
+
+" front matter から title / time / group を取る（lines は先頭付近でよい）
+function! s:diary_head(lines) abort
+  let l:r = {'title': '', 'time': '', 'group': 0}
+  let l:fence = 0
+  for l:ln in a:lines
+    if l:ln ==# '---'
+      let l:fence += 1
+      if l:fence >= 2 | break | endif
+      continue
+    endif
+    if l:fence != 1 | break | endif
+    if l:ln =~# '^title:'
+      let l:r.title = trim(substitute(l:ln, '^title:\s*', '', ''))
+    elseif l:ln =~# '^time:'
+      let l:r.time = trim(substitute(l:ln, '^time:\s*', '', ''))
+    elseif l:ln =~# '^attribute:\s*group\>'
+      let l:r.group = 1
+    endif
+  endfor
+  return l:r
+endfunction
+
+function! s:diary_is_diary_title(title) abort
+  return a:title =~# '^\d\{4}-\d\{2}-\d\{2}-\u\u-$'
+endfunction
+
+" 日記以外で、題が日付で始まるもの → その日付。違えば ''
+function! s:diary_title_date(title) abort
+  if s:diary_is_diary_title(a:title)
+    return ''
+  endif
+  return matchstr(a:title, '^\d\{4}-\d\{2}-\d\{2}\ze-')
+endfunction
+
+function! s:diary_day_of_time(timestr) abort
+  let l:h = get(g:, 'simple_yurii_note_diary_day_start_hour', 5)
+  let l:ts = (!empty(a:timestr) && exists('*strptime'))
+        \ ? strptime('%Y-%m-%d %H:%M:%S', a:timestr) : 0
+  if l:ts <= 0
+    let l:ts = localtime()
+  endif
+  return strftime('%Y-%m-%d', l:ts - l:h * 3600)
+endfunction
+
+function! s:diary_weekday(date) abort
+  let l:ts = strptime('%Y-%m-%d %H:%M:%S', a:date . ' 12:00:00')
+  return s:diary_weekdays[str2nr(strftime('%u', l:ts)) - 1]
+endfunction
+
+" vault 直下の .md を {file, title, group} で返す
+function! s:diary_scan(root) abort
+  let l:out = []
+  for l:f in glob(fnamemodify(a:root, ':p') . '*.md', 0, 1)
+    let l:h = s:diary_head(readfile(l:f, '', 30))
+    call add(l:out, {'file': fnamemodify(l:f, ':t'), 'title': l:h.title, 'group': l:h.group})
+  endfor
+  return l:out
+endfunction
+
+function! s:diary_find_group(notes, title) abort
+  for l:n in a:notes
+    if l:n.group && l:n.title ==# a:title
+      return l:n.file
+    endif
+  endfor
+  return ''
+endfunction
+
+" その日の日記のファイル名（記録 → 題が日付-曜日- だけのもの）。無ければ ''
+function! s:diary_find(root, date, st, notes) abort
+  let l:rec = get(a:st.days, a:date, '')
+  if !empty(l:rec) && filereadable(fnamemodify(a:root, ':p') . l:rec)
+    return l:rec
+  endif
+  for l:n in a:notes
+    if s:diary_is_diary_title(l:n.title) && l:n.title[0 : 9] ==# a:date
+      let a:st.days[a:date] = l:n.file
+      return l:n.file
+    endif
+  endfor
+  return ''
+endfunction
+
+function! s:diary_new_filename(root) abort
+  let l:i = 0
+  while 1
+    let l:name = strftime('%y%m%d%H%M%S', localtime() + l:i) . '.md'
+    if !filereadable(fnamemodify(a:root, ':p') . l:name)
+      return l:name
+    endif
+    let l:i += 1
+  endwhile
+endfunction
+
+function! s:diary_link(file, title) abort
+  return '[' . a:title . '](' . a:file . ')'
+endfunction
+
+" Parent の節に親リンクを 1 本入れた新規ノートの内容
+function! s:diary_new_lines(title, is_group, parent_link) abort
+  let l:lines = simple_yurii_note#note_template(a:title, a:is_group)
+  if !empty(a:parent_link)
+    let l:p = index(l:lines, s:v2_up_mark)
+    call insert(l:lines, a:parent_link, l:p >= 0 ? l:p + 1 : len(l:lines))
+  endif
+  return l:lines
+endfunction
+
+" a:section が空なら本文の最後（### Parent の直前）に足す。あれば `## 節` に足す。
+" 重複判定は同じ節の中だけ（文中にあっても節に足す）。
+function! s:diary_op_add(link, section, lines) abort
+  let l:lines = copy(a:lines)
+  let l:tgt = matchstr(a:link, '](\zs[^)]*\ze)')
+  let l:p = index(l:lines, s:v2_up_mark)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  if empty(a:section)
+    for l:i in range(0, l:end - 1)
+      if stridx(l:lines[l:i], '](' . l:tgt . ')') >= 0
+        return l:lines
+      endif
+    endfor
+    if l:end > 0 && trim(l:lines[l:end - 1]) !=# '' && l:lines[l:end - 1] !~# ')\s*$'
+      call insert(l:lines, '', l:end)
+      let l:end += 1
+    endif
+    call insert(l:lines, a:link, l:end)
+    return l:lines
+  endif
+  let l:head = '## ' . a:section
+  let l:h = index(l:lines[0 : l:end - 1], l:head)
+  if l:h < 0
+    let l:add = [l:head, a:link]
+    if l:end > 0 && trim(l:lines[l:end - 1]) !=# ''
+      let l:add = [''] + l:add
+    endif
+    call extend(l:lines, l:add, l:end)
+    return l:lines
+  endif
+  let l:s_end = l:end
+  for l:j in range(l:h + 1, l:end - 1)
+    if l:lines[l:j] =~# '^#'
+      let l:s_end = l:j
+      break
+    endif
+  endfor
+  for l:j in range(l:h + 1, l:s_end - 1)
+    if stridx(l:lines[l:j], '](' . l:tgt . ')') >= 0
+      return l:lines
+    endif
+  endfor
+  let l:k = l:s_end
+  while l:k > l:h + 1 && trim(l:lines[l:k - 1]) ==# ''
+    let l:k -= 1
+  endwhile
+  call insert(l:lines, a:link, l:k)
+  return l:lines
+endfunction
+
+" 節の中から、そのファイルへのリンク行を外す。リンクが無くなった節は見出しごと消す。
+function! s:diary_op_remove(tgt, section, lines) abort
+  let l:lines = copy(a:lines)
+  let l:p = index(l:lines, s:v2_up_mark)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  let l:h = index(l:lines[0 : l:end - 1], '## ' . a:section)
+  if l:h < 0
+    return l:lines
+  endif
+  let l:s_end = l:end
+  for l:j in range(l:h + 1, l:end - 1)
+    if l:lines[l:j] =~# '^#'
+      let l:s_end = l:j
+      break
+    endif
+  endfor
+  for l:j in range(l:s_end - 1, l:h + 1, -1)
+    if stridx(l:lines[l:j], '](' . a:tgt . ')') >= 0
+      call remove(l:lines, l:j)
+      let l:s_end -= 1
+    endif
+  endfor
+  let l:left = filter(copy(l:lines[l:h + 1 : l:s_end - 1]), 'trim(v:val) !=# ""')
+  if empty(l:left)
+    call remove(l:lines, l:h, l:s_end - 1)
+    if l:h > 0 && trim(l:lines[l:h - 1]) ==# ''
+      call remove(l:lines, l:h - 1)
+    endif
+  endif
+  return l:lines
+endfunction
+
+" ファイルに a:Fn（行リスト → 行リスト）を適用する。バッファが開いていればバッファを直接
+" 書き換える（未保存の変更を壊さない。保存は自動保存に任せる）。変わったら 1。
+function! s:diary_edit_file(file, Fn) abort
+  let l:nr = bufnr(a:file)
+  if l:nr > 0 && bufloaded(l:nr)
+    let l:old = getbufline(l:nr, 1, '$')
+    let l:new = call(a:Fn, [l:old])
+    if l:new ==# l:old
+      return 0
+    endif
+    let l:view = (l:nr == bufnr('%')) ? winsaveview() : {}
+    let l:pos = 0
+    while l:pos < min([len(l:old), len(l:new)]) && l:old[l:pos] ==# l:new[l:pos]
+      let l:pos += 1
+    endwhile
+    call s:write_note_lines_for_path(a:file, l:new)
+    if !empty(l:view)
+      if l:view.lnum > l:pos
+        let l:view.lnum = max([1, l:view.lnum + len(l:new) - len(l:old)])
+      endif
+      call winrestview(l:view)
+    endif
+    return 1
+  endif
+  let l:old = readfile(a:file)
+  let l:new = call(a:Fn, [l:old])
+  if l:new ==# l:old
+    return 0
+  endif
+  call s:syn_writefile(l:new, a:file)
+  return 1
+endfunction
+
+" その日の日記を作る。月グループ（YYYY-MM）の本文にも足す。月グループが無ければ、
+" グループ「日記」があればその下に月グループも作る。作った日記のファイル名を返す。
+function! s:diary_create(root, date, notes) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  let l:title = a:date . '-' . s:diary_weekday(a:date) . '-'
+  let l:month = a:date[0 : 6]
+  let l:mg = s:diary_find_group(a:notes, l:month)
+  if empty(l:mg)
+    let l:top = s:diary_find_group(a:notes, '日記')
+    if !empty(l:top)
+      let l:mg = s:diary_new_filename(a:root)
+      call s:syn_writefile(s:diary_new_lines(l:month, 1, s:diary_link(l:top, '日記')), l:dir . l:mg)
+      call s:diary_edit_file(l:dir . l:top, function('s:diary_op_add', [s:diary_link(l:mg, l:month), '']))
+    endif
+  endif
+  let l:file = s:diary_new_filename(a:root)
+  let l:parent = empty(l:mg) ? '' : s:diary_link(l:mg, l:month)
+  call s:syn_writefile(s:diary_new_lines(l:title, 0, l:parent), l:dir . l:file)
+  if !empty(l:mg)
+    call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
+  endif
+  return l:file
+endfunction
+
+" ノート a:path（vault 直下）を、入れるべき日記の「今日のノート」に入れる。
+" a:1 = そのノートの行（まだ読めない・読むのが重いとき用）
+function! s:diary_place(path, ...) abort
+  if !get(g:, 'simple_yurii_note_diary_auto', 1)
+    return
+  endif
+  let l:root = s:get_pkm_root()
+  if empty(l:root) || empty(a:path) || !s:is_markdown_file(a:path)
+    return
+  endif
+  let l:dir = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  if substitute(fnamemodify(a:path, ':p:h'), '/$', '', '') !=# l:dir
+    return
+  endif
+  let l:tail = fnamemodify(a:path, ':t')
+  if index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:tail) >= 0
+    return
+  endif
+  let l:lines = a:0 > 0 ? a:1 : readfile(a:path, '', 30)
+  let l:head = s:diary_head(l:lines)
+  if l:head.group
+    return
+  endif
+  let l:st = s:diary_state_read()
+  if s:diary_is_diary_title(l:head.title) || index(values(l:st.days), l:tail) >= 0
+    return
+  endif
+  let l:tdate = s:diary_title_date(l:head.title)
+  let l:date = empty(l:tdate) ? s:diary_day_of_time(l:head.time) : l:tdate
+  let l:notes = s:diary_scan(l:root)
+  let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
+  if empty(l:diary)
+    " 日記が見つからない日に、題が日付で始まる別のノート（昔の日記など）があるときは、
+    " 重複した日記を作らない。:YuriiDiaryAdopt でその日記を登録すると使える。
+    for l:n in l:notes
+      if l:n.file !=# l:tail && l:n.title =~# '^' . l:date . '-' && !has_key(l:st.notes, l:n.file)
+        echohl WarningMsg
+        echom 'simple_yurii_note: ' . l:date . ' の日記が見つかりません（' . l:n.file
+              \ . ' が日付で始まっています）。日記なら、そのノートで :YuriiDiaryAdopt'
+        echohl NONE
+        return
+      endif
+    endfor
+    let l:diary = s:diary_create(l:root, l:date, l:notes)
+    let l:st.days[l:date] = l:diary
+  endif
+  let l:title = empty(l:head.title) ? fnamemodify(l:tail, ':r') : l:head.title
+  let l:sec = get(g:, 'simple_yurii_note_diary_section', '今日のノート')
+  call s:diary_edit_file(l:dir . '/' . l:diary,
+        \ function('s:diary_op_add', [s:diary_link(l:tail, l:title), l:sec]))
+  let l:prev = get(l:st.notes, l:tail, '')
+  if !empty(l:prev) && l:prev !=# l:diary && filereadable(l:dir . '/' . l:prev)
+    call s:diary_edit_file(l:dir . '/' . l:prev, function('s:diary_op_remove', [l:tail, l:sec]))
+  endif
+  let l:st.notes[l:tail] = l:diary
+  call s:diary_state_write(l:st)
+endfunction
+
+function! s:diary_place_safe(path, ...) abort
+  try
+    call call('s:diary_place', [a:path] + a:000)
+  catch
+    echohl WarningMsg
+    echom 'simple_yurii_note: 日記への追加に失敗: ' . v:exception
+    echohl NONE
+  endtry
+endfunction
+
+" 保存時: 作成時に日記へ入れたノートの題が日付で始まるようになっていたら、その日の日記へ移す
+function! simple_yurii_note#diary_on_save() abort
+  if !get(g:, 'simple_yurii_note_diary_auto', 1)
+    return
+  endif
+  let l:path = expand('%:p')
+  let l:tail = fnamemodify(l:path, ':t')
+  let l:st = s:diary_state_read()
+  if !has_key(l:st.notes, l:tail)
+    return
+  endif
+  let l:head = s:diary_head(getline(1, 30))
+  let l:tdate = s:diary_title_date(l:head.title)
+  if empty(l:tdate)
+    return
+  endif
+  let l:cur = get(l:st.days, l:tdate, '')
+  if !empty(l:cur) && l:cur ==# l:st.notes[l:tail]
+    return
+  endif
+  call s:diary_place_safe(l:path, getline(1, 30))
+endfunction
+
+" :YuriiDiaryAdopt … 今のノート（題が日付で始まる）を、その日付の日記として登録する
+function! simple_yurii_note#diary_adopt() abort
+  let l:head = s:diary_head(getline(1, 30))
+  let l:date = matchstr(l:head.title, '^\d\{4}-\d\{2}-\d\{2}\ze-')
+  if empty(l:date)
+    echohl WarningMsg | echo 'simple_yurii_note: 題が YYYY-MM-DD- で始まるノートで実行して' | echohl NONE
+    return
+  endif
+  let l:st = s:diary_state_read()
+  let l:st.days[l:date] = expand('%:t')
+  call s:diary_state_write(l:st)
+  echo 'simple_yurii_note: ' . l:date . ' の日記に登録: ' . expand('%:t')
 endfunction

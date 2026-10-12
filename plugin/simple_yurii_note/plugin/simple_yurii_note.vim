@@ -156,6 +156,7 @@ endif
 " コマンド定義
 " ---------------------------------------------------------------------------
 
+command!          YuriiDiaryAdopt call simple_yurii_note#diary_adopt()
 command! -nargs=? UpdateMD   call simple_yurii_note#update_md(<q-args>)
 command! -nargs=? UpdateAll  call simple_yurii_note#update_all(<q-args>)
 command! -nargs=? UpdateALL  call simple_yurii_note#update_all(<q-args>)
@@ -849,6 +850,10 @@ augroup simple_yurii_note_autosync
 augroup END
 
 function! s:on_write_post() abort
+  try
+    call simple_yurii_note#diary_on_save()
+  catch
+  endtry
   if !g:simple_yurii_note_autosync
     call simple_yurii_note#autosync_log('on_write_post: autosync is off')
     return
