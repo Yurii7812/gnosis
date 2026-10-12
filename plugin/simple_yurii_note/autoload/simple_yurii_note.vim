@@ -8733,6 +8733,7 @@ function! simple_yurii_note#linkify_selection_new_note() abort range
           \ '# ' . l:title,
           \ '',
           \ '',
+          \ '',
           \ s:v2_up_mark,
           \ s:v2_down_mark,
           \ ]
