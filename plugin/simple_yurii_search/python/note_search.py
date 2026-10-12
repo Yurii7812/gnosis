@@ -109,7 +109,7 @@ def main() -> int:
         args = args[2:]
     root = args[0] if args else "."
     tokens = split_tokens(" ".join(args[1:]))
-    rows: list[tuple[int, str, str, str, int]] = []
+    rows: list[tuple[int, int, str, str, str, int]] = []
     for path, text in load_notes(root):
         if only is not None and os.path.realpath(path) not in only:
             continue
@@ -119,12 +119,14 @@ def main() -> int:
         hay = (name + "\n" + text).lower()
         if tokens and not all(t.lower() in hay for t in tokens):
             continue
-        title_hits = sum(1 for t in tokens if t.lower() in (name + " " + title).lower())
+        # 優先順位: リンクの表示名に当たった語数 → ノートのタイトルに当たった語数 → 表示名順。
+        name_hits = sum(1 for t in tokens if t.lower() in name.lower())
+        title_hits = sum(1 for t in tokens if t.lower() in title.lower())
         line = first_hit_line(text.split("\n"), tokens) if tokens else 1
-        rows.append((-title_hits, shown.casefold(), path, shown, line))
+        rows.append((-name_hits, -title_hits, shown.casefold(), path, shown, line))
     rows.sort()
     out = []
-    for _score, _t, path, title, line in rows:
+    for _nh, _th, _t, path, title, line in rows:
         out.append(f"{path}\t{highlight(title.replace(chr(9), ' '), tokens)}\t{line}")
     sys.stdout.write("\n".join(out))
     return 0
