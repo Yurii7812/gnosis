@@ -157,7 +157,7 @@ function! s:current_buffer_links() abort
         continue
       endif
       let l:seen[l:path] = 1
-      call add(l:entries, {'p': l:path,
+      call add(l:entries, {'p': l:path, 'n': l:text,
             \ 't': empty(l:text) ? fnamemodify(l:path, ':t:r') : l:text})
     endwhile
   endfor
@@ -352,7 +352,8 @@ function! simple_yurii_search#search_local() abort
   if empty(l:links) | echo 'simple_yurii_search: このノートにリンクがありません' | return | endif
   " リンク先ノートの本文も検索対象にする（タイトル優先）。note_search.py を --only で絞る。
   let l:onlyfile = tempname()
-  call writefile(map(copy(l:links), {_, n -> n.p}), l:onlyfile)
+  " 表示名（リンクのテキスト）も渡し、一覧にはタイトルでなくそれを出す
+  call writefile(map(copy(l:links), {_, n -> n.p . (empty(n.n) ? '' : "\t" . substitute(n.n, '\t', ' ', 'g'))}), l:onlyfile)
   if s:note_search_run('Link> ', '2', function('s:search_open_sink'),
         \ '--only ' . shellescape(l:onlyfile))
     return

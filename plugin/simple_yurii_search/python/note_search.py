@@ -12,7 +12,10 @@
 
 使い方: note_search.py [--only <paths-file>] <root> [query...]
   --only <paths-file> … そのファイルに列挙した絶対パスだけを検索対象にする
-                        （<Space>=今のノートのリンク先に絞る用）。
+                        （<Space>=今のノートのリンク先に絞る用）。各行は
+                        `絶対パス` か `絶対パス<TAB>リンクの表示名`。表示名があれば、
+                        左の一覧にはノートのタイトルではなくその表示名を出し、
+                        検索・優先順位にも表示名を使う（そのページでの呼び名で探せる）。
 """
 from __future__ import annotations
 
@@ -92,13 +95,17 @@ def first_hit_line(lines: list[str], tokens: list[str]) -> int:
 
 def main() -> int:
     args = sys.argv[1:]
-    only: set[str] | None = None
+    only: dict[str, str] | None = None
     if args and args[0] == "--only":
         if len(args) < 2:
             print("--only requires a file", file=sys.stderr)
             return 2
         with open(args[1], encoding="utf-8") as f:
-            only = {os.path.realpath(ln.strip()) for ln in f if ln.strip()}
+            only = {}
+            for ln in f:
+                path_part, _, name = ln.rstrip("\n").partition("\t")
+                if path_part.strip():
+                    only[os.path.realpath(path_part.strip())] = name.strip()
         args = args[2:]
     root = args[0] if args else "."
     tokens = split_tokens(" ".join(args[1:]))
@@ -107,11 +114,14 @@ def main() -> int:
         if only is not None and os.path.realpath(path) not in only:
             continue
         title, _tline = title_of(text, path)
-        if tokens and not all(t.lower() in text.lower() for t in tokens):
+        name = only.get(os.path.realpath(path), "") if only is not None else ""
+        shown = name or title
+        hay = (name + "\n" + text).lower()
+        if tokens and not all(t.lower() in hay for t in tokens):
             continue
-        title_hits = sum(1 for t in tokens if t.lower() in title.lower())
+        title_hits = sum(1 for t in tokens if t.lower() in (name + " " + title).lower())
         line = first_hit_line(text.split("\n"), tokens) if tokens else 1
-        rows.append((-title_hits, title.casefold(), path, title, line))
+        rows.append((-title_hits, shown.casefold(), path, shown, line))
     rows.sort()
     out = []
     for _score, _t, path, title, line in rows:
