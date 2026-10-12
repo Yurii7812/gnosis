@@ -1043,7 +1043,7 @@ function! s:guide_template() abort
         \ '- `:YuriiGuide` このガイドを再生成 ・ `:YuriiWeb` ノートアプリ',
         \ '',
         \ '### 暗号・ゴミ箱・紙PKM・画像',
-        \ '- `:YuriiMount` / `:YuriiLock` / `:YuriiSetPassword` / `:YuriiSetPassword` / `:YuriiExitCleanup`',
+        \ '- `:YuriiMount` / `:YuriiLock` / `:YuriiSetPassword` / `:YuriiExitCleanup`',
         \ '- `:YuriiTrash` ゴミ箱へ ・ `:YuriiTrashList` ゴミ箱一覧 ・ `:YuriiPaperIndex` 紙PKM Index ・ `:YuriiScan` スキャン取り込み',
         \ '- `:SetImageSize` 画像サイズ ・ `:Gallery` / `:YuriiGallery` ・ `:GalleryFolder` / `:YuriiGalleryFolder` 画像ギャラリー',
         \ '',
