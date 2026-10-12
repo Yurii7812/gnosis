@@ -11402,13 +11402,32 @@ function! simple_yurii_note#backup_vault_with(pw, dest) abort
   let l:res = system('cd ' . shellescape(l:parent) . ' && 7z a -t7z -mhe=on -mx=1 -p '
         \ . shellescape(l:out) . ' ' . shellescape(fnamemodify(l:cipher, ':t')) . ' < ' . shellescape(l:pf2) . ' 2>&1')
   let l:rc = v:shell_error
-  call s:secure_delete(l:pf2)
-  if l:rc != 0 || !filereadable(l:out)
+  " 終了コード 1 は警告（マウント中の vault がバックアップ中に書き換わって、走査後に
+  " 消えたファイルがあった等）。7z は出来ているので失敗扱いにしない。2 以上が失敗。
+  let l:warn = l:rc == 1
+  if l:rc >= 2 || !filereadable(l:out)
+    call s:secure_delete(l:pf2)
     call delete(l:out)
     echohl ErrorMsg
     echom 'simple_yurii_note: 7z 失敗: ' . substitute(l:res, '\n\+', ' ', 'g')[-200:]
     echohl NONE
     return
+  endif
+  " 出来た 7z がパスワードで開けて壊れていないか検査する
+  call system('7z t ' . shellescape(l:out) . ' < ' . shellescape(l:pf2) . ' 2>&1')
+  let l:tested = v:shell_error == 0
+  call s:secure_delete(l:pf2)
+  if !l:tested
+    call delete(l:out)
+    echohl ErrorMsg
+    echom 'simple_yurii_note: 7z の検査に失敗したので破棄しました'
+    echohl NONE
+    return
+  endif
+  if l:warn
+    echohl WarningMsg
+    echom 'simple_yurii_note: 警告あり（バックアップ中に変更されたファイルがあった可能性）。保存中でない時にもう一度取ると確実です'
+    echohl NONE
   endif
   echom 'simple_yurii_note: バックアップ完了 → ' . l:out
 endfunction
