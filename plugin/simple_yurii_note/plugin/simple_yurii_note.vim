@@ -157,6 +157,7 @@ endif
 " ---------------------------------------------------------------------------
 
 command!          YuriiDiaryAdopt call simple_yurii_note#diary_adopt()
+command!          YuriiDiaryBackfill call simple_yurii_note#diary_backfill()
 command! -nargs=? UpdateMD   call simple_yurii_note#update_md(<q-args>)
 command! -nargs=? UpdateAll  call simple_yurii_note#update_all(<q-args>)
 command! -nargs=? UpdateALL  call simple_yurii_note#update_all(<q-args>)

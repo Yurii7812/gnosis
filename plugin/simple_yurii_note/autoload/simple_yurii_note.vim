@@ -12049,7 +12049,7 @@ endfunction
 
 " {'days': {日付: 日記のファイル名}, 'notes': {ノートのファイル名: 入れた日記のファイル名}}
 function! s:diary_state_read() abort
-  let l:st = {'days': {}, 'notes': {}}
+  let l:st = {'days': {}, 'notes': {}, 'backfilled': 0}
   let l:p = s:diary_state_path()
   if filereadable(l:p)
     try
@@ -12057,6 +12057,7 @@ function! s:diary_state_read() abort
       if type(l:d) == v:t_dict
         let l:st.days = get(l:d, 'days', {})
         let l:st.notes = get(l:d, 'notes', {})
+        let l:st.backfilled = get(l:d, 'backfilled', 0)
       endif
     catch
     endtry
@@ -12472,7 +12473,13 @@ function! s:diary_adopt_all() abort
       let l:amb += 1
     endif
   endfor
-  let l:filled = s:diary_backfill(l:root, l:st, l:notes)
+  " さかのぼって入れるのは最初の 1 回だけ。以後は作成時に入る（\ua では全体を見直さない）。
+  " もう一度やりたいときは :YuriiDiaryBackfill。
+  let l:filled = 0
+  if !l:st.backfilled
+    let l:filled = s:diary_backfill(l:root, l:st, l:notes)
+    let l:st.backfilled = 1
+  endif
   call s:diary_state_write(l:st)
   if l:added > 0 || l:amb > 0 || l:filled > 0
     echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録、「今日のノート」を ' . l:filled . ' 日分更新'
@@ -12544,4 +12551,17 @@ function! s:diary_adopt_all_safe() abort
   catch
     echom 'simple_yurii_note: 日記の登録に失敗: ' . v:exception
   endtry
+endfunction
+
+" :YuriiDiaryBackfill … 日記の「今日のノート」へ、入っていないノートを全部さかのぼって足し直す
+function! simple_yurii_note#diary_backfill() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:st = s:diary_state_read()
+  let l:n = s:diary_backfill(l:root, l:st, s:diary_scan(l:root))
+  let l:st.backfilled = 1
+  call s:diary_state_write(l:st)
+  echo 'simple_yurii_note: 「今日のノート」を ' . l:n . ' 日分更新'
 endfunction
