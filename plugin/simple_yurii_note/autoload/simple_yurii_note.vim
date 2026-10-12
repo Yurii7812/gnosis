@@ -12732,18 +12732,29 @@ function! simple_yurii_note#diary_today() abort
   call s:diary_cursor()
 endfunction
 
-" 日記を開いたときのカーソル位置: 「今日のノート」の節の 2 行上
+" 日記を開いたときのカーソル位置と、その周りの形を整える。
 "   本文 / 空行 / ここにカーソル / 空行 / ## 今日のノート
-" 節が無ければ ### Parent の直前の行。
+" 「今日のノート」の節の直前に空行が 3 つ無ければ足し（節が無ければ ### Parent の前に
+" 空の節も作る）、真ん中の空行にカーソルを置く。
 function! s:diary_cursor() abort
   let l:sec = '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート')
-  let l:n = index(getline(1, '$'), l:sec) + 1
+  let l:lines = getline(1, '$')
+  let l:n = index(l:lines, l:sec) + 1
   if l:n <= 0
-    let l:n = index(getline(1, '$'), s:v2_up_mark) + 1
+    let l:u = index(l:lines, s:v2_up_mark) + 1
+    if l:u <= 0
+      return
+    endif
+    call append(l:u - 1, [l:sec, ''])
+    let l:n = l:u
   endif
-  if l:n <= 0
-    return
+  let l:cnt = 0
+  while l:cnt < 3 && l:n - 1 - l:cnt >= 1 && trim(getline(l:n - 1 - l:cnt)) ==# ''
+    let l:cnt += 1
+  endwhile
+  if l:cnt < 3
+    call append(l:n - 1, repeat([''], 3 - l:cnt))
+    let l:n += 3 - l:cnt
   endif
-  call cursor(max([1, l:n - 2]), 1)
-  normal! $
+  call cursor(l:n - 2, 1)
 endfunction
