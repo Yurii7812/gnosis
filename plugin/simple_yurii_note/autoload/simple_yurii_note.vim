@@ -2538,6 +2538,50 @@ function! simple_yurii_note#jump_up() abort
   call s:jump_to_line(l:up)
 endfunction
 
+" 行 a:lnum が画面で使う行数（折り返し・閉じた折りたたみを考慮した概算）。
+function! s:screen_rows(lnum) abort
+  if !&wrap || foldclosed(a:lnum) != -1
+    return 1
+  endif
+  let l:w = max([1, winwidth(0) - getwininfo(win_getid())[0].textoff])
+  return max([1, (strdisplaywidth(getline(a:lnum)) + l:w - 1) / l:w])
+endfunction
+
+" a:lnum の行を画面の中央に置くときの、窓の先頭行。ただし最終行が窓の下端より
+" 上へ上がる（＝ファイルの末尾より下の空白が出る）ほど下へは送らない。
+" 下に十分な行があれば中央、無ければ「最終行が窓の下端」になる先頭行を返す。
+" カーソルは動かさない（末尾まで動かして戻す、はしない）。
+function! s:view_top_centered(lnum) abort
+  let l:h = winheight(0)
+  " 中央に置くために a:lnum の上へ空ける画面の行数
+  let l:above = max([0, (l:h - s:screen_rows(a:lnum)) / 2])
+  let l:top = a:lnum
+  let l:used = 0
+  while l:top > 1
+    let l:prev = l:top - 1
+    let l:f = foldclosed(l:prev)
+    if l:f != -1 | let l:prev = l:f | endif
+    let l:r = s:screen_rows(l:prev)
+    if l:used + l:r > l:above | break | endif
+    let l:used += l:r
+    let l:top = l:prev
+  endwhile
+  " 最終行が窓の下端に来る先頭行（これより下へはスクロールしない）
+  let l:max_top = line('$')
+  let l:used = 0
+  let l:ln = line('$')
+  while l:ln >= 1
+    let l:f = foldclosed(l:ln)
+    let l:start = l:f != -1 ? l:f : l:ln
+    let l:r = s:screen_rows(l:start)
+    if l:used + l:r > l:h | break | endif
+    let l:used += l:r
+    let l:max_top = l:start
+    let l:ln = l:start - 1
+  endwhile
+  return min([l:top, l:max_top])
+endfunction
+
 " \k 用: Parent セクションへカーソルを移すだけで、リンク先は開かない
 " （:JumpParent は従来どおり、リンクが1つならそのノートを開く）。
 function! simple_yurii_note#jump_up_cursor() abort
@@ -2547,9 +2591,13 @@ function! simple_yurii_note#jump_up_cursor() abort
     return
   endif
   " 「### Parent」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
-  " 見出しを画面の上端に寄せる（zt）。下に来ると Parent の中身が画面の外へ出るため。
+  " 見出しは、下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
+  " 来るところまでで止める（末尾より下の空白は出さない）。
   call s:jump_to_line(l:up)
-  normal! zt
+  let l:view = winsaveview()
+  let l:view.topline = s:view_top_centered(l:up)
+  let l:view.topfill = 0
+  call winrestview(l:view)
 endfunction
 
 function! simple_yurii_note#jump_down_top() abort
