@@ -8310,7 +8310,7 @@ endfunction
 
 " za: ca と同じ そっちにとって 側だが、関係は常に既定の「ノート」固定
 " （ピッカーも「相手にも書くか」の質問も出さない）。
-" Index（index.md）への za / zA。キーワード索引なので、置き場所は聞かずに
+" Index（index.md）への zA（za は通常どおり位置を聞く）。キーワード索引なので、置き場所は聞かずに
 " 「表示名（キーワード）」を聞く。末尾に足して、足した行へカーソルを置く。
 " 並べ替えは勝手にしない（\S / \ua のときだけ）。
 " 同じノートを別のキーワードで何度も足せる（同じ表示名＋同じ行のときだけ重複扱い）。
@@ -8345,14 +8345,9 @@ endfunction
 function! simple_yurii_note#add_clipboard_before_up_note(...) abort
   " za: 今のノートに（カーソル下のリンク or クリップボードの）リンクを 1 本足す。
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
-  "     Index では表示名を聞いて、末尾に足し、その行へ移る（並べ替えはしない）。
   let l:link = s:pick_one_link()
   if empty(l:link)
     echo 'Error: リンクが見つかりません（カーソル下 or クリップボード）'
-    return
-  endif
-  if s:is_current_index_buffer()
-    call call('s:add_to_index_named', [l:link] + a:000)
     return
   endif
   call s:insert_links_at_position([l:link])
