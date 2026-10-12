@@ -11405,7 +11405,7 @@ function! simple_yurii_note#backup_vault_with(pw, dest) abort
   call system('install -m 600 /dev/null ' . shellescape(l:pf2))
   call s:syn_writefile([l:pw, l:pw], l:pf2)
   let l:parent = fnamemodify(l:target, ':h')
-  let l:res = system('cd ' . shellescape(l:parent) . ' && 7z a -t7z -mhe=on -mx=1 -p '
+  let l:res = system('cd ' . shellescape(l:parent) . ' && 7z a -t7z -mhe=on -mx=1 -snl -p '
         \ . shellescape(l:out) . ' ' . shellescape(fnamemodify(l:target, ':t')) . ' < ' . shellescape(l:pf2) . ' 2>&1')
   let l:rc = v:shell_error
   " 終了コード 1 は警告（マウント中の vault がバックアップ中に書き換わって、走査後に
