@@ -1824,6 +1824,11 @@ function! s:append_link_to_buffer_section(name, link) abort
     endfor
   endif
 
+  if a:name ==# 'up'
+    let l:plan = s:parent_insert_plan(getline(1, '$'), l:sec - 1, a:link, expand('%:p:h'))
+    call append(l:plan.at, l:plan.lines)
+    return 1
+  endif
   call append(l:end, a:link)
   return 1
 endfunction
@@ -1906,7 +1911,45 @@ function! s:ensure_section_in_lines(lines, name) abort
   return {'lines': l:lines, 'idx': l:idx}
 endfunction
 
-function! s:add_link_to_lines_section(lines, name, link) abort
+" リンク行の target が グループ（attribute: group）のノートか。a:base_dir はリンクを解決する基準。
+function! s:parent_line_is_group(line, base_dir) abort
+  let l:tgt = s:extract_target(a:line)
+  if empty(l:tgt) | return 0 | endif
+  return s:v2_path_attr(simple_yurii_note#resolve_link(l:tgt, a:base_dir)) ==# 'group'
+endfunction
+
+" ### Parent に a:link を入れる位置と行。並びは「グループ（先頭ブロック）→ 1 行あけ → 普通のノート」。
+" 戻り値 {at, lines}: at は 0 始まりで、この index の直前に lines を入れる。
+function! s:parent_insert_plan(lines, sec_idx, link, base_dir) abort
+  let l:end = s:section_end_index_in_lines(a:lines, a:sec_idx)
+  let l:top = a:sec_idx + 1
+  " 先頭から続くグループのリンクの直後の位置
+  let l:gend = l:top
+  while l:gend < l:end && s:parent_line_is_group(a:lines[l:gend], a:base_dir)
+    let l:gend += 1
+  endwhile
+
+  if s:parent_line_is_group(a:link, a:base_dir)
+    let l:ins = [a:link]
+    if l:gend < l:end && trim(a:lines[l:gend]) !=# ''
+      call add(l:ins, '')
+    endif
+    return {'at': l:gend, 'lines': l:ins}
+  endif
+
+  " 普通のノート: 末尾（末尾の空行の手前）へ。直前がグループだけなら 1 行あける
+  let l:last = l:end - 1
+  while l:last >= l:top && trim(a:lines[l:last]) ==# ''
+    let l:last -= 1
+  endwhile
+  let l:ins = [a:link]
+  if l:last >= l:top && l:last < l:gend
+    call insert(l:ins, '', 0)
+  endif
+  return {'at': l:last + 1, 'lines': l:ins}
+endfunction
+
+function! s:add_link_to_lines_section(lines, name, link, ...) abort
   let l:ensured = s:ensure_section_in_lines(a:lines, a:name)
   let l:lines = l:ensured.lines
   let l:idx = l:ensured.idx
@@ -1916,6 +1959,11 @@ function! s:add_link_to_lines_section(lines, name, link) abort
   let l:end = s:section_end_index_in_lines(l:lines, l:idx)
   if index(l:lines[l:idx + 1 : l:end - 1], a:link) >= 0
     return {'lines': l:lines, 'added': 0}
+  endif
+  if a:name ==# 'up'
+    let l:plan = s:parent_insert_plan(l:lines, l:idx, a:link, a:0 > 0 ? a:1 : '')
+    call extend(l:lines, l:plan.lines, l:plan.at)
+    return {'lines': l:lines, 'added': 1}
   endif
   call insert(l:lines, a:link, l:end)
   return {'lines': l:lines, 'added': 1}
@@ -2148,7 +2196,7 @@ function! s:add_reciprocal_link(target_path, section_name, current_file, current
   endif
   let l:lines = s:note_lines_for_path(a:target_path)
   let l:link = s:make_link_from_dir(a:current_file, a:current_title, fnamemodify(a:target_path, ':h'))
-  let l:result = s:add_link_to_lines_section(l:lines, a:section_name, l:link)
+  let l:result = s:add_link_to_lines_section(l:lines, a:section_name, l:link, fnamemodify(a:target_path, ':h'))
   if l:result.added
     call s:write_note_lines_for_path(a:target_path, l:result.lines)
     return 1
@@ -5335,9 +5383,13 @@ endfunction
 " 任意の .md ファイル（現ノートからの相対パス）の front matter attribute 値。無ければ空文字
 " （旧名 カテゴリー / キーワード は グループ / 小グループ へ読み替えて返す）
 function! s:v2_target_attr(tgt) abort
-  let l:path = simple_yurii_note#resolve_link(a:tgt)
-  if !filereadable(l:path) | return '' | endif
-  let l:lines = readfile(l:path, '', 30)
+  return s:v2_path_attr(simple_yurii_note#resolve_link(a:tgt))
+endfunction
+
+" ファイルの front matter の attribute（正規化済み）。無ければ ''。
+function! s:v2_path_attr(path) abort
+  if !filereadable(a:path) | return '' | endif
+  let l:lines = readfile(a:path, '', 30)
   if empty(l:lines) || l:lines[0] !~# '^---\s*$' | return '' | endif
   for l:i in range(1, len(l:lines) - 1)
     if l:lines[l:i] =~# '^---\s*$' | break | endif
@@ -8420,7 +8472,7 @@ function! simple_yurii_note#add_clipboard_before_up() abort
     let l:target_lines = readfile(l:target_path)
     let l:current_link = s:make_link_from_dir(
           \ l:current_file, l:current_title, fnamemodify(l:target_path, ':h'))
-    let l:up_result = s:add_link_to_lines_section(l:target_lines, 'up', l:current_link)
+    let l:up_result = s:add_link_to_lines_section(l:target_lines, 'up', l:current_link, fnamemodify(l:target_path, ':h'))
     if l:up_result.added
       call s:syn_writefile(l:up_result.lines, l:target_path)
       let l:up_added += 1
