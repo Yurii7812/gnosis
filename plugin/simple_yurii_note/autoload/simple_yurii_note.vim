@@ -12122,7 +12122,7 @@ function! s:diary_scan(root) abort
   let l:out = []
   for l:f in glob(fnamemodify(a:root, ':p') . '*.md', 0, 1)
     let l:h = s:diary_head(readfile(l:f, '', 30))
-    call add(l:out, {'file': fnamemodify(l:f, ':t'), 'title': l:h.title, 'group': l:h.group})
+    call add(l:out, {'file': fnamemodify(l:f, ':t'), 'title': l:h.title, 'group': l:h.group, 'time': l:h.time})
   endfor
   return l:out
 endfunction
@@ -12456,13 +12456,49 @@ function! s:diary_adopt_all() abort
       let l:amb += 1
     endif
   endfor
-  if l:added > 0
+  let l:filled = s:diary_backfill(l:root, l:st, l:notes)
+  if l:added > 0 || l:filled > 0
     call s:diary_state_write(l:st)
   endif
-  if l:added > 0 || l:amb > 0
-    echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録'
-          \ . (l:amb > 0 ? '（' . l:amb . ' 日分は日付のノートが複数あるため未登録。日記のノートで :YuriiDiaryAdopt）' : '')
+  if l:added > 0 || l:amb > 0 || l:filled > 0
+    echom 'simple_yurii_note: 日記を ' . l:added . ' 件登録、「今日のノート」に ' . l:filled . ' 件追加'
+          \ . (l:amb > 0 ? '（' . l:amb . ' 日分は日付のノートが複数あるため日記は未登録。日記のノートで :YuriiDiaryAdopt）' : '')
   endif
+endfunction
+
+" まだ日記の節に入れていないノートを、入れるべき日記の「今日のノート」に足す（作成時に
+" 入れそびれた分・機能を入れる前に作った分）。対象は直近 g:simple_yurii_note_diary_backfill_days
+" 日（既定 7、0 で全部）。日記が無い日は作らない（作るのは新規ノートのときだけ）。
+function! s:diary_backfill(root, st, notes) abort
+  let l:days = get(g:, 'simple_yurii_note_diary_backfill_days', 7)
+  let l:h = get(g:, 'simple_yurii_note_diary_day_start_hour', 5)
+  let l:since = l:days > 0 ? strftime('%Y-%m-%d', localtime() - l:days * 86400 - l:h * 3600) : ''
+  let l:dir = substitute(fnamemodify(a:root, ':p'), '/$', '', '')
+  let l:sec = get(g:, 'simple_yurii_note_diary_section', '今日のノート')
+  let l:diaries = values(a:st.days)
+  let l:n_added = 0
+  for l:n in a:notes
+    if l:n.group || has_key(a:st.notes, l:n.file) || index(l:diaries, l:n.file) >= 0
+          \ || index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:n.file) >= 0
+          \ || s:diary_is_diary_title(l:n.title) || empty(l:n.title) && empty(l:n.time)
+      continue
+    endif
+    let l:tdate = s:diary_title_date(l:n.title)
+    let l:date = empty(l:tdate) ? s:diary_day_of_time(l:n.time) : l:tdate
+    if !empty(l:since) && l:date <# l:since
+      continue
+    endif
+    let l:diary = s:diary_find(a:root, l:date, a:st, a:notes)
+    if empty(l:diary) || l:diary ==# l:n.file
+      continue
+    endif
+    let l:title = empty(l:n.title) ? fnamemodify(l:n.file, ':r') : l:n.title
+    call s:diary_edit_file(l:dir . '/' . l:diary,
+          \ function('s:diary_op_add', [s:diary_link(l:n.file, l:title), l:sec]))
+    let a:st.notes[l:n.file] = l:diary
+    let l:n_added += 1
+  endfor
+  return l:n_added
 endfunction
 
 function! s:diary_adopt_all_safe() abort
