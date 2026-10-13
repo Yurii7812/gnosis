@@ -1,5 +1,5 @@
 {
   "start": {"base": "dark", "bg": "#14283D", "fg": "#79CFFF", "link": "#79CFFF", "heading": "#79CFFF", "selection": "#305879", "cursorline": "#1C354E"},
-  "light": {"base": "light", "bg": "#ffffff", "fg": "#1f2328", "link": "#0969da", "heading": "#0b3d91", "selection": "#b6d6ff", "cursorline": "#f2f5f8"},
-  "dark":  {"base": "dark",  "bg": "#0d1117", "fg": "#e6edf3", "link": "#4493f8", "heading": "#ffa657", "selection": "#264f78", "cursorline": "#161b22"}
+  "light": {"base": "dark", "bg": "#14283D", "fg": "#79CFFF", "link": "#BCEEFF", "heading": "#79CFFF", "selection": "#305879", "cursorline": "#1C354E"},
+  "dark":  {"base": "dark",  "bg": "#14283D", "fg": "#79CFFF", "link": "#BCEEFF", "heading": "#79CFFF", "selection": "#305879", "cursorline": "#1C354E"}
 }
