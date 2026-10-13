@@ -42,7 +42,7 @@ function! gnosis#settings_ui#open(...) abort
   setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nonumber norelativenumber nowrap nolist
   silent! file Gnosis\ Settings
   let b:gnosis_settings = 1
-  for l:k in ['<CR>', '<Space>', 'q', '<Esc>', 'j', 'k', '<Down>', '<Up>', 'h', 'l', '<Left>', '<Right>']
+  for l:k in ['<CR>', '<Space>', 'q', '<Esc>', 'j', 'k', '<Down>', '<Up>', 'h', 'l', '<Left>', '<Right>', '+', '-', '=']
     execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#settings_ui#key(%s)<CR>', l:k, substitute(string(l:k), '<', '<lt>', 'g'))
   endfor
   for l:k in ['i', 'I', 'o', 'O', 'a', 'A', 'x', 'p', 'P', 'c', 'C', 'u', 'd']
@@ -113,11 +113,21 @@ endfunction
 function! s:save() abort
   let s:settings = gnosis#settings#validate(s:settings)
   call gnosis#settings#save(s:vault, s:settings)
-  " 開いている vault の設定ならすぐ反映。起動画面からなら言語だけ反映（配色は白黒のまま）
+  " 開いている vault の設定を即時反映。起動画面は10番の配色を維持。
   if gnosis#vault#same(gnosis#settings#current_vault(), s:vault) && !gnosis#start#active()
     call gnosis#settings#activate(s:vault)
   else
     call gnosis#i18n#set_lang(s:settings.language)
+    let g:gnosis_font_live_applied = has('gui_running') ? 1
+          \ : gnosis#settings#apply_terminal_font(s:settings.fontSize)
+  endif
+endfunction
+
+function! s:font_feedback() abort
+  if has('gui_running') || get(g:, 'gnosis_font_live_applied', 0)
+    let s:message = printf('Font: %d pt (+/-)', s:settings.fontSize)
+  else
+    let s:message = s:t('settings.note_terminal')
   endif
 endfunction
 
@@ -144,6 +154,11 @@ function! gnosis#settings_ui#key(k) abort
   elseif a:k ==# 'q' || a:k ==# '<Esc>'
     call gnosis#settings_ui#close()
     return
+  elseif (a:k ==# '+' || a:k ==# '=' || a:k ==# '-') && s:items[s:sel] ==# 'fontSize'
+    " + / - で実際のフォントサイズをその場でプレビュー（対応端末のみ）。
+    let s:settings.fontSize = max([8, min([48, s:settings.fontSize + (a:k ==# '-' ? -1 : 1)])])
+    call s:save()
+    call s:font_feedback()
   elseif index(['<CR>', '<Space>', 'h', 'l', '<Left>', '<Right>'], a:k) >= 0
     call s:change(s:items[s:sel])
   endif
@@ -193,6 +208,9 @@ function! s:change(item) abort
     let l:s.theme = {'kind': 'builtin'}
   endif
   call s:save()
+  if a:item ==# 'fontSize'
+    call s:font_feedback()
+  endif
 endfunction
 
 function! s:choose_theme() abort
