@@ -24,7 +24,7 @@ Vim からは `\A` または `:GnosisWeb`。
 `~/.vimrc`（または `init.vim`）に以下を書いてください。
 
 ```vim
-Plug 'Yurii7812/simple-yurii-note'
+Plug 'Yurii7812/gnosis'   " 旧名 simple-yurii-note（GitHub は旧 URL も転送する）
 ```
 
 その後、Vim/Neovim で以下を実行します。
