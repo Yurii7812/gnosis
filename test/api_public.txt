@@ -47,6 +47,7 @@ gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
 gnosis#guard_vault_write
+gnosis#has_python
 gnosis#hint_goto
 gnosis#home#dir
 gnosis#home#ensure_fzf_path
@@ -121,6 +122,7 @@ gnosis#paste_clipboard
 gnosis#paste_clipboard_link_here
 gnosis#perf_diag
 gnosis#push_history
+gnosis#python_cmd
 gnosis#quit_unmount
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
@@ -163,6 +165,7 @@ gnosis#settings_ui#close
 gnosis#settings_ui#key
 gnosis#settings_ui#open
 gnosis#settings_ui#render
+gnosis#shell_job
 gnosis#sort_selection
 gnosis#sort_time
 gnosis#sort_yomi

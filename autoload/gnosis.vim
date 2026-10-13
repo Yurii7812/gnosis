@@ -372,7 +372,7 @@ let s:note_root = expand('<sfile>:p:h:h')
 " a:none が真なら先頭に「（見出しなし）」を足す（zo の解除用）。
 function! s:outline_fzf(items, path, sink, none) abort
   let l:tsv = tempname()
-  let l:rows = a:none ? ["（見出しなし）\t\t\t\t"] : []
+  let l:rows = a:none ? [gnosis#i18n#tr('（見出しなし）') . "\t\t\t\t"] : []
   for l:it in a:items
     call add(l:rows, repeat('#', l:it.level) . ' ' . l:it.text . "\t" . l:it.slug
           \ . "\t" . a:path . "\t" . l:it.lnum . "\t" . get(l:it, 'body', ''))
@@ -385,7 +385,7 @@ function! s:outline_fzf(items, path, sink, none) abort
         \ 'sink': a:sink,
         \ 'options': '--delimiter="\t" --with-nth=1 --no-multi --disabled --ansi'
         \   . ' --bind ' . shellescape('change:reload:' . l:filter . ' || true')
-        \   . ' --prompt=' . shellescape('見出し> ')
+        \   . ' --prompt=' . shellescape(gnosis#i18n#tr('見出し> '))
         \   . ' --preview ' . shellescape(gnosis#python_cmd() . ' ' . l:py . ' preview {3} {4} {q}')
         \   . ' --preview-window=right:50%',
         \ }))
@@ -436,10 +436,10 @@ endfunction
 
 function! s:outline_editor_lines(items) abort
   let l:lines = []
-  call add(l:lines, '# OutlineEdit: 見出しを編集して :write で反映')
-  call add(l:lines, '# <- / -> : 見出しレベル変更（# の数を減増）')
-  call add(l:lines, '# Visual選択して <- / -> : 選択範囲を一括変更')
-  call add(l:lines, '# q / ZZ / :OutlineApply で反映（Q は保存せず閉じる）')
+  call add(l:lines, gnosis#i18n#tr('# OutlineEdit: 見出しを編集して :write で反映'))
+  call add(l:lines, gnosis#i18n#tr('# <- / -> : 見出しレベル変更（# の数を減増）'))
+  call add(l:lines, gnosis#i18n#tr('# Visual選択して <- / -> : 選択範囲を一括変更'))
+  call add(l:lines, gnosis#i18n#tr('# q / ZZ / :OutlineApply で反映（Q は保存せず閉じる）'))
   call add(l:lines, '')
 
   for l:item in a:items
@@ -492,7 +492,7 @@ function! gnosis#outline_editor_apply() abort
   " 元ノートが開いてから変わっていないか確認（行番号ずれで別行を壊さない）
   for l:src in l:items
     if get(getbufline(l:src_buf, l:src.src_lnum), 0, '') !=# l:src.orig
-      echoerr 'OutlineEdit: 元ノートが変わったため反映を中止しました（もう一度 :OutlineEdit してください）'
+      echoerr gnosis#i18n#tr('OutlineEdit: 元ノートが変わったため反映を中止しました（もう一度 :OutlineEdit してください）')
       return
     endif
   endfor
@@ -515,19 +515,19 @@ function! gnosis#outline_editor_apply() abort
   endfor
 
   setlocal nomodified
-  echom 'OutlineEdit: 反映しました'
+  echom gnosis#i18n#tr('OutlineEdit: 反映しました')
 endfunction
 
 function! gnosis#outline_edit() abort
   if !s:is_markdown_file(expand('%:p'))
-    echoerr 'Gnosis: OutlineEdit は Markdown ファイルでのみ利用できます'
+    echoerr gnosis#i18n#tr('Gnosis: OutlineEdit は Markdown ファイルでのみ利用できます')
     return
   endif
 
   let l:items = s:outline_collect()
 
   if empty(l:items)
-    echom 'Gnosis: 見出しが見つかりませんでした'
+    echom gnosis#i18n#tr('Gnosis: 見出しが見つかりませんでした')
     return
   endif
 
@@ -1113,7 +1113,7 @@ endfunction
 function! gnosis#write_guide() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !isdirectory(l:root)
-    echo 'Gnosis: PKM root 未設定'
+    echo gnosis#i18n#tr('Gnosis: PKM root 未設定')
     return
   endif
   call s:refresh_guide(l:root)
@@ -1405,7 +1405,7 @@ function! s:setup_root_and_index(open_index) abort
   if gnosis#vault_locked_flag() == 1
     call gnosis#mount_vault()
     if gnosis#vault_locked_flag() == 1
-      echom 'Gnosis: vault はロック中。:GnosisMount で解除してください'
+      echom gnosis#i18n#tr('Gnosis: vault はロック中。:GnosisMount で解除してください')
       return l:root
     endif
   endif
@@ -1535,7 +1535,7 @@ function! s:close_vault_buffers(root) abort
   endfor
   if l:kept > 0
     echohl WarningMsg
-    echom 'Gnosis: 未保存のバッファが ' . l:kept . ' 件残っています（保存してから切替えてください）'
+    echom gnosis#i18n#tr('Gnosis: 未保存のバッファが ') . l:kept . gnosis#i18n#tr(' 件残っています（保存してから切替えてください）')
     echohl NONE
   endif
 endfunction
@@ -3115,7 +3115,7 @@ function! s:rlp_build_local() abort
     call add(l:items, {'kind': 'anchor', 'path': s:rlp_path, 'label': '',
           \ 'text': s:get_title(s:rlp_path)})
   endif
-  for [l:key, l:title] in [['body', '文中'], ['up', 'こっちにとって'], ['down', 'そっちにとって']]
+  for [l:key, l:title] in [['body', gnosis#i18n#tr('文中')], ['up', gnosis#i18n#tr('こっちにとって')], ['down', gnosis#i18n#tr('そっちにとって')]]
     let l:g = get(s:rlp_groups, l:key, [])
     " リンクの表示名に当たるものを先に、表示名には当たらずリンク先の全文だけに
     " 当たるものをその後ろに並べる（それぞれ元の並びを保つ）。
@@ -3362,11 +3362,11 @@ function! s:rlp_render() abort
         \ l:nsel, l:nmark > 0 ? ' *' . l:nmark : '')
   if s:rlp_typing()
     " 打っているツールだけ検索バーを出す。カーソル ▏ が見えている＝打てる合図。
-    let l:qtext = (s:rlp_scope ==# 'global' ? '検索 ' : '絞込 ') . s:rlp_query . '▏'
+    let l:qtext = (s:rlp_scope ==# 'global' ? gnosis#i18n#tr('検索 ') : gnosis#i18n#tr('絞込 ')) . s:rlp_query . '▏'
     let l:right = l:pos
   elseif s:rlp_scope ==# 'global'
     " グローバルのコマンド状態。i で打てることと、効いているクエリを見せる
-    let l:qtext = '全ノート' . (empty(s:rlp_query) ? '' : ' ' . s:rlp_query)
+    let l:qtext = gnosis#i18n#tr('全ノート') . (empty(s:rlp_query) ? '' : ' ' . s:rlp_query)
     let l:qtext = s:rlp_trunc_head(l:qtext, l:w - 14)
     let l:right = l:pos
   else
@@ -3421,15 +3421,15 @@ function! s:rlp_render() abort
         \ ? '─── ↓' . l:below . ' ' . repeat('─', max([l:w - 6 - len(string(l:below)), 0]))
         \ : repeat('─', l:w))
   if s:rlp_input
-    call add(l:lines, '打つ 絞る  ↑↓ 選択  → 潜る  ⏎ 入力終了  ⌫ 消す  ⎋ 消して終了')
+    call add(l:lines, gnosis#i18n#tr('打つ 絞る  ↑↓ 選択  → 潜る  ⏎ 入力終了  ⌫ 消す  ⎋ 消して終了'))
   else
     call add(l:lines, s:rlp_scope ==# 'global'
-          \ ? '字 移動  ⏎ 開く  l 潜る  ⌫ 戻る  fb プレ  cp 子親  ym  i 打つ  ⇥ 切替'
-          \ : '字 潜る  jk 選択  ⏎ 開く  ⌫ 戻る  ␣ ここ  fb プレ  cp 子親  ym  i 打つ  ⇥ 切替')
+          \ ? gnosis#i18n#tr('字 移動  ⏎ 開く  l 潜る  ⌫ 戻る  fb プレ  cp 子親  ym  i 打つ  ⇥ 切替')
+          \ : gnosis#i18n#tr('字 潜る  jk 選択  ⏎ 開く  ⌫ 戻る  ␣ ここ  fb プレ  cp 子親  ym  i 打つ  ⇥ 切替'))
   endif
   call popup_settext(s:rlp_win, l:lines)
   call popup_setoptions(s:rlp_win,
-        \ {'title': s:rlp_scope ==# 'global' ? ' 全ノート ' : ' ローカル '})
+        \ {'title': s:rlp_scope ==# 'global' ? gnosis#i18n#tr(' 全ノート ') : gnosis#i18n#tr(' ローカル ')})
   call s:rlp_preview()
 endfunction
 
@@ -3463,17 +3463,17 @@ function! s:rlp_preview() abort
   if s:rlp_pvwin < 0 | return | endif
   let l:it = s:rlp_sel_item()
   if empty(l:it)
-    call popup_settext(s:rlp_pvwin, ['(該当なし)'])
+    call popup_settext(s:rlp_pvwin, [gnosis#i18n#tr('(該当なし)')])
     return
   endif
   let l:path = s:rlp_row_path(l:it)
   if empty(l:path) || (!filereadable(l:path) && !isdirectory(l:path))
     call popup_settext(s:rlp_pvwin,
-          \ ['(開けない: ' . get(l:it, 'target', get(l:it, 'path', '')) . ')'])
+          \ [gnosis#i18n#tr('(開けない: ') . get(l:it, 'target', get(l:it, 'path', '')) . ')'])
     return
   endif
   if isdirectory(l:path)
-    call popup_settext(s:rlp_pvwin, ['(ディレクトリ)', l:path])
+    call popup_settext(s:rlp_pvwin, [gnosis#i18n#tr('(ディレクトリ)'), l:path])
     return
   endif
   let l:body = readfile(l:path, '', get(g:, 'gnosis_space_preview_lines', 400))
@@ -3744,15 +3744,15 @@ endfunction
 function! s:rlp_link_apply(targets, below, ...) abort
   let l:anchor = s:rlp_path
   if empty(l:anchor) || !filereadable(l:anchor)
-    echohl WarningMsg | echo 'Gnosis: アンカーが不正' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: アンカーが不正') | echohl NONE
     return
   endif
   if empty(a:targets)
-    echo 'Gnosis: 対象なし'
+    echo gnosis#i18n#tr('Gnosis: 対象なし')
     return
   endif
   let l:rel = (a:0 > 0 && a:1 !=# '') ? a:1 : s:v2_pick_relation()
-  if empty(l:rel) | echo 'Gnosis: キャンセル' | return | endif
+  if empty(l:rel) | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
   let l:side = s:v2_relation_side(l:rel)
   let l:below = l:side >= 0 ? l:side : a:below
 
@@ -3782,14 +3782,14 @@ function! s:rlp_link_apply(targets, below, ...) abort
     call winrestview(l:view)
   endif
   let s:rlp_marks = {}
-  echo printf('Gnosis: %s %s %s += %d 件',
-        \ fnamemodify(l:anchor, ':t'), l:rel, l:below ? '↓そっちにとって' : '↑こっちにとって', l:n)
+  echo printf(gnosis#i18n#tr('Gnosis: %s %s %s += %d 件'),
+        \ fnamemodify(l:anchor, ':t'), l:rel, l:below ? gnosis#i18n#tr('↓そっちにとって') : gnosis#i18n#tr('↑こっちにとって'), l:n)
 endfunction
 
 function! s:rlp_open_path(path, ...) abort
   let l:it = a:0 > 0 ? a:1 : {}
   if empty(a:path) || (!filereadable(a:path) && !isdirectory(a:path))
-    echo 'Gnosis: 開けない: ' . a:path
+    echo gnosis#i18n#tr('Gnosis: 開けない: ') . a:path
     return
   endif
   call gnosis#push_history()
@@ -3799,7 +3799,7 @@ function! s:rlp_open_path(path, ...) abort
   if !empty(l:frag)
     " 見出しアンカー付きリンク → その見出し行へ
     if !s:jump_to_fragment(l:frag)
-      echohl WarningMsg | echo '見出しが見つかりません: ' . l:frag | echohl None
+      echohl WarningMsg | echo gnosis#i18n#tr('見出しが見つかりません: ') . l:frag | echohl None
     endif
   elseif !empty(l:it) && get(l:it, 'kind', '') ==# 'link'
         \ && (l:it.side ==# 'up' || l:it.side ==# 'down')
@@ -3825,12 +3825,12 @@ function! s:rlp_done(winid, result) abort
     for l:t in a:result.yank
       call add(l:links, s:make_link_from_dir(l:t, s:get_title(l:t), expand('%:p:h')))
     endfor
-    if empty(l:links) | echo 'Gnosis: 対象なし' | return | endif
+    if empty(l:links) | echo gnosis#i18n#tr('Gnosis: 対象なし') | return | endif
     let l:txt = join(l:links, "\n")
     let @" = l:txt
     call gnosis#clipboard_copy(l:txt)
     let s:rlp_marks = {}
-    echo 'Gnosis: ヤンク ' . len(l:links) . ' 件'
+    echo gnosis#i18n#tr('Gnosis: ヤンク ') . len(l:links) . gnosis#i18n#tr(' 件')
     return
   endif
 
@@ -3914,7 +3914,7 @@ function! gnosis#note_navigator(scope) abort
   let s:rlp_rows = l:geo.rows
 
   let s:rlp_win = popup_create([], {
-        \ 'title': ' ローカル ',
+        \ 'title': gnosis#i18n#tr(' ローカル '),
         \ 'line': l:geo.list_line, 'col': l:geo.list_col,
         \ 'minwidth': l:geo.list_w, 'maxwidth': l:geo.list_w,
         \ 'minheight': l:geo.h, 'maxheight': l:geo.h,
@@ -3925,7 +3925,7 @@ function! gnosis#note_navigator(scope) abort
         \ 'filter': function('s:rlp_key'), 'callback': function('s:rlp_done'),
         \ })
   let s:rlp_pvwin = popup_create([], {
-        \ 'title': ' プレビュー ',
+        \ 'title': gnosis#i18n#tr(' プレビュー '),
         \ 'line': l:geo.pv_line, 'col': l:geo.pv_col,
         \ 'minwidth': l:geo.pv_w, 'maxwidth': l:geo.pv_w,
         \ 'minheight': l:geo.h, 'maxheight': l:geo.h,
@@ -4911,18 +4911,18 @@ endfunction
 function! gnosis#hub_set(...) abort
   let l:file = expand('%:p')
   if empty(l:file) || !s:is_markdown_file(l:file)
-    echohl WarningMsg | echo 'Gnosis: ノート上で実行して' | echohl NONE | return
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノート上で実行して') | echohl NONE | return
   endif
   let l:hub = s:hub_migrate()
   let l:link = '[' . gnosis#current_title() . '](' . fnamemodify(l:file, ':p') . ')'
   let l:lines = readfile(l:hub)
   if index(l:lines, l:link) >= 0
-    echo 'Gnosis: ハブ登録済み'
+    echo gnosis#i18n#tr('Gnosis: ハブ登録済み')
     return
   endif
   call add(l:lines, l:link)
   call s:syn_writefile(l:lines, l:hub)
-  echo printf('Gnosis: ハブに追加（%d 件）', len(l:lines))
+  echo printf(gnosis#i18n#tr('Gnosis: ハブに追加（%d 件）'), len(l:lines))
 endfunction
 
 function! gnosis#hub_jump(n) abort
@@ -4930,7 +4930,7 @@ function! gnosis#hub_jump(n) abort
   let l:idx = s:hub_key(a:n) - 1
   let l:p = get(l:paths, l:idx, '')
   if empty(l:p) || !filereadable(l:p)
-    echo printf('Gnosis: ハブ %s は未登録（\H で登録）', a:n)
+    echo printf(gnosis#i18n#tr('Gnosis: ハブ %s は未登録（\H で登録）'), a:n)
     return
   endif
   if fnamemodify(expand('%:p'), ':p') ==# fnamemodify(l:p, ':p') | return | endif
@@ -4986,14 +4986,14 @@ endfunction
 function! gnosis#trash_current() abort
   let l:file = expand('%:p')
   if empty(l:file) || !filereadable(l:file) || !s:is_markdown_file(l:file)
-    echohl WarningMsg | echo 'Gnosis: ノートを開いて実行して' | echohl NONE | return
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノートを開いて実行して') | echohl NONE | return
   endif
   let l:root = s:get_pkm_root()
   if empty(l:root) || !s:is_root_note_path(l:file)
-    echohl WarningMsg | echo 'Gnosis: PKM のノートではありません' | echohl NONE | return
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: PKM のノートではありません') | echohl NONE | return
   endif
   if fnamemodify(l:file, ':t') ==# 'index.md'
-    echohl WarningMsg | echo 'Gnosis: Index はゴミ箱へ移せません' | echohl NONE | return
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: Index はゴミ箱へ移せません') | echohl NONE | return
   endif
   let l:dir = s:trash_dir()
   if !isdirectory(l:dir) | call mkdir(l:dir, 'p') | endif
@@ -5006,7 +5006,7 @@ function! gnosis#trash_current() abort
   " 元ファイルが消えたので、このバッファは閉じる（履歴を残して戻れるように）
   call gnosis#push_history()
   execute 'bwipeout! ' . bufnr('%')
-  echo 'ゴミ箱へ移動: ' . fnamemodify(l:dest, ':t')
+  echo gnosis#i18n#tr('ゴミ箱へ移動: ') . fnamemodify(l:dest, ':t')
 endfunction
 
 " ゴミ箱のファイルを vault 直下へ戻す。戻した絶対パスを返す（失敗時は空）。
@@ -5021,7 +5021,7 @@ function! s:trash_restore(path) abort
   if empty(l:orig) | let l:orig = l:name | endif
   let l:dest = fnamemodify(l:root, ':p') . l:orig
   if filereadable(l:dest)
-    echohl WarningMsg | echo 'Gnosis: 復元先が既に存在します: ' . l:orig | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 復元先が既に存在します: ') . l:orig | echohl NONE
     return ''
   endif
   " 対応する画像がゴミ箱にあれば一緒に戻す
@@ -5077,7 +5077,7 @@ function! s:trash_sink(lines) abort
     if empty(l:restored) | return | endif
     call gnosis#push_history()
     silent! execute 'edit ' . fnameescape(l:restored)
-    echo '復元しました: ' . fnamemodify(l:restored, ':t')
+    echo gnosis#i18n#tr('復元しました: ') . fnamemodify(l:restored, ':t')
     return
   endif
   " ⏎（または他のキー）… 中身を開くだけ。復元は ^r。
@@ -5090,7 +5090,7 @@ endfunction
 function! gnosis#trash_list() abort
   let l:entries = s:trash_entries()
   if empty(l:entries)
-    echo 'Gnosis: ゴミ箱は空です'
+    echo gnosis#i18n#tr('Gnosis: ゴミ箱は空です')
     return
   endif
   if !exists('*fzf#run')
@@ -5105,7 +5105,7 @@ function! gnosis#trash_list() abort
         \ 'sink*': function('s:trash_sink'),
         \ 'options': '--delimiter="\t" --with-nth=2 --accept-nth=1'
         \   . ' --expect=ctrl-r,ctrl-e'
-        \   . ' --prompt=' . shellescape('ゴミ箱(⏎=開く ^r=復元 ^e=空)> ')
+        \   . ' --prompt=' . shellescape(gnosis#i18n#tr('ゴミ箱(⏎=開く ^r=復元 ^e=空)> '))
         \   . ' --preview "sed -n ''1,200p'' -- {1}"'
         \   . ' --preview-window=right:50%',
         \ }))
@@ -5115,26 +5115,26 @@ endfunction
 function! gnosis#trash_empty() abort
   let l:dir = s:trash_dir()
   if !isdirectory(l:dir)
-    echo 'Gnosis: ゴミ箱は空です'
+    echo gnosis#i18n#tr('Gnosis: ゴミ箱は空です')
     return
   endif
   let l:names = filter(readdir(l:dir), {_, n -> n !=# '.' && n !=# '..'})
   if empty(l:names)
     call delete(l:dir, 'd')
-    echo 'Gnosis: ゴミ箱は空です'
+    echo gnosis#i18n#tr('Gnosis: ゴミ箱は空です')
     return
   endif
   let l:n = len(l:names)
-  if confirm(printf('ゴミ箱の %d 件を完全に削除しますか？（元に戻せません）', l:n),
+  if confirm(printf(gnosis#i18n#tr('ゴミ箱の %d 件を完全に削除しますか？（元に戻せません）'), l:n),
         \ "&Yes\n&No", 2) != 1
-    echo 'キャンセルしました'
+    echo gnosis#i18n#tr('キャンセルしました')
     return
   endif
   for l:name in l:names
     call delete(l:dir . s:sep() . l:name)
   endfor
   call delete(l:dir, 'd')
-  echo printf('ゴミ箱を空にしました（%d 件）', l:n)
+  echo printf(gnosis#i18n#tr('ゴミ箱を空にしました（%d 件）'), l:n)
 endfunction
 
 " :!rm % などの後始末。今のノートのファイルが消えていたらバッファを閉じて同期する
@@ -5156,7 +5156,7 @@ function! gnosis#after_shell_rm() abort
   if l:buf > 0 && bufexists(l:buf)
     silent! execute 'bwipeout! ' . l:buf
   endif
-  echo 'ファイルが無くなったので閉じました（ゴミ箱なら \tr で復元）'
+  echo gnosis#i18n#tr('ファイルが無くなったので閉じました（ゴミ箱なら \tr で復元）')
 endfunction
 
 function! gnosis#push_history() abort
@@ -5181,11 +5181,11 @@ function! gnosis#toggle_alternate() abort
     let l:alt = g:gnosis_history[-1].file
   endif
   if empty(l:alt) || !filereadable(l:alt)
-    echo 'Gnosis: 直前のノートがない'
+    echo gnosis#i18n#tr('Gnosis: 直前のノートがない')
     return
   endif
   if fnamemodify(l:alt, ':p') ==# fnamemodify(l:cur, ':p')
-    echo 'Gnosis: 直前のノートが自分自身'
+    echo gnosis#i18n#tr('Gnosis: 直前のノートが自分自身')
     return
   endif
   call add(g:gnosis_history, {'file': l:cur, 'pos': getpos('.')})
@@ -5201,7 +5201,7 @@ endfunction
 " 履歴を前に進む（⌫ の対）。戻るが可逆になる。
 function! gnosis#go_forward() abort
   if !exists('g:gnosis_forward') || empty(g:gnosis_forward)
-    echo 'Gnosis: これ以上進めない'
+    echo gnosis#i18n#tr('Gnosis: これ以上進めない')
     return
   endif
   let l:item = remove(g:gnosis_forward, -1)
@@ -5234,7 +5234,7 @@ function! gnosis#open_link_under_cursor() abort
     if !empty(l:frag)
       call gnosis#push_history()
       if !s:jump_to_fragment(l:frag)
-        echohl WarningMsg | echo '見出しが見つかりません: ' . l:frag | echohl None
+        echohl WarningMsg | echo gnosis#i18n#tr('見出しが見つかりません: ') . l:frag | echohl None
       endif
     endif
     return
@@ -5257,7 +5257,7 @@ function! gnosis#open_link_under_cursor() abort
   if !empty(l:frag)
     " 見出しアンカー付きリンク → その見出し行へ
     if !s:jump_to_fragment(l:frag)
-      echohl WarningMsg | echo '見出しが見つかりません: ' . l:frag | echohl None
+      echohl WarningMsg | echo gnosis#i18n#tr('見出しが見つかりません: ') . l:frag | echohl None
     endif
   elseif l:from_back || l:from_up
     let l:pos = s:find_reciprocal_link_pos(l:path, l:source_name)
@@ -5466,8 +5466,8 @@ function! s:v2_pick(label, items) abort
     call add(l:menu, l:i . ' ' . l:t)
     let l:i += 1
   endfor
-  call add(l:menu, l:i . ' 入力')
-  echo a:label . '  ' . join(l:menu, '   ') . '    (Esc / q: キャンセル)'
+  call add(l:menu, l:i . gnosis#i18n#tr(' 入力'))
+  echo a:label . '  ' . join(l:menu, '   ') . gnosis#i18n#tr('    (Esc / q: キャンセル)')
   let l:c = getchar()
   redraw
   if type(l:c) == v:t_number && (l:c == 27 || l:c == 3)
@@ -5484,7 +5484,7 @@ function! s:v2_pick(label, items) abort
   if l:n == len(a:items) + 1
     let l:v = ''
     try
-      let l:v = trim(input(a:label . '（空でキャンセル）: '))
+      let l:v = trim(input(a:label . gnosis#i18n#tr('（空でキャンセル）: ')))
     catch /^Vim:Interrupt$/
       let l:v = ''
     endtry
@@ -5515,7 +5515,7 @@ endfunction
 function! s:v2_pick_relation2(...) abort
   let l:items = (a:0 > 0 && a:1) ? s:v2_relations_attr : s:v2_relations
   let l:self  = a:0 > 1 ? a:2 : 0
-  let l:side  = l:self ? '自分側' : '相手側'
+  let l:side  = l:self ? gnosis#i18n#tr('自分側') : gnosis#i18n#tr('相手側')
 
   let l:menu = []
   let l:i = 1
@@ -5524,12 +5524,12 @@ function! s:v2_pick_relation2(...) abort
     let l:i += 1
   endfor
   let l:write_idx = l:i
-  call add(l:menu, l:i . ' 入力(' . l:side . 'にも書く)')
+  call add(l:menu, l:i . gnosis#i18n#tr(' 入力(') . l:side . gnosis#i18n#tr('にも書く)'))
   let l:i += 1
   let l:nowrite_idx = l:i
-  call add(l:menu, l:i . ' 入力(' . l:side . 'には書かない)')
+  call add(l:menu, l:i . gnosis#i18n#tr(' 入力(') . l:side . gnosis#i18n#tr('には書かない)'))
 
-  echo 'relation  ' . join(l:menu, '   ') . '    (Esc / q: キャンセル)'
+  echo 'relation  ' . join(l:menu, '   ') . gnosis#i18n#tr('    (Esc / q: キャンセル)')
   let l:c = getchar()
   redraw
   if type(l:c) == v:t_number && (l:c == 27 || l:c == 3)
@@ -5546,7 +5546,7 @@ function! s:v2_pick_relation2(...) abort
   if l:n == l:write_idx || l:n == l:nowrite_idx
     let l:v = ''
     try
-      let l:v = trim(input('relation（空でキャンセル）: '))
+      let l:v = trim(input(gnosis#i18n#tr('relation（空でキャンセル）: ')))
     catch /^Vim:Interrupt$/
       let l:v = ''
     endtry
@@ -5577,8 +5577,8 @@ endfunction
 " 聞かれる側。「いいえ」なら何も書かず sync の既定『ノート』に任せる。
 function! s:v2_ask_write_same_label(rel, ...) abort
   let l:self = a:0 > 0 ? a:1 : 0
-  let l:side = l:self ? '自分側' : '相手側'
-  return s:v2_pick(l:side . 'にも「' . a:rel . '」と書く？', ['はい', 'いいえ（自動）']) ==# 'はい'
+  let l:side = l:self ? gnosis#i18n#tr('自分側') : gnosis#i18n#tr('相手側')
+  return s:v2_pick(l:side . gnosis#i18n#tr('にも「') . a:rel . gnosis#i18n#tr('」と書く？'), [gnosis#i18n#tr('はい'), gnosis#i18n#tr('いいえ（自動）')]) ==# gnosis#i18n#tr('はい')
 endfunction
 
 " 属性ノードは グループ だけ（小グループはグループに統合して廃止）。
@@ -5850,14 +5850,14 @@ function! s:v2_insert_link(rel, linktext, ...) abort
   " 関係の節は空なら見出しごと無いので、書く前に必要な見出し（Context / BackLink）を作る
   if !s:ensure_context_in_buffer() || (l:below && !s:ensure_backlink_in_buffer())
     echohl WarningMsg
-    echo 'Gnosis: このノートには関係を書けません（index.md など）'
+    echo gnosis#i18n#tr('Gnosis: このノートには関係を書けません（index.md など）')
     echohl NONE
     return 0
   endif
   let [l:up_m, l:dn_m] = s:v2_boundaries()
   if l:up_m == 0
     echohl WarningMsg
-    echo 'Gnosis: このノートは v2 形式じゃない（見張りコメントなし）。:V2Migrate で変換して'
+    echo gnosis#i18n#tr('Gnosis: このノートは v2 形式じゃない（見張りコメントなし）。:V2Migrate で変換して')
     echohl NONE
     return 0
   endif
@@ -5881,7 +5881,7 @@ function! s:v2_insert_link(rel, linktext, ...) abort
       let l:old = s:extract_target(getline(l:i))
       if empty(l:old) | continue | endif
       if fnamemodify(gnosis#resolve_link(l:old, expand('%:p:h')), ':p') ==# l:new_fp
-        echo 'Gnosis: すでに登録済み — ' . l:new_tgt
+        echo gnosis#i18n#tr('Gnosis: すでに登録済み — ') . l:new_tgt
         return 0
       endif
     endfor
@@ -5951,7 +5951,7 @@ function! gnosis#v2_add_link(...) abort
 
   let l:targets = filter(s:extract_targets_from_clipboard(l:raw), 'v:val =~# ''\.md$''')
   if empty(l:targets)
-    echohl WarningMsg | echo 'Gnosis: .md のファイル名 / リンクが見つからない' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: .md のファイル名 / リンクが見つからない') | echohl NONE
     return
   endif
 
@@ -5972,13 +5972,13 @@ function! gnosis#v2_add_link(...) abort
   if empty(l:batch_rel)
     if len(l:targets) == 1
       let l:batch_rel = s:v2_pick_relation(l:all_attr)
-      if l:batch_rel ==# '' | echo 'Gnosis: キャンセル' | return | endif
+      if l:batch_rel ==# '' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
     else
-      let l:mode = s:v2_pick('複数件の関係', ['一括で同じ関係', '一つずつ選ぶ'])
-      if l:mode ==# '' | echo 'Gnosis: キャンセル' | return | endif
-      if l:mode ==# '一括で同じ関係'
+      let l:mode = s:v2_pick(gnosis#i18n#tr('複数件の関係'), [gnosis#i18n#tr('一括で同じ関係'), gnosis#i18n#tr('一つずつ選ぶ')])
+      if l:mode ==# '' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
+      if l:mode ==# gnosis#i18n#tr('一括で同じ関係')
         let l:batch_rel = s:v2_pick_relation(l:all_attr)
-        if l:batch_rel ==# '' | echo 'Gnosis: キャンセル' | return | endif
+        if l:batch_rel ==# '' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
       endif
     endif
   endif
@@ -5991,9 +5991,9 @@ function! gnosis#v2_add_link(...) abort
   if !empty(l:rel_fixed)
     let l:manual_name = 0
   elseif !empty(l:attr_targets) && len(l:attr_targets) > 1
-    let l:nm = s:v2_pick('属性ノートの表示名', ['一つずつ入力', 'タイトルのまま'])
-    if l:nm ==# '' | echo 'Gnosis: キャンセル' | return | endif
-    let l:manual_name = (l:nm ==# '一つずつ入力')
+    let l:nm = s:v2_pick(gnosis#i18n#tr('属性ノートの表示名'), [gnosis#i18n#tr('一つずつ入力'), gnosis#i18n#tr('タイトルのまま')])
+    if l:nm ==# '' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
+    let l:manual_name = (l:nm ==# gnosis#i18n#tr('一つずつ入力'))
   endif
 
   let l:cur_path  = expand('%:p')
@@ -6008,7 +6008,7 @@ function! gnosis#v2_add_link(...) abort
     let l:is_attr = has_key(l:attr_targets, l:tgt)
     let l:rel = !empty(l:batch_rel) ? l:batch_rel : s:v2_pick_relation(l:self_attr || l:is_attr)
     if l:rel ==# ''
-      echo 'Gnosis: ' . l:tgt . ' はキャンセルしてスキップ'
+      echo 'Gnosis: ' . l:tgt . gnosis#i18n#tr(' はキャンセルしてスキップ')
       continue
     endif
     " 関係ごとの向きの制約（グループ=こっちにとって / 関連=対称）
@@ -6018,7 +6018,7 @@ function! gnosis#v2_add_link(...) abort
     let l:default_title = s:v2_title_for(l:tgt)
     let l:title = l:default_title
     if l:is_attr && l:manual_name
-      let l:input = trim(input('[' . l:tgt . '] 表示名: ', l:default_title))
+      let l:input = trim(input('[' . l:tgt . gnosis#i18n#tr('] 表示名: '), l:default_title))
       let l:title = empty(l:input) ? l:default_title : l:input
     endif
 
@@ -6042,8 +6042,8 @@ function! gnosis#v2_add_link(...) abort
   if len(l:free_rels) == 1
     let l:write_asked = s:v2_ask_write_same_label(keys(l:free_rels)[0], l:reverse)
   elseif len(l:free_rels) > 1
-    let l:msg = l:reverse ? '自分側にもそれぞれ書く？' : '相手側にもそれぞれ書く？'
-    let l:write_asked = s:v2_pick(l:msg, ['はい', 'いいえ（自動）']) ==# 'はい'
+    let l:msg = l:reverse ? gnosis#i18n#tr('自分側にもそれぞれ書く？') : gnosis#i18n#tr('相手側にもそれぞれ書く？')
+    let l:write_asked = s:v2_pick(l:msg, [gnosis#i18n#tr('はい'), gnosis#i18n#tr('いいえ（自動）')]) ==# gnosis#i18n#tr('はい')
   endif
 
   let l:added = 0
@@ -6072,7 +6072,7 @@ function! gnosis#v2_add_link(...) abort
           echo 'Gnosis: ' . l:own_rel . (l:e.below ? ' ↓ ' : ' ') . '+= ' . l:e.title
         endif
       else
-        echo 'Gnosis: ' . l:e.rel . (l:e.below ? ' ↓ ' : ' ') . '(相手のみ) += ' . l:e.title
+        echo 'Gnosis: ' . l:e.rel . (l:e.below ? ' ↓ ' : ' ') . gnosis#i18n#tr('(相手のみ) += ') . l:e.title
       endif
     else
       " ca/at/bc/cu: 自分側は常に生のラベルをその場で書く。相手側は
@@ -6140,42 +6140,42 @@ endfunction
 function! gnosis#v2_expand() abort
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きバッファで実行して' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE
     return
   endif
   let l:root = s:get_pkm_root()
   if empty(l:root)
-    echohl WarningMsg | echo 'Gnosis: PKM root が未設定' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: PKM root が未設定') | echohl NONE
     return
   endif
   let l:py = get(g:, 'gnosis_expand_v2_python', '')
   if empty(l:py) || !filereadable(l:py)
-    echohl WarningMsg | echo 'Gnosis: expand_v2.py が見つからない: ' . l:py | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: expand_v2.py が見つからない: ') . l:py | echohl NONE
     return
   endif
 
-  let l:mode = s:v2_pick('展開', ['シンプル', '詳細'])
-  if l:mode ==# '' | echo 'Gnosis: キャンセル' | return | endif
+  let l:mode = s:v2_pick(gnosis#i18n#tr('展開'), [gnosis#i18n#tr('シンプル'), gnosis#i18n#tr('詳細')])
+  if l:mode ==# '' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
 
-  if l:mode ==# 'シンプル'
-    let l:n = input('深さ（数字）: ', '1')
-    if l:n !~# '^\d\+$' | echo 'Gnosis: キャンセル' | return | endif
+  if l:mode ==# gnosis#i18n#tr('シンプル')
+    let l:n = input(gnosis#i18n#tr('深さ（数字）: '), '1')
+    if l:n !~# '^\d\+$' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
     let l:args = [s:python_cmd(), l:py, 'simple', l:root, l:cur, l:n]
   else
     let l:st = s:v2_expand_detail_settings(l:root, l:py)
-    if empty(l:st) | echo 'Gnosis: キャンセル' | return | endif
+    if empty(l:st) | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
     let l:args = [s:python_cmd(), l:py, 'detailed', l:root, l:cur,
           \ l:st.body, l:st.context, l:st.group, l:st.br, l:st.diary]
   endif
 
   let l:out = systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
   if v:shell_error != 0 || empty(l:out)
-    echohl WarningMsg | echo 'Gnosis: 展開に失敗: ' . join(l:out, ' ') | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 展開に失敗: ') . join(l:out, ' ') | echohl NONE
     return
   endif
   let l:result_path = l:out[-1]
   if !filereadable(l:result_path)
-    echohl WarningMsg | echo 'Gnosis: 展開ファイルが見つからない: ' . l:result_path | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 展開ファイルが見つからない: ') . l:result_path | echohl NONE
     return
   endif
   execute 'edit ' . fnameescape(l:result_path)
@@ -6200,8 +6200,8 @@ function! s:v2_expand_parse(line) abort
 endfunction
 
 function! s:v2_expand_fmt(st) abort
-  return '文中' . a:st.body . ' Context' . a:st.context . ' Group' . a:st.group
-        \ . ' BL/Rel' . a:st.br . ' 日記' . a:st.diary
+  return gnosis#i18n#tr('文中') . a:st.body . ' Context' . a:st.context . ' Group' . a:st.group
+        \ . ' BL/Rel' . a:st.br . gnosis#i18n#tr(' 日記') . a:st.diary
 endfunction
 
 " 詳細モードの前回設定を取得する。無ければ空 dict
@@ -6230,13 +6230,13 @@ endfunction
 " 5 項目を 1 つずつ入力する（既定値は a:def）。取り止めなら {}。
 function! s:v2_expand_input(def) abort
   let l:st = {}
-  for [l:key, l:label] in [['body', '文中リンクの深さ'], ['context', 'Context の深さ'],
-        \ ['group', 'Group の深さ'], ['br', 'Backlink / Related の深さ']]
-    let l:v = trim(input(l:label . ' (0 = 探索しない): ', a:def[l:key]))
+  for [l:key, l:label] in [['body', gnosis#i18n#tr('文中リンクの深さ')], ['context', gnosis#i18n#tr('Context の深さ')],
+        \ ['group', gnosis#i18n#tr('Group の深さ')], ['br', gnosis#i18n#tr('Backlink / Related の深さ')]]
+    let l:v = trim(input(l:label . gnosis#i18n#tr(' (0 = 探索しない): '), a:def[l:key]))
     if l:v !~# '^\d\+$' | redraw | return {} | endif
     let l:st[l:key] = l:v
   endfor
-  let l:d = trim(input('Backlink の探索に Diary を含めるか (t / f): ', a:def.diary))
+  let l:d = trim(input(gnosis#i18n#tr('Backlink の探索に Diary を含めるか (t / f): '), a:def.diary))
   redraw
   if l:d !~# '^[tf]$' | return {} | endif
   let l:st.diary = l:d
@@ -6245,30 +6245,30 @@ endfunction
 
 " プリセットを保存する。同じ名前があれば上書きするか確認する（確認なしには上書きしない）。
 function! s:v2_expand_save_preset(root, py, st) abort
-  let l:name = trim(input('プリセット名: '))
+  let l:name = trim(input(gnosis#i18n#tr('プリセット名: ')))
   redraw
-  if empty(l:name) | echo 'Gnosis: 保存しない' | return 0 | endif
+  if empty(l:name) | echo gnosis#i18n#tr('Gnosis: 保存しない') | return 0 | endif
   let l:base = [s:python_cmd(), a:py, 'preset_save', a:root, l:name,
         \ a:st.body, a:st.context, a:st.group, a:st.br, a:st.diary]
   let l:out = systemlist(join(map(copy(l:base), 'shellescape(v:val)'), ' '))
   if v:shell_error != 0
-    echohl WarningMsg | echo 'Gnosis: プリセットを保存できません: ' . join(l:out, ' ') | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: プリセットを保存できません: ') . join(l:out, ' ') | echohl NONE
     return 0
   endif
   if get(l:out, 0, '') ==# 'exists'
-    if confirm('プリセット「' . l:name . '」は既にあります。上書きしますか？', "&Yes\n&No", 2) != 1
-      echo 'Gnosis: 上書きしない（保存しない）'
+    if confirm(gnosis#i18n#tr('プリセット「') . l:name . gnosis#i18n#tr('」は既にあります。上書きしますか？'), "&Yes\n&No", 2) != 1
+      echo gnosis#i18n#tr('Gnosis: 上書きしない（保存しない）')
       return 0
     endif
     call systemlist(join(map(l:base + ['overwrite'], 'shellescape(v:val)'), ' '))
   endif
-  echo 'Gnosis: プリセット「' . l:name . '」を保存した'
+  echo gnosis#i18n#tr('Gnosis: プリセット「') . l:name . gnosis#i18n#tr('」を保存した')
   return 1
 endfunction
 
 " 一覧から 1 つ選ぶ（inputlist）。取り止めなら {}。
 function! s:v2_expand_choose_preset(label, presets) abort
-  let l:lines = [a:label . '（番号を入力。0 / 空で取り止め）']
+  let l:lines = [a:label . gnosis#i18n#tr('（番号を入力。0 / 空で取り止め）')]
   let l:i = 1
   for l:p in a:presets
     call add(l:lines, l:i . '. ' . l:p.name . '    [' . s:v2_expand_fmt(l:p.st) . ']')
@@ -6286,38 +6286,38 @@ function! s:v2_expand_detail_settings(root, py) abort
     let l:prefs = s:v2_expand_prefs(a:root, a:py)
     let l:presets = s:v2_expand_presets(a:root, a:py)
     let l:items = []
-    if !empty(l:prefs) | call add(l:items, '前回の設定で展開') | endif
-    call add(l:items, '新しく設定する')
+    if !empty(l:prefs) | call add(l:items, gnosis#i18n#tr('前回の設定で展開')) | endif
+    call add(l:items, gnosis#i18n#tr('新しく設定する'))
     if !empty(l:presets)
-      call add(l:items, 'プリセットを呼び出す')
-      call add(l:items, 'プリセットを削除する')
+      call add(l:items, gnosis#i18n#tr('プリセットを呼び出す'))
+      call add(l:items, gnosis#i18n#tr('プリセットを削除する'))
     endif
-    let l:label = '詳細設定' . (empty(l:prefs) ? '' : '(前回: ' . s:v2_expand_fmt(l:prefs) . ')')
+    let l:label = gnosis#i18n#tr('詳細設定') . (empty(l:prefs) ? '' : gnosis#i18n#tr('(前回: ') . s:v2_expand_fmt(l:prefs) . ')')
     let l:pm = s:v2_pick(l:label, l:items)
     if l:pm ==# '' | return {} | endif
 
-    if l:pm ==# '前回の設定で展開'
+    if l:pm ==# gnosis#i18n#tr('前回の設定で展開')
       return l:prefs
-    elseif l:pm ==# '新しく設定する'
+    elseif l:pm ==# gnosis#i18n#tr('新しく設定する')
       let l:def = empty(l:prefs) ? {'body': '3', 'context': '1', 'group': '1', 'br': '1', 'diary': 't'} : l:prefs
       let l:st = s:v2_expand_input(l:def)
       if empty(l:st) | return {} | endif
-      let l:act = s:v2_pick('この設定 [' . s:v2_expand_fmt(l:st) . '] を', ['展開する', '名前を付けて保存して展開する'])
+      let l:act = s:v2_pick(gnosis#i18n#tr('この設定 [') . s:v2_expand_fmt(l:st) . gnosis#i18n#tr('] を'), [gnosis#i18n#tr('展開する'), gnosis#i18n#tr('名前を付けて保存して展開する')])
       if l:act ==# '' | return {} | endif
-      if l:act =~# '^名前'
+      if l:act =~# gnosis#i18n#tr('^名前')
         call s:v2_expand_save_preset(a:root, a:py, l:st)
       endif
       return l:st
-    elseif l:pm ==# 'プリセットを呼び出す'
-      let l:p = s:v2_expand_choose_preset('呼び出すプリセット', l:presets)
+    elseif l:pm ==# gnosis#i18n#tr('プリセットを呼び出す')
+      let l:p = s:v2_expand_choose_preset(gnosis#i18n#tr('呼び出すプリセット'), l:presets)
       if empty(l:p) | return {} | endif
       return l:p.st
-    elseif l:pm ==# 'プリセットを削除する'
-      let l:p = s:v2_expand_choose_preset('削除するプリセット', l:presets)
+    elseif l:pm ==# gnosis#i18n#tr('プリセットを削除する')
+      let l:p = s:v2_expand_choose_preset(gnosis#i18n#tr('削除するプリセット'), l:presets)
       if empty(l:p) | return {} | endif
-      if confirm('プリセット「' . l:p.name . '」を削除しますか？（ノートは消えません）', "&Yes\n&No", 2) == 1
+      if confirm(gnosis#i18n#tr('プリセット「') . l:p.name . gnosis#i18n#tr('」を削除しますか？（ノートは消えません）'), "&Yes\n&No", 2) == 1
         call systemlist(join(map([s:python_cmd(), a:py, 'preset_delete', a:root, l:p.name], 'shellescape(v:val)'), ' '))
-        echo 'Gnosis: プリセット「' . l:p.name . '」を削除した'
+        echo gnosis#i18n#tr('Gnosis: プリセット「') . l:p.name . gnosis#i18n#tr('」を削除した')
       endif
       " メニューに戻る
     else
@@ -6330,11 +6330,11 @@ endfunction
 " 関係セクションには入れない → 相手には バックリンク: として現れる。
 function! gnosis#v2_new_here() abort
   if s:pkm_format() !=# 'v2'
-    echo 'Gnosis: v2 専用' | return
+    echo gnosis#i18n#tr('Gnosis: v2 専用') | return
   endif
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きバッファで実行して' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE
     return
   endif
   let l:dir = expand('%:p:h')
@@ -6365,11 +6365,11 @@ endfunction
 "   グループの ### Context は今のノート。作成後グループを開いて本文末にカーソル。
 function! gnosis#v2_new_group_visual() abort range
   if s:pkm_format() !=# 'v2'
-    echo 'Gnosis: v2 専用' | return
+    echo gnosis#i18n#tr('Gnosis: v2 専用') | return
   endif
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きバッファで実行して' | echohl NONE | return
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE | return
   endif
 
   " 選択範囲を記録
@@ -6405,7 +6405,7 @@ function! gnosis#v2_new_group_visual() abort range
   while !empty(l:body) && trim(l:body[0]) ==# '' | call remove(l:body, 0) | endwhile
   while !empty(l:body) && trim(l:body[-1]) ==# '' | call remove(l:body, -1) | endwhile
   if empty(l:body)
-    echo 'Gnosis: 選択が空です' | return
+    echo gnosis#i18n#tr('Gnosis: 選択が空です') | return
   endif
 
   let l:cur_title = gnosis#current_title()
@@ -6597,7 +6597,7 @@ endfunction
 function! gnosis#add_clipboard() abort
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きファイルで実行して' | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
     return
   endif
   let l:target = ''
@@ -6608,22 +6608,22 @@ function! gnosis#add_clipboard() abort
     endif
   endfor
   if empty(l:target)
-    let l:target = trim(input('追加するノート (.md): ', '', 'file'))
+    let l:target = trim(input(gnosis#i18n#tr('追加するノート (.md): '), '', 'file'))
   endif
   if empty(l:target)
-    echo 'キャンセル'
+    echo gnosis#i18n#tr('キャンセル')
     return
   endif
   let l:tf = gnosis#resolve_link(l:target)
   if !filereadable(l:tf)
-    echohl WarningMsg | echo '見つかりません: ' . l:tf | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:tf | echohl None
     return
   endif
   let l:link = s:make_link_from_dir(l:tf, s:v2_title_for(l:target), expand('%:p:h'))
   call s:simple_body_append(l:link)
   silent! write
   call s:write_current_and_sync_now()
-  echo 'Gnosis: 追加 → ' . fnamemodify(l:tf, ':t')
+  echo gnosis#i18n#tr('Gnosis: 追加 → ') . fnamemodify(l:tf, ':t')
 endfunction
 
 " 旧: 今のノートを、相手（カーソル下のリンク or クリップボード）の ### Context に追加
@@ -6632,28 +6632,28 @@ endfunction
 function! gnosis#add_current_as_parent_here() abort
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きファイルで実行して' | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
     return
   endif
   let l:lk = gnosis#get_link_under_cursor()
   if empty(l:lk) || empty(l:lk.target) || l:lk.target !~? '\.md\(#.*\)\?$'
-    echo 'Gnosis: カーソル下に .md リンクがありません'
+    echo gnosis#i18n#tr('Gnosis: カーソル下に .md リンクがありません')
     return
   endif
   let l:tgt = gnosis#resolve_link(l:lk.target)
   if !filereadable(l:tgt)
-    echohl WarningMsg | echo '見つかりません: ' . l:tgt | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:tgt | echohl None
     return
   endif
   call s:simple_add_parent(l:tgt, l:cur, gnosis#current_title())
   call s:write_current_and_sync_now()
-  echo 'Gnosis: Context に追加 → ' . fnamemodify(l:tgt, ':t')
+  echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
 function! gnosis#add_to_parent() abort
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きファイルで実行して' | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
     return
   endif
   let l:cur_title = gnosis#current_title()
@@ -6671,20 +6671,20 @@ function! gnosis#add_to_parent() abort
     endfor
   endif
   if empty(l:target)
-    let l:target = trim(input('Context に追加する相手 (.md): ', '', 'file'))
+    let l:target = trim(input(gnosis#i18n#tr('Context に追加する相手 (.md): '), '', 'file'))
   endif
   if empty(l:target)
-    echo 'キャンセル'
+    echo gnosis#i18n#tr('キャンセル')
     return
   endif
   let l:tgt = gnosis#resolve_link(l:target)
   if !filereadable(l:tgt)
-    echohl WarningMsg | echo '見つかりません: ' . l:tgt | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:tgt | echohl None
     return
   endif
   call s:simple_add_parent(l:tgt, l:cur, l:cur_title)
   call s:write_current_and_sync_now()
-  echo 'Gnosis: Context に追加 → ' . fnamemodify(l:tgt, ':t')
+  echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
 function! s:v2_new_interactive(attr) abort
@@ -6838,7 +6838,7 @@ function! s:outline_pick_here(Cb) abort
   let l:path = expand('%:p')
   let l:items = s:file_heading_items(l:path, getline(1, '$'))
   if empty(l:items)
-    echo 'Gnosis: 見出しがありません'
+    echo gnosis#i18n#tr('Gnosis: 見出しがありません')
     return
   endif
   let s:outline_pick_cb = a:Cb
@@ -7174,10 +7174,10 @@ endfunction
 "   :V2Migrate %     … 現在のファイルだけ
 function! gnosis#v2_migrate(...) abort
   if s:pkm_format() !=# 'v2'
-    echo 'Gnosis: v2 のみ' | return
+    echo gnosis#i18n#tr('Gnosis: v2 のみ') | return
   endif
   let l:root = s:get_pkm_root()
-  if empty(l:root) | echoerr 'Gnosis: PKM ルート未設定' | return | endif
+  if empty(l:root) | echoerr gnosis#i18n#tr('Gnosis: PKM ルート未設定') | return | endif
   let l:args = [s:python_cmd(), g:gnosis_python, 'migrate', l:root]
   if a:0 > 0 && a:1 !=# ''
     call add(l:args, a:1 ==# '%' ? expand('%:p') : a:1)
@@ -7374,7 +7374,7 @@ function! gnosis#update_all(arg) abort
   else
     call s:sort_index_async(l:root, 1)
   endif
-  echo 'Gnosis: UpdateAll（index 並べ替え・紙PKM 再生成）を裏で実行中…'
+  echo gnosis#i18n#tr('Gnosis: UpdateAll（index 並べ替え・紙PKM 再生成）を裏で実行中…')
 endfunction
 
 function! s:update_all_done(root, job, status) abort
@@ -7389,18 +7389,18 @@ function! s:sort_index_async(root, ...) abort
   let l:notify = a:0 ? a:1 : 0
   if !has('job')
     call s:sort_index_file(a:root)
-    call s:ua_notify(l:notify, 'Gnosis: UpdateAll 完了')
+    call s:ua_notify(l:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了'))
     return
   endif
   let l:index = s:index_path(a:root)
   let l:script = s:sort_yomi_script()
   if !filereadable(l:index) || !filereadable(l:script)
-    call s:ua_notify(l:notify, 'Gnosis: UpdateAll 完了（index なし）')
+    call s:ua_notify(l:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index なし）'))
     return
   endif
   let l:lines = readfile(l:index)
   if empty(l:lines)
-    call s:ua_notify(l:notify, 'Gnosis: UpdateAll 完了（index が空）')
+    call s:ua_notify(l:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index が空）'))
     return
   endif
   let l:in = tempname()
@@ -7429,26 +7429,26 @@ function! s:sort_index_done(index, lines, in, out, rep, notify, job, status) abo
   call delete(a:out)
   call delete(a:rep)
   if a:status != 0 || empty(l:new)
-    call s:ua_notify(a:notify, 'Gnosis: index の並べ替えに失敗しました（pykakasi 未導入?）')
+    call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: index の並べ替えに失敗しました（pykakasi 未導入?）'))
     return
   endif
   " ソート中に index.md が書き換わっていたら、古い入力の結果で上書きしない
   if !filereadable(a:index) || readfile(a:index) !=# a:lines
-    call s:ua_notify(a:notify, 'Gnosis: UpdateAll 完了（index が更新されたため並べ替えは省略）')
+    call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index が更新されたため並べ替えは省略）'))
     return
   endif
   let l:nr = bufnr(a:index)
   if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
-    call s:ua_notify(a:notify, 'Gnosis: UpdateAll 完了（index に未保存の変更があるため並べ替えは省略）')
+    call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index に未保存の変更があるため並べ替えは省略）'))
     return
   endif
   if len(l:new) != len(a:lines) || l:new ==# a:lines
-    call s:ua_notify(a:notify, 'Gnosis: UpdateAll 完了')
+    call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了'))
     return
   endif
   call writefile(l:new, a:index)
   call s:reload_current()
-  call s:ua_notify(a:notify, 'Gnosis: UpdateAll 完了（index を並べ替えました）')
+  call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index を並べ替えました）'))
 endfunction
 
 function! s:update_all_sync(arg) abort
@@ -7475,7 +7475,7 @@ function! s:sort_index_file(root) abort
   endif
   let l:nr = bufnr(l:index)
   if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
-    echohl WarningMsg | echo 'Gnosis: index.md に未保存の変更があるため並べ替えを省略しました' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: index.md に未保存の変更があるため並べ替えを省略しました') | echohl NONE
     return
   endif
   let l:lines = readfile(l:index)
@@ -7488,7 +7488,7 @@ function! s:sort_index_file(root) abort
   let l:out = system(l:cmd, join(l:lines, "\n") . "\n")
   call delete(l:report)
   if v:shell_error != 0
-    echohl WarningMsg | echo 'Gnosis: index.md のよみソートに失敗しました（pykakasi 未導入?）' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: index.md のよみソートに失敗しました（pykakasi 未導入?）') | echohl NONE
     return
   endif
   let l:new = split(l:out, "\n", 1)
@@ -7893,14 +7893,14 @@ function! s:link_to_outline_apply(frag) abort
         \ . l:new_raw . strpart(getline(l:ctx.lnum), l:lk.endcol))
   call cursor(l:ctx.lnum, 1)
   if empty(a:frag)
-    echo 'Gnosis: 見出しアンカーを外しました'
+    echo gnosis#i18n#tr('Gnosis: 見出しアンカーを外しました')
   else
     echo 'Gnosis: → #' . a:frag
   endif
 endfunction
 
 function! s:link_to_outline_sink(line) abort
-  if a:line ==# '（見出しなし）'
+  if a:line ==# gnosis#i18n#tr('（見出しなし）')
     call s:link_to_outline_apply('')
   else
     call s:link_to_outline_apply(get(split(a:line, "\t", 1), 1, ''))
@@ -7909,7 +7909,7 @@ endfunction
 
 " fzf が無いときは inputlist で選ぶ（同じ apply を使う）。
 function! s:link_to_outline_fallback(items) abort
-  let l:choices = ['0: （見出しなし）']
+  let l:choices = [gnosis#i18n#tr('0: （見出しなし）')]
   let l:i = 1
   for l:it in a:items
     call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
@@ -7930,18 +7930,18 @@ endfunction
 function! gnosis#link_to_outline(...) abort
   let l:lk = gnosis#get_link_under_cursor()
   if empty(l:lk) || empty(l:lk.target) || l:lk.target !~? '\.md\(#.*\)\?$'
-    echo 'Gnosis: カーソル下に .md リンクがありません'
+    echo gnosis#i18n#tr('Gnosis: カーソル下に .md リンクがありません')
     return
   endif
   if s:in_back_section(line('.'))
     echohl WarningMsg
-    echo 'Gnosis: BackLink は同期で作り直されるため見出しリンクにできません'
+    echo gnosis#i18n#tr('Gnosis: BackLink は同期で作り直されるため見出しリンクにできません')
     echohl None
     return
   endif
   let l:path = s:resolve_link_for_navigation(s:link_base(l:lk.target))
   if !filereadable(l:path)
-    echohl WarningMsg | echo '見つかりません: ' . l:path | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:path | echohl None
     return
   endif
   let s:link_to_outline_ctx = {
@@ -7958,7 +7958,7 @@ function! gnosis#link_to_outline(...) abort
   let l:items = s:file_heading_items(l:path)
   if empty(l:items)
     let s:link_to_outline_ctx = {}
-    echo 'Gnosis: 見出しがありません: ' . fnamemodify(l:path, ':t')
+    echo gnosis#i18n#tr('Gnosis: 見出しがありません: ') . fnamemodify(l:path, ':t')
     return
   endif
   if !exists('*fzf#run')
@@ -8907,7 +8907,7 @@ function! s:insert_links_core(links, ...) abort
   redraw
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
-    echo 'Gnosis: 何も追加しない'
+    echo gnosis#i18n#tr('Gnosis: 何も追加しない')
     return 0
   endif
   if l:ch ==? 't' && a:0 > 0
@@ -8915,7 +8915,7 @@ function! s:insert_links_core(links, ...) abort
     return -1
   endif
   if l:ch ==? 'p'
-    echo 'Gnosis: 位置キー p は c（Context 末尾）に変わりました。何も追加しません'
+    echo gnosis#i18n#tr('Gnosis: 位置キー p は c（Context 末尾）に変わりました。何も追加しません')
     return 0
   endif
   if l:ch ==# 'n' && l:inline
@@ -8971,7 +8971,7 @@ function! s:insert_links_core(links, ...) abort
     " ここで初めてセクションが生まれる。
     let l:cur = expand('%:p')
     if empty(l:cur)
-      echohl WarningMsg | echo 'Gnosis: 名前付きファイルで実行して' | echohl None
+      echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
       return 0
     endif
     let l:cur_title = gnosis#current_title()
@@ -8988,7 +8988,7 @@ function! s:insert_links_core(links, ...) abort
       call s:simple_add_related(l:tgt, l:cur, l:cur_title)
     endfor
     if l:added == 0
-      echo 'Gnosis: Related は変更なし（既に追加済み）'
+      echo gnosis#i18n#tr('Gnosis: Related は変更なし（既に追加済み）')
     endif
     return l:added > 0
   endif
@@ -9193,7 +9193,7 @@ function! gnosis#add_clipboard_before_up_note(...) abort
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
   let l:links = s:pick_links()
   if empty(l:links)
-    echo 'Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
+    echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
   call s:insert_links_at_position(l:links, function('s:links_added_done'))
@@ -9232,7 +9232,7 @@ function! s:zap_add_child_link(rel_target) abort
   endif
   let l:nr = bufnr(l:parent_file)
   if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
-    echohl WarningMsg | echo 'Gnosis: 相手のノートに未保存の変更があるため、相手の本文へは足しませんでした' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 相手のノートに未保存の変更があるため、相手の本文へは足しませんでした') | echohl NONE
     return
   endif
   " このノートのタイトル（相手のリンクの表示名）
@@ -9267,7 +9267,7 @@ function! s:add_parent_with_reverse(link) abort
   endif
   let l:bare = substitute(l:target, '#.*$', '', '')
   if !s:append_link_to_buffer_section('up', a:link)
-    echo 'Gnosis: Context に追加できませんでした（重複 or ### Context 無し）'
+    echo gnosis#i18n#tr('Gnosis: Context に追加できませんでした（重複 or ### Context 無し）')
     return 0
   endif
   call s:realtime_sync_apply()
@@ -9324,7 +9324,7 @@ function! gnosis#add_link_to_parent() abort
   " 相手（リンク先）の本文に今のノートが無ければ相手の ### Context の直前に入れる。
   let l:links = s:pick_links()
   if empty(l:links)
-    echo 'Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
+    echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
   let l:n = 0
@@ -9334,14 +9334,14 @@ function! gnosis#add_link_to_parent() abort
     endif
   endfor
   if l:n
-    echo 'Gnosis: Context に ' . l:n . ' 本追加しました'
+    echo gnosis#i18n#tr('Gnosis: Context に ') . l:n . gnosis#i18n#tr(' 本追加しました')
   endif
 endfunction
 
 function! gnosis#add_clipboard_before_up_note_named(...) abort
   let l:links = s:pick_links()
   if empty(l:links)
-    echo 'Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
+    echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
   " 複数あるときは 1 本ずつ表示名を聞く（空 Enter / Esc でどれか 1 本でも中止したら全部中止）
@@ -9352,17 +9352,17 @@ function! gnosis#add_clipboard_before_up_note_named(...) abort
     let l:target = get(l:parts, 'target', '')
     let l:default = get(l:parts, 'text', '')
     if empty(l:target)
-      echohl WarningMsg | echo 'Gnosis: リンクの形式が不正です' | echohl NONE
+      echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: リンクの形式が不正です') | echohl NONE
       return
     endif
     if a:0 > 0 && l:i == 0
       let l:name = a:1
     else
-      let l:label = len(l:links) > 1 ? '表示名 (' . (l:i + 1) . '/' . len(l:links) . '): ' : '表示名: '
+      let l:label = len(l:links) > 1 ? gnosis#i18n#tr('表示名 (') . (l:i + 1) . '/' . len(l:links) . '): ' : gnosis#i18n#tr('表示名: ')
       let l:name = input(l:label, l:default)
     endif
     if empty(l:name)
-      echo 'Gnosis: 中止しました'
+      echo gnosis#i18n#tr('Gnosis: 中止しました')
       return
     endif
     call add(l:named, '[' . l:name . '](' . l:target . ')')
@@ -9374,7 +9374,7 @@ endfunction
 function! s:named_links_added_done(count) abort
   call s:realtime_sync_apply()
   silent write
-  echo 'Gnosis: 表示名を付けてリンクを ' . a:count . ' 本追加'
+  echo gnosis#i18n#tr('Gnosis: 表示名を付けてリンクを ') . a:count . gnosis#i18n#tr(' 本追加')
 endfunction
 
 " 現ノートがグループ（attribute: group / index.md）かどうか
@@ -9464,19 +9464,19 @@ function! gnosis#add_clipboard_as_child_with_parent() abort
   "     今のノートがグループなら本文リンクだけで足りるので親は sync に任せる。
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きファイルで実行して' | echohl None
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
     return
   endif
   let l:links = s:pick_links()
   if empty(l:links)
-    echo 'Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
+    echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
   call s:insert_links_at_position(l:links)
   if s:buf_is_group()
     call s:realtime_sync_apply()
     silent write
-    echo 'グループ: 本文リンクを追加（親は sync が書く）'
+    echo gnosis#i18n#tr('グループ: 本文リンクを追加（親は sync が書く）')
     return
   endif
   let l:done = []
@@ -9492,9 +9492,9 @@ function! gnosis#add_clipboard_as_child_with_parent() abort
   call s:realtime_sync_apply()
   silent write
   if empty(l:done)
-    echo 'リンクのみ追加（相手ノートが見つからず Context には書けません）'
+    echo gnosis#i18n#tr('リンクのみ追加（相手ノートが見つからず Context には書けません）')
   else
-    echo 'リンク追加 + 親に登録 → ' . join(l:done, ', ')
+    echo gnosis#i18n#tr('リンク追加 + 親に登録 → ') . join(l:done, ', ')
   endif
 endfunction
 
@@ -9869,7 +9869,7 @@ endfunction
 function! gnosis#paste_clipboard(mode, ...) abort
   let l:text = s:clipboard_text()
   if empty(l:text)
-    echo 'Gnosis: クリップボードが空'
+    echo gnosis#i18n#tr('Gnosis: クリップボードが空')
     return
   endif
   let @" = l:text
@@ -10045,7 +10045,7 @@ endfunction
 function! gnosis#paper_index() abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
-    echohl WarningMsg | echo 'Gnosis: PKM root が未設定です' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: PKM root が未設定です') | echohl NONE
     return
   endif
   " 既にある索引は開くだけ（再生成は重いので \ua で行う）
@@ -10063,12 +10063,12 @@ function! gnosis#paper_index() abort
   endif
   if !empty(l:existing)
     silent execute 'edit ' . fnameescape(l:existing)
-    redraw | echo 'Gnosis: 紙PKM Index を開きました（更新は \ua）'
+    redraw | echo gnosis#i18n#tr('Gnosis: 紙PKM Index を開きました（更新は \ua）')
     return
   endif
   let l:script = s:paper_pkm_script()
   if !filereadable(l:script)
-    echohl ErrorMsg | echo 'Gnosis: paper_pkm.py が見つかりません: ' . l:script | echohl NONE
+    echohl ErrorMsg | echo gnosis#i18n#tr('Gnosis: paper_pkm.py が見つかりません: ') . l:script | echohl NONE
     return
   endif
   let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' create ' . shellescape(l:root)
@@ -10079,32 +10079,32 @@ function! gnosis#paper_index() abort
   endif
   let l:path = substitute(l:out, '\n.*$', '', '')
   if empty(l:path) || !filereadable(l:path)
-    echohl ErrorMsg | echo 'Gnosis: 紙PKM Index を作成できませんでした' | echohl NONE
+    echohl ErrorMsg | echo gnosis#i18n#tr('Gnosis: 紙PKM Index を作成できませんでした') | echohl NONE
     return
   endif
   silent execute 'edit ' . fnameescape(l:path)
-  redraw | echo 'Gnosis: 紙PKM Index を開きました（Index-write にキーワードを書く）'
+  redraw | echo gnosis#i18n#tr('Gnosis: 紙PKM Index を開きました（Index-write にキーワードを書く）')
 endfunction
 
 " スキャン画像の番号付け GUI を起動する。移動先は今開いているノートのフォルダ。
 function! gnosis#paper_scan() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !filereadable(s:index_path(l:root))
-    echohl WarningMsg | echo 'Gnosis: PKM root が未設定です' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: PKM root が未設定です') | echohl NONE
     return
   endif
   let l:dest = expand('%:p:h')
   if empty(l:dest)
-    echohl WarningMsg | echo 'Gnosis: ノートを開いてから実行してください' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノートを開いてから実行してください') | echohl NONE
     return
   endif
   if stridx(fnamemodify(l:dest, ':p'), fnamemodify(l:root, ':p')) != 0
-    echohl WarningMsg | echo 'Gnosis: 今のノートが vault の外です: ' . l:dest | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 今のノートが vault の外です: ') . l:dest | echohl NONE
     return
   endif
   let l:script = s:paper_scan_script()
   if !filereadable(l:script)
-    echohl ErrorMsg | echo 'Gnosis: folgezettel_scan.py が見つかりません: ' . l:script | echohl NONE
+    echohl ErrorMsg | echo gnosis#i18n#tr('Gnosis: folgezettel_scan.py が見つかりません: ') . l:script | echohl NONE
     return
   endif
   " GUI が Index を再生成するので、編集中の内容は先に書き出す。
@@ -10124,13 +10124,13 @@ function! gnosis#paper_scan() abort
     call system(l:cmd)
     checktime
   endif
-  echo 'Gnosis: フォルゲゼッテル番号付けを起動しました（GUI で番号を入力）'
+  echo gnosis#i18n#tr('Gnosis: フォルゲゼッテル番号付けを起動しました（GUI で番号を入力）')
 endfunction
 
 function! s:paper_scan_done(job, status) abort
   call s:reload_current()
   if a:status == 0
-    echo 'Gnosis: 番号付けが完了しました（Index を再読み込み）'
+    echo gnosis#i18n#tr('Gnosis: 番号付けが完了しました（Index を再読み込み）')
   endif
 endfunction
 
@@ -10146,13 +10146,13 @@ endfunction
 function! s:sort_lines_by_yomi(first, last) abort
   if expand('%:t') ==# 'Folgezettel-Index.md'
     echohl WarningMsg
-    echo 'Gnosis: Folgezettel-Index は生成物（ID の自然順）なので \S しません'
+    echo gnosis#i18n#tr('Gnosis: Folgezettel-Index は生成物（ID の自然順）なので \S しません')
     echohl NONE
     return
   endif
   let l:script = s:sort_yomi_script()
   if !filereadable(l:script)
-    echohl ErrorMsg | echo 'Gnosis: sort_yomi.py が見つかりません: ' . l:script | echohl NONE
+    echohl ErrorMsg | echo gnosis#i18n#tr('Gnosis: sort_yomi.py が見つかりません: ') . l:script | echohl NONE
     return
   endif
   let l:lines = getline(a:first, a:last)
@@ -10164,12 +10164,12 @@ function! s:sort_lines_by_yomi(first, last) abort
         \ . (expand('%:t') ==# 'Index-write.md' ? ' --keyword-lines' : '')
         \ . ' --report-file ' . shellescape(l:report)
   " 1 万行の Index では数秒かかる。無反応に見えないよう先に表示する。
-  echo printf('Gnosis: %d 行をよみ順に並べ替え中…', len(l:lines))
+  echo printf(gnosis#i18n#tr('Gnosis: %d 行をよみ順に並べ替え中…'), len(l:lines))
   redraw
   let l:out = system(l:cmd, join(l:lines, "\n") . "\n")
   if v:shell_error != 0
     call delete(l:report)
-    echohl WarningMsg | echo 'Gnosis: よみソートに失敗しました（pykakasi 未導入?）' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: よみソートに失敗しました（pykakasi 未導入?）') | echohl NONE
     return
   endif
   let l:added = 0
@@ -10182,7 +10182,7 @@ function! s:sort_lines_by_yomi(first, last) abort
     call remove(l:new, -1)
   endif
   if len(l:new) != len(l:lines)
-    echohl WarningMsg | echo 'Gnosis: よみソートの行数が一致しません' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: よみソートの行数が一致しません') | echohl NONE
     return
   endif
   let l:view = winsaveview()
@@ -10190,9 +10190,9 @@ function! s:sort_lines_by_yomi(first, last) abort
   call winrestview(l:view)
   if l:added
     silent! checktime
-    echo printf('Gnosis: %d 行をよみ順に並べ替え（未登録のよみ %d 件を yomi: に追加）', len(l:new), l:added)
+    echo printf(gnosis#i18n#tr('Gnosis: %d 行をよみ順に並べ替え（未登録のよみ %d 件を yomi: に追加）'), len(l:new), l:added)
   else
-    echo printf('Gnosis: %d 行をよみ順に並べ替えました', len(l:new))
+    echo printf(gnosis#i18n#tr('Gnosis: %d 行をよみ順に並べ替えました'), len(l:new))
   endif
 endfunction
 
@@ -10273,7 +10273,7 @@ function! gnosis#sort_selection() abort
   let l:first = line("'<")
   let l:last = line("'>")
   if l:first <= 0 || l:last <= 0 || l:first > l:last
-    echo 'Gnosis: 選択範囲がありません'
+    echo gnosis#i18n#tr('Gnosis: 選択範囲がありません')
     return
   endif
   call s:sort_lines_by_yomi(l:first, l:last)
@@ -10290,7 +10290,7 @@ function! s:yomi_target() abort
   let l:note = expand('%:p')
   let l:name = gnosis#current_title()
   if empty(l:name) || empty(l:note) || !filereadable(l:note)
-    echohl WarningMsg | echo 'Gnosis: ノート上で実行して' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノート上で実行して') | echohl NONE
     return ['', '']
   endif
   return [l:name, l:note]
@@ -10332,15 +10332,15 @@ function! s:yomi_choose_name(script, note, name) abort
     call add(l:names, a:name)
   endif
   let l:menu = join(map(copy(l:names), {i, v -> (i + 1) . '=' . v}), '  ')
-  let l:choice = inputdialog('表示名を選択 (' . l:menu . '): ',
+  let l:choice = inputdialog(gnosis#i18n#tr('表示名を選択 (') . l:menu . '): ',
         \ string(index(l:names, a:name) + 1), "\x01")
   if l:choice ==# "\x01" || empty(trim(l:choice))
-    echo 'Gnosis: 中止'
+    echo gnosis#i18n#tr('Gnosis: 中止')
     return ''
   endif
   let l:num = str2nr(trim(l:choice))
   if l:num < 1 || l:num > len(l:names)
-    echohl WarningMsg | echo 'Gnosis: 番号が範囲外です' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 番号が範囲外です') | echohl NONE
     return ''
   endif
   return l:names[l:num - 1]
@@ -10348,13 +10348,13 @@ endfunction
 
 " よみの入力と保存（表示名は確定済み）。既定値を消して Enter なら削除。
 function! s:yomi_input(note, name, default) abort
-  let l:reading = inputdialog('よみ(' . a:name . '): ', a:default, "\x01")
+  let l:reading = inputdialog(gnosis#i18n#tr('よみ(') . a:name . '): ', a:default, "\x01")
   if l:reading ==# "\x01"
-    echo 'Gnosis: 中止'
+    echo gnosis#i18n#tr('Gnosis: 中止')
     return
   endif
   if empty(l:reading) && empty(a:default)
-    echo 'Gnosis: 変更なし'
+    echo gnosis#i18n#tr('Gnosis: 変更なし')
     return
   endif
   call s:apply_yomi(a:note, a:name, l:reading)
@@ -10364,7 +10364,7 @@ endfunction
 function! s:apply_yomi(note, name, reading) abort
   let l:script = s:sort_yomi_script()
   if !filereadable(l:script)
-    echohl ErrorMsg | echo 'Gnosis: sort_yomi.py が見つかりません: ' . l:script | echohl NONE
+    echohl ErrorMsg | echo gnosis#i18n#tr('Gnosis: sort_yomi.py が見つかりません: ') . l:script | echohl NONE
     return
   endif
   let l:out = s:yomi_py(l:script, 'set',
@@ -11166,8 +11166,8 @@ endfunction
 
 function! s:table_row_editor_lines(headers, cells) abort
   let l:lines = [
-        \ '# TableRowEdit: 各項目の次の行を書き換えて :write で反映',
-        \ '# q で閉じる / ZZ で保存して閉じる',
+        \ gnosis#i18n#tr('# TableRowEdit: 各項目の次の行を書き換えて :write で反映'),
+        \ gnosis#i18n#tr('# q で閉じる / ZZ で保存して閉じる'),
         \ ''
         \ ]
   for l:i in range(0, len(a:cells) - 1)
@@ -11277,7 +11277,7 @@ function! gnosis#table_row_editor_apply() abort
   endif
 
   if l:block_lines[l:row_idx] !=# get(b:, 'gnosis_table_orig_line', '')
-    echoerr 'TableRowEdit: 元の行が変わったため保存しません（エディタを開き直してください）'
+    echoerr gnosis#i18n#tr('TableRowEdit: 元の行が変わったため保存しません（エディタを開き直してください）')
     return
   endif
   let l:src_parsed = s:parse_table_line(l:block_lines[l:row_idx])
@@ -11763,7 +11763,7 @@ function! s:stack_copy_statusline_on() abort
   endif
   setlocal statusline=%#WarningMsg#\ [CopyStack]\ %*%f\ %m%=%l/%L
   if exists('+winbar')
-    let &l:winbar = '%#WarningMsg# [CopyStack] y:追加  d:切り取り  :CopyStack:確定/終了 %#Normal#'
+    let &l:winbar = gnosis#i18n#tr('%#WarningMsg# [CopyStack] y:追加  d:切り取り  :CopyStack:確定/終了 %#Normal#')
   endif
 endfunction
 
@@ -12304,7 +12304,7 @@ function! s:mount_by_password(cipher, root) abort
   for l:i in range(3)
     let l:pw = inputsecret('vault password: ')
     if empty(l:pw)
-      echom 'Gnosis: マウントせず終了（:GnosisMount で再試行）'
+      echom gnosis#i18n#tr('Gnosis: マウントせず終了（:GnosisMount で再試行）')
       return 0
     endif
     let l:pf = s:temp_passfile(l:pw)
@@ -12340,11 +12340,11 @@ function! s:mount_by_password(cipher, root) abort
     endif
     echohl ErrorMsg
     if l:code == 12
-      echom 'Gnosis: パスワードが違う (' . (l:i + 1) . '/3)'
+      echom gnosis#i18n#tr('Gnosis: パスワードが違う (') . (l:i + 1) . '/3)'
     else
       " パスワードの間違いではない失敗。本当の理由を出す
       let l:why = trim(get(split(l:out, "\n"), -1, ''))
-      echom 'Gnosis: マウントできません（パスワードの間違いではありません・終了コード ' . l:code . '）: ' . l:why
+      echom gnosis#i18n#tr('Gnosis: マウントできません（パスワードの間違いではありません・終了コード ') . l:code . '）: ' . l:why
     endif
     echohl NONE
   endfor
@@ -12369,7 +12369,7 @@ function! gnosis#maybe_mount_interactive() abort
   if !isdirectory(l:root)
     " mountpoint が無いと gocryptfs はマウントできない。yurii-note は
     " 死んだ root.txt が残っているだけかもしれないので、聞かずに止める。
-    echom 'Gnosis: vault ディレクトリが無いのでマウントできません: ' . l:root
+    echom gnosis#i18n#tr('Gnosis: vault ディレクトリが無いのでマウントできません: ') . l:root
     return
   endif
   if gnosis#vault_mounted() == 1
@@ -12392,12 +12392,12 @@ function! gnosis#mount_vault() abort
   let l:root = s:vault_clean()
   if empty(l:cipher) || empty(l:root) || !filereadable(l:cipher . s:sep() . 'gocryptfs.conf')
     echohl ErrorMsg
-    echom 'Gnosis: 暗号箱(' . l:cipher . ')がありません（このvaultは暗号化されていません）'
+    echom gnosis#i18n#tr('Gnosis: 暗号箱(') . l:cipher . gnosis#i18n#tr(')がありません（このvaultは暗号化されていません）')
     echohl NONE
     return
   endif
   if gnosis#vault_mounted() == 1
-    echom 'Gnosis: 既にマウント済み'
+    echom gnosis#i18n#tr('Gnosis: 既にマウント済み')
     return
   endif
   if s:mount_by_password(l:cipher, l:root) != 1
@@ -12446,7 +12446,7 @@ function! gnosis#lock_vault() abort
     return
   endif
   if gnosis#vault_mounted() != 1
-    echom 'Gnosis: vault は既にロック中です'
+    echom gnosis#i18n#tr('Gnosis: vault は既にロック中です')
     return
   endif
   call gnosis#save_current_note()
@@ -12468,7 +12468,7 @@ function! gnosis#lock_vault() abort
   call s:mount_cache_reset()
   if v:shell_error != 0 || gnosis#vault_mounted(escape(l:root, '\\'), 1) == 1
     echohl WarningMsg
-    echom 'Gnosis: 他アプリが開いていてロック失敗。閉じてから再度 :GnosisLock'
+    echom gnosis#i18n#tr('Gnosis: 他アプリが開いていてロック失敗。閉じてから再度 :GnosisLock')
     echohl NONE
     return
   endif
@@ -12484,30 +12484,30 @@ function! gnosis#backup_vault(...) abort
   let l:st = s:vault_status()
   if !l:st.has_cipher
     echohl ErrorMsg
-    echom 'Gnosis: 暗号箱がないのでバックアップできません（暗号化されていない vault）'
+    echom gnosis#i18n#tr('Gnosis: 暗号箱がないのでバックアップできません（暗号化されていない vault）')
     echohl NONE
     return
   endif
   if !executable('7z') || !executable('gocryptfs')
     echohl ErrorMsg
-    echom 'Gnosis: 7z と gocryptfs が必要です'
+    echom gnosis#i18n#tr('Gnosis: 7z と gocryptfs が必要です')
     echohl NONE
     return
   endif
   let l:dest = a:0 && !empty(a:1) ? a:1 : get(g:, 'gnosis_backup_dir', '')
   if empty(l:dest)
-    let l:dest = input('バックアップ先ディレクトリ: ', '', 'dir')
+    let l:dest = input(gnosis#i18n#tr('バックアップ先ディレクトリ: '), '', 'dir')
   endif
   let l:dest = fnamemodify(expand(l:dest), ':p')
   if empty(l:dest) || l:dest ==# fnamemodify('', ':p') || !isdirectory(l:dest)
     echohl ErrorMsg
-    echom 'Gnosis: 出力先ディレクトリがありません: ' . l:dest
+    echom gnosis#i18n#tr('Gnosis: 出力先ディレクトリがありません: ') . l:dest
     echohl NONE
     return
   endif
   let l:pw = inputsecret('vault password: ')
   if empty(l:pw)
-    echom 'Gnosis: バックアップを中止'
+    echom gnosis#i18n#tr('Gnosis: バックアップを中止')
     return
   endif
   call gnosis#backup_vault_with(l:pw, l:dest)
@@ -12524,7 +12524,7 @@ function! gnosis#backup_vault_with(pw, dest) abort
   let l:target = l:st.layout ==# 'note' ? fnamemodify(l:st.root, ':p:h:h') : l:cipher
   if stridx(l:dest, l:target . s:sep()) == 0 || l:dest ==# l:target . s:sep()
     echohl ErrorMsg
-    echom 'Gnosis: 出力先を vault の中にはできません'
+    echom gnosis#i18n#tr('Gnosis: 出力先を vault の中にはできません')
     echohl NONE
     return
   endif
@@ -12536,7 +12536,7 @@ function! gnosis#backup_vault_with(pw, dest) abort
         \ . strftime('%Y%m%d%H%M%S') . '-' . l:proj . '.7z'
   if filereadable(l:out)
     echohl ErrorMsg
-    echom 'Gnosis: 既に存在します: ' . l:out
+    echom gnosis#i18n#tr('Gnosis: 既に存在します: ') . l:out
     echohl NONE
     return
   endif
@@ -12547,7 +12547,7 @@ function! gnosis#backup_vault_with(pw, dest) abort
   call s:secure_delete(l:pf)
   if !l:ok
     echohl ErrorMsg
-    echom 'Gnosis: パスワードが違う（または暗号箱が壊れています）'
+    echom gnosis#i18n#tr('Gnosis: パスワードが違う（または暗号箱が壊れています）')
     echohl NONE
     return
   endif
@@ -12572,7 +12572,7 @@ function! gnosis#backup_vault_with(pw, dest) abort
     call s:secure_delete(l:pf2)
     call delete(l:out)
     echohl ErrorMsg
-    echom 'Gnosis: 7z 失敗: ' . substitute(l:res, '\n\+', ' ', 'g')[-200:]
+    echom gnosis#i18n#tr('Gnosis: 7z 失敗: ') . substitute(l:res, '\n\+', ' ', 'g')[-200:]
     echohl NONE
     return
   endif
@@ -12583,16 +12583,16 @@ function! gnosis#backup_vault_with(pw, dest) abort
   if !l:tested
     call delete(l:out)
     echohl ErrorMsg
-    echom 'Gnosis: 7z の検査に失敗したので破棄しました'
+    echom gnosis#i18n#tr('Gnosis: 7z の検査に失敗したので破棄しました')
     echohl NONE
     return
   endif
   if l:warn
     echohl WarningMsg
-    echom 'Gnosis: 警告あり（バックアップ中に変更されたファイルがあった可能性）。保存中でない時にもう一度取ると確実です'
+    echom gnosis#i18n#tr('Gnosis: 警告あり（バックアップ中に変更されたファイルがあった可能性）。保存中でない時にもう一度取ると確実です')
     echohl NONE
   endif
-  echom 'Gnosis: バックアップ完了 → ' . l:out
+  echom gnosis#i18n#tr('Gnosis: バックアップ完了 → ') . l:out
 endfunction
 
 " Vim 終了 = 自動ロック（busy なら静かに諦める）
@@ -12644,7 +12644,7 @@ function! gnosis#set_password() abort
   let l:root = s:vault_clean()
   if empty(l:root)
     echohl ErrorMsg
-    echom 'Gnosis: vault(root) が決まっていません'
+    echom gnosis#i18n#tr('Gnosis: vault(root) が決まっていません')
     echohl NONE
     return
   endif
@@ -12664,13 +12664,13 @@ function! gnosis#set_password() abort
   let l:new = inputsecret('New password: ')
   if empty(l:new)
     echohl ErrorMsg
-    echom 'Gnosis: 空のパスワードは使えません。中止'
+    echom gnosis#i18n#tr('Gnosis: 空のパスワードは使えません。中止')
     echohl NONE
     return
   endif
-  if l:new !=# inputsecret('New password (確認): ')
+  if l:new !=# inputsecret(gnosis#i18n#tr('New password (確認): '))
     echohl ErrorMsg
-    echom 'Gnosis: 新パスワードが一致しません。中止'
+    echom gnosis#i18n#tr('Gnosis: 新パスワードが一致しません。中止')
     echohl NONE
     return
   endif
@@ -12680,11 +12680,11 @@ function! gnosis#set_password() abort
   call s:secure_delete(l:pold)
   if v:shell_error == 0
     redraw
-    echom 'Gnosis: パスワードを変更しました（次回のマウントから有効）'
+    echom gnosis#i18n#tr('Gnosis: パスワードを変更しました（次回のマウントから有効）')
   else
     let l:msg = trim(substitute(l:out, "\n", ' ', 'g'))[0:100]
     echohl ErrorMsg
-    echom 'Gnosis: 変更失敗: ' . l:msg
+    echom gnosis#i18n#tr('Gnosis: 変更失敗: ') . l:msg
     echohl NONE
   endif
 endfunction
@@ -12704,13 +12704,13 @@ function! s:init_encrypted_impl() abort
   let l:cur = s:vault_clean()
   if empty(l:cur)
     echohl ErrorMsg
-    echom 'Gnosis: vault(root) が決まっていません'
+    echom gnosis#i18n#tr('Gnosis: vault(root) が決まっていません')
     echohl NONE
     return
   endif
   if gnosis#vault_mounted(escape(l:cur, '\\'), 1) == 1
     echohl WarningMsg
-    echom 'Gnosis: 既にマウント済み（暗号化済み vault）。:GnosisSetPassword はパスワード変更用'
+    echom gnosis#i18n#tr('Gnosis: 既にマウント済み（暗号化済み vault）。:GnosisSetPassword はパスワード変更用')
     echohl NONE
     return
   endif
@@ -12720,14 +12720,14 @@ function! s:init_encrypted_impl() abort
   let l:root = l:proj . s:sep() . 'note'
   let l:cipher = l:proj . s:sep() . '.crypt'
   let l:converted = (l:root !=# substitute(fnamemodify(l:cur, ':p'), s:sep() . '\+$', '', ''))
-  let l:new = inputsecret('vault の新しいパスワード: ')
+  let l:new = inputsecret(gnosis#i18n#tr('vault の新しいパスワード: '))
   if empty(l:new)
-    echom 'Gnosis: 中止（空パスワード）'
+    echom gnosis#i18n#tr('Gnosis: 中止（空パスワード）')
     return
   endif
-  if l:new !=# inputsecret('もう一度（確認）: ')
+  if l:new !=# inputsecret(gnosis#i18n#tr('もう一度（確認）: '))
     echohl ErrorMsg
-    echom 'Gnosis: パスワードが一致しません。中止'
+    echom gnosis#i18n#tr('Gnosis: パスワードが一致しません。中止')
     echohl NONE
     return
   endif
@@ -12741,12 +12741,12 @@ function! s:init_encrypted_impl() abort
   if l:n !~# '^\d\+$' || str2nr(l:n) > 0
     let l:size = trim(system('du -sh ' . shellescape(l:cur) . ' 2>/dev/null | cut -f1'))
     let l:msg = l:converted
-          \ ? printf('%s を暗号化して %s + %s にします：%s 個のファイル(%s)。よければ y: ',
+          \ ? printf(gnosis#i18n#tr('%s を暗号化して %s + %s にします：%s 個のファイル(%s)。よければ y: '),
           \          l:cur, l:root, l:cipher, l:n, l:size)
-          \ : printf('%s を暗号化します：%s 個のファイル(%s)。よければ y: ', l:cur, l:n, l:size)
+          \ : printf(gnosis#i18n#tr('%s を暗号化します：%s 個のファイル(%s)。よければ y: '), l:cur, l:n, l:size)
     let l:yn = input(l:msg)
     if l:yn !=# 'y'
-      echom 'Gnosis: 中止'
+      echom gnosis#i18n#tr('Gnosis: 中止')
       return
     endif
   endif
@@ -12755,19 +12755,19 @@ function! s:init_encrypted_impl() abort
   let l:before_err = ''
   try
     if !empty(glob(l:cipher . s:sep() . '*', 1)) || filereadable(l:cipher . s:sep() . 'gocryptfs.conf')
-      throw 'cipher が既に存在・非空: ' . l:cipher
+      throw gnosis#i18n#tr('cipher が既に存在・非空: ') . l:cipher
     endif
     let l:stage = 'mv'
     call system('mv ' . shellescape(l:cur) . ' ' . shellescape(l:plaindir))
     if v:shell_error != 0
-      throw 'mv 失敗'
+      throw gnosis#i18n#tr('mv 失敗')
     endif
     let l:stage = 'init'
     call mkdir(fnamemodify(l:cipher, ':h'), 'p')
     call mkdir(l:cipher, 'p')
     let l:out = system('gocryptfs -init -passfile=' . shellescape(l:pf) . ' ' . shellescape(l:cipher) . ' 2>&1')
     if v:shell_error != 0
-      throw 'init 失敗: ' . trim(substitute(l:out, "\n", ' ', 'g'))
+      throw gnosis#i18n#tr('init 失敗: ') . trim(substitute(l:out, "\n", ' ', 'g'))
     endif
     let l:stage = 'mount'
     call mkdir(l:root, 'p')
@@ -12775,20 +12775,20 @@ function! s:init_encrypted_impl() abort
     let l:out = system('gocryptfs -passfile=' . shellescape(l:pf) . ' ' . shellescape(l:cipher)
           \ . ' ' . shellescape(l:root) . ' 2>&1')
     if v:shell_error != 0
-      throw 'mount 失敗: ' . trim(substitute(l:out, "\n", ' ', 'g'))
+      throw gnosis#i18n#tr('mount 失敗: ') . trim(substitute(l:out, "\n", ' ', 'g'))
     endif
     let s:mounted_by_me = 1
     let l:stage = 'copy'
     let l:out = system('cp -a --no-preserve=xattr,context,mode,ownership ' . shellescape(l:plaindir) . '/. ' . shellescape(l:root) . '/ 2>&1')
     if v:shell_error != 0
-      throw 'copy 失敗'
+      throw gnosis#i18n#tr('copy 失敗')
     endif
     let l:stage = 'verify'
     " パイプ（| head）を挟むと終了コードが head のものになり不一致を見逃すので使わない
     let l:out = system('diff -rq --no-dereference ' . shellescape(l:plaindir)
           \ . ' ' . shellescape(l:root) . ' 2>&1')
     if v:shell_error != 0
-      throw 'verify 不一致: ' . trim(substitute(l:out, "\n", ' ', 'g'))[0:300]
+      throw gnosis#i18n#tr('verify 不一致: ') . trim(substitute(l:out, "\n", ' ', 'g'))[0:300]
     endif
     let l:stage = 'done'
     " verify 済みだが FUSE 越しで silent corruption の可能性はゼロではない。
@@ -12802,7 +12802,7 @@ function! s:init_encrypted_impl() abort
     " 巻き戻し: mount 中なら外し、root/退避を復元
     call s:init_rollback(l:cur, l:root, l:plaindir, l:cipher, l:stage, l:converted)
     echohl ErrorMsg
-    echom 'Gnosis: 暗号化失敗(' . l:before_err . ')。元の状態に戻しました'
+    echom gnosis#i18n#tr('Gnosis: 暗号化失敗(') . l:before_err . gnosis#i18n#tr(')。元の状態に戻しました')
     echohl NONE
     call s:secure_delete(l:pf)
     return
@@ -12828,7 +12828,7 @@ function! s:init_encrypted_impl() abort
   endif
   silent! execute 'cd ' . fnameescape(l:root)
   redraw
-  echom 'Gnosis: vault を暗号化しました。閉じるとロックされます（開くときはパスワード）'
+  echom gnosis#i18n#tr('Gnosis: vault を暗号化しました。閉じるとロックされます（開くときはパスワード）')
 endfunction
 
 " :GnosisRemovePassword（暗号化を解除して平文 vault に戻す）
@@ -12845,13 +12845,13 @@ function! s:remove_encryption_impl() abort
   let l:st = s:vault_status()
   if empty(l:st.root)
     echohl ErrorMsg
-    echom 'Gnosis: vault(root) が決まっていません'
+    echom gnosis#i18n#tr('Gnosis: vault(root) が決まっていません')
     echohl NONE
     return
   endif
   if !l:st.encrypted
     echohl WarningMsg
-    echom 'Gnosis: この vault は暗号化されていません（解除する必要はありません）'
+    echom gnosis#i18n#tr('Gnosis: この vault は暗号化されていません（解除する必要はありません）')
     echohl NONE
     return
   endif
@@ -12860,7 +12860,7 @@ function! s:remove_encryption_impl() abort
     call gnosis#mount_vault()
     if gnosis#vault_mounted() != 1
       echohl ErrorMsg
-      echom 'Gnosis: マウントできませんでした。解除を中止'
+      echom gnosis#i18n#tr('Gnosis: マウントできませんでした。解除を中止')
       echohl NONE
       return
     endif
@@ -12872,17 +12872,17 @@ function! s:remove_encryption_impl() abort
   let l:proj = substitute(fnamemodify(l:proj, ':p'), s:sep() . '\+$', '', '')
   if empty(l:cipher) || !filereadable(l:cipher . s:sep() . 'gocryptfs.conf')
     echohl ErrorMsg
-    echom 'Gnosis: 暗号箱が見つかりません: ' . l:cipher
+    echom gnosis#i18n#tr('Gnosis: 暗号箱が見つかりません: ') . l:cipher
     echohl NONE
     return
   endif
   let l:n = trim(system('find ' . shellescape(l:mount) . ' -mindepth 1 2>/dev/null | wc -l'))
   let l:size = trim(system('du -sh ' . shellescape(l:mount) . ' 2>/dev/null | cut -f1'))
   let l:msg = (l:st.layout ==# 'note')
-        \ ? printf('暗号を解除して %s 直下の平文に戻します：%s 個(%s)。よければ y: ', l:proj, l:n, l:size)
-        \ : printf('暗号を解除します（%s のまま平文に戻します）：%s 個(%s)。よければ y: ', l:proj, l:n, l:size)
+        \ ? printf(gnosis#i18n#tr('暗号を解除して %s 直下の平文に戻します：%s 個(%s)。よければ y: '), l:proj, l:n, l:size)
+        \ : printf(gnosis#i18n#tr('暗号を解除します（%s のまま平文に戻します）：%s 個(%s)。よければ y: '), l:proj, l:n, l:size)
   if input(l:msg) !=# 'y'
-    echom 'Gnosis: 中止'
+    echom gnosis#i18n#tr('Gnosis: 中止')
     return
   endif
   " バッファの未保存分は、パスが有効な今のうちに書き出しておく
@@ -12902,14 +12902,14 @@ function! s:remove_encryption_impl() abort
   let l:stage = 'none'
   try
     if !empty(glob(l:temp . s:sep() . '*', 1)) || isdirectory(l:temp)
-      throw '一時退避先が既に存在: ' . l:temp
+      throw gnosis#i18n#tr('一時退避先が既に存在: ') . l:temp
     endif
     let l:stage = 'copy'
     call mkdir(l:temp, 'p')
     let l:out = system('cp -a --no-preserve=xattr,context,mode,ownership '
           \ . shellescape(l:mount) . '/. ' . shellescape(l:temp) . '/ 2>&1')
     if v:shell_error != 0
-      throw 'copy 失敗'
+      throw gnosis#i18n#tr('copy 失敗')
     endif
     " FUSE 内の .crypt symlink（../.crypt）は暗号箱を消すと無効になるので持ち込まない
     call system('find ' . shellescape(l:temp) . ' -maxdepth 1 -name .crypt -type l -delete 2>/dev/null')
@@ -12917,7 +12917,7 @@ function! s:remove_encryption_impl() abort
     let l:out = system('diff -rq --no-dereference --exclude=.crypt '
           \ . shellescape(l:mount) . ' ' . shellescape(l:temp) . ' 2>&1')
     if v:shell_error != 0
-      throw 'verify 不一致: ' . trim(substitute(l:out, "\n", ' ', 'g'))[0:300]
+      throw gnosis#i18n#tr('verify 不一致: ') . trim(substitute(l:out, "\n", ' ', 'g'))[0:300]
     endif
     " アンマウント（cwd がマウント内だと busy になるので vault の外へ出る）
     let l:stage = 'unmount'
@@ -12925,7 +12925,7 @@ function! s:remove_encryption_impl() abort
     call system('fusermount3 -u ' . shellescape(l:mount) . ' 2>&1')
     call s:mount_cache_reset()
     if gnosis#vault_mounted(escape(l:mount, '\\'), 1) == 1
-      throw 'アンマウント失敗（他アプリが開いていませんか）'
+      throw gnosis#i18n#tr('アンマウント失敗（他アプリが開いていませんか）')
     endif
     " マウントポイント（空）を外し、一時平文を A 直下へ複製して検証
     let l:stage = 'restore'
@@ -12934,14 +12934,14 @@ function! s:remove_encryption_impl() abort
     let l:out = system('cp -a --no-preserve=xattr,context,mode,ownership '
           \ . shellescape(l:temp) . '/. ' . shellescape(l:proj) . '/ 2>&1')
     if v:shell_error != 0
-      throw 'コピー失敗'
+      throw gnosis#i18n#tr('コピー失敗')
     endif
     " A に元からある非 vault ファイル（Only in <proj>）は無視し、欠落・不一致だけを見る。
     " diff のメッセージが翻訳されると "Only in" が一致しないので LC_ALL=C で英語に固定する。
     let l:out = system('LC_ALL=C diff -rq --no-dereference ' . shellescape(l:temp) . ' '
           \ . shellescape(l:proj) . ' 2>&1 | grep -v ' . shellescape('^Only in ' . l:proj) . ' || true')
     if !empty(trim(l:out))
-      throw 'restore 不一致: ' . trim(substitute(l:out, "\n", ' ', 'g'))
+      throw gnosis#i18n#tr('restore 不一致: ') . trim(substitute(l:out, "\n", ' ', 'g'))
     endif
     " 暗号箱を削除（これで解除完了）
     let l:stage = 'rm-cipher'
@@ -12957,7 +12957,7 @@ function! s:remove_encryption_impl() abort
       call s:mount_cache_reset()
     endif
     echohl ErrorMsg
-    echom 'Gnosis: 暗号解除に失敗(' . l:err . ')。平文データは失われていません'
+    echom gnosis#i18n#tr('Gnosis: 暗号解除に失敗(') . l:err . gnosis#i18n#tr(')。平文データは失われていません')
     echohl NONE
     return
   endtry
@@ -12973,7 +12973,7 @@ function! s:remove_encryption_impl() abort
   call gnosis#reload_vault_buffers(l:proj)
   silent! execute 'cd ' . fnameescape(l:proj)
   redraw
-  echom 'Gnosis: 暗号を解除しました。' . l:proj . ' は平文の vault です'
+  echom gnosis#i18n#tr('Gnosis: 暗号を解除しました。') . l:proj . gnosis#i18n#tr(' は平文の vault です')
 endfunction
 
 " レイアウト変換後: 旧 root 配下のバッファを新 root 配下の同名ファイルへ張り替える
@@ -13026,7 +13026,7 @@ function! s:init_rollback(oldroot, root, plaindir, cipher, stage, converted) abo
       " まだマウントが残っているなら親を消さない（中の暗号箱・マウント先を巻き込むため）
       if gnosis#vault_mounted(escape(l:root, '\\'), 1) == 1
         echohl WarningMsg
-        echom 'Gnosis: 巻き戻し中断（マウントが残っています）。平文は ' . a:plaindir . ' にあります'
+        echom gnosis#i18n#tr('Gnosis: 巻き戻し中断（マウントが残っています）。平文は ') . a:plaindir . gnosis#i18n#tr(' にあります')
         echohl NONE
         return
       endif
@@ -13118,7 +13118,7 @@ function! gnosis#guard_vault_write(path) abort
   let l:p = fnamemodify(expand(a:path), ':p')
   if stridx(l:p, fnamemodify(l:root, ':p')) == 0
     echohl ErrorMsg
-    echom 'Gnosis: vault はロック中。:GnosisMount でマウントしてから'
+    echom gnosis#i18n#tr('Gnosis: vault はロック中。:GnosisMount でマウントしてから')
     echohl NONE
     throw 'Gnosis: vault locked'
   endif
@@ -13139,7 +13139,7 @@ function! gnosis#vault_locked_buffer_hint() abort
     if !exists('s:vault_locked_shown') || empty(s:vault_locked_shown)
       let s:vault_locked_shown = 1
       echohl WarningMsg
-      echom 'Gnosis: vault はロック中。編集不可（:GnosisMount でマウント）'
+      echom gnosis#i18n#tr('Gnosis: vault はロック中。編集不可（:GnosisMount でマウント）')
       echohl NONE
     endif
   endif
@@ -13150,7 +13150,7 @@ endfunction
 " 既存本文を無言で消すのを防ぐ）
 function! s:write_new_note(lines, path) abort
   if filereadable(a:path) || isdirectory(a:path)
-    throw 'Gnosis: 既存のファイルを上書きしません: ' . a:path
+    throw gnosis#i18n#tr('Gnosis: 既存のファイルを上書きしません: ') . a:path
   endif
   let l:ret = s:syn_writefile(a:lines, a:path)
   call s:diary_place_safe(a:path, a:lines)
@@ -13714,8 +13714,8 @@ function! s:diary_place(path, ...) abort
     for l:n in l:notes
       if l:n.file !=# l:tail && l:n.title =~# '^' . l:date . '-' && !has_key(l:st.notes, l:n.file)
         echohl WarningMsg
-        echom 'Gnosis: ' . l:date . ' の日記が見つかりません（' . l:n.file
-              \ . ' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt'
+        echom 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記が見つかりません（') . l:n.file
+              \ . gnosis#i18n#tr(' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt')
         echohl NONE
         return
       endif
@@ -13740,7 +13740,7 @@ function! s:diary_place_safe(path, ...) abort
     call call('s:diary_place', [a:path] + a:000)
   catch
     echohl WarningMsg
-    echom 'Gnosis: 日記への追加に失敗: ' . v:exception
+    echom gnosis#i18n#tr('Gnosis: 日記への追加に失敗: ') . v:exception
     echohl NONE
   endtry
 endfunction
@@ -13775,18 +13775,18 @@ endfunction
 function! gnosis#diary_adopt() abort
   let l:head = s:diary_head(getline(1, 30))
   if l:head.paper
-    echohl WarningMsg | echo 'Gnosis: 紙の日記はデジタル日記には登録しません' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 紙の日記はデジタル日記には登録しません') | echohl NONE
     return
   endif
   let l:date = matchstr(l:head.title, '^\d\{4}-\d\{2}-\d\{2}\ze-')
   if empty(l:date)
-    echohl WarningMsg | echo 'Gnosis: 題が YYYY-MM-DD- で始まるノートで実行して' | echohl NONE
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 題が YYYY-MM-DD- で始まるノートで実行して') | echohl NONE
     return
   endif
   let l:st = s:diary_state_read()
   let l:st.days[l:date] = expand('%:t')
   call s:diary_state_write(l:st)
-  echo 'Gnosis: ' . l:date . ' の日記に登録: ' . expand('%:t')
+  echo 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記に登録: ') . expand('%:t')
 endfunction
 
 " \ua: 日記として登録されていない日付について、題がその日付で始まる（グループでない）
@@ -13834,8 +13834,8 @@ function! s:diary_adopt_all() abort
   endif
   call s:diary_state_write(l:st)
   if l:added > 0 || l:amb > 0 || l:filled > 0
-    echom 'Gnosis: 日記を ' . l:added . ' 件登録、「今日のノート」を ' . l:filled . ' 日分更新'
-          \ . (l:amb > 0 ? '（' . l:amb . ' 日分は日付のノートが複数あるため日記は未登録。日記のノートで :GnosisDiaryAdopt）' : '')
+    echom gnosis#i18n#tr('Gnosis: 日記を ') . l:added . gnosis#i18n#tr(' 件登録、「今日のノート」を ') . l:filled . gnosis#i18n#tr(' 日分更新')
+          \ . (l:amb > 0 ? '（' . l:amb . gnosis#i18n#tr(' 日分は日付のノートが複数あるため日記は未登録。日記のノートで :GnosisDiaryAdopt）') : '')
   endif
 endfunction
 
@@ -13902,7 +13902,7 @@ function! s:diary_backfill(root, st, notes) abort
     endfor
   endfor
   if l:made > 0
-    echom 'Gnosis: 日記を ' . l:made . ' 日分作りました'
+    echom gnosis#i18n#tr('Gnosis: 日記を ') . l:made . gnosis#i18n#tr(' 日分作りました')
   endif
   return l:n_added
 endfunction
@@ -13920,7 +13920,7 @@ function! s:diary_adopt_all_safe() abort
   try
     call s:diary_adopt_all()
   catch
-    echom 'Gnosis: 日記の登録に失敗: ' . v:exception
+    echom gnosis#i18n#tr('Gnosis: 日記の登録に失敗: ') . v:exception
   endtry
 endfunction
 
@@ -13947,7 +13947,7 @@ function! gnosis#diary_update() abort
     endif
   endfor
   call s:diary_state_write(l:st)
-  echo 'Gnosis: 日記を更新（「今日のノート」に追加 ' . l:n . ' 日分・体裁を整えた日記 ' . l:fmt . ' 件）'
+  echo gnosis#i18n#tr('Gnosis: 日記を更新（「今日のノート」に追加 ') . l:n . gnosis#i18n#tr(' 日分・体裁を整えた日記 ') . l:fmt . gnosis#i18n#tr(' 件）')
 endfunction
 
 " \d / :GnosisToday … 今日の日記を開く。無ければ作る（日付が変わる時刻は diary_day_start_hour）。
@@ -13965,8 +13965,8 @@ function! gnosis#diary_today() abort
     for l:n in l:notes
       if !l:n.group && l:n.title =~# '^' . l:date . '-' && !s:diary_is_diary_title(l:n.title)
         echohl WarningMsg
-        echo 'Gnosis: ' . l:date . ' の日記が見つかりません（' . l:n.file
-              \ . ' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt'
+        echo 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記が見つかりません（') . l:n.file
+              \ . gnosis#i18n#tr(' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt')
         echohl NONE
         return
       endif

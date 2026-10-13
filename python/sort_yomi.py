@@ -22,14 +22,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gnosis_i18n import tr  # noqa: E402
 import japanese_yomi as jy  # noqa: E402
 
 
 def _warn_if_missing() -> None:
     if not jy.pykakasi_installed():
         print(
-            "Gnosis: pykakasi 未導入のため Unicode 順で代用します"
-            "（pip install --user pykakasi）",
+            tr("Gnosis: pykakasi 未導入のため Unicode 順で代用します（pip install --user pykakasi）",
+               "Gnosis: pykakasi is not installed; using Unicode order (pip install --user pykakasi)"),
             file=sys.stderr,
         )
 
@@ -116,11 +117,11 @@ def main(argv: list[str]) -> int:
             reading = jy.reading_for(args.name)
         changed = jy.set_yomi(args.note, args.name, reading)
         if not changed:
-            print("Gnosis: 変更なし")
+            print(tr("Gnosis: 変更なし", "Gnosis: no change"))
         elif reading:
-            print(f"Gnosis: よみを登録 [{args.name}] → {reading}")
+            print(tr(f"Gnosis: よみを登録 [{args.name}] → {reading}", f"Gnosis: reading set [{args.name}] → {reading}"))
         else:
-            print(f"Gnosis: よみを削除 [{args.name}]")
+            print(tr(f"Gnosis: よみを削除 [{args.name}]", f"Gnosis: reading removed [{args.name}]"))
         return 0
 
     return 1

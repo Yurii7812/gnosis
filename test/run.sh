@@ -17,6 +17,7 @@ trap 'rm -f "$OUT" "$ERR"' EXIT
 
 python3 "$REPO/test/vim_static_check.py"
 python3 "$REPO/test/check_guide.py"
+python3 "$REPO/test/i18n_check.py"
 python3 "$REPO/python/test_sort_yomi.py"
 python3 "$REPO/python/test_paper_pkm.py"
 

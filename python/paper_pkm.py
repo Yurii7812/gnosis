@@ -59,6 +59,7 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gnosis_i18n import tr  # noqa: E402
 import japanese_yomi as jy  # noqa: E402
 
 INDEX_WRITE = "Index-write.md"
@@ -790,7 +791,7 @@ def migrate_paper_index(root: Path) -> Optional[Path]:
     if current is None or current == fixed:
         return current
     if fixed.exists():
-        print(f"paper_pkm: {PAPER_INDEX_NAME} が既にあるため移行しません（{current.name} を使います）",
+        print(tr(f"paper_pkm: {PAPER_INDEX_NAME} が既にあるため移行しません（{current.name} を使います）", f"paper_pkm: {PAPER_INDEX_NAME} already exists, not migrating (using {current.name})"),
               file=sys.stderr)
         return current
     os.rename(current, fixed)
@@ -1796,14 +1797,14 @@ def main(argv: list[str]) -> int:
     if args.mode == "regen":
         ok = regen(Path(args.root), do_sync=not args.no_sync)
         if not ok:
-            print("paper_pkm: 紙PKM Index（Paper-Zettelkasten-Index）がありません", file=sys.stderr)
+            print(tr("paper_pkm: 紙PKM Index（Paper-Zettelkasten-Index）がありません", "paper_pkm: no paper PKM Index (Paper-Zettelkasten-Index)"), file=sys.stderr)
             return 1
         return 0
 
     if args.mode == "migrate":
         path = migrate_paper_index(Path(args.root))
         if path is None:
-            print("paper_pkm: 紙PKM Index（Paper-Zettelkasten-Index）がありません", file=sys.stderr)
+            print(tr("paper_pkm: 紙PKM Index（Paper-Zettelkasten-Index）がありません", "paper_pkm: no paper PKM Index (Paper-Zettelkasten-Index)"), file=sys.stderr)
             return 1
         print(path)
         return 0

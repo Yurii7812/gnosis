@@ -10,6 +10,8 @@ fsearch_tui_jp_inline.py
 """
 
 import sys
+sys.path.insert(0, __import__('os').path.dirname(__file__))
+from gnosis_i18n import tr  # noqa: E402
 import os
 import re
 import curses
@@ -747,9 +749,9 @@ def main():
         print(f'Error: {directory} is not a directory', file=sys.stderr)
         sys.exit(1)
 
-    print('ファイルを読み込み中...', end='', flush=True)
+    print(tr('ファイルを読み込み中...', 'Loading files...'), end='', flush=True)
     all_files = scan_dir(directory)
-    print(f'\r{len(all_files)} ファイル読み込み完了      ')
+    print(tr(f'\r{len(all_files)} ファイル読み込み完了      ', f'\r{len(all_files)} files loaded      '))
 
     selected = curses.wrapper(run_tui, directory, all_files, initial_query)
 

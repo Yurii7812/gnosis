@@ -95,11 +95,11 @@ endfunction
 
 function! s:fzf_ok() abort
   if !exists('*fzf#run')
-    echoerr 'gnosis_search: fzf.vim が見つかりません（プラグインを入れてください）'
+    echoerr gnosis#i18n#tr('gnosis_search: fzf.vim が見つかりません（プラグインを入れてください）')
     return 0
   endif
   if !executable('fzf')
-    echoerr 'gnosis_search: fzf コマンドが見つかりません（~/.local/bin などに導入してください）'
+    echoerr gnosis#i18n#tr('gnosis_search: fzf コマンドが見つかりません（~/.local/bin などに導入してください）')
     return 0
   endif
   return 1
@@ -345,7 +345,7 @@ function! gnosis_search#search_global() abort
   endif
   " フォールバック（note_search.py が無い時）: タイトル＋本文の全件リスト
   let l:notes = s:build_notes(s:root())
-  if empty(l:notes) | echo 'gnosis_search: ノートが見つかりません' | return | endif
+  if empty(l:notes) | echo gnosis#i18n#tr('gnosis_search: ノートが見つかりません') | return | endif
   let l:entries = map(copy(l:notes), {_, n -> n.p . "\t" . n.t . "\t" . n.b})
   call s:fzf_run(l:entries, function('s:open_selected'),
         \ s:fzf_options('2,3', '1', 'Search> '))
@@ -355,7 +355,7 @@ endfunction
 function! gnosis_search#search_local() abort
   if !s:fzf_ok() | return | endif
   let l:links = s:current_buffer_links()
-  if empty(l:links) | echo 'gnosis_search: このノートにリンクがありません' | return | endif
+  if empty(l:links) | echo gnosis#i18n#tr('gnosis_search: このノートにリンクがありません') | return | endif
   " リンク先ノートの本文も検索対象にする（タイトル優先）。note_search.py を --only で絞る。
   let l:onlyfile = tempname()
   " 表示名（リンクのテキスト）も渡し、一覧にはタイトルでなくそれを出す
@@ -380,7 +380,7 @@ function! gnosis_search#pick_insert_link() abort
   endif
   " フォールバック: 旧タイトルピッカー（タイトル検索・fzf 任せ）
   let l:notes = s:build_notes(s:root())
-  if empty(l:notes) | echo 'gnosis_search: ノートが見つかりません' | return | endif
+  if empty(l:notes) | echo gnosis#i18n#tr('gnosis_search: ノートが見つかりません') | return | endif
   let l:entries = map(copy(l:notes), {_, n -> n.p . "\t" . n.t})
   call s:fzf_run(l:entries, function('s:insert_selected'),
         \ s:fzf_options('2', '1,2', 'Title> '))
@@ -468,7 +468,7 @@ function! gnosis_search#run_legacy(...) abort
     endif
   endfor
   if empty(s:cands)
-    echo 'gnosis_search: ノートが見つかりません（' . l:root . '）'
+    echo gnosis#i18n#tr('gnosis_search: ノートが見つかりません（') . l:root . '）'
     return
   endif
 
@@ -491,7 +491,7 @@ function! gnosis_search#run_legacy(...) abort
         \ 'minheight': l:h, 'maxheight': l:h,
         \ 'border': [], 'borderchars': ['─','│','─','│','╭','╮','╯','╰'],
         \ 'borderhighlight': ['Comment'], 'padding': [0,1,0,1],
-        \ 'title': ' 検索 ', 'zindex': 300,
+        \ 'title': gnosis#i18n#tr(' 検索 '), 'zindex': 300,
         \ 'mapping': 0, 'filter': function('s:key'), 'callback': function('s:done'),
         \ })
   let s:pvwin = popup_create([], {
@@ -500,7 +500,7 @@ function! gnosis_search#run_legacy(...) abort
         \ 'minheight': l:h, 'maxheight': l:h,
         \ 'border': [], 'borderchars': ['─','│','─','│','╭','╮','╯','╰'],
         \ 'borderhighlight': ['Comment'], 'padding': [0,1,0,1],
-        \ 'title': ' プレビュー ', 'zindex': 299,
+        \ 'title': gnosis#i18n#tr(' プレビュー '), 'zindex': 299,
         \ })
   call s:render()
 endfunction
@@ -531,12 +531,12 @@ endfunction
 " --- 描画 -----------------------------------------------------------------
 function! s:render() abort
   if s:win < 0 | return | endif
-  let l:tag = (s:mode ==# 'pick') ? '[選択] ' : ''
+  let l:tag = (s:mode ==# 'pick') ? gnosis#i18n#tr('[選択] ') : ''
   let l:bar = repeat('─', 58)
   let l:terms = s:terms()
   let l:lines = [l:tag . '> ' . s:query . '▏', l:bar]
   if empty(s:hits)
-    call add(l:lines, '  (該当なし)')
+    call add(l:lines, gnosis#i18n#tr('  (該当なし)'))
     " 10 行ぶん高さを埋める
     call extend(l:lines, repeat([''], s:rows - 1))
   else
@@ -558,24 +558,24 @@ function! s:render() abort
   " 上下に何件あるか
   let l:above = s:top
   let l:below = max([0, len(s:hits) - (s:top + s:rows)])
-  let l:ctx = (l:above > 0 ? '↑ 上 ' . l:above . ' 件   ' : '')
-        \ . (l:below > 0 ? '残り ' . l:below . ' 件' : '')
+  let l:ctx = (l:above > 0 ? gnosis#i18n#tr('↑ 上 ') . l:above . gnosis#i18n#tr(' 件   ') : '')
+        \ . (l:below > 0 ? gnosis#i18n#tr('残り ') . l:below . gnosis#i18n#tr(' 件') : '')
   let l:hint = (s:mode ==# 'pick')
-        \ ? 'hl ページ  jk 1件  数字=見る 同数字=開く  ⇥ 入力  ⎋ 閉じる'
-        \ : '打つ=絞込  ⇥ 選択へ  ^J^K ページ  ↑↓ 1件  ⏎ 開く  ⎋ 閉じる'
+        \ ? gnosis#i18n#tr('hl ページ  jk 1件  数字=見る 同数字=開く  ⇥ 入力  ⎋ 閉じる')
+        \ : gnosis#i18n#tr('打つ=絞込  ⇥ 選択へ  ^J^K ページ  ↑↓ 1件  ⏎ 開く  ⎋ 閉じる')
   call add(l:lines, l:bar)
   call add(l:lines, printf('%d/%d  %s', empty(s:hits) ? 0 : s:sel + 1, len(s:hits),
         \ empty(l:ctx) ? l:hint : l:ctx))
   call add(l:lines, l:hint)
   call s:settext(s:win, l:lines)
-  call popup_setoptions(s:win, {'title': s:mode ==# 'pick' ? ' 選択 ' : ' 検索 '})
+  call popup_setoptions(s:win, {'title': s:mode ==# 'pick' ? gnosis#i18n#tr(' 選択 ') : gnosis#i18n#tr(' 検索 ')})
   call s:preview()
 endfunction
 
 function! s:preview() abort
   if s:pvwin < 0 | return | endif
   if empty(s:hits)
-    call popup_settext(s:pvwin, ['(なし)'])
+    call popup_settext(s:pvwin, [gnosis#i18n#tr('(なし)')])
     return
   endif
   let l:c = s:cands[s:hits[s:sel]]
@@ -730,7 +730,7 @@ endfunction
 function! s:tui_run() abort
   let l:script = get(g:, 'gnosis_search_tui', '')
   if !filereadable(l:script)
-    echoerr 'notes_index.py も fsearch_tui.py も見つかりません'
+    echoerr gnosis#i18n#tr('notes_index.py も fsearch_tui.py も見つかりません')
     return
   endif
   let l:tmpfile = tempname()

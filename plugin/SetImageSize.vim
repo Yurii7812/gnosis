@@ -167,7 +167,7 @@ function! s:SetImageSizeLine() abort
   let l:found = s:FindImageAtCursor(l:line, col('.'))
 
   if l:found[0] ==# ''
-    echo 'カーソル位置に画像が見つかりません'
+    echo gnosis#i18n#tr('カーソル位置に画像が見つかりません')
     return
   endif
 
@@ -203,7 +203,7 @@ function! s:SetImageSizeRange(line1, line2) abort
   endfor
 
   if l:changed == 0
-    echo '範囲内に画像が見つかりません'
+    echo gnosis#i18n#tr('範囲内に画像が見つかりません')
   endif
 endfunction
 

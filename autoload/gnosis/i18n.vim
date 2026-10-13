@@ -38,6 +38,8 @@ endfunction
 function! gnosis#i18n#set_lang(lang) abort
   if a:lang =~# '^\(ja\|en\)$'
     let s:lang = a:lang
+    " Python の補助スクリプト・アプリにも伝える
+    let $GNOSIS_LANG = a:lang
   endif
 endfunction
 

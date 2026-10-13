@@ -151,7 +151,7 @@ if g:gnosis_rm_guard && !has('win32') && executable('bash')
       let $BASH_ENV = s:rm_guard
     elseif $BASH_ENV !=# s:rm_guard
       let g:gnosis_rm_guard = 0
-      echohl WarningMsg | echom 'Gnosis: $BASH_ENV が既にあるため rm ゴミ箱ガードは無効' | echohl NONE
+      echohl WarningMsg | echom gnosis#i18n#tr('Gnosis: $BASH_ENV が既にあるため rm ゴミ箱ガードは無効') | echohl NONE
     endif
   endif
 endif

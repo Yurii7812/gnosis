@@ -256,7 +256,7 @@ function! s:open_with_default_app(path) abort
   elseif executable('gio')
     call s:spawn(['gio', 'open', l:path])
   else
-    echohl WarningMsg | echom 'open-default: xdg-open / gio が見つかりません' | echohl None
+    echohl WarningMsg | echom gnosis#i18n#tr('open-default: xdg-open / gio が見つかりません') | echohl None
     return
   endif
   " 既にアプリが起動中で裏にタブが増えるだけのときも、前面に出す。
