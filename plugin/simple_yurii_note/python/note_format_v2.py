@@ -419,10 +419,59 @@ def migrate_note(text: str, path: str = "note.md") -> str | None:
     return render_note(Note(Path(path), fm, title, body, up, down))
 
 
+_FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+_INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1|(`+)[^`]*$")
+
+
+def _fenced(lines: list[str]) -> list[bool]:
+    """各行が ``` / ~~~ で囲んだコードブロック（囲みの行を含む）の中か。"""
+    out: list[bool] = []
+    mark = None
+    for ln in lines:
+        m = _FENCE_RE.match(ln)
+        if mark is None:
+            if m:
+                mark = m.group(1)[0] * 3
+                out.append(True)
+            else:
+                out.append(False)
+        else:
+            out.append(True)
+            if m and m.group(1)[0] == mark[0] and ln.strip().strip(mark[0]) == "":
+                mark = None
+    return out
+
+
+def _code_spans(ln: str) -> list[tuple[int, int]]:
+    """行の中の `インラインコード` の範囲。"""
+    return [m.span() for m in _INLINE_CODE_RE.finditer(ln)]
+
+
+def _link_iter(rx, ln: str):
+    """行の中のリンク記法 [..](..) のうち、`コード` の外にあるものだけ。"""
+    spans = _code_spans(ln)
+    for m in rx.finditer(ln):
+        if not any(a <= m.start() < b for a, b in spans):
+            yield m
+
+
+def _link_sub(rx, repl, ln: str) -> str:
+    """rx.sub と同じだが、`コード` の中のリンク記法は変えない。"""
+    spans = _code_spans(ln)
+
+    def f(m):
+        if any(a <= m.start() < b for a, b in spans):
+            return m.group(0)
+        return repl(m)
+    return rx.sub(f, ln)
+
+
 def _links_in(lines: list[str]) -> list[str]:
     out: list[str] = []
-    for ln in lines:
-        for m in ANY_LINK_RE.finditer(ln):
+    for ln, fz in zip(lines, _fenced(lines)):
+        if fz:
+            continue
+        for m in _link_iter(ANY_LINK_RE, ln):
             t = m.group(1).split("#", 1)[0].strip()
             if t.lower().endswith(".md"):
                 out.append(t)
@@ -610,7 +659,7 @@ def _render_down_preserving(note: Note, key_fn) -> list[str] | None:
         out.append(ln)
         if s != "":
             prev_label = None  # 散文などでブロックが切れる
-        for mm in ANY_LINK_RE.finditer(ln):
+        for mm in _link_iter(ANY_LINK_RE, ln):
             kk = key_fn(mm.group(1))
             if kk is not None and kk in desired:
                 used.add(kk)
@@ -906,8 +955,10 @@ def sync_vault(root) -> int:
     for _p, _n in by_path.items():
         if _p.name == "index.md" and not _n.managed:
             _kids = []
-            for _ln in _n.body:
-                for _m in re.finditer(r"\[([^\]]*)\]\(([^)]+)\)", _ln):
+            for _ln, _fz in zip(_n.body, _fenced(_n.body)):
+                if _fz:
+                    continue
+                for _m in _link_iter(re.compile(r"\[([^\]]*)\]\(([^)]+)\)"), _ln):
                     _tg = _m.group(2).split("#", 1)[0].strip()
                     if _tg.lower().endswith(".md"):
                         _kids.append((_m.group(1), _tg, None))
@@ -1271,8 +1322,10 @@ def _link_target(link_line: str) -> str:
 
 def _links_from(lines: list[str]) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
-    for ln in lines:
-        for m in _SIMPLE_INLINE_LINK.finditer(ln):
+    for ln, fz in zip(lines, _fenced(lines)):
+        if fz:
+            continue
+        for m in _link_iter(_SIMPLE_INLINE_LINK, ln):
             tg = m.group(2).split("#", 1)[0].strip()
             if tg.lower().endswith(".md"):
                 out.append((m.group(1), tg))
@@ -1335,8 +1388,12 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     related: list[str] = []
     back: list[str] = []
     cur = "body"
-    for ln in rest:
+    for ln, fz in zip(rest, _fenced(rest)):
         s = ln.strip()
+        if fz:  # コードブロックの中は見出し・リンクとして扱わない
+            (body if cur == "body" else parent if cur == "parent" else group if cur == "group"
+             else related if cur == "related" else back).append(ln)
+            continue
         if s == CONTEXT_MARK or s == UP_MARK:  # UP_MARK = 旧 `### Parent`
             cur = "parent"
             continue
@@ -1420,8 +1477,8 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
             return f"[{now}]({tg})"
         return m.group(0)
     out: list[str] = []
-    for ln in body:
-        out.append(_SIMPLE_INLINE_LINK.sub(repl, ln))
+    for ln, fz in zip(body, _fenced(body)):
+        out.append(ln if fz else _link_sub(_SIMPLE_INLINE_LINK, repl, ln))
     return out
 
 
@@ -1500,7 +1557,10 @@ def _prune_dangling(lines: list[str], path: Path, resolver) -> list[str]:
     """
     out: list[str] = []
     base_dir = path.parent
-    for ln in lines:
+    for ln, fz in zip(lines, _fenced(lines)):
+        if fz:
+            out.append(ln)
+            continue
         if _SIMPLE_LINK_LINE_RE.match(ln):
             tg = _link_target(ln)
             if tg.lower().endswith(".md") and resolver(tg, base_dir) is None:
@@ -1515,7 +1575,7 @@ def _prune_dangling(lines: list[str], path: Path, resolver) -> list[str]:
                 return disp
             return m.group(0)
 
-        out.append(_SIMPLE_INLINE_LINK.sub(repl, ln))
+        out.append(_link_sub(_SIMPLE_INLINE_LINK, repl, ln))
     return out
 
 
@@ -1535,7 +1595,10 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
         return rp is None or rp == path or path not in related_t.get(rp, set())
 
     out: list[str] = []
-    for ln in lines:
+    for ln, fz in zip(lines, _fenced(lines)):
+        if fz:
+            out.append(ln)
+            continue
         if _SIMPLE_LINK_LINE_RE.match(ln):
             tg = _link_target(ln)
             if tg.lower().endswith(".md") and one_sided(tg):
@@ -1550,7 +1613,7 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
                 return disp
             return m.group(0)
 
-        out.append(_SIMPLE_INLINE_LINK.sub(repl, ln))
+        out.append(_link_sub(_SIMPLE_INLINE_LINK, repl, ln))
     return out
 
 

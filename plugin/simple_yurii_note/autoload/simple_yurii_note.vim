@@ -19,6 +19,59 @@
 " ---------------------------------------------------------------------------
 
 let s:link_pat = '\v\[[^\]]+\]\([^)]*\)'
+
+" コードの中（``` で囲んだブロック・`インラインコード`）はリンクとして扱わない。
+" 各行が囲みコードブロックの中（囲みの行も含む）か。
+function! s:fence_flags(lines) abort
+  let l:out = []
+  let l:mark = ''
+  for l:ln in a:lines
+    let l:m = matchlist(l:ln, '^\s\{0,3}\(`\{3,}\|\~\{3,}\)')
+    if l:mark ==# ''
+      if !empty(l:m)
+        let l:mark = l:m[1][0]
+        call add(l:out, 1)
+      else
+        call add(l:out, 0)
+      endif
+    else
+      call add(l:out, 1)
+      if !empty(l:m) && l:m[1][0] ==# l:mark && trim(l:ln) =~# '^' . (l:mark ==# '`' ? '`' : '\~') . '\+$'
+        let l:mark = ''
+      endif
+    endif
+  endfor
+  return l:out
+endfunction
+
+" バッファ全体のコードブロック判定（changedtick ごとにキャッシュ）
+let s:fence_cache = {'tick': -1, 'buf': -1, 'flags': []}
+function! s:buf_fence_flags() abort
+  if s:fence_cache.tick != b:changedtick || s:fence_cache.buf != bufnr('%')
+    let s:fence_cache = {'tick': b:changedtick, 'buf': bufnr('%'), 'flags': s:fence_flags(getline(1, '$'))}
+  endif
+  return s:fence_cache.flags
+endfunction
+
+" 行 a:line の 0 始まりの桁 a:col0 が `インラインコード` の中か
+function! s:in_inline_code(line, col0) abort
+  if stridx(a:line, '`') < 0 | return 0 | endif
+  let l:start = 0
+  while 1
+    let l:m = matchstrpos(a:line, '\(`\+\)\%(\%(\1\)\@!.\)\{-1,}\1', l:start)
+    if l:m[1] < 0 | break | endif
+    if a:col0 >= l:m[1] && a:col0 < l:m[2] | return 1 | endif
+    let l:start = l:m[2]
+  endwhile
+  return 0
+endfunction
+
+" 現在のバッファの lnum 行・0 始まりの col0 桁がコードの中か
+function! s:buf_in_code(lnum, col0) abort
+  let l:f = s:buf_fence_flags()
+  if get(l:f, a:lnum - 1, 0) | return 1 | endif
+  return s:in_inline_code(getline(a:lnum), a:col0)
+endfunction
 let s:fixed_link_text_marker = 'pkm:fixed-text'
 
 function! s:sep() abort
@@ -2597,7 +2650,9 @@ function! s:section_link_positions_one(name) abort
       if len(l:m) < 3 || l:m[1] < 0
         break
       endif
-      call add(l:positions, {'lnum': l:lnum, 'col': l:m[1] + 1})
+      if !s:buf_in_code(l:lnum, l:m[1])
+        call add(l:positions, {'lnum': l:lnum, 'col': l:m[1] + 1})
+      endif
       let l:start = l:m[2]
     endwhile
   endfor
@@ -2793,8 +2848,10 @@ function! s:link_positions_in_range_limited(lo, hi, max) abort
     call cursor(a:lo, 1)
     let l:m = searchpos(s:link_pat, 'cW', l:hi)
     while l:m[0] > 0 && l:m[0] <= l:hi
-      call add(l:pos, {'lnum': l:m[0], 'col': l:m[1]})
-      if !l:unlimited && len(l:pos) >= a:max | break | endif
+      if !s:buf_in_code(l:m[0], l:m[1] - 1)
+        call add(l:pos, {'lnum': l:m[0], 'col': l:m[1]})
+        if !l:unlimited && len(l:pos) >= a:max | break | endif
+      endif
       let l:m = searchpos(s:link_pat, 'W', l:hi)
     endwhile
   finally
@@ -2864,13 +2921,17 @@ function! s:link_positions_in_lines(lines, lo, hi) abort
   let l:lo = max([a:lo, 1])
   let l:hi = min([a:hi, len(a:lines)])
   if l:lo > l:hi | return l:pos | endif
+  let l:fz = s:fence_flags(a:lines)
   for l:lnum in range(l:lo, l:hi)
     let l:line = a:lines[l:lnum - 1]
+    if l:fz[l:lnum - 1] | continue | endif
     let l:start = 0
     while 1
       let l:m = matchstrpos(l:line, s:link_pat, l:start)
       if len(l:m) < 3 || l:m[1] < 0 | break | endif
-      call add(l:pos, {'lnum': l:lnum, 'col': l:m[1] + 1})
+      if !s:in_inline_code(l:line, l:m[1])
+        call add(l:pos, {'lnum': l:lnum, 'col': l:m[1] + 1})
+      endif
       let l:start = l:m[2]
     endwhile
   endfor
@@ -4151,6 +4212,10 @@ function! simple_yurii_note#get_link_under_cursor() abort
     let l:m = matchstrpos(l:line, s:link_pat, l:start)
     if len(l:m) < 3 || l:m[1] < 0
       return {}
+    endif
+    if s:buf_in_code(line('.'), l:m[1])
+      let l:start = l:m[2]
+      continue
     endif
     if l:cursor >= l:m[1] && l:cursor < l:m[2]
       let l:parts = matchlist(l:m[0], '\v\[([^\]]+)\]\(([^)]*)\)')

@@ -1297,6 +1297,21 @@ def test_simple_sync_empty_sections_are_not_written() -> None:
               "BackLink が空になったら見出しごと消え、元の新ノートの形に戻る")
 
 
+def test_links_in_code_are_not_links() -> None:
+    print("code: ``` のブロックと `インラインコード` の中の [表示名](ファイル.md) はリンクにしない")
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        head = "---\ntime: 2026-01-01 00:00:00\ntitle: %s\n---\n\n# %s\n"
+        (root / "a.md").write_text(head % ("A", "A") + "\n```\n[表示名](b.md#アウトライン)\n```\n\n`[表示名](b.md)` と [実](c.md)\n", encoding="utf-8")
+        (root / "b.md").write_text(head % ("B", "B"), encoding="utf-8")
+        (root / "c.md").write_text(head % ("C", "C"), encoding="utf-8")
+        v2.simple_sync(root)
+        check(DOWN_MARK not in (root / "b.md").read_text(encoding="utf-8"), "コード内のリンク先に BackLink は付かない")
+        check(DOWN_MARK in (root / "c.md").read_text(encoding="utf-8"), "コードの外の本物のリンクは今までどおり")
+        check("[表示名](b.md#アウトライン)" in (root / "a.md").read_text(encoding="utf-8"), "コードの中身は書き換えない")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

@@ -676,6 +676,13 @@ function! s:setup_conceal() abort
   " トップレベルの構文が効かず、リンクの conceal が丸ごと無効になっていた。
   " リンクは斜体/太字の中でもリンクとして見せる（この環境の日本語名は
   " `_00001` を含むため実質必須）。
+  " コード（``` のブロックと `インライン`）の中はリンクにしない
+  silent! syntax clear yuriiCodeFence
+  silent! syntax clear yuriiCodeInline
+  syntax region yuriiCodeFence start=/^\s\{0,3}\z(`\{3,}\)/ end=/^\s\{0,3}\z1`*\s*$/ keepend contains=NONE
+  syntax match yuriiCodeInline /\(`\+\)\%(\%(\1\)\@!.\)\{-1,}\1/ contains=NONE
+  highlight default link yuriiCodeFence markdownCodeBlock
+  highlight default link yuriiCodeInline markdownCode
   syntax region yuriiLinkRegion start=/\[\ze[^\] \n][^\]\n]*\](\([^)\n]\{1,300}\))/ end=/\](\([^)\n]\{1,300}\))/ keepend oneline contains=yuriiLinkText,yuriiConcealOpen,yuriiConcealClose containedin=markdownItalic,markdownBold,markdownBoldItalic
   syntax match yuriiLinkText /\%(\[\)\@<=[^\] \n][^\]\n]*\ze\](\([^)\n]\{1,300}\))/ contained
   let l:link_color_gui = get(g:, 'simple_yurii_note_link_color_gui', '#66CCFF')
