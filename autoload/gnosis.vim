@@ -2515,6 +2515,60 @@ function! s:byte_next(line, col) abort
   return a:col + strlen(matchstr(strpart(a:line, a:col - 1), '^.'))
 endfunction
 
+" リンクの表示名の色（テーマの link の色。無ければ水色）。下線で本文と区別する。
+function! gnosis#link_highlight() abort
+  let l:link_color_gui = get(g:, 'gnosis_link_color_gui', '#5CD0FF')
+  let l:link_color_cterm = get(g:, 'gnosis_link_color_cterm', '81')
+  execute 'highlight gnosisLinkText term=underline cterm=underline gui=underline ctermfg=' . l:link_color_cterm . ' guifg=' . l:link_color_gui
+endfunction
+
+" Markdown リンクの構文: [表示名](ファイル名) の [ と ](…) を隠し、表示名だけを見せる。
+" 隠すかどうかは conceallevel（plugin/gnosis.vim の s:setup_conceal が決める）。
+function! gnosis#link_syntax() abort
+  " 再実行時の重複定義を防ぐ
+  silent! syntax clear gnosisLinkRegion
+  silent! syntax clear gnosisLinkText
+  silent! syntax clear gnosisConcealOpen
+  silent! syntax clear gnosisConcealClose
+  silent! syntax clear gnosisEmptyBracket
+  silent! syntax clear gnosisCheckboxBracket
+  silent! syntax clear gnosisCheckedBracket
+
+  " リンク全体は region で保持し、見える本文だけを水色にする。
+  " containedin=... が要る: 日本語の直後の `_` は Vim の markdown 斜体
+  " （markdownItalic は `\w\@<!_\S\@=` で、非 ASCII の前では開始してしまう）に
+  " 飲み込まれ、閉じ `_` が無いと行をまたいで本文全体が斜体扱いになる。その中は
+  " トップレベルの構文が効かず、リンクの conceal が丸ごと無効になっていた。
+  " リンクは斜体/太字の中でもリンクとして見せる（この環境の日本語名は
+  " `_00001` を含むため実質必須）。
+  " コード（``` のブロックと `インライン`）の中はリンクにしない
+  silent! syntax clear gnosisCodeFence
+  silent! syntax clear gnosisCodeInline
+  syntax region gnosisCodeFence start=/^\s\{0,3}\z(`\{3,}\)/ end=/^\s\{0,3}\z1`*\s*$/ keepend contains=NONE
+  syntax match gnosisCodeInline /\(`\+\)\%(\%(\1\)\@!.\)\{-1,}\1/ contains=NONE
+  highlight default link gnosisCodeFence markdownCodeBlock
+  highlight default link gnosisCodeInline markdownCode
+  syntax region gnosisLinkRegion start=/\[\ze[^\] \n][^\]\n]*\](\([^)\n]\{1,300}\))/ end=/\](\([^)\n]\{1,300}\))/ keepend oneline contains=gnosisLinkText,gnosisConcealOpen,gnosisConcealClose containedin=markdownItalic,markdownBold,markdownBoldItalic
+  syntax match gnosisLinkText /\%(\[\)\@<=[^\] \n][^\]\n]*\ze\](\([^)\n]\{1,300}\))/ contained
+  call gnosis#link_highlight()
+
+  " [ と ](xxx) を隠して、リンク本文だけ見せる
+  syntax match gnosisConcealOpen /\[/ contained conceal
+  syntax match gnosisConcealClose /\](\([^)\n]\{1,300}\))/ contained conceal
+  syntax match gnosisEmptyBracket /\[\]/ containedin=ALL
+  syntax match gnosisCheckboxBracket /\[ \]/ containedin=ALL
+  syntax match gnosisCheckedBracket /\[[xX]\]/ containedin=ALL
+  highlight default link gnosisEmptyBracket Normal
+  highlight default link gnosisCheckboxBracket Normal
+  highlight default link gnosisCheckedBracket Normal
+
+  " エラー強調を無効化（[] の直後にリンクがある場合などの赤表示を防ぐ）
+  highlight default link markdownError Normal
+  highlight default link htmlError Normal
+  highlight! link markdownError Normal
+  highlight! link htmlError Normal
+endfunction
+
 " :GnosisLinkSource … リンクの元の Markdown を見せる／隠す（このバッファだけ）。
 " ふだんは表示名だけを見せ、URL（ファイル名）を直接直したいときに切り替える。
 function! gnosis#toggle_link_source() abort

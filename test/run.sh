@@ -63,8 +63,14 @@ sh "$REPO/test/link_ops_net.sh"
 # vault の登録簿・vault ごとの設定・移行・テーマ・ガイドの言語
 sh "$REPO/test/vault_settings_net.sh"
 
-# Terminal: Chnoubis縦横補正版・GNOSIS点描ロゴ・リンク省略・色
+# Terminal: Chnoubis の図案・GNOSIS点描ロゴ・リンク省略・配色（コントラスト）
 sh "$REPO/test/terminal_visual_net.sh"
+
+# 操作ガイドの所属関係（### Group / BackLink）を更新・同期・言語切り替えで失わない
+sh "$REPO/test/guide_relations_net.sh"
+
+# 文字サイズ（terminal.json の保存・ランチャーが読む値・端末ごとの説明）
+sh "$REPO/test/termfont_net.sh"
 
 # Vim の起動画面（pty）
 sh "$REPO/test/start_screen_net.sh"

@@ -734,20 +734,12 @@ augroup gnosis_conceal
   autocmd!
   autocmd FileType markdown,vimwiki call s:setup_conceal()
   autocmd BufRead,BufNewFile *.md   call s:setup_conceal()
-  " 構文を読み込んだ後にも付け直す。FileType の自動コマンドは定義順に動き、
-  " plugin/other.vim の `syntax on` が syntaxset（set syntax=…）を後ろへ並べ直すため、
-  " FileType だけだと Markdown の構文ファイルが `syntax clear` でリンクの構文を消していた
-  " （ファイルを読まずに filetype=markdown にしたバッファでリンクが生のまま見えた）。
-  autocmd Syntax markdown,vimwiki call s:setup_conceal()
   " 配色を変えても（:colorscheme・テーマの切り替え）リンクの色と下線を保つ
   autocmd ColorScheme * call s:link_highlight()
 augroup END
 
-" リンクの表示名の色（テーマの link の色。無ければ水色）。下線で本文と区別する。
 function! s:link_highlight() abort
-  let l:link_color_gui = get(g:, 'gnosis_link_color_gui', '#5CD0FF')
-  let l:link_color_cterm = get(g:, 'gnosis_link_color_cterm', '81')
-  execute 'highlight gnosisLinkText term=underline cterm=underline gui=underline ctermfg=' . l:link_color_cterm . ' guifg=' . l:link_color_gui
+  call gnosis#link_highlight()
 endfunction
 
 function! s:setup_conceal() abort
@@ -790,48 +782,10 @@ function! s:setup_conceal() abort
     setlocal linebreak
   endif
 
-  " 再実行時の重複定義を防ぐ
-  silent! syntax clear gnosisLinkRegion
-  silent! syntax clear gnosisLinkText
-  silent! syntax clear gnosisConcealOpen
-  silent! syntax clear gnosisConcealClose
-  silent! syntax clear gnosisEmptyBracket
-  silent! syntax clear gnosisCheckboxBracket
-  silent! syntax clear gnosisCheckedBracket
-
-  " リンク全体は region で保持し、見える本文だけを水色にする。
-  " containedin=... が要る: 日本語の直後の `_` は Vim の markdown 斜体
-  " （markdownItalic は `\w\@<!_\S\@=` で、非 ASCII の前では開始してしまう）に
-  " 飲み込まれ、閉じ `_` が無いと行をまたいで本文全体が斜体扱いになる。その中は
-  " トップレベルの構文が効かず、リンクの conceal が丸ごと無効になっていた。
-  " リンクは斜体/太字の中でもリンクとして見せる（この環境の日本語名は
-  " `_00001` を含むため実質必須）。
-  " コード（``` のブロックと `インライン`）の中はリンクにしない
-  silent! syntax clear gnosisCodeFence
-  silent! syntax clear gnosisCodeInline
-  syntax region gnosisCodeFence start=/^\s\{0,3}\z(`\{3,}\)/ end=/^\s\{0,3}\z1`*\s*$/ keepend contains=NONE
-  syntax match gnosisCodeInline /\(`\+\)\%(\%(\1\)\@!.\)\{-1,}\1/ contains=NONE
-  highlight default link gnosisCodeFence markdownCodeBlock
-  highlight default link gnosisCodeInline markdownCode
-  syntax region gnosisLinkRegion start=/\[\ze[^\] \n][^\]\n]*\](\([^)\n]\{1,300}\))/ end=/\](\([^)\n]\{1,300}\))/ keepend oneline contains=gnosisLinkText,gnosisConcealOpen,gnosisConcealClose containedin=markdownItalic,markdownBold,markdownBoldItalic
-  syntax match gnosisLinkText /\%(\[\)\@<=[^\] \n][^\]\n]*\ze\](\([^)\n]\{1,300}\))/ contained
-  call s:link_highlight()
-
-  " [ と ](xxx) を隠して、リンク本文だけ見せる
-  syntax match gnosisConcealOpen /\[/ contained conceal
-  syntax match gnosisConcealClose /\](\([^)\n]\{1,300}\))/ contained conceal
-  syntax match gnosisEmptyBracket /\[\]/ containedin=ALL
-  syntax match gnosisCheckboxBracket /\[ \]/ containedin=ALL
-  syntax match gnosisCheckedBracket /\[[xX]\]/ containedin=ALL
-  highlight default link gnosisEmptyBracket Normal
-  highlight default link gnosisCheckboxBracket Normal
-  highlight default link gnosisCheckedBracket Normal
-
-  " エラー強調を無効化（[] の直後にリンクがある場合などの赤表示を防ぐ）
-  highlight default link markdownError Normal
-  highlight default link htmlError Normal
-  highlight! link markdownError Normal
-  highlight! link htmlError Normal
+  " リンクの構文（[ と ](…) を隠し、表示名に色と下線）は autoload の gnosis#link_syntax。
+  " 構文ファイルの後に読まれる after/syntax/markdown.vim からも呼ぶ（:syntax on の読み直しや
+  " filetype だけを設定したバッファでも、Markdown の構文がリンクの構文を消さないように）。
+  call gnosis#link_syntax()
 endfunction
 
 " ---------------------------------------------------------------------------

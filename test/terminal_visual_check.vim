@@ -22,6 +22,48 @@ call assert_equal(1, synconcealed(1, 13)[0], 'Link destination hidden')
 call assert_equal('gnosisLinkText', synIDattr(synID(1, 2, 1), 'name'), 'Link title highlighted')
 call assert_equal('#5cd0ff', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link highlight color')
 
+" 日本語の表示名・長いファイル名
+call setline(2, ['本文 [ローズマリーの育て方](261013140412-very-long-file-name.md) 続き'])
+call assert_equal('gnosisLinkText', synIDattr(synID(2, strlen('本文 [') + 1, 1), 'name'), 'Japanese link title highlighted')
+call assert_equal(1, synconcealed(2, strlen('本文 [ローズマリーの育て方]') + 2)[0], 'Japanese link destination hidden')
+" 再描画・テーマの再適用・:syntax on の後もリンクの構文と色が残る
+syntax on
+call assert_equal(1, synconcealed(1, 13)[0], 'Concealed after :syntax on')
+call assert_equal('gnosisLinkText', synIDattr(synID(1, 2, 1), 'name'), 'Link syntax after :syntax on')
+call gnosis#theme#apply(gnosis#settings#defaults())
+call assert_equal('#5cd0ff', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link color after theme reapply')
+call assert_equal('1', synIDattr(synIDtrans(hlID('gnosisLinkText')), 'underline', 'gui'), 'Link underline after theme reapply')
+colorscheme default
+call assert_equal('1', synIDattr(synIDtrans(hlID('gnosisLinkText')), 'underline', 'gui'), 'Link underline survives another colorscheme')
+call gnosis#theme#apply(gnosis#settings#defaults())
+" 本文は白系・リンクと見出しは本文と違う色（WCAG コントラスト比）
+function! s:lum(h) abort
+  let l:c = map([a:h[1:2], a:h[3:4], a:h[5:6]], 'str2nr(v:val, 16) / 255.0')
+  call map(l:c, 'v:val <= 0.03928 ? v:val / 12.92 : pow((v:val + 0.055) / 1.055, 2.4)')
+  return 0.2126 * l:c[0] + 0.7152 * l:c[1] + 0.0722 * l:c[2]
+endfunction
+function! s:cr(a, b) abort
+  let [l:x, l:y] = [s:lum(a:a), s:lum(a:b)]
+  " max() / min() は小数を扱えないので比べて並べる
+  return l:x > l:y ? (l:x + 0.05) / (l:y + 0.05) : (l:y + 0.05) / (l:x + 0.05)
+endfunction
+let s:p = g:gnosis_palette
+call assert_true(s:cr(s:p.fg, s:p.bg) >= 7.0, 'body contrast >= 7:1')
+call assert_true(s:cr(s:p.muted, s:p.bg) >= 4.5, 'muted contrast >= 4.5:1')
+call assert_true(s:cr(s:p.link, s:p.bg) >= 4.5, 'link contrast >= 4.5:1')
+call assert_true(s:cr(s:p.fg, s:p.selection) >= 4.5, 'selected text contrast >= 4.5:1')
+call assert_notequal(tolower(s:p.fg), tolower(s:p.link), 'link differs from body')
+call assert_notequal(tolower(s:p.fg), tolower(s:p.heading), 'heading differs from body')
+call assert_equal('1', synIDattr(synIDtrans(hlID('markdownH1')), 'bold', 'gui'), 'heading bold')
+call assert_equal('', synIDattr(synIDtrans(hlID('Comment')), 'italic', 'gui'), 'no italic comments')
+call assert_equal('#79cfff', tolower(synIDattr(synIDtrans(hlID('gnosisStartArt')), 'fg#', 'gui')), 'Chnoubis art keeps #79CFFF')
+" 起動画面の図案は、ふつうの等幅フォント（点が正方形に近い）では元の図案
+let g:gnosis_test_cell_pixels = [11, 24]
+call assert_equal(readfile(expand('<sfile>:p:h:h') . '/assets/chnoubis/chnoubis-44.txt')[0], gnosis#start#art(44)[0], 'original art for normal cells')
+let g:gnosis_test_cell_pixels = [20, 24]
+call assert_equal(readfile(expand('<sfile>:p:h:h') . '/assets/chnoubis/chnoubis-fit-44.txt')[0], gnosis#start#art(44)[0], 'fit art for wide cells')
+unlet g:gnosis_test_cell_pixels
+
 call writefile(v:errors, $GNOSIS_TEST_OUT)
 if !empty(v:errors)
   cquit 1

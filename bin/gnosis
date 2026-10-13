@@ -144,7 +144,8 @@ pick_terminal() {
   [ -n "$t" ] || t=$(tf_get terminal "")
   if [ -n "$t" ] && have "$t"; then echo "$t"; return; fi
   [ -z "$t" ] || log "terminal '$t' not found; choosing automatically"
-  case "${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}" in
+  desk=${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-}}
+  case "$desk" in
     *KDE*|*kde*|*plasma*) pref=konsole ;;
     *XFCE*|*xfce*) pref=xfce4-terminal ;;
     *GNOME*|*gnome*|*Unity*|*Cinnamon*|*ubuntu*) pref=gnome-terminal ;;
@@ -297,6 +298,16 @@ run_app() {
   exec "$ELECTRON" "$GNOSIS_DIR/web" --no-sandbox --ozone-platform=x11 --disable-gpu
 }
 
+# 端末を起動する。GNOSIS_DRY_RUN=1 のときは起動せず、渡す引数を 1 行ずつ表示する（試験用）
+run_term() {
+  if [ "${GNOSIS_DRY_RUN:-0}" = 1 ]; then
+    printf '%s\n' "$@"
+    printf 'env GNOSIS_TERMINAL_KIND=%s XDG_DATA_DIRS=%s\n' "${GNOSIS_TERMINAL_KIND:-}" "${XDG_DATA_DIRS:-}"
+    exit 0
+  fi
+  exec "$@"
+}
+
 fail_window() {
   log "$1"
   echo "gnosis: $1" >&2
@@ -329,34 +340,34 @@ run_new_terminal() {
       export GNOSIS_ORIG_XDG_DATA_DIRS
       XDG_DATA_DIRS="$GNOSIS_HOME/terminal/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
       export XDG_DATA_DIRS
-      exec konsole --separate --hide-menubar --hide-tabbar --profile "Gnosis-$size" -e "$SELF" --tui "$@" ;;
+      run_term konsole --separate --hide-menubar --hide-tabbar --profile "Gnosis-$size" -e "$SELF" --tui "$@" ;;
     kitty)
       set -- -o "font_size=$size" -o "font_family=$fam" -o "modify_font=cell_height +${lsp}px" \
         -o allow_remote_control=yes --title Gnosis "$SELF" --tui "$@"
-      if [ "$max" = 1 ]; then exec kitty --start-as=maximized "$@"; fi
-      exec kitty "$@" ;;
+      if [ "$max" = 1 ]; then run_term kitty --start-as=maximized "$@"; fi
+      run_term kitty "$@" ;;
     alacritty)
       mode=Windowed; [ "$max" = 1 ] && mode=Maximized
-      exec alacritty -o "font.size=$size" -o "font.normal.family=\"$fam\"" -o "font.offset.y=$lsp" \
+      run_term alacritty -o "font.size=$size" -o "font.normal.family=\"$fam\"" -o "font.offset.y=$lsp" \
         -o "window.startup_mode=\"$mode\"" --title Gnosis -e "$SELF" --tui "$@" ;;
     wezterm)
-      exec wezterm --config "font_size=$size" start -- "$SELF" --tui "$@" ;;
+      run_term wezterm --config "font_size=$size" start -- "$SELF" --tui "$@" ;;
     xterm)
       if [ "$max" = 1 ]; then
-        exec xterm -maximized -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
+        run_term xterm -maximized -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
       fi
-      exec xterm -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
+      run_term xterm -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
     gnome-terminal)
       # GNOME Terminal には窓ごとに文字の大きさを渡す方法が無い（端末のプロファイルのまま）
-      if [ "$max" = 1 ]; then exec gnome-terminal --maximize --title Gnosis -- "$SELF" --tui "$@"; fi
-      exec gnome-terminal --title Gnosis -- "$SELF" --tui "$@" ;;
+      if [ "$max" = 1 ]; then run_term gnome-terminal --maximize --title Gnosis -- "$SELF" --tui "$@"; fi
+      run_term gnome-terminal --title Gnosis -- "$SELF" --tui "$@" ;;
     xfce4-terminal)
       # XFCE Terminal は新しい窓に --font を渡せる（開いている窓の文字は変えられない）
       if [ "$max" = 1 ]; then
-        exec xfce4-terminal --font "$fam $size" --maximize --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@"
+        run_term xfce4-terminal --font "$fam $size" --maximize --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@"
       fi
-      exec xfce4-terminal --font "$fam $size" --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@" ;;
-    *) exec "$term" -e "$SELF" --tui "$@" ;;
+      run_term xfce4-terminal --font "$fam $size" --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@" ;;
+    *) run_term "$term" -e "$SELF" --tui "$@" ;;
   esac
 }
 
