@@ -228,36 +228,6 @@ def read_note(path: Path) -> tuple[list[str], list[str]]:
     return parse_note(path.read_text(encoding="utf-8"))
 
 
-_LINK_ONLY_RE = re.compile(r"^\s*\[[^\]]*\]\([^)]*\)\s*$")
-
-
-def _tidy_generated(lines: list[str]) -> list[str]:
-    """生成ノートの本文の空行を整える:
-    - 連続した空行は 1 つにする。
-    - リンクだけの行と行のあいだの空行は取る（リンクの並びに空行を入れない）。
-    - 節の見出し（`### Context` など）の直前の空行は、直前がリンクの行のときは取る。
-    - 見出し `# …` の直後がリンクの行なら、空行を 1 つ挟む。
-    文章・画像の前後の空行は残す。"""
-    out: list[str] = []
-    for i, ln in enumerate(lines):
-        if ln.strip() == "":
-            if out and out[-1].strip() == "":
-                continue  # 連続した空行
-            nxt = next((x for x in lines[i + 1:] if x.strip()), None)
-            prev = next((x for x in reversed(out) if x.strip()), None)
-            if prev is not None and nxt is not None and _LINK_ONLY_RE.match(prev) and (
-                    _LINK_ONLY_RE.match(nxt) or _is_section_head(nxt)):
-                continue
-        out.append(ln)
-    # 見出し `# …` の直後がリンクの行なら、空行を 1 つ挟む
-    res: list[str] = []
-    for i, ln in enumerate(out):
-        res.append(ln)
-        if ln.startswith("# ") and i + 1 < len(out) and _LINK_ONLY_RE.match(out[i + 1]):
-            res.append("")
-    return res
-
-
 def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     """紙PKMの自動生成ノートの本文を、手で書いた内容を消さずに作る。
 
@@ -294,13 +264,8 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
         present.add(t)
     if head_add:
         p = next((k for k, ln in enumerate(out) if _is_section_head(ln)), len(out))
-        ins = list(head_add)
-        # 直前が文章などのときだけ空行を挟む（リンクの並びの続きや見出しの直後には挟まない）。
-        # 節の見出しの直前にも空行は足さない（リンクと `### Context` をくっつける）。
-        prev = out[p - 1] if p > 0 else ""
-        if prev.strip() and not _LINK_ONLY_RE.match(prev) and not prev.startswith("# ") and not ins[0].startswith("# "):
-            ins.insert(0, "")
-        out[p:p] = ins
+        # 自動で空行は足さない（ノートの空行は利用者が自由に入れる。既にある空行も消さない）。
+        out[p:p] = list(head_add)
 
     # 2) Parent のリンク: 無いものだけを、Parent の節の最後へ足す（節が無ければ作る）
     parent_links = [ln for ln in gen_parent[1:] if ln.strip() and ln.strip() not in present]
@@ -312,8 +277,6 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
                 # Context が無く Group 等だけある → その手前に Context を作る
                 out[fs:fs] = [CONTEXT_HEAD, *parent_links]
             else:
-                if out and out[-1].strip():
-                    out.append("")
                 out += [CONTEXT_HEAD, *parent_links]
         else:
             e = next((k for k in range(p + 1, len(out)) if _is_heading(out[k])), len(out))
@@ -321,7 +284,7 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
             while last > p + 1 and not out[last - 1].strip():
                 last -= 1
             out[last:last] = parent_links
-    return _tidy_generated(out)
+    return out
 
 
 def write_note(path: Path, fm: list[str], body: list[str]) -> None:
@@ -837,8 +800,52 @@ def _find_note_by_fm(root: Path, key: str, value: str) -> Optional[Path]:
     return None
 
 
+def _sync_link_block(body: list[str], base: Path, strip_targets: set[str],
+                     desired: list[tuple[Path, str]]) -> list[str]:
+    """自動で作るリンク（紙の日記の構造: 日・月・年へのリンク）を、本文の中でその場で直す。
+
+    - 今ある構造リンクの行は、必要なものならその位置のまま（表示名だけ新しく）残す。
+      不要になったもの（消えた日記など）の行だけ消す。
+    - 足りないものは、並びの順で前後のリンクの隣に入れる（どれも無ければ、最初の節の手前か末尾）。
+    - 空行など、それ以外の行は一切変えない（ノートの空行は利用者が自由に入れる。自動では足さない）。
+    """
+    want = {os.path.normpath(str(t)): line for t, line in desired}
+    order = [os.path.normpath(str(t)) for t, _ in desired]
+    out: list[str] = []
+    emitted: dict[str, int] = {}
+    for ln in body:
+        m = re.search(r"\]\(([^)#]+)", ln)
+        key = os.path.normpath(str(base / m.group(1))) if m else None
+        if key is not None and key in strip_targets:
+            if key in want and key not in emitted:
+                emitted[key] = len(out)
+                out.append(want[key])
+            continue  # 不要になった構造リンク / 重複は消す
+        out.append(ln)
+    for i, key in enumerate(order):
+        if key in emitted:
+            continue
+        prev = next((emitted[k] for k in reversed(order[:i]) if k in emitted), None)
+        if prev is not None:
+            at = prev + 1
+        else:
+            nxt = next((emitted[k] for k in order[i + 1:] if k in emitted), None)
+            if nxt is not None:
+                at = nxt
+            else:
+                at = next((j for j, ln in enumerate(out) if _is_section_head(ln)), len(out))
+        out.insert(at, want[key])
+        # 以降の位置を 1 つずつずらす
+        for k2 in emitted:
+            if emitted[k2] >= at:
+                emitted[k2] += 1
+        emitted[key] = at
+    return out
+
+
 def _write_diary_group(root: Path, key: str, value: str, links: list[str],
-                       strip_targets: set[str], extra_tail: Optional[list[str]] = None) -> Path:
+                       strip_targets: set[str], desired: list[tuple[Path, str]],
+                       extra_tail: Optional[list[str]] = None) -> Path:
     """紙の日記の月／年グループを作る／作り直す（題 = 値。`attribute: group`）。
     本文のリンクは作り直し（古い構造のリンクは strip_targets で外す）。それ以外の手書きは残す。"""
     path = _find_note_by_fm(root, key, value)
@@ -847,12 +854,7 @@ def _write_diary_group(root: Path, key: str, value: str, links: list[str],
         write_note(path, [_time_line(), f"title: {value}", f"{key}: {value}", "attribute: group"], [f"# {value}", ""])
     fm, old_body = read_note(path)
     base = path.parent
-
-    def _structure_link(ln: str) -> bool:
-        m = re.search(r"\]\(([^)#]+)", ln)
-        return bool(m) and os.path.normpath(str(base / m.group(1))) in strip_targets
-
-    old_body = [ln for ln in old_body if not _structure_link(ln)]
+    old_body = _sync_link_block(old_body, base, strip_targets, desired)
     fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
     fm.insert(1 if fm else 0, f"title: {value}")
     fm.append("attribute: group")
@@ -891,15 +893,18 @@ def build_diary_hierarchy(root: Path, diaries: dict[str, Path]) -> tuple[list[Pa
 
     for month, days in sorted(by_month.items()):
         links = [markdown_link(diary_title(d), p, root) for d, p in days]
-        month_paths[month] = _write_diary_group(root, FM_PAPER_DIARY_MONTH, month, links, strip)
+        month_paths[month] = _write_diary_group(root, FM_PAPER_DIARY_MONTH, month, links, strip,
+                                                [(p, lk) for (d, p), lk in zip(days, links)])
         strip.add(os.path.normpath(str(month_paths[month])))
     if not use_years:
         # 年グループを作らなかった（まだ作らない）。前に作っていたら残す（消さない）が、並べない
         return [month_paths[m] for m in sorted(month_paths) if m in by_month], strip
     top: list[Path] = []
     for y in years:
-        links = [markdown_link(m, month_paths[m], root) for m in sorted(by_month) if m.startswith(y)]
-        year_paths[y] = _write_diary_group(root, FM_PAPER_DIARY_YEAR, y, links, strip)
+        ms = [m for m in sorted(by_month) if m.startswith(y)]
+        links = [markdown_link(m, month_paths[m], root) for m in ms]
+        year_paths[y] = _write_diary_group(root, FM_PAPER_DIARY_YEAR, y, links, strip,
+                                           [(month_paths[m], lk) for m, lk in zip(ms, links)])
         strip.add(os.path.normpath(str(year_paths[y])))
         top.append(year_paths[y])
     return top, strip
@@ -987,9 +992,10 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             # 紙の日記は 年・月別のグループにまとめる（年グループは年が変わってから）。
             # 一番上の「日記」グループには、月グループ（年が変わったあとは年グループ）を並べる
             top_children, diary_structure = build_diary_hierarchy(root, diaries)
-            inner += [markdown_link(fm_value(read_note(p)[0], "title") or p.stem, p, group_path.parent)
-                      for p in top_children]
-            old_group_body_extra = diary_structure
+            top_links = [markdown_link(fm_value(read_note(p)[0], "title") or p.stem, p, group_path.parent)
+                         for p in top_children]
+            inner += top_links
+            old_group_body_extra = (diary_structure, list(zip(top_children, top_links)))
         inner.append(CONTEXT_HEAD)
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
@@ -997,10 +1003,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         if group_title != display:
             old_group_body = [f"# {group_title}" if ln.strip() == f"# {display}" else ln for ln in old_group_body]
         if old_group_body_extra:
-            def _is_diary_link(ln: str, base=group_path.parent) -> bool:
-                m = re.search(r"\]\(([^)#]+)", ln)
-                return bool(m) and os.path.normpath(str(base / m.group(1))) in old_group_body_extra
-            old_group_body = [ln for ln in old_group_body if not _is_diary_link(ln)]
+            structure, desired_top = old_group_body_extra
+            old_group_body = _sync_link_block(old_group_body, group_path.parent, structure, desired_top)
         fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
         fm.insert(1 if fm else 0, f"title: {group_title}")
         fm.append("attribute: group")

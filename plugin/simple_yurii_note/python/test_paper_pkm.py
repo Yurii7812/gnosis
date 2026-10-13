@@ -410,9 +410,9 @@ def test_diary_register_and_keyword() -> None:
         fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
         check(fi.count(f"[diary]({group.name})") == 1, f"Folgezettel-Index に diary（日記一覧）が 1 つ並ぶ: {fi}")
         body_lines = gtext.split("---\n", 2)[2].rstrip("\n").split("\n")
-        check(body_lines[0] == "# 紙の日記" and body_lines[1] == "" and body_lines[2].startswith("[2026-")
-              and "" not in body_lines[2:] and body_lines[body_lines.index("### Context") - 1].startswith("[2026-"),
-              f"日記グループは 見出し・空行 1 つ・リンクの並び・### Context の順で、リンクと ### Context の間に空行がない: {body_lines}")
+        check(body_lines[0] == "# 紙の日記" and "" not in body_lines
+              and body_lines[body_lines.index("### Context") - 1].startswith("[2026-"),
+              f"自動で作る日記グループには空行を入れない（リンクの次に ### Context がそのまま続く）: {body_lines}")
         idx_lines = idx.read_text(encoding="utf-8").split("\n")
         at = idx_lines.index("[日記](" + group.name + ")")
         check(idx_lines[at + 1].startswith("### "), f"Index の「日記」と ### の間にも空行がない: {idx_lines[at:at+2]}")
@@ -511,7 +511,7 @@ def test_diary_weekday_is_computed() -> None:
 
 
 def test_index_has_no_blank_lines_between_links() -> None:
-    print("index: Paper-Zettelkasten-Index のリンクの並びに空行を入れない（既存の空行も取り除く）")
+    print("index: Paper-Zettelkasten-Index のリンクの並びに自動で空行を入れない（利用者の空行は消さない）")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         p = root / "p.jpg"
@@ -523,13 +523,45 @@ def test_index_has_no_blank_lines_between_links() -> None:
         check(lines[at + 1].startswith("[日記]("), f"Folgezettel-Index の直後に「日記」が続く（空行なし）: {lines[at:at+3]}")
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
                       for i in range(1, len(lines) - 1)), "リンクとリンクのあいだに空行がない")
-        # 旧い Index（空行入り）も直る
-        text = idx.read_text(encoding="utf-8").replace("[Folgezettel-Index](Folgezettel-Index.md)\n[日記](", "[Folgezettel-Index](Folgezettel-Index.md)\n\n[日記](")
+        # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
+        text = idx.read_text(encoding="utf-8").replace("[Folgezettel-Index](Folgezettel-Index.md)\n[日記](", "[Folgezettel-Index](Folgezettel-Index.md)\n\n\n[日記](")
         idx.write_text(text, encoding="utf-8")
+        pp.regen(root)
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
         at = lines.index("[Folgezettel-Index](Folgezettel-Index.md)")
-        check(lines[at + 1].startswith("[日記]("), "旧い空行も regen で取り除かれる")
+        check(lines[at + 1:at + 4] == ["", "", lines[at + 3]] and lines[at + 3].startswith("[日記]("),
+              f"自分で入れた空行（2 つ）は regen しても消えない・増えない: {lines[at:at+5]}")
+
+
+def test_user_blank_lines_survive_regen() -> None:
+    print("regen: 利用者が入れた空行は、グループなどの生成ノートでも消えない・増えない")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07"), (root / "q.jpg", "2026-10-08")] if False else [(p, "2026-10-07")])
+        pp.regen(root)
+        group = pp.find_group(root, "日記")
+        month = pp._find_note_by_fm(root, "paper_diary_month", "2026-10")
+        for note in (group, month):
+            t = note.read_text(encoding="utf-8")
+            t = t.replace("### Context", "\n\n### Context", 1)  # リンクと ### Context の間に自分で空行
+            t = t.replace("\n[2026", "\n\n[2026", 1)            # 最初のリンクの前にも空行
+            note.write_text(t, encoding="utf-8")
+        before = {n: n.read_text(encoding="utf-8") for n in (group, month)}
+        pp.regen(root)
+        pp.regen(root)
+        for note in (group, month):
+            check(note.read_text(encoding="utf-8").split("---\n", 2)[2] == before[note].split("---\n", 2)[2],
+                  f"{note.name}: 自分で入れた空行がそのまま残る")
+        # 新しく自動で作る部分は空行を足さない
+        p2 = root / "p2.jpg"
+        p2.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p2, "2026-10-09")])
+        pp.regen(root)
+        m = pp._find_note_by_fm(root, "paper_diary_month", "2026-10").read_text(encoding="utf-8")
+        check("[2026-10-09-FR](" in m, "後から足した日が一覧に入る")
 
 
 def test_regen_without_index() -> None:
