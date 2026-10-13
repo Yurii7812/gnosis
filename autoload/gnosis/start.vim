@@ -114,9 +114,8 @@ function! gnosis#start#open() abort
       let s:sel = l:i
     endif
   endfor
-  " 初めて（vault が未登録）なら、作るか登録するかを尋ねる一覧から始める
+  " 初回起動も Chnoubis を見せる。Enter/v で vault の作成・登録へ進む。
   if empty(l:reg)
-    let s:mode = 'vaults'
     let s:message = s:t('start.first_run')
   endif
   call gnosis#start#render()
