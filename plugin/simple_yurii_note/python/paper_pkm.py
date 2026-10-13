@@ -18,7 +18,7 @@
   （`attribute: group`、中に各IDノートへのリンク）、単一IDは直接リンク。
 - `Folgezettel-Index.md`: 存在する全IDを自然順で並べた一覧。
 - **紙の日記**: `\\F` の GUI で「日記として登録」した画像は、日記が書かれた日付ごとに 1 ノート
-  （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD 紙の日記`）にまとめる。
+  （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD(曜) 紙の日記`。曜日は日付から自動計算）にまとめる。
   複数ページは同じノートに画像を並べる。ノートの `time:` はスキャンした日時で、日記の日付とは別。
   日記があると Paper-Zettelkasten-Index のキーワードに「日記」が 1 つ自動で入り、
   開くと日付順に日記の一覧（グループ `紙の日記`）になる。デジタル日記（`\\d`）とは題の形が違い、
@@ -488,8 +488,21 @@ def normalize_diary_date(raw: str) -> str:
     return d.strftime("%Y-%m-%d")
 
 
+_WEEKDAYS_JA = "月火水木金土日"
+
+
+def weekday_ja(date: str) -> str:
+    """YYYY-MM-DD の曜日（月〜日）。"""
+    return _WEEKDAYS_JA[datetime.strptime(date, "%Y-%m-%d").weekday()]
+
+
+def diary_label(date: str) -> str:
+    """曜日つきの日付（例: 2026-10-07(水)）。デジタル日記の題（YYYY-MM-DD-WE…）とは形を変えてある。"""
+    return f"{date}({weekday_ja(date)})"
+
+
 def diary_title(date: str) -> str:
-    return f"{date} 紙の日記"
+    return f"{diary_label(date)} 紙の日記"
 
 
 def _diary_image_name(date: str, page: int, suffix: str) -> str:
@@ -809,6 +822,13 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     # 紙の日記があれば、キーワード「日記」を 1 つだけ入れる（Index-write に同名のキーワードが
     # あればそれに日記を足す。無ければ自動で追加する）。regen のたびに作り直すので消えない。
     diaries = scan_diary_notes(root)
+    for date, dpath in diaries.items():
+        fm_d, body_d = read_note(dpath)
+        if fm_value(fm_d, "title") != diary_title(date):
+            old_t = fm_value(fm_d, "title") or ""
+            fm_d = [f"title: {diary_title(date)}" if re.match(r"^\s*title\s*:", ln) else ln for ln in fm_d]
+            body_d = [f"# {diary_title(date)}" if ln.strip() == f"# {old_t}" else ln for ln in body_d]
+            write_note(dpath, fm_d, body_d)
     if diaries:
         dup = [e for e in entries if e["display"] == DIARY_KEYWORD]
         if dup:

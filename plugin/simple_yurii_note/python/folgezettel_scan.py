@@ -196,6 +196,7 @@ class ScanApp:
         self.topic_parent_var = tk.StringVar(value="")
         self.topic_preview_var = tk.StringVar(value="")
         self.diary_date_var = tk.StringVar(value="")
+        self.diary_preview_var = tk.StringVar(value="")
 
         self.ui_font = pick_font(self.root, UI_FONT_CANDIDATES, "TkDefaultFont")
         self.mono_font = pick_font(self.root, MONO_FONT_CANDIDATES, "TkFixedFont")
@@ -528,6 +529,9 @@ class ScanApp:
         self.diary_date_entry.pack(side="left", padx=(10, 14), ipady=4)
         ttk.Label(self.diary_frame, text="YYYY-MM-DD（その日記が書かれた日。複数ページは同じ日付で続けて登録）／ "
                   "Enter で確定 ／ Esc でキャンセル", style="CardNote.TLabel").pack(side="left")
+        ttk.Label(self.diary_frame, textvariable=self.diary_preview_var,
+                  style="PrevId.TLabel").pack(side="left", padx=(0, 14))
+        self.diary_date_var.trace_add("write", self.update_diary_preview)
         self.diary_date_entry.bind("<Return>", self.confirm_diary)
         self.diary_date_entry.bind("<Escape>", self.cancel_input)
 
@@ -667,7 +671,7 @@ class ScanApp:
             self.tree.insert(
                 "", "end", iid=iid, text="", image=image_ref,
                 values=(idx + 1, item.current_name,
-                        item.folgezettel_id or (f"日記 {item.diary_date}" if item.diary_date else ""),
+                        item.folgezettel_id or (f"日記 {pp.diary_label(item.diary_date)}" if item.diary_date else ""),
                         stat_text),
                 tags=("done" if item.processed else "todo",),
             )
@@ -1003,6 +1007,13 @@ class ScanApp:
         self.diary_date_entry.icursor(tk.END)
         self.status_var.set("この日記が書かれた日付を確認してEnter（同じ日記の続きのページは同じ日付のまま）")
 
+    def update_diary_preview(self, *_args):
+        """入力中の日付を曜日つきで見せる（例: 2026-10-07 → 2026-10-07(水)）。"""
+        try:
+            self.diary_preview_var.set("→ " + pp.diary_label(pp.normalize_diary_date(self.diary_date_var.get())))
+        except ValueError:
+            self.diary_preview_var.set("")
+
     def on_diary(self, _event=None):
         if self.input_active:
             return
@@ -1211,7 +1222,7 @@ class ScanApp:
         self.hide_input()
         self.save_project()
         self.load_current_image()
-        self.status_var.set(f"日記（{date}）の {page} ページ目として登録しました")
+        self.status_var.set(f"日記（{pp.diary_label(date)}）の {page} ページ目として登録しました")
 
     def undo_last(self):
         if not self.folder or not self.undo_stack:
