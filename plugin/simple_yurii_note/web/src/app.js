@@ -72,8 +72,9 @@ function applyState(s) {
   last = { ...last, ...s, lines: undefined };
   const m = (s.mode || "n")[0];
   const el = $("mode");
-  el.textContent = MODE_LABEL[m] || String(s.mode).toUpperCase();
-  el.className = "mode " + (MODE_CLASS[m] || "normal");
+  const showView = viewOnly && !needsTerminal(s);
+  el.textContent = showView ? "VIEW" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
+  el.className = "mode " + (showView ? "viewonly" : (MODE_CLASS[m] || "normal"));
   $("file").textContent = s.file ? s.file.split("/").pop() : "";
   $("dirty").textContent = s.mod ? "●" : "";
 
@@ -88,7 +89,10 @@ function applyState(s) {
 
   // バッファの内容とカーソルをマークダウンで映す（端末バッファは映さない）
   if (s.bt === "terminal") return;
+  const fileChanged = viewOnly && s.file && s.file !== lastViewFile;
+  if (s.file) lastViewFile = s.file;
   if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); }
+  if (fileChanged) view.view.scrollDOM.scrollTop = 0; // 見るだけのときは別のノートに移ったら先頭から
   if (s.vtext) view.setVtext(s.vtext);
   if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
 }
@@ -185,9 +189,54 @@ function preloadImages(lines) {
   return queue.length;
 }
 
+// ---------------------------------------------------------------- 見るだけモード
+// F2 で「見るだけ」と「普通の Vim」を切り替える。見るだけのときは、カーソルを出さず、
+// キーを Vim に送らない（ノートは絶対に変わらない）。j/k・矢印・Space・PageUp/Down・gg/G・
+// Ctrl-d/u でスクロールし、リンクはクリックで開く。確認・fzf などの端末が要る場面では、
+// 普通どおりキーを Vim へ送る。
+let viewOnly = false;
+let lastViewFile = "";
+let gPending = false;
+
+function setViewOnly(on) {
+  viewOnly = !!on;
+  $("view").classList.toggle("view-only", viewOnly);
+  view.setViewOnly(viewOnly);
+  if (!viewOnly) view.setVim({ cur: last.cur || [1, 1], mode: last.mode || "n", vis: last.vis }); // カーソルへ戻す
+  applyState({ mode: last.mode, file: last.file, bt: last.bt, popups: last.popups });
+}
+
+function viewOnlyKey(e) {
+  const sc = view.view.scrollDOM;
+  const page = sc.clientHeight - 60;
+  const by = (dy) => { sc.scrollTop += dy; return true; };
+  if (e.ctrlKey && !e.altKey) {
+    if (e.key === "d") return by(page / 2);
+    if (e.key === "u") return by(-page / 2);
+    return false;
+  }
+  if (e.altKey || e.metaKey) return false;
+  const k = e.key;
+  if (k !== "g") gPending = false;
+  switch (k) {
+    case "j": case "ArrowDown": return by(48);
+    case "k": case "ArrowUp": return by(-48);
+    case " ": return by(e.shiftKey ? -page : page);
+    case "PageDown": return by(page);
+    case "PageUp": return by(-page);
+    case "Home": sc.scrollTop = 0; return true;
+    case "End": case "G": sc.scrollTop = sc.scrollHeight; return true;
+    case "g":
+      if (gPending) { gPending = false; sc.scrollTop = 0; } else gPending = true;
+      return true;
+    default: return false;
+  }
+}
+
 // 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
 function onClick({ pos, link }) {
   if (pos == null) return;
+  if (viewOnly && !link) return; // 見るだけ: カーソルは動かさない（リンクだけ開く）
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
   if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
@@ -222,7 +271,13 @@ async function boot() {
   term.open($("term"));
   try { await document.fonts.ready; } catch { /* ignore */ }
 
-  term.onData((d) => gui.write(d));
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== "keydown") return !(viewOnly && !needsTerminal(last)); // 見るだけ中は keyup/keypress も Vim へ流さない
+    if (e.key === "F2") { e.preventDefault(); setViewOnly(!viewOnly); return false; }
+    if (viewOnly && !needsTerminal(last)) { viewOnlyKey(e); return false; }
+    return true;
+  });
+  term.onData((d) => { if (viewOnly && !needsTerminal(last)) return; gui.write(d); });
   gui.onData((d) => term.write(d));
   gui.onState((s) => { try { applyState(s); } catch (e) { console.error("applyState failed: " + (e && e.stack || e)); showError(e && e.message || e); } });
   gui.onExit(() => { $("mode").textContent = "EXIT"; });
@@ -245,6 +300,8 @@ async function boot() {
     state: () => last,
     send: (d) => gui.write(d),
     isExpanded: () => expanded,
+    isViewOnly: () => viewOnly,
+    setViewOnly,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

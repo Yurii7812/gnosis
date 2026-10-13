@@ -39,6 +39,7 @@ html { --strip-h: 54px; }
 .mode.insert { background: #0969da; }
 .mode.visual { background: #8250df; }
 .mode.replace { background: #cf222e; }
+.mode.viewonly { background: #57606a; }
 .mode.command { background: #bf8700; }
 .file { color: var(--fg); }
 .dirty { color: #bf8700; font-size: 10px; }
@@ -48,6 +49,10 @@ html { --strip-h: 54px; }
 span.cm-vim-block { display: inline-block; width: .6em; }
 span.cm-vim-bar { display: inline-block; width: 0; border-left: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; margin-left: -1px; }
 span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; }
+/* 見るだけモード: カーソルも選択も出さない */
+.view-only .cm-vim-block { background: transparent; color: inherit; }
+.view-only span.cm-vim-block, .view-only span.cm-vim-bar, .view-only span.cm-vim-under { display: none; }
+.view-only .cm-vim-visual { background: transparent; }
 .cm-vim-visual { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 
 /* ---- 本文（マークダウンの見た目） ---- */

@@ -236,7 +236,7 @@ function buildDecorations(view, cfg) {
   const decos = [];
   // Vim のモード（インサート中は画像を文字のまま見せる）
   const vmode = view.state.field(vimField, false)?.mode || "n";
-  cfg.insertMode = vmode[0] === "i" || vmode[0] === "R";
+  cfg.insertMode = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
   // 先頭の front matter（--- で囲まれた部分）。カーソルがあるときは通常どおり、無いときは薄く小さく。
   let fmEnd = 0;
   if (doc.lines >= 2 && doc.line(1).text.trim() === "---") {
@@ -258,7 +258,7 @@ function buildDecorations(view, cfg) {
     if (RE.fence.test(t)) { fenceLines.add(n); inBlock = !inBlock; }
     else if (inBlock) fenceLines.add(n);
   }
-  for (const r of view.state.selection.ranges) {
+  if (!cfg.viewOnly) for (const r of view.state.selection.ranges) {
     const a = doc.lineAt(r.from).number;
     const b = doc.lineAt(r.to).number;
     for (let l = a; l <= b; l++) activeLines.add(l);
@@ -443,6 +443,12 @@ export function createView(opts) {
       while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
       view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) } });
     },
+    // 見るだけ: カーソルのある行も含め、全部を描いた見た目にする。カーソルへのスクロールもしない
+    setViewOnly(on) {
+      cfg.viewOnly = !!on;
+      this.followCursor = !on;
+      view.dispatch({ effects: refreshDecorations.of(null) });
+    },
     // 画像の大きさが分かったので、高さの見積もりを取り直す
     refresh() { view.dispatch({ effects: refreshDecorations.of(null) }); },
     // 仮想テキスト（リンクの数字のしるしなど）を反映する
@@ -467,7 +473,7 @@ export function createView(opts) {
       }
       view.dispatch({
         selection: { anchor: pos },
-        effects: [setVim.of({ pos, mode, visFrom, visTo }), EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })],
+        effects: [setVim.of({ pos, mode, visFrom, visTo }), ...(this.followCursor === false ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })])],
       });
     },
     lineColAt(pos) {

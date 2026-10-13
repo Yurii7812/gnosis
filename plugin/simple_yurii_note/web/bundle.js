@@ -32618,7 +32618,7 @@ ${h2.join(`
     const doc2 = view2.state.doc;
     const decos = [];
     const vmode = view2.state.field(vimField, false)?.mode || "n";
-    cfg.insertMode = vmode[0] === "i" || vmode[0] === "R";
+    cfg.insertMode = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
     let fmEnd = 0;
     if (doc2.lines >= 2 && doc2.line(1).text.trim() === "---") {
       for (let n = 2; n <= doc2.lines; n++) {
@@ -32642,7 +32642,7 @@ ${h2.join(`
         inBlock = !inBlock;
       } else if (inBlock) fenceLines.add(n);
     }
-    for (const r of view2.state.selection.ranges) {
+    if (!cfg.viewOnly) for (const r of view2.state.selection.ranges) {
       const a = doc2.lineAt(r.from).number;
       const b2 = doc2.lineAt(r.to).number;
       for (let l = a; l <= b2; l++) activeLines.add(l);
@@ -32826,6 +32826,12 @@ ${h2.join(`
         while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
         view2.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) } });
       },
+      // 見るだけ: カーソルのある行も含め、全部を描いた見た目にする。カーソルへのスクロールもしない
+      setViewOnly(on2) {
+        cfg.viewOnly = !!on2;
+        this.followCursor = !on2;
+        view2.dispatch({ effects: refreshDecorations.of(null) });
+      },
       // 画像の大きさが分かったので、高さの見積もりを取り直す
       refresh() {
         view2.dispatch({ effects: refreshDecorations.of(null) });
@@ -32857,7 +32863,7 @@ ${h2.join(`
         }
         view2.dispatch({
           selection: { anchor: pos },
-          effects: [setVim.of({ pos, mode, visFrom, visTo }), EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })]
+          effects: [setVim.of({ pos, mode, visFrom, visTo }), ...this.followCursor === false ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })]]
         });
       },
       lineColAt(pos) {
@@ -32929,8 +32935,9 @@ ${h2.join(`
     last2 = { ...last2, ...s15, lines: void 0 };
     const m = (s15.mode || "n")[0];
     const el2 = $2("mode");
-    el2.textContent = MODE_LABEL[m] || String(s15.mode).toUpperCase();
-    el2.className = "mode " + (MODE_CLASS[m] || "normal");
+    const showView = viewOnly && !needsTerminal(s15);
+    el2.textContent = showView ? "VIEW" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
+    el2.className = "mode " + (showView ? "viewonly" : MODE_CLASS[m] || "normal");
     $2("file").textContent = s15.file ? s15.file.split("/").pop() : "";
     $2("dirty").textContent = s15.mod ? "\u25CF" : "";
     if (needsTerminal(s15)) {
@@ -32944,10 +32951,13 @@ ${h2.join(`
       }, 120);
     }
     if (s15.bt === "terminal") return;
+    const fileChanged = viewOnly && s15.file && s15.file !== lastViewFile;
+    if (s15.file) lastViewFile = s15.file;
     if (s15.lines) {
       view.setText(s15.lines.join("\n"));
       preloadImages(s15.lines);
     }
+    if (fileChanged) view.view.scrollDOM.scrollTop = 0;
     if (s15.vtext) view.setVtext(s15.vtext);
     if (s15.cur) view.setVim({ cur: s15.cur, mode: s15.mode || "n", vis: s15.vis });
   }
@@ -33041,8 +33051,64 @@ ${h2.join(`
     pump();
     return queue.length;
   }
+  var viewOnly = false;
+  var lastViewFile = "";
+  var gPending = false;
+  function setViewOnly(on2) {
+    viewOnly = !!on2;
+    $2("view").classList.toggle("view-only", viewOnly);
+    view.setViewOnly(viewOnly);
+    if (!viewOnly) view.setVim({ cur: last2.cur || [1, 1], mode: last2.mode || "n", vis: last2.vis });
+    applyState({ mode: last2.mode, file: last2.file, bt: last2.bt, popups: last2.popups });
+  }
+  function viewOnlyKey(e) {
+    const sc2 = view.view.scrollDOM;
+    const page = sc2.clientHeight - 60;
+    const by = (dy) => {
+      sc2.scrollTop += dy;
+      return true;
+    };
+    if (e.ctrlKey && !e.altKey) {
+      if (e.key === "d") return by(page / 2);
+      if (e.key === "u") return by(-page / 2);
+      return false;
+    }
+    if (e.altKey || e.metaKey) return false;
+    const k = e.key;
+    if (k !== "g") gPending = false;
+    switch (k) {
+      case "j":
+      case "ArrowDown":
+        return by(48);
+      case "k":
+      case "ArrowUp":
+        return by(-48);
+      case " ":
+        return by(e.shiftKey ? -page : page);
+      case "PageDown":
+        return by(page);
+      case "PageUp":
+        return by(-page);
+      case "Home":
+        sc2.scrollTop = 0;
+        return true;
+      case "End":
+      case "G":
+        sc2.scrollTop = sc2.scrollHeight;
+        return true;
+      case "g":
+        if (gPending) {
+          gPending = false;
+          sc2.scrollTop = 0;
+        } else gPending = true;
+        return true;
+      default:
+        return false;
+    }
+  }
   function onClick({ pos, link }) {
     if (pos == null) return;
+    if (viewOnly && !link) return;
     const [l, c] = view.lineColAt(pos);
     const m = (last2.mode || "n")[0];
     if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
@@ -33077,7 +33143,23 @@ ${h2.join(`
       await document.fonts.ready;
     } catch {
     }
-    term.onData((d) => gui.write(d));
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return !(viewOnly && !needsTerminal(last2));
+      if (e.key === "F2") {
+        e.preventDefault();
+        setViewOnly(!viewOnly);
+        return false;
+      }
+      if (viewOnly && !needsTerminal(last2)) {
+        viewOnlyKey(e);
+        return false;
+      }
+      return true;
+    });
+    term.onData((d) => {
+      if (viewOnly && !needsTerminal(last2)) return;
+      gui.write(d);
+    });
     gui.onData((d) => term.write(d));
     gui.onState((s15) => {
       try {
@@ -33105,6 +33187,8 @@ ${h2.join(`
       state: () => last2,
       send: (d) => gui.write(d),
       isExpanded: () => expanded,
+      isViewOnly: () => viewOnly,
+      setViewOnly,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];
