@@ -35,7 +35,11 @@ function! gnosis#start#should_show() abort
   if argc() > 0 || !empty($GNOSIS_FILE) || !empty($PKM_FILE)
     return 0
   endif
-  if !empty(trim(get(g:, 'gnosis_root', '')))
+  " Gnosis 専用 Vim では、前回の vault のルートがプラグイン初期化中に
+  " g:gnosis_root へ復元される場合がある。これは「起動画面を省略する」
+  " 指示ではない。画面を出さないのはファイル指定など明示的な場合だけ。
+  " 旧 vimrc 統合環境では従来の root 指定による起動を維持する。
+  if !get(g:, 'gnosis_managed', 0) && !empty(trim(get(g:, 'gnosis_root', '')))
     return 0
   endif
   " 標準入力からの読み込み（vim -）など、何かのバッファが既にあるとき
@@ -90,7 +94,9 @@ function! gnosis#start#open_vaults() abort
 endfunction
 
 function! gnosis#start#open() abort
-  let s:had_vault = !empty(trim(get(g:, 'gnosis_root', ''))) && !s:active
+  " 前回のルート文字列が残っているだけでは、使用中の vault とは扱わない。
+  " VimEnter の初回起動と、実際に開いた vault からの切り替えを区別する。
+  let s:had_vault = !empty(get(g:, 'gnosis_active_vault', '')) && !s:active
   let s:active = 1
   let s:mode = 'start'
   let s:message = ''
