@@ -60,7 +60,11 @@ endfunction
 
 " アート（幅 a:width の行のリスト）。無ければ []
 function! gnosis#start#art(width) abort
-  let l:f = s:art_dir . '/chnoubis-' . a:width . '.txt'
+  " 横につぶれて表示される環境用に、横幅を調整した点描版を優先する。
+  " 元の図案はそのまま残し、g:gnosis_start_original_art=1 で比較できる。
+  let l:name = get(g:, 'gnosis_start_original_art', 0) && a:width != 24
+        \ ? 'chnoubis-' . a:width : 'chnoubis-fit-' . a:width
+  let l:f = s:art_dir . '/' . l:name . '.txt'
   if !filereadable(l:f)
     return []
   endif
@@ -73,7 +77,7 @@ endfunction
 
 " 画面に収まる大きさのアートを選ぶ（大きいものから。下の情報欄の行数 a:reserve を残す）
 function! gnosis#start#pick_art(cols, rows, reserve) abort
-  for l:w in [80, 60, 44, 32]
+  for l:w in [80, 60, 44, 32, 24]
     let l:art = gnosis#start#art(l:w)
     if empty(l:art)
       continue
@@ -81,6 +85,19 @@ function! gnosis#start#pick_art(cols, rows, reserve) abort
     let l:aw = max(map(copy(l:art), 'strdisplaywidth(v:val)'))
     if l:aw + 2 <= a:cols && len(l:art) + a:reserve <= a:rows
       return l:art
+    endif
+  endfor
+  return []
+endfunction
+
+" Gnosis の文字も普通の文字列ではなく、Chnoubis と同じ Braille 点描で描く。
+function! gnosis#start#logo(cols, rows) abort
+  let l:candidates = a:cols >= 82 && a:rows >= 52 ? [78, 52, 26]
+        \ : a:cols >= 56 && a:rows >= 23 ? [52, 26] : [26]
+  for l:w in l:candidates
+    let l:f = s:art_dir . '/gnosis-logo-' . l:w . '.txt'
+    if filereadable(l:f)
+      return readfile(l:f)
     endif
   endfor
   return []
@@ -168,7 +185,7 @@ function! gnosis#start#render() abort
   if s:mode ==# 'start'
     let l:v = s:current_vault()
     let l:info = []
-    let l:info += [['Gnosis', 'gnosisStartTitle'], ['', '']]
+    " ロゴを独立した Braille 図案で描くため、普通の Gnosis 文字行は置かない。
     if empty(l:v)
       let l:info += [[s:t('start.no_vault'), 'gnosisStartDim']]
     else
@@ -185,27 +202,32 @@ function! gnosis#start#render() abort
     if !empty(s:message)
       let l:info += [['', ''], [s:message, 'gnosisStartWarn']]
     endif
-    " 小さい端末（例: 80x24）でも、必ず優先して Chnoubis の32幅版を表示する。
-    " 既存の詳しい案内は、行数に余裕のある画面ではそのまま残す。
-    if l:rows < 30
-      let l:heading = 'Gnosis' . (empty(l:v) ? '' : ' — ' . l:v.name)
-      let l:info = [[l:heading, 'gnosisStartTitle']]
+    " 小さな端末でも図案 + ロゴ + 開始キーを表示。収まるときは詳細も残す。
+    if l:rows < 43
+      let l:label = empty(l:v) ? s:t('start.no_vault') : l:v.name
+      let l:info = [[l:label, 'gnosisStartTitle']]
       if !empty(l:v) && !l:v.exists
         let l:info += [[s:t('start.vault_missing'), 'gnosisStartWarn']]
       endif
       let l:info += [['Enter  |  v  |  s  |  q', 'gnosisStartKey']]
     endif
-    let l:art = gnosis#start#pick_art(l:cols, l:rows, len(l:info) + 2)
-    let l:top = max([0, (l:rows - len(l:art) - len(l:info) - 1) / 2])
+    let l:logo = gnosis#start#logo(l:cols, l:rows)
+    let l:art = gnosis#start#pick_art(l:cols, l:rows, len(l:info) + len(l:logo) + 2)
+    let l:top = max([0, (l:rows - len(l:art) - len(l:logo) - len(l:info) - 2) / 2])
     let l:lines += repeat([''], l:top)
+    let l:hl += repeat([''], l:top)
     for l:a in l:art
       call add(l:lines, s:center(l:a, l:cols))
       call add(l:hl, 'gnosisStartArt')
     endfor
-    if !empty(l:art)
-      call add(l:lines, '')
-    endif
-    let l:hl = repeat([''], l:top) + l:hl + (empty(l:art) ? [] : [''])
+    call add(l:lines, '')
+    call add(l:hl, '')
+    for l:letter in l:logo
+      call add(l:lines, s:center(l:letter, l:cols))
+      call add(l:hl, 'gnosisStartTitle')
+    endfor
+    call add(l:lines, '')
+    call add(l:hl, '')
     for [l:text, l:group] in l:info
       call add(l:lines, s:center(l:text, l:cols))
       call add(l:hl, l:group)
