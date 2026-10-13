@@ -28,7 +28,8 @@
   手書きの本文＝キーワード行をサイ博（並び順のみ整える）。
 - `Index-write.md` と `Folgezettel-Index.md` の `### Context` は
   Paper-Zettelkasten-Index へのリンク（regen が無ければ足す）。
-- `create` 時に vault 親Index（`index.md`）へ Paper-Zettelkasten-Index へのリンクを足す。
+- `create` 時に vault 親Index（`index.md`）へ Paper-Zettelkasten-Index へのリンクを足す
+  （空行は入れない。最後のリンク行の直後に 1 行）。
 - 実行後は `note_format_v2.simple_sync()` で SYN 同期まで行う。
 
 CLI::

@@ -279,7 +279,14 @@ const scenarioPath = path.join(tmp, "scenario.js");
 fs.writeFileSync(scenarioPath, scenario);
 const outPath = path.join(tmp, "out.json");
 
-const env = { ...process.env, HOME: home, PKM_ROOT: vault, PKM_TEST_SCRIPT: scenarioPath, PKM_TEST_OUT: outPath };
+// クリップボードを読むコマンドは、何も出さない代役に差し替える（実機のクリップボードの中身で za などの結果が
+// 変わらないように。za は取得元を順に見て、最初に有効なリンクがあったものを使う）
+const stubBin = path.join(tmp, "stub-bin");
+fs.mkdirSync(stubBin, { recursive: true });
+for (const cmd of ["wl-paste", "wl-copy", "xclip", "xsel", "qdbus6", "qclip"]) {
+  fs.writeFileSync(path.join(stubBin, cmd), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+}
+const env = { ...process.env, PATH: stubBin + path.delimiter + (process.env.PATH || ""), HOME: home, PKM_ROOT: vault, PKM_TEST_SCRIPT: scenarioPath, PKM_TEST_OUT: outPath };
 delete env.WAYLAND_DISPLAY; delete env.XDG_SESSION_TYPE; delete env.DISPLAY;
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { console.error("FAIL: " + msg); failed++; } };
