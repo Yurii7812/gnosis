@@ -2690,6 +2690,7 @@ function! simple_yurii_note#jump_up_cursor() abort
   " 見出しは、下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
   " 来るところまでで止める（末尾より下の空白は出さない）。
   call s:jump_to_line(l:up)
+  let l:view = winsaveview()
   let l:view.topline = s:view_top_centered(l:up)
   let l:view.topfill = 0
   call winrestview(l:view)
@@ -3775,6 +3776,7 @@ function! s:rlp_link_apply(targets, below, ...) abort
   let l:below = l:side >= 0 ? l:side : a:below
 
   let l:cur_buf = bufnr('%')
+  let l:view = winsaveview()
   let l:same = fnamemodify(expand('%:p'), ':p') ==# fnamemodify(l:anchor, ':p')
   if !l:same
     execute 'silent keepalt hide edit ' . fnameescape(l:anchor)
@@ -7141,6 +7143,7 @@ endfunction
 
 function! s:reload_by_edit(path) abort
   let l:pos = getpos('.')
+  let l:view = winsaveview()
   " E823（undoファイル不一致）を抑制しつつ再読み込み
   silent! execute 'edit ' . fnameescape(a:path)
   call winrestview(l:view)
@@ -9606,6 +9609,7 @@ function! s:sort_lines_by_yomi(first, last) abort
     echohl WarningMsg | echo 'simple_yurii_note: よみソートの行数が一致しません' | echohl NONE
     return
   endif
+  let l:view = winsaveview()
   call setline(a:first, l:new)
   call winrestview(l:view)
   if l:added

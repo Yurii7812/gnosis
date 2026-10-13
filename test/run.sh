@@ -36,3 +36,6 @@ fi
 
 # 保存タイミング（Esc 即保存・gm 前保存・\tD 前保存など）の回帰網
 sh "$REPO/test/autosave_net.sh"
+
+# \S（選択なし）のよみ順ソート
+sh "$REPO/test/sort_yomi_net.sh"
