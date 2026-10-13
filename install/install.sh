@@ -8,7 +8,7 @@
 #   1. 必要なもの（Vim・git・Python 3・fzf・ripgrep、アプリ用に Node.js）を確かめ、
 #      無ければ OS のパッケージ管理（apt / dnf / pacman / zypper / Homebrew）で入れる（確認してから）
 #   2. Gnosis ホームに、Gnosis 専用の vimrc とプラグイン領域（fzf / fzf.vim / vim-surround）を作る
-#   3. アプリ（Electron）を入れる（npm install と build）
+#   3. Electron は --app が指定されたときだけ入れる（標準では不要）
 #   4. ランチャー（~/.local/bin/gnosis）と、アイコン付きの起動項目を作る
 #        Linux … アプリメニュー（~/.local/share/applications/gnosis.desktop）
 #        macOS … ~/Applications/Gnosis.app
@@ -16,7 +16,8 @@
 # オプション:
 #   --yes          確認せずに進める
 #   --no-system    OS のパッケージを入れない（足りないものは表示だけ）
-#   --no-app       アプリ（Electron）を入れない（端末・GUI 版 Vim で使う）
+#   --app          オプションの Electron アプリを追加で入れる
+#   --no-app       Electron を入れない（標準動作）
 #   --desktop-icon Linux でデスクトップにもアイコンを置く
 #   --bin DIR      ランチャーを置く場所（既定 ~/.local/bin）
 #   --help
@@ -24,12 +25,13 @@
 #           既定は GitHub。試験やオフライン用に、fzf / fzf.vim / vim-surround を置いたフォルダを指定できる）
 set -eu
 
-YES=0; NO_SYSTEM=0; NO_APP=0; DESKTOP_ICON=0
+YES=0; NO_SYSTEM=0; NO_APP=1; DESKTOP_ICON=0
 BIN_DIR="$HOME/.local/bin"
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) YES=1 ;;
     --no-system) NO_SYSTEM=1 ;;
+    --app) NO_APP=0 ;;
     --no-app) NO_APP=1 ;;
     --desktop-icon) DESKTOP_ICON=1 ;;
     --bin) shift; BIN_DIR=$1 ;;
@@ -73,7 +75,7 @@ fi
 
 pkg_name() { # 汎用名 → パッケージ名
   case "$PM:$1" in
-    apt:vim) echo vim-gtk3 ;; dnf:vim) echo vim-enhanced vim-X11 ;; pacman:vim) echo gvim ;; zypper:vim) echo gvim ;; brew:vim) echo vim ;;
+    apt:vim) echo vim ;; dnf:vim) echo vim-enhanced ;; pacman:vim) echo vim ;; zypper:vim) echo vim ;; brew:vim) echo vim ;;
     *:python3) case "$PM" in pacman) echo python ;; brew) echo python ;; *) echo python3 ;; esac ;;
     *:node) case "$PM" in apt) echo nodejs npm ;; dnf|zypper) echo nodejs npm ;; pacman) echo nodejs npm ;; brew) echo node ;; esac ;;
     *:rg) echo ripgrep ;;
@@ -250,11 +252,10 @@ Comment=Markdown notes with Vim
 Comment[ja]=Vim で書く Markdown のノート
 Exec=$exec_path %F
 Icon=gnosis
-Terminal=false
+Terminal=true
 Categories=Utility;TextEditor;
 MimeType=text/markdown;
 StartupNotify=true
-StartupWMClass=Gnosis
 EOF
   have update-desktop-database && update-desktop-database "$APPS" >/dev/null 2>&1 || true
   have gtk-update-icon-cache && gtk-update-icon-cache -q -t "$ICON_BASE" >/dev/null 2>&1 || true
