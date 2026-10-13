@@ -30,10 +30,10 @@ npm run build          # src/*.js -> bundle.js
 npm run app            # = electron .
 ```
 
-Vim からは `\A` / `:YuriiWeb`。直接: `bin/simple-yurii-note-app.sh [VAULT_DIR]`。
+Vim からは `\A` / `:GnosisWeb`。直接: `bin/simple-yurii-note-app.sh [VAULT_DIR]`。
 
-環境変数: `PKM_ROOT`（SYN の root。省略すると Vim が前回の root を使う）、`PKM_FILE`（最初に開くノート）、
-`PKM_VIMRC`（使う vimrc。既定 `~/.vimrc-simple-yurii-note`）。
+環境変数: `GNOSIS_ROOT`（SYN の root。省略すると Vim が前回の root を使う）、`GNOSIS_FILE`（最初に開くノート）、
+`GNOSIS_VIMRC`（使う vimrc。既定 `~/.vimrc-simple-yurii-note`）。
 
 ## 作り
 

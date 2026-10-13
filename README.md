@@ -1,376 +1,218 @@
-# simple_yurii_note
+<p align="center"><img src="assets/logo/gnosis-logo.png" alt="Gnosis" width="420"></p>
 
-Vim/Neovim 上で Markdown ベースのノートを管理するための PKM（Personal Knowledge Management）プラグインです。  
-ノート作成・リンク移動・タイトル同期・表編集までを 1 つのワークフローで扱えます。
+# Gnosis
+
+**Gnosis** は、Markdown のノートを本物の Vim で書き、リンクでつないで育てる PKM（Personal Knowledge Management）です。
+旧名は **simple-yurii-note**（2026-10 に改名）。ノートの形式と操作は、そのまま引き継いでいます。
+
+*Gnosis is a PKM for Markdown notes written in real Vim. Notes are linked into Context / Group / BackLink automatically.
+The UI and the generated guide are available in Japanese and English (see [English summary](#english-summary)).*
+
+- 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、`### Context` / `### Group` / `### Related` / `### BackLink` を保存時に自動で同期
+- 中身は本物の Vim。Vim を知らなくても、インストーラーが Gnosis 専用の Vim 環境を作り、アイコンから起動できる
+- デスクトップアプリ（Electron）は、Vim の画面をマークダウンの見た目で描く（画像・表・リンクの番号つき）
+- 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・文字サイズ・起動サイズ・テーマ）
+- 日本語 / 英語。操作ガイドも選んだ言語で作られる
+
+リポジトリ: https://github.com/Yurii7812/gnosis
 
 ---
-Vim 上で Markdown ノートを運用するための PKM（Personal Knowledge Management）プラグインです。
-
-## デスクトップアプリ
-
-`web/` に、SYN を**マークダウンのビューアの見た目**で使うアプリ（Electron）があります。
-Vim からは `\A` または `:YuriiWeb`。
-
-- 中身は**本物の Vim**（あなたの vimrc と SYN などのプラグイン）。機能を作り直していないので、
-  `zn`・Tab・数字キー・`\ua`・`\L` など、Vim の操作がそのまま使えます。
-- Vim との違いは、バッファがマークダウンとして描画されること（画像も表示）だけです。
-
-詳細は [`docs/08-web.md`](docs/08-web.md)。過去の Obsidian 風アプリは git タグ `app-obsidian-style` にあります。
 
 ## インストール
 
-### vim-plug
+ふだんの Vim の設定（`~/.vimrc`・`~/.vim`・`_vimrc`・`vimfiles`）は**読み込まず、変更もしません**。
+インストーラーは Gnosis 専用の vimrc とプラグイン領域を **Gnosis ホーム**に作り、その vimrc を指定して起動するランチャーとアイコンを作ります。
+Vim が無ければ入れ、Gnosis に使える Vim（8.2 以上、`+job +channel +timers +textprop +popupwin`）が既にあればそれを使います。
+ふつうに `vim` を起動すれば、今までどおりの Vim です。
 
-`~/.vimrc`（または `init.vim`）に以下を書いてください。
+### Linux
 
-```vim
-Plug 'Yurii7812/simple-yurii-note'
+```sh
+git clone https://github.com/Yurii7812/gnosis.git
+cd gnosis
+./install/install.sh
 ```
 
-その後、Vim/Neovim で以下を実行します。
+- 足りないもの（Vim・git・Python 3・fzf・ripgrep・Node.js）は、確認してから apt / dnf / pacman / zypper で入れます（`--no-system` で入れない）
+- アプリメニューに **Gnosis**（アイコン付き）ができます。端末からは `gnosis`（`~/.local/bin/gnosis`）
+- デスクトップにもアイコンを置くなら `--desktop-icon`。アプリ（Electron）が不要なら `--no-app`
 
-```vim
-:PlugInstall
+### macOS
+
+```sh
+git clone https://github.com/Yurii7812/gnosis.git
+cd gnosis
+./install/install.sh
 ```
 
----
+Homebrew で足りないものを入れ、`~/Applications/Gnosis.app` を作ります（Finder・Launchpad から起動）。
 
-## 必須設定（最小）
+### Windows 10 / 11
 
-ノートを保存するルートディレクトリを指定します。
-
-```vim
-let g:simple_yurii_note_root = expand('~/memo')
+```bat
+git clone https://github.com/Yurii7812/gnosis.git
+cd gnosis
+powershell -ExecutionPolicy Bypass -File install\install.ps1
 ```
 
----
+winget で足りないもの（Vim・Git・Python・fzf・ripgrep・Node.js）を入れ、デスクトップとスタートメニューに **Gnosis** のショートカットを作ります。
+Bash は要りません（起動画面のシンボルは静的なアセットから表示します）。
 
-## 使い方（最短）
+### アンインストール
 
-1. `:YuriiIndex` で `index.md` を開く。
-2. `nf` / `mm` / `nk` で新規ノートを作成する。
-3. `<Tab>` / `<S-Tab>` でリンク移動、`<Enter>` でリンクを開く。
-4. `zt` でタイトル編集、`\bc` / `ta` でリンク操作を行う。
-
-### 現在のファイルをブラウザで開く
-
-Normal モードで `gm` を押すと、今開いているノートを開きます（カーソル下のリンクは見ません）。Linux では `xdg-open`、WSL では Windows 側の既定ブラウザを使用します。WSL で `wslview` があればそれを優先し、無い場合は Windows 標準の `cmd.exe` に `file://` URI を渡します。
+`install/uninstall.sh`（Linux / macOS）はランチャー・アプリメニュー・アイコンを取り除きます。vault（ノート）は消しません。
+`--purge` を付けると Gnosis ホーム（vault の一覧・テーマ・プラグイン）も消します。
 
 ---
 
-## 推奨設定
+## 起動
 
-```vim
-" fcitx: Insert を抜けると英語入力、戻ると直前が日本語なら日本語入力へ復元（既定: 1）
-let g:yurii_fcitx_auto_switch = 1
-" 必要なら fcitx コマンドを明示
-let g:yurii_fcitx_remote_cmd = 'fcitx5-remote'
+| 方法 | 動き |
+| --- | --- |
+| アイコン（アプリメニュー / Gnosis.app / ショートカット） | アプリ（Electron）で起動 |
+| `gnosis` | アプリがあればアプリ、無ければ端末なら端末の Vim、GUI 版 Vim（gvim / MacVim） |
+| `gnosis --app` / `--gui` / `--tui` | アプリ / GUI 版 Vim / 今の端末の Vim |
+| `gnosis --new-terminal` | 新しい端末ウィンドウの Vim（対応端末には文字サイズと最大化を渡す） |
+| `gnosis ノート.md` | そのノートを開く（起動画面は出さない） |
+| `gnosis --where` | Gnosis のフォルダ・Gnosis ホーム・使う vimrc を表示 |
 
-" 保存時 AutoSync（既定: 1）
-let g:simple_yurii_note_autosync = 1
+### 起動画面
 
-" Context/Child リンクのリアルタイム双方向同期（既定: 1）
-let g:simple_yurii_note_realtime_link_sync = 1
-" TextChanged 後に同期を走らせるまでの待ち時間 ms（既定: 800）
-let g:simple_yurii_note_realtime_link_sync_delay = 800
-" 大きいノートでは TextChanged 直後の同期をスキップ（保存時 AutoSync は有効）
-let g:simple_yurii_note_realtime_link_sync_max_lines = 2000
-" 本文リンクから BackLink をリアルタイム同期する重い処理（既定: 0 / 保存時に同期）
-let g:simple_yurii_note_realtime_backlink_sync = 0
+ノートを開く前に、**白背景・黒文字**の起動画面が出ます: Chnoubis のシンボル・「Gnosis」・選択中の vault の名前とパス・「Enter で開始」。
 
-" リンクを表示名だけにする conceal の自動抑止しきい値。
-" 既定 20000 行（1 万行の Index でも表示名だけになる。0 で無制限）。
-" 1 万行の描画は conceal 有無で差が出ないことを実測済み。
-let g:simple_yurii_note_markdown_conceal_max_lines = 20000
-" 1 行の文字数がこれより長いファイルでは抑止する（既定 0 = 無制限。日本語の長い段落でも効く）
-let g:simple_yurii_note_markdown_conceal_max_line_length = 0
+| キー | 動き |
+| --- | --- |
+| `Enter` | 選択中の vault を開く（前回の vault が選ばれている） |
+| `v` | vault の選択・管理 |
+| `s` | 設定 |
+| `q` | 終了 |
 
-" コマンド実行前に自動保存（既定: 1）
-let g:simple_yurii_note_auto_save_on_command = 1
+vault の一覧: `j` / `k` で選ぶ・`Enter` で開く・`a` 既存のフォルダを登録・`n` 新しい vault を作る・`d` 一覧から外す（**ノートとフォルダは消しません**）・`Esc` 戻る。
+初めての起動（vault が無い）では、作るか登録するかを尋ねます。前回の vault が見つからないときは、元の場所に勝手に作らず、選び直し・場所の指定し直しを案内します。
+使用中に vault を切り替えるときは `:GnosisVaults`（保存先・検索・同期・設定がその vault に切り替わります）。
 
-" 履歴件数（既定: 200）
-let g:simple_yurii_note_history_max = 200
+### 設定（`:GnosisSettings` / 起動画面の `s` / アプリの「設定」）
 
-" 新規ノートの既定プレフィクス
-let g:simple_yurii_note_default_child_prefix = 'C'
-let g:simple_yurii_note_default_quick_prefix = 'F'
-let g:simple_yurii_note_default_atomic_prefix = 'C'
+vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/settings.json`）。
+
+- 言語（日本語 / English）… メッセージ・メニュー・入力案内・操作ガイド
+- 起動時に最大化（既定: する。全画面表示ではありません）・通常のウィンドウサイズ
+- 文字サイズ … 次に開くときから使われます
+- ライト / ダーク
+- テーマ … 標準・カスタム配色（背景・本文・リンク・見出し・選択範囲・カーソル行）・追加テーマ
+- テーマの追加 … `Plug 'cocopon/iceberg.vim'` のように入力。Vim script としては実行せず、`作者/リポジトリ` だけを取り出して Gnosis ホームの `themes/` に取得します。読み込めないテーマは標準に戻ります
+
+文字サイズと拡大縮小:
+
+| 環境 | 文字サイズの設定 | Ctrl + / − / 0 |
+| --- | --- | --- |
+| アプリ | 本文と端末部分の文字の大きさ | 画面全体の拡大・縮小・元に戻す（その場だけ。設定は変わらない） |
+| GUI 版 Vim | `guifont` の大きさ・起動サイズ | 文字の大きさをその場だけ変える（`Ctrl 0` で設定の大きさ） |
+| 端末版 Vim | 端末の文字は Vim から変えられない。`gnosis --new-terminal` が kitty / alacritty / wezterm / xterm にだけ大きさと最大化を渡す | 端末の機能のまま |
+
+ふだんの端末の設定は変更しません。gnome-terminal / konsole / Terminal.app などは、その端末の設定の文字サイズのままです。
+
+---
+
+## 主な操作
+
+詳しくは vault の中の操作ガイド（`gnosis-guide.md`。旧 vault では `simple-yurii-note-guide.md`）と [docs/04-キー操作.md](docs/04-キー操作.md)。
+
+| キー | 動作 |
+| --- | --- |
+| `zn` | ノート作成（`h` カーソル直下 / `Enter` 本文の最後 / `t` 見出しの下 / `c` Context 末尾 / `o` 孤立） |
+| `zk` | グループ作成（位置キーは `zn` と同じ。**`g` = カーソル下のリンク 1 本を新しいグループへ**） |
+| `zk`（ビジュアル） | 選択範囲を中身にしたグループ |
+| `za` / `zA` / `zp` | クリップボード・ヤンクのリンクを追加（`zA` は表示名つき） |
+| `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ**） |
+| `\L` | ファイル名のリンク化 / 選択範囲から新ノート |
+| `\S` | リンク行をよみ順に並べる（**グループでは本文の最後のブロックだけ**） |
+| `\d` | 今日の日記 |
+
+**`c` のあと（`zn` / `zk` / `za` / `\l`）**: 今のノート A の Context にリンク先 B を入れたあと、B に A へのリンクをどう入れるかを選びます。
+
+| キー | B 側 |
+| --- | --- |
+| `Enter` | B の本文の最後（関係の節の手前） |
+| `t` | B の見出しを選び、その節の最後（次の同じか上の階層の見出しの手前） |
+| `o` | 入れない（A 側の追加はそのまま。操作の取り消しではありません） |
+| `Esc` | 取り消し（A にも B にも何も書きません） |
+
+B がグループなら、表示名を入力します。入力欄は空から始まり、空のまま `Enter` で A のタイトル、文字を入れて `Enter` でその文字、`Esc` で取り消し。
+表示名はノートのタイトルやファイル名を変えず、保存・同期しても残ります（自動生成の BackLink とは別もの）。
+
+アプリでは、リンクを `Alt` + クリックすると、開かずにカーソルだけがリンクに移ります（`zk` → `g` などに使います）。
+
+---
+
+## 置き場所
+
+| もの | 場所 |
+| --- | --- |
+| Gnosis 本体 | `git clone` したフォルダ（更新は `git pull` してもう一度インストーラー） |
+| Gnosis ホーム（Gnosis 側の状態） | Linux `~/.local/share/gnosis`（`$XDG_DATA_HOME/gnosis`）・macOS `~/Library/Application Support/Gnosis`・Windows `%APPDATA%\Gnosis`。`$GNOSIS_HOME` で変更可 |
+| ├ `vaults.json` | 登録済みの vault と最後に選んだ vault |
+| ├ `vimrc` / `vimrc.local` | 専用の vimrc（インストーラーが作る）/ Gnosis だけの追加設定（任意） |
+| ├ `plugins/` / `themes/` | 専用のプラグイン（fzf・fzf.vim・vim-surround）/ 追加したテーマ |
+| └ `logs/` / `state/` | アプリのログ / vault を選ぶ前の一時的な状態 |
+| vault ごとの設定 | `<vault>/.gnosis/settings.json` |
+| ノート | vault の中（`.md`）。履歴など vault の状態は `<vault>/.state/` |
+
+設定の優先順位: 設定画面の項目は vault の `settings.json` → 既定値。設定画面に無い細かな動作は vimrc の `g:gnosis_*`（無ければ旧名 `g:simple_yurii_note_*`）→ 既定値。
+
+---
+
+## 旧 simple-yurii-note からの移行
+
+1. Gnosis をインストールする（上の手順。今の `~/.vim-simple-yurii-note` はそのまま残ります）
+2. 初めて Gnosis を起動すると、旧環境の vault（`~/.vim/simple_yurii_note/root.txt`）が自動で vault の一覧に入り、選択済みになります（root.txt は消しません）
+3. 旧 vault の操作ガイド `simple-yurii-note-guide.md` は同じファイル名のまま最新の内容に更新されます（Index のリンクは壊れません）
+4. 旧 vimrc の `g:simple_yurii_note_*` は `g:gnosis_*` にそのまま引き継がれます。旧コマンド `:Yurii*` は `:Gnosis*` の別名として使えます（`let g:gnosis_legacy_commands = 0` で定義しない）
+5. 旧テーマ（kalisi）を使い続けるなら、設定画面のテーマの追加に `Plug 'freeo/vim-kalisi'`
+6. 旧 vimrc（`~/.vimrc-simple-yurii-note`）で起動しても動きます（その場合だけ、従来どおり root.txt も更新します）
+
+キーの変更点: 短いキー（`zn`・`zk`・`\l` など）は変わりません。追加は `zk` → `g`・`\l` → `n`・`c` のあとの `Enter` / `t` / `o`。`\S` はグループでは最後のブロックだけを並べます。
+
+---
+
+## 対応 OS と確認の範囲
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Vim プラグイン（同期・リンク操作・起動画面・設定） | 実機で確認（Debian・Vim 9.1） | 実装済み・実機未確認 | 実装済み・実機未確認 |
+| アプリ（Electron） | 実機で確認（xvfb 上の自動試験を含む） | 実装済み・実機未確認 | 実装済み・実機未確認（node-pty の作り直しが要る） |
+| インストーラー | 一時 HOME で確認（パッケージの導入以外） | 実装済み・実機未確認 | 構文の確認のみ |
+| GUI 版 Vim | gvim で確認 | MacVim 用に実装・未確認 | gvim 用に実装・未確認 |
+
+---
+
+## 開発
+
+```sh
+test/run.sh            # Vim・Python・インストーラーの回帰網（一時フォルダ ~/Desktop/test を使う）
+cd web && npm test     # アプリの E2E（xvfb・本物の Vim）
+python3 tools/build_icons.py       # アイコン・ロゴの生成（assets/*/source/ に正式な画像を置くと差し替え）
+python3 tools/extract_chnoubis.py  # assets/chnoubis/chnoubis.sh から起動画面のアートを取り出す
 ```
 
----
-
-### fcitx の入力モード自動切り替え
-
-`vimrc_simple_yurii_note` では、fcitx の日本語入力中に Insert モードから Normal モードへ戻ると自動で英語入力へ切り替えます。<br>
-そのとき日本語入力だった場合だけ、次に Insert モードへ入ると日本語入力へ戻します。
-Normal モードへ戻ったときの英語入力化は、状態取得に失敗しても必ず実行します。
-
-- `fcitx5-remote` があれば優先して使います。
-- `fcitx5-remote` が無い場合は `fcitx-remote` を使います。
-- 無効化する場合は `let g:yurii_fcitx_auto_switch = 0` を設定してください。
-- コマンドを固定したい場合は `let g:yurii_fcitx_remote_cmd = 'fcitx5-remote'` のように設定してください。
-- 動作確認用に `:YuriiFcitxOff`、`:YuriiFcitxOn`、`:YuriiFcitxStatus` を使えます。`:YuriiFcitxStatus` が `2` を返す状態が「次回 Insert で日本語入力へ戻す」対象です。
+構成: `plugin/` `autoload/`（Vim プラグイン）・`python/`（同期・検索）・`web/`（アプリ）・`i18n/`（日英の文言）・`guide/`（操作ガイドの元）・
+`assets/`（シンボル・アイコン・ロゴ・テーマの色）・`install/`・`bin/`（ランチャー）。資料は [docs/](docs/README.md)。
 
 ---
 
+## English summary
 
-## 基本的な仕組み（設計の考え方）
+Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on real Vim.
 
-このアプリ（`simple_yurii_note`）は、**1ファイル=1ノートの Markdown** を前提に、
-ノート間の関係をリンクとセクション構造で管理します。
-
-- ノート実体: `*.md` ファイル
-- メタ情報: YAML front matter（`title`, `time`, `filetype` など）
-- 関係性: Markdown リンク `[表示名](target.md)`
-- 同期: Context/Child は編集直後に相手側へ反映し、保存時 AutoSync は軽量な単一ファイル同期、`:UpdateMD` は全体整合
-- 自動保存: Vim は約5秒無操作で vault の `.md` を自動保存（バッファを離れるときは即保存。
-  `g:simple_yurii_note_autosave`）。vault のノートは **swap を作らない**（`.swp` の残骸・
-  E325 なし。アプリとの衝突検知は state dir の PID 入りロックファイル）。
-  vault は git で自動バックアップ（2分ごと・`~/files/yurii-note/.git` とローカル bare ミラーの2か所）。
-  アプリの削除は `.trash/` へ移動し、`yurii-note-restore`（fzf）で復元できる。
-
-### セクションモデル
-
-標準ノートは概ね次の領域で扱います。
-
-- `Parent:`（親方向）
-  - このノートが「どこから来たか / どの親にぶら下がるか」を示すリンク群
-- `Child:`（子・関連方向）
-  - このノートから派生した子ノートや関連ノートへのリンク群
-- `BackLink:`（被リンク方向）
-  - 他ノートからこのノートへ向けられた逆リンク（バックリンク）
-
-`Parent / Child / Back` を分けることで、
-「親へ戻る」「子へ進む」「どこから参照されているかを確認する」を明確に使い分けできます。
-
-## Context と BackLink（Back）の仕様
-
-### Context の仕様
-
-- 役割: **親ノートへの導線**。
-- `Parent:` は **複数リンクを保持可能**（複数の親文脈を許可）。
-- 主な追加方法:
-  - ノート作成コマンド（`nc`, `nq` のモード）で自動挿入
-  - `cu` / `:CA` でクリップボードのリンクを Context: に追加
-  - `ca` / `:CU` でクリップボードのリンクを現在ノートの Child: に追加し、リンク先ノートの Context: に現在ノートを追加
-  - `ta` / `:AT` でクリップボード先ノートの Child: に現在ノートを追加し、現在ノートの Context: にクリップボード先ノートを追加
-- 使い方:
-  - 現在ノートの文脈上の「上位」へ戻るための導線として運用
-  - `\bu`（`JumpLastLinkBeforeParent`）で Context: 近傍のリンクへ素早く移動
-  - `\k`（`:JumpParent`）で、Context リンクが1つだけならリンク先へ直接移動し、複数ある場合は `Parent:` 見出しへ移動
-  - 親文脈を増やしたい場合は、Context: にリンクを追加できる
-  - Child: からの親子関係が複数ある場合、同期後も Context: に複数リンクとして反映
-  - PKM ルート配下のサブフォルダをまたぐ Child/Context 関係も、相手ノート基準の相対パス付きリンクとして反映
-  - Child: からリンクを削除した場合も、同期後に相手ノートの Context: から対応リンクが消える
-  - Context: からリンクを削除した場合も、保存時同期後に相手ノートの Child: から対応リンクが消える
-  - 未保存の Child: 編集がある状態でリンク移動や履歴戻りをした場合も、移動前に保存と同期を行って Context: に即反映する
-
-### BackLink（Back）の仕様
-
-- 役割: **このノートを参照しているノートの一覧（逆リンク）**。
-- 生成タイミング:
-  - `.md` 保存時 AutoSync（`g:simple_yurii_note_autosync=1`）
-  - もしくは `:UpdateMD` / `:UpdateAll` の一括更新
-- 表示ルール:
-  - Back セクションに、他ノートからのリンクに応じて逆リンクを自動反映
-  - 同じノートが `Parent:` にもある場合は Context を優先し、重複するリンクを BackLink には表示しない
-  - PKM ルート配下のサブフォルダにあるノート同士でも、相対パス付きリンクとして BackLink を生成
-  - サブフォルダ内の本文リンクがファイル名だけでも、PKM ルート配下で一意に見つかる `.md` なら BackLink に反映
-  - K系ノートでは `category:` 見出し、N系ノートでは `note:`（または見出しなし運用）を使う設計
-- 手動編集との共存:
-  - リンク表示名の自動更新は「表示名=ファイル stem」のリンクのみ更新対象
-  - 手動で意味付けした表示名は原則維持
-
-### Context と BackLink の違い（重要）
-
-- **Context**: このノートから見た「親方向」の明示リンク（能動的に置く）
-- **BackLink**: 他ノートからの参照を集約した「被リンク一覧」（受動的に集まる）
-
-この2つを分離しているため、
-- Context は構造ナビゲーション（階層・文脈）
-- Back は発見ナビゲーション（参照関係の把握）
-
-として機能します。
-
-## 機能一覧（整理版）
-
-### 1) ノート作成
-
-- `nf` : クイックノート作成（タイトルなし）
-- `mm` : プレフィクスなしの新規ノート作成（YAML `filetype: N`）。親ノート側のリンクは `Child:` に作成
-- `nk` : プレフィクスなしの新規ノート作成（YAML `filetype: K`）。`title:` 入力後にモード選択を行い、タイトルを空のまま Enter するとファイル名（タイムスタンプ）がタイトルになる
-- `na` / `:NA` : 現在位置に A ノート作成
-- `:NF` : 引数付きクイック作成
-- ビジュアルモードでも `nf` / `mm` / `nk` に対応
-
-### 2) リンク移動・履歴
-
-- `<Tab>` : 次のリンクへ移動（本文・関係すべて）
-- `<S-Tab>` : 前のリンクへ移動
-- `<Space>` / `gs` : ノートナビゲータ。状態は**「打つ」か「打たない」かの1つだけ**。`⏎` で打つのをやめ、`i` で打ちに戻る
-  - **打たない状態のキーは、ローカルでもグローバルでも完全に同じ。** スコープ（ローカル＝今のノートのリンク / グローバル＝全ノート）は**候補が何か**の違いでしかない。`⇥` で切り替え
-  - 上のバーで今どっちか分かる … `検索 …▏`（カーソル有り）＝打てる / `◎ ノート名`・`全ノート`（カーソル無し）＝打たない
-
-  **打たない（コマンド）**
-    - **ラベルキー**（`1`〜`0` のあと英字）… 1タップでその行へ
-      - **ローカル**では**そのまま潜る**（相手が既に分かっているので。潜ってもアンカー行 `◎` とプレビューに出続け `⌫` で即戻れる＝非破壊）
-      - **検索結果（グローバル）では移動だけ**。7番を見たいのに `↓` を7回は野暮なので1打で飛び、プレビューで中身を見てから `⏎` 開く / `l` 潜る を選ぶ
-    - `j`/`k` 選択 ・ `g`/`G` 先頭/末尾 ・ `f`/`b` プレビュー送り
-    - `⏎` 選択を開いて閉じる（潜った直後はアンカーが選択済みなので `5` `⏎` で「5番へ潜って着地」）
-    - `⌫` / `h` / `←` 戻る ・ `␣` アンカー自体を開く
-    - `c`/`p` アンカーの子/親に追加 ・ `y` ヤンク ・ `m` マーク ・ `M` 全解除 ・ `a` アンカー移動
-    - `i` 打つ（クエリは残る）・ `/` クエリを消して打つ ・ `⇥` スコープ切替 ・ `⎋` 取消
-
-  **打つ（入力）**
-    - 打つ … タイトル＋本文の AND 絞り込み（**ラベルが無い状態なので数字もそのままクエリに入る**）・ `⌫` 1字消す（空なら戻る）
-    - `↑`/`↓` 選択 ・ `→` 潜る ・ `←` 戻る
-    - `⏎` 入力終了 → コマンドへ ・ `⎋` クエリを消して終了 ・ `⇥` スコープ切替
-    - 入力中は記号もそのまま打てる（`-` を含む）。子/親に追加・マーク・ヤンクは、`⏎` で入力を終えたコマンド状態か、英字キー `c`/`p`/`m`/`y` で行う
-
-  - ローカルは `── 文中 ──` / `── こっちにとって ──` / `── そっちにとって ──` の3区切り（`¶` `→` `←`）、1行目は常にアンカー `◎`
-  - 検索中はプレビューで**ヒット語が反転表示**され、**最初のヒット行まで自動でスクロール**する（なぜその結果が出たのか一目で分かる）
-  - グローバルの並びは**最近訪問した順**に固定。パンくず（`起点 › … › 現在`）が最上段。`⎋` は何ホップ潜っても全部取り消して元のノート・カーソル位置へ
-- `<S-Space>` : ポップアップを出さず、カーソルだけ次の parent/child リンクへ（端で折り返す）
-- `n` / `N` : 素のVimの検索リピート（前方/後方）。ノート作成系の2文字コマンド（`zk`/`zn`等）は頭文字を`z`にしてあるため`n`とは衝突しない
-- `_` : **直前のノートと1キーで往復**（A⇄B）。読むもの・選ぶものゼロの最速移動
-- `<S-BS>` / `\.` : 履歴を**前へ進む**（`<BS>` の対。戻りが可逆になる）
-- `\1`〜`\9` : **ハブへ直行**。`\H` で今のノートをハブに登録（番号を1打）、`\0` で一覧。登録は再起動後も残り、**Index（PKM ルート）ごと**に保存される
-- `1`〜`9` / `\`+文字+数字（`\a1`〜） : 本文 → `Parent`/`Child` の順で通し番号にしたリンクを**そのまま開く**（移動して `<Enter>` まで含む）。**リンクの手前にラベルが仮想テキストで表示される**ので、数えずにどのキーを押せばいいか分かる。1〜9番目は数字1打、10番目以降は `\a1`〜`\a9`、`\b1`…（既存の `\ca` 等と同じ `\` リーダー、3打）。生の `a` `i` `o` などは一切奪わない ── 10番目以降のラベルも `\` から始まるので、素のキー入力の速さには影響しない。該当リンクが無い数字キーはそのままカウント（`5j` 等）として素通しされる。表示は `g:simple_yurii_note_link_hints = 0` で無効化できる（移動・オープン自体は無効化されず、番号は数えて押す必要がある）
-- `<Enter>` : カーソル下リンクを開く
-- `<BS>` : 履歴を戻る（戻った直後はカーソルがリンク上に寄る）
-- `\bu` : `Parent:` 近傍のリンクへ移動
-- `\k` / `:JumpParent` : Context リンクが1つだけならリンク先へ直接移動、複数ある場合は `Parent:` 見出しへ移動
-- `\j` / `:JumpChildTop` : `Child:` セクションの先頭行へ移動
-- `\J` / `:JumpChildBottom` : Context リンクが複数ある場合は一番上の Context リンクへ移動し、それ以外は `Child:` セクションの最後尾行へ移動
-
-### 3) タイトル変更
-
-- `zt` : 空入力からタイトル編集
-- `zT` / `:NT` : 現在タイトルを残して編集
-- タイトル変更時は、同一ターゲットへのリンクのうち「旧タイトルと一致する表示テキスト」だけ新タイトルへ更新（例: `[A](x.md)` は更新、`[aaa](x.md)` は維持）
-
-### 4) リンク操作
-
-- `\bc` / `:BC` : クリップボードのファイルを Child: に追加
-- `ca` / `:CU` : クリップボードのリンクを現在ノートの Child: に追加し、リンク先ノートの Context: に現在ノートを追加
-- `ta` / `:AT` : クリップボード側ノートの Child: に現在ノートを追加し、現在ノートの Context: にクリップボード側ノートを追加
-- `yn` / `:YN` : 現在ファイル名をヤンク
-- `\L` / `:Linkify` : ファイル名テキストを Markdown リンク化。表示名もリンク先も拡張子つきのファイル名（例: `[memo.pdf](memo.pdf)`、`.html` も同じ）。`.md` だけは代わりにタイトルを使う
-
-
-- `\p` / `:PasteLink` : クリップボードのリンクを挿入
-- Visual `\p` : クリップボードにファイル名/リンクがある場合のみ、選択文字列をそのターゲットへリンク化（無い場合は何もしない）
-- `p` : `"+p` へマップ（システムクリップボード貼り付け）
-- `gp` : 旧挙動の貼り付け
-- `.` : Vim 標準の直前の変更を繰り返す動作
-
-### 5) 同期・一括更新
-
-- `:UpdateMD [path]` : リンクタイトル等の一括更新
-- `:UpdateAll [path]` / `:UpdateALL [path]` : 同等コマンド
-- 自動同期で表示名を上書きするのは `[xxx](xxx.md)` のように表示名がターゲットstemと一致するリンクのみ（手動表示名は維持）
-- Back セクションは、該当リンクがあるときだけ `category:`（K系）/`note:`（N系）見出しを自動表示
-
-- Context/Child リンクは `g:simple_yurii_note_realtime_link_sync=1` 時に追加・削除直後に相手ノートへ反映
-- `.md` 保存時に AutoSync（`g:simple_yurii_note_autosync=1` 時）は編集中ファイルのタイトルと直接リンク先だけを軽量同期
-
-### 6) 変換・リネーム
-
-- `\se` / `:ExpandLinks`（旧 `:SE` / `:ExpandToT`）: S ノートを展開して関連ファイルを開く（元ファイルへリンクは追加しない。出力は `.trash/T_*.md` で vault・sync・検索に出ない）
-- `mp` / `:RP` : YAML の `filetype` を変更
-
-### 7) インデックス・ユーティリティ
-
-- `:YuriiIndex` : `index.md` を開く
-- `:YuriiChooseIndexDir` : index ルート選択
-- `:SortYomi` : バッファの**リンク行**を表示名のよみ順（五十音 → ローマ字は末尾）に安定ソート（`\S` のノーマルと同じ。主に `index.md`）
-- `\S` : ノーマル=バッファのリンク行 / ビジュアル=選択行をよみ順ソート。よみはリンク先の front matter `yomi:` を優先し、未登録は pykakasi のよみを `yomi:` に自動追加（`zy` で手直し。`pip install --user pykakasi`）
-- `zy` / `zY` : **今開いているノート**のよみを変更（`zy`=空欄から / `zY`=現在のよみを残して。`zY` で全部消して `Enter` は削除）。`yomi:` に表示名が複数あるときは番号で表示名を選んでから編集
-- `zA` : `za` と同じリンク追加だが、追加前に表示名を入力する
-- `za` / `zp` : カーソル下リンク（無ければクリップボード）を今のノートに追加。位置キー `h`（カーソル直下）/ `Enter`（本文の最後）/ `r`（`### Related` に**相互追加**＝両ノートに書く）。`zp` はさらに相手の `### Context` に今のノートを書く
-- `:CheckPrefix` : プレフィクスチェック
-- `:OutlineEdit` / `\oe` : アウトライン編集（別バッファで見出し編集、`←/→` で `#` 数変更、`q` / `:write` / `ZZ` / `:OutlineApply` で反映）
-- `za` / `zA` → `t` : `zn` → `t` と同じ見出しピッカーで、既存ノートへのリンクを見出しの本文の最後に置く（`zp` では使えない）
-- `zn` → `t` : 今のノートの見出しを fzf で選び、その見出しの本文の最後（空行を挟んで次の見出しの手前）に新ノートへのリンクを置く。左は見出しだけ表示。検索は見出しを優先しつつ、見出しの下の本文にもヒットし、右のプレビューにヒット箇所を強調表示する。見出しの下に置いた後ろの空行（日記の余白など）は消さない。今のノートが日記のときは、同じ日記の「今日のノート」には重ねて載せない
-- `<Space>` の検索（`simple_yurii_search`、fzf）: 一覧には**そのページでのリンクの表示名**を出し（ノートのタイトルではない）、検索は表示名・タイトルを優先してリンク先の本文にもヒットする。右のプレビューにヒット箇所を強調表示
-- `<Space>` / `gs` の検索（ポップアップ版）: ローカルはリンクの表示名を優先し、リンク先ノートの全文だけに当たるものをその後ろに出す。`gs`（全ノート）はタイトルを優先し、本文だけに当たるものをその後ろに出す。一覧の名前は、最初に開いたページでのリンクの表示名（無ければタイトル）
-- `zo` : カーソル下の `.md` リンク先ノートの見出し（アウトライン）を fzf で選び（左は見出しだけ表示。検索は見出し優先で、見出しの下の本文にもヒットし、右のプレビューにヒット箇所を強調表示）、リンク先に `#スラッグ`（GitHub / VS Code 互換）を付ける。先頭の「（見出しなし）」で解除。右ペインに選んだ見出し以降の本文プレビュー。タイトルと同じ H1 と `### Context` / `### Related` / `### BackLink` は一覧に出ない（BackLink は同期で作り直されるため fragment が消える = 対象外）
-
-
-### 8) Markdown テーブル編集
-
-- 作成: `:TN`, `:NewTable`, `:YuriiTable`
-- 整形: `:TA`
-- 行編集: `:TRE`
-- CSV編集: `:TCSV`, `:TableCsvEdit`, `:TableCsvApplySaved`
-- 変換: `:TableToCsv` (`:TCE`), `:CsvToTable`
-- 新規CSVテーブル: `:TableCsvNew`, `:TCN`
-- 行列操作: `:TAR`, `:TAC`, `:TDR`, `:TDC`
-- ノーマルモード補助:
-  - `\tn`, `\ta`, `\te`, `\tc`, `\tt`, `\tnc`, `\tar`, `\tac`, `\tdr`, `\tdc`
-- テーブル内挿入モード補助:
-  - `<Tab>` / `<S-Tab>` / `<CR>` がテーブル操作として動作
-
----
-
-## 主要コマンド一覧（早見表）
-
-| 種別 | コマンド |
-|---|---|
-| 作成 | `:NF`, `:NA`, `:CA` |
-| 更新 | `:UpdateMD`, `:UpdateAll`, `:UpdateALL` |
-| 編集 | `:NT`, `:RP`, `:OutlineEdit` |
-| 移動 | `:YuriiIndex`, `:YuriiChooseIndexDir` |
-| 変換 | `:ExpandLinks`（旧 `:SE` / `:ExpandToT`）, `:SortYomi`, `:Linkify`, `:LinkifySelection`, `:PasteLink` |
-
-| テーブル | `:TN`, `:TA`, `:TRE`, `:TCSV`, `:TableToCsv`, `:CsvToTable`, `:TAR`, `:TAC`, `:TDR`, `:TDC` |
-
----
-
-## 既定値つき設定変数
-
-| 変数 | 既定値 | 内容 |
-|---|---:|---|
-| `g:simple_yurii_note_root` | `''` | PKM ルートディレクトリ |
-| `g:simple_yurii_note_default_child_prefix` | `'C'` | 子ノート既定プレフィクス |
-| `g:simple_yurii_note_default_quick_prefix` | `'F'` | クイック作成既定プレフィクス |
-| `g:simple_yurii_note_default_atomic_prefix` | `'C'` | Atomic 作成既定プレフィクス |
-| `g:simple_yurii_note_history_max` | `200` | 履歴最大件数 |
-| `g:simple_yurii_note_autosync` | `1` | 保存時 AutoSync 有効/無効 |
-| `g:simple_yurii_note_auto_save_on_command` | `0` | コマンド前自動保存 |
-| `g:simple_yurii_note_sync_before_link_navigation` | `0` | `<CR>` / `<BS>` のリンク移動直前に同期まで実行するか（既定OFFで移動優先） |
-| `g:simple_yurii_note_save_before_link_navigation` | `0` | `<CR>` / `<BS>` のリンク移動直前に保存するか（既定OFFでEnter移動優先） |
-| `g:simple_yurii_note_global_bare_link_navigation` | `0` | ファイル名だけのリンクをEnter移動時にPKMルート全体から一意検索するか |
-| `g:simple_yurii_note_space_fullscreen` | `1` | `<Space>` を画面いっぱいの2ペインにする（`0` で従来の中央小窓） |
-| `g:simple_yurii_note_space_list_width` | `0` | `<Space>` 一覧の幅（`0` = 自動、34〜50） |
-| `g:simple_yurii_note_space_labels` | `'1234567890asdfwertzxcvbnmuiop'` | `<Space>` の行ジャンプに使うラベルキー列 |
-| `g:simple_yurii_note_space_preview_lines` | `400` | `<Space>` プレビューで読み込む行数 |
-| `g:simple_yurii_note_recent_max` | `500` | 最近訪問を覚えるノート数 |
-| `g:simple_yurii_search_legacy` | `0` | `gs` を旧ポップアップに戻す |
-| `g:simple_yurii_note_link_hints` | `1` | `1`〜`9`/文字+数字リンクジャンプのラベル仮想テキスト表示（`0` で非表示。移動機能自体は残る） |
-| `g:simple_yurii_note_timeoutlen` | `500` | `&timeoutlen`（ms）をこの値に短縮。`zk`/`ca`等の2文字マッピングと素の`z`/`c`等の単発コマンドが1文字目を共有するため、既定の1000msだと素のキーの反応が遅く感じる。短すぎると`zt`等が2文字目の入力前にタイムアウトして無反応になるので、体感と両立する値として500に調整。`0`で変更しない |
-| `g:simple_yurii_note_python` | `{plugin}/python/simple_yurii_note_sync.py` | 同期スクリプト |
-| `g:simple_yurii_note_expand_s_python` | `{plugin}/python/expand_s.py` | S展開スクリプト |
-
----
-
-
-## トラブルシューティング（マージ競合エラー）
-
-README に以下のような文字列が見える場合は、Git のマージ競合が未解決です。
-
-- `<<<<<<<`
-- `=======`
-- `>>>>>>>`
-
-このリポジトリの `README.md` は競合解消済みの状態が正です。  
-競合マーカーが残っている場合は、競合行を削除して 1 つの内容に統合してからコミットしてください。
-
----
-
-## 参考
-
-- 詳細な操作リファレンス: `plugin/simple_yurii_note/README.txt`
-- ノート形式・同期の規則・引き継ぎ: [`docs/`](docs/README.md)（PKM システムの仕様ドキュメント）
-- 設計メモ: [`NAVIGATION.md`](NAVIGATION.md)
-- 旧フォーマット（v2 Relationship）の仕様: [`NOTE_FORMAT.md`](NOTE_FORMAT.md)
+- **Install**: `git clone https://github.com/Yurii7812/gnosis.git && cd gnosis && ./install/install.sh` (Linux / macOS) or
+  `powershell -ExecutionPolicy Bypass -File install\install.ps1` (Windows). The installer creates a Gnosis-only vimrc and plugin area in the
+  Gnosis home (`~/.local/share/gnosis`, `~/Library/Application Support/Gnosis`, `%APPDATA%\Gnosis`), a launcher (`gnosis`) and an icon.
+  Your own `~/.vimrc` / `~/.vim` are never read or changed.
+- **Start screen**: the Chnoubis symbol, "Gnosis", the selected vault, `Enter` to start, `v` to choose / register / create / remove vaults
+  (removing never deletes notes), `s` for settings.
+- **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, font size, light / dark,
+  themes (standard, custom colors, or `Plug 'author/repo'` themes from GitHub, safely parsed).
+- **New keys**: `zk` → `g` groups the link under the cursor; `\l` → `n` adds a link with a typed display name;
+  after `c` in `zn` / `zk` / `za` / `\l`, choose how the target links back: `Enter` end of body, `t` end of a chosen section, `o` none.
+  `\S` in a group sorts only the last blank-line-separated block.
+- **Migration**: the old vault is imported automatically on first start; old `g:simple_yurii_note_*` settings and `:Yurii*` commands keep working.

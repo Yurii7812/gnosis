@@ -1,5 +1,12 @@
 # 08 アプリ（マークダウン表示で使う本物の Vim）
 
+**2026-10-13〜 Gnosis**: 起動するとまず HTML の**起動画面**（白背景・黒文字。Chnoubis のシンボル・Gnosis・選択中の vault・Enter で開始）。
+`v` / ボタンで vault の一覧（登録・新規作成・一覧から外す）、`s` / ボタンで設定画面（言語・最大化・ウィンドウサイズ・文字サイズ・
+ライト/ダーク・テーマ・Plug でテーマ追加・カスタム配色。`<vault>/.gnosis/settings.json`）。Enter で、その vault の Vim を起動する。
+vault を開いたあとは、Vim が読み込んだテーマの色を画面にも使う。`Ctrl` + `+`/`-`/`0` は画面全体の拡大縮小（その場だけ）。
+リンクを `Alt` + クリックすると、開かずにカーソルだけを動かす。Vim の `\A` から開いたときは、起動画面を出さずにその vault で始める。
+実装: `web/electron/config.cjs`（Vim 側と同じ規則の登録簿・設定・テーマ）、`web/src/launcher.js`（画面）、`web/vim/gui.vim`（色・文字サイズ・vault を送る、設定の読み直しを受ける）。
+
 SYN を、**マークダウンのビューアの見た目**で使うデスクトップアプリ（Electron）。
 中身は**本物の Vim**（`~/.vimrc-simple-yurii-note`、SYN・fzf・vim-surround などのプラグイン入り）。
 機能を作り直していないので、操作は Vim で使っているものと同じ（`zn`・Tab・数字キー・`\ua`・`\L` ほか全部）。
@@ -11,8 +18,8 @@ SYN を、**マークダウンのビューアの見た目**で使うデスクト
 
 ## 起動
 
-- Vim から: `\A` または `:YuriiWeb`。今の root と、今開いているノートを渡して起動する。
-- 直接: `web/bin/simple-yurii-note-app.sh [VAULT_DIR]`（引数なしなら Vim が前回の root を使う）。
+- Vim から: `\A` または `:GnosisWeb`。今の root と、今開いているノートを渡して起動する。
+- 直接: `bin/gnosis --app [VAULT_DIR]`（引数なしなら Vim が前回の root を使う）。
   アプリメニュー: `~/.local/share/applications/simple-yurii-note.desktop`。
 - 初回だけ `cd web && npm install && npm run build`。
 
@@ -23,7 +30,7 @@ SYN を、**マークダウンのビューアの見た目**で使うデスクト
 - 下: 本物の Vim の画面の下 3 行（ステータス行・コマンド行・メッセージ）。確認（`confirm`）・fzf・
   ポップアップ・Enter 待ち（`:ls` など）のときは、端末の画面全体に広がり、終わると戻る。
 - 一番下: モード表示（NORMAL / INSERT / VISUAL / V-LINE / V-BLOCK / REPLACE / COMMAND …）。
-- 色は常にライト。
+- 色は vault の設定のテーマ（起動画面だけは白黒）。
 
 ## 仕組み
 
@@ -38,7 +45,7 @@ Vim ──(TCP/JSON)──► 画面 ……… バッファの全文・カーソ
   端末版と違う。
 - `web/electron/main.cjs` … 擬似端末と TCP を持つ。画像は、ノートのあるフォルダからの相対パスで読む。
 - `web/src/view.js` … 読み取り専用のマークダウン描画（CodeMirror 6）。`web/src/app.js` … 端末と状態の反映。
-- 環境変数: `PKM_ROOT`（root）、`PKM_FILE`（最初に開くノート）、`PKM_VIMRC`（使う vimrc）。
+- 環境変数: `GNOSIS_ROOT`（root）、`GNOSIS_FILE`（最初に開くノート）、`GNOSIS_VIMRC`（使う vimrc）。
 
 ## 注意
 
@@ -58,10 +65,10 @@ Windows でも動くように作ってあります（Linux は今のまま）。
    npm run rebuild:pty
    ```
    `rebuild:pty` は `node-pty`（Windows の擬似端末 ConPTY）を、Electron 用に作り直す。
-3. Vim の設定は Windows 用に用意する。`PKM_VIMRC` で vimrc の場所を指定できる。SYN のプラグインの
+3. Vim の設定は Windows 用に用意する。`GNOSIS_VIMRC` で vimrc の場所を指定できる。SYN のプラグインの
    `runtimepath` は、Windows のパスで書く。
-4. 起動: `web\bin\simple-yurii-note-app.cmd [VAULT_DIR]`、または Vim で `\A`（`:YuriiWeb`）。
+4. 起動: `bin\gnosis.cmd --app [VAULT_DIR]`、または Vim で `\A`（`:GnosisWeb`）。
 
-環境変数: `PKM_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`PKM_PTY`（`node-pty` / `python`。
-既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `PKM_PTY=node-pty` で動くことを確認済み。
+環境変数: `GNOSIS_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`GNOSIS_PTY`（`node-pty` / `python`。
+既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `GNOSIS_PTY=node-pty` で動くことを確認済み。
 
