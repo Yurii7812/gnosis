@@ -1329,7 +1329,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
             else back
         ).append(ln)
     # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
-    tail_blanks = max(0, len(text) - len(text.rstrip("\n")) - 1)
+    tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": body, "parent": parent, "group": group,
             "related": related, "back": back, "tail_blanks": tail_blanks,
             "hash": _content_hash(text)}
@@ -1561,6 +1561,8 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         lines += [""] * int(n.get("tail_blanks", 0))
         return "\n".join(lines) + "\n"
     # 本文末の空行（リンク行と節の間）は残す。本文の余白はそのまま。
+    # 節が無かったノートの末尾の空行（画像のあとの空行など）も、最初の節の手前に残す。
+    lines += [""] * int(n.get("tail_blanks", 0))
     last = next((ln for ln in reversed(lines) if ln.strip() != ""), None)
     if last is not None and re.match(r"^#\s", last):
         # 本文が見出しだけのときはテンプレート通り書くための余白を置く

@@ -594,6 +594,41 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         check(groups3 == [g] and idx.read_text(encoding="utf-8").count("[日記](") == 1, "リンクを消しても同じグループを見つけて、リンクが戻る")
 
 
+def test_diary_note_keeps_a_blank_line_after_the_last_image() -> None:
+    print("diary: 日記ノートは、最後の画像と ### Group などの節のあいだに空行を置く（あれば触らない）")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07")])
+        note = pp.scan_diary_notes(root)["2026-10-07"]
+        body = note.read_text(encoding="utf-8").split("---\n", 2)[2]
+        check(body.endswith("![](paper-diary-20261007-1.jpg)\n\n"), f"登録直後: 最後の画像のあとに空行: {body!r}")
+        pp.regen(root)
+        lines = note.read_text(encoding="utf-8").split("\n")
+        at = lines.index("![](paper-diary-20261007-1.jpg)")
+        check(lines[at + 1] == "" and lines[at + 2].startswith("### Group"), f"sync 後も画像と ### Group のあいだに空行: {lines[at:at+4]}")
+        # 2 ページ目を足しても、画像と節のあいだの空行は 1 つのまま
+        p2 = root / "p2.jpg"
+        p2.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p2, "2026-10-07")])
+        pp.regen(root)
+        lines = note.read_text(encoding="utf-8").split("\n")
+        at = lines.index("![](paper-diary-20261007-2.jpg)")
+        check(lines[at + 1] == "" and lines[at + 2].startswith("### Group") and lines[at - 1] == "" and lines[at - 2] == "![](paper-diary-20261007-1.jpg)",
+              f"2 ページ目のあとも画像と節のあいだは空行 1 つ（増えない）: {lines[at-3:at+4]}")
+        # 空行の無い旧いノート（画像の直後に節）は、空行を 1 つ足す。自分で空行を 2 つ入れたノートは触らない
+        text = note.read_text(encoding="utf-8")
+        note.write_text(text.replace("![](paper-diary-20261007-2.jpg)\n\n### Group", "![](paper-diary-20261007-2.jpg)\n### Group"), encoding="utf-8")
+        pp.regen(root)
+        check("![](paper-diary-20261007-2.jpg)\n\n### Group" in note.read_text(encoding="utf-8"), "空行が無いときは regen が 1 つ足す")
+        text = note.read_text(encoding="utf-8").replace("![](paper-diary-20261007-2.jpg)\n\n### Group", "![](paper-diary-20261007-2.jpg)\n\n\n### Group")
+        note.write_text(text, encoding="utf-8")
+        pp.regen(root)
+        pp.regen(root)
+        check("![](paper-diary-20261007-2.jpg)\n\n\n### Group" in note.read_text(encoding="utf-8"), "自分で入れた空行（2 つ）は消さない・増やさない")
+
+
 def test_regen_without_index() -> None:
     print("regen: Paper-Zettelkasten-Index が無ければ False")
     with tempfile.TemporaryDirectory() as d:

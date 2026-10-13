@@ -287,9 +287,10 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     return out
 
 
-def write_note(path: Path, fm: list[str], body: list[str]) -> None:
-    text = "---\n" + "\n".join(fm) + "\n---\n" + "\n".join(body).rstrip("\n") + "\n"
-    path.write_text(text, encoding="utf-8")
+def write_note(path: Path, fm: list[str], body: list[str], keep_trailing_blank: bool = False) -> None:
+    """keep_trailing_blank: 本文の末尾の空行を残す（紙の日記ノートの、画像のあとの空行など）。"""
+    tail = "\n".join(body) + "\n" if keep_trailing_blank else "\n".join(body).rstrip("\n") + "\n"
+    path.write_text("---\n" + "\n".join(fm) + "\n---\n" + tail, encoding="utf-8")
 
 
 def fm_value(fm: list[str], key: str) -> Optional[str]:
@@ -513,6 +514,17 @@ def _diary_image_name(date: str, page: int, suffix: str) -> str:
 _IMAGE_LINE_RE = re.compile(r"^!\[[^\]]*\]\((.+)\)$")
 
 
+def _blank_after_last_image(body: list[str]) -> list[str]:
+    """紙の日記ノートの本文で、最後の画像の次に空行が無ければ 1 つ足す（画像と `### Group` などの節、
+    またはファイルの末尾とのあいだに空行を置く）。既に空行があれば何もしない。"""
+    last = max((i for i, ln in enumerate(body) if _IMAGE_LINE_RE.match(ln.strip())), default=None)
+    if last is None:
+        return body
+    if last + 1 >= len(body) or body[last + 1].strip():
+        return body[:last + 1] + [""] + body[last + 1:]
+    return body
+
+
 def register_diary_pages(
     root: Path,
     dest: Path,
@@ -580,8 +592,8 @@ def register_diary_pages(
         new_lines: list[str] = []
         for name in added:
             new_lines += ["", f"![]({name})"]
-        body = body[:end] + new_lines + ([""] + body[end:] if fs is not None else [])
-        write_note(note_path, fm, body)
+        body = body[:end] + new_lines + body[end:]  # 元の空行はそのまま（無ければ下で 1 つ足す）
+        write_note(note_path, fm, _blank_after_last_image(body), keep_trailing_blank=True)
         moved[date] = note_path
     return list(moved.items()), errors
 
@@ -978,11 +990,16 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     diaries = scan_diary_notes(root)
     for date, dpath in diaries.items():
         fm_d, body_d = read_note(dpath)
+        new_fm, new_body = fm_d, body_d
         if fm_value(fm_d, "title") != diary_title(date):
             old_t = fm_value(fm_d, "title") or ""
-            fm_d = [f"title: {diary_title(date)}" if re.match(r"^\s*title\s*:", ln) else ln for ln in fm_d]
-            body_d = [f"# {diary_title(date)}" if ln.strip() == f"# {old_t}" else ln for ln in body_d]
-            write_note(dpath, fm_d, body_d)
+            new_fm = [f"title: {diary_title(date)}" if re.match(r"^\s*title\s*:", ln) else ln for ln in fm_d]
+            new_body = [f"# {diary_title(date)}" if ln.strip() == f"# {old_t}" else ln for ln in body_d]
+        # 画像の次に空行が無ければ 1 つ足す（画像と ### Group などの節をくっつけない。あれば触らない）
+        # 節が無く末尾が画像の日記ノートでも、末尾に空行を 1 つ置く
+        new_body = _blank_after_last_image(new_body)
+        if new_fm != fm_d or new_body != body_d:
+            write_note(dpath, new_fm, new_body, keep_trailing_blank=True)
     if diaries:
         dup = [e for e in entries if e["display"] == DIARY_KEYWORD]
         if dup:
