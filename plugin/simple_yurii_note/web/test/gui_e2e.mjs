@@ -42,6 +42,8 @@ function makePng(w, h, seed) {
 }
 for (const [i, name] of ["a.png", "b.png", "c.png", "d.png"].entries()) fs.writeFileSync(path.join(vault, name), makePng(240, 900, i));
 fs.writeFileSync(path.join(vault, "plain.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 本文だけ\n---\n\n# 本文だけ\n\n本文だけのノート（関係の節が無い）。\n");
+fs.writeFileSync(path.join(vault, "grp.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: グループG\nattribute: group\n---\n\n# グループG\n\n[節あり](sec.md)\n");
+fs.writeFileSync(path.join(vault, "sec.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 節あり\n---\n\n# 節あり\n\n本文の文。\n\n### Group\n[グループG](grp.md)\n");
 mk("img.md", "画像", ["a", "b", "c", "d"].map((n) => `## 画像 ${n}\n\n![](${n}.png)\n`).join("\n"), "[Index](index.md)");
 
 const scenario = `(async () => {
@@ -187,6 +189,16 @@ const scenario = `(async () => {
     await press(':w\\r', 800);
   }
 
+  // zn Enter: 新ノートへのリンクは、本文の最後（最初の関係の節の直前）に入る
+  {
+    await press(':e sec.md\\r', 1200);
+    await press('zn', 700);
+    await press('\\r', 1800);
+    R.znEnter = { now: base(G.state().file) };
+    await press('\\x1b', 300);
+    await press(':w\\r', 800);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -233,6 +245,17 @@ try {
     check(ctx.includes("(" + z.now + ")"), "zn c: the old note (no sections before) should get ### Context with the new note: " + oldTxt.slice(-200));
     check(!/\n### Parent\n/.test(oldTxt), "zn c: no ### Parent should remain");
     check((z.body || "").includes("(plain.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
+  }
+  {
+    const txt = fs.readFileSync(path.join(vault, "sec.md"), "utf8");
+    const lines = txt.split("\n");
+    const linkAt = lines.findIndex((l) => /^\[\d{12}\]\(\d{12}\.md\)$/.test(l));
+    const groupAt = lines.indexOf("### Group");
+    check(groupAt > 0, "sec.md should still have its ### Group: " + JSON.stringify(lines));
+    const bodyAt = lines.indexOf("本文の文。");
+    check(linkAt > bodyAt && linkAt < groupAt && lines.indexOf("### Context") < 0,
+      "zn Enter: the link should be at the end of the body, just before the first section (### Group): " + JSON.stringify(lines.slice(6)));
+    check(lines.slice(linkAt + 1, groupAt).every((l) => l === ""), "zn Enter: nothing but blanks between the link and ### Group: " + JSON.stringify(lines.slice(linkAt, groupAt + 1)));
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
