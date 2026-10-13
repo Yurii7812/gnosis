@@ -385,9 +385,9 @@ def iter_md(root: Path):
 # IDらしい題を持つ普通のノートは、画像の参照が無ければ（title と同じ名前の画像を参照していなければ）
 # スキャンノートとは見なさない。判定できないときは推測で分類しない（None を返す）。
 
-_IS_LINK_LINE = re.compile(r"^\s*\[[^\]]*\]\([^)]*\)\s*$")
-_IMAGE_ONLY_RE = re.compile(r"^!\[[^\]]*\]\(([^)\s]+)\)\s*$")
-_MD_LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)\)")
+_IS_LINK_LINE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)]*\)\s*$")
+_IMAGE_ONLY_RE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)\s*$")
+_MD_LINK_RE = re.compile(r"(?<!!)\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)")
 TOPIC_TITLE_RE = re.compile(r"^(\d+(?:[a-z]+\d+)*[a-z]*)-(.+)$")
 DIARY_TITLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(MO|TU|WE|TH|FR|SA|SU)$")
 
@@ -524,7 +524,7 @@ def _rewrite_links_to(root: Path, old_path: Path, new_path: Path) -> int:
     """vault の全ノートで、old_path を指す Markdown リンクの宛先を new_path へ書き換える
     （表示名・`#見出し` はそのまま）。書き換えたノート数を返す。"""
     old_norm = os.path.normpath(str(old_path))
-    link_re = re.compile(r"(\[[^\]]*\]\()([^)\s]*)(\))")
+    link_re = re.compile(r"(\[(?:\\.|[^\]\\])*\]\()([^)\s]*)(\))")
     changed = 0
     for note in iter_md(root):
         try:
@@ -848,7 +848,7 @@ def _diary_image_name(date: str, page: int, suffix: str) -> str:
     return f"{DIARY_IMAGE_PREFIX}{date.replace('-', '')}-{page}{suffix.lower()}"
 
 
-_IMAGE_LINE_RE = re.compile(r"^!\[[^\]]*\]\((.+)\)$")
+_IMAGE_LINE_RE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\((.+)\)$")
 
 
 def _blank_after_last_image(body: list[str]) -> list[str]:

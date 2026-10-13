@@ -90,9 +90,9 @@ const RE = {
   quote: /^(\s*>+\s?)/,
   hr: /^\s*([-*_])(?:\s*\1){2,}\s*$/,
   code: /`([^`\n]+)`/g,
-  image: /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+  image: /!\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
   htmlimg: /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  link: /\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+  link: /\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
   bold: /\*\*([^*\n]+)\*\*|__([^_\n]+)__/g,
   italic: /(?<![*_])\*([^*\n]+)\*(?!\*)|(?<![*_])_([^_\n]+)_(?!_)/g,
   strike: /~~([^~\n]+)~~/g,
@@ -367,7 +367,7 @@ function findTables(doc) {
 }
 
 function inlineInto(el, text) {
-  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\(([^)\s]+)\)/g;
+  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)\)/g;
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));

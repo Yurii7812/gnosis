@@ -32,11 +32,11 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 GALLERY_PROTOCOL_VERSION = "6"
 IMAGE_EXTENSIONS = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
-MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+MARKDOWN_IMAGE_RE = re.compile(r"!\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 HTML_IMAGE_RE = re.compile(r"<img\b[^>]*\bsrc\s*=\s*(?:[\"']([^\"']+)[\"']|([^\s>]+))[^>]*>", re.IGNORECASE)
-WIKI_IMAGE_RE = re.compile(r"!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
-MARKDOWN_LOCAL_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
-MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+WIKI_IMAGE_RE = re.compile(r"!?\[\[([^\]|]+)(?:\|((?:\\.|[^\]\\])+))?\]\]")
+MARKDOWN_LOCAL_LINK_RE = re.compile(r"(?<!!)\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
+MARKDOWN_LINK_RE = re.compile(r"\[((?:\\.|[^\]\\])+)\]\((https?://[^)]+)\)")
 URL_RE = re.compile(r"https?://[^\s<>)\"]+")
 WINDOWS_DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
 

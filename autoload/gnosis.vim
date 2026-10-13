@@ -18,7 +18,7 @@
 " Internal helpers
 " ---------------------------------------------------------------------------
 
-let s:link_pat = '\v\[[^\]]+\]\([^)]*\)'
+let s:link_pat = '\v\[%(\\.|[^\]\\])+\]\([^)]*\)'
 
 " コードの中（``` で囲んだブロック・`インラインコード`）はリンクとして扱わない。
 " 各行が囲みコードブロックの中（囲みの行も含む）か。
@@ -264,7 +264,7 @@ endfunction
 
 function! s:gh_slug(text) abort
   " 見出し内のリンクは表示テキストだけでスラッグ化する（GitHub と同じ。URL は含めない）
-  let l:s = tolower(trim(substitute(a:text, '\[\([^\]]*\)\]([^)]*)', '\1', 'g')))
+  let l:s = tolower(trim(substitute(a:text, '\[\(\%(\\.\|[^\]\\]\)*\)\]([^)]*)', '\1', 'g')))
   " ASCII の句読点・記号（英数と `-` `_` は残す）
   let l:s = substitute(l:s, '[!-,.\/:-@\[-\^`{-~]', '', 'g')
   " 日本語の約物（読点・句点・括弧・中黒など）
@@ -1999,7 +1999,7 @@ function! s:section_link_targets_from_lines_one(lines, name, base_dir) abort
     endif
     let l:start = 0
     while 1
-      let l:m = matchstrpos(l:line, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+      let l:m = matchstrpos(l:line, '\v\[%(\\.|[^\]\\])+\]\(([^)]*)\)', l:start)
       if empty(l:m) || l:m[1] < 0
         break
       endif
@@ -2055,7 +2055,7 @@ function! s:body_link_targets_from_lines(lines, base_dir) abort
 
     let l:start = 0
     while 1
-      let l:m = matchstrpos(l:line, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+      let l:m = matchstrpos(l:line, '\v\[%(\\.|[^\]\\])+\]\(([^)]*)\)', l:start)
       if empty(l:m) || l:m[1] < 0
         break
       endif
@@ -2164,7 +2164,7 @@ function! s:remove_link_to_path_from_lines_section(lines, name, target_path, bas
     let l:start = 0
     let l:line_removed = 0
     while 1
-      let l:m = matchstrpos(l:line, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+      let l:m = matchstrpos(l:line, '\v\[%(\\.|[^\]\\])+\]\(([^)]*)\)', l:start)
       if empty(l:m) || l:m[1] < 0
         break
       endif
@@ -2363,7 +2363,7 @@ function! s:find_reciprocal_link_pos(target_path, source_name) abort
           if len(l:m) < 3 || l:m[1] < 0
             break
           endif
-          let l:parts = matchlist(l:m[0], '\v\[([^\]]+)\]\(([^)]*)\)')
+          let l:parts = matchlist(l:m[0], '\v\[(%(\\.|[^\]\\])+)\]\(([^)]*)\)')
           if fnamemodify(get(l:parts, 2, ''), ':t') ==# a:source_name
             return [l:hit, l:m[1] + 1]
           endif
@@ -2394,7 +2394,7 @@ function! s:find_reciprocal_link_pos(target_path, source_name) abort
       if len(l:m) < 3 || l:m[1] < 0
         break
       endif
-      let l:parts = matchlist(l:m[0], '\v\[([^\]]+)\]\(([^)]*)\)')
+      let l:parts = matchlist(l:m[0], '\v\[(%(\\.|[^\]\\])+)\]\(([^)]*)\)')
       let l:target = fnamemodify(get(l:parts, 2, ''), ':t')
       if l:target ==# a:source_name
         return [l:lnum, l:m[1] + 1]
@@ -2879,7 +2879,7 @@ function! s:relation_links_from_lines(lines, base_dir) abort
       if !empty(l:h) | let l:label = trim(l:h) | break | endif
     endfor
     let l:raw = matchstr(get(a:lines, l:p.lnum - 1, ''), s:link_pat, l:p.col - 1)
-    let l:parts = matchlist(l:raw, '\v\[([^\]]*)\]\(([^)]*)\)')
+    let l:parts = matchlist(l:raw, '\v\[(%(\\.|[^\]\\])*)\]\(([^)]*)\)')
     call add(l:out, {
           \ 'lnum': l:p.lnum, 'col': l:p.col,
           \ 'side': (l:down_start > 0 && l:p.lnum > l:down_start) ? 'down' : 'up',
@@ -2906,7 +2906,7 @@ function! s:body_links_from_lines(lines, base_dir) abort
       if !empty(l:hd) | let l:label = trim(l:hd) | break | endif
     endfor
     let l:raw = matchstr(get(a:lines, l:p.lnum - 1, ''), s:link_pat, l:p.col - 1)
-    let l:parts = matchlist(l:raw, '\v\[([^\]]*)\]\(([^)]*)\)')
+    let l:parts = matchlist(l:raw, '\v\[(%(\\.|[^\]\\])*)\]\(([^)]*)\)')
     call add(l:out, {
           \ 'lnum': l:p.lnum, 'col': l:p.col, 'side': 'body',
           \ 'label': l:label,
@@ -4104,7 +4104,7 @@ function! gnosis#get_link_under_cursor() abort
       continue
     endif
     if l:cursor >= l:m[1] && l:cursor < l:m[2]
-      let l:parts = matchlist(l:m[0], '\v\[([^\]]+)\]\(([^)]*)\)')
+      let l:parts = matchlist(l:m[0], '\v\[(%(\\.|[^\]\\])+)\]\(([^)]*)\)')
       return {
             \ 'raw':      l:m[0],
             \ 'text':     get(l:parts, 1, ''),
@@ -4123,7 +4123,7 @@ function! gnosis#get_link_under_cursor() abort
         let l:next = matchstrpos(l:line, s:link_pat, l:m[2])
         let l:title_end = (len(l:next) >= 3 && l:next[1] >= 0) ? l:next[1] : len(l:line)
         if l:cursor < l:title_end
-          let l:parts = matchlist(l:m[0], '\v\[([^\]]+)\]\(([^)]*)\)')
+          let l:parts = matchlist(l:m[0], '\v\[(%(\\.|[^\]\\])+)\]\(([^)]*)\)')
           return {
                 \ 'raw':      l:m[0],
                 \ 'text':     get(l:parts, 1, ''),
@@ -4528,7 +4528,7 @@ function! s:extract_targets_from_clipboard(text) abort
   " まず Markdown リンクを全文から全部拾う
   let l:start = 0
   while 1
-    let l:m = matchstrpos(a:text, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+    let l:m = matchstrpos(a:text, '\v\[%(\\.|[^\]\\])+\]\(([^)]*)\)', l:start)
     if empty(l:m) || l:m[1] < 0
       break
     endif
@@ -4611,12 +4611,12 @@ function! s:retitle_markdown_links_in_line(line, base_dir) abort
   let l:start = 0
   let l:changed = 0
   while 1
-    let l:m = matchstrpos(l:line, '\v\[[^\]]*\]\(([^)]*)\)', l:start)
+    let l:m = matchstrpos(l:line, '\v\[%(\\.|[^\]\\])*\]\(([^)]*)\)', l:start)
     if empty(l:m) || l:m[1] < 0
       break
     endif
     let l:raw = l:m[0]
-    let l:parts = matchlist(l:raw, '\v\[([^\]]*)\]\(([^)]*)\)')
+    let l:parts = matchlist(l:raw, '\v\[(%(\\.|[^\]\\])*)\]\(([^)]*)\)')
     let l:target = get(l:parts, 2, '')
     let l:new_link = l:raw
     if !empty(l:target) && s:is_markdown_target(l:target)
@@ -4842,7 +4842,7 @@ function! s:hub_link_paths() abort
   let l:file = s:hub_migrate()
   let l:out = []
   for l:ln in readfile(l:file)
-    let l:m = matchlist(l:ln, '\v\[([^\]]*)\]\(([^)]+)\)')
+    let l:m = matchlist(l:ln, '\v\[(%(\\.|[^\]\\])*)\]\(([^)]+)\)')
     if !empty(l:m)
       call add(l:out, gnosis#resolve_link(l:m[2]))
     endif
@@ -6641,17 +6641,21 @@ endfunction
 
 function! s:v2_new_interactive(attr) abort
   if s:pkm_format() !=# 'v2'
-    echo 'Gnosis: v2 専用' | return
+    echo 'Gnosis: ' . gnosis#i18n#tr('v2 専用') | return
   endif
   let l:cur = expand('%:p')
   if empty(l:cur)
-    echohl WarningMsg | echo 'Gnosis: 名前付きバッファで実行して' | echohl NONE | return
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前付きバッファで実行して') | echohl NONE | return
   endif
-  echo 'h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)'
-  let l:ch = nr2char(getchar())
+  if empty(a:attr)
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)')
+  else
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立) / g=カーソル下のリンクをグループ化  (Esc/q キャンセル)')
+  endif
+  let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
-    echo 'Gnosis: キャンセル' | return
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
   endif
   if l:ch ==? 't'
     " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
@@ -6659,11 +6663,87 @@ function! s:v2_new_interactive(attr) abort
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
     return
   endif
+  if l:ch ==# 'g' && !empty(a:attr)
+    " zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す
+    call s:group_link_under_cursor()
+    return
+  endif
+  if l:ch ==? 'c'
+    " c: 今のノートの Context に新ノートを入れる。新ノート側に今のノートへのリンクを
+    " どう入れるか（Enter / t / o。グループなら表示名も）を、作る前に聞く。
+    call s:ask_back_link('', [], !empty(a:attr), gnosis#current_title(),
+          \ function('s:v2_new_run_c', [a:attr]))
+    return
+  endif
   " 位置キー以外（旧 p を含む）では何も作らない
-  if l:ch !~? '^[hco]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: キャンセル（h / Enter / t / c / o のどれか）' | return
+  if l:ch !~? '^[ho]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
+endfunction
+
+" zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す。
+"   新しいグループの本文はそのリンク 1 行、### Context は今のノート（ビジュアルの zk と同じ）。
+"   元のリンクの位置は、新しいグループへのリンクに置き換える。同じ行の前後の文章・
+"   他のリンクはそのまま。リンク先のノート（ファイル）は動かさない。
+"   カーソル下にリンクが無ければ何も変えず、案内だけ出す。
+function! s:group_link_under_cursor() abort
+  let l:span = s:link_span_under_cursor()
+  if empty(l:span)
+    echohl WarningMsg
+    echo 'Gnosis: ' . gnosis#i18n#tr('カーソル下にリンクがありません（リンクの上で zk → g。アプリでは Alt+クリックでリンクにカーソルを置けます）')
+    echohl NONE
+    return
+  endif
+  let l:cur = expand('%:p')
+  let l:cur_title = gnosis#current_title()
+  let l:dir = expand('%:p:h')
+  let l:ts = gnosis#timestamp_filename()
+  let l:file = s:join_path(l:dir, l:ts . '.md')
+  let l:content = [
+        \ '---',
+        \ 'time: ' . gnosis#timestamp_yaml(),
+        \ 'title: ' . l:ts,
+        \ 'attribute: group',
+        \ '---',
+        \ '',
+        \ '# ' . l:ts,
+        \ '',
+        \ l:span.text,
+        \ s:v2_up_mark,
+        \ s:make_link_from_dir(l:cur, l:cur_title, l:dir),
+        \ ]
+  call s:write_new_note(l:content, l:file)
+  let l:line = getline(l:span.lnum)
+  call setline(l:span.lnum, strpart(l:line, 0, l:span.start) . '[' . l:ts . '](' . l:ts . '.md)' . strpart(l:line, l:span.end))
+  silent noautocmd write
+  call s:run_update_one_for(l:cur)
+  call gnosis#push_history()
+  silent execute 'edit ' . fnameescape(l:file)
+  call cursor(9, 1)
+endfunction
+
+" カーソル下の Markdown リンク（画像・コードの中は除く）の {lnum, start, end, text}（0 始まりのバイト位置）
+function! s:link_span_under_cursor() abort
+  let l:lnum = line('.')
+  let l:line = getline(l:lnum)
+  let l:col0 = col('.') - 1
+  let l:start = 0
+  while 1
+    let l:m = matchstrpos(l:line, s:link_pat, l:start)
+    if l:m[1] < 0
+      return {}
+    endif
+    let l:is_image = l:m[1] > 0 && l:line[l:m[1] - 1] ==# '!'
+    if !l:is_image && l:col0 >= l:m[1] && l:col0 < l:m[2] && !s:buf_in_code(l:lnum, l:m[1])
+      return {'lnum': l:lnum, 'start': l:m[1], 'end': l:m[2], 'text': l:m[0]}
+    endif
+    let l:start = l:m[2]
+  endwhile
+endfunction
+
+function! s:v2_new_run_c(attr, choice) abort
+  call s:v2_new_run(a:attr, 'c', 0, a:choice)
 endfunction
 
 function! s:v2_new_run_t(attr, head_lnum) abort
@@ -6743,8 +6823,9 @@ function! s:outline_pick_done(lnum) abort
 endfunction
 
 " zn / zk の続き。a:ch は位置キー、a:head_lnum は t のときの見出し行。
-function! s:v2_new_run(attr, ch, head_lnum) abort
+function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ch = a:ch
+  let l:choice = a:0 ? a:1 : {'mode': 'end', 'lnum': 0, 'name': ''}
   let l:cur = expand('%:p')
   let l:cur_title = gnosis#current_title()
   let l:dir = expand('%:p:h')
@@ -6790,11 +6871,14 @@ function! s:v2_new_run(attr, ch, head_lnum) abort
   let l:hl = 0
   if l:added
     if l:ch ==? 'c'
-      " 新ノート側は「もと開いていたノート」を**本文リンク**（子）に置く。
+      " 新ノート側は「もと開いていたノート」を**本文リンク**（子）に置く（o を選んだら置かない）。
       " c は「親（文脈）を作る」操作なので、ここを ### Context にすると循環して読めない。
-      let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
-      call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
-      let l:in_body = 1
+      if l:choice.mode !=# 'none'
+        let l:name = empty(l:choice.name) ? l:cur_title : s:md_link_text(l:choice.name)
+        let l:back = s:make_link_from_dir(l:cur, l:name, fnamemodify(l:file, ':h'))
+        call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
+        let l:in_body = 1
+      endif
     else
       " h / Enter は今のノートが親。新ノート側は ### Context にだけ入れる。
       " 本文（中央）には入れない。本文はテンプレートのまま（余白 2 行）を残す。潰さない。
@@ -6813,6 +6897,228 @@ function! s:v2_new_run(attr, ch, head_lnum) abort
   if l:h1 > 0 && l:hl == 0 | let l:hl = l:h1 + (empty(a:attr) ? 2 : 1) | endif
   if l:hl > 0 | call cursor(l:hl, 1) | call cursor(l:hl, col('$')) | endif
   startinsert
+endfunction
+
+" ---------------------------------------------------------------------------
+" c（今のノート A の Context にリンク先 B を入れる）のあとに、B 側へ A へのリンクを
+" どう入れるかを選ぶ（zn / zk / za / \l 共通）。
+"   Enter … B の本文の最後（関係の節の手前）
+"   t     … B の見出しを選び、その節の最後（次の同じか上の階層の見出しの手前）
+"   o     … B には入れない（A の Context への追加はそのまま行う。操作の取り消しではない）
+"   Esc   … 操作全体の取り消し（A にも B にも何も書かない）
+" B がグループなら、Enter / t のあとに表示名を聞く（空欄から。空 Enter = A のタイトル）。
+" 質問はすべて変更の前に行う。答えは a:Cont({mode, lnum, name}) に渡す（取り消しなら呼ばない）。
+" 見出しの選択は fzf（非同期）なので、続きはコールバックで行う。
+" ---------------------------------------------------------------------------
+
+" 表示名を Markdown のリンクの文字として安全にする（\ [ ] をエスケープ）
+function! s:md_link_text(text) abort
+  return escape(a:text, '\[]')
+endfunction
+
+" 表示名の入力。入力欄は空から始まる。
+"   空のまま Enter → a:default_title（リンクが指すノートのタイトル）
+"   文字を入れて Enter → その文字
+"   Esc → 取り消し（{'ok': 0}）
+" g:gnosis_test_display_name があれば入力の代わりに使う（試験用。"\x1b" は Esc）
+function! s:ask_display_name(default_title, ...) abort
+  let l:prompt = gnosis#i18n#tr('表示名（空 Enter で「%s」・Esc で取り消し）: ', a:default_title)
+  if exists('g:gnosis_test_display_name')
+    let l:r = remove(g:gnosis_test_display_name, 0)
+    let l:r = l:r ==# "\x1b" ? "\x01gnosis-cancel" : l:r
+  else
+    try
+      let l:r = inputdialog(l:prompt, '', "\x01gnosis-cancel")
+    catch /^Vim:Interrupt$/
+      let l:r = "\x01gnosis-cancel"
+    endtry
+    redraw
+  endif
+  if l:r ==# "\x01gnosis-cancel"
+    return {'ok': 0}
+  endif
+  return {'ok': 1, 'name': empty(l:r) ? a:default_title : l:r}
+endfunction
+
+" 1 文字を読む（g:gnosis_test_keys があればそこから。試験用）
+function! s:getkey() abort
+  if exists('g:gnosis_test_keys') && !empty(g:gnosis_test_keys)
+    return remove(g:gnosis_test_keys, 0)
+  endif
+  return nr2char(getchar())
+endfunction
+
+" ファイル（または行リスト）の見出しを選ぶ。選ばれた見出しの行番号で a:Cb を呼ぶ。
+" g:gnosis_test_heading（見出しの文字）があれば選択の代わりに使う（試験用）。
+function! s:outline_pick_lines(path, lines, Cb) abort
+  let l:items = s:file_heading_items(a:path, a:lines)
+  if empty(l:items)
+    return 0
+  endif
+  if exists('g:gnosis_test_heading')
+    for l:it in l:items
+      if l:it.text ==# g:gnosis_test_heading
+        call call(a:Cb, [l:it.lnum])
+        return 1
+      endif
+    endfor
+    return 1
+  endif
+  let s:outline_pick_cb = a:Cb
+  if !exists('*fzf#run')
+    let l:choices = [gnosis#i18n#tr('見出しを選んでください（番号）:')]
+    let l:i = 1
+    for l:it in l:items
+      call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
+      let l:i += 1
+    endfor
+    let l:sel = inputlist(l:choices)
+    if l:sel > 0 && l:sel <= len(l:items)
+      call s:outline_pick_done(l:items[l:sel - 1].lnum)
+    endif
+    return 1
+  endif
+  call s:outline_fzf(l:items, a:path, function('s:outline_pick_sink'), 0)
+  return 1
+endfunction
+
+" B 側への入れ方を聞く。a:target … B のパス（まだ無い新ノートなら ''）、a:lines … B の行、
+" a:is_group … B がグループか、a:a_title … A のタイトル（表示名の既定）。
+function! s:ask_back_link(target, lines, is_group, a_title, Cont) abort
+  echo gnosis#i18n#tr('リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / o=入れない  (Esc で取り消し)')
+  let l:ch = s:getkey()
+  redraw
+  let l:n = char2nr(l:ch)
+  if l:n == 27 || l:n == 3 || l:ch ==? 'q'
+    echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+    return
+  endif
+  if l:ch ==? 'o'
+    call a:Cont({'mode': 'none', 'lnum': 0, 'name': ''})
+    return
+  endif
+  if l:ch ==? 't'
+    let l:Next = function('s:ask_back_link_named', [a:is_group, a:a_title, a:Cont, 't'])
+    if !empty(a:lines) && s:outline_pick_lines(a:target, a:lines, l:Next)
+      return
+    endif
+    echo 'Gnosis: ' . gnosis#i18n#tr('リンク先に見出しがないので、本文の最後に入れます')
+    call s:ask_back_link_named(a:is_group, a:a_title, a:Cont, 'end', 0)
+    return
+  endif
+  if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    call s:ask_back_link_named(a:is_group, a:a_title, a:Cont, 'end', 0)
+    return
+  endif
+  echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（Enter / t / o のどれか。何も変更していません）')
+endfunction
+
+function! s:ask_back_link_named(is_group, a_title, Cont, mode, lnum) abort
+  let l:name = ''
+  if a:is_group
+    let l:r = s:ask_display_name(a:a_title)
+    if !l:r.ok
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+      return
+    endif
+    let l:name = l:r.name
+  endif
+  call a:Cont({'mode': a:mode, 'lnum': a:lnum, 'name': l:name})
+endfunction
+
+" 行リスト a:lines の見出し a:hl（1 始まり）が受け持つ節の終わり（次の同じか上の階層の見出し、
+" 関係の節、またはファイルの終わり）の行番号（その見出しの手前の行。1 始まり）
+function! s:section_end_in_lines(lines, hl) abort
+  let l:level = strlen(matchstr(get(a:lines, a:hl - 1, ''), '^\s*\zs#\+'))
+  let l:flags = s:fence_flags(a:lines)
+  let l:i = a:hl + 1
+  while l:i <= len(a:lines)
+    let l:t = a:lines[l:i - 1]
+    if !l:flags[l:i - 1]
+      if trim(l:t) =~# s:v2_any_pat || trim(l:t) =~# '^###\s\+\%(Context\|Group\|Related\|BackLink\|Parent\)\s*$'
+        break
+      endif
+      let l:m = matchstr(l:t, '^\s*\zs#\+\ze\s\+')
+      if !empty(l:m) && strlen(l:m) <= l:level
+        break
+      endif
+    endif
+    let l:i += 1
+  endwhile
+  return l:i - 1
+endfunction
+
+" 行リストのリンク挿入（a:mode = 'end' | 't'）。直前が文章なら空行を 1 つ挟み、直前がリンク行なら
+" 続けて並べる（zn の Enter・\l の t と同じ並べ方）。挿入後の行リストを返す。
+function! s:insert_link_in_lines(lines, link, mode, hl) abort
+  let l:lines = copy(a:lines)
+  if a:mode ==# 't' && a:hl > 0
+    let l:end = s:section_end_in_lines(l:lines, a:hl)
+    let l:e = l:end
+    while l:e > a:hl && trim(l:lines[l:e - 1]) ==# ''
+      let l:e -= 1
+    endwhile
+    let l:prev_link = l:e > a:hl && trim(l:lines[l:e - 1]) =~# '\]\s*(\S\+)\s*$'
+    let l:new = (l:prev_link ? [] : ['']) + [a:link]
+    if l:e == l:end && l:end < len(l:lines)
+      let l:new += ['']
+    endif
+    call extend(l:lines, l:new, l:e)
+    return l:lines
+  endif
+  let l:hdr = s:first_section_index_in_lines(l:lines)
+  let l:at = l:hdr < 0 ? len(l:lines) : l:hdr
+  if l:hdr < 0
+    " 関係の節が無い: 末尾の空行の手前（空行はそのまま残す）
+    while l:at > 0 && trim(l:lines[l:at - 1]) ==# ''
+      let l:at -= 1
+    endwhile
+  endif
+  let l:prev = l:at > 0 ? trim(l:lines[l:at - 1]) : ''
+  if l:prev !=# '' && l:prev !~# '\]\s*(\S\+)\s*$' && l:prev !~# '^---\s*$'
+    call extend(l:lines, ['', a:link], l:at)
+  else
+    call insert(l:lines, a:link, l:at)
+  endif
+  return l:lines
+endfunction
+
+" B の本文に A へのリンクが既にあるか（関係の節は見ない）
+function! s:body_links_to(lines, b_dir, a_path) abort
+  let l:hdr = s:first_section_index_in_lines(a:lines)
+  let l:body = l:hdr < 0 ? a:lines : (l:hdr > 0 ? a:lines[: l:hdr - 1] : [])
+  let l:want = fnamemodify(a:a_path, ':p')
+  for l:t in s:body_link_targets_from_lines(l:body, a:b_dir)
+    if fnamemodify(l:t, ':p') ==# l:want
+      return 1
+    endif
+  endfor
+  return 0
+endfunction
+
+" B（a:target）に A（a:a_path）へのリンクを、選んだ入れ方 a:choice で書く。書いたら 1。
+function! s:apply_back_link(target, a_path, a_title, choice) abort
+  if a:choice.mode ==# 'none' || !filereadable(a:target)
+    return 0
+  endif
+  let l:nr = bufnr(fnamemodify(a:target, ':p'))
+  if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('リンク先に未保存の変更があるため、リンク先には入れませんでした') | echohl NONE
+    return 0
+  endif
+  let l:lines = readfile(a:target)
+  let l:bdir = fnamemodify(a:target, ':h')
+  if s:body_links_to(l:lines, l:bdir, a:a_path)
+    return 0
+  endif
+  let l:title = empty(a:choice.name) ? a:a_title : a:choice.name
+  let l:link = s:make_link_from_dir(a:a_path, s:md_link_text(l:title), l:bdir)
+  let l:lines = s:insert_link_in_lines(l:lines, l:link, a:choice.mode, a:choice.lnum)
+  call s:syn_writefile(l:lines, a:target)
+  if l:nr > 0
+    silent! execute 'checktime ' . l:nr
+  endif
+  return 1
 endfunction
 
 " 旧形式（v1 の Parent:/Child: / 旧 `---`）を v2 へ明示変換。
@@ -6907,8 +7213,8 @@ function! gnosis#update_current_buffer() abort
       continue
     endif
 
-    if (l:in_branch || l:in_back) && l:line =~# '\[[^\]]\+\]([^)]\+\.md)'
-      let l:lm = matchlist(l:line, '^\(\[\([^\]]\+\)\](\([^)]\+\))\)\(.*\)$')
+    if (l:in_branch || l:in_back) && l:line =~# '\[\%(\\.\|[^\]\\]\)\+\]([^)]\+\.md)'
+      let l:lm = matchlist(l:line, '^\(\[\(\%(\\.\|[^\]\\]\)\+\)\](\([^)]\+\))\)\(.*\)$')
       if !empty(l:lm)
         let l:link_text = get(l:lm, 2, '')
         let l:target    = trim(get(l:lm, 3, ''))
@@ -8545,9 +8851,11 @@ function! s:insert_links_core(links, ...) abort
     return 0
   endif
   let l:inline = !empty(get(s:, 'inline_pos', []))
-  echo 'h=カーソル直下 / Enter=本文の最後 / '
-        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . (l:inline ? 'i=カーソル位置 / ' : '') . 'c=Context末尾 / r=Related  (Esc で取り止め)'
-  let l:ch = nr2char(getchar())
+  echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / ')
+        \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出しの下 / ') : '')
+        \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名を入力して本文の最後 / ') : '')
+        \ . gnosis#i18n#tr('c=Context末尾 / r=Related  (Esc で取り止め)')
+  let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
@@ -8562,6 +8870,34 @@ function! s:insert_links_core(links, ...) abort
     echo 'Gnosis: 位置キー p は c（Context 末尾）に変わりました。何も追加しません'
     return 0
   endif
+  if l:ch ==# 'n' && l:inline
+    " \l → n: 表示名を入力して、今のノートの本文の最後へ入れる（入力欄は空から。
+    " 空 Enter = リンク先ノートのタイトル、Esc = 取り消し）。ノートのタイトルは変えない。
+    let l:added = 0
+    for l:lk in l:links
+      let l:tg = s:extract_target(l:lk)
+      let l:fp = gnosis#resolve_link(substitute(l:tg, '#.*$', '', ''))
+      let l:title = s:get_title(l:fp)
+      if empty(l:title)
+        let l:title = get(s:extract_markdown_link(l:lk), 'text', fnamemodify(l:fp, ':t:r'))
+      endif
+      let l:r = s:ask_display_name(l:title)
+      if !l:r.ok
+        echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+        return 0
+      endif
+      let l:named = '[' . s:md_link_text(l:r.name) . '](' . l:tg . ')'
+      if s:insert_link_before_up_note(l:named)
+        let l:added += 1
+      else
+        echo 'Gnosis: ' . gnosis#i18n#tr('このノートには既にそのリンクがあります')
+      endif
+    endfor
+    if l:added
+      call s:ensure_blank_before_up()
+    endif
+    return l:added > 0
+  endif
   if l:ch ==? 'i' && l:inline
     " ピッカーを開いたときのカーソル位置に、行の中へそのまま入れる（従来の \l）
     call cursor(s:inline_pos[1], s:inline_pos[2])
@@ -8574,17 +8910,12 @@ function! s:insert_links_core(links, ...) abort
   endif
   if l:ch ==? 'c'
     " 今のノートの ### Context 末尾に置く（相手が親になる）。zn / zk の c と同じ。
-    " za,p: 今のノートの Parent の節の末尾に入れ、相手の本文に今のノートが無ければ相手の ### Context の直前に入れる。
-    let l:added = 0
-    for l:lk in l:links
-      if s:add_parent_with_reverse(l:lk)
-        let l:added += 1
-      endif
-    endfor
-    if l:added == 0
-      echo 'Gnosis: 追加できるリンクがありません（Context に既にある or 取れなかった）'
-    endif
-    return l:added > 0
+    " そのあと、相手（リンク先）に今のノートへのリンクをどう入れるか（Enter / t / o）を
+    " リンクごとに聞いてから、まとめて書く（Esc なら何も書かない）。
+    let l:Done = a:0 > 0 ? a:1 : function('s:noop')
+    call s:c_mode_chain(l:links, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'),
+          \ 'title': gnosis#current_title()}, l:Done)
+    return -1
   endif
   if l:ch ==? 'r'
     " ### Related に相互追加: 今のノートの Related に相手、相手ノートの
@@ -8897,6 +9228,49 @@ function! s:add_parent_with_reverse(link) abort
   return 1
 endfunction
 
+function! s:noop(...) abort
+endfunction
+
+" za / \l の c: リンクごとに相手側の入れ方を聞き（非同期の見出し選択を含む）、全部そろったら書く
+function! s:c_mode_chain(links, idx, choices, a, Done) abort
+  if a:idx >= len(a:links)
+    call s:c_mode_apply(a:links, a:choices, a:a, a:Done)
+    return
+  endif
+  let l:lk = a:links[a:idx]
+  let l:tgt = gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
+  let l:lines = filereadable(l:tgt) ? readfile(l:tgt) : []
+  let l:is_group = filereadable(l:tgt) && s:v2_path_attr(l:tgt) ==# 'group'
+  call s:ask_back_link(l:tgt, l:lines, l:is_group, a:a.title,
+        \ function('s:c_mode_next', [a:links, a:idx, a:choices, a:a, a:Done]))
+endfunction
+
+function! s:c_mode_next(links, idx, choices, a, Done, choice) abort
+  call s:c_mode_chain(a:links, a:idx + 1, a:choices + [a:choice], a:a, a:Done)
+endfunction
+
+function! s:c_mode_apply(links, choices, a, Done) abort
+  if bufnr('%') != a:a.buf && bufexists(a:a.buf)
+    execute 'silent! buffer ' . a:a.buf
+  endif
+  let l:added = 0
+  for l:i in range(len(a:links))
+    let l:lk = a:links[l:i]
+    if !s:append_link_to_buffer_section('up', l:lk)
+      continue
+    endif
+    let l:added += 1
+    call s:realtime_sync_apply()
+    silent write
+    let l:tgt = gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
+    call s:apply_back_link(l:tgt, a:a.path, a:a.title, a:choices[l:i])
+  endfor
+  if l:added == 0
+    echo 'Gnosis: ' . gnosis#i18n#tr('追加できるリンクがありません（Context に既にある or 取れなかった）')
+  endif
+  call a:Done()
+endfunction
+
 function! gnosis#add_link_to_parent() abort
   " zap / za,p: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の末尾に入れ、
   " 相手（リンク先）の本文に今のノートが無ければ相手の ### Context の直前に入れる。
@@ -8985,7 +9359,7 @@ function! s:pick_links() abort
     " 文中の Markdown リンク [表示名](パス) を全部拾う（行頭でなくてもよい）
     let l:start = 0
     while 1
-      let l:m = matchstrpos(l:text, '\v\[[^\]]+\]\(([^)]*)\)', l:start)
+      let l:m = matchstrpos(l:text, '\v\[%(\\.|[^\]\\])+\]\(([^)]*)\)', l:start)
       if empty(l:m) || l:m[1] < 0
         break
       endif
@@ -8994,7 +9368,7 @@ function! s:pick_links() abort
     endwhile
     " リンク記法でない行（パスや file:// だけ）
     for l:raw in split(l:text, "\n")
-      if l:raw =~# '\[[^\]]\+\]([^)]*)'
+      if l:raw =~# '\[\%(\\.\|[^\]\\]\)\+\]([^)]*)'
         continue
       endif
       call s:pick_links_add(l:found, l:seen, l:raw)
@@ -9777,7 +10151,73 @@ endfunction
 " \S（ノーマル）/ :SortYomi … バッファ内の本文リンク行をよみ順にソート（主に index.md）。
 " ### Context / ### Related / ### BackLink 以降のリンクは動かさない。
 function! gnosis#sort_yomi() abort
+  if s:sort_group_mode()
+    let l:r = s:group_last_block()
+    if empty(l:r) || s:count_link_lines(l:r[0], l:r[1]) <= 1
+      echo 'Gnosis: ' . gnosis#i18n#tr('並べ替えるリンクがありません（グループの最後のブロックにリンクが 2 本以上あるときだけ並べ替えます）')
+      return
+    endif
+    call s:sort_lines_by_yomi(l:r[0], l:r[1])
+    return
+  endif
   call s:sort_lines_by_yomi(1, line('$'))
+endfunction
+
+" \S をグループの規則（本文の最後のブロックだけ）で行うか。
+" Index（index.md）と紙PKM の生成物は、これまでどおりバッファ全体の規則のまま。
+function! s:sort_group_mode() abort
+  if !s:buf_is_group() || s:is_current_index_buffer()
+    return 0
+  endif
+  return expand('%:t') !~# '^\%(index\|Index-write\|Paper-Zettelkasten-Index\|Folgezettel-Index\)\.md$'
+endfunction
+
+" グループの本文の最後の「空行で区切られたブロック」の行範囲 [first, last]（無ければ []）。
+"   本文 = front matter の後から、最初の関係の節（### Context など）の手前まで。
+"   本文末尾の空行は、ブロックを探すときだけ読み飛ばす（空行そのものは変えない）。
+"   最後の非空行から上へたどり、直前の空行の次の行までがブロック。
+"   ブロックの先頭がコードブロックの途中なら、コードブロックが終わった次の行から。
+function! s:group_last_block() abort
+  let l:start = 1
+  if getline(1) =~# '^---\s*$'
+    let l:i = 2
+    while l:i <= line('$') && getline(l:i) !~# '^---\s*$'
+      let l:i += 1
+    endwhile
+    let l:start = l:i + 1
+  endif
+  let l:sec = s:first_section_line()
+  let l:end = l:sec > 0 ? l:sec - 1 : line('$')
+  while l:end >= l:start && trim(getline(l:end)) ==# ''
+    let l:end -= 1
+  endwhile
+  if l:end < l:start
+    return []
+  endif
+  let l:first = l:end
+  while l:first > l:start && trim(getline(l:first - 1)) !=# ''
+    let l:first -= 1
+  endwhile
+  let l:flags = s:buf_fence_flags()
+  if get(l:flags, l:first - 1, 0) && get(l:flags, l:first - 2, 0)
+    " ブロックがコードブロックの途中から始まる: 閉じの行の次から
+    while l:first <= l:end && get(l:flags, l:first - 1, 0)
+      let l:first += 1
+    endwhile
+  endif
+  return l:first <= l:end ? [l:first, l:end] : []
+endfunction
+
+" 範囲内の「リンクだけの行」（コードブロックの外）の数
+function! s:count_link_lines(first, last) abort
+  let l:flags = s:buf_fence_flags()
+  let l:n = 0
+  for l:lnum in range(a:first, a:last)
+    if !get(l:flags, l:lnum - 1, 0) && getline(l:lnum) =~# '^\s*\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\s*$'
+      let l:n += 1
+    endif
+  endfor
+  return l:n
 endfunction
 
 " \S（ビジュアル）… 選択した行のリンク行をよみ順にソート。
@@ -9947,7 +10387,7 @@ function! s:extract_time_digits(text) abort
 endfunction
 
 function! s:link_time_key(line) abort
-  let l:m = matchlist(a:line, '\v\[[^\]]+\]\(([^)]+)\)')
+  let l:m = matchlist(a:line, '\v\[%(\\.|[^\]\\])+\]\(([^)]+)\)')
   let l:target = get(l:m, 1, '')
   if empty(l:target)
     return '00000000000000'
@@ -11415,8 +11855,8 @@ endfunction
 
 function! s:line_has_image_link(line) abort
   let l:image_ext = '\%(avif\|bmp\|gif\|jpe\?g\|png\|svg\|webp\)'
-  return a:line =~# '!\[[^\]]*\]([^)]\+)'
-        \ || a:line =~? '\[[^\]]*\]([^)]*\.' . l:image_ext . '\%([#?][^)]*\)\?)'
+  return a:line =~# '!\[\%(\\.\|[^\]\\]\)*\]([^)]\+)'
+        \ || a:line =~? '\[\%(\\.\|[^\]\\]\)*\]([^)]*\.' . l:image_ext . '\%([#?][^)]*\)\?)'
         \ || a:line =~? '!?\[\[[^]|]\+\.' . l:image_ext . '\%([#?][^]|]\)*\%(|[^]]*\)\?\]\]'
         \ || (a:line =~? '<img' && a:line =~? 'src\s*=')
 endfunction
@@ -12756,15 +13196,15 @@ function! s:diary_head(lines) abort
       continue
     endif
     if l:fence >= 2
-      if l:ln =~# '^!\[[^\]]*\](paper-diary-\d\{8}-\d\+\.\w\+)\s*$'
+      if l:ln =~# '^!\[\%(\\.\|[^\]\\]\)*\](paper-diary-\d\{8}-\d\+\.\w\+)\s*$'
         let l:r.paper = 1
       endif
       let l:rest = l:ln
       while 1
-        let l:m = matchlist(l:rest, '\[[^\]]*\](\([^)#[:space:]]\+\.md\)')
+        let l:m = matchlist(l:rest, '\[\%(\\.\|[^\]\\]\)*\](\([^)#[:space:]]\+\.md\)')
         if empty(l:m) | break | endif
         call add(l:r.links, fnamemodify(l:m[1], ':t'))
-        let l:rest = substitute(l:rest, '\[[^\]]*\](\([^)#[:space:]]\+\.md\)', '', '')
+        let l:rest = substitute(l:rest, '\[\%(\\.\|[^\]\\]\)*\](\([^)#[:space:]]\+\.md\)', '', '')
       endwhile
       continue
     endif
@@ -13050,7 +13490,7 @@ function! s:diary_op_unlink_body(tgt, lines) abort
   let l:p = s:first_section_index_in_lines(l:lines)
   let l:end = l:p >= 0 ? l:p : len(l:lines)
   for l:i in range(l:end - 1, 0, -1)
-    if l:lines[l:i] =~# '^\s*\[[^\]]*\](' . escape(a:tgt, '.') . ')\s*$'
+    if l:lines[l:i] =~# '^\s*\[\%(\\.\|[^\]\\]\)*\](' . escape(a:tgt, '.') . ')\s*$'
       call remove(l:lines, l:i)
     endif
   endfor

@@ -55,3 +55,6 @@ sh "$REPO/test/diary_paper_net.sh"
 
 # 同期の冪等性（試験用の小さな vault）
 sh "$REPO/test/sync_net.sh"
+
+# リンク操作（c → Enter / t / o・表示名・zk → g・グループの \S）
+sh "$REPO/test/link_ops_net.sh"

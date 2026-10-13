@@ -21,7 +21,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-LINK_RE = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+LINK_RE = re.compile(r'\[((?:\\.|[^\]\\])+)\]\(([^)]+)\)')
 TITLE_RE = re.compile(r'^title:\s*(.*)$', re.IGNORECASE)
 H1_RE = re.compile(r'^#{1,6}\s+(.+)$')
 TRASH_DIR = '.trash'  # 展開の使い捨て出力先。ドット始まりなので sync・検索に出ない。

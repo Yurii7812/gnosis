@@ -9,6 +9,24 @@ endif
 let g:loaded_gnosis = 1
 
 " ---------------------------------------------------------------------------
+" 旧設定名の互換（simple-yurii-note → Gnosis）
+"   vimrc の g:simple_yurii_note_* / g:simple_yurii_search_* / g:yurii_* は、同じ意味の
+"   g:gnosis_* / g:gnosis_search_* にそのまま引き継ぐ。両方あるときは g:gnosis_* が優先。
+"   （設定画面で変える項目は vault の .gnosis/settings.json が優先。autoload/gnosis/settings.vim）
+" ---------------------------------------------------------------------------
+for [s:old_prefix, s:new_prefix] in [['simple_yurii_search_', 'gnosis_search_'], ['simple_yurii_note_', 'gnosis_'], ['yurii_', 'gnosis_']]
+  for s:old in keys(g:)
+    if stridx(s:old, s:old_prefix) == 0
+      let s:new = s:new_prefix . strpart(s:old, len(s:old_prefix))
+      if !has_key(g:, s:new)
+        let g:[s:new] = g:[s:old]
+      endif
+    endif
+  endfor
+endfor
+unlet! s:old_prefix s:new_prefix s:old s:new
+
+" ---------------------------------------------------------------------------
 " デフォルト設定
 " ---------------------------------------------------------------------------
 

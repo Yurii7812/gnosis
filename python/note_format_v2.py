@@ -114,9 +114,9 @@ DIVIDER_RE = re.compile(r"^-{3,}\s*$")
 # （§4）。ラベルは内部的には `;` を含んだ文字列として保持する（例: `きっかけ;`）。
 HEADER_RE = re.compile(r"^([^\s:;#][^:;]*?)\s*([:;])\s*(.*)$")
 # [表示]() 形式のリンク行（末尾に「 — 注釈」を許す）
-LINK_LINE_RE = re.compile(r"^\s*\[([^\]]*)\]\(([^)]+)\)\s*(?:—\s*(.*\S))?\s*$")
+LINK_LINE_RE = re.compile(r"^\s*\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)\s*(?:—\s*(.*\S))?\s*$")
 # 本文どこにでも現れるリンク（バックリンク判定用）
-ANY_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+ANY_LINK_RE = re.compile(r"\[(?:\\.|[^\]\\])*\]\(([^)]+)\)")
 # 旧 v1 の構造見出し
 LEGACY_HDR_RE = re.compile(r"^(Parent|Child|Branch|BackLink|Back)\s*:\s*(.*)$", re.I)
 # グループノートの判定（front matter の attribute / 属性）。simple_sync で
@@ -768,7 +768,7 @@ Rel = tuple[str, str, str]  # (src_id, type, tgt_id)  id = root からの相対 
 _ZK_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 _ZK_ID_RE = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*(?:-.+)?$")
 _ZK_DIARY_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-(?:MO|TU|WE|TH|FR|SA|SU)$")
-_ZK_IMG_LINE = re.compile(r"^!\[[^\]]*\]\(([^)\s]+)\)\s*$")
+_ZK_IMG_LINE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)\s*$")
 
 
 def _zk_note_images(title: str, body) -> list[str]:
@@ -958,7 +958,7 @@ def sync_vault(root) -> int:
             for _ln, _fz in zip(_n.body, _fenced(_n.body)):
                 if _fz:
                     continue
-                for _m in _link_iter(re.compile(r"\[([^\]]*)\]\(([^)]+)\)"), _ln):
+                for _m in _link_iter(re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)"), _ln):
                     _tg = _m.group(2).split("#", 1)[0].strip()
                     if _tg.lower().endswith(".md"):
                         _kids.append((_m.group(1), _tg, None))
@@ -1309,9 +1309,9 @@ def sync_vault(root) -> int:
 #   だけを行い、リンクの追加はしない。incoming へも反映しない。
 # ---------------------------------------------------------------------------
 
-_SIMPLE_INLINE_LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+_SIMPLE_INLINE_LINK = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 # 行全体がリンク 1 本だけの行（前後の空白は許す）
-_SIMPLE_LINK_LINE_RE = re.compile(r"^\s*(\[[^\]]*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$")
+_SIMPLE_LINK_LINE_RE = re.compile(r"^\s*(\[(?:\\.|[^\]\\])*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$")
 
 
 def _link_target(link_line: str) -> str:

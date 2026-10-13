@@ -57,12 +57,12 @@ def _rank_of(ch: str):
     """かな 1 文字の五十音ランク（濁点・半濁点は清音に寄せる）。無ければ None。"""
     return _RANK.get(_DAKUTEN_BASE.get(ch, ch))
 
-_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+_LINK_RE = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 _YOMI_HEAD_RE = re.compile(r"^yomi\s*:\s*$")
 _YOMI_PAIR_RE = re.compile(r'^\s+("(?:[^"\\]|\\.)*")\s*:\s*("(?:[^"\\]|\\.)*")\s*$')
 # 並べ替えの対象は「リンクだけの行」（`— 注記` 付きも可）。文章に埋もれた
 # リンク（例: 「〜は [これ](x.md) を参照」）は行ごと動かさない。
-_LINK_LINE_RE = re.compile(r"^\s*\[[^\]]*\]\([^)]+\)\s*(?:—\s*\S+)?\s*$")
+_LINK_LINE_RE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)]+\)\s*(?:—\s*\S+)?\s*$")
 # ここから後ろ（### Parent / ### Related / ### BackLink）は本文ではない。
 _SECTION_HEAD_RE = re.compile(r"^###\s*(?:Parent|Context|Group|Related|BackLink)\s*$")
 
@@ -368,6 +368,9 @@ def line_reading(line: str, base_dir) -> str:
     return disp
 
 
+_FENCE_RE = re.compile(r"^\s{0,3}(```|~~~)")
+
+
 def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
     """リンクだけの行（＋ extra_key_fn がキーを返す行）をよみ順に安定ソートする。
 
@@ -379,7 +382,13 @@ def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
     Index-write のキーワード行（`バナナ(ばなな): 1,2`）を並べるのに使う。
     """
     slots: list[int] = []
+    in_fence = False
     for i, ln in enumerate(lines):
+        if _FENCE_RE.match(ln):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue  # コードブロックの中の文字列は対象にしない
         if _SECTION_HEAD_RE.match(ln.strip()):
             break
         if _LINK_LINE_RE.match(ln):
@@ -409,7 +418,13 @@ def persist_readings(lines: list[str], base_dir) -> int:
     """
     count = 0
     seen: set[tuple[str, str]] = set()
+    in_fence = False
     for line in lines:
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         if _SECTION_HEAD_RE.match(line.strip()):
             break
         if not _LINK_LINE_RE.match(line):

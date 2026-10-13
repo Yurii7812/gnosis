@@ -139,7 +139,7 @@ function! s:current_buffer_links() abort
   let l:entries = []
   let l:seen = {}
   let l:base = expand('%:p:h')
-  let l:pat = '\v\[([^\]]+)\]\(([^)]+)\)'
+  let l:pat = '\v\[(%(\\.|[^\]\\])+)\]\(([^)]+)\)'
   for l:ln in getline(1, '$')
     let l:start = 0
     while 1
