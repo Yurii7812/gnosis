@@ -2,7 +2,7 @@
 
 Gnosis を、**マークダウンのビューアの見た目**で使うアプリ（Electron）。
 中身は**本物の Vim**（Gnosis 専用の vimrc。Gnosis・fzf・vim-surround などのプラグイン入り。ふだんの ~/.vimrc は読まない）。
-起動すると、まず起動画面（白背景・黒文字の Chnoubis・vault の選択と管理・設定）。Enter でその vault の Vim を起動する。
+`gnosis --app` を明示した場合のみ使用する任意の画面です。通常の `gnosis` はターミナル Vim を起動し、Chnoubis 10番の起動画面を表示します。Electron を起動すると、まず独自の vault 選択画面。Enter でその vault の Vim を起動する。
 機能を作り直していないので、操作は Vim で使っているものと同じ（`zn`・Tab・数字キー・`\ua`・`\l` ほか全部）。
 違いは、バッファがマークダウンとして描画されること（見出し・箇条書き・チェックボックス・引用・画像・リンク）だけ。
 
@@ -31,7 +31,7 @@ npm run build          # src/*.js -> bundle.js
 npm run app            # = electron .
 ```
 
-Vim からは `\A` / `:GnosisWeb`。ふつうは `gnosis`（`bin/gnosis --app`）。
+Vim からは `\A` / `:GnosisWeb`。Electron を使う場合のみ `gnosis --app`（通常の `gnosis` はターミナル Vim）。
 
 環境変数: `GNOSIS_ROOT`（vault。指定すると起動画面を出さずにその vault で始める）、`GNOSIS_FILE`（最初に開くノート）、
 `GNOSIS_VIMRC`（使う vimrc。既定は Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）、`GNOSIS_HOME`、`GNOSIS_VIM`。旧 `PKM_*` も読む。
