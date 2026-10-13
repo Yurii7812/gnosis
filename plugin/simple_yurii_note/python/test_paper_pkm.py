@@ -400,10 +400,11 @@ def test_diary_register_and_keyword() -> None:
         pp.regen(root)
         index_text = idx.read_text(encoding="utf-8")
         check(index_text.count("[日記](") == 1, f"Index にキーワード「日記」が 1 つだけある: {index_text}")
-        group = pp.find_group(root, "日記")
+        group = pp.find_diary_group(root, idx)
         check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
         gtext = group.read_text(encoding="utf-8")
         check("title: 紙の日記" in gtext and "attribute: group" in gtext, "題は「紙の日記」（デジタル日記の「日記」と区別）")
+        check("paper_keyword" not in gtext, "日記グループに paper_keyword: 日記 の行は付けない")
         check("[2026-09](" in gtext and "[2026-10](" in gtext and gtext.index("[2026-09](") < gtext.index("[2026-10](")
               and "2026-10-07-WE" not in gtext, "「日記」の直下には月グループが古い順に並ぶ（年が変わるまで年グループは作らない）")
         check(pp._find_note_by_fm(root, "paper_diary_year", "2026") is None, "同じ年だけなら年グループは作られない")
@@ -469,7 +470,7 @@ def test_diary_keyword_merges_with_index_write_entry() -> None:
         pp.regen(root)
         text = idx.read_text(encoding="utf-8")
         check(text.count("[日記](") == 1, f"「日記」は 1 つだけ: {text}")
-        group = pp.find_group(root, "日記")
+        group = pp.find_diary_group(root, idx)
         gtext = group.read_text(encoding="utf-8")
         check("[2026-10](" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記（月グループ）が同じグループに並ぶ")
 
@@ -542,7 +543,7 @@ def test_user_blank_lines_survive_regen() -> None:
         p.write_bytes(b"x")
         pp.register_diary_pages(root, root, [(p, "2026-10-07"), (root / "q.jpg", "2026-10-08")] if False else [(p, "2026-10-07")])
         pp.regen(root)
-        group = pp.find_group(root, "日記")
+        group = pp.find_diary_group(root, idx)
         month = pp._find_note_by_fm(root, "paper_diary_month", "2026-10")
         for note in (group, month):
             t = note.read_text(encoding="utf-8")
@@ -562,6 +563,35 @@ def test_user_blank_lines_survive_regen() -> None:
         pp.regen(root)
         m = pp._find_note_by_fm(root, "paper_diary_month", "2026-10").read_text(encoding="utf-8")
         check("[2026-10-09-FR](" in m, "後から足した日が一覧に入る")
+
+
+def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
+    print("diary: 日記グループは paper_keyword を持たず、regen のたびに同じノートを見つける（増えない）")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07")])
+        for _ in range(3):
+            pp.regen(root)
+        groups = [n for n in root.glob("*.md") if "title: 紙の日記\n" in n.read_text(encoding="utf-8")]
+        check(len(groups) == 1, f"「紙の日記」のグループは 1 つだけ: {[g.name for g in groups]}")
+        check("paper_keyword" not in groups[0].read_text(encoding="utf-8"), "paper_keyword の行は無い")
+        # 旧い版が作った paper_keyword: 日記 つきのグループ（Index からリンクされている）は、同じノートを使い、目印の行だけ外す
+        g = groups[0]
+        t = g.read_text(encoding="utf-8").replace("attribute: group", "paper_keyword: 日記\nattribute: group", 1)
+        g.write_text(t, encoding="utf-8")
+        pp.regen(root)
+        groups2 = [n for n in root.glob("*.md") if "title: 紙の日記\n" in n.read_text(encoding="utf-8")]
+        check(groups2 == [g] and "paper_keyword" not in g.read_text(encoding="utf-8"), "旧い目印つきのグループも、同じノートのまま目印だけ外れる")
+        # Index のリンクが無くなっても（題 + attribute: group で）同じノートを見つける
+        itext = idx.read_text(encoding="utf-8")
+        idx.write_text("\n".join(ln for ln in itext.split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
+        fi = root / "Folgezettel-Index.md"
+        fi.write_text("\n".join(ln for ln in fi.read_text(encoding="utf-8").split("\n") if not ln.startswith("[diary](")), encoding="utf-8")
+        pp.regen(root)
+        groups3 = [n for n in root.glob("*.md") if "title: 紙の日記\n" in n.read_text(encoding="utf-8")]
+        check(groups3 == [g] and idx.read_text(encoding="utf-8").count("[日記](") == 1, "リンクを消しても同じグループを見つけて、リンクが戻る")
 
 
 def test_regen_without_index() -> None:

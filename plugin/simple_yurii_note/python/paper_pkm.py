@@ -715,12 +715,44 @@ def find_id_index(root: Path, fid: str) -> Optional[Path]:
     return None
 
 
-def _new_group_note(root: Path, display: str, reading: str) -> Path:
+def find_diary_group(root: Path, index_path: Optional[Path]) -> Optional[Path]:
+    """紙の日記の一番上のグループ（題「紙の日記」）。目印の front matter は持たないので、
+    Paper-Zettelkasten-Index の `[日記](…)` のリンク先 → Folgezettel-Index の `[diary](…)` のリンク先 →
+    題が「紙の日記」の `attribute: group` のノート → 旧い目印（`paper_keyword: 日記`）の順に探す。"""
+    def _target(note: Optional[Path], text: str) -> Optional[Path]:
+        if note is None or not note.is_file():
+            return None
+        try:
+            _fm, body = read_note(note)
+        except OSError:
+            return None
+        for ln in body:
+            m = re.match(r"^\s*\[" + re.escape(text) + r"\]\(([^)#\s]+)\)\s*$", ln)
+            if m:
+                cand = (note.parent / m.group(1)).resolve()
+                if cand.is_file():
+                    return cand
+        return None
+
+    found = _target(index_path, DIARY_KEYWORD) or _target(Path(root) / FOLGE_INDEX, DIARY_FOLGE_LABEL)
+    if found is not None:
+        return found
+    for p in iter_md(root):
+        try:
+            fm, _ = read_note(p)
+        except OSError:
+            continue
+        if fm_value(fm, "title") == DIARY_GROUP_TITLE and fm_value(fm, "attribute") == "group":
+            return p
+    return find_group(root, DIARY_KEYWORD)  # 旧い目印
+
+
+def _new_group_note(root: Path, display: str, reading: str, marker: bool = True) -> Path:
     path = unique_note_path(root)
     fm = [
         _time_line(),
         f"title: {display}",
-        f"{FM_PAPER_KEYWORD}: {display}",
+        *([f"{FM_PAPER_KEYWORD}: {display}"] if marker else []),
         "attribute: group",
     ]
     if reading and reading != display:
@@ -976,9 +1008,16 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             continue  # 同名キーワードは 1 つのグループにまとめる
         seen_groups.add(display)
         group_title = entry.get("title", display)
-        group_path = find_group(root, display)
-        if group_path is None:
-            group_path = _new_group_note(root, display, readings[display])
+        is_diary_top = group_title == DIARY_GROUP_TITLE and entry.get("diary")
+        if is_diary_top:
+            # 自動で足した「日記」: 目印（paper_keyword）は持たせず、Index のリンクから見つける
+            group_path = find_diary_group(root, index_path)
+            if group_path is None:
+                group_path = _new_group_note(root, group_title, readings[display], marker=False)
+        else:
+            group_path = find_group(root, display)
+            if group_path is None:
+                group_path = _new_group_note(root, display, readings[display])
         group_paths[display] = group_path
 
         inner = [
@@ -1005,7 +1044,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         if old_group_body_extra:
             structure, desired_top = old_group_body_extra
             old_group_body = _sync_link_block(old_group_body, group_path.parent, structure, desired_top)
-        fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
+        drop = r"^\s*(title|attribute|" + FM_PAPER_KEYWORD + r")\s*:" if is_diary_top else r"^\s*(title|attribute)\s*:"
+        fm = [ln for ln in fm if not re.match(drop, ln)]
         fm.insert(1 if fm else 0, f"title: {group_title}")
         fm.append("attribute: group")
         fm = _update_yomi(fm, {display: readings[display]})
