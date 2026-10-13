@@ -8,6 +8,10 @@
   --line: #d0d7de;
   --link: #0969da;
   --accent: #0969da;
+  --heading: #0b3d91;
+  --selection: #b6d6ff;
+  --cursorline: #f2f5f8;
+  --content-font-size: 16px;
   --font-body: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", system-ui, sans-serif;
   color-scheme: light;
   --font-mono: "JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace;
@@ -24,7 +28,7 @@ html { --strip-h: 54px; }
 .view .cm-editor { height: 100%; }
 
 /* 端末（本物の Vim の画面）: 普段は下の数行だけ見せ、確認・fzf などのときは全体を見せる */
-#termwrap { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; overflow: hidden; z-index: 5; }
+#termwrap { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bg); overflow: hidden; z-index: 5; }
 #termwrap.strip { height: var(--strip-h); border-top: 1px solid var(--line); }
 #termwrap.expanded { top: 0; height: auto; border-top: none; }
 #term { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 6px; }
@@ -53,11 +57,12 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .view-only .cm-vim-block { background: transparent; color: inherit; }
 .view-only span.cm-vim-block, .view-only span.cm-vim-bar, .view-only span.cm-vim-under { display: none; }
 .view-only .cm-vim-visual { background: transparent; }
-.cm-vim-visual { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.cm-vim-visual { background: var(--selection); }
 
 /* ---- 本文（マークダウンの見た目） ---- */
-.cm-content { font-size: 16px; }
+.cm-content { font-size: var(--content-font-size); }
 .cm-scroller { line-height: 1.8; }
+.cm-md-h1, .cm-md-h2, .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--heading); }
 .cm-md-h1 { font-size: 2em; font-weight: 700; line-height: 1.3; padding-bottom: .3em; padding-top: .5em; border-bottom: 1px solid var(--line); }
 .cm-md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.35; padding-bottom: .3em; padding-top: .6em; border-bottom: 1px solid var(--line); }
 .cm-md-h3 { font-size: 1.25em; font-weight: 700; padding-top: .4em; }
@@ -96,3 +101,38 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-vim-hit { background: color-mix(in srgb, #f5c400 28%, transparent); border-radius: 3px; }
 /* 中身が空の関係の節の見出し（Context / Group / Related / BackLink）は出さない */
 .cm-md-sec-empty { height: 0; line-height: 0; font-size: 0; padding: 0 !important; margin: 0 !important; border: 0 !important; overflow: hidden; }
+
+/* ---- 起動画面（白背景・黒文字。vault を開くまでは設定のテーマを使わない） ---- */
+body.launching #stage, body.launching #statusbar { visibility: hidden; }
+.launcher { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #000000; overflow: auto; color-scheme: light;
+  font-family: var(--font-body); display: flex; flex-direction: column; }
+.launcher button, .launcher input, .launcher select { font: inherit; color: #000; background: #fff; border: 1px solid #000; border-radius: 6px; padding: 6px 14px; }
+.launcher button:disabled { opacity: .4; }
+.launcher button:focus-visible, .launcher input:focus-visible, .launcher select:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+.launcher .l-primary { background: #000; color: #fff; font-weight: 700; }
+.l-start { margin: auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 100%; }
+.l-art { margin: 0; color: #000; font-family: "DejaVu Sans Mono", "Noto Sans Mono", "Menlo", "Consolas", monospace; line-height: 1; letter-spacing: 0; white-space: pre; user-select: none; }
+.l-title { font-size: 34px; font-weight: 700; letter-spacing: .12em; }
+.l-vault { display: flex; flex-direction: column; gap: 2px; }
+.l-vname { font-weight: 700; }
+.l-vpath { font-family: var(--font-mono); font-size: 13px; word-break: break-all; }
+.l-warn, .l-msg { font-weight: 700; color: #000; border: 1px solid #000; border-radius: 6px; padding: 6px 10px; max-width: 640px; white-space: pre-wrap; }
+.l-hint { font-size: 12px; color: #444; }
+.l-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.l-panel { width: 100%; max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.l-head { display: flex; align-items: center; gap: 12px; }
+.l-head h2 { margin: 0; font-size: 20px; }
+.l-list { list-style: none; margin: 0; padding: 0; border: 1px solid #000; border-radius: 6px; max-height: 50vh; overflow: auto; }
+.l-item { padding: 8px 12px; border-bottom: 1px solid #ccc; cursor: pointer; text-align: left; }
+.l-item:last-child { border-bottom: none; }
+.l-item.sel { background: #000; color: #fff; }
+.l-item.missing .l-vname { text-decoration: line-through; }
+.l-form { display: flex; flex-direction: column; gap: 10px; }
+.l-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.l-field > span:first-child { min-width: 200px; font-weight: 700; }
+.l-row { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.l-row input[type=number] { width: 7em; }
+.l-field input[type=number] { width: 7em; }
+.l-colors { border: 1px solid #000; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
+.l-colors input[type=color] { width: 56px; height: 32px; padding: 0 4px; }
+@media (max-width: 520px) { .l-field > span:first-child { min-width: 0; width: 100%; } .l-title { font-size: 26px; } }

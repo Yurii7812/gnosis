@@ -1,13 +1,35 @@
-" gui.vim — アプリ（Electron）の画面へ、Vim の状態を送る。
+" gui.vim — Gnosis のアプリ（Electron）の画面へ、Vim の状態を送る。
 " アプリは Vim を擬似端末の中で動かし、このファイルを -S で読み込ませる。
 " 状態（バッファの全行・カーソル・モード など）が変わるたびに、アプリが開いた TCP の
-" ポート（$SYN_GUI_PORT）へ JSON を 1 行で送る。表示はアプリ側がマークダウンの見た目で行う。
+" ポート（$GNOSIS_GUI_PORT）へ JSON を 1 行で送る。表示はアプリ側がマークダウンの見た目で行う。
 " 操作は一切ここでは行わない（キーは擬似端末から Vim にそのまま届く）。
-if !exists('$SYN_GUI_PORT') || !has('channel')
+if !exists('$GNOSIS_GUI_PORT') || !has('channel')
   finish
 endif
 
-let s:ch = ch_open('127.0.0.1:' . $SYN_GUI_PORT, {'mode': 'raw', 'waittime': 3000})
+" アプリからの知らせ（1 行 1 つの JSON）。受け付けるのは決まった種類だけ:
+"   {"type": "settings", "vault": パス} … 設定画面で保存された vault の設定を読み直す
+let s:inbuf = ''
+function! s:on_msg(ch, msg) abort
+  let s:inbuf .= a:msg
+  while stridx(s:inbuf, "\n") >= 0
+    let l:i = stridx(s:inbuf, "\n")
+    let l:line = strpart(s:inbuf, 0, l:i)
+    let s:inbuf = strpart(s:inbuf, l:i + 1)
+    try
+      let l:m = json_decode(l:line)
+    catch
+      continue
+    endtry
+    if type(l:m) == v:t_dict && get(l:m, 'type', '') ==# 'settings' && type(get(l:m, 'vault', 0)) == v:t_string
+      call gnosis#settings#activate(l:m.vault)
+      redraw!
+      call s:snapshot(1)
+    endif
+  endwhile
+endfunction
+
+let s:ch = ch_open('127.0.0.1:' . $GNOSIS_GUI_PORT, {'mode': 'raw', 'waittime': 3000, 'callback': function('s:on_msg')})
 if ch_status(s:ch) !=# 'open'
   finish
 endif
@@ -17,14 +39,14 @@ endif
 set ttimeout
 set ttimeoutlen=20
 
-" 最初に開くノート（$PKM_FILE）。SYN は起動時に Index を開き直すので、起動が済んだあとで開く。
+" 最初に開くノート（$GNOSIS_FILE）。Gnosis は起動時に Index を開き直すので、起動が済んだあとで開く。
 function! s:open_start_file(t) abort
-  let l:f = fnamemodify($PKM_FILE, ':p')
+  let l:f = fnamemodify($GNOSIS_FILE, ':p')
   if filereadable(l:f) && fnamemodify(expand('%:p'), ':p') !=# l:f
     execute 'silent! edit ' . fnameescape(l:f)
   endif
 endfunction
-if $PKM_FILE !=# ''
+if $GNOSIS_FILE !=# ''
   autocmd VimEnter * ++once call timer_start(400, function('s:open_start_file'))
 endif
 
@@ -72,6 +94,17 @@ function! s:snapshot(force) abort
     endfor
   endif
   let l:d.vtext = l:vt
+  " 配色（テーマ）・文字サイズ・vault: 変わったときだけ送る
+  try
+    let l:look = {'palette': get(g:, 'gnosis_palette', {}), 'fontSize': get(gnosis#settings#current(), 'fontSize', 16),
+          \ 'vault': get(g:, 'gnosis_active_vault', ''), 'lang': gnosis#i18n#lang()}
+  catch
+    let l:look = {'palette': get(g:, 'gnosis_palette', {})}
+  endtry
+  if a:force || l:look !=# get(s:, 'sent_look', {})
+    call extend(l:d, l:look)
+    let s:sent_look = l:look
+  endif
   " 全行は、バッファか内容が変わったときだけ送る
   let l:key = bufnr('%') . ':' . b:changedtick
   if a:force || l:key !=# s:sent_key

@@ -67,6 +67,20 @@
     "vaults.prompt_add": "Folder to register: ",
     "vaults.prompt_new": "Folder for the new vault: ",
     "vaults.removed": "Removed from the list (notes were not deleted): %s",
-    "vaults.title": "Choose / manage vaults"
+    "vaults.title": "Choose / manage vaults",
+    "web.add": "Add",
+    "web.add_existing": "Register an existing folder",
+    "web.back": "Back",
+    "web.create_new": "Create a new vault",
+    "web.open": "Open",
+    "web.remove": "Remove from the list (keeps notes)",
+    "web.save": "Save",
+    "web.saved": "Saved (font size and theme apply when the vault opens; window size from the next start)",
+    "web.settings_button": "Settings",
+    "web.start_keys": "Enter Start ・ v Choose / manage vaults ・ s Settings ・ q Quit",
+    "web.use_custom": "Save and use these colors",
+    "web.vault_keys": "↑↓ / j k Select ・ Enter Open ・ a Register ・ n New ・ d Remove from list ・ Esc Back",
+    "web.vaults_button": "Choose / manage vaults",
+    "web.zoom_note": "Ctrl + / Ctrl − / Ctrl 0 zoom the whole window (only for now). The font size setting is saved and used from the next time."
   }
 }

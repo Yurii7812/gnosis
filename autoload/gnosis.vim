@@ -1269,6 +1269,10 @@ function! gnosis#startup_sequence() abort
   call gnosis#migrate_state_into_vault()
   call gnosis#startup_restore_root()
   call gnosis#refresh_guide()
+  " Index を開く（ファイルを指定して起動したときは、そのファイルのまま）
+  if get(g:, 'gnosis_open_index_on_startup', 1) && argc() == 0 && has('timers')
+    call timer_start(0, {-> execute('GnosisIndex')})
+  endif
   if has('timers')
     call timer_start(300, {-> execute('redraw!')})
   endif
@@ -1316,6 +1320,16 @@ function! gnosis#startup_restore_root() abort
       return
     endif
 
+    " 作ったばかりの vault（起動画面・アプリの「新しい vault」）: Index とガイドを黙って作る
+    if get(g:, 'gnosis_new_vault', 0) || filereadable(fnamemodify(gnosis#vault#of_root(l:root), ':p') . '.gnosis/settings.json') && empty(glob(fnamemodify(l:root, ':p') . '*.md', 1, 1))
+      let g:gnosis_root = l:root
+      call s:save_persisted_root(l:root)
+      call gnosis#create_vault_files(l:root)
+      execute 'cd ' . fnameescape(l:root)
+      call gnosis#push_history()
+      silent execute 'edit ' . fnameescape(s:index_path(l:root))
+      return
+    endif
     " root は覚えているが Index が無い → 勝手には作らず、どこに作るか・
     " 作ってよいかを聞く（s:setup_root_and_index が両方を尋ねる）。
     echom 'Remembered index not found: ' . s:index_path(l:root)

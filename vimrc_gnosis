@@ -26,7 +26,8 @@ let g:gnosis_vimrc_path = expand('<sfile>:p')
 " ---------------------------------------------------------
 let &runtimepath = join([g:gnosis_dir, $VIM . '/vimfiles', $VIMRUNTIME, $VIM . '/vimfiles/after', g:gnosis_dir . '/after'], ',')
 call gnosis#home#init()
-let &packpath = gnosis#home#path('pack')
+" packpath も Gnosis 専用（ふだんの ~/.vim/pack は読まない）。Vim 本体の同梱パッケージ（netrw など）は使う
+let &packpath = join([gnosis#home#path('pack'), $VIM . '/vimfiles', $VIMRUNTIME], ',')
 for s:dir in gnosis#home#plugin_dirs()
   execute 'set runtimepath^=' . fnameescape(s:dir)
   if isdirectory(s:dir . '/after')

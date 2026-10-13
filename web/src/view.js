@@ -575,12 +575,12 @@ export function createView(opts) {
         mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
           const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
-          opts.onClick?.({ pos, link: !!el, doc: view.state.doc });
+          opts.onClick?.({ pos, link: !!el, doc: view.state.doc, alt: e.altKey });
           return false;
         },
       }),
       EditorView.theme({
-        "&": { fontSize: "16px", height: "100%" },
+        "&": { fontSize: "var(--content-font-size, 16px)", height: "100%" },
         ".cm-content": { padding: "32px 28px 40vh", maxWidth: "860px", margin: "0 auto" },
         ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.8" },
         ".cm-gutters": { display: "none" },

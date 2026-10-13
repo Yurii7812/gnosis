@@ -281,13 +281,8 @@ set autowriteall
 set nobackup
 set nowritebackup
 
-" indexを最初から開く（不要なら let g:gnosis_open_index_on_startup = 0）
-if get(g:, 'gnosis_open_index_on_startup', 1)
-  augroup gnosis_other_startup_index
-    autocmd!
-    autocmd VimEnter * call timer_start(0, {-> execute('GnosisIndex')})
-  augroup END
-endif
+" index を最初から開く処理は gnosis#startup_sequence() が行う
+" （起動画面で Enter を押したあと。不要なら let g:gnosis_open_index_on_startup = 0）
 
 " エラーを表示しない
 autocmd FileType markdown highlight markdownError cterm=NONE gui=NONE

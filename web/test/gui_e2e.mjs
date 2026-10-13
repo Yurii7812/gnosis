@@ -23,11 +23,17 @@ const home = path.join(tmp, "home");
 const vault = path.join(tmp, "vault", "note");
 fs.mkdirSync(path.join(home, ".vim"), { recursive: true });
 fs.mkdirSync(vault, { recursive: true });
-for (const f of [".vimrc-simple-yurii-note", ".vim-simple-yurii-note"]) {
-  const src = path.join(realHome, f);
-  if (!fs.existsSync(src)) { console.error("SKIP: " + src + " が無いので E2E テストを省略"); process.exit(0); }
-  fs.symlinkSync(src, path.join(home, f));
+// Gnosis ホーム（一時フォルダ）。fzf などの Vim プラグインは、入っていればその場所へのリンクで読むだけ。
+const gnosisHome = path.join(tmp, "gnosis-home");
+fs.mkdirSync(path.join(gnosisHome, "plugins"), { recursive: true });
+for (const base of [process.env.GNOSIS_TEST_PLUGINS, path.join(realHome, ".local", "share", "gnosis", "plugins"), path.join(realHome, ".vim-simple-yurii-note")].filter(Boolean)) {
+  for (const name of ["fzf", "fzf.vim", "vim-surround"]) {
+    const src = path.join(base, name);
+    const dst = path.join(gnosisHome, "plugins", name);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) fs.symlinkSync(src, dst);
+  }
 }
+if (!fs.existsSync(path.join(gnosisHome, "plugins", "fzf.vim"))) { console.error("SKIP: fzf.vim が無いので E2E テストを省略"); process.exit(0); }
 
 // テスト用 vault
 const mk = (name, title, body, parent) => fs.writeFileSync(path.join(vault, name),
@@ -64,7 +70,7 @@ const scenario = `(async () => {
   const R = {};
   await waitFor(() => G.state().file);
   await sleep(800);
-  R.start = { file: base(G.state().file), mode: document.getElementById('mode').textContent, h1: !!document.querySelector('.cm-md-h1') };
+  R.start = { file: base(G.state().file), mode: document.getElementById('mode').textContent, h1: !!document.querySelector('.cm-md-h1'), screen: G.screen().filter((r) => r.trim()).slice(-4) };
 
   // リンクの数字のしるし（仮想テキスト）が、リンクの手前に出る
   await press('j', 900);
@@ -191,7 +197,9 @@ const scenario = `(async () => {
     await press(':e plain.md\\r', 1200);
     const baseFile = base(G.state().file);
     await press('zn', 700);
-    await press('c', 1800);
+    await press('c', 700);
+    R.znCPrompt = G.screen().slice(-2).join('|').trim().slice(0, 120);
+    await press('\\r', 1800);   // リンク先（新ノート）の本文の最後に、今のノートへのリンク
     R.znC = { from: baseFile, now: base(G.state().file), body: G.view.getText(), mode: G.state().mode };
     await press('\\x1b', 300);
     await press(':w\\r', 800);
@@ -292,7 +300,7 @@ fs.mkdirSync(stubBin, { recursive: true });
 for (const cmd of ["wl-paste", "wl-copy", "xclip", "xsel", "qdbus6", "qclip"]) {
   fs.writeFileSync(path.join(stubBin, cmd), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
 }
-const env = { ...process.env, PATH: stubBin + path.delimiter + (process.env.PATH || ""), HOME: home, PKM_ROOT: vault, PKM_TEST_SCRIPT: scenarioPath, PKM_TEST_OUT: outPath };
+const env = { ...process.env, PATH: stubBin + path.delimiter + (process.env.PATH || ""), HOME: home, GNOSIS_HOME: gnosisHome, GNOSIS_VIMRC: path.join(web, "..", "vimrc_gnosis"), PKM_ROOT: vault, PKM_TEST_SCRIPT: scenarioPath, PKM_TEST_OUT: outPath };
 delete env.WAYLAND_DISPLAY; delete env.XDG_SESSION_TYPE; delete env.DISPLAY;
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { console.error("FAIL: " + msg); failed++; } };
@@ -373,7 +381,7 @@ try {
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
   if (failed) process.exit(1);
-  console.log("gui e2e: OK (real Vim + SYN in the app: hints, digit/Tab/BS, zn, insert/visual, :w, terminal strip)");
+  console.log("gui e2e: OK (real Vim + Gnosis in the app: hints, digit/Tab/BS, zn, insert/visual, :w, terminal strip)");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

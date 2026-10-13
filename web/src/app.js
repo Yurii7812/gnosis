@@ -2,6 +2,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
+import { showLauncher } from "./launcher.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -94,7 +95,43 @@ function needsTerminal(s) {
 const MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "\x16": "V-BLOCK", R: "REPLACE", c: "COMMAND", t: "TERMINAL", r: "PROMPT", s: "SELECT", S: "S-LINE", "\x13": "S-BLOCK", "!": "SHELL" };
 const MODE_CLASS = { n: "normal", i: "insert", v: "visual", V: "visual", "\x16": "visual", R: "replace", c: "command", t: "command", r: "command", s: "visual", S: "visual", "\x13": "visual", "!": "command" };
 
+// 配色（vault の設定のテーマ。Vim が読み込んだ色）と文字サイズを画面に反映する
+let lastLook = "";
+function applyLook(s) {
+  if (!s.palette && !s.fontSize) return;
+  const key = JSON.stringify([s.palette, s.fontSize]);
+  if (key === lastLook) return;
+  lastLook = key;
+  const p = s.palette && s.palette.bg ? s.palette : null;
+  const r = document.documentElement.style;
+  if (p) {
+    const dark = p.base === "dark";
+    r.setProperty("--bg", p.bg);
+    r.setProperty("--fg", p.fg);
+    r.setProperty("--link", p.link);
+    r.setProperty("--accent", p.link);
+    r.setProperty("--heading", p.heading);
+    r.setProperty("--selection", p.selection);
+    r.setProperty("--cursorline", p.cursorline);
+    r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);
+    r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 14 : 8}%, ${p.bg})`);
+    r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
+    r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
+    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    if (term) term.options.theme = { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.selection };
+  }
+  if (s.fontSize) {
+    r.setProperty("--content-font-size", s.fontSize + "px");
+    if (term && term.options.fontSize !== Math.max(10, s.fontSize - 2)) {
+      term.options.fontSize = Math.max(10, s.fontSize - 2);
+      setTimeout(() => { const d = fitTerm(); gui.resize(d.cols, d.rows); }, 0);
+    }
+  }
+  view?.refresh?.();
+}
+
 function applyState(s) {
+  applyLook(s);
   const prevCur = last.cur;
   last = { ...last, ...s, lines: undefined };
   if (viewInCmd) {
@@ -320,8 +357,10 @@ function viewOnlyKey(e) {
 }
 
 // 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
-function onClick({ pos, link }) {
+function onClick({ pos, link, alt }) {
   if (pos == null) return;
+  // Alt + クリック: リンクでも開かず、カーソルだけをそこへ動かす（zk → g などに使う）
+  if (alt) link = false;
   if (viewOnly && !link) return; // 見るだけ: カーソルは動かさない（リンクだけ開く）
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
@@ -335,7 +374,7 @@ function onClick({ pos, link }) {
 function showError(msg) {
   const el = $("err");
   if (!el) return;
-  el.textContent = "エラー: " + String(msg).slice(0, 160);
+  el.textContent = (document.documentElement.lang === "en" ? "Error: " : "エラー: ") + String(msg).slice(0, 160);
   el.hidden = false;
   clearTimeout(showError._t);
   showError._t = setTimeout(() => { el.hidden = true; }, 12000);
@@ -378,17 +417,21 @@ async function boot() {
   gui.onState((s) => { try { applyState(s); } catch (e) { console.error("applyState failed: " + (e && e.stack || e)); showError(e && e.message || e); } });
   gui.onExit(() => { $("mode").textContent = "EXIT"; });
 
-  const { cols, rows } = fitTerm();
-  gui.start(cols, rows);
-  term.focus();
+  // 起動画面で vault を選んで Enter を押したら（GNOSIS_ROOT 指定のときはすぐ）Vim を起動する
+  await showLauncher((vaultPath, settings) => {
+    applyLook({ palette: null, fontSize: settings && settings.fontSize });
+    const { cols, rows } = fitTerm();
+    gui.start(cols, rows, vaultPath);
+    term.focus();
+  });
 
   window.addEventListener("resize", () => {
     const d = fitTerm();
     gui.resize(d.cols, d.rows);
   });
   // どこを押しても、キー入力は端末（Vim）へ戻す
-  document.addEventListener("mousedown", () => setTimeout(() => term.focus(), 0));
-  window.addEventListener("focus", () => term.focus());
+  document.addEventListener("mousedown", () => setTimeout(() => { if (document.getElementById("launcher").hidden) term.focus(); }, 0));
+  window.addEventListener("focus", () => { if (document.getElementById("launcher").hidden) term.focus(); });
 
   // デバッグ・テスト用フック
   window.__gui = {

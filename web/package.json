@@ -1,6 +1,6 @@
 {
-  "name": "simple-yurii-note-app",
-  "version": "0.4.0",
+  "name": "gnosis",
+  "version": "0.5.0",
   "private": true,
   "description": "Gnosis をマークダウンビューアの見た目で使うアプリ（本物の Vim を中で動かす・Electron）",
   "type": "module",
@@ -9,7 +9,7 @@
     "app": "electron .",
     "build": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --log-level=warning",
     "watch": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --watch",
-    "test": "node test/view_swap.mjs && node test/gui_e2e.mjs",
+    "test": "node test/view_swap.mjs && node test/gui_e2e.mjs && node test/launcher_e2e.mjs && GNOSIS_E2E_SMALL=1 node test/launcher_e2e.mjs",
     "rebuild:pty": "electron-rebuild -f -w node-pty",
     "app:win": "electron ."
   },

@@ -66,6 +66,20 @@
     "vaults.prompt_add": "登録するフォルダ: ",
     "vaults.prompt_new": "新しい vault のフォルダ: ",
     "vaults.removed": "一覧から外しました（ノートは消していません）: %s",
-    "vaults.title": "vault の選択・管理"
+    "vaults.title": "vault の選択・管理",
+    "web.add": "追加",
+    "web.add_existing": "既存のフォルダを登録",
+    "web.back": "戻る",
+    "web.create_new": "新しい vault を作る",
+    "web.open": "開く",
+    "web.remove": "一覧から外す（ノートは消さない）",
+    "web.save": "保存",
+    "web.saved": "保存しました（文字サイズ・テーマは vault を開くと反映。ウィンドウの大きさは次回の起動から）",
+    "web.settings_button": "設定",
+    "web.start_keys": "Enter 開始 ・ v vault の選択・管理 ・ s 設定 ・ q 終了",
+    "web.use_custom": "この配色を保存して使う",
+    "web.vault_keys": "↑↓ / j k 選ぶ ・ Enter 開く ・ a 登録 ・ n 新規 ・ d 一覧から外す ・ Esc 戻る",
+    "web.vaults_button": "vault の選択・管理",
+    "web.zoom_note": "Ctrl + / Ctrl − / Ctrl 0 は画面全体の拡大・縮小（その場だけ）。文字サイズの設定は保存され、次に開くときから使われます。"
   }
 }

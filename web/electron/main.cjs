@@ -1,29 +1,43 @@
-// Gnosis アプリ (Electron)。
-// 本物の Vim（SYN などのプラグインが入った ~/.vimrc-simple-yurii-note）を擬似端末の中で動かし、
+// Gnosis のデスクトップアプリ (Electron)。
+// 本物の Vim（Gnosis 専用の vimrc と、そのプラグイン領域だけを読むもの）を擬似端末の中で動かし、
 // その画面を、マークダウンのビューアの見た目で表示する。機能は Vim そのもの（作り直していない）。
 //
+//   起動画面（HTML）… Chnoubis・vault の選択・管理・設定 → Enter で Vim を起動
 //   Vim ──(擬似端末)──► xterm.js … メッセージ・質問・fzf などの端末画面
-//   Vim ──(TCP/JSON)──► 画面 …… バッファの全文・カーソル・モード（マークダウンで描画）
+//   Vim ──(TCP/JSON)──► 画面 …… バッファの全文・カーソル・モード・配色（マークダウンで描画）
 //   キー入力 ──► 擬似端末 ──► Vim
 //
-// 環境変数: PKM_ROOT … SYN の root（vault）。PKM_FILE … 最初に開くノート。
-//           HOME のかわりに別の場所の設定を使うときは PKM_VIMRC。
-const { app, BrowserWindow, ipcMain, Menu } = require("electron");
+// 環境変数（GNOSIS_* が無ければ旧名 PKM_* も読む）:
+//   GNOSIS_ROOT  … vault（指定すると起動画面を出さずにその vault で始める。Vim の \A から）
+//   GNOSIS_FILE  … 最初に開くノート
+//   GNOSIS_VIMRC … 使う vimrc（既定: Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）
+//   GNOSIS_VIM   … Vim の実行ファイル（既定: PATH の vim）
+//   GNOSIS_HOME  … Gnosis ホーム（vault の登録簿など）
+const { app, BrowserWindow, ipcMain, Menu, dialog, nativeImage } = require("electron");
 const { spawn } = require("child_process");
 const { StringDecoder } = require("string_decoder");
 const net = require("net");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const cfg = require("./config.cjs");
 
+const env = (name) => process.env["GNOSIS_" + name] || process.env["PKM_" + name] || "";
 const WEB = path.resolve(__dirname, "..");
-const VIMRC = process.env.PKM_VIMRC || path.join(os.homedir(), ".vimrc-simple-yurii-note");
-const ROOT = process.env.PKM_ROOT ? path.resolve(process.env.PKM_ROOT) : "";
-const OPEN = process.env.PKM_FILE || "";
+const REPO = cfg.REPO;
+const TEST = env("TEST_SCRIPT");
 
-// ログ: ~/.local/state/simple-yurii-note-app/app.log （画面のエラー・Vim の標準エラー・終了など）。
-// アプリは Vim から起動するので、標準エラーが捨てられてしまう。何か起きたときの手がかりに残す。
-const LOG_FILE = path.join(os.homedir(), ".local", "state", "simple-yurii-note-app", "app.log");
+function vimrcPath() {
+  if (env("VIMRC")) return env("VIMRC");
+  const home = path.join(cfg.gnosisHome(), "vimrc");
+  if (fs.existsSync(home)) return home;
+  return path.join(REPO, "vimrc_gnosis");
+}
+const EXPLICIT_ROOT = env("ROOT") ? path.resolve(env("ROOT")) : "";
+const OPEN = env("FILE");
+
+// ログ: <Gnosis ホーム>/logs/app.log（画面のエラー・Vim の標準エラー・終了など）。
+const LOG_FILE = path.join(cfg.gnosisHome(), "logs", "app.log");
 function log(msg) {
   try {
     fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
@@ -35,12 +49,11 @@ try {
 } catch { /* ignore */ }
 process.on("unhandledRejection", (e) => log("unhandledRejection: " + (e && e.stack || e)));
 
-// 画面（window）へ送る。窓を閉じたあと・Vim が遅れて終了したときに「Object has been destroyed」で
-// 落ちないよう、窓が生きているときだけ送る。
 const uncaught = [];
 process.removeAllListeners("uncaughtException");
 process.on("uncaughtException", (e) => { uncaught.push(String(e && e.stack || e)); log("uncaughtException: " + (e && e.stack || e)); });
 
+// 画面（window）へ送る。窓を閉じたあとに「Object has been destroyed」で落ちないよう、生きているときだけ。
 function send(channel, ...args) {
   try {
     if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args);
@@ -50,10 +63,14 @@ function send(channel, ...args) {
 let win = null;
 let bridge = null;
 let server = null;
+let vimSock = null; // Vim（gui.vim）とつないだソケット。アプリ → Vim の知らせにも使う
+let activeVault = "";
+let newVaults = new Set(); // このアプリで作ったばかりの vault（Index を黙って作る）
 
 function startServer() {
   return new Promise((resolve) => {
     server = net.createServer((sock) => {
+      vimSock = sock;
       let buf = "";
       sock.setEncoding("utf8");
       sock.on("data", (d) => {
@@ -62,7 +79,9 @@ function startServer() {
         while ((i = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, i);
           buf = buf.slice(i + 1);
-          let st; try { st = JSON.parse(line); } catch { continue; } /* 壊れた行は捨てる */ send("vim:state", st);
+          let st; try { st = JSON.parse(line); } catch { continue; } /* 壊れた行は捨てる */
+          if (st.vault && !cfg.same(st.vault, activeVault)) { activeVault = st.vault; }
+          send("vim:state", st);
         }
       });
       sock.on("error", () => {});
@@ -71,18 +90,15 @@ function startServer() {
   });
 }
 
-// 擬似端末（Vim を端末の中で動かす部品）。OS で切り替える:
-//   Linux/macOS … 同梱の bridge/ptybridge.py（python3 の pty）。ctl(fd 3) で大きさを変える。
-//   Windows     … node-pty（ConPTY）。Electron 用に再ビルドが要る（npm run rebuild:pty）。
-function startPty(cmd, args, env, cols, rows, onData, onExit) {
-  // PKM_PTY=node-pty / python で切り替えられる（テスト用。既定は Windows だけ node-pty）
-  const kind = process.env.PKM_PTY || (process.platform === "win32" ? "node-pty" : "python");
+// 擬似端末。Linux/macOS … 同梱の bridge/ptybridge.py（python3 の pty）。Windows … node-pty（ConPTY）。
+function startPty(cmd, args, penv, cols, rows, onData, onExit) {
+  const kind = env("PTY") || (process.platform === "win32" ? "node-pty" : "python");
   if (kind === "node-pty") {
     let pty;
     try { pty = require("node-pty"); } catch (e) {
-      throw new Error("node-pty が読み込めません。`npm install` のあと `npm run rebuild:pty` を実行してください: " + e.message);
+      throw new Error("node-pty が読み込めません / cannot load node-pty: npm install && npm run rebuild:pty — " + e.message);
     }
-    const p = pty.spawn(cmd, args, { name: "xterm-256color", cols, rows, env, cwd: os.homedir() });
+    const p = pty.spawn(cmd, args, { name: "xterm-256color", cols, rows, env: penv, cwd: os.homedir() });
     p.onData(onData);
     p.onExit(({ exitCode }) => onExit(exitCode));
     return {
@@ -91,8 +107,9 @@ function startPty(cmd, args, env, cols, rows, onData, onExit) {
       kill: () => { try { p.kill(); } catch { /* ignore */ } },
     };
   }
+  const py = process.platform === "win32" ? "python" : "python3";
   const bridgeArgs = [path.join(WEB, "bridge", "ptybridge.py"), String(cols), String(rows), "--", cmd, ...args];
-  const child = spawn("python3", bridgeArgs, { env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
+  const child = spawn(py, bridgeArgs, { env: penv, stdio: ["pipe", "pipe", "pipe", "pipe"] });
   const dec = new StringDecoder("utf8");
   child.stdout.on("data", (d) => { const t = dec.write(d); if (t) onData(t); });
   child.stderr.on("data", (d) => { process.stderr.write(d); log("vim/bridge stderr: " + d); });
@@ -105,37 +122,68 @@ function startPty(cmd, args, env, cols, rows, onData, onExit) {
   };
 }
 
-async function startVim(cols, rows) {
+const vimStr = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+
+async function startVim(cols, rows, vaultPath) {
   if (bridge) return;
   const port = await startServer();
-  // Vim の実行ファイル: 既定は PATH の vim（Windows は vim.exe / gvim の console 版）。PKM_VIM で指定できる。
-  const vimCmd = process.env.PKM_VIM || "vim";
-  const args = ["-u", VIMRC];
-  if (ROOT) args.push("--cmd", `let g:gnosis_root='${ROOT.replace(/'/g, "''")}/'`);
+  const vimCmd = env("VIM") || "vim";
+  const args = ["-u", vimrcPath(), "--cmd", "let g:gnosis_start_screen = 0"];
+  const vault = vaultPath || EXPLICIT_ROOT;
+  if (vault) {
+    activeVault = cfg.normalize(vault);
+    const root = EXPLICIT_ROOT && !vaultPath ? EXPLICIT_ROOT : cfg.noteRoot(vault);
+    args.push("--cmd", `let g:gnosis_root = ${vimStr(root.replace(/\\/g, "/") + "/")}`);
+    if (newVaults.has(cfg.normalize(vault))) args.push("--cmd", "let g:gnosis_new_vault = 1");
+  }
   args.push("-S", path.join(WEB, "vim", "gui.vim"));
-  const env = { ...process.env, SYN_GUI_PORT: String(port), TERM: "xterm-256color", PKM_FILE: OPEN };
+  const penv = { ...process.env, GNOSIS_GUI_PORT: String(port), TERM: "xterm-256color", COLORTERM: "truecolor", GNOSIS_FILE: OPEN };
+  log(`start vim: vault=${vault || "(none)"} vimrc=${vimrcPath()}`);
   try {
-    bridge = startPty(vimCmd, args, env, cols, rows,
+    bridge = startPty(vimCmd, args, penv, cols, rows,
       (t) => send("pty:data", t),
       (code) => {
         log("vim exited: code=" + code);
         send("vim:exit", code);
-        // Vim を終了したら（:q など）アプリも終える。テスト時は呼び出し側が終了を制御する。
-        if (!process.env.PKM_TEST_SCRIPT) app.quit();
+        if (!TEST) app.quit();
       });
   } catch (e) {
     log("start failed: " + (e && e.stack || e));
-    send("pty:data", "\r\n[起動できませんでした] " + String(e && e.message || e) + "\r\n");
+    send("pty:data", "\r\n[起動できませんでした / could not start] " + String(e && e.message || e) + "\r\n");
     bridge = null;
   }
 }
 
+// 最初の窓の大きさ: 起動に使う vault（指定 or 最後に選んだもの）の設定
+function initialSettings() {
+  const v = EXPLICIT_ROOT ? cfg.normalize(path.basename(EXPLICIT_ROOT) === "note" ? path.dirname(EXPLICIT_ROOT) : EXPLICIT_ROOT) : cfg.lastVault();
+  return cfg.loadSettings(v && cfg.isDir(v) ? v : "");
+}
+
+// 起動サイズ（最大化は「最大化」であって全画面表示ではない）
+function applyWindow(s, first) {
+  if (!win || win.isDestroyed()) return;
+  if (s.window.maximized) {
+    if (!win.isMaximized()) win.maximize();
+  } else {
+    if (win.isMaximized()) win.unmaximize();
+    if (!first) win.setSize(s.window.width, s.window.height);
+  }
+}
+
+function iconPath() {
+  const p = path.join(REPO, "assets", "icons", process.platform === "win32" ? "gnosis.ico" : "gnosis-256.png");
+  return fs.existsSync(p) ? p : undefined;
+}
+
 function createWindow() {
+  const s = initialSettings();
   win = new BrowserWindow({
-    width: 1100,
-    height: 880,
+    width: s.window.width,
+    height: s.window.height,
     show: false,
     title: "Gnosis",
+    icon: iconPath(),
     backgroundColor: "#ffffff",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -145,8 +193,7 @@ function createWindow() {
     },
   });
   Menu.setApplicationMenu(null);
-  log(`start: root=${ROOT || "(vim default)"} file=${OPEN || "(none)"} vimrc=${VIMRC}`);
-  // 画面（renderer）のエラーと、画面が落ちたことを記録する
+  log(`start: root=${EXPLICIT_ROOT || "(start screen)"} file=${OPEN || "(none)"} vimrc=${vimrcPath()}`);
   win.webContents.on("console-message", (...a) => {
     const d = a[1] && typeof a[1] === "object" ? a[1] : null;
     const lvl = d ? d.level : a[1];
@@ -154,14 +201,21 @@ function createWindow() {
     if ((lvl === "error" || lvl === 3) && !/Electron Security Warning/.test(String(msg))) log("renderer error: " + msg);
   });
   win.webContents.on("render-process-gone", (_e, det) => log("render-process-gone: " + JSON.stringify(det)));
-  // 最大化して開く（前のアプリと同じ）
-  win.once("ready-to-show", () => { win.maximize(); win.show(); win.focus(); });
+  // Ctrl + / - / 0 … 画面全体の拡大・縮小・元に戻す（その場だけ。文字サイズの設定とは別）
+  win.webContents.on("before-input-event", (e, input) => {
+    if (input.type !== "keyDown" || !(input.control || input.meta) || input.alt) return;
+    const wc = win.webContents;
+    if (input.key === "+" || input.key === "=" || input.key === ";") { wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5)); e.preventDefault(); }
+    else if (input.key === "-" || input.key === "_") { wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -4)); e.preventDefault(); }
+    else if (input.key === "0" && !input.shift) { wc.setZoomLevel(0); e.preventDefault(); }
+  });
+  win.once("ready-to-show", () => { applyWindow(s, true); win.show(); win.focus(); });
   win.loadFile(path.join(WEB, "index.html"));
   win.on("page-title-updated", (e) => e.preventDefault());
 
-  // テスト用: PKM_TEST_SCRIPT の JS を画面で実行し、結果を PKM_TEST_OUT に書いて終了する
+  // テスト用: GNOSIS_TEST_SCRIPT の JS を画面で実行し、結果を GNOSIS_TEST_OUT に書いて終了する
   const consoleLog = [];
-  if (process.env.PKM_TEST_SCRIPT) {
+  if (TEST) {
     win.webContents.on("console-message", (...a) => {
       const d = a[1] && typeof a[1] === "object" ? a[1] : null;
       const lvl = d ? d.level : a[1];
@@ -172,15 +226,17 @@ function createWindow() {
     win.webContents.on("did-finish-load", async () => {
       let result;
       try {
-        const src = fs.readFileSync(process.env.PKM_TEST_SCRIPT, "utf8");
-        result = await win.webContents.executeJavaScript(src);
+        result = await win.webContents.executeJavaScript(fs.readFileSync(TEST, "utf8"));
       } catch (e) { result = { fatal: String(e && e.stack || e) }; }
-      // 結果を先に書く。画面の撮影（任意）は時間制限つきで、固まってもテストを止めない
       const png = result && result.__png;
       const closeWindow = !!(result && result.__closeWindow);
       if (result) { delete result.__png; delete result.__closeWindow; }
-      if (result && typeof result === "object" && !Array.isArray(result)) result.__console = consoleLog.slice(0, 20);
-      fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(result, null, 2));
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        result.__console = consoleLog.slice(0, 20);
+        result.__window = { maximized: win.isMaximized(), fullscreen: win.isFullScreen(), zoom: win.webContents.getZoomLevel() };
+      }
+      const out = env("TEST_OUT");
+      fs.writeFileSync(out, JSON.stringify(result, null, 2));
       if (png) {
         try {
           const img = await Promise.race([
@@ -190,15 +246,14 @@ function createWindow() {
           fs.writeFileSync(png, img.toPNG());
         } catch { /* ignore */ }
       }
-      // 窓を壊した状態で Vim が終わっても、アプリが例外を出さないこと（「Object has been destroyed」の回帰確認）
       if (closeWindow) {
         try { win.destroy(); } catch { /* ignore */ }
         try { bridge?.kill(); } catch { /* ignore */ }
         await new Promise((r) => setTimeout(r, 1500));
         try {
-          const cur = JSON.parse(fs.readFileSync(process.env.PKM_TEST_OUT, "utf8"));
+          const cur = JSON.parse(fs.readFileSync(out, "utf8"));
           cur.__uncaught = uncaught.slice(0, 5);
-          fs.writeFileSync(process.env.PKM_TEST_OUT, JSON.stringify(cur, null, 2));
+          fs.writeFileSync(out, JSON.stringify(cur, null, 2));
         } catch { /* ignore */ }
       }
       try { bridge?.kill(); } catch { /* ignore */ }
@@ -207,7 +262,64 @@ function createWindow() {
   }
 }
 
-ipcMain.on("vim:start", (_e, cols, rows) => startVim(cols, rows));
+// ---------------------------------------------------------------- 起動画面・vault・設定（画面から呼ぶ）
+
+function launcherState(selected) {
+  const vaults = cfg.listVaults();
+  const sel = selected && vaults.find((v) => cfg.same(v.path, selected)) ? selected : (cfg.lastVault() || (vaults[0] && vaults[0].path) || "");
+  const s = cfg.loadSettings(sel && cfg.isDir(sel) ? sel : "");
+  return {
+    explicitRoot: EXPLICIT_ROOT,
+    vaults, selected: sel, settings: s,
+    lang: s.language,
+    msg: cfg.catalog(s.language),
+    art: cfg.art(),
+    palettes: cfg.builtinPalettes(),
+    themes: cfg.installedThemes(),
+    home: cfg.gnosisHome(),
+    platform: process.platform,
+  };
+}
+
+const ok = (v) => ({ ok: true, value: v });
+const err = (e) => {
+  const m = String(e && e.message || e);
+  const i = m.indexOf(":");
+  return i > 0 && /^[a-z_.]+$/.test(m.slice(0, i)) ? { ok: false, key: m.slice(0, i), detail: m.slice(i + 1) } : { ok: false, key: "", detail: m };
+};
+
+ipcMain.handle("launcher:state", (_e, selected) => launcherState(selected));
+ipcMain.handle("vault:pick", async (_e, title) => {
+  const r = await dialog.showOpenDialog(win, { title, properties: ["openDirectory", "createDirectory"] });
+  return r.canceled || !r.filePaths.length ? "" : r.filePaths[0];
+});
+ipcMain.handle("vault:add", (_e, p) => { try { return ok(cfg.addVault(p)); } catch (e) { return err(e); } });
+ipcMain.handle("vault:create", (_e, p, lang) => {
+  try { const v = cfg.createVault(p, "", lang); newVaults.add(cfg.normalize(v)); return ok(v); } catch (e) { return err(e); }
+});
+ipcMain.handle("vault:remove", (_e, p) => ok(cfg.removeVault(p)));
+ipcMain.handle("vault:select", (_e, p) => {
+  try {
+    const v = cfg.selectVault(p);
+    applyWindow(cfg.loadSettings(v), false);
+    return ok(v);
+  } catch (e) { return err(e); }
+});
+ipcMain.handle("settings:save", (_e, vault, s) => {
+  try {
+    const v = cfg.saveSettings(vault, s);
+    if (cfg.same(vault, activeVault) || !bridge) applyWindow(v, false);
+    // Vim が動いていれば、同じファイルを読み直させる（gui.vim が受けて gnosis#settings#activate）
+    if (vimSock && cfg.same(vault, activeVault)) {
+      try { vimSock.write(JSON.stringify({ type: "settings", vault }) + "\n"); } catch { /* ignore */ }
+    }
+    return ok(v);
+  } catch (e) { return err(e); }
+});
+ipcMain.handle("theme:install", (_e, spec) => cfg.installTheme(spec));
+ipcMain.handle("theme:palette", (_e, s) => cfg.paletteFor(cfg.validateSettings(s)));
+
+ipcMain.on("vim:start", (_e, cols, rows, vault) => startVim(cols, rows, vault));
 ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* ignore */ } });
 ipcMain.on("pty:resize", (_e, cols, rows) => { try { bridge?.resize(cols, rows); } catch { /* ignore */ } });
 ipcMain.on("app:quit", () => app.quit());
@@ -218,12 +330,20 @@ ipcMain.handle("img:read", async (_e, file, src) => {
     if (!file) return null;
     const base = path.dirname(file);
     const p = path.resolve(base, decodeURIComponent(src));
-    const allowed = [base, ROOT, path.dirname(base)].filter(Boolean).map((x) => path.resolve(x));
+    const roots = [base, path.dirname(base)];
+    if (activeVault) roots.push(activeVault, cfg.noteRoot(activeVault));
+    if (EXPLICIT_ROOT) roots.push(EXPLICIT_ROOT);
+    const allowed = roots.filter(Boolean).map((x) => path.resolve(x));
     if (!allowed.some((a) => p === a || p.startsWith(a + path.sep))) return null;
     return await fs.promises.readFile(p);
   } catch { return null; }
 });
 
-app.whenReady().then(createWindow);
-app.on("window-all-closed", () => { if (!process.env.PKM_TEST_SCRIPT) app.quit(); });
+app.setName("Gnosis");
+if (process.platform === "win32") app.setAppUserModelId("Gnosis");
+app.whenReady().then(() => {
+  if (process.platform === "darwin" && iconPath()) { try { app.dock.setIcon(nativeImage.createFromPath(iconPath())); } catch { /* ignore */ } }
+  createWindow();
+});
+app.on("window-all-closed", () => { if (!TEST) app.quit(); });
 app.on("before-quit", () => { try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ } });

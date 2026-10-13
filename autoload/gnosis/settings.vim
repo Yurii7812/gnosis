@@ -53,18 +53,22 @@ endfunction
 
 " 既定値に、読んだ値を重ねる（型の違う値・知らない値は既定値のまま）
 function! gnosis#settings#merge(base, over) abort
+  return gnosis#settings#validate(s:merge(a:base, a:over))
+endfunction
+
+function! s:merge(base, over) abort
   let l:out = deepcopy(a:base)
   for [l:k, l:v] in items(a:over)
     if !has_key(l:out, l:k)
       let l:out[l:k] = l:v
     elseif type(l:out[l:k]) == v:t_dict && type(l:v) == v:t_dict && l:k !=# 'theme' && l:k !=# 'customThemes'
-      let l:out[l:k] = gnosis#settings#merge(l:out[l:k], l:v)
+      let l:out[l:k] = s:merge(l:out[l:k], l:v)
     elseif type(l:out[l:k]) == type(l:v)
           \ || (index([v:t_number, v:t_bool, v:t_float], type(l:out[l:k])) >= 0 && index([v:t_number, v:t_bool, v:t_float], type(l:v)) >= 0)
       let l:out[l:k] = l:v
     endif
   endfor
-  return gnosis#settings#validate(l:out)
+  return l:out
 endfunction
 
 function! gnosis#settings#validate(s) abort
