@@ -108,83 +108,150 @@ def test_simple_mode_depth0_only_start() -> None:
         check(order == [start_id], "深さ0は起点ノートのみ")
 
 
-def test_detailed_mode_independent_budgets() -> None:
-    print("detailed: 種類ごとに独立した深さで絞り込める（子/親/文中/関連）")
+def _ctx(root: Path):
+    """(dir_of, ids, notes, id_to_path) を作る。"""
+    by_name, notes, ids, id_to_path = ex._build_index(root)
+    return _dir_of(root, by_name, notes, ids, id_to_path), ids, notes, id_to_path
+
+
+def _titles(order, notes, id_to_path) -> set[str]:
+    return {notes[id_to_path[i]]["title"] for i in order}
+
+
+def _detailed(root: Path, start: str, body=0, context=0, group=0, br=0, diary=True) -> set[str]:
+    dir_of, ids, notes, id_to_path = _ctx(root)
+    holder = {"is_diary": lambda nid: ex.is_diary_title(notes[id_to_path[nid]]["title"])}
+    order, _po = ex.collect_detailed(
+        ids[(root / start).resolve()], dir_of, body, context, group, br,
+        skip_backlink=None if diary else holder["is_diary"])
+    assert len(order) == len(set(order)), "重複なし"
+    return _titles(order, notes, id_to_path)
+
+
+def test_detailed_body_depth_follows_only_body_links() -> None:
+    print("detailed: 文中リンクの深さ 3 → 文中リンクだけを 3 段階辿る（Context / BackLink は数えない）")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        _fixture(root)
-        by_name, notes, ids, id_to_path = ex._build_index(root)
-        start_id = ids[(root / "A.md").resolve()]
-        dir_of = _dir_of(root, by_name, notes, ids, id_to_path)
-
-        order, _po = ex.collect_detailed(start_id, dir_of, 1, 0, 0, 0)
-        titles = {notes[id_to_path[i]]["title"] for i in order}
-        check(titles == {"A", "B"}, "子だけ許可だと A と B だけ")
-
-        order2, _po2 = ex.collect_detailed(start_id, dir_of, 0, 1, 0, 0)
-        titles2 = {notes[id_to_path[i]]["title"] for i in order2}
-        check(titles2 == {"A", "G"}, "親だけ許可だと A と G だけ")
-
-        order3, _po3 = ex.collect_detailed(start_id, dir_of, 0, 0, 1, 0)
-        titles3 = {notes[id_to_path[i]]["title"] for i in order3}
-        check(titles3 == {"A", "D"}, "文中だけ許可だと A と D だけ（関連の R は入らない）")
-
-        order4, _po4 = ex.collect_detailed(start_id, dir_of, 0, 0, 0, 1)
-        titles4 = {notes[id_to_path[i]]["title"] for i in order4}
-        check(titles4 == {"A", "R"}, "関連だけ許可だと A と R だけ（文中の D は入らない）")
-
-
-def test_detailed_mode_parent_does_not_leak_siblings() -> None:
-    print("detailed: 親を辿った先（ハブ）の他の子までは展開しない")
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d)
-        # G(グループ) の子は A と H。A は深い子チェーン A->C1->C2 を持つ。
-        # G の別の子 H やその子 HC は、A から見た展開には一切出てはいけない
-        # （親チェーンは「純粋に親だけ」を辿り、途中のノードの子は展開しない）。
-        note(root / "G.md", "G", body="[A](A.md)\n[H](H.md)", attr="group")
-        note(root / "A.md", "A", body="[C1](C1.md)")
-        note(root / "C1.md", "C1", parent="[A](A.md)", body="[C2](C2.md)")
-        note(root / "C2.md", "C2", parent="[C1](C1.md)")
-        note(root / "H.md", "H", body="[HC](HC.md)")
-        note(root / "HC.md", "HC", parent="[H](H.md)")
+        note(root / "A.md", "A", body="[B1](B1.md)")
+        note(root / "B1.md", "B1", body="[B2](B2.md)", parent="[P](P.md)")
+        note(root / "B2.md", "B2", body="[B3](B3.md)")
+        note(root / "B3.md", "B3", body="[B4](B4.md)")
+        note(root / "B4.md", "B4")
+        note(root / "P.md", "P")
+        note(root / "X.md", "X", body="言及: [B1](B1.md)")
         v2.simple_sync(root)
-
-        by_name, notes, ids, id_to_path = ex._build_index(root)
-        start_id = ids[(root / "A.md").resolve()]
-
-        # 子を深く(3)・親は浅く(1)。子チェーン A->C1->C2 と、A 自身の親 G は
-        # 含まれるが、G のもう一つの子 H やその子 HC は含まれない。
-        order, _po = ex.collect_detailed(
-            start_id, _dir_of(root, by_name, notes, ids, id_to_path),
-            child_depth=3, parent_depth=1, backlink_depth=0, related_depth=0)
-        titles = {notes[id_to_path[i]]["title"] for i in order}
-        check(titles == {"A", "C1", "C2", "G"},
-              "親を1回辿った先(G)がハブでも、G の他の子(H)やその子(HC)までは展開しない")
+        check(_detailed(root, "A.md", body=3) == {"A", "B1", "B2", "B3"},
+              "深さ 3 は A→B1→B2→B3（B4 は 4 段階目、Context の P・BackLink の X は辿らない）")
+        check(_detailed(root, "A.md", body=1) == {"A", "B1"}, "深さ 1 は B1 まで")
+        check(_detailed(root, "A.md", body=0) == {"A"}, "深さ 0 は文中リンクを辿らない（起点だけ）")
 
 
-def test_detailed_mode_each_child_chain_node_gets_own_parent_and_backlink() -> None:
-    print("detailed: 子チェーン上の各ノードそれぞれが、自分自身の親・文中・関連を独立に持ってくる")
+def test_detailed_context_first_step_then_all_kinds() -> None:
+    print("detailed: Context の深さ 2 → Context に進み、その先で全種類を 1 段階（Context だけ 2 回ではない）")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        # A(起点) の親は G。A の子 C1 の親は別の note P（A の親ではない）。
-        # C1 は本文で自分に言及している D1 を BackLink に、R1 を Related に持つ。
-        note(root / "G.md", "G", body="[A](A.md)", attr="group")
-        note(root / "P.md", "P", body="Pの本文。参照: [C1](C1.md)")
-        note(root / "A.md", "A", body="[C1](C1.md)")
-        note(root / "C1.md", "C1", parent="[P](P.md)", related="[R1](R1.md)")
-        note(root / "D1.md", "D1", body="D1の本文。言及: [C1](C1.md)")
-        note(root / "R1.md", "R1", related="[C1](C1.md)")
+        note(root / "A.md", "A", parent="[C](C.md)")
+        # C: 子 CB（本文）・Context CC・Related R
+        note(root / "C.md", "C", body="[CB](CB.md)", parent="[CC](CC.md)", related="[R](R.md)")
+        note(root / "CB.md", "CB", body="[CBB](CBB.md)")
+        note(root / "CBB.md", "CBB")
+        note(root / "CC.md", "CC", parent="[CCC](CCC.md)")
+        note(root / "CCC.md", "CCC")
+        note(root / "R.md", "R", related="[C](C.md)")
         v2.simple_sync(root)
+        check(_detailed(root, "A.md", context=1) == {"A", "C"}, "深さ 1 は Context の辺だけ（C）")
+        check(_detailed(root, "A.md", context=2) == {"A", "C", "CB", "CC", "R"},
+              "深さ 2 は C の先で全種類（子 CB・Context CC・関連 R）を 1 段階")
+        check(_detailed(root, "A.md", context=3) == {"A", "C", "CB", "CC", "R", "CBB", "CCC"},
+              "深さ 3 は全種類の探索をさらに 1 段階（CBB・CCC）")
+        check(_detailed(root, "A.md", context=0) == {"A"}, "深さ 0 は Context を辿らない")
 
-        by_name, notes, ids, id_to_path = ex._build_index(root)
-        start_id = ids[(root / "A.md").resolve()]
 
-        order, _po = ex.collect_detailed(
-            start_id, _dir_of(root, by_name, notes, ids, id_to_path),
-            child_depth=1, parent_depth=1, backlink_depth=1, related_depth=1)
-        titles = {notes[id_to_path[i]]["title"] for i in order}
-        check(titles == {"A", "C1", "G", "P", "D1", "R1"},
-              "起点(A)の親G・子C1に加えて、C1自身の親P・文中D1・関連R1も独立に含まれる")
+def test_detailed_group_first_step_then_all_kinds() -> None:
+    print("detailed: Group の深さも同じ考え方（最初は Group の辺、その先は全種類）")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        note(root / "G.md", "G", body="[A](A.md)\n[A2](A2.md)", attr="group")
+        note(root / "A.md", "A", body="[X](X.md)")
+        note(root / "A2.md", "A2")
+        note(root / "X.md", "X")
+        v2.simple_sync(root)
+        check(_detailed(root, "A.md", group=1) == {"A", "G"}, "深さ 1 は Group の G だけ")
+        check(_detailed(root, "A.md", group=2) == {"A", "G", "A2"},
+              "深さ 2 は G の先で全種類（G の子 A2）。A 自身の子 X は Group の先ではないので入らない")
+        check(_detailed(root, "A.md", group=0) == {"A"}, "深さ 0 は Group を辿らない")
+
+
+def test_detailed_backlink_related_shared_depth() -> None:
+    print("detailed: BackLink / Related は共通の深さ（最初は両方、その先は全種類）")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        note(root / "A.md", "A", related="[R](R.md)")
+        note(root / "R.md", "R", related="[A](A.md)", body="[RB](RB.md)")
+        note(root / "RB.md", "RB")
+        note(root / "D.md", "D", body="言及: [A](A.md)", parent="[DP](DP.md)")
+        note(root / "DP.md", "DP")
+        v2.simple_sync(root)
+        check(_detailed(root, "A.md", br=1) == {"A", "R", "D"}, "深さ 1 は BackLink の D と Related の R の両方")
+        check(_detailed(root, "A.md", br=2) == {"A", "R", "D", "RB", "DP"},
+              "深さ 2 は D・R の先で全種類（R の子 RB・D の Context DP）")
+        check(_detailed(root, "A.md", br=0) == {"A"}, "深さ 0 は BackLink / Related を辿らない")
+
+
+def test_detailed_anchors_include_body_reached_notes() -> None:
+    print("detailed: Context 等の探索の起点は、現在のノートと文中リンクで届いたノート")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        note(root / "A.md", "A", body="[B1](B1.md)", parent="[PA](PA.md)")
+        note(root / "B1.md", "B1", body="[B2](B2.md)", parent="[PB1](PB1.md)")
+        note(root / "B2.md", "B2", parent="[PB2](PB2.md)")
+        for n in ("PA", "PB1", "PB2"):
+            note(root / f"{n}.md", n)
+        v2.simple_sync(root)
+        check(_detailed(root, "A.md", body=1, context=1) == {"A", "B1", "PA", "PB1"},
+              "文中 1・Context 1: 起点 A と B1 のそれぞれの Context（PA・PB1）。B2 の PB2 は入らない")
+        check(_detailed(root, "A.md", body=2, context=1) == {"A", "B1", "B2", "PA", "PB1", "PB2"},
+              "文中 2・Context 1: B2 の Context も入る")
+        check(_detailed(root, "A.md", body=0, context=1) == {"A", "PA"}, "文中 0 なら起点 A の Context だけ")
+
+
+def test_detailed_dedup_and_cycles() -> None:
+    print("detailed: 複数経路・循環でも重複せず、止まる")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        # 循環 A <-> B。ひし形 A→M1→T、A→M2→T。T は Context に A を持つ。
+        note(root / "A.md", "A", body="[B](B.md)\n[M1](M1.md)\n[M2](M2.md)")
+        note(root / "B.md", "B", body="[A](A.md)")
+        note(root / "M1.md", "M1", body="[T](T.md)")
+        note(root / "M2.md", "M2", body="[T](T.md)")
+        note(root / "T.md", "T", parent="[A](A.md)", body="[A](A.md)")
+        v2.simple_sync(root)
+        got = _detailed(root, "A.md", body=10, context=10, group=10, br=10)
+        check(got == {"A", "B", "M1", "M2", "T"}, f"循環があっても有限で、全部 1 回ずつ: {got}")
+        dir_of, ids, notes, id_to_path = _ctx(root)
+        order, _po = ex.collect_detailed(ids[(root / "A.md").resolve()], dir_of, 10, 10, 10, 10)
+        check(len(order) == len(set(order)) == 5, "T は複数経路から届いても 1 回だけ")
+        # 経路の順で深さの数え方が変わらない: M1 側の T は深さ 2、BackLink 側の T は深さ 1
+        check(_detailed(root, "A.md", br=1) >= {"A", "T"}, "最短の深さで見つける（BackLink 1 段階で T が入る）")
+
+
+def test_detailed_diary_flag_only_affects_backlink_edges() -> None:
+    print("detailed: Diary の t/f は BackLink の辺だけに効く（他の辺で届く日記は除外しない）")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        note(root / "A.md", "A", body="[Y](Y.md)", related="[Z](Z.md)")
+        note(root / "D.md", "D", body="言及: [A](A.md)")
+        note(root / "X.md", "2026-10-12-MO-日記", body="言及: [A](A.md)")
+        note(root / "Y.md", "2026-10-11-SU-別の日記")
+        note(root / "Z.md", "2026-10-10-SA-関連の日記", related="[A](A.md)")
+        v2.simple_sync(root)
+        t = _detailed(root, "A.md", br=1, diary=True)
+        check({"D", "2026-10-12-MO-日記", "2026-10-10-SA-関連の日記"} <= t, f"t: BackLink の日記も入る: {t}")
+        f = _detailed(root, "A.md", br=1, diary=False)
+        check("D" in f and "2026-10-12-MO-日記" not in f, f"f: BackLink の日記 X だけ除外、D は入る: {f}")
+        check("2026-10-10-SA-関連の日記" in f, "f でも Related で届く日記は除外しない")
+        fb = _detailed(root, "A.md", body=1, diary=False)
+        check("2026-10-11-SU-別の日記" in fb, "f でも文中リンクで届く日記は除外しない")
 
 
 def test_relation_links_shown_even_for_terminal_nodes() -> None:
@@ -201,7 +268,7 @@ def test_relation_links_shown_even_for_terminal_nodes() -> None:
         v2.simple_sync(root)
 
         out_path = ex._run(root, root / "A.md",
-                            lambda sid, dir_of: ex.collect_detailed(sid, dir_of, 0, 1, 0, 0))
+                            lambda sid, dir_of: ex.collect_detailed(sid, dir_of, 0, 0, 1, 0))
         text = out_path.read_text(encoding="utf-8")
         check("## Index" in text, "Index 自体は展開結果に含まれる（終端として）")
         check("## 日記" not in text and "## simple_yurii_note" not in text,
@@ -287,62 +354,87 @@ def test_trash_output_excluded_from_sync_scan() -> None:
         check(found == [], "_iter_md は .trash / _tmp 配下を無視する")
 
 
-def test_prefs_roundtrip() -> None:
-    print("prefs: detailed 実行後に前回設定を記録・復元できる")
+def _snapshot(root: Path) -> dict:
+    return {p.name: p.read_bytes() for p in root.glob("*.md")}
+
+
+def test_presets_save_list_overwrite_delete_persist() -> None:
+    print("presets: 保存・一覧・上書き確認・削除。保存済みは再読み込み（再起動）後も残る")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         _fixture(root)
-        check(ex._load_prefs(root) is None, "初回は前回設定なし")
-        ex._run(root, root / "A.md",
-                lambda sid, dir_of: ex.collect_detailed(sid, dir_of, 2, 1, 0, 1))
-        ex._save_prefs(root, 2, 1, 0, 1)
-        prefs = ex._load_prefs(root)
-        check(prefs == {"child": 2, "parent": 1, "backlink": 0, "related": 1, "diary": 1},
-              "保存した数値がそのまま読み出せる")
+        before = _snapshot(root)
+        a = ex.normalize_settings(3, 2, 1, 4, "t")
+        b = ex.normalize_settings(0, 1, 0, 2, "f")
+        check(ex.load_presets(root) == {}, "最初は空")
+        check(ex.save_preset(root, "広く 日本語", a) == "saved", "新しい名前は保存される")
+        check(ex.save_preset(root, "狭い", b) == "saved", "もう一つ保存")
+        check(ex.save_preset(root, "広く 日本語", b) == "exists", "同じ名前は確認なしに上書きしない")
+        check(ex.load_presets(root)["広く 日本語"] == a, "上書きしなかったので元の設定のまま")
+        check(ex.save_preset(root, "広く 日本語", b, overwrite=True) == "overwritten", "確認したら上書きできる")
+        check(ex.load_presets(root)["広く 日本語"] == b, "上書き後は新しい設定")
+        ex.save_preset(root, "広く 日本語", a, overwrite=True)
+        # 「再起動」= ファイルから読み直す（プロセス内の状態を持たない）
+        again = ex.load_presets(root)
+        check(set(again) == {"広く 日本語", "狭い"} and again["広く 日本語"] == a and again["狭い"] == b,
+              "5 項目すべてが復元される（body/context/group/br/diary）")
+        check(again["広く 日本語"] == {"body": 3, "context": 2, "group": 1, "br": 4, "diary": True}, "保存形式の中身")
+        check(ex.delete_preset(root, "狭い") is True and "狭い" not in ex.load_presets(root), "削除すると一覧から消える")
+        check(ex.delete_preset(root, "狭い") is False, "無い名前の削除は何もしない")
+        check(set(ex.load_presets(root)) == {"広く 日本語"}, "再読み込み後も削除したものは復活しない")
+        check(_snapshot(root) == before, "プリセットの操作でノートの中身は 1 バイトも変わらない")
+        for bad in ("", "  ", "a\tb", "a\nb"):
+            try:
+                ex.save_preset(root, bad, a)
+                check(False, f"不正な名前 {bad!r} は拒否される")
+            except ValueError:
+                check(True, f"不正な名前 {bad!r} は拒否される")
 
 
-def test_prefs_old_format_defaults_related_zero() -> None:
-    print("prefs: 関連が無い旧形式の保存値は related=0 として読める")
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d)
-        (root / ex._PREFS_FILE).write_text(
-            '{"child": 1, "parent": 2, "backlink": 3}', encoding="utf-8")
-        prefs = ex._load_prefs(root)
-        check(prefs == {"child": 1, "parent": 2, "backlink": 3, "related": 0, "diary": 1},
-              "旧 prefs（related 無し）は 0 で補完される")
+def test_settings_validation() -> None:
+    print("settings: 深さは 0 以上の整数、diary は t/f")
+    check(ex.normalize_settings("2", "0", "1", "3", "f")["diary"] is False, "f は False")
+    check(ex.normalize_settings(1, 1, 1, 1, "T")["diary"] is True, "T は True")
+    for args in ((-1, 0, 0, 0, "t"), (0, 0, 0, 0, "x"), ("a", 0, 0, 0, "t")):
+        try:
+            ex.normalize_settings(*args)
+            check(False, f"不正な設定 {args} は拒否される")
+        except ValueError:
+            check(True, f"不正な設定 {args} は拒否される")
 
 
-def test_detailed_can_exclude_diary_from_backlinks() -> None:
-    print("detailed: 文中（バックリンク）に日記を含めるか選べる")
+def test_cli_detailed_updates_prefs_but_not_presets() -> None:
+    print("CLI: detailed は前回の設定だけ更新し、保存済みプリセットは自動では書き換えない")
+    import contextlib
+    import io
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         _fixture(root)
-        note(root / "X.md", "2026-10-12-MO-日記の日", body="日記から言及: [A](A.md)")
-        v2.simple_sync(root)
-        check(ex.is_diary_title("2026-10-12-MO-日記の日") and ex.is_diary_title("2026-10-13-TU")
-              and not ex.is_diary_title("2026-10-12-夢日記") and not ex.is_diary_title("日記"),
-              "日記の題の判定（YYYY-MM-DD-曜日2文字）")
-        for diary, label in ((1, "含める"), (0, "含めない")):
-            holder: dict = {}
-            out_path = ex._run(
-                root, root / "A.md",
-                lambda sid, dir_of, diary=diary, holder=holder: ex.collect_detailed(
-                    sid, dir_of, 0, 0, 1, 0,
-                    skip_backlink=None if diary else holder["is_diary"]),
-                holder)
-            text = out_path.read_text(encoding="utf-8")
-            check("## D" in text, f"通常の言及ノート D は入る（日記を{label}）")
-            if diary:
-                check("2026-10-12-MO-日記の日" in text, "日記を含めると日記の X も入る")
-            else:
-                check("## 2026-10-12-MO-日記の日" not in text, "日記を含めないと日記の X は入らない")
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d)
-        ex._save_prefs(root, 1, 2, 3, 4, 0)
-        p = ex._load_prefs(root)
-        check(p == {"child": 1, "parent": 2, "backlink": 3, "related": 4, "diary": 0}, f"設定に日記の選択も保存される: {p}")
-        (root / ex._PREFS_FILE).write_text('{"child":1,"parent":1,"backlink":1}', encoding="utf-8")
-        check(ex._load_prefs(root)["diary"] == 1, "旧い保存値は日記を含める扱い")
+        check(ex._load_prefs(root) is None, "初回は前回の設定なし")
+        ex.save_preset(root, "固定", ex.normalize_settings(1, 1, 1, 1, "t"))
+        preset_bytes = (root / ex._PRESETS_FILE).read_bytes()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = ex.main(["expand_v2.py", "detailed", str(root), str(root / "A.md"), "2", "1", "0", "1", "f"])
+        check(rc == 0 and Path(buf.getvalue().strip()).is_file(), "展開ファイルができる")
+        check(ex._load_prefs(root) == {"body": 2, "context": 1, "group": 0, "br": 1, "diary": False},
+              "前回の設定が新しい 5 項目で保存される")
+        check((root / ex._PRESETS_FILE).read_bytes() == preset_bytes, "プリセットのファイルは変わらない")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ex.main(["expand_v2.py", "presets_list", str(root)])
+        check(buf.getvalue().strip() == "固定\t1 1 1 1 t", f"一覧は 名前<TAB>設定: {buf.getvalue()!r}")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ex.main(["expand_v2.py", "preset_save", str(root), "固定", "0", "0", "0", "0", "f"])
+        check(buf.getvalue().strip() == "exists" and ex.load_presets(root)["固定"]["body"] == 1,
+              "CLI の保存も同じ名前は上書きしない（exists）")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ex.main(["expand_v2.py", "preset_delete", str(root), "固定"])
+        check(buf.getvalue().strip() == "deleted" and ex.load_presets(root) == {}, "CLI の削除")
+        (root / ex._PREFS_FILE).write_text('{"child":1,"parent":1,"backlink":1,"related":0}', encoding="utf-8")
+        check(ex._load_prefs(root) is None, "旧形式の前回設定は読まない（探索の意味が違うため）")
 
 
 def main() -> int:

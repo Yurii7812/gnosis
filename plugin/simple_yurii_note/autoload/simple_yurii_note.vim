@@ -973,7 +973,7 @@ function! s:guide_template() abort
         \ '',
         \ '## 展開・画像・その他',
         \ '',
-        \ '- `\e` … 現ノート周辺を 1 つの md に展開（`expand_v2.py`。**シンプル/詳細**を選び、シンプルは深さを数字で入力。詳細は文中の深さが 1 以上のとき、バックリンクの日記（題が YYYY-MM-DD-曜日2文字-…）を含めるか選べる。前回値は `.pkm_expand_prefs.json`。出力 `.trash/T_*.md`）',
+        \ '- `\e` … 現ノート周辺を 1 つの md に展開（`expand_v2.py`。**シンプル/詳細**を選び、シンプルは深さを数字で入力。詳細は 5 項目（文中・Context・Group・BackLink/Related の深さ、BackLink に日記を含めるか t/f。深さ 0 = 探索しない。Context 等は 1 段階目がその種類、2 段階目以降は全種類）を指定し、名前を付けてプリセット保存・呼び出し・削除できる。前回値は `.pkm_expand_prefs.json`。出力 `.trash/T_*.md`）',
         \ '- `\se` … S ノートを A ノートに展開（`expand_s.py`。旧 v1 前提の別系統。出力 `.trash/T_*.md`）',
         \ '- `\gi` … 画像ギャラリー（画像リンクがあればそれ、無ければ Index 以下の全画像をブラウザで）',
         \ '- `\oe` … 見出しを別バッファで編集（`:write` で元ノートへ反映）',
@@ -6164,39 +6164,10 @@ function! simple_yurii_note#v2_expand() abort
     if l:n !~# '^\d\+$' | echo 'simple_yurii_note: キャンセル' | return | endif
     let l:args = [s:python_cmd(), l:py, 'simple', l:root, l:cur, l:n]
   else
-    let l:prefs = s:v2_expand_prefs(l:root, l:py)
-    let l:use_saved = 0
-    if !empty(l:prefs)
-      let l:pm = s:v2_pick('詳細設定', [
-            \ '保存済み(子' . l:prefs.child . ' 親' . l:prefs.parent . ' 文中' . l:prefs.backlink . ' 関連' . l:prefs.related
-            \ . (l:prefs.backlink > 0 ? ' 日記' . (l:prefs.diary ? '含む' : '除く') : '') . ')を使う',
-            \ '新しく設定する'])
-      if l:pm ==# '' | echo 'simple_yurii_note: キャンセル' | return | endif
-      let l:use_saved = (l:pm =~# '^保存済み')
-    endif
-    if l:use_saved
-      let l:cd = l:prefs.child
-      let l:pd = l:prefs.parent
-      let l:bd = l:prefs.backlink
-      let l:rd = l:prefs.related
-      let l:dy = l:prefs.diary
-    else
-      let l:cd = input('子の深さ: ', '1')
-      let l:pd = input('親の深さ: ', '1')
-      let l:bd = input('文中の深さ: ', '0')
-      let l:rd = input('関連の深さ: ', '0')
-      if l:cd !~# '^\d\+$' || l:pd !~# '^\d\+$' || l:bd !~# '^\d\+$' || l:rd !~# '^\d\+$'
-        echo 'simple_yurii_note: キャンセル' | return
-      endif
-      " 文中（バックリンク）を辿るときだけ、日記（題が YYYY-MM-DD-曜日2文字-…）を含めるか選ぶ
-      let l:dy = 1
-      if l:bd > 0
-        let l:dp = s:v2_pick('文中(バックリンク)の日記', ['含める', '含めない'])
-        if l:dp ==# '' | echo 'simple_yurii_note: キャンセル' | return | endif
-        let l:dy = (l:dp ==# '含める') ? 1 : 0
-      endif
-    endif
-    let l:args = [s:python_cmd(), l:py, 'detailed', l:root, l:cur, l:cd, l:pd, l:bd, l:rd, l:dy]
+    let l:st = s:v2_expand_detail_settings(l:root, l:py)
+    if empty(l:st) | echo 'simple_yurii_note: キャンセル' | return | endif
+    let l:args = [s:python_cmd(), l:py, 'detailed', l:root, l:cur,
+          \ l:st.body, l:st.context, l:st.group, l:st.br, l:st.diary]
   endif
 
   let l:out = systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
@@ -6212,18 +6183,149 @@ function! simple_yurii_note#v2_expand() abort
   execute 'edit ' . fnameescape(l:result_path)
 endfunction
 
+" ---------------------------------------------------------------------------
+" \e 詳細モードの探索設定（5 項目）とプリセット
+"   {body, context, group, br: 深さの文字列, diary: 't' | 'f'}
+"   body    … 文中リンクの深さ（本文のリンクだけを辿る）
+"   context … Context の深さ（1 段階目は Context、その先は全種類）
+"   group   … Group の深さ（同上）
+"   br      … BackLink / Related 共通の深さ（同上）
+"   diary   … BackLink の探索に日記（題が YYYY-MM-DD-曜日2文字-…）を含めるか
+"   深さ 0 = その探索はしない。前回の設定は自動で記録され、プリセットは明示的に保存したものだけ
+"   （vault 直下の .pkm_expand_prefs.json / .pkm_expand_presets.json。ノートには触れない）。
+" ---------------------------------------------------------------------------
+
+function! s:v2_expand_parse(line) abort
+  let l:p = split(trim(a:line))
+  if len(l:p) != 5 | return {} | endif
+  return {'body': l:p[0], 'context': l:p[1], 'group': l:p[2], 'br': l:p[3], 'diary': l:p[4]}
+endfunction
+
+function! s:v2_expand_fmt(st) abort
+  return '文中' . a:st.body . ' Context' . a:st.context . ' Group' . a:st.group
+        \ . ' BL/Rel' . a:st.br . ' 日記' . a:st.diary
+endfunction
+
 " 詳細モードの前回設定を取得する。無ければ空 dict
 function! s:v2_expand_prefs(root, py) abort
-  let l:args = [s:python_cmd(), a:py, 'get_prefs', a:root]
-  let l:out = systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
-  if v:shell_error != 0 || empty(l:out) || trim(l:out[0]) ==# ''
+  let l:out = systemlist(join(map([s:python_cmd(), a:py, 'get_prefs', a:root], 'shellescape(v:val)'), ' '))
+  if v:shell_error != 0 || empty(l:out)
     return {}
   endif
-  let l:parts = split(trim(l:out[0]))
-  if len(l:parts) != 4 && len(l:parts) != 5 | return {} | endif
-  " 5 つ目 = 文中に日記を含めるか（旧形式は 4 つ → 含める）
-  return {'child': l:parts[0], 'parent': l:parts[1], 'backlink': l:parts[2], 'related': l:parts[3],
-        \ 'diary': len(l:parts) > 4 ? str2nr(l:parts[4]) : 1}
+  return s:v2_expand_parse(l:out[0])
+endfunction
+
+" プリセット一覧: [{name, st}]（名前順）
+function! s:v2_expand_presets(root, py) abort
+  let l:out = systemlist(join(map([s:python_cmd(), a:py, 'presets_list', a:root], 'shellescape(v:val)'), ' '))
+  let l:res = []
+  if v:shell_error != 0 | return l:res | endif
+  for l:ln in l:out
+    let l:f = split(l:ln, "\t", 1)
+    if len(l:f) != 2 | continue | endif
+    let l:st = s:v2_expand_parse(l:f[1])
+    if !empty(l:st) | call add(l:res, {'name': l:f[0], 'st': l:st}) | endif
+  endfor
+  return l:res
+endfunction
+
+" 5 項目を 1 つずつ入力する（既定値は a:def）。取り止めなら {}。
+function! s:v2_expand_input(def) abort
+  let l:st = {}
+  for [l:key, l:label] in [['body', '文中リンクの深さ'], ['context', 'Context の深さ'],
+        \ ['group', 'Group の深さ'], ['br', 'Backlink / Related の深さ']]
+    let l:v = trim(input(l:label . ' (0 = 探索しない): ', a:def[l:key]))
+    if l:v !~# '^\d\+$' | redraw | return {} | endif
+    let l:st[l:key] = l:v
+  endfor
+  let l:d = trim(input('Backlink の探索に Diary を含めるか (t / f): ', a:def.diary))
+  redraw
+  if l:d !~# '^[tf]$' | return {} | endif
+  let l:st.diary = l:d
+  return l:st
+endfunction
+
+" プリセットを保存する。同じ名前があれば上書きするか確認する（確認なしには上書きしない）。
+function! s:v2_expand_save_preset(root, py, st) abort
+  let l:name = trim(input('プリセット名: '))
+  redraw
+  if empty(l:name) | echo 'simple_yurii_note: 保存しない' | return 0 | endif
+  let l:base = [s:python_cmd(), a:py, 'preset_save', a:root, l:name,
+        \ a:st.body, a:st.context, a:st.group, a:st.br, a:st.diary]
+  let l:out = systemlist(join(map(copy(l:base), 'shellescape(v:val)'), ' '))
+  if v:shell_error != 0
+    echohl WarningMsg | echo 'simple_yurii_note: プリセットを保存できません: ' . join(l:out, ' ') | echohl NONE
+    return 0
+  endif
+  if get(l:out, 0, '') ==# 'exists'
+    if confirm('プリセット「' . l:name . '」は既にあります。上書きしますか？', "&Yes\n&No", 2) != 1
+      echo 'simple_yurii_note: 上書きしない（保存しない）'
+      return 0
+    endif
+    call systemlist(join(map(l:base + ['overwrite'], 'shellescape(v:val)'), ' '))
+  endif
+  echo 'simple_yurii_note: プリセット「' . l:name . '」を保存した'
+  return 1
+endfunction
+
+" 一覧から 1 つ選ぶ（inputlist）。取り止めなら {}。
+function! s:v2_expand_choose_preset(label, presets) abort
+  let l:lines = [a:label . '（番号を入力。0 / 空で取り止め）']
+  let l:i = 1
+  for l:p in a:presets
+    call add(l:lines, l:i . '. ' . l:p.name . '    [' . s:v2_expand_fmt(l:p.st) . ']')
+    let l:i += 1
+  endfor
+  let l:n = inputlist(l:lines)
+  redraw
+  if l:n < 1 || l:n > len(a:presets) | return {} | endif
+  return a:presets[l:n - 1]
+endfunction
+
+" 詳細モードの探索設定を決める。戻り値は設定の dict（取り止めなら {}）。
+function! s:v2_expand_detail_settings(root, py) abort
+  while 1
+    let l:prefs = s:v2_expand_prefs(a:root, a:py)
+    let l:presets = s:v2_expand_presets(a:root, a:py)
+    let l:items = []
+    if !empty(l:prefs) | call add(l:items, '前回の設定で展開') | endif
+    call add(l:items, '新しく設定する')
+    if !empty(l:presets)
+      call add(l:items, 'プリセットを呼び出す')
+      call add(l:items, 'プリセットを削除する')
+    endif
+    let l:label = '詳細設定' . (empty(l:prefs) ? '' : '(前回: ' . s:v2_expand_fmt(l:prefs) . ')')
+    let l:pm = s:v2_pick(l:label, l:items)
+    if l:pm ==# '' | return {} | endif
+
+    if l:pm ==# '前回の設定で展開'
+      return l:prefs
+    elseif l:pm ==# '新しく設定する'
+      let l:def = empty(l:prefs) ? {'body': '3', 'context': '1', 'group': '1', 'br': '1', 'diary': 't'} : l:prefs
+      let l:st = s:v2_expand_input(l:def)
+      if empty(l:st) | return {} | endif
+      let l:act = s:v2_pick('この設定 [' . s:v2_expand_fmt(l:st) . '] を', ['展開する', '名前を付けて保存して展開する'])
+      if l:act ==# '' | return {} | endif
+      if l:act =~# '^名前'
+        call s:v2_expand_save_preset(a:root, a:py, l:st)
+      endif
+      return l:st
+    elseif l:pm ==# 'プリセットを呼び出す'
+      let l:p = s:v2_expand_choose_preset('呼び出すプリセット', l:presets)
+      if empty(l:p) | return {} | endif
+      return l:p.st
+    elseif l:pm ==# 'プリセットを削除する'
+      let l:p = s:v2_expand_choose_preset('削除するプリセット', l:presets)
+      if empty(l:p) | return {} | endif
+      if confirm('プリセット「' . l:p.name . '」を削除しますか？（ノートは消えません）', "&Yes\n&No", 2) == 1
+        call systemlist(join(map([s:python_cmd(), a:py, 'preset_delete', a:root, l:p.name], 'shellescape(v:val)'), ' '))
+        echo 'simple_yurii_note: プリセット「' . l:p.name . '」を削除した'
+      endif
+      " メニューに戻る
+    else
+      return {}
+    endif
+  endwhile
 endfunction
 
 " カーソル直下ノート（zh）: 新ノートを作り、そのリンクをカーソル行の直下（本文）に置く。

@@ -225,6 +225,41 @@ const scenario = `(async () => {
     await press('\\x1b', 500);
   }
 
+  // \\e 詳細モード: 5 項目を入力し、名前を付けて保存（2 件）→ 1 件削除。vault の JSON を後で確認する
+  {
+    const menu = () => G.screen().slice(-3).join('|').replace(/\\s+/g, ' ').slice(0, 300);
+    await press(':e m1.md\\r', 1200);
+    await press('\\\\e', 800);
+    await press('2', 600);                 // 詳細
+    R.eMenu1 = menu();
+    await press('1', 600);                 // 新しく設定する
+    for (let k = 0; k < 5; k++) await press('\\r', 300);   // 既定値のまま 5 項目
+    await press('2', 600);                 // 名前を付けて保存して展開する
+    await press('テスト設定\\r', 1500);
+    R.eAfterSave = { file: base(G.state().file) };
+    // 2 件目: 値を変えて保存（入力欄は既定値入りなので Ctrl-U で消してから打つ）
+    await press(':e m1.md\\r', 1200);
+    await press('\\\\e', 800);
+    await press('2', 600);
+    R.eMenu2 = menu();
+    await press('2', 600);                 // 新しく設定する（前回の設定があるので 2 番）
+    for (const v of ['2', '0', '1', '2', 'f']) await press('\\x15' + v + '\\r', 300);
+    await press('2', 600);
+    await press('残す設定\\r', 1500);
+    R.eAfterSave2 = { file: base(G.state().file) };
+    // 呼び出し → 削除
+    await press(':e m1.md\\r', 1200);
+    await press('\\\\e', 800);
+    await press('2', 600);
+    await press('4', 800);                 // プリセットを削除する
+    R.eDeleteList = G.screen().filter((r) => r.trim()).slice(-6).join('|').replace(/\\s+/g, ' ').slice(0, 300);
+    await press('1\\r', 800);              // 一覧の 1 番（名前順で「テスト設定」）
+    await press('y', 800);                 // 削除の確認 Yes
+    R.eAfterDelete = menu();
+    await press('\\x1b', 500);
+    await press('\\x1b', 500);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -292,6 +327,19 @@ try {
     check(/h=カーソル直下/.test(k.prompt || "") && /c=Context末尾/.test(k.prompt || ""), "\\l: the place-key prompt should be visible after confirming: " + JSON.stringify(k));
     check(k.hasLink, "\\l: the buffer should be fully redrawn behind the prompt (not a blank/half-drawn screen): " + JSON.stringify(k));
     check(k.st?.mode === "n" && k.st.bt === "" && k.st.popups === 0 && !k.expanded, "\\l: back in the normal buffer: " + JSON.stringify(k));
+  }
+  {
+    check(/新しく設定する/.test(R.eMenu1 || "") && !/プリセット/.test(R.eMenu1 || ""), "\\e detail: first time shows only 'new settings': " + R.eMenu1);
+    check(/^T_\d+\.md$/.test(R.eAfterSave?.file || "") && /^T_\d+\.md$/.test(R.eAfterSave2?.file || ""), "\\e detail: expansion files are opened after saving: " + JSON.stringify([R.eAfterSave, R.eAfterSave2]));
+    check(/プリセットを呼び出す/.test(R.eMenu2 || "") && /プリセットを削除する/.test(R.eMenu2 || "") && /前回の設定で展開/.test(R.eMenu2 || ""), "\\e detail: menu offers last/recall/delete once presets exist: " + R.eMenu2);
+    check(/テスト設定.*文中3 Context1 Group1 BL\/Rel1 日記t/.test(R.eDeleteList || ""), "\\e detail: preset list shows names and their 5 settings: " + R.eDeleteList);
+    const pre = JSON.parse(fs.readFileSync(path.join(vault, ".pkm_expand_presets.json"), "utf8")).presets;
+    check(!("テスト設定" in pre) && JSON.stringify(pre["残す設定"]) === JSON.stringify({ body: 2, context: 0, group: 1, br: 2, diary: false }),
+      "\\e detail: deleted preset is gone, the other keeps its 5 values on disk: " + JSON.stringify(pre));
+    const last = JSON.parse(fs.readFileSync(path.join(vault, ".pkm_expand_prefs.json"), "utf8"));
+    check(last.body === 2 && last.diary === false, "\\e detail: last settings are recorded separately: " + JSON.stringify(last));
+    const m1 = fs.readFileSync(path.join(vault, "m1.md"), "utf8");
+    check(!m1.includes("テスト設定") && !m1.includes("残す設定"), "\\e detail: notes are untouched by preset operations");
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
