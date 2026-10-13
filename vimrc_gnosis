@@ -42,8 +42,8 @@ call gnosis#home#ensure_fzf_path()
 " vault が決まるまでは Gnosis ホームの viminfo を使う。
 call gnosis#home#setup_viminfo()
 
-" 起動画面の配色（白背景・黒文字）。vault を開いたら、その vault の設定のテーマに切り替わる。
-set background=light
+" 起動画面は Chnoubis パレット10（夜空×水色）。vault を開いたらそのテーマに切り替わる。
+set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
 set t_ut=
 silent! colorscheme gnosis
