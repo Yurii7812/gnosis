@@ -404,7 +404,12 @@ def test_diary_register_and_keyword() -> None:
         check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
         gtext = group.read_text(encoding="utf-8")
         check("title: 紙の日記" in gtext and "attribute: group" in gtext, "題は「紙の日記」（デジタル日記の「日記」と区別）")
-        check(gtext.index("2026-09-30-WE") < gtext.index("2026-10-07-WE"), "日付順（古い日記から）に並ぶ")
+        check("[2026-09](" in gtext and "[2026-10](" in gtext and gtext.index("[2026-09](") < gtext.index("[2026-10](")
+              and "2026-10-07-WE" not in gtext, "「日記」の直下には月グループが古い順に並ぶ（年が変わるまで年グループは作らない）")
+        check(pp._find_note_by_fm(root, "paper_diary_year", "2026") is None, "同じ年だけなら年グループは作られない")
+        m10 = pp._find_note_by_fm(root, "paper_diary_month", "2026-10")
+        mtext = m10.read_text(encoding="utf-8")
+        check("title: 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         link = f"({group.name})"
         check(link in index_text, "Index の「日記」は紙の日記グループを指す")
@@ -421,8 +426,23 @@ def test_diary_register_and_keyword() -> None:
         check("paper-diary-20261007-3.jpg" in n7b and n7b.count("![](") == 3, "同じ日付の続きのページは同じノートに足される（上書きしない）")
         pp.regen(root)
         gtext = group.read_text(encoding="utf-8")
-        order = [gtext.index(x) for x in ("2026-09-30-WE", "2026-10-01-TH", "2026-10-07-WE")]
-        check(order == sorted(order) and gtext.count("2026-10-07-WE](") == 1, "追加後も日付順で、重複しない")
+        mtext = pp._find_note_by_fm(root, "paper_diary_month", "2026-10").read_text(encoding="utf-8")
+        order = [mtext.index(x) for x in ("2026-10-01-TH", "2026-10-07-WE")]
+        check(order == sorted(order) and mtext.count("2026-10-07-WE](") == 1, "追加後も月の中で日付順、重複しない")
+        check(pp._find_note_by_fm(root, "paper_diary_year", "2026") is None, "追加しても同じ年なら年グループは作らない")
+        # 年が変わったら: すべての年に年グループを作り、「日記」の直下は年グループになる
+        moved, errors = pp.register_diary_pages(root, root, [(img("d1.jpg"), "2025-12-31")])
+        pp.regen(root)
+        y25 = pp._find_note_by_fm(root, "paper_diary_year", "2025")
+        y26 = pp._find_note_by_fm(root, "paper_diary_year", "2026")
+        check(y25 is not None and y26 is not None, "年をまたいだら、すべての年に年グループができる")
+        t25 = y25.read_text(encoding="utf-8")
+        t26 = y26.read_text(encoding="utf-8")
+        check("title: 2025\n" in t25 and "[2025-12](" in t25 and "[2026-09](" in t26 and "[2026-10](" in t26, "年グループに月グループが並ぶ")
+        gtext = group.read_text(encoding="utf-8")
+        check("[2025](" in gtext and "[2026](" in gtext and "[2026-09](" not in gtext and gtext.index("[2025](") < gtext.index("[2026](")
+              and gtext.count("[2025](") == 1, f"「日記」の直下は年グループ（古い順・重複なし）に替わる: {gtext}")
+        check("[日記](" in idx.read_text(encoding="utf-8") and idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
 
 
 def test_diary_keyword_merges_with_index_write_entry() -> None:
@@ -440,7 +460,7 @@ def test_diary_keyword_merges_with_index_write_entry() -> None:
         check(text.count("[日記](") == 1, f"「日記」は 1 つだけ: {text}")
         group = pp.find_group(root, "日記")
         gtext = group.read_text(encoding="utf-8")
-        check("2026-10-07-WE" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記が同じグループに並ぶ")
+        check("[2026-10](" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記（月グループ）が同じグループに並ぶ")
 
 
 def test_diary_errors_and_scan_unchanged() -> None:
@@ -474,8 +494,8 @@ def test_diary_weekday_is_computed() -> None:
         text = old.read_text(encoding="utf-8")
         check("title: 2026-10-01-TH\n" in text and "# 2026-10-01-TH\n" in text and "paper-diary-20261001-1.jpg" in text and "paper_diary: 2026-10-01" in text,
               "旧い題（曜日つきの紙の日記など）は YYYY-MM-DD-TH に直り、画像と日付はそのまま")
-        group = pp.find_group(root, "日記").read_text(encoding="utf-8")
-        check("[2026-10-01-TH](261001000000.md)" in group and "紙の日記](" not in group, "一覧のリンクも同じ題")
+        month = pp._find_note_by_fm(root, "paper_diary_month", "2026-10").read_text(encoding="utf-8")
+        check("[2026-10-01-TH](261001000000.md)" in month and "(木) 紙の日記](" not in month, "月グループの一覧のリンクも同じ題（曜日つきの旧題は残らない）")
 
 
 def test_regen_without_index() -> None:

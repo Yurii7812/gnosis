@@ -21,7 +21,8 @@
   （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD-曜日2文字`（例 2026-10-13-TU。曜日は日付から自動計算。デジタル日記と同じ形）にまとめる。
   複数ページは同じノートに画像を並べる。ノートの `time:` はスキャンした日時で、日記の日付とは別。
   日記があると Paper-Zettelkasten-Index のキーワードに「日記」が 1 つ自動で入り、
-  開くと日付順に日記の一覧（グループ `紙の日記`）になる。デジタル日記（`\\d`）とは題の形が違い、
+  開くと日記の一覧（グループ `紙の日記`）になり、**年・月別**に辿れる: 「日記」→ 月グループ（題 `YYYY-MM`）→ 日（日付順）。
+  **年グループ（題 `YYYY`）は、日記が 2 つ以上の年にまたがってから**作る（それまでは「日記」の直下に月グループが並ぶ）。デジタル日記（`\\d`）とは題の形が違い、
   `\\d` の日記グループ（題 `日記`）とも別のノート。
 - 生成物（Index・グループ・Folgezettel-Index・スキャンノート）の本文は regen が
   毎回まるごと作り直す（管理コメントは書かない）。`Index-write.md` だけは
@@ -75,6 +76,8 @@ KEYWORD_LINE_RE = re.compile(
 FM_FOLGEZETTEL = "folgezettel"
 FM_PAPER_KEYWORD = "paper_keyword"
 FM_PAPER_INDEX = "paper_index"
+FM_PAPER_DIARY_MONTH = "paper_diary_month"  # 紙の日記の月グループのfm（値=YYYY-MM）
+FM_PAPER_DIARY_YEAR = "paper_diary_year"    # 紙の日記の年グループのfm（値=YYYY。年が変わってから作る）
 FM_PAPER_DIARY = "paper_diary"          # 紙の日記ノートのfm（値=日記が書かれた日付 YYYY-MM-DD）
 DIARY_KEYWORD = "日記"                   # Paper-Zettelkasten-Index のキーワード表示名
 DIARY_GROUP_TITLE = "紙の日記"           # そのグループノートの題（デジタル日記のグループ「日記」と区別する）
@@ -791,6 +794,85 @@ def _root_id(fid: str) -> str:
     return fid
 
 
+def _find_note_by_fm(root: Path, key: str, value: str) -> Optional[Path]:
+    for p in iter_md(root):
+        try:
+            fm, _ = read_note(p)
+        except OSError:
+            continue
+        if fm_value(fm, key) == value:
+            return p
+    return None
+
+
+def _write_diary_group(root: Path, key: str, value: str, links: list[str],
+                       strip_targets: set[str], extra_tail: Optional[list[str]] = None) -> Path:
+    """紙の日記の月／年グループを作る／作り直す（題 = 値。`attribute: group`）。
+    本文のリンクは作り直し（古い構造のリンクは strip_targets で外す）。それ以外の手書きは残す。"""
+    path = _find_note_by_fm(root, key, value)
+    if path is None:
+        path = unique_note_path(root)
+        write_note(path, [_time_line(), f"title: {value}", f"{key}: {value}", "attribute: group"], [f"# {value}", ""])
+    fm, old_body = read_note(path)
+    base = path.parent
+
+    def _structure_link(ln: str) -> bool:
+        m = re.search(r"\]\(([^)#]+)", ln)
+        return bool(m) and os.path.normpath(str(base / m.group(1))) in strip_targets
+
+    old_body = [ln for ln in old_body if not _structure_link(ln)]
+    fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
+    fm.insert(1 if fm else 0, f"title: {value}")
+    fm.append("attribute: group")
+    write_note(path, fm, merge_note_body(old_body, [f"# {value}", "", *links, *(extra_tail or [])]))
+    return path
+
+
+def build_diary_hierarchy(root: Path, diaries: dict[str, Path]) -> tuple[list[Path], set[str]]:
+    """紙の日記を 年・月別のグループにまとめる。戻り値: (一番上のグループ「日記」の直下に並べるノート, 構造ノートの正規化パス)。
+
+    - 日（日記ノート）は月グループ（題 YYYY-MM）の本文に日付順に並ぶ。
+    - **年グループ（題 YYYY）は、日記が 2 つ以上の年にまたがってから**作る（年が変わるまでは作らない）。
+      またがったら、すべての年に年グループを作り、その本文に月グループを並べる。
+    - 年が変わる前は「日記」の直下に月グループが並び、変わったあとは年グループが並ぶ。
+    """
+    by_month: dict[str, list[tuple[str, Path]]] = {}
+    for date, path in sorted(diaries.items()):
+        by_month.setdefault(date[:7], []).append((date, path))
+    years = sorted({m[:4] for m in by_month})
+    use_years = len(years) >= 2
+
+    # 古い構造のリンク（日・月・年）はどのグループからも一度外して作り直す
+    month_paths: dict[str, Path] = {}
+    for month in by_month:
+        existing = _find_note_by_fm(root, FM_PAPER_DIARY_MONTH, month)
+        if existing is not None:
+            month_paths[month] = existing
+    year_paths: dict[str, Path] = {}
+    for y in years:
+        existing = _find_note_by_fm(root, FM_PAPER_DIARY_YEAR, y)
+        if existing is not None:
+            year_paths[y] = existing
+    strip = {os.path.normpath(str(p)) for p in diaries.values()}
+    strip |= {os.path.normpath(str(p)) for p in month_paths.values()}
+    strip |= {os.path.normpath(str(p)) for p in year_paths.values()}
+
+    for month, days in sorted(by_month.items()):
+        links = [markdown_link(diary_title(d), p, root) for d, p in days]
+        month_paths[month] = _write_diary_group(root, FM_PAPER_DIARY_MONTH, month, links, strip)
+        strip.add(os.path.normpath(str(month_paths[month])))
+    if not use_years:
+        # 年グループを作らなかった（まだ作らない）。前に作っていたら残す（消さない）が、並べない
+        return [month_paths[m] for m in sorted(month_paths) if m in by_month], strip
+    top: list[Path] = []
+    for y in years:
+        links = [markdown_link(m, month_paths[m], root) for m in sorted(by_month) if m.startswith(y)]
+        year_paths[y] = _write_diary_group(root, FM_PAPER_DIARY_YEAR, y, links, strip)
+        strip.add(os.path.normpath(str(year_paths[y])))
+        top.append(year_paths[y])
+    return top, strip
+
+
 def regen(root: Path, do_sync: bool = True) -> bool:
     """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。"""
     root = Path(root).resolve()
@@ -870,11 +952,12 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         ]
         old_group_body_extra = None
         if entry.get("diary"):
-            # 紙の日記を日付順に並べる（古い日記から）。並びを保つため、既存の日記リンクは作り直す
-            diary_targets = {os.path.normpath(str(p)) for p in diaries.values()}
-            inner += [markdown_link(diary_title(date), path, group_path.parent)
-                      for date, path in sorted(diaries.items())]
-            old_group_body_extra = diary_targets
+            # 紙の日記は 年・月別のグループにまとめる（年グループは年が変わってから）。
+            # 一番上の「日記」グループには、月グループ（年が変わったあとは年グループ）を並べる
+            top_children, diary_structure = build_diary_hierarchy(root, diaries)
+            inner += [markdown_link(fm_value(read_note(p)[0], "title") or p.stem, p, group_path.parent)
+                      for p in top_children]
+            old_group_body_extra = diary_structure
         inner.append(CONTEXT_HEAD)
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 

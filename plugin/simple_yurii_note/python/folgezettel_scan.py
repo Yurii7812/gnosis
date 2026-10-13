@@ -534,6 +534,24 @@ class ScanApp:
         self.diary_date_var.trace_add("write", self.update_diary_preview)
         self.diary_date_entry.bind("<Return>", self.confirm_diary)
         self.diary_date_entry.bind("<Escape>", self.cancel_input)
+        # 日記一覧: 登録済みの日記（と、このバッチで登録した日付）。選ぶと日付が入る。
+        # 一覧にない日付は、上の欄に打てば新しい日記になる。
+        list_row = ttk.Frame(self.input_holder, style="Card.TFrame")
+        self.diary_list_row = list_row
+        ttk.Label(list_row, text="日記一覧:", style="CardMuted.TLabel").pack(side="left", anchor="n")
+        self.diary_list = tk.Listbox(list_row, height=6, width=34, exportselection=False,
+                                     font=(self.mono_font, FONT_SIZES["small"]), activestyle="none")
+        diary_scroll = ttk.Scrollbar(list_row, orient="vertical", command=self.diary_list.yview)
+        self.diary_list.configure(yscrollcommand=diary_scroll.set)
+        self.diary_list.pack(side="left", padx=(10, 0))
+        diary_scroll.pack(side="left", fill="y")
+        ttk.Label(list_row, text="↑↓ で選ぶ ／ ダブルクリックか Enter で確定", style="CardNote.TLabel").pack(
+            side="left", padx=(14, 0), anchor="s")
+        self.diary_list.bind("<<ListboxSelect>>", self.on_diary_list_select)
+        self.diary_list.bind("<Double-Button-1>", self.confirm_diary)
+        self.diary_list_dates: list[str] = []
+        self.diary_date_entry.bind("<Down>", lambda e: self.move_diary_selection(1))
+        self.diary_date_entry.bind("<Up>", lambda e: self.move_diary_selection(-1))
 
         # キー操作と同じ動きの大きなボタン（キーボードでも押してもOK）
         self.action_bar = ttk.Frame(self.naming_frame)
@@ -963,6 +981,7 @@ class ScanApp:
     def show_input(self, value: str):
         self.topic_frame.pack_forget()
         self.diary_frame.pack_forget()
+        self.diary_list_row.pack_forget()
         self.input_active = True
         self.input_var.set(value)
         self.input_holder.pack(fill="x", pady=(6, 8), before=self.action_bar)
@@ -975,6 +994,7 @@ class ScanApp:
         self.input_holder.pack_forget()
         self.input_frame.pack_forget()
         self.diary_frame.pack_forget()
+        self.diary_list_row.pack_forget()
         self.input_active = True
         previous = self.previous_id()
         self.topic_id_var.set(previous or "")
@@ -1003,9 +1023,65 @@ class ScanApp:
         self.diary_date_var.set(self.last_diary_date() or datetime.now().strftime("%Y-%m-%d"))
         self.input_holder.pack(fill="x", pady=(6, 8), before=self.action_bar)
         self.diary_frame.pack(fill="x", pady=2)
+        self.refresh_diary_list()
+        self.diary_list_row.pack(fill="x", pady=(6, 0))
         self.diary_date_entry.focus_set()
         self.diary_date_entry.icursor(tk.END)
         self.status_var.set("この日記が書かれた日付を確認してEnter（同じ日記の続きのページは同じ日付のまま）")
+
+    def diary_choices(self) -> list[tuple[str, int]]:
+        """日記一覧: [(日付, ページ数)]（新しい日記から）。vault に登録済みの日記と、このバッチで
+        登録した日付をまとめる。ページ数 = vault の日記ノートの画像数 + このバッチの枚数。"""
+        pages: dict[str, int] = {}
+        for date, note in pp.scan_diary_notes(self.vault_root).items():
+            try:
+                _fm, body = pp.read_note(note)
+            except OSError:
+                continue
+            pages[date] = sum(1 for ln in body if pp._IMAGE_LINE_RE.match(ln.strip()))
+        for item in self.items:
+            if item.processed and item.diary_date:
+                pages[item.diary_date] = pages.get(item.diary_date, 0) + 1
+        return sorted(pages.items(), reverse=True)
+
+    def refresh_diary_list(self):
+        choices = self.diary_choices()
+        self.diary_list_dates = [d for d, _n in choices]
+        self.diary_list.delete(0, tk.END)
+        for date, n in choices:
+            self.diary_list.insert(tk.END, f"{pp.diary_label(date)}   {n}ページ")
+        self.sync_diary_selection()
+
+    def sync_diary_selection(self):
+        """入力欄の日付に合う行を選んで見せる（なければ選択なし = 新しい日記）。"""
+        self.diary_list.selection_clear(0, tk.END)
+        try:
+            date = pp.normalize_diary_date(self.diary_date_var.get())
+        except ValueError:
+            return
+        if date in self.diary_list_dates:
+            i = self.diary_list_dates.index(date)
+            self.diary_list.selection_set(i)
+            self.diary_list.see(i)
+
+    def on_diary_list_select(self, _event=None):
+        sel = self.diary_list.curselection()
+        if sel:
+            self.diary_date_var.set(self.diary_list_dates[sel[0]])
+            self.diary_date_entry.icursor(tk.END)
+
+    def move_diary_selection(self, delta: int):
+        if not self.diary_list_dates:
+            return "break"
+        sel = self.diary_list.curselection()
+        i = (sel[0] + delta) if sel else (0 if delta > 0 else len(self.diary_list_dates) - 1)
+        i = max(0, min(len(self.diary_list_dates) - 1, i))
+        self.diary_list.selection_clear(0, tk.END)
+        self.diary_list.selection_set(i)
+        self.diary_list.see(i)
+        self.diary_date_var.set(self.diary_list_dates[i])
+        self.diary_date_entry.icursor(tk.END)
+        return "break"
 
     def update_diary_preview(self, *_args):
         """入力中の日付を曜日つきで見せる（例: 2026-10-07 → 2026-10-07(水)）。"""
@@ -1013,6 +1089,8 @@ class ScanApp:
             self.diary_preview_var.set("→ " + pp.diary_label(pp.normalize_diary_date(self.diary_date_var.get())))
         except ValueError:
             self.diary_preview_var.set("")
+        if hasattr(self, "diary_list_dates"):
+            self.sync_diary_selection()
 
     def on_diary(self, _event=None):
         if self.input_active:

@@ -54,6 +54,10 @@ def main() -> int:
         scans.mkdir()
         (vault / "index.md").write_text("---\ntitle: Index\nattribute: group\n---\n\n# Index\n", encoding="utf-8")
         idx = pp.create_paper_index(vault)
+        # 登録済みの日記（日記一覧に出る）
+        prior = scans / "prior.jpg"
+        Image.new("RGB", (40, 30), (9, 9, 9)).save(prior)
+        pp.register_diary_pages(vault, vault, [(prior, "2026-10-05")])
         for i in range(1, 5):
             Image.new("RGB", (40, 30), (i * 40, 0, 0)).save(scans / f"s{i}.jpg")
         app = fs.ScanApp(root_tk, vault, vault)
@@ -87,6 +91,17 @@ def main() -> int:
         app.show_diary_input()
         app.diary_date_var.set("2026-10-07")
         app.confirm_diary()
+        # 日記一覧: 登録済みの日記と、このバッチの日付が新しい順に並ぶ。選ぶと日付が入る
+        app.show_diary_input()
+        listed = list(app.diary_list.get(0, "end"))
+        check(app.diary_list_dates == ["2026-10-07", "2026-10-05"], f"日記一覧は新しい順: {app.diary_list_dates}")
+        check(listed[0].startswith("2026-10-07-WE") and "2ページ" in listed[0] and listed[1].startswith("2026-10-05-MO") and "1ページ" in listed[1],
+              f"曜日とページ数つきで出る: {listed}")
+        app.move_diary_selection(1)
+        check(app.diary_date_var.get() == "2026-10-05", "↓ で一覧の次の日記を選ぶと日付が入る")
+        app.diary_date_var.set("2026-09-30")
+        check(not app.diary_list.curselection(), "一覧にない日付を打てば選択なし（新しい日記）")
+        app.hide_input()
         # 4 枚目: 別の日の日記
         app.show_diary_input()
         app.diary_date_var.set("2026-09-30")
@@ -94,7 +109,7 @@ def main() -> int:
         app.move_processed(auto=True)
 
         notes = pp.scan_diary_notes(vault)
-        check(set(notes) == {"2026-10-07", "2026-09-30"}, f"日記ノートができる: {sorted(notes)}")
+        check(set(notes) == {"2026-10-07", "2026-09-30", "2026-10-05"}, f"日記ノートができる: {sorted(notes)}")
         n = notes["2026-10-07"].read_text(encoding="utf-8")
         check("paper-diary-20261007-1.jpg" in n and "paper-diary-20261007-2.jpg" in n, "複数ページが 1 ノートに入る")
         check((vault / "paper-diary-20261007-1.jpg").is_file() and (vault / "1.jpg").is_file(), "日記の画像と通常の ID 画像が vault へ移る")
