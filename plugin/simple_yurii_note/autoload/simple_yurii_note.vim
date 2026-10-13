@@ -11468,6 +11468,10 @@ endfunction
 " gocryptfs は「空でないマウントポイント」を拒否するため、起動時の vimrc や
 " プラグインの初期化がロック中に mountpoint へファイルを作ると、正しいパスワード
 " でもマウントに失敗する。
+" この Vim 自身がマウントしたか。アプリ（\A）が起動する Vim は、別の Vim が先にマウントした vault を
+" 終了時にアンマウントしない（アンマウントすると元の Vim が使えなくなり、次にまたパスワードを聞かれる）。
+let s:mounted_by_me = 0
+
 function! s:mount_by_password(cipher, root) abort
   call s:clear_mountpoint_garbage(a:root)
   for l:i in range(3)
@@ -11482,6 +11486,7 @@ function! s:mount_by_password(cipher, root) abort
     call s:secure_delete(l:pf)
     call s:mount_cache_reset()
     if simple_yurii_note#vault_mounted(escape(a:root, '\\'), 1) == 1
+      let s:mounted_by_me = 1
       redraw
       return 1
     endif
@@ -11740,6 +11745,10 @@ function! simple_yurii_note#quit_unmount() abort
   if simple_yurii_note#vault_mounted() != 1
     return
   endif
+  " アプリの Vim は、別の Vim がマウントした vault をそのままにして終わる（閉じるのは元の Vim の仕事）
+  if !empty($SYN_GUI_PORT) && !s:mounted_by_me
+    return
+  endif
   let l:root = s:vault_clean()
   if empty(l:root)
     return
@@ -11887,6 +11896,7 @@ function! s:init_encrypted_impl() abort
     if v:shell_error != 0
       throw 'mount 失敗: ' . trim(substitute(l:out, "\n", ' ', 'g'))
     endif
+    let s:mounted_by_me = 1
     let l:stage = 'copy'
     let l:out = system('cp -a --no-preserve=xattr,context,mode,ownership ' . shellescape(l:plaindir) . '/. ' . shellescape(l:root) . '/ 2>&1')
     if v:shell_error != 0
