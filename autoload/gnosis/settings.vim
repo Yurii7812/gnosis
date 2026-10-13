@@ -214,3 +214,18 @@ function! gnosis#settings#builtin_palettes() abort
   endif
   return s:palettes
 endfunction
+
+" GUI 版 Vim の Ctrl + / Ctrl - / Ctrl 0: 文字の大きさをその場だけ変える（保存しない）。
+" 保存される「文字サイズ」の設定は設定画面で変える。Ctrl 0 で設定の大きさに戻る。
+function! gnosis#settings#gui_zoom(delta) abort
+  if !has('gui_running')
+    return
+  endif
+  let l:base = gnosis#settings#current().fontSize
+  let s:gui_zoom = a:delta == 0 ? 0 : get(s:, 'gui_zoom', 0) + a:delta
+  let l:size = max([6, min([72, l:base + s:gui_zoom])])
+  let l:s = deepcopy(gnosis#settings#current())
+  let l:s.fontSize = l:size
+  let s:gui_window_done = 1
+  call gnosis#settings#apply_gui(l:s)
+endfunction

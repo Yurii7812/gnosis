@@ -1033,6 +1033,14 @@ augroup gnosis_auto_save_on_command
   autocmd CmdlineLeave : call s:auto_save_before_command()
 augroup END
 
+" GUI 版 Vim: Ctrl + / Ctrl - / Ctrl 0 で文字の大きさをその場だけ変える（設定の文字サイズは変えない）
+if has('gui_running') || has('gui')
+  nnoremap <silent> <C-=> <Cmd>call gnosis#settings#gui_zoom(1)<CR>
+  nnoremap <silent> <C-+> <Cmd>call gnosis#settings#gui_zoom(1)<CR>
+  nnoremap <silent> <C--> <Cmd>call gnosis#settings#gui_zoom(-1)<CR>
+  nnoremap <silent> <C-0> <Cmd>call gnosis#settings#gui_zoom(0)<CR>
+endif
+
 " 起動: 起動画面（Chnoubis・vault の選択）を出すか、そのまま vault を開く。
 " vault を開く処理（マウント・ロック掃除・状態の移行・Index・操作ガイド・描き直し）は
 " gnosis#startup_sequence() が順に行う（起動画面のときは Enter を押したあと）。
