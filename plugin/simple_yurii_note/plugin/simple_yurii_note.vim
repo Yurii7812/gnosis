@@ -834,6 +834,7 @@ augroup simple_yurii_note_vault
   autocmd VimLeavePre * call simple_yurii_note#before_write_viminfo()
   autocmd VimEnter * call simple_yurii_note#clear_search_highlight()
   autocmd BufWritePre * call simple_yurii_note#guard_vault_write(expand('<afile>:p'))
+  autocmd TextChangedI,TextChanged,InsertLeave *.md call simple_yurii_note#strip_stray_escape()
 augroup END
 
 autocmd VimEnter * call simple_yurii_note#cleanup_stale_locks()
