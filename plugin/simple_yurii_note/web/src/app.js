@@ -6,7 +6,7 @@ import { createView } from "./view.js";
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
 
-const STRIP_ROWS = 3; // 普段は端末の下の 3 行（ステータス行・コマンド行・メッセージ）だけ見せる
+const STRIP_ROWS = 2; // 普段は端末の下の 2 行（ステータス行・コマンド行/メッセージ）だけ見せる。本文の最後の行は表示側にあるので出さない
 let term = null;
 let fit = null;
 let view = null;

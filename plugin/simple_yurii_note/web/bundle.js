@@ -32882,7 +32882,7 @@ ${h2.join(`
   // src/app.js
   var gui = window.gui;
   var $2 = (id2) => document.getElementById(id2);
-  var STRIP_ROWS = 3;
+  var STRIP_ROWS = 2;
   var term = null;
   var fit = null;
   var view = null;
