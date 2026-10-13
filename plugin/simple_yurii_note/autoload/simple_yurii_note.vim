@@ -937,7 +937,7 @@ function! s:guide_template() abort
         \ '- `\L`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Context は付けない＝元ノートは BackLink に出る。付けるなら `\P`）',
         \ '- `\p`（ノーマル）… カーソル下 or クリップボードのリンクを 1 本追加（`h`/`Enter` で位置を選ぶ）',
         \ '- `\p`（ビジュアル）… クリップボードのファイル名/URL を選択範囲のリンクに（無ければ何もしない）',
-        \ '- `za` … リンク 1 本を今のノートに追加（`h`=カーソル直下 / `Enter`=本文の最後 / `c`=Context末尾 / `r`=Related）',
+        \ '- `za` … クリップボード／ヤンクしたリンクを今のノートに追加（複数行・複数リンクも全部）（`h`=カーソル直下 / `Enter`=本文の最後 / `c`=Context末尾 / `r`=Related）',
         \ '- `zA` … `za` と同じだが、追加前に**表示名**を入力する（空 Enter / Esc で中止）',
         \ '- `zp` … `za` と同じ追加＋今のノートを相手の Context に書く',
         \ '- `zap` … カーソル下（無ければクリップボード）のリンクを、今のノートの Context の最後に足す（`za` → `c` と同じ。本文に同じリンクがあっても足す）',
@@ -8862,12 +8862,12 @@ endfunction
 function! simple_yurii_note#add_clipboard_before_up_note(...) abort
   " za: 今のノートに（カーソル下のリンク or クリップボードの）リンクを 1 本足す。
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
-  let l:link = s:pick_one_link()
-  if empty(l:link)
+  let l:links = s:pick_links()
+  if empty(l:links)
     echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
-  call s:insert_links_at_position([l:link], function('s:links_added_done'))
+  call s:insert_links_at_position(l:links, function('s:links_added_done'))
 endfunction
 
 " \l などのピッカーから: 選んだリンク（Markdown リンクの文字列のリスト）を、za と同じ置き場所キー
@@ -8950,46 +8950,59 @@ endfunction
 function! simple_yurii_note#add_link_to_parent() abort
   " zap / za,p: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の末尾に入れ、
   " 相手（リンク先）の本文に今のノートが無ければ相手の ### Context の直前に入れる。
-  let l:link = s:pick_one_link()
-  if empty(l:link)
+  let l:links = s:pick_links()
+  if empty(l:links)
     echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
-  if s:add_parent_with_reverse(l:link)
-    echo 'simple_yurii_note: Context に追加しました'
+  let l:n = 0
+  for l:lk in l:links
+    if s:add_parent_with_reverse(l:lk)
+      let l:n += 1
+    endif
+  endfor
+  if l:n
+    echo 'simple_yurii_note: Context に ' . l:n . ' 本追加しました'
   endif
 endfunction
 
 function! simple_yurii_note#add_clipboard_before_up_note_named(...) abort
-  let l:link = s:pick_one_link()
-  if empty(l:link)
+  let l:links = s:pick_links()
+  if empty(l:links)
     echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
-  let l:parts = s:extract_markdown_link(l:link)
-  let l:target = get(l:parts, 'target', '')
-  let l:default = get(l:parts, 'text', '')
-  if empty(l:target)
-    echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
-    return
-  endif
-  if a:0 > 0
-    let l:name = a:1
-  else
-    let l:name = input('表示名: ', l:default)
-  endif
-  if empty(l:name)
-    echo 'simple_yurii_note: 中止しました'
-    return
-  endif
-  call s:insert_links_at_position(['[' . l:name . '](' . l:target . ')'],
-        \ function('s:named_links_added_done', [l:name]))
+  " 複数あるときは 1 本ずつ表示名を聞く（空 Enter / Esc でどれか 1 本でも中止したら全部中止）
+  let l:named = []
+  let l:i = 0
+  for l:link in l:links
+    let l:parts = s:extract_markdown_link(l:link)
+    let l:target = get(l:parts, 'target', '')
+    let l:default = get(l:parts, 'text', '')
+    if empty(l:target)
+      echohl WarningMsg | echo 'simple_yurii_note: リンクの形式が不正です' | echohl NONE
+      return
+    endif
+    if a:0 > 0 && l:i == 0
+      let l:name = a:1
+    else
+      let l:label = len(l:links) > 1 ? '表示名 (' . (l:i + 1) . '/' . len(l:links) . '): ' : '表示名: '
+      let l:name = input(l:label, l:default)
+    endif
+    if empty(l:name)
+      echo 'simple_yurii_note: 中止しました'
+      return
+    endif
+    call add(l:named, '[' . l:name . '](' . l:target . ')')
+    let l:i += 1
+  endfor
+  call s:insert_links_at_position(l:named, function('s:named_links_added_done', [len(l:named)]))
 endfunction
 
-function! s:named_links_added_done(name) abort
+function! s:named_links_added_done(count) abort
   call s:realtime_sync_apply()
   silent write
-  echo 'simple_yurii_note: 表示名 ' . a:name . ' でリンクを追加'
+  echo 'simple_yurii_note: 表示名を付けてリンクを ' . a:count . ' 本追加'
 endfunction
 
 " 現ノートがグループ（attribute: group / index.md）かどうか
@@ -9003,14 +9016,22 @@ endfunction
 " 追加するリンクを 1 行で取り出す。優先は「カーソル下のリンク」、
 " 無ければクリップボード。za / zp 共通。
 function! s:pick_one_link() abort
-  " za / zA / zp が足すリンクは、クリップボードかヤンクしたリンク（カーソル下のリンクではない）。
-  " 取得元を全部順に見て、最初に「実在するノートを指すリンク」を返す。システムの
-  " クリップボードがリンクでない文字のときでも、ヤンクしたリンク（"/0 レジスタ）を見落とさない。
+  let l:links = s:pick_links()
+  return empty(l:links) ? '' : l:links[0]
+endfunction
+
+" za / zA / zp / zap が足すリンクを全部（複数行・複数リンク可）。クリップボードかヤンクしたリンクで、
+" カーソル下のリンクではない。取得元を順に見て、最初に「実在するノートを指すリンク」が 1 本でもあった
+" 取得元の、実在するリンクを全部返す（同じノートは 1 本にまとめる）。システムのクリップボードが
+" リンクでない文字のときでも、ヤンクしたリンク（"/0 レジスタ）を見落とさない。
+function! s:pick_links() abort
   let l:texts = [s:clipboard_text_external(), getreg('"'), getreg('0'), getreg('+'), getreg('*')]
   for l:text in l:texts
     if empty(trim(l:text))
       continue
     endif
+    let l:found = []
+    let l:seen = {}
     " 文中の Markdown リンク [表示名](パス) を全部拾う（行頭でなくてもよい）
     let l:start = 0
     while 1
@@ -9019,20 +9040,38 @@ function! s:pick_one_link() abort
         break
       endif
       let l:start = l:m[2]
-      let l:target = s:extract_target(l:m[0])
-      if !empty(l:target) && filereadable(simple_yurii_note#resolve_link(l:target))
-        return s:link_from_clipboard_raw(l:m[0])
-      endif
+      call s:pick_links_add(l:found, l:seen, l:m[0])
     endwhile
     " リンク記法でない行（パスや file:// だけ）
     for l:raw in split(l:text, "\n")
-      let l:target = s:extract_target(l:raw)
-      if !empty(l:target) && filereadable(simple_yurii_note#resolve_link(l:target))
-        return s:link_from_clipboard_raw(l:raw)
+      if l:raw =~# '\[[^\]]\+\]([^)]*)'
+        continue
       endif
+      call s:pick_links_add(l:found, l:seen, l:raw)
     endfor
+    if !empty(l:found)
+      return l:found
+    endif
   endfor
-  return ''
+  return []
+endfunction
+
+" a:raw が実在するノートを指していて、まだ入っていなければ l:found に足す
+function! s:pick_links_add(found, seen, raw) abort
+  let l:target = s:extract_target(a:raw)
+  if empty(l:target)
+    return
+  endif
+  let l:path = simple_yurii_note#resolve_link(l:target)
+  if !filereadable(l:path)
+    return
+  endif
+  let l:key = fnamemodify(l:path, ':p')
+  if has_key(a:seen, l:key)
+    return
+  endif
+  let a:seen[l:key] = 1
+  call add(a:found, s:link_from_clipboard_raw(a:raw))
 endfunction
 
 " \ca: ca と同じ そっちにとって 側だが、括弧が付く側が逆。今開いているノート
@@ -9049,36 +9088,42 @@ endfunction
 "     さらに「今のノート」側のリンクを相手ノートの ### Context にも書く。
 "     今のノートがグループの場合は本文リンクだけで十分（sync が親側を作る）。
 function! simple_yurii_note#add_clipboard_as_child_with_parent() abort
-  " zp: za と同じことをしたうえで、今開いてるノートを「相手の ### Context」에도書く。
+  " zp: za と同じことをしたうえで、今開いてるノートを「相手の ### Context」にも書く（複数のリンクも全部）。
   "     今のノートがグループなら本文リンクだけで足りるので親は sync に任せる。
   let l:cur = expand('%:p')
   if empty(l:cur)
     echohl WarningMsg | echo 'simple_yurii_note: 名前付きファイルで実行して' | echohl None
     return
   endif
-  let l:link = s:pick_one_link()
-  if empty(l:link)
+  let l:links = s:pick_links()
+  if empty(l:links)
     echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
-  call s:insert_links_at_position([l:link])
-  let l:target = simple_yurii_note#resolve_link(s:extract_target(l:link))
-  if empty(l:target) || !filereadable(l:target)
-    call s:realtime_sync_apply()
-    silent write
-    echo 'リンクのみ追加（相手ノートが見つからず Context には書けません）'
-    return
-  endif
+  call s:insert_links_at_position(l:links)
   if s:buf_is_group()
     call s:realtime_sync_apply()
     silent write
     echo 'グループ: 本文リンクを追加（親は sync が書く）'
     return
   endif
-  call s:simple_add_parent(l:target, l:cur, simple_yurii_note#current_title())
+  let l:done = []
+  let l:cur_title = simple_yurii_note#current_title()
+  for l:link in l:links
+    let l:target = simple_yurii_note#resolve_link(s:extract_target(l:link))
+    if empty(l:target) || !filereadable(l:target)
+      continue
+    endif
+    call s:simple_add_parent(l:target, l:cur, l:cur_title)
+    call add(l:done, fnamemodify(l:target, ':t'))
+  endfor
   call s:realtime_sync_apply()
   silent write
-  echo 'リンク追加 + 親に登録 → ' . fnamemodify(l:target, ':t')
+  if empty(l:done)
+    echo 'リンクのみ追加（相手ノートが見つからず Context には書けません）'
+  else
+    echo 'リンク追加 + 親に登録 → ' . join(l:done, ', ')
+  endif
 endfunction
 
 function! simple_yurii_note#add_clipboard_before_up() abort

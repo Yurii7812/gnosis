@@ -45,6 +45,7 @@ fs.writeFileSync(path.join(vault, "plain.md"), "---\ntime: 2026-01-01 00:00:00\n
 fs.writeFileSync(path.join(vault, "grp.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: グループG\nattribute: group\n---\n\n# グループG\n\n[節あり](sec.md)\n");
 fs.writeFileSync(path.join(vault, "sec.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 節あり\n---\n\n# 節あり\n\n本文の文。\n\n### Group\n[グループG](grp.md)\n");
 fs.writeFileSync(path.join(vault, "pick.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: ピッカー\n---\n\n# ピッカー\n\n本文の文。\n");
+fs.writeFileSync(path.join(vault, "multi.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 複数\n---\n\n# 複数\n\n本文の文。\n");
 mk("img.md", "画像", ["a", "b", "c", "d"].map((n) => `## 画像 ${n}\n\n![](${n}.png)\n`).join("\n"), "[Index](index.md)");
 
 const scenario = `(async () => {
@@ -260,6 +261,16 @@ const scenario = `(async () => {
     await press('\\x1b', 500);
   }
 
+  // za: クリップボード（ヤンク）に複数のリンクがあれば全部足す。h = カーソル直下
+  {
+    await press(':e multi.md\\r', 1200);
+    await press('G', 300);
+    await press(':let @" = "[一つ目](m1.md)\\\\n[二つ目](m2.md)\\\\n[三つ目](index.md)"\\r', 500);
+    await press('za', 800);
+    await press('h', 1200);
+    await press(':w\\r', 800);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -340,6 +351,11 @@ try {
     check(last.body === 2 && last.diary === false, "\\e detail: last settings are recorded separately: " + JSON.stringify(last));
     const m1 = fs.readFileSync(path.join(vault, "m1.md"), "utf8");
     check(!m1.includes("テスト設定") && !m1.includes("残す設定"), "\\e detail: notes are untouched by preset operations");
+  }
+  {
+    const txt = fs.readFileSync(path.join(vault, "multi.md"), "utf8");
+    check(/\[一つ目\]\(m1\.md\)/.test(txt) && /\[二つ目\]\(m2\.md\)/.test(txt) && /\[三つ目\]\(index\.md\)/.test(txt),
+      "za: all links on the clipboard should be added, not only the first: " + JSON.stringify(txt.slice(-200)));
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
