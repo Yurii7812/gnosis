@@ -43,7 +43,7 @@ function! gnosis#settings_ui#open(...) abort
   silent! file Gnosis\ Settings
   let b:gnosis_settings = 1
   for l:k in ['<CR>', '<Space>', 'q', '<Esc>', 'j', 'k', '<Down>', '<Up>', 'h', 'l', '<Left>', '<Right>']
-    execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#settings_ui#key(%s)<CR>', l:k, string(l:k))
+    execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#settings_ui#key(%s)<CR>', l:k, substitute(string(l:k), '<', '<lt>', 'g'))
   endfor
   for l:k in ['i', 'I', 'o', 'O', 'a', 'A', 'x', 'p', 'P', 'c', 'C', 'u', 'd']
     execute 'nnoremap <buffer><silent><nowait> ' . l:k . ' <Nop>'

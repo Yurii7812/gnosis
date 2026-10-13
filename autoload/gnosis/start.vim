@@ -124,14 +124,14 @@ endfunction
 
 function! s:map_keys() abort
   for l:k in ['<CR>', 'v', 's', 'q', 'j', 'k', '<Down>', '<Up>', 'a', 'n', 'd', '<Esc>', 'r', 'l', '?']
-    execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#start#key(%s)<CR>', l:k, string(l:k))
+    execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#start#key(%s)<CR>', l:k, substitute(string(l:k), '<', '<lt>', 'g'))
   endfor
   " 文字の上で i や o などを押しても編集しない
   for l:k in ['i', 'I', 'o', 'O', 'A', 'x', 'p', 'P', 'c', 'C', 'u']
     execute 'nnoremap <buffer><silent><nowait> ' . l:k . ' <Nop>'
   endfor
   nnoremap <buffer><silent> <LeftMouse> <LeftMouse><Cmd>call gnosis#start#click()<CR>
-  nnoremap <buffer><silent> <2-LeftMouse> <LeftMouse><Cmd>call gnosis#start#click()<CR><Cmd>call gnosis#start#key('<CR>')<CR>
+  nnoremap <buffer><silent> <2-LeftMouse> <LeftMouse><Cmd>call gnosis#start#click()<CR><Cmd>call gnosis#start#key('<lt>CR>')<CR>
 endfunction
 
 function! s:current_vault() abort
@@ -154,6 +154,10 @@ function! gnosis#start#render() abort
   endif
   let l:cols = winwidth(0)
   let l:rows = winheight(0)
+  " 文言は選択中の vault の言語（vault が無い・見つからないときは初期値）。配色は白黒のまま
+  let l:sv = s:current_vault()
+  let l:lang = !empty(l:sv) && l:sv.exists ? gnosis#settings#load(l:sv.path).language : gnosis#settings#defaults().language
+  call gnosis#i18n#set_lang(l:lang)
   let l:lines = []
   let l:hl = []
   if s:mode ==# 'start'

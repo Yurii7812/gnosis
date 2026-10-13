@@ -152,7 +152,8 @@ function! gnosis#theme#apply(s) abort
         endif
         execute 'colorscheme ' . fnameescape(l:name)
         let &background = a:s.appearance
-        let l:ok = 1
+        " 読み込めたか（端末の色数などで途中で止まるテーマもある）
+        let l:ok = get(g:, 'colors_name', '') ==# l:name
       catch
         let l:ok = 0
       endtry
@@ -177,15 +178,15 @@ endfunction
 " 追加テーマの色から、Electron 側の画面に渡す色を作る
 function! s:palette_from_highlights(base) abort
   let l:def = get(gnosis#settings#builtin_palettes(), a:base, gnosis#settings#builtin_palettes().light)
-  let l:get = {grp, what, dflt -> s:hl_color(grp, what, dflt)}
+  let l:Get = {grp, what, dflt -> s:hl_color(grp, what, dflt)}
   return {
         \ 'base': a:base,
-        \ 'bg': l:get('Normal', 'bg', l:def.bg),
-        \ 'fg': l:get('Normal', 'fg', l:def.fg),
-        \ 'link': l:get('Underlined', 'fg', l:get('Identifier', 'fg', l:def.link)),
-        \ 'heading': l:get('Title', 'fg', l:def.heading),
-        \ 'selection': l:get('Visual', 'bg', l:def.selection),
-        \ 'cursorline': l:get('CursorLine', 'bg', l:def.cursorline),
+        \ 'bg': l:Get('Normal', 'bg', l:def.bg),
+        \ 'fg': l:Get('Normal', 'fg', l:def.fg),
+        \ 'link': l:Get('Underlined', 'fg', l:Get('Identifier', 'fg', l:def.link)),
+        \ 'heading': l:Get('Title', 'fg', l:def.heading),
+        \ 'selection': l:Get('Visual', 'bg', l:def.selection),
+        \ 'cursorline': l:Get('CursorLine', 'bg', l:def.cursorline),
         \ }
 endfunction
 

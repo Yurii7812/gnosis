@@ -1,0 +1,50 @@
+" Vim の起動画面の回帰網（pty で起動して確かめる。test/start_screen_net.sh から）。
+"   起動直後: 起動画面（Chnoubis・Gnosis・vault・Enter で開始）が白背景・黒文字で出て、ノートはまだ開かない
+"   Enter: 選択中の vault の Index が開き、その vault の設定のテーマ（ダーク）になる
+let s:w = $START_WORK
+let s:res = []
+
+function! s:ok(name, cond, ...) abort
+  call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
+endfunction
+function! s:hl(attr) abort
+  return synIDattr(synIDtrans(hlID('Normal')), a:attr . '#', 'gui')
+endfunction
+function! s:first(t) abort
+  let l:text = join(getline(1, '$'), "\n")
+  call s:ok('起動画面: ノートを開く前に出る', bufname('%') ==# 'Gnosis' && &buftype ==# 'nofile', bufname('%'))
+  call s:ok('起動画面: Chnoubis（Braille）', l:text =~# '[⠀-⣿]', strpart(l:text, 0, 80))
+  call s:ok('起動画面: Gnosis の文字', l:text =~# 'Gnosis')
+  call s:ok('起動画面: vault の名前とパス', l:text =~# '保管庫' && stridx(l:text, $START_VAULT) >= 0)
+  call s:ok('起動画面: Enter で開始の案内', l:text =~# 'Enter')
+  call s:ok('起動画面: vault の選択・管理への入口', l:text =~# 'v ')
+  call s:ok('起動画面: 白背景・黒文字', s:hl('bg') ==# '#ffffff' && s:hl('fg') ==# '#000000', s:hl('bg') . ' ' . s:hl('fg'))
+  call s:ok('起動画面: アートが画面幅に収まる', max(map(getline(1, '$'), 'strdisplaywidth(v:val)')) <= &columns)
+  call feedkeys('v', 't')
+  call timer_start(400, function('s:vaults'))
+endfunction
+function! s:vaults(t) abort
+  let l:text = join(getline(1, '$'), "\n")
+  call s:ok('v: vault の一覧（登録・作成・一覧から外す の案内）', l:text =~# '保管庫' && l:text =~# 'a ' && l:text =~# 'n ' && l:text =~# 'd ', l:text)
+  call feedkeys("\<Esc>s", 't')
+  call timer_start(500, function('s:settings'))
+endfunction
+function! s:settings(t) abort
+  let l:text = join(getline(1, '$'), "\n")
+  call s:ok('s: 設定画面（vault の言語で表示）', bufname('%') =~# 'Settings' && l:text =~# 'Language' && l:text =~# 'Font size' && l:text =~# 'Maximize', l:text)
+  call feedkeys('q', 't')
+  call timer_start(400, function('s:back'))
+endfunction
+function! s:back(t) abort
+  call s:ok('q: 起動画面へ戻る', bufname('%') ==# 'Gnosis')
+  call feedkeys("\<CR>", 't')
+  call timer_start(1500, function('s:second'))
+endfunction
+function! s:second(t) abort
+  call s:ok('Enter: vault の Index が開く', expand('%:t') ==# 'index.md' && stridx(expand('%:p'), $START_VAULT) == 0, expand('%:p'))
+  call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && s:hl('bg') ==# '#0d1117', &background . ' ' . s:hl('bg'))
+  call s:ok('Enter: vault の言語（英語）', gnosis#i18n#lang() ==# 'en', execute('messages'))
+  call writefile(s:res, s:w . '/result.txt')
+  qa!
+endfunction
+call timer_start(1200, function('s:first'))

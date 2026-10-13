@@ -58,3 +58,9 @@ sh "$REPO/test/sync_net.sh"
 
 # リンク操作（c → Enter / t / o・表示名・zk → g・グループの \S）
 sh "$REPO/test/link_ops_net.sh"
+
+# vault の登録簿・vault ごとの設定・移行・テーマ・ガイドの言語
+sh "$REPO/test/vault_settings_net.sh"
+
+# Vim の起動画面（pty）
+sh "$REPO/test/start_screen_net.sh"
