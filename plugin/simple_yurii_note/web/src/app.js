@@ -227,7 +227,7 @@ function preloadImages(lines) {
 }
 
 // ---------------------------------------------------------------- 見るだけモード
-// F2 で「見るだけ」と「普通の Vim」を切り替える。見るだけのときは、カーソルを出さず、
+// Alt+V（View）で「見るだけ」と「普通の Vim」を切り替える。見るだけのときは、カーソルを出さず、
 // キーを Vim に送らない（ノートは絶対に変わらない）。j/k・矢印・Space・PageUp/Down・gg/G・
 // Ctrl-d/u でスクロールし、リンクはクリックで開く。確認・fzf などの端末が要る場面では、
 // 普通どおりキーを Vim へ送る。
@@ -359,10 +359,18 @@ async function boot() {
   term.open($("term"));
   try { await document.fonts.ready; } catch { /* ignore */ }
 
+  // 見るだけで自分で処理したキーは、同じキーの keypress / keyup も端末に渡さない
+  // （/ を打つと viewInCmd が真になり、続く keypress が通って // になっていた）
+  let swallowed = false;
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== "keydown") return !viewBlocks(); // 見るだけ中は keyup/keypress も Vim へ流さない
-    if (e.key === "F2") { e.preventDefault(); setViewOnly(!viewOnly); return false; }
-    if (viewBlocks()) { viewOnlyKey(e); return false; }
+    if (e.type !== "keydown") {
+      const sw = swallowed;
+      if (e.type === "keyup") swallowed = false;
+      return sw ? false : !viewBlocks();
+    }
+    swallowed = false;
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setViewOnly(!viewOnly); return false; }
+    if (viewBlocks()) { swallowed = true; viewOnlyKey(e); return false; }
     return true;
   });
   term.onData((d) => { if (viewBlocks()) return; gui.write(d); });

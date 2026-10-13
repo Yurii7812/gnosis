@@ -33423,14 +33423,22 @@ ${h2.join(`
       await document.fonts.ready;
     } catch {
     }
+    let swallowed = false;
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return !viewBlocks();
-      if (e.key === "F2") {
+      if (e.type !== "keydown") {
+        const sw = swallowed;
+        if (e.type === "keyup") swallowed = false;
+        return sw ? false : !viewBlocks();
+      }
+      swallowed = false;
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") {
         e.preventDefault();
+        swallowed = true;
         setViewOnly(!viewOnly);
         return false;
       }
       if (viewBlocks()) {
+        swallowed = true;
         viewOnlyKey(e);
         return false;
       }
