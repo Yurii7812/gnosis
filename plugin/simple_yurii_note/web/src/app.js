@@ -196,7 +196,6 @@ function preloadImages(lines) {
 // 普通どおりキーを Vim へ送る。
 let viewOnly = false;
 let lastViewFile = "";
-let gPending = false;
 
 function setViewOnly(on) {
   viewOnly = !!on;
@@ -204,6 +203,31 @@ function setViewOnly(on) {
   view.setViewOnly(viewOnly);
   if (!viewOnly) view.setVim({ cur: last.cur || [1, 1], mode: last.mode || "n", vis: last.vis }); // カーソルへ戻す
   applyState({ mode: last.mode, file: last.file, bt: last.bt, popups: last.popups });
+}
+
+// 見るだけで、キーを Vim へ流さない場面か（端末が要る場面・コマンドライン/質問の入力中は流す）
+function viewBlocks() {
+  return viewOnly && !needsTerminal(last) && (last.mode || "n")[0] !== "c";
+}
+
+// 見るだけでも Vim に届けるキー（編集しない SYN の操作）。完全に一致したらすぐ送る。
+// どれも他の候補の前半にはならない（待たずに送れる）。ここに無いキーは、スクロール以外は捨てる。
+const VIEW_PASS = new Set([
+  "gs", "gm", " ", "\t", "\x1b[Z", "\r", "\x7f", "_",
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+  "\\h", "\\H", "\\0", "\\i", "\\d", "\\.", "\\L", "\\gi", "\\r", "\\bu", "\\k", "\\j", "\\J", "\\sc",
+]);
+const VIEW_SCROLL_SEQ = new Set(["gg"]);
+let viewPend = "";
+
+function vimKeyString(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey) return null;
+  switch (e.key) {
+    case "Tab": return e.shiftKey ? "\x1b[Z" : "\t";
+    case "Enter": return "\r";
+    case "Backspace": return "\x7f";
+    default: return e.key.length === 1 ? e.key : null;
+  }
 }
 
 function viewOnlyKey(e) {
@@ -216,19 +240,24 @@ function viewOnlyKey(e) {
     return false;
   }
   if (e.altKey || e.metaKey) return false;
-  const k = e.key;
-  if (k !== "g") gPending = false;
-  switch (k) {
+  const ks = vimKeyString(e);
+  if (ks != null) {
+    const cand = viewPend + ks;
+    if (VIEW_PASS.has(cand)) { viewPend = ""; gui.write(cand); return true; }
+    if (VIEW_SCROLL_SEQ.has(cand)) { viewPend = ""; sc.scrollTop = 0; return true; }
+    const isPrefix = [...VIEW_PASS, ...VIEW_SCROLL_SEQ].some((x) => x.startsWith(cand));
+    if (isPrefix) { viewPend = cand; return true; }
+    const hadPend = viewPend !== "";
+    viewPend = "";
+    if (hadPend) return true; // 候補から外れた続きは捨てる
+  }
+  switch (e.key) {
     case "j": case "ArrowDown": return by(48);
     case "k": case "ArrowUp": return by(-48);
-    case " ": return by(e.shiftKey ? -page : page);
     case "PageDown": return by(page);
     case "PageUp": return by(-page);
     case "Home": sc.scrollTop = 0; return true;
     case "End": case "G": sc.scrollTop = sc.scrollHeight; return true;
-    case "g":
-      if (gPending) { gPending = false; sc.scrollTop = 0; } else gPending = true;
-      return true;
     default: return false;
   }
 }
@@ -272,12 +301,12 @@ async function boot() {
   try { await document.fonts.ready; } catch { /* ignore */ }
 
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== "keydown") return !(viewOnly && !needsTerminal(last)); // 見るだけ中は keyup/keypress も Vim へ流さない
+    if (e.type !== "keydown") return !viewBlocks(); // 見るだけ中は keyup/keypress も Vim へ流さない
     if (e.key === "F2") { e.preventDefault(); setViewOnly(!viewOnly); return false; }
-    if (viewOnly && !needsTerminal(last)) { viewOnlyKey(e); return false; }
+    if (viewBlocks()) { viewOnlyKey(e); return false; }
     return true;
   });
-  term.onData((d) => { if (viewOnly && !needsTerminal(last)) return; gui.write(d); });
+  term.onData((d) => { if (viewBlocks()) return; gui.write(d); });
   gui.onData((d) => term.write(d));
   gui.onState((s) => { try { applyState(s); } catch (e) { console.error("applyState failed: " + (e && e.stack || e)); showError(e && e.message || e); } });
   gui.onExit(() => { $("mode").textContent = "EXIT"; });

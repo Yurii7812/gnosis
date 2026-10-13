@@ -144,11 +144,14 @@ const scenario = `(async () => {
     const vo = { on: G.isViewOnly(), label: label() };
     key('i'); key('x'); key('d'); key('d'); await sleep(500);
     const after = G.state();
-    const t0 = sc2.scrollTop; key('j'); key('j'); key(' '); await sleep(200);
+    const t0 = sc2.scrollTop; key('j'); key('j'); await sleep(200);
     const scrolled = sc2.scrollTop > t0;
+    const f0 = G.state().file;
+    key('Backspace'); await sleep(900); // 戻る（SYN の操作）は Vim に届いて、前のノートへ戻る
+    const passed = G.state().file !== f0;
     const curHidden = [...document.querySelectorAll('.cm-vim-block, .cm-vim-bar, .cm-vim-under')].every((e) => getComputedStyle(e).display === 'none' || getComputedStyle(e).backgroundColor === 'rgba(0, 0, 0, 0)');
     key('F2'); await sleep(400);
-    R.viewOnly = { vo, mode: after.mode, sameFile: after.file === before.file, unmodified: !after.mod, scrolled, curHidden, backOff: !G.isViewOnly(), backLabel: label() };
+    R.viewOnly = { vo, mode: after.mode, sameFile: after.file === before.file, unmodified: !after.mod, scrolled, passed, curHidden, backOff: !G.isViewOnly(), backLabel: label() };
   }
 
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
@@ -187,7 +190,7 @@ try {
   check(R.insertMode === "INSERT" && R.typed && R.normalAgain === "NORMAL" && R.visualMode === "V-LINE", "vim modes: " + JSON.stringify([R.insertMode, R.typed, R.normalAgain, R.visualMode]));
   check(R.modAfterSave === 0 && fs.readFileSync(path.join(vault, R.newNote), "utf8").includes("abc"), ":w did not save");
   check(R.expandedOnLs && R.collapsedAfter, "terminal strip did not expand/collapse for :ls: " + JSON.stringify([R.expandedOnLs, R.collapsedAfter]));
-  check(R.viewOnly?.vo.on && R.viewOnly.vo.label === "VIEW" && R.viewOnly.mode[0] === "n" && R.viewOnly.sameFile && R.viewOnly.unmodified && R.viewOnly.scrolled && R.viewOnly.curHidden && R.viewOnly.backOff && R.viewOnly.backLabel === "NORMAL", "view-only mode: " + JSON.stringify(R.viewOnly));
+  check(R.viewOnly?.vo.on && R.viewOnly.vo.label === "VIEW" && R.viewOnly.mode[0] === "n" && R.viewOnly.sameFile && R.viewOnly.unmodified && R.viewOnly.scrolled && R.viewOnly.passed && R.viewOnly.curHidden && R.viewOnly.backOff && R.viewOnly.backLabel === "NORMAL", "view-only mode: " + JSON.stringify(R.viewOnly));
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
   if (failed) process.exit(1);

@@ -33053,13 +33053,64 @@ ${h2.join(`
   }
   var viewOnly = false;
   var lastViewFile = "";
-  var gPending = false;
   function setViewOnly(on2) {
     viewOnly = !!on2;
     $2("view").classList.toggle("view-only", viewOnly);
     view.setViewOnly(viewOnly);
     if (!viewOnly) view.setVim({ cur: last2.cur || [1, 1], mode: last2.mode || "n", vis: last2.vis });
     applyState({ mode: last2.mode, file: last2.file, bt: last2.bt, popups: last2.popups });
+  }
+  function viewBlocks() {
+    return viewOnly && !needsTerminal(last2) && (last2.mode || "n")[0] !== "c";
+  }
+  var VIEW_PASS = /* @__PURE__ */ new Set([
+    "gs",
+    "gm",
+    " ",
+    "	",
+    "\x1B[Z",
+    "\r",
+    "\x7F",
+    "_",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "0",
+    "\\h",
+    "\\H",
+    "\\0",
+    "\\i",
+    "\\d",
+    "\\.",
+    "\\L",
+    "\\gi",
+    "\\r",
+    "\\bu",
+    "\\k",
+    "\\j",
+    "\\J",
+    "\\sc"
+  ]);
+  var VIEW_SCROLL_SEQ = /* @__PURE__ */ new Set(["gg"]);
+  var viewPend = "";
+  function vimKeyString(e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return null;
+    switch (e.key) {
+      case "Tab":
+        return e.shiftKey ? "\x1B[Z" : "	";
+      case "Enter":
+        return "\r";
+      case "Backspace":
+        return "\x7F";
+      default:
+        return e.key.length === 1 ? e.key : null;
+    }
   }
   function viewOnlyKey(e) {
     const sc2 = view.view.scrollDOM;
@@ -33074,17 +33125,35 @@ ${h2.join(`
       return false;
     }
     if (e.altKey || e.metaKey) return false;
-    const k = e.key;
-    if (k !== "g") gPending = false;
-    switch (k) {
+    const ks2 = vimKeyString(e);
+    if (ks2 != null) {
+      const cand = viewPend + ks2;
+      if (VIEW_PASS.has(cand)) {
+        viewPend = "";
+        gui.write(cand);
+        return true;
+      }
+      if (VIEW_SCROLL_SEQ.has(cand)) {
+        viewPend = "";
+        sc2.scrollTop = 0;
+        return true;
+      }
+      const isPrefix = [...VIEW_PASS, ...VIEW_SCROLL_SEQ].some((x) => x.startsWith(cand));
+      if (isPrefix) {
+        viewPend = cand;
+        return true;
+      }
+      const hadPend = viewPend !== "";
+      viewPend = "";
+      if (hadPend) return true;
+    }
+    switch (e.key) {
       case "j":
       case "ArrowDown":
         return by(48);
       case "k":
       case "ArrowUp":
         return by(-48);
-      case " ":
-        return by(e.shiftKey ? -page : page);
       case "PageDown":
         return by(page);
       case "PageUp":
@@ -33095,12 +33164,6 @@ ${h2.join(`
       case "End":
       case "G":
         sc2.scrollTop = sc2.scrollHeight;
-        return true;
-      case "g":
-        if (gPending) {
-          gPending = false;
-          sc2.scrollTop = 0;
-        } else gPending = true;
         return true;
       default:
         return false;
@@ -33144,20 +33207,20 @@ ${h2.join(`
     } catch {
     }
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return !(viewOnly && !needsTerminal(last2));
+      if (e.type !== "keydown") return !viewBlocks();
       if (e.key === "F2") {
         e.preventDefault();
         setViewOnly(!viewOnly);
         return false;
       }
-      if (viewOnly && !needsTerminal(last2)) {
+      if (viewBlocks()) {
         viewOnlyKey(e);
         return false;
       }
       return true;
     });
     term.onData((d) => {
-      if (viewOnly && !needsTerminal(last2)) return;
+      if (viewBlocks()) return;
       gui.write(d);
     });
     gui.onData((d) => term.write(d));
