@@ -297,7 +297,7 @@ def test_prefs_roundtrip() -> None:
                 lambda sid, dir_of: ex.collect_detailed(sid, dir_of, 2, 1, 0, 1))
         ex._save_prefs(root, 2, 1, 0, 1)
         prefs = ex._load_prefs(root)
-        check(prefs == {"child": 2, "parent": 1, "backlink": 0, "related": 1},
+        check(prefs == {"child": 2, "parent": 1, "backlink": 0, "related": 1, "diary": 1},
               "保存した数値がそのまま読み出せる")
 
 
@@ -308,8 +308,41 @@ def test_prefs_old_format_defaults_related_zero() -> None:
         (root / ex._PREFS_FILE).write_text(
             '{"child": 1, "parent": 2, "backlink": 3}', encoding="utf-8")
         prefs = ex._load_prefs(root)
-        check(prefs == {"child": 1, "parent": 2, "backlink": 3, "related": 0},
+        check(prefs == {"child": 1, "parent": 2, "backlink": 3, "related": 0, "diary": 1},
               "旧 prefs（related 無し）は 0 で補完される")
+
+
+def test_detailed_can_exclude_diary_from_backlinks() -> None:
+    print("detailed: 文中（バックリンク）に日記を含めるか選べる")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _fixture(root)
+        note(root / "X.md", "2026-10-12-MO-日記の日", body="日記から言及: [A](A.md)")
+        v2.simple_sync(root)
+        check(ex.is_diary_title("2026-10-12-MO-日記の日") and ex.is_diary_title("2026-10-13-TU")
+              and not ex.is_diary_title("2026-10-12-夢日記") and not ex.is_diary_title("日記"),
+              "日記の題の判定（YYYY-MM-DD-曜日2文字）")
+        for diary, label in ((1, "含める"), (0, "含めない")):
+            holder: dict = {}
+            out_path = ex._run(
+                root, root / "A.md",
+                lambda sid, dir_of, diary=diary, holder=holder: ex.collect_detailed(
+                    sid, dir_of, 0, 0, 1, 0,
+                    skip_backlink=None if diary else holder["is_diary"]),
+                holder)
+            text = out_path.read_text(encoding="utf-8")
+            check("## D" in text, f"通常の言及ノート D は入る（日記を{label}）")
+            if diary:
+                check("2026-10-12-MO-日記の日" in text, "日記を含めると日記の X も入る")
+            else:
+                check("## 2026-10-12-MO-日記の日" not in text, "日記を含めないと日記の X は入らない")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        ex._save_prefs(root, 1, 2, 3, 4, 0)
+        p = ex._load_prefs(root)
+        check(p == {"child": 1, "parent": 2, "backlink": 3, "related": 4, "diary": 0}, f"設定に日記の選択も保存される: {p}")
+        (root / ex._PREFS_FILE).write_text('{"child":1,"parent":1,"backlink":1}', encoding="utf-8")
+        check(ex._load_prefs(root)["diary"] == 1, "旧い保存値は日記を含める扱い")
 
 
 def main() -> int:

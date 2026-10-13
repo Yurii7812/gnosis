@@ -973,7 +973,7 @@ function! s:guide_template() abort
         \ '',
         \ '## 展開・画像・その他',
         \ '',
-        \ '- `\e` … 現ノート周辺を 1 つの md に展開（`expand_v2.py`。**シンプル/詳細**を選び、シンプルは深さを数字で入力。前回値は `.pkm_expand_prefs.json`。出力 `.trash/T_*.md`）',
+        \ '- `\e` … 現ノート周辺を 1 つの md に展開（`expand_v2.py`。**シンプル/詳細**を選び、シンプルは深さを数字で入力。詳細は文中の深さが 1 以上のとき、バックリンクの日記（題が YYYY-MM-DD-曜日2文字-…）を含めるか選べる。前回値は `.pkm_expand_prefs.json`。出力 `.trash/T_*.md`）',
         \ '- `\se` … S ノートを A ノートに展開（`expand_s.py`。旧 v1 前提の別系統。出力 `.trash/T_*.md`）',
         \ '- `\gi` … 画像ギャラリー（画像リンクがあればそれ、無ければ Index 以下の全画像をブラウザで）',
         \ '- `\oe` … 見出しを別バッファで編集（`:write` で元ノートへ反映）',
@@ -6168,7 +6168,8 @@ function! simple_yurii_note#v2_expand() abort
     let l:use_saved = 0
     if !empty(l:prefs)
       let l:pm = s:v2_pick('詳細設定', [
-            \ '保存済み(子' . l:prefs.child . ' 親' . l:prefs.parent . ' 文中' . l:prefs.backlink . ' 関連' . l:prefs.related . ')を使う',
+            \ '保存済み(子' . l:prefs.child . ' 親' . l:prefs.parent . ' 文中' . l:prefs.backlink . ' 関連' . l:prefs.related
+            \ . (l:prefs.backlink > 0 ? ' 日記' . (l:prefs.diary ? '含む' : '除く') : '') . ')を使う',
             \ '新しく設定する'])
       if l:pm ==# '' | echo 'simple_yurii_note: キャンセル' | return | endif
       let l:use_saved = (l:pm =~# '^保存済み')
@@ -6178,6 +6179,7 @@ function! simple_yurii_note#v2_expand() abort
       let l:pd = l:prefs.parent
       let l:bd = l:prefs.backlink
       let l:rd = l:prefs.related
+      let l:dy = l:prefs.diary
     else
       let l:cd = input('子の深さ: ', '1')
       let l:pd = input('親の深さ: ', '1')
@@ -6186,8 +6188,15 @@ function! simple_yurii_note#v2_expand() abort
       if l:cd !~# '^\d\+$' || l:pd !~# '^\d\+$' || l:bd !~# '^\d\+$' || l:rd !~# '^\d\+$'
         echo 'simple_yurii_note: キャンセル' | return
       endif
+      " 文中（バックリンク）を辿るときだけ、日記（題が YYYY-MM-DD-曜日2文字-…）を含めるか選ぶ
+      let l:dy = 1
+      if l:bd > 0
+        let l:dp = s:v2_pick('文中(バックリンク)の日記', ['含める', '含めない'])
+        if l:dp ==# '' | echo 'simple_yurii_note: キャンセル' | return | endif
+        let l:dy = (l:dp ==# '含める') ? 1 : 0
+      endif
     endif
-    let l:args = [s:python_cmd(), l:py, 'detailed', l:root, l:cur, l:cd, l:pd, l:bd, l:rd]
+    let l:args = [s:python_cmd(), l:py, 'detailed', l:root, l:cur, l:cd, l:pd, l:bd, l:rd, l:dy]
   endif
 
   let l:out = systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
@@ -6211,8 +6220,10 @@ function! s:v2_expand_prefs(root, py) abort
     return {}
   endif
   let l:parts = split(trim(l:out[0]))
-  if len(l:parts) != 4 | return {} | endif
-  return {'child': l:parts[0], 'parent': l:parts[1], 'backlink': l:parts[2], 'related': l:parts[3]}
+  if len(l:parts) != 4 && len(l:parts) != 5 | return {} | endif
+  " 5 つ目 = 文中に日記を含めるか（旧形式は 4 つ → 含める）
+  return {'child': l:parts[0], 'parent': l:parts[1], 'backlink': l:parts[2], 'related': l:parts[3],
+        \ 'diary': len(l:parts) > 4 ? str2nr(l:parts[4]) : 1}
 endfunction
 
 " カーソル直下ノート（zh）: 新ノートを作り、そのリンクをカーソル行の直下（本文）に置く。

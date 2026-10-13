@@ -29,7 +29,9 @@ detailed で使った深さは ROOT/.pkm_expand_prefs.json に記録し、次回
 
 CLI:
     expand_v2.py simple    ROOT START_FILE DEPTH
-    expand_v2.py detailed  ROOT START_FILE CHILD_DEPTH PARENT_DEPTH BACKLINK_DEPTH RELATED_DEPTH
+    expand_v2.py detailed  ROOT START_FILE CHILD_DEPTH PARENT_DEPTH BACKLINK_DEPTH RELATED_DEPTH [DIARY]
+                           DIARY = 文中（バックリンク）に日記（題が YYYY-MM-DD-曜日2文字-… のノート）を
+                           含めるか（1=含める 既定 / 0=含めない）
     expand_v2.py get_prefs ROOT
 """
 from __future__ import annotations
@@ -137,9 +139,17 @@ def collect_simple(start_id: str, dir_of, depth: int) -> Collected:
     return order, parent_of
 
 
-def _collect_pure_chain(start_id: str, dir_of, depth: int, kind: str) -> Collected:
+# 日記ノート: 題が `YYYY-MM-DD-曜日2文字`（例: 2026-10-13-TU-…）で始まるもの
+DIARY_TITLE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-[A-Z]{2}(?:-|$)")
+
+
+def is_diary_title(title: str) -> bool:
+    return bool(DIARY_TITLE_RE.match(title or ""))
+
+
+def _collect_pure_chain(start_id: str, dir_of, depth: int, kind: str, skip=None) -> Collected:
     """起点から、指定した 1 種類の辺だけを辿って深さ N まで集める（純粋なチェーン。
-    他の種類へは一切切り替えない）。"""
+    他の種類へは一切切り替えない）。skip(id) が真の相手は集めない（その先も辿らない）。"""
     visited = {start_id}
     order = [start_id]
     parent_of: dict = {start_id: None}
@@ -148,6 +158,8 @@ def _collect_pure_chain(start_id: str, dir_of, depth: int, kind: str) -> Collect
         nxt: list[str] = []
         for nid in frontier:
             for neighbor in dir_of(nid)[kind]:
+                if skip is not None and skip(neighbor):
+                    continue
                 if neighbor not in visited:
                     visited.add(neighbor)
                     order.append(neighbor)
@@ -160,7 +172,8 @@ def _collect_pure_chain(start_id: str, dir_of, depth: int, kind: str) -> Collect
 
 
 def collect_detailed(start_id: str, dir_of, child_depth: int, parent_depth: int,
-                      backlink_depth: int, related_depth: int) -> Collected:
+                      backlink_depth: int, related_depth: int,
+                      skip_backlink=None) -> Collected:
     """子方向を主軸に再帰展開し、その経路上の各ノート（起点含む）それぞれから
     独立に親・文中・関連を指定の深さだけ辿って付け加える。
 
@@ -173,6 +186,8 @@ def collect_detailed(start_id: str, dir_of, child_depth: int, parent_depth: int,
       （親を辿った先でさらに子や文中には進まない）ので、例えば親の先がハブ的な
       ノート（Index 等）でも、そのハブの他の子まで展開されることはない。
     - 全体を通して同じノートは 1 回だけ（重複除去）。
+    - skip_backlink(id) が真のノートは、文中（バックリンク）のチェーンに入れない
+      （日記を除きたいときに使う）。
     """
     order = [start_id]
     seen = {start_id}
@@ -190,7 +205,8 @@ def collect_detailed(start_id: str, dir_of, child_depth: int, parent_depth: int,
                             ("related", related_depth)):
             if depth <= 0:
                 continue
-            sub_chain, sub_parent_of = _collect_pure_chain(anchor, dir_of, depth, kind)
+            sub_chain, sub_parent_of = _collect_pure_chain(
+                anchor, dir_of, depth, kind, skip_backlink if kind == "backlink" else None)
             for nid in sub_chain[1:]:
                 if nid not in seen:
                     seen.add(nid)
@@ -329,16 +345,19 @@ def _load_prefs(root: Path) -> dict[str, int] | None:
             "backlink": int(d["backlink"]),
             # 旧形式（関連が無い時代）の保存値は 0 として読む。
             "related": int(d.get("related", 0)),
+            # 文中（バックリンク）に日記を含めるか。旧形式（無い）は含める。
+            "diary": int(d.get("diary", 1)),
         }
     except Exception:  # noqa: BLE001
         return None
 
 
-def _save_prefs(root: Path, child: int, parent: int, backlink: int, related: int) -> None:
+def _save_prefs(root: Path, child: int, parent: int, backlink: int, related: int,
+                diary: int = 1) -> None:
     fp = root / _PREFS_FILE
     fp.write_text(
         json.dumps({"child": child, "parent": parent, "backlink": backlink,
-                    "related": related}, ensure_ascii=False),
+                    "related": related, "diary": diary}, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -347,7 +366,7 @@ def _save_prefs(root: Path, child: int, parent: int, backlink: int, related: int
 # CLI
 # ---------------------------------------------------------------------------
 
-def _run(root: Path, start_file: Path, order_fn) -> Path:
+def _run(root: Path, start_file: Path, order_fn, holder: dict | None = None) -> Path:
     by_name, notes, ids, id_to_path = _build_index(root)
     start_id = ids.get(start_file.resolve())
     if start_id is None:
@@ -361,6 +380,9 @@ def _run(root: Path, start_file: Path, order_fn) -> Path:
             dir_cache[nid] = _directions(p, notes[p], root, by_name, ids)
         return dir_cache[nid]
 
+    if holder is not None:
+        # order_fn が日記かどうかを引けるように渡す
+        holder["is_diary"] = lambda nid: is_diary_title(notes[id_to_path[nid]]["title"])
     order, parent_of = order_fn(start_id, dir_of)
     notes_by_id = {i: notes[id_to_path[i]] for i in order}
 
@@ -382,7 +404,7 @@ def main(argv: list[str]) -> int:
     if mode == "get_prefs":
         prefs = _load_prefs(root)
         if prefs:
-            print(f"{prefs['child']} {prefs['parent']} {prefs['backlink']} {prefs['related']}")
+            print(f"{prefs['child']} {prefs['parent']} {prefs['backlink']} {prefs['related']} {prefs['diary']}")
         return 0
 
     if len(argv) < 4:
@@ -398,15 +420,22 @@ def main(argv: list[str]) -> int:
         out_path = _run(root, start_file, lambda sid, dir_of: collect_simple(sid, dir_of, depth))
     elif mode == "detailed":
         if len(argv) < 7:
-            print("usage: expand_v2.py detailed ROOT START_FILE CHILD PARENT BACKLINK [RELATED]",
+            print("usage: expand_v2.py detailed ROOT START_FILE CHILD PARENT BACKLINK [RELATED [DIARY]]",
                   file=sys.stderr)
             return 2
         cd, pd, bd = int(argv[4]), int(argv[5]), int(argv[6])
         # 旧呼び出し（関連が無い時代）は related=0 として扱う。
         rd = int(argv[7]) if len(argv) > 7 else 0
-        out_path = _run(root, start_file,
-                         lambda sid, dir_of: collect_detailed(sid, dir_of, cd, pd, bd, rd))
-        _save_prefs(root, cd, pd, bd, rd)
+        # 文中（バックリンク）に日記を含めるか（1=含める / 0=含めない）。省略は含める。
+        dy = int(argv[8]) if len(argv) > 8 else 1
+        holder: dict = {}
+        out_path = _run(
+            root, start_file,
+            lambda sid, dir_of: collect_detailed(
+                sid, dir_of, cd, pd, bd, rd,
+                skip_backlink=None if dy else holder["is_diary"]),
+            holder)
+        _save_prefs(root, cd, pd, bd, rd, dy)
     else:
         print(f"unknown mode: {mode}", file=sys.stderr)
         return 2
