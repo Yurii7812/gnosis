@@ -508,8 +508,8 @@ nnoremap <silent> \V <Cmd>call simple_yurii_note#paste_clipboard('P', v:count)<C
 nnoremap <silent> gp <Cmd>call simple_yurii_note#paste_charwise()<CR>
 " .: 標準の「直前の変更を繰り返す」動作を明示的に使用する
 nnoremap <silent> . .
-nnoremap <silent> \l        <Cmd>call simple_yurii_note#linkify_filename_under_cursor()<CR>
-xnoremap <silent> \l        :<C-u>call simple_yurii_note#linkify_selection_new_note()<CR>
+nnoremap <silent> \L        <Cmd>call simple_yurii_note#linkify_filename_under_cursor()<CR>
+xnoremap <silent> \L        :<C-u>call simple_yurii_note#linkify_selection_new_note()<CR>
 nnoremap <nowait> <silent> mx  <Cmd>ToggleCheckbox<CR>
 xnoremap <nowait> <silent> mx  :<C-u>'<,'>ToggleCheckbox<CR>
 nnoremap <silent> \p        <Cmd>call simple_yurii_note#paste_clipboard_link_here()<CR>

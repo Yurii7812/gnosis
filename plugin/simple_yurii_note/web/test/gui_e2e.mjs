@@ -44,6 +44,7 @@ for (const [i, name] of ["a.png", "b.png", "c.png", "d.png"].entries()) fs.write
 fs.writeFileSync(path.join(vault, "plain.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 本文だけ\n---\n\n# 本文だけ\n\n本文だけのノート（関係の節が無い）。\n");
 fs.writeFileSync(path.join(vault, "grp.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: グループG\nattribute: group\n---\n\n# グループG\n\n[節あり](sec.md)\n");
 fs.writeFileSync(path.join(vault, "sec.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 節あり\n---\n\n# 節あり\n\n本文の文。\n\n### Group\n[グループG](grp.md)\n");
+fs.writeFileSync(path.join(vault, "pick.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: ピッカー\n---\n\n# ピッカー\n\n本文の文。\n");
 mk("img.md", "画像", ["a", "b", "c", "d"].map((n) => `## 画像 ${n}\n\n![](${n}.png)\n`).join("\n"), "[Index](index.md)");
 
 const scenario = `(async () => {
@@ -199,6 +200,17 @@ const scenario = `(async () => {
     await press(':w\\r', 800);
   }
 
+  // \\l の確定: 選んだリンクを za と同じ置き場所キーで入れる（fzf の選択そのものは対象外。
+  // sink が呼ぶ simple_yurii_note#insert_links_pick を直接呼ぶ）。h = カーソル直下
+  {
+    await press(':e pick.md\\r', 1200);
+    await press('G', 300);
+    await press(':call simple_yurii_note#insert_links_pick(["[数学とは何か](m1.md)"], getpos("."))\\r', 800);
+    R.pickPrompt = G.screen().slice(-3).join('|').trim().slice(0, 200);
+    await press('h', 1200);
+    await press(':w\\r', 800);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -256,6 +268,10 @@ try {
     check(linkAt > bodyAt && linkAt < groupAt && lines.indexOf("### Context") < 0,
       "zn Enter: the link should be at the end of the body, just before the first section (### Group): " + JSON.stringify(lines.slice(6)));
     check(lines.slice(linkAt + 1, groupAt).every((l) => l === ""), "zn Enter: nothing but blanks between the link and ### Group: " + JSON.stringify(lines.slice(linkAt, groupAt + 1)));
+  }
+  {
+    const txt = fs.readFileSync(path.join(vault, "pick.md"), "utf8");
+    check(/^\[[^\]]*\]\(m1\.md\)$/m.test(txt), "\\L h: the picked note should be linked on its own line: " + JSON.stringify(txt.slice(-160)));
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);

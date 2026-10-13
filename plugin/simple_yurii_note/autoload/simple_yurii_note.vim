@@ -933,8 +933,8 @@ function! s:guide_template() abort
         \ '',
         \ '## リンク',
         \ '',
-        \ '- `\l`（ノーマル）… カーソル下のファイル名を Markdown リンク化',
-        \ '- `\l`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Context は付けない＝元ノートは BackLink に出る。付けるなら `\P`）',
+        \ '- `\L`（ノーマル）… カーソル下のファイル名を Markdown リンク化',
+        \ '- `\L`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Context は付けない＝元ノートは BackLink に出る。付けるなら `\P`）',
         \ '- `\p`（ノーマル）… カーソル下 or クリップボードのリンクを 1 本追加（`h`/`Enter` で位置を選ぶ）',
         \ '- `\p`（ビジュアル）… クリップボードのファイル名/URL を選択範囲のリンクに（無ければ何もしない）',
         \ '- `za` … リンク 1 本を今のノートに追加（`h`=カーソル直下 / `Enter`=本文の最後 / `c`=Context末尾 / `r`=Related）',
@@ -944,8 +944,8 @@ function! s:guide_template() abort
         \ '- 関連: `za` 等で `r` を押すと `### Related` に**相互追加**（両ノートに。セクションはこの時だけ作る。片側で消すと次回同期で両方から消える。BackLink には出ない）',
         \ '- `\P` … カーソル下リンクの Context に今のノートを確認なしで追加',
         \ '- クリップボードを関係付きで追加: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc`（`\ca`= `ca`、`\at`= `at` の逆方向）',
-        \ '- `\L`（ノーマル）… 全ノートを全文検索（タイトル優先）→ カーソル位置にリンク挿入（`:LinkPick`）',
-        \ '- `\L`（ビジュアル）… 同じ検索で選んだノートへのリンクで選択範囲を置換',
+        \ '- `\l`（ノーマル）… 全ノートを全文検索（タイトル優先）→ 選んだら置き場所を聞かれる（`za` と同じ: `h`=カーソル直下に新しい行 / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context 末尾 / `r`=Related / `i`=カーソル位置にそのまま）（`:LinkPick`）',
+        \ '- `\l`（ビジュアル）… 同じ検索で選んだノートへのリンクで選択範囲を置換',
         \ '',
         \ '## タイトル・表示名',
         \ '',
@@ -984,7 +984,7 @@ function! s:guide_template() abort
         \ '',
         \ '- `gs` … vault を全文検索（タイトル優先。左はタイトル、右はヒット箇所を強調）→ `⏎` でヒット行を開く',
         \ '- `<Space>` … 今のノートのリンク先を検索（タイトル優先。リンク先ノートの本文も検索対象）→ `⏎` で開く',
-        \ '- `\L` … 同じ全文検索（タイトル優先）でノートを選び、カーソル位置にリンクを挿入（`:LinkPick`）',
+        \ '- `\l` … 同じ全文検索（タイトル優先）でノートを選び、`za` と同じ置き場所キーでリンクを入れる（`:LinkPick`）',
         \ '- `rg` … ripgrep で全文（行）検索（`:Rg`）',
         \ '',
         \ '## 貼り付け（クリップボード）',
@@ -8481,8 +8481,9 @@ function! s:insert_links_core(links, ...) abort
   if empty(l:links)
     return 0
   endif
+  let l:inline = !empty(get(s:, 'inline_pos', []))
   echo 'h=カーソル直下 / Enter=本文の最後 / '
-        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . 'c=Context末尾 / r=Related  (Esc で取り止め)'
+        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . (l:inline ? 'i=カーソル位置 / ' : '') . 'c=Context末尾 / r=Related  (Esc で取り止め)'
   let l:ch = nr2char(getchar())
   redraw
   let l:num = char2nr(l:ch)
@@ -8497,6 +8498,16 @@ function! s:insert_links_core(links, ...) abort
   if l:ch ==? 'p'
     echo 'simple_yurii_note: 位置キー p は c（Context 末尾）に変わりました。何も追加しません'
     return 0
+  endif
+  if l:ch ==? 'i' && l:inline
+    " ピッカーを開いたときのカーソル位置に、行の中へそのまま入れる（従来の \l）
+    call cursor(s:inline_pos[1], s:inline_pos[2])
+    let l:text = join(l:links, ' ')
+    let l:cur = getline('.')
+    let l:col = col('.') - 1
+    call setline('.', strpart(l:cur, 0, l:col) . l:text . strpart(l:cur, l:col))
+    call cursor(line('.'), l:col + strlen(l:text) + 1)
+    return 1
   endif
   if l:ch ==? 'c'
     " 今のノートの ### Context 末尾に置く（相手が親になる）。zn / zk の c と同じ。
@@ -8744,6 +8755,18 @@ function! simple_yurii_note#add_clipboard_before_up_note(...) abort
     return
   endif
   call s:insert_links_at_position([l:link], function('s:links_added_done'))
+endfunction
+
+" \l などのピッカーから: 選んだリンク（Markdown リンクの文字列のリスト）を、za と同じ置き場所キー
+" （h / Enter / t / c / r と、行の中へ入れる i）で今のノートに入れる。
+" a:pos はピッカーを開いたときの getpos('.')（i 用）。
+function! simple_yurii_note#insert_links_pick(links, pos) abort
+  let s:inline_pos = a:pos
+  try
+    call s:insert_links_at_position(a:links, function('s:links_added_done'))
+  finally
+    let s:inline_pos = []
+  endtry
 endfunction
 
 function! s:links_added_done() abort

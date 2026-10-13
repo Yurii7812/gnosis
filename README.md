@@ -12,7 +12,7 @@ Vim 上で Markdown ノートを運用するための PKM（Personal Knowledge M
 Vim からは `\A` または `:YuriiWeb`。
 
 - 中身は**本物の Vim**（あなたの vimrc と SYN などのプラグイン）。機能を作り直していないので、
-  `zn`・Tab・数字キー・`\ua`・`\l` など、Vim の操作がそのまま使えます。
+  `zn`・Tab・数字キー・`\ua`・`\L` など、Vim の操作がそのまま使えます。
 - Vim との違いは、バッファがマークダウンとして描画されること（画像も表示）だけです。
 
 詳細は [`docs/08-web.md`](docs/08-web.md)。過去の Obsidian 風アプリは git タグ `app-obsidian-style` にあります。
@@ -255,7 +255,7 @@ Normal モードへ戻ったときの英語入力化は、状態取得に失敗�
 - `ca` / `:CU` : クリップボードのリンクを現在ノートの Child: に追加し、リンク先ノートの Context: に現在ノートを追加
 - `ta` / `:AT` : クリップボード側ノートの Child: に現在ノートを追加し、現在ノートの Context: にクリップボード側ノートを追加
 - `yn` / `:YN` : 現在ファイル名をヤンク
-- `\l` / `:Linkify` : ファイル名テキストを Markdown リンク化。表示名もリンク先も拡張子つきのファイル名（例: `[memo.pdf](memo.pdf)`、`.html` も同じ）。`.md` だけは代わりにタイトルを使う
+- `\L` / `:Linkify` : ファイル名テキストを Markdown リンク化。表示名もリンク先も拡張子つきのファイル名（例: `[memo.pdf](memo.pdf)`、`.html` も同じ）。`.md` だけは代わりにタイトルを使う
 
 
 - `\p` / `:PasteLink` : クリップボードのリンクを挿入

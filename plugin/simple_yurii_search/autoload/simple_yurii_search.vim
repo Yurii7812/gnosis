@@ -88,7 +88,7 @@ endfunction
 " fzf バックエンド
 "   - gs        … vault を全文検索（note_search.py。タイトル優先・表示はタイトル＋抜粋）
 "   - <Space>   … 今のノートのリンク先を検索（タイトル優先＋本文）→ Enter で開く
-"   - \L         … 全文検索（タイトル優先・表示はタイトル）→ Enter でリンク挿入
+"   - \l         … 全文検索（タイトル優先・表示はタイトル）→ Enter でリンク挿入
 "   検索・並び・強調は python、fzf は --disabled で表示に徹する（change:reload）。
 "   fzf / fzf.vim が無い環境ではフォールバックせず明示的にエラーにする。
 " ===========================================================================
@@ -195,7 +195,7 @@ function! s:preview_script() abort
   return (!empty(l:p) && filereadable(l:p)) ? l:p : ''
 endfunction
 
-" \L の確定処理。fzf.vim の sink* 形式（先頭は押したキー）で [パス:タイトル,...] を受ける。
+" \l の確定処理。fzf.vim の sink* 形式（先頭は押したキー）で [パス:タイトル,...] を受ける。
 function! s:link_sink(lines) abort
   if len(a:lines) < 2 | return | endif
   if exists('s:insert_buf') && bufnr('%') != s:insert_buf
@@ -278,7 +278,7 @@ function! s:search_open_sink(lines) abort
   endfor
 endfunction
 
-" \L の確定: 選んだノートへの Markdown リンクをカーソル位置に挿入。
+" \l の確定: 選んだノートへの Markdown リンクをカーソル位置に挿入。
 function! s:link_sink_tab(lines) abort
   let l:notes = []
   for l:line in a:lines
@@ -294,11 +294,8 @@ function! s:link_sink_tab(lines) abort
     call cursor(s:insert_pos[1], s:insert_pos[2])
   endif
   let l:links = map(copy(l:notes), {_, n -> simple_yurii_note#make_link(n.path, n.title)})
-  let l:link = join(l:links, ' ')
-  let l:cur = getline('.')
-  let l:col = col('.') - 1
-  call setline('.', strpart(l:cur, 0, l:col) . l:link . strpart(l:cur, l:col))
-  call cursor(line('.'), l:col + strlen(l:link) + 1)
+  " 置き場所は za と同じキーで選ぶ（h / Enter / t / c / r。i = ピッカーを開いたカーソル位置）
+  call simple_yurii_note#insert_links_pick(l:links, getpos('.'))
 endfunction
 
 " note_search.py + fzf。表示はタイトル（with_nth で抜粋も出せる）。
@@ -365,7 +362,7 @@ function! simple_yurii_search#search_local() abort
         \ s:fzf_options('2', '1', 'Link> '))
 endfunction
 
-" \L … 全ノートを全文検索（タイトル優先・表示はタイトル）→ カーソル位置にリンク挿入。
+" \l … 全ノートを全文検索（タイトル優先・表示はタイトル）→ カーソル位置にリンク挿入。
 function! simple_yurii_search#pick_insert_link() abort
   if !s:fzf_ok() | return | endif
   let s:insert_buf = bufnr('%')
@@ -381,7 +378,7 @@ function! simple_yurii_search#pick_insert_link() abort
         \ s:fzf_options('2', '1,2', 'Title> '))
 endfunction
 
-" \L（ビジュアル）… 選択範囲を検索で選んだノートへのリンクで置き換える。
+" \l（ビジュアル）… 選択範囲を検索で選んだノートへのリンクで置き換える。
 " リンクの表示テキストは選択していた文字列（空ならノートタイトル）。
 function! simple_yurii_search#pick_insert_link_visual() abort range
   if !s:fzf_ok() | return | endif
@@ -424,7 +421,7 @@ function! simple_yurii_search#pick_insert_link_visual() abort range
   call s:note_search_run('Link> ', '2', function('s:link_sink_visual'))
 endfunction
 
-" ビジュアル \L の確定: 選択範囲をリンクで置き換える。
+" ビジュアル \l の確定: 選択範囲をリンクで置き換える。
 function! s:link_sink_visual(lines) abort
   if !exists('s:vis') | return | endif
   for l:line in a:lines
