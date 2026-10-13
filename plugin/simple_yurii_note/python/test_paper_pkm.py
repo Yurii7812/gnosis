@@ -261,6 +261,191 @@ def test_topic_index() -> None:
         check(len(moved) == 1 and len(errors) == 1, "同じバッチ内の重複もエラー")
 
 
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_index_has_fixed_file_name() -> None:
+    print("index: 新規作成は常に Paper-Zettelkasten-Index.md（タイムスタンプ名を作らない）")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        path = pp.create_paper_index(root)
+        check(path.name == "Paper-Zettelkasten-Index.md" and path.is_file(), f"固定名で作られる: {path.name}")
+        check(pp.find_paper_index(root) == path, "find_paper_index は固定名を返す")
+        text = path.read_text(encoding="utf-8")
+        check("paper_index: true" in text and "title: Paper-Zettelkasten-Index" in text, "paper_index マーカーと題")
+        before = sorted(p.name for p in root.glob("*.md"))
+        pp.regen(root)
+        pp.create_paper_index(root)
+        check(sorted(p.name for p in root.glob("*.md")) == before, "regen / create を繰り返しても新しい Index は増えない")
+        check(sum(1 for p in root.glob("*.md") if "paper_index: true" in p.read_text(encoding="utf-8")) == 1,
+              "Index は 1 つだけ")
+        parent = (root / "index.md").read_text(encoding="utf-8")
+        check("(Paper-Zettelkasten-Index.md)" in parent, "index.md から固定名でリンクされる")
+
+
+def test_index_migrates_from_timestamp_name() -> None:
+    print("index: 旧タイムスタンプ名の Index を固定名へ移行（内容・メタデータ保持、リンク更新）")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        old = root / "261001120000.md"
+        _write(old, "---\ntime: 2026-10-01 12:00:00\ntitle: Paper-Zettelkasten-Index\npaper_index: true\nextra: 残す\n---\n"
+                    "# Paper-Zettelkasten-Index\n\n[Index-write](Index-write.md)\n[Folgezettel-Index](Folgezettel-Index.md)\n\n"
+                    "[バナナ](261001120001.md)\n")
+        _write(root / "index.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n\n"
+                                  "[Paper-Zettelkasten-Index](261001120000.md)\n")
+        _write(root / "Index-write.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\n"
+                                         "### Parent\n[Paper-Zettelkasten-Index](261001120000.md)\n")
+        _write(root / "sub" / "n.md", "---\ntitle: sub\n---\n\n# sub\n\n[戻る](../261001120000.md#見出し)と[外部](https://example.com/261001120000.md)\n")
+        _write(root / "other.md", "---\ntitle: other\n---\n\n# other\n\n[別](261001120009.md)\n")
+        old_text = old.read_text(encoding="utf-8")
+        result = pp.migrate_paper_index(root)
+        new = root / "Paper-Zettelkasten-Index.md"
+        check(result == new and new.is_file() and not old.exists(), "改名された")
+        check(new.read_text(encoding="utf-8") == old_text, "中身（キーワード・リンク・メタデータ）は 1 バイトも変わらない")
+        check("(Paper-Zettelkasten-Index.md)" in (root / "index.md").read_text(encoding="utf-8")
+              and "261001120000" not in (root / "index.md").read_text(encoding="utf-8"), "index.md のリンクが更新される")
+        check("(Paper-Zettelkasten-Index.md)" in (root / "Index-write.md").read_text(encoding="utf-8"), "他のノートのリンクも更新される")
+        sub = (root / "sub" / "n.md").read_text(encoding="utf-8")
+        check("(../Paper-Zettelkasten-Index.md#見出し)" in sub, "サブフォルダの相対リンクと #見出し を保つ")
+        check("https://example.com/261001120000.md" in sub, "外部 URL は書き換えない")
+        check("261001120009.md" in (root / "other.md").read_text(encoding="utf-8"), "別のノートへのリンクは触らない")
+        check(pp.find_paper_index(root) == new, "find_paper_index は固定名")
+        check(pp.migrate_paper_index(root) == new, "移行済みなら何もしない（冪等）")
+        pp.regen(root)
+        check(not list(root.glob("2610*.md")) or all(p.name != "261001120000.md" for p in root.glob("*.md")),
+              "regen で旧名が復活しない")
+
+
+def test_index_migration_never_overwrites() -> None:
+    print("index: 固定名のファイルが既にあるとき、上書き・データ消失をしない")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        old = root / "261001120000.md"
+        _write(old, "---\ntime: 2026-10-01 12:00:00\ntitle: Paper-Zettelkasten-Index\npaper_index: true\n---\n# Paper-Zettelkasten-Index\n")
+        other = root / "Paper-Zettelkasten-Index.md"
+        _write(other, "---\ntitle: 別のノート\n---\n# 別のノート\n\n大事な内容\n")
+        before_old = old.read_text(encoding="utf-8")
+        before_other = other.read_text(encoding="utf-8")
+        result = pp.migrate_paper_index(root)
+        check(result == old, "固定名が別のノートなら移行せず旧 Index を使い続ける")
+        check(other.read_text(encoding="utf-8") == before_other and old.read_text(encoding="utf-8") == before_old,
+              "どちらのファイルも変わらない")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        _write(root / "Paper-Zettelkasten-Index.md", "---\ntitle: 別のノート\n---\n# 別のノート\n\n大事な内容\n")
+        try:
+            pp.create_paper_index(root)
+            check(False, "別のノートが固定名を使っていたら create は止まる")
+        except RuntimeError:
+            check(True, "別のノートが固定名を使っていたら create は止まる（上書きしない）")
+        check("大事な内容" in (root / "Paper-Zettelkasten-Index.md").read_text(encoding="utf-8"), "中身は残る")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        _write(root / "Paper-Zettelkasten-Index.md", "---\ntitle: Paper-Zettelkasten-Index\n---\n# Paper-Zettelkasten-Index\n\n手書き\n")
+        idx = pp.create_paper_index(root)
+        text = idx.read_text(encoding="utf-8")
+        check(idx.name == "Paper-Zettelkasten-Index.md" and "paper_index: true" in text and "手書き" in text,
+              "題が Index の固定名ファイルはマーカーだけ足して使う（中身は残る）")
+
+
+def _diary_vault(root: Path) -> tuple[Path, Path]:
+    root = _make_vault(root)
+    idx = pp.create_paper_index(root)
+    return root, idx
+
+
+def test_diary_register_and_keyword() -> None:
+    print("diary: 紙の日記を登録 → Index にキーワード「日記」→ 日付順の一覧")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        # デジタル日記のグループ（題「日記」）。紙の日記はこれと別のノートになる
+        _write(root / "digital.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 日記\nattribute: group\n---\n\n# 日記\n")
+        digital_before = (root / "digital.md").read_bytes()
+
+        def img(name: str) -> Path:
+            p = root / name
+            p.write_bytes(b"x")
+            return p
+
+        moved, errors = pp.register_diary_pages(
+            root, root, [(img("a1.jpg"), "2026-10-07"), (img("a2.jpg"), "2026-10-07"), (img("b1.png"), "2026-09-30")])
+        check(not errors and len(moved) == 2, f"2 日分（3 ページ）が登録される: {moved}")
+        notes = pp.scan_diary_notes(root)
+        check(set(notes) == {"2026-10-07", "2026-09-30"}, "日記が書かれた日付ごとに 1 ノート")
+        n7 = notes["2026-10-07"].read_text(encoding="utf-8")
+        check("paper_diary: 2026-10-07" in n7 and "title: 2026-10-07 紙の日記" in n7, "日記の日付と題")
+        check("![](paper-diary-20261007-1.jpg)" in n7 and "![](paper-diary-20261007-2.jpg)" in n7, "複数ページの画像が並ぶ")
+        check((root / "paper-diary-20261007-1.jpg").is_file() and (root / "paper-diary-20260930-1.png").is_file(), "画像が dest へ移る")
+        import re as _re
+        t7 = _re.search(r"^time: (.+)$", n7, _re.M).group(1)
+        from datetime import datetime as _dt
+        check(t7.startswith(_dt.now().strftime("%Y-%m-%d")) and "paper_diary: 2026-10-07" in n7,
+              f"time はスキャンした日時（今）で、日記の日付（paper_diary: 2026-10-07）とは別: {t7}")
+
+        pp.regen(root)
+        index_text = idx.read_text(encoding="utf-8")
+        check(index_text.count("[日記](") == 1, f"Index にキーワード「日記」が 1 つだけある: {index_text}")
+        group = pp.find_group(root, "日記")
+        check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
+        gtext = group.read_text(encoding="utf-8")
+        check("title: 紙の日記" in gtext and "attribute: group" in gtext, "題は「紙の日記」（デジタル日記の「日記」と区別）")
+        check(gtext.index("2026-09-30 紙の日記") < gtext.index("2026-10-07 紙の日記"), "日付順（古い日記から）に並ぶ")
+        check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
+        link = f"({group.name})"
+        check(link in index_text, "Index の「日記」は紙の日記グループを指す")
+
+        # 再生成しても消えず、重複しない
+        pp.regen(root)
+        pp.regen(root)
+        index_text2 = idx.read_text(encoding="utf-8")
+        check(index_text2.count("[日記](") == 1 and link in index_text2, "regen を繰り返しても「日記」は 1 つのまま消えない")
+        # 後から追加（別の日付、同じ日付の続きのページ）
+        moved, errors = pp.register_diary_pages(root, root, [(img("c1.jpg"), "2026-10-01"), (img("a3.jpg"), "2026-10-07")])
+        check(not errors, "追加登録")
+        n7b = pp.scan_diary_notes(root)["2026-10-07"].read_text(encoding="utf-8")
+        check("paper-diary-20261007-3.jpg" in n7b and n7b.count("![](") == 3, "同じ日付の続きのページは同じノートに足される（上書きしない）")
+        pp.regen(root)
+        gtext = group.read_text(encoding="utf-8")
+        order = [gtext.index(x) for x in ("2026-09-30 紙の日記", "2026-10-01 紙の日記", "2026-10-07 紙の日記")]
+        check(order == sorted(order) and gtext.count("2026-10-07 紙の日記](") == 1, "追加後も日付順で、重複しない")
+
+
+def test_diary_keyword_merges_with_index_write_entry() -> None:
+    print("diary: Index-write に「日記」のキーワード行があれば重複させず、日記も同じグループに入る")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
+        _write(root / "Index-write.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\n日記: 1,2\nバナナ: 1\n")
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07")])
+        pp.regen(root)
+        pp.regen(root)
+        text = idx.read_text(encoding="utf-8")
+        check(text.count("[日記](") == 1, f"「日記」は 1 つだけ: {text}")
+        group = pp.find_group(root, "日記")
+        gtext = group.read_text(encoding="utf-8")
+        check("2026-10-07 紙の日記" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記が同じグループに並ぶ")
+
+
+def test_diary_errors_and_scan_unchanged() -> None:
+    print("diary: 不正な日付はエラー。日記が無ければ「日記」キーワードは出ない。通常のスキャンはそのまま")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "z.jpg"
+        p.write_bytes(b"x")
+        moved, errors = pp.register_diary_pages(root, root, [(p, "2026-13-40"), (p, "あした")])
+        check(not moved and len(errors) == 2 and p.exists(), "不正な日付は登録されず、画像も動かさない")
+        check(pp.normalize_diary_date("2026/9/3") == "2026-09-03" and pp.normalize_diary_date("２０２６-１０-０７") == "2026-10-07"
+              and pp.normalize_diary_date("20261007") == "2026-10-07", "日付の入力ゆれを受ける")
+        moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
+        pp.regen(root)
+        check("[日記](" not in idx.read_text(encoding="utf-8"), "日記を登録していなければ「日記」は出ない")
+        check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"1", "2"}, "通常の ID 登録は今までどおり")
+
+
 def test_regen_without_index() -> None:
     print("regen: Paper-Zettelkasten-Index が無ければ False")
     with tempfile.TemporaryDirectory() as d:

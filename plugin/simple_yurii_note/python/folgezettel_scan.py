@@ -5,7 +5,8 @@
 
     1. スキャン画像のあるフォルダを選ぶ
     2. 画像を見ながら ID を手入力（→=次の連番 / ↓=子ID / ↑=直前を編集 /
-       Space=手入力 / ←=取り消し。ドラッグやボタンで順番も変更できる）
+       Space=手入力 / ←=取り消し / d=紙の日記として登録（日記が書かれた日付を入力。
+       複数ページは同じ日付で続けて d）。ドラッグやボタンで順番も変更できる）
     3. 終わったら「移動して終了」または全枚数の完了で、画像を
        `--dest`（今開いている Index のフォルダ）へ `<ID>.<拡張子>` として移し、
        タイムスタンプ名ノートを作って paper_pkm.regen（Index・グループ・
@@ -89,6 +90,7 @@ class ImageItem:
     processed: bool = False
     topic_title: Optional[str] = None  # トピック別Index（例: 1-仏教）のとき「仏教」
     topic_parent: Optional[str] = None  # 親トピック表示名（例: 1-仏教）（トピック階層用）
+    diary_date: Optional[str] = None  # 紙の日記として登録するとき、日記が書かれた日付 YYYY-MM-DD
 
     def current_path(self, folder: Path) -> Path:
         return folder / self.current_name
@@ -193,6 +195,7 @@ class ScanApp:
         self.topic_title_var = tk.StringVar(value="")
         self.topic_parent_var = tk.StringVar(value="")
         self.topic_preview_var = tk.StringVar(value="")
+        self.diary_date_var = tk.StringVar(value="")
 
         self.ui_font = pick_font(self.root, UI_FONT_CANDIDATES, "TkDefaultFont")
         self.mono_font = pick_font(self.root, MONO_FONT_CANDIDATES, "TkFixedFont")
@@ -517,6 +520,17 @@ class ScanApp:
         self.topic_title_var.trace_add("write", self.update_topic_preview)
         self.topic_parent_var.trace_add("write", self.update_topic_preview)
 
+        # 紙の日記として登録（日記が書かれた日付。スキャンした日付とは別）
+        self.diary_frame = ttk.Frame(self.input_holder, style="Card.TFrame")
+        ttk.Label(self.diary_frame, text="日記の日付:", style="PrevId.TLabel").pack(side="left")
+        self.diary_date_entry = ttk.Entry(self.diary_frame, textvariable=self.diary_date_var,
+                                          font=(self.mono_font, FONT_SIZES["input"]), width=12)
+        self.diary_date_entry.pack(side="left", padx=(10, 14), ipady=4)
+        ttk.Label(self.diary_frame, text="YYYY-MM-DD（その日記が書かれた日。複数ページは同じ日付で続けて登録）／ "
+                  "Enter で確定 ／ Esc でキャンセル", style="CardNote.TLabel").pack(side="left")
+        self.diary_date_entry.bind("<Return>", self.confirm_diary)
+        self.diary_date_entry.bind("<Escape>", self.cancel_input)
+
         # キー操作と同じ動きの大きなボタン（キーボードでも押してもOK）
         self.action_bar = ttk.Frame(self.naming_frame)
         self.action_bar.pack(fill="x")
@@ -536,6 +550,8 @@ class ScanApp:
                    command=self._focus_back(self.on_down)).pack(side="left", padx=(10, 0))
         ttk.Button(main_group, text="t トピックIndex", style="Big.TButton",
                    command=self._focus_back(self.on_topic)).pack(side="left", padx=(10, 0))
+        ttk.Button(main_group, text="d 日記として登録", style="Big.TButton",
+                   command=self._focus_back(self.on_diary)).pack(side="left", padx=(10, 0))
         ttk.Button(main_group, text="→ 次の連番", style="BigAccent.TButton",
                    command=self._focus_back(self.on_right)).pack(side="left", padx=(10, 0))
 
@@ -650,7 +666,8 @@ class ScanApp:
             iid = str(idx)
             self.tree.insert(
                 "", "end", iid=iid, text="", image=image_ref,
-                values=(idx + 1, item.current_name, item.folgezettel_id or "",
+                values=(idx + 1, item.current_name,
+                        item.folgezettel_id or (f"日記 {item.diary_date}" if item.diary_date else ""),
                         stat_text),
                 tags=("done" if item.processed else "todo",),
             )
@@ -825,10 +842,11 @@ class ScanApp:
         self.root.bind("<Left>", self.on_left)
         self.root.bind("<space>", self.on_space)
         self.root.bind("<t>", self.on_topic)
+        self.root.bind("<d>", self.on_diary)
         self.root.bind("<Escape>", self.on_escape_global)
 
     def unbind_naming_keys(self):
-        for sequence in ("<Right>", "<Down>", "<Up>", "<Left>", "<space>", "<t>", "<Escape>"):
+        for sequence in ("<Right>", "<Down>", "<Up>", "<Left>", "<space>", "<t>", "<d>", "<Escape>"):
             self.root.unbind(sequence)
 
     def previous_id(self) -> Optional[str]:
@@ -940,6 +958,7 @@ class ScanApp:
 
     def show_input(self, value: str):
         self.topic_frame.pack_forget()
+        self.diary_frame.pack_forget()
         self.input_active = True
         self.input_var.set(value)
         self.input_holder.pack(fill="x", pady=(6, 8), before=self.action_bar)
@@ -950,6 +969,8 @@ class ScanApp:
 
     def show_topic_input(self):
         self.input_holder.pack_forget()
+        self.input_frame.pack_forget()
+        self.diary_frame.pack_forget()
         self.input_active = True
         previous = self.previous_id()
         self.topic_id_var.set(previous or "")
@@ -962,6 +983,40 @@ class ScanApp:
         else:
             self.topic_id_entry.focus_set()
         self.status_var.set("番号とトピック名を入力してEnterで確定します（例: 1 + 仏教 → 1-仏教）")
+
+    def last_diary_date(self) -> Optional[str]:
+        """このバッチで直前に登録した日記の日付（続きのページは同じ日付で登録するため）。"""
+        for item in reversed(self.items[:self.current_index]):
+            if item.processed and item.diary_date:
+                return item.diary_date
+        return None
+
+    def show_diary_input(self):
+        self.input_holder.pack_forget()
+        self.input_frame.pack_forget()
+        self.topic_frame.pack_forget()
+        self.input_active = True
+        self.diary_date_var.set(self.last_diary_date() or datetime.now().strftime("%Y-%m-%d"))
+        self.input_holder.pack(fill="x", pady=(6, 8), before=self.action_bar)
+        self.diary_frame.pack(fill="x", pady=2)
+        self.diary_date_entry.focus_set()
+        self.diary_date_entry.icursor(tk.END)
+        self.status_var.set("この日記が書かれた日付を確認してEnter（同じ日記の続きのページは同じ日付のまま）")
+
+    def on_diary(self, _event=None):
+        if self.input_active:
+            return
+        self.show_diary_input()
+        return "break"
+
+    def confirm_diary(self, _event=None):
+        try:
+            date = pp.normalize_diary_date(self.diary_date_var.get())
+        except ValueError as exc:
+            self.status_var.set(str(exc))
+            return "break"
+        self.commit_diary(date)
+        return "break"
 
     def on_topic(self, _event=None):
         if self.input_active:
@@ -1093,11 +1148,13 @@ class ScanApp:
             "processed": item.processed,
             "topic_title": item.topic_title,
             "topic_parent": item.topic_parent,
+            "diary_date": item.diary_date,
         }
         item.current_name = new_path.name
         item.folgezettel_id = folgezettel_id
         item.topic_title = topic
         item.topic_parent = parent_topic
+        item.diary_date = None
         item.processed = True
         self.undo_stack.append({
             "index": self.current_index,
@@ -1109,6 +1166,52 @@ class ScanApp:
         self.hide_input()
         self.save_project()
         self.load_current_image()
+
+    def commit_diary(self, date: str):
+        """この画像を紙の日記のページとして登録する（日付 = 日記が書かれた日）。
+        ここでは `paper-diary-日付-ページ.拡張子` に名前を変えるだけ。移動とノート作成は
+        「移動して終了」で paper_pkm.register_diary_pages が行う。"""
+        if not self.folder or self.current_index >= len(self.items):
+            return
+        item = self.items[self.current_index]
+        old_path = item.current_path(self.folder)
+        page = sum(1 for it in self.items if it.processed and it.diary_date == date) + 1
+        while True:
+            new_path = self.folder / (f"{pp.DIARY_IMAGE_PREFIX}{date.replace('-', '')}-{page}"
+                                      + old_path.suffix.lower())
+            if not new_path.exists() or new_path.resolve() == old_path.resolve():
+                break
+            page += 1
+        try:
+            os.replace(str(old_path), str(new_path))
+        except OSError as exc:
+            messagebox.showerror("名前を変更できません", f"{old_path.name}\n→ {new_path.name}\n\n{exc}")
+            return
+        old_state = {
+            "current_name": item.current_name,
+            "folgezettel_id": item.folgezettel_id,
+            "processed": item.processed,
+            "topic_title": item.topic_title,
+            "topic_parent": item.topic_parent,
+            "diary_date": item.diary_date,
+        }
+        item.current_name = new_path.name
+        item.folgezettel_id = None
+        item.topic_title = None
+        item.topic_parent = None
+        item.diary_date = date
+        item.processed = True
+        self.undo_stack.append({
+            "index": self.current_index,
+            "old_name": old_state["current_name"],
+            "new_name": new_path.name,
+            "old_state": old_state,
+        })
+        self.current_index += 1
+        self.hide_input()
+        self.save_project()
+        self.load_current_image()
+        self.status_var.set(f"日記（{date}）の {page} ページ目として登録しました")
 
     def undo_last(self):
         if not self.folder or not self.undo_stack:
@@ -1134,6 +1237,7 @@ class ScanApp:
         item.folgezettel_id = old_state.get("folgezettel_id")
         item.topic_title = old_state.get("topic_title")
         item.topic_parent = old_state.get("topic_parent")
+        item.diary_date = old_state.get("diary_date")
         item.processed = bool(old_state.get("processed", False))
         self.current_index = index
         self.hide_input()
@@ -1173,15 +1277,23 @@ class ScanApp:
         self.moving = True
         try:
             assignments = []
+            diary_pages = []
             for item in processed:
-                if item.topic_title:
+                if item.diary_date:
+                    diary_pages.append((item.current_path(self.folder), item.diary_date))
+                elif item.topic_title:
                     assignments.append((item.current_path(self.folder),
                                         item.folgezettel_id or "",
                                         item.topic_title, item.topic_parent))
                 else:
                     assignments.append((item.current_path(self.folder),
                                         item.folgezettel_id or ""))
-            moved, errors = pp.move_images(self.vault_root, self.dest, assignments)
+            moved, errors = (pp.move_images(self.vault_root, self.dest, assignments)
+                             if assignments else ([], []))
+            # 紙の日記は、日記が書かれた日付ごとのノートにまとめて登録する
+            diary_moved, diary_errors = (pp.register_diary_pages(self.vault_root, self.dest, diary_pages)
+                                         if diary_pages else ([], []))
+            diary_failed = {src for src, _date, _reason in diary_errors}
             regen_ok = True
             try:
                 regen_ok = pp.regen(self.vault_root)
@@ -1189,10 +1301,17 @@ class ScanApp:
                 regen_ok = False
                 traceback.print_exc()
 
-            moved_items = {(fid, item.topic_title) for fid, item in moved}
+            # move_images の戻り値は [(表示名, ノートパス)]。表示名 = ID（トピックは ID-トピック名）
+            moved_displays = {display for display, _note in moved}
+
+            def _display(item: ImageItem) -> str:
+                fid = item.folgezettel_id or ""
+                return pp.topic_display(fid, item.topic_title) if item.topic_title else fid
+
             self.items = [item for item in self.items
                           if not (item.processed
-                                  and (item.folgezettel_id, item.topic_title) in moved_items)]
+                                  and ((item.diary_date and item.current_path(self.folder) not in diary_failed)
+                                       or (not item.diary_date and _display(item) in moved_displays)))]
             self.current_index = self.first_unprocessed_index()
             self.undo_stack.clear()
             if self.items:
@@ -1205,11 +1324,15 @@ class ScanApp:
                     except OSError:
                         pass
 
-            message = f"{len(moved)}枚を {self.dest} へ移動しました。"
+            n_diary_pages = len(diary_pages) - len(diary_errors)
+            message = f"{len(moved) + n_diary_pages}枚を {self.dest} へ移動しました。"
+            if n_diary_pages:
+                message += f"\n（うち紙の日記 {n_diary_pages} ページ・{len(diary_moved)} 日分。Index のキーワード「日記」から開けます）"
             if regen_ok:
                 message += "\nIndex・グループ・Folgezettel-Index を再生成して同期しました。"
             else:
                 message += "\n（Index の再生成に失敗しました。紙PKM Index を確認してください）"
+            errors = list(errors) + list(diary_errors)
             if errors:
                 message += "\n\n移動できなかった画像:\n" + "\n".join(
                     f"{src.name}（{fid}）: {reason}" for src, fid, reason in errors

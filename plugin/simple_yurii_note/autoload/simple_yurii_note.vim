@@ -1054,9 +1054,8 @@ function! s:guide_template() abort
         \ '',
         \ '## 紙のPKM（フォルゲゼッテル）',
         \ '',
-        \ '- `\F` … 紙PKM Index（タイムスタンプ名）を作成/オープン（`:YuriiPaperIndex`）。Index-write と Folgezettel-Index も作られる',
-        \ '- `\F` … スキャン画像に番号を付けて vault 直下へ移動（`:YuriiScan`。番号付け GUI が開く）',
-        \ '- `\f` … 紙PKM Index を開く（`:YuriiPaperIndex`。無ければ作成。更新は `\ua`）',
+        \ '- `\f` … 紙PKM Index（ファイル名は `Paper-Zettelkasten-Index.md` 固定。旧タイムスタンプ名の Index は開くときに自動で移行し、他のノートのリンクも書き換える）を開く／無ければ作る（`:YuriiPaperIndex`）。Index-write と Folgezettel-Index も作られる。更新は `\ua`',
+        \ '- `\F` … スキャン画像に番号を付けて vault 直下へ移動（`:YuriiScan`。番号付け GUI が開く）。GUI で `d` = **紙の日記として登録**（日記が書かれた日付を入力。複数ページは同じ日付で続けて `d`。通常の ID 登録はそのまま）。日記があると Index にキーワード「日記」が 1 つ自動で入り、開くと日付順の一覧になる（デジタル日記 `\d` とは別）',
         \ '- `Index-write` … `キーワード(よみ): 1,1a10b,3` の形式で手書き。複数IDのキーワードはグループノート、単一IDは直接リンクとして紙PKM Index に並ぶ（保存で自動再生成）',
         \ '- `\S` … Index-write ではキーワード行もよみ順に並べる（`(…)` が本体のよみと一致すればそれをよみに、修飾語なら本体のよみで並べる）',
         \ '- Folgezettel-Index は存在する全IDの一覧（自然順）。生成物なので `\S` しない',
@@ -9648,7 +9647,15 @@ endfunction
 
 " 紙PKM Index（Index・Index-write・Folgezettel-Index）を作成/再利用して開く。
 " 紙PKM索引（paper_index: true のノート）のパス。無ければ ''。名前の新しい方（paper_pkm.py と同じ）。
+" Paper-Zettelkasten-Index。固定ファイル名 Paper-Zettelkasten-Index.md（paper_index マーカー付き）を
+" 優先し、無ければ旧タイムスタンプ名などのマーカー付きノートを返す。
+let s:paper_index_name = 'Paper-Zettelkasten-Index.md'
+
 function! s:paper_index_path(root) abort
+  let l:fixed = a:root . s:sep() . s:paper_index_name
+  if filereadable(l:fixed) && index(readfile(l:fixed, '', 8), 'paper_index: true') >= 0
+    return l:fixed
+  endif
   let l:found = []
   for l:f in glob(a:root . s:sep() . '*.md', 0, 1)
     if index(readfile(l:f, '', 8), 'paper_index: true') >= 0
@@ -9666,6 +9673,17 @@ function! simple_yurii_note#paper_index() abort
   endif
   " 既にある索引は開くだけ（再生成は重いので \ua で行う）
   let l:existing = s:paper_index_path(l:root)
+  if !empty(l:existing) && fnamemodify(l:existing, ':t') !=# s:paper_index_name
+    " 旧タイムスタンプ名の Index: 固定名へ移行（他のノートからのリンクも書き換える）してから開く
+    let l:script0 = s:paper_pkm_script()
+    if filereadable(l:script0)
+      let l:mig = systemlist(s:python_cmd() . ' ' . shellescape(l:script0) . ' migrate ' . shellescape(l:root))
+      if v:shell_error == 0 && !empty(l:mig) && filereadable(l:mig[-1])
+        let l:existing = l:mig[-1]
+        silent! checktime
+      endif
+    endif
+  endif
   if !empty(l:existing)
     silent execute 'edit ' . fnameescape(l:existing)
     redraw | echo 'simple_yurii_note: 紙PKM Index を開きました（更新は \ua）'

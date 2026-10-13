@@ -12,10 +12,17 @@
       バナナ(ばなな): 1,1a10b,3
       オザーク(ドラマ): 2
 
-  の各行から、Paper-Zettelkasten-Index（タイムスタンプ名・`paper_index: true`）の
-  キーワードリンクを生成する。**複数IDのキーワードはグループノート**
+  の各行から、Paper-Zettelkasten-Index（`Paper-Zettelkasten-Index.md` 固定・`paper_index: true`）の
+  キーワードリンクを生成する。旧タイムスタンプ名の Index は regen / create が
+  `Paper-Zettelkasten-Index.md` へ改名して移行する（他ノートからのリンクも書き換える）。**複数IDのキーワードはグループノート**
   （`attribute: group`、中に各IDノートへのリンク）、単一IDは直接リンク。
 - `Folgezettel-Index.md`: 存在する全IDを自然順で並べた一覧。
+- **紙の日記**: `\\F` の GUI で「日記として登録」した画像は、日記が書かれた日付ごとに 1 ノート
+  （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD 紙の日記`）にまとめる。
+  複数ページは同じノートに画像を並べる。ノートの `time:` はスキャンした日時で、日記の日付とは別。
+  日記があると Paper-Zettelkasten-Index のキーワードに「日記」が 1 つ自動で入り、
+  開くと日付順に日記の一覧（グループ `紙の日記`）になる。デジタル日記（`\\d`）とは題の形が違い、
+  `\\d` の日記グループ（題 `日記`）とも別のノート。
 - 生成物（Index・グループ・Folgezettel-Index・スキャンノート）の本文は regen が
   毎回まるごと作り直す（管理コメントは書かない）。`Index-write.md` だけは
   手書きの本文＝キーワード行をサイ博（並び順のみ整える）。
@@ -27,6 +34,8 @@
 CLI::
 
     paper_pkm.py create ROOT          # 紙PKM Index一式を作成（既存なら再利用）し Index のパスを表示
+    paper_pkm.py migrate ROOT         # 旧タイムスタンプ名の Index を Paper-Zettelkasten-Index.md へ移行
+    paper_pkm.py diary ROOT DEST YYYY-MM-DD FILE...   # 画像を紙の日記として登録（複数ページ可）
     paper_pkm.py regen ROOT [--no-sync]   # Index・グループ・Folgezettel-Index を再生成
     paper_pkm.py ids ROOT             # ID → ノートの対応を表示（確認用）
 
@@ -53,6 +62,7 @@ INDEX_WRITE = "Index-write.md"
 OLD_INDEX_WRITE = "Index_write.md"
 FOLGE_INDEX = "Folgezettel-Index.md"
 DEFAULT_INDEX_TITLE = "Paper-Zettelkasten-Index"
+PAPER_INDEX_NAME = "Paper-Zettelkasten-Index.md"  # Index のファイル名は常にこれ
 
 ID_PATTERN = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*$")
 # キーと ID 部に `:` を許さない（`time: 2026-01-01 00:00:00` のような front matter を
@@ -64,6 +74,10 @@ KEYWORD_LINE_RE = re.compile(
 FM_FOLGEZETTEL = "folgezettel"
 FM_PAPER_KEYWORD = "paper_keyword"
 FM_PAPER_INDEX = "paper_index"
+FM_PAPER_DIARY = "paper_diary"          # 紙の日記ノートのfm（値=日記が書かれた日付 YYYY-MM-DD）
+DIARY_KEYWORD = "日記"                   # Paper-Zettelkasten-Index のキーワード表示名
+DIARY_GROUP_TITLE = "紙の日記"           # そのグループノートの題（デジタル日記のグループ「日記」と区別する）
+DIARY_IMAGE_PREFIX = "paper-diary-"
 FM_PAPER_TOPIC = "paper_topic"          # トピック別Indexノートのfm（値=起点ID）
 FM_PAPER_TOPIC_INDEX = "paper_topic_index"  # 番号別Index（グループ）のfm（値=起点ID）
 FM_PAPER_FOLGE_INDEX = "folgezettel_index"  # 番号専用ノート folgezettel-Index-N のfm（値=起点ID）
@@ -172,7 +186,7 @@ def keyword_sort_key(entry: dict):
 # ---------------------------------------------------------------------------
 
 
-# 上側の見出し。現行は `### Context`（旧 `### Context`）。旧表記も読む。
+# 上側の見出し。現行は `### Context`（旧 `### Parent`）。旧表記も読む。
 CONTEXT_HEAD = "### Context"
 CONTEXT_HEADS = ("### Context", "### Parent")
 
@@ -359,8 +373,8 @@ def scan_folgezettel_notes(root: Path) -> dict[str, Path]:
     return found
 
 
-def find_paper_index(root: Path) -> Optional[Path]:
-    """`paper_index:` マーカーのあるノート（複数あれば名前の新しい方）。"""
+def _marked_paper_indexes(root: Path) -> list[Path]:
+    """`paper_index:` マーカーのあるノート（名前順）。"""
     found: list[Path] = []
     for p in iter_md(root):
         try:
@@ -369,9 +383,193 @@ def find_paper_index(root: Path) -> Optional[Path]:
             continue
         if fm_value(fm, FM_PAPER_INDEX):
             found.append(p)
-    if not found:
-        return None
-    return sorted(found, key=lambda p: p.name)[-1]
+    return sorted(found, key=lambda p: p.name)
+
+
+def find_paper_index(root: Path) -> Optional[Path]:
+    """Paper-Zettelkasten-Index。固定ファイル名 `Paper-Zettelkasten-Index.md`（`paper_index:`
+    マーカー付き）を優先し、無ければ旧タイムスタンプ名などのマーカー付きノート
+    （複数あれば名前の新しい方）を返す。"""
+    fixed = Path(root) / PAPER_INDEX_NAME
+    if fixed.is_file():
+        try:
+            fm, _ = read_note(fixed)
+        except OSError:
+            fm = []
+        if fm_value(fm, FM_PAPER_INDEX):
+            return fixed
+    found = _marked_paper_indexes(Path(root))
+    return found[-1] if found else None
+
+
+def _rewrite_links_to(root: Path, old_path: Path, new_path: Path) -> int:
+    """vault の全ノートで、old_path を指す Markdown リンクの宛先を new_path へ書き換える
+    （表示名・`#見出し` はそのまま）。書き換えたノート数を返す。"""
+    old_norm = os.path.normpath(str(old_path))
+    link_re = re.compile(r"(\[[^\]]*\]\()([^)\s]*)(\))")
+    changed = 0
+    for note in iter_md(root):
+        try:
+            text = note.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if old_path.name not in text:
+            continue
+
+        def repl(m: re.Match) -> str:
+            target = m.group(2)
+            if "://" in target:
+                return m.group(0)
+            base, sep, frag = target.partition("#")
+            if not base.endswith(old_path.name):
+                return m.group(0)
+            if os.path.normpath(os.path.join(str(note.parent), base)) != old_norm:
+                return m.group(0)
+            return m.group(1) + _rel(note.parent, new_path) + sep + frag + m.group(3)
+
+        new_text = link_re.sub(repl, text)
+        if new_text != text:
+            note.write_text(new_text, encoding="utf-8")
+            changed += 1
+    return changed
+
+
+def migrate_paper_index(root: Path) -> Optional[Path]:
+    """旧タイムスタンプ名の Paper-Zettelkasten-Index を `Paper-Zettelkasten-Index.md` へ移行する。
+
+    - 内容・キーワード・リンク・メタデータはそのまま（ファイルの改名だけ）。
+    - 他のノート（`index.md` を含む）からのリンクの宛先を新しい名前へ書き換える。
+    - 固定名のファイルが既にある場合は、上書きもデータ消失もしない: 固定名がマーカー付きの
+      Index ならそれを正とし、旧ファイルはそのまま残す。固定名が Index でない別のノートなら
+      何もしない（旧ファイルをそのまま使い続ける）。
+    戻り値: 使う Index のパス（Index が無ければ None）。
+    """
+    root = Path(root).resolve()
+    fixed = root / PAPER_INDEX_NAME
+    current = find_paper_index(root)
+    if current is None or current == fixed:
+        return current
+    if fixed.exists():
+        print(f"paper_pkm: {PAPER_INDEX_NAME} が既にあるため移行しません（{current.name} を使います）",
+              file=sys.stderr)
+        return current
+    os.rename(current, fixed)
+    _rewrite_links_to(root, current, fixed)
+    return fixed
+
+
+def scan_diary_notes(root: Path) -> dict[str, Path]:
+    """front matter に `paper_diary: YYYY-MM-DD` を持つ紙の日記ノート → {日付: ノート}。"""
+    found: dict[str, Path] = {}
+    for p in iter_md(root):
+        try:
+            fm, _ = read_note(p)
+        except OSError:
+            continue
+        value = fm_value(fm, FM_PAPER_DIARY)
+        if value and DATE_RE.fullmatch(value.strip()):
+            found.setdefault(value.strip(), p)
+    return found
+
+
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def normalize_diary_date(raw: str) -> str:
+    """日記の日付を YYYY-MM-DD にそろえる（全角・`/`・`.`・`YYYYMMDD` も受ける）。不正なら ValueError。"""
+    t = unicodedata.normalize("NFKC", raw).strip()
+    m = re.fullmatch(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", t) or re.fullmatch(r"(\d{4})(\d{2})(\d{2})", t)
+    if not m:
+        raise ValueError(f"日付は YYYY-MM-DD の形で入力してください: {raw!r}")
+    try:
+        d = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError as exc:
+        raise ValueError(f"存在しない日付です: {raw!r}") from exc
+    return d.strftime("%Y-%m-%d")
+
+
+def diary_title(date: str) -> str:
+    return f"{date} 紙の日記"
+
+
+def _diary_image_name(date: str, page: int, suffix: str) -> str:
+    return f"{DIARY_IMAGE_PREFIX}{date.replace('-', '')}-{page}{suffix.lower()}"
+
+
+_IMAGE_LINE_RE = re.compile(r"^!\[[^\]]*\]\((.+)\)$")
+
+
+def register_diary_pages(
+    root: Path,
+    dest: Path,
+    pages: list[tuple[Path, str]],
+) -> tuple[list[tuple[str, Path]], list[tuple[Path, str, str]]]:
+    """スキャン画像を「紙の日記」として登録する。
+
+    pages: [(画像パス, 日記が書かれた日付)]（指定順がページ順）。同じ日付の画像は 1 つの
+    ノート（`paper_diary: 日付`・題 `日付 紙の日記`）に画像を並べる。同じ日付の日記が既にあれば
+    そのノートの末尾にページを足す（ページ番号は続き番号。既存の画像は上書きしない）。
+    ノートの `time:` はスキャンした日時（画像の撮影日時、無ければ今）で、日記の日付とは別。
+    戻り値は (moved, errors): moved = [(日付, ノートパス)]（日付ごとに 1 件）/ errors = [(元パス, 日付, 理由)]。
+    """
+    root = Path(root).resolve()
+    dest = Path(dest).resolve()
+    existing = scan_diary_notes(root)
+    moved: dict[str, Path] = {}
+    errors: list[tuple[Path, str, str]] = []
+
+    # 日付ごとにまとめる（出現順を保つ）
+    by_date: dict[str, list[Path]] = {}
+    for src, raw_date in pages:
+        src = Path(src)
+        try:
+            date = normalize_diary_date(raw_date)
+        except ValueError as exc:
+            errors.append((src, str(raw_date), str(exc)))
+            continue
+        by_date.setdefault(date, []).append(src)
+
+    for date, srcs in by_date.items():
+        note_path = existing.get(date)
+        if note_path is not None:
+            fm, body = read_note(note_path)
+            image_dir = note_path.parent
+            page = sum(1 for ln in body if _IMAGE_LINE_RE.match(ln.strip())) + 1
+            when = None
+        else:
+            fm, body, image_dir, page = None, None, dest, 1
+            when = image_datetime(srcs[0]) or datetime.now()
+        added: list[str] = []
+        for src in srcs:
+            # 既にある画像名は使わない（上書きしない）
+            while (image_dir / _diary_image_name(date, page, src.suffix)).exists():
+                page += 1
+            target = image_dir / _diary_image_name(date, page, src.suffix)
+            try:
+                shutil.move(str(src), str(target))
+            except OSError as exc:
+                errors.append((src, date, str(exc)))
+                continue
+            added.append(target.name)
+            page += 1
+        if not added:
+            continue
+        if note_path is None:
+            note_path = unique_note_path(dest, when)
+            fm = [_time_line(when), f"title: {diary_title(date)}", f"{FM_PAPER_DIARY}: {date}"]
+            body = [f"# {diary_title(date)}"]
+        # 画像行を、最初の関係の節の手前（無ければ末尾）に、空行を挟んで足す
+        fs = _first_section(body)
+        end = fs if fs is not None else len(body)
+        while end > 0 and not body[end - 1].strip():
+            end -= 1
+        new_lines: list[str] = []
+        for name in added:
+            new_lines += ["", f"![]({name})"]
+        body = body[:end] + new_lines + ([""] + body[end:] if fs is not None else [])
+        write_note(note_path, fm, body)
+        moved[date] = note_path
+    return list(moved.items()), errors
 
 
 def find_group(root: Path, keyword: str) -> Optional[Path]:
@@ -580,7 +778,7 @@ def _root_id(fid: str) -> str:
 def regen(root: Path, do_sync: bool = True) -> bool:
     """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。"""
     root = Path(root).resolve()
-    index_path = find_paper_index(root)
+    index_path = migrate_paper_index(root)  # 旧タイムスタンプ名なら Paper-Zettelkasten-Index.md へ移す
     if index_path is None:
         return False
     index_display = index_title(index_path)
@@ -607,16 +805,35 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         elif keyword_line_order:
             write_note(index_write, iw_fm, body)
     entries.sort(key=keyword_sort_key)
+
+    # 紙の日記があれば、キーワード「日記」を 1 つだけ入れる（Index-write に同名のキーワードが
+    # あればそれに日記を足す。無ければ自動で追加する）。regen のたびに作り直すので消えない。
+    diaries = scan_diary_notes(root)
+    if diaries:
+        dup = [e for e in entries if e["display"] == DIARY_KEYWORD]
+        if dup:
+            for e in dup:
+                e["diary"] = True
+            del dup[1:]  # 同名が複数あっても、グループは 1 つ
+        else:
+            entries.append({"key": DIARY_KEYWORD, "display": DIARY_KEYWORD, "ids": [],
+                            "diary": True, "title": DIARY_GROUP_TITLE})
+        entries.sort(key=keyword_sort_key)
     readings = _entry_readings(entries)
 
     folge = scan_folgezettel_notes(root)
 
     # --- グループ（複数IDのキーワード） -------------------------------------
     group_paths: dict[str, Path] = {}
+    seen_groups: set[str] = set()
     for entry in entries:
-        if len(entry["ids"]) < 2:
+        if len(entry["ids"]) < 2 and not entry.get("diary"):
             continue
         display = entry["display"]
+        if display in seen_groups:
+            continue  # 同名キーワードは 1 つのグループにまとめる
+        seen_groups.add(display)
+        group_title = entry.get("title", display)
         group_path = find_group(root, display)
         if group_path is None:
             group_path = _new_group_note(root, display, readings[display])
@@ -628,12 +845,24 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                 (f for f in entry["ids"] if f in folge), key=natural_key
             )
         ]
+        old_group_body_extra = None
+        if entry.get("diary"):
+            # 紙の日記を日付順に並べる（古い日記から）。並びを保つため、既存の日記リンクは作り直す
+            diary_targets = {os.path.normpath(str(p)) for p in diaries.values()}
+            inner += [markdown_link(diary_title(date), path, group_path.parent)
+                      for date, path in sorted(diaries.items())]
+            old_group_body_extra = diary_targets
         inner.append(CONTEXT_HEAD)
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
         fm, old_group_body = read_note(group_path)
+        if old_group_body_extra:
+            def _is_diary_link(ln: str, base=group_path.parent) -> bool:
+                m = re.search(r"\]\(([^)#]+)", ln)
+                return bool(m) and os.path.normpath(str(base / m.group(1))) in old_group_body_extra
+            old_group_body = [ln for ln in old_group_body if not _is_diary_link(ln)]
         fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
-        fm.insert(1 if fm else 0, f"title: {display}")
+        fm.insert(1 if fm else 0, f"title: {group_title}")
         fm.append("attribute: group")
         fm = _update_yomi(fm, {display: readings[display]})
         write_note(group_path, fm, merge_note_body(old_group_body, inner))
@@ -642,10 +871,11 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     inner: list[str] = []
     for entry in entries:
         display = entry["display"]
-        if len(entry["ids"]) >= 2:
+        if len(entry["ids"]) >= 2 or entry.get("diary"):
             target = group_paths.get(display)
-            if target is not None:
-                inner.append(markdown_link(display, target, index_path.parent))
+            link = markdown_link(display, target, index_path.parent) if target is not None else None
+            if link is not None and link not in inner:  # 同名キーワードは 1 回だけ
+                inner.append(link)
         elif entry["ids"][0] in folge:
             target = folge[entry["ids"][0]]
             inner.append(markdown_link(display, target, index_path.parent))
@@ -827,6 +1057,21 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     return True
 
 
+def _write_new_paper_index(index_path: Path) -> None:
+    fm = [
+        _time_line(),
+        f"title: {DEFAULT_INDEX_TITLE}",
+        f"{FM_PAPER_INDEX}: true",
+    ]
+    body = [
+        f"# {DEFAULT_INDEX_TITLE}",
+        "",
+        f"[{INDEX_WRITE[:-3]}]({INDEX_WRITE})",
+        f"[{FOLGE_INDEX[:-3]}]({FOLGE_INDEX})",
+    ]
+    write_note(index_path, fm, body)
+
+
 def create_paper_index(root: Path) -> Path:
     """紙PKM Index一式（Index-write・Paper-Zettelkasten-Index・Folgezettel-Index）を作る。
 
@@ -851,21 +1096,18 @@ def create_paper_index(root: Path) -> Path:
             body = [INDEX_WRITE[:-3] if ln.strip() == OLD_INDEX_WRITE[:-3] else ln
                     for ln in body]
             write_note(index_write, fm, body)
-    index_path = find_paper_index(root)
+    index_path = migrate_paper_index(root)
     if index_path is None:
-        index_path = unique_note_path(root)
-        fm = [
-            _time_line(),
-            f"title: {DEFAULT_INDEX_TITLE}",
-            f"{FM_PAPER_INDEX}: true",
-        ]
-        body = [
-            f"# {DEFAULT_INDEX_TITLE}",
-            "",
-            f"[{INDEX_WRITE[:-3]}]({INDEX_WRITE})",
-            f"[{FOLGE_INDEX[:-3]}]({FOLGE_INDEX})",
-        ]
-        write_note(index_path, fm, body)
+        index_path = root / PAPER_INDEX_NAME
+        if index_path.exists():
+            # 固定名に同名の別ノートがある: 中身を壊さないよう、マーカーだけ足して Index として使う
+            # （題が Paper-Zettelkasten-Index のときだけ。別のノートなら止める）
+            fm0, body0 = read_note(index_path)
+            if fm_value(fm0, "title") != DEFAULT_INDEX_TITLE:
+                raise RuntimeError(f"{PAPER_INDEX_NAME} は紙PKM Index ではない別のノートです。名前を変えてから実行してください")
+            write_note(index_path, fm0 + [f"{FM_PAPER_INDEX}: true"], body0)
+        else:
+            _write_new_paper_index(index_path)
     else:
         fm, body = read_note(index_path)
         old_title = fm_value(fm, "title")
@@ -983,6 +1225,15 @@ def main(argv: list[str]) -> int:
     p_ids = sub.add_parser("ids", help="ID → ノートの対応を表示")
     p_ids.add_argument("root")
 
+    p_migrate = sub.add_parser("migrate", help="旧タイムスタンプ名の Index を Paper-Zettelkasten-Index.md へ移行")
+    p_migrate.add_argument("root")
+
+    p_diary = sub.add_parser("diary", help="画像を紙の日記として登録（複数ページ可）")
+    p_diary.add_argument("root")
+    p_diary.add_argument("dest")
+    p_diary.add_argument("date", help="日記が書かれた日付 YYYY-MM-DD")
+    p_diary.add_argument("files", nargs="+")
+
     args = ap.parse_args(argv)
 
     if args.mode == "create":
@@ -996,6 +1247,24 @@ def main(argv: list[str]) -> int:
             print("paper_pkm: 紙PKM Index（paper_index: true）がありません", file=sys.stderr)
             return 1
         return 0
+
+    if args.mode == "migrate":
+        path = migrate_paper_index(Path(args.root))
+        if path is None:
+            print("paper_pkm: 紙PKM Index（paper_index: true）がありません", file=sys.stderr)
+            return 1
+        print(path)
+        return 0
+
+    if args.mode == "diary":
+        moved, errors = register_diary_pages(
+            Path(args.root), Path(args.dest), [(Path(f), args.date) for f in args.files])
+        for date, note in moved:
+            print(f"{date}\t{note}")
+        for src, date, reason in errors:
+            print(f"error: {src}（{date}）: {reason}", file=sys.stderr)
+        regen(Path(args.root))
+        return 1 if errors else 0
 
     if args.mode == "ids":
         for fid, path in sorted(
