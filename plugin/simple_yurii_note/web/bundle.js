@@ -32809,6 +32809,20 @@ ${h2.join(`
       provide: (f) => EditorView.decorations.from(f)
     });
   }
+  var setHit = StateEffect.define();
+  var hitField = StateField.define({
+    create: () => null,
+    update(v2, tr2) {
+      if (tr2.docChanged) v2 = null;
+      for (const e of tr2.effects) if (e.is(setHit)) v2 = e.value;
+      return v2;
+    },
+    provide: (f) => EditorView.decorations.compute([f], (state) => {
+      const n = state.field(f);
+      if (!n || n > state.doc.lines) return Decoration.none;
+      return Decoration.set([Decoration.line({ class: "cm-vim-hit" }).range(state.doc.line(n).from)]);
+    })
+  });
   var setVim = StateEffect.define();
   var vimField = StateField.define({
     create: () => ({ pos: 0, mode: "n", visFrom: null, visTo: null }),
@@ -32924,6 +32938,7 @@ ${h2.join(`
         vtextDecorations,
         livePreview(cfg),
         tableField(cfg),
+        hitField,
         EditorView.domEventHandlers({
           mousedown: (e, view3) => {
             const el2 = e.target?.closest?.("[data-md-href]");
@@ -32961,6 +32976,22 @@ ${h2.join(`
         cfg.viewOnly = !!on2;
         this.followCursor = !on2;
         view2.dispatch({ effects: refreshDecorations.of(null) });
+      },
+      // カーソルのある行を真ん中へスクロールして色づける（見るだけモードで検索したあと）。null で色を消す
+      revealCursor(on2 = true) {
+        const head = view2.state.selection.main.head;
+        view2.dispatch({ effects: on2 ? [setHit.of(view2.state.doc.lineAt(head).number)] : [setHit.of(null)] });
+        if (!on2) return;
+        const go2 = () => {
+          const sc2 = view2.scrollDOM;
+          const top2 = view2.lineBlockAt(head).top;
+          sc2.scrollTop = Math.max(0, top2 - sc2.clientHeight / 2 + 32);
+        };
+        go2();
+        requestAnimationFrame(() => {
+          go2();
+          setTimeout(go2, 150);
+        });
       },
       // 画像の大きさが分かったので、高さの見積もりを取り直す
       refresh() {
@@ -33086,7 +33117,12 @@ ${h2.join(`
   var MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "": "V-BLOCK", R: "REPLACE", c: "COMMAND", t: "TERMINAL", r: "PROMPT", s: "SELECT", S: "S-LINE", "": "S-BLOCK", "!": "SHELL" };
   var MODE_CLASS = { n: "normal", i: "insert", v: "visual", V: "visual", "": "visual", R: "replace", c: "command", t: "command", r: "command", s: "visual", S: "visual", "": "visual", "!": "command" };
   function applyState(s15) {
+    const prevCur = last2.cur;
     last2 = { ...last2, ...s15, lines: void 0 };
+    if (viewInCmd) {
+      if ((s15.mode || "n")[0] === "c") viewSawCmd = true;
+      else if (viewSawCmd) viewInCmd = false;
+    }
     const m = (s15.mode || "n")[0];
     const el2 = $2("mode");
     const showView = viewOnly && !needsTerminal(s15);
@@ -33115,6 +33151,10 @@ ${h2.join(`
     if (fileChanged) view.view.scrollDOM.scrollTop = 0;
     if (s15.vtext) view.setVtext(s15.vtext);
     if (s15.cur) view.setVim({ cur: s15.cur, mode: s15.mode || "n", vis: s15.vis });
+    if (viewOnly && s15.cur && prevCur && !viewInCmd && viewFollow > Date.now() && m === "n" && (prevCur[0] !== s15.cur[0] || prevCur[1] !== s15.cur[1])) {
+      viewFollow = 0;
+      view.revealCursor();
+    }
   }
   var imgCache = /* @__PURE__ */ new Map();
   var imgPending = /* @__PURE__ */ new Map();
@@ -33212,13 +33252,20 @@ ${h2.join(`
     viewOnly = !!on2;
     $2("view").classList.toggle("view-only", viewOnly);
     view.setViewOnly(viewOnly);
+    if (!viewOnly) view.revealCursor(false);
     if (!viewOnly) view.setVim({ cur: last2.cur || [1, 1], mode: last2.mode || "n", vis: last2.vis });
     applyState({ mode: last2.mode, file: last2.file, bt: last2.bt, popups: last2.popups });
   }
   function viewBlocks() {
-    return viewOnly && !needsTerminal(last2) && (last2.mode || "n")[0] !== "c";
+    return viewOnly && !viewInCmd && !needsTerminal(last2) && (last2.mode || "n")[0] !== "c";
   }
   var VIEW_PASS = /* @__PURE__ */ new Set([
+    "/",
+    "?",
+    "n",
+    "N",
+    "*",
+    "#",
     "gs",
     "gm",
     " ",
@@ -33254,6 +33301,19 @@ ${h2.join(`
   ]);
   var VIEW_SCROLL_SEQ = /* @__PURE__ */ new Set(["gg"]);
   var viewPend = "";
+  var viewInCmd = false;
+  var viewSawCmd = false;
+  var viewFollow = 0;
+  function viewStartSearch(key) {
+    viewFollow = Date.now() + 3e4;
+    if (key === "/" || key === "?") {
+      viewInCmd = true;
+      viewSawCmd = false;
+      setTimeout(() => {
+        if (!viewSawCmd) viewInCmd = false;
+      }, 1500);
+    }
+  }
   function vimKeyString(e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return null;
     switch (e.key) {
@@ -33285,6 +33345,7 @@ ${h2.join(`
       const cand = viewPend + ks2;
       if (VIEW_PASS.has(cand)) {
         viewPend = "";
+        if ("/?nN*#".includes(cand) && cand.length === 1) viewStartSearch(cand);
         gui.write(cand);
         return true;
       }

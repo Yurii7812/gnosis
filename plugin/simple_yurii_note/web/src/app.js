@@ -95,7 +95,12 @@ const MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "\x16":
 const MODE_CLASS = { n: "normal", i: "insert", v: "visual", V: "visual", "\x16": "visual", R: "replace", c: "command", t: "command", r: "command", s: "visual", S: "visual", "\x13": "visual", "!": "command" };
 
 function applyState(s) {
+  const prevCur = last.cur;
   last = { ...last, ...s, lines: undefined };
+  if (viewInCmd) {
+    if ((s.mode || "n")[0] === "c") viewSawCmd = true;
+    else if (viewSawCmd) viewInCmd = false;
+  }
   const m = (s.mode || "n")[0];
   const el = $("mode");
   const showView = viewOnly && !needsTerminal(s);
@@ -122,6 +127,11 @@ function applyState(s) {
   if (fileChanged) view.view.scrollDOM.scrollTop = 0; // 見るだけのときは別のノートに移ったら先頭から
   if (s.vtext) view.setVtext(s.vtext);
   if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
+  // 見るだけで検索して、カーソルが動いたら、その行を出す
+  if (viewOnly && s.cur && prevCur && !viewInCmd && viewFollow > Date.now() && m === "n" && (prevCur[0] !== s.cur[0] || prevCur[1] !== s.cur[1])) {
+    viewFollow = 0;
+    view.revealCursor();
+  }
 }
 
 // ---------------------------------------------------------------- 起動
@@ -228,24 +238,39 @@ function setViewOnly(on) {
   viewOnly = !!on;
   $("view").classList.toggle("view-only", viewOnly);
   view.setViewOnly(viewOnly);
+  if (!viewOnly) view.revealCursor(false);
   if (!viewOnly) view.setVim({ cur: last.cur || [1, 1], mode: last.mode || "n", vis: last.vis }); // カーソルへ戻す
   applyState({ mode: last.mode, file: last.file, bt: last.bt, popups: last.popups });
 }
 
 // 見るだけで、キーを Vim へ流さない場面か（端末が要る場面・コマンドライン/質問の入力中は流す）
 function viewBlocks() {
-  return viewOnly && !needsTerminal(last) && (last.mode || "n")[0] !== "c";
+  return viewOnly && !viewInCmd && !needsTerminal(last) && (last.mode || "n")[0] !== "c";
 }
 
 // 見るだけでも Vim に届けるキー（編集しない SYN の操作）。完全に一致したらすぐ送る。
 // どれも他の候補の前半にはならない（待たずに送れる）。ここに無いキーは、スクロール以外は捨てる。
 const VIEW_PASS = new Set([
-  "gs", "gm", " ", "\t", "\x1b[Z", "\r", "\x7f", "_",
+  "/", "?", "n", "N", "*", "#", "gs", "gm", " ", "\t", "\x1b[Z", "\r", "\x7f", "_",
   "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
   "\\h", "\\H", "\\0", "\\i", "\\d", "\\.", "\\L", "\\gi", "\\r", "\\bu", "\\k", "\\j", "\\J", "\\sc",
 ]);
 const VIEW_SCROLL_SEQ = new Set(["gg"]);
 let viewPend = "";
+// 検索（/ ? n N * #）: コマンドラインに入ったのが画面に伝わる前に打たれたキーも Vim へ届けるため、
+// 検索を始めたら、コマンドラインが終わるまで（または 1.5 秒で入らなければ）キーを流す。
+// 終わって、カーソルが動いたら、その行を真ん中に出す。
+let viewInCmd = false;
+let viewSawCmd = false;
+let viewFollow = 0;
+function viewStartSearch(key) {
+  viewFollow = Date.now() + 30000;
+  if (key === "/" || key === "?") {
+    viewInCmd = true;
+    viewSawCmd = false;
+    setTimeout(() => { if (!viewSawCmd) viewInCmd = false; }, 1500);
+  }
+}
 
 function vimKeyString(e) {
   if (e.ctrlKey || e.altKey || e.metaKey) return null;
@@ -270,7 +295,12 @@ function viewOnlyKey(e) {
   const ks = vimKeyString(e);
   if (ks != null) {
     const cand = viewPend + ks;
-    if (VIEW_PASS.has(cand)) { viewPend = ""; gui.write(cand); return true; }
+    if (VIEW_PASS.has(cand)) {
+      viewPend = "";
+      if ("/?nN*#".includes(cand) && cand.length === 1) viewStartSearch(cand);
+      gui.write(cand);
+      return true;
+    }
     if (VIEW_SCROLL_SEQ.has(cand)) { viewPend = ""; sc.scrollTop = 0; return true; }
     const isPrefix = [...VIEW_PASS, ...VIEW_SCROLL_SEQ].some((x) => x.startsWith(cand));
     if (isPrefix) { viewPend = cand; return true; }

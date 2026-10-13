@@ -93,3 +93,4 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-table th, .cm-md-table td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
 .cm-md-table th { background: var(--bg-2); font-weight: 700; }
 .cm-md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-2) 60%, transparent); }
+.cm-vim-hit { background: color-mix(in srgb, #f5c400 28%, transparent); border-radius: 3px; }

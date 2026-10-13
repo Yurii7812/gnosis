@@ -407,6 +407,23 @@ function tableField(cfg) {
   });
 }
 
+
+// 見るだけモードで検索したとき、見つけた行をうっすら色づける
+const setHit = StateEffect.define();
+const hitField = StateField.define({
+  create: () => null,
+  update(v, tr) {
+    if (tr.docChanged) v = null;
+    for (const e of tr.effects) if (e.is(setHit)) v = e.value;
+    return v;
+  },
+  provide: (f) => EditorView.decorations.compute([f], (state) => {
+    const n = state.field(f);
+    if (!n || n > state.doc.lines) return Decoration.none;
+    return Decoration.set([Decoration.line({ class: "cm-vim-hit" }).range(state.doc.line(n).from)]);
+  }),
+});
+
 // ---------------------------------------------------------------- Vim のカーソルと選択
 
 // Vim の状態（カーソル位置・モード・ビジュアル範囲）。表示だけに使う。
@@ -523,6 +540,7 @@ export function createView(opts) {
       vtextDecorations,
       livePreview(cfg),
       tableField(cfg),
+      hitField,
       EditorView.domEventHandlers({
         mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
@@ -561,6 +579,20 @@ export function createView(opts) {
       cfg.viewOnly = !!on;
       this.followCursor = !on;
       view.dispatch({ effects: refreshDecorations.of(null) });
+    },
+    // カーソルのある行を真ん中へスクロールして色づける（見るだけモードで検索したあと）。null で色を消す
+    revealCursor(on = true) {
+      const head = view.state.selection.main.head;
+      view.dispatch({ effects: on ? [setHit.of(view.state.doc.lineAt(head).number)] : [setHit.of(null)] });
+      if (!on) return;
+      // 行の位置は、画像の高さが分かるたびに変わるので、描き終わるまで何度か合わせ直す
+      const go = () => {
+        const sc = view.scrollDOM;
+        const top = view.lineBlockAt(head).top;
+        sc.scrollTop = Math.max(0, top - sc.clientHeight / 2 + 32);
+      };
+      go();
+      requestAnimationFrame(() => { go(); setTimeout(go, 150); });
     },
     // 画像の大きさが分かったので、高さの見積もりを取り直す
     refresh() { view.dispatch({ effects: refreshDecorations.of(null) }); },
