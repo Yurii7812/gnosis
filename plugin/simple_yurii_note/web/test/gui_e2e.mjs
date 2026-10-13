@@ -211,6 +211,20 @@ const scenario = `(async () => {
     await press(':w\\r', 800);
   }
 
+  // \\l → 検索 → 確定 の直後: fzf を閉じたあとの画面が描き直されていて、置き場所の質問が見える。
+  // （fzf の exit_cb の中で getchar すると、再描画前に待ちに入って白い／途中までの画面が残った）
+  {
+    await press(':e pick.md\\r', 1200);
+    await press('G', 300);
+    await press('\\\\l', 2500);
+    await press('数学', 3500);
+    await press('\\r', 2500);
+    const rows = G.screen().map((r) => r.trimEnd());
+    R.pick = { prompt: rows.slice(-1)[0], hasLink: (rows[8] || '').includes('数学とは何か'), fullLinesBeforePrompt: rows.filter(Boolean).length,
+               st: { mode: G.state().mode, bt: G.state().bt, popups: G.state().popups }, expanded: G.isExpanded() };
+    await press('\\x1b', 500);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -272,6 +286,12 @@ try {
   {
     const txt = fs.readFileSync(path.join(vault, "pick.md"), "utf8");
     check(/^\[[^\]]*\]\(m1\.md\)$/m.test(txt), "\\L h: the picked note should be linked on its own line: " + JSON.stringify(txt.slice(-160)));
+  }
+  {
+    const k = R.pick || {};
+    check(/h=カーソル直下/.test(k.prompt || "") && /c=Context末尾/.test(k.prompt || ""), "\\l: the place-key prompt should be visible after confirming: " + JSON.stringify(k));
+    check(k.hasLink, "\\l: the buffer should be fully redrawn behind the prompt (not a blank/half-drawn screen): " + JSON.stringify(k));
+    check(k.st?.mode === "n" && k.st.bt === "" && k.st.popups === 0 && !k.expanded, "\\l: back in the normal buffer: " + JSON.stringify(k));
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);

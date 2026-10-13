@@ -278,7 +278,11 @@ function! s:search_open_sink(lines) abort
   endfor
 endfunction
 
-" \l の確定: 選んだノートへの Markdown リンクをカーソル位置に挿入。
+" \l の確定: 選んだノートへの Markdown リンクを、za と同じ置き場所キーで入れる。
+" ここは fzf の exit_cb（ターミナルを閉じた直後）から呼ばれる。置き場所キーの質問は getchar() で
+" 待つので、ここで直接聞くと、Vim が画面を再描画する前に待ちに入って、fzf のターミナルが
+" 消えたあとの画面（白い／途中までの描画）が残ったままになる。fzf の後始末が済んで画面が
+" 描き直されてから聞くよう、timer で遅らせる。
 function! s:link_sink_tab(lines) abort
   let l:notes = []
   for l:line in a:lines
@@ -287,15 +291,19 @@ function! s:link_sink_tab(lines) abort
     call add(l:notes, l:r)
   endfor
   if empty(l:notes) | return | endif
-  if exists('s:insert_buf') && bufnr('%') != s:insert_buf
-    execute 'buffer ' . s:insert_buf
-  endif
-  if exists('s:insert_pos')
-    call cursor(s:insert_pos[1], s:insert_pos[2])
-  endif
   let l:links = map(copy(l:notes), {_, n -> simple_yurii_note#make_link(n.path, n.title)})
-  " 置き場所は za と同じキーで選ぶ（h / Enter / t / c / r。i = ピッカーを開いたカーソル位置）
-  call simple_yurii_note#insert_links_pick(l:links, getpos('.'))
+  let l:buf = exists('s:insert_buf') ? s:insert_buf : bufnr('%')
+  let l:pos = exists('s:insert_pos') ? s:insert_pos : getpos('.')
+  call timer_start(0, function('s:link_pick_deferred', [l:links, l:buf, l:pos]))
+endfunction
+
+function! s:link_pick_deferred(links, buf, pos, timer) abort
+  if bufexists(a:buf) && bufnr('%') != a:buf
+    execute 'buffer ' . a:buf
+  endif
+  call cursor(a:pos[1], a:pos[2])
+  redraw
+  call simple_yurii_note#insert_links_pick(a:links, getpos('.'))
 endfunction
 
 " note_search.py + fzf。表示はタイトル（with_nth で抜粋も出せる）。
