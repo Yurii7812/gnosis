@@ -832,6 +832,7 @@ augroup simple_yurii_note_vault
   autocmd VimLeave  * call simple_yurii_note#quit_unmount()
   " viminfo は VimLeavePre の後に書かれる。ロック中なら書き先を無効化する
   autocmd VimLeavePre * call simple_yurii_note#before_write_viminfo()
+  autocmd VimEnter * call simple_yurii_note#clear_search_highlight()
   autocmd BufWritePre * call simple_yurii_note#guard_vault_write(expand('<afile>:p'))
 augroup END
 

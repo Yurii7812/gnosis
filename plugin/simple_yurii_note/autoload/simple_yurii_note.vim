@@ -12186,8 +12186,7 @@ function! s:adopt_vault_runtime(root) abort
   endif
   " ロック中は読めなかった vault 内の履歴をここで読み込む
   silent! rviminfo
-  " 読み込んだ前回のハイライト状態は捨てる（:nohlsearch は関数内で効かないので v:hlsearch で）
-  let v:hlsearch = 0
+  call simple_yurii_note#clear_search_highlight()
   call s:setup_persistent_undo_for_root(l:root)
 endfunction
 
@@ -13036,4 +13035,10 @@ function! s:diary_cursor() abort
     let l:n += 3 - l:cnt
   endif
   call cursor(l:n - 2, 1)
+endfunction
+
+" 前回の検索ハイライトを消す。関数の中の :nohlsearch / v:hlsearch=0 は関数を抜けると
+" 元に戻される（検索状態が復元される）ので、<Cmd> を typeahead に積んで関数の外で実行する。
+function! simple_yurii_note#clear_search_highlight() abort
+  call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
 endfunction
