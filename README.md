@@ -10,7 +10,7 @@ The UI and the generated guide are available in Japanese and English (see [Engli
 
 - 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、`### Context` / `### Group` / `### Related` / `### BackLink` を保存時に自動で同期
 - 中身は本物の Vim。Vim を知らなくても、インストーラーが Gnosis 専用の Vim 環境を作り、アイコンから起動できる
-- デスクトップアプリ（Electron）は、Vim の画面をマークダウンの見た目で描く（画像・表・リンクの番号つき）
+- 標準の画面は Bash などのターミナルで起動する本物の Vim。独自 GUI ではない（Electron は明示的な `--app` のときだけ使用できるオプション）
 - 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・文字サイズ・起動サイズ・テーマ）
 - 日本語 / 英語。操作ガイドも選んだ言語で作られる
 
@@ -34,8 +34,8 @@ cd gnosis
 ```
 
 - 足りないもの（Vim・git・Python 3・fzf・ripgrep・Node.js）は、確認してから apt / dnf / pacman / zypper で入れます（`--no-system` で入れない）
-- アプリメニューに **Gnosis**（アイコン付き）ができます。端末からは `gnosis`（`~/.local/bin/gnosis`）
-- デスクトップにもアイコンを置くなら `--desktop-icon`。アプリ（Electron）が不要なら `--no-app`
+- アプリメニューの **Gnosis** はターミナルを開いて Vim を起動します。Bash などの端末では `gnosis`（`~/.local/bin/gnosis`）でその端末の Vim を起動します
+- デスクトップにもアイコンを置くなら `--desktop-icon`。Electron は標準でインストールされません。追加する場合だけ `--app`
 
 ### macOS
 
@@ -69,16 +69,16 @@ Bash は要りません（起動画面のシンボルは静的なアセットか
 
 | 方法 | 動き |
 | --- | --- |
-| アイコン（アプリメニュー / Gnosis.app / ショートカット） | アプリ（Electron）で起動 |
-| `gnosis` | アプリがあればアプリ、無ければ端末なら端末の Vim、GUI 版 Vim（gvim / MacVim） |
-| `gnosis --app` / `--gui` / `--tui` | アプリ / GUI 版 Vim / 今の端末の Vim |
+| アイコン（Linux アプリメニュー / macOS Gnosis.app） | ターミナルを開いて Vim で起動（Windows は別ランチャー） |
+| `gnosis` | 現在の端末で Vim を起動。端末外からは新しい端末を開く。Electron / GUI Vim は自動起動しない |
+| `gnosis --app` / `--gui` / `--tui` | 明示的な場合のみ Electron / GUI Vim / 今の端末の Vim |
 | `gnosis --new-terminal` | 新しい端末ウィンドウの Vim（対応端末には文字サイズと最大化を渡す） |
 | `gnosis ノート.md` | そのノートを開く（起動画面は出さない） |
 | `gnosis --where` | Gnosis のフォルダ・Gnosis ホーム・使う vimrc を表示 |
 
 ### 起動画面
 
-ノートを開く前に、**白背景・黒文字**の起動画面が出ます: Chnoubis のシンボル・「Gnosis」・選択中の vault の名前とパス・「Enter で開始」。
+ノートを開く前に、**夜空色背景 `#14283D`・水色文字 `#79CFFF`**（添付 `chnoubis3.sh` の10番）の起動画面が出ます: Chnoubis のシンボル・「Gnosis」・選択中の vault の名前とパス・「Enter で開始」。
 
 | キー | 動き |
 | --- | --- |
@@ -88,7 +88,7 @@ Bash は要りません（起動画面のシンボルは静的なアセットか
 | `q` | 終了 |
 
 vault の一覧: `j` / `k` で選ぶ・`Enter` で開く・`a` 既存のフォルダを登録・`n` 新しい vault を作る・`d` 一覧から外す（**ノートとフォルダは消しません**）・`Esc` 戻る。
-初めての起動（vault が無い）では、作るか登録するかを尋ねます。前回の vault が見つからないときは、元の場所に勝手に作らず、選び直し・場所の指定し直しを案内します。
+初めての起動（vault が無い）でも Chnoubis の起動画面を表示し、`Enter` / `v` から vault を作るか登録するか選びます。前回の vault が見つからないときは、元の場所に勝手に作らず、選び直し・場所の指定し直しを案内します。
 使用中に vault を切り替えるときは `:GnosisVaults`（保存先・検索・同期・設定がその vault に切り替わります）。
 
 ### 設定（`:GnosisSettings` / 起動画面の `s` / アプリの「設定」）

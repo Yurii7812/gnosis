@@ -4,13 +4,13 @@
 " ふつうに起動したとき（ファイルを指定しないとき）、ノートを開く前に出す:
 "   Chnoubis のシンボル（assets/chnoubis/*.txt の Unicode Braille）・「Gnosis」・
 "   選択中の vault の名前とパス・「Enter で開始」・vault の選択と管理への入口。
-" 配色は白背景・黒文字（gnosis#theme#apply_start）。vault を開くと、その vault の
+" 配色は chnoubis3.sh の10番・夜空×水色（gnosis#theme#apply_start）。vault を開くと、その vault の
 " 設定のテーマに切り替わる。
 "
 " 起動画面のキー:  Enter 開始 / v vault の一覧 / s 設定 / q 終了
 " vault 一覧のキー: j k 移動 / Enter 選んで開始 / a 既存フォルダを登録 /
 "                   n 新しい vault を作る / d 一覧から外す（ノートは消さない） / Esc 戻る
-" Electron アプリは同じ働きを HTML の画面で持つ（web/）。
+" 標準起動はターミナルの本物の Vim。
 " =============================================================================
 
 let s:art_dir = expand('<sfile>:p:h:h:h') . '/assets/chnoubis'
@@ -69,7 +69,7 @@ endfunction
 
 " 画面に収まる大きさのアートを選ぶ（大きいものから。下の情報欄の行数 a:reserve を残す）
 function! gnosis#start#pick_art(cols, rows, reserve) abort
-  for l:w in [80, 60, 44]
+  for l:w in [80, 60, 44, 32]
     let l:art = gnosis#start#art(l:w)
     if empty(l:art)
       continue
@@ -114,9 +114,8 @@ function! gnosis#start#open() abort
       let s:sel = l:i
     endif
   endfor
-  " 初めて（vault が未登録）なら、作るか登録するかを尋ねる一覧から始める
+  " 初回起動も Chnoubis を見せる。Enter/v で vault の作成・登録へ進む。
   if empty(l:reg)
-    let s:mode = 'vaults'
     let s:message = s:t('start.first_run')
   endif
   call gnosis#start#render()
@@ -154,7 +153,7 @@ function! gnosis#start#render() abort
   endif
   let l:cols = winwidth(0)
   let l:rows = winheight(0)
-  " 文言は選択中の vault の言語（vault が無い・見つからないときは初期値）。配色は白黒のまま
+  " 文言は選択中の vault の言語。配色は Chnoubis #10（夜空×水色）。
   let l:sv = s:current_vault()
   let l:lang = !empty(l:sv) && l:sv.exists ? gnosis#settings#load(l:sv.path).language : gnosis#settings#defaults().language
   call gnosis#i18n#set_lang(l:lang)
@@ -179,6 +178,16 @@ function! gnosis#start#render() abort
     let l:info += [[s:t('start.keys'), 'gnosisStartDim']]
     if !empty(s:message)
       let l:info += [['', ''], [s:message, 'gnosisStartWarn']]
+    endif
+    " 小さい端末（例: 80x24）でも、必ず優先して Chnoubis の32幅版を表示する。
+    " 既存の詳しい案内は、行数に余裕のある画面ではそのまま残す。
+    if l:rows < 30
+      let l:heading = 'Gnosis' . (empty(l:v) ? '' : ' — ' . l:v.name)
+      let l:info = [[l:heading, 'gnosisStartTitle']]
+      if !empty(l:v) && !l:v.exists
+        let l:info += [[s:t('start.vault_missing'), 'gnosisStartWarn']]
+      endif
+      let l:info += [['Enter  |  v  |  s  |  q', 'gnosisStartKey']]
     endif
     let l:art = gnosis#start#pick_art(l:cols, l:rows, len(l:info) + 2)
     let l:top = max([0, (l:rows - len(l:art) - len(l:info) - 1) / 2])

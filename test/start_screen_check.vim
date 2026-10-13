@@ -1,5 +1,5 @@
 " Vim の起動画面の回帰網（pty で起動して確かめる。test/start_screen_net.sh から）。
-"   起動直後: 起動画面（Chnoubis・Gnosis・vault・Enter で開始）が白背景・黒文字で出て、ノートはまだ開かない
+"   起動直後: 起動画面（Chnoubis・Gnosis・vault・Enter で開始）が10番の夜空×水色で出て、ノートはまだ開かない
 "   Enter: 選択中の vault の Index が開き、その vault の設定のテーマ（ダーク）になる
 let s:w = $START_WORK
 let s:res = []
@@ -18,7 +18,8 @@ function! s:first(t) abort
   call s:ok('起動画面: vault の名前とパス', l:text =~# '保管庫' && stridx(l:text, $START_VAULT) >= 0)
   call s:ok('起動画面: Enter で開始の案内', l:text =~# 'Enter')
   call s:ok('起動画面: vault の選択・管理への入口', l:text =~# 'v ')
-  call s:ok('起動画面: 白背景・黒文字', s:hl('bg') ==# '#ffffff' && s:hl('fg') ==# '#000000', s:hl('bg') . ' ' . s:hl('fg'))
+  call s:ok('起動画面: chnoubis3.sh の10番', tolower(s:hl('bg')) ==# '#14283d' && tolower(s:hl('fg')) ==# '#79cfff', s:hl('bg') . ' ' . s:hl('fg'))
+  call s:ok('起動画面: 通常端末向け32幅図案', len(gnosis#start#pick_art(80, 23, 4)) == 19)
   call s:ok('起動画面: アートが画面幅に収まる', max(map(getline(1, '$'), 'strdisplaywidth(v:val)')) <= &columns)
   call feedkeys('v', 't')
   call timer_start(400, function('s:vaults'))

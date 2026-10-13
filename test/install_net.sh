@@ -67,7 +67,9 @@ val = re.sub(r"\\(.)", r"\1", line)
 m = re.match(r'"((?:\\.|[^"\\])*)"', val)
 arg0 = re.sub(r'\\([\\"`$])', r"\1", m.group(1))
 assert arg0 == sys.argv[2], (arg0, sys.argv[2])
-assert "Icon=gnosis" in open(sys.argv[1], encoding="utf-8").read()
+desktop = open(sys.argv[1], encoding="utf-8").read()
+assert "Icon=gnosis" in desktop
+assert "Terminal=true" in desktop
 PY
 if command -v desktop-file-validate >/dev/null 2>&1; then
   desktop-file-validate "$H/.local/share/applications/gnosis.desktop" || fail "desktop-file-validate"

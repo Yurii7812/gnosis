@@ -1,8 +1,8 @@
 #!/bin/sh
 # Gnosis のランチャー（Linux / macOS）。
 #
-#   gnosis                 アプリ（Electron）で起動。無ければ GUI 版 Vim、それも無ければ端末の Vim
-#   gnosis --app           アプリで起動
+#   gnosis                 現在の端末（Bash 等）で普通の Vim を起動。端末外からは端末を新規起動
+#   gnosis --app           旧 Electron アプリを明示したときだけ起動（任意）
 #   gnosis --gui           GUI 版 Vim（gvim / MacVim）で起動
 #   gnosis --tui           今の端末の Vim で起動（--terminal も同じ）
 #   gnosis --new-terminal  新しい端末ウィンドウを開いて、その中の Vim で起動
@@ -178,8 +178,7 @@ case "$mode" in
   tui) run_tui "$@" ;;
   newterm) run_new_terminal "$@" ;;
   auto)
-    if graphical && [ -x "$ELECTRON" ]; then run_app "$@"; fi
+    # デフォルトは必ず本物の端末 Vim。Electron / gvim を自動選択しない。
     if [ -t 0 ] && [ -t 1 ]; then run_tui "$@"; fi
-    if graphical && find_gvim >/dev/null 2>&1; then run_gui "$@"; fi
     run_new_terminal "$@" ;;
 esac
