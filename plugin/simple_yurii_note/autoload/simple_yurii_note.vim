@@ -11831,8 +11831,29 @@ function! s:mount_by_password(cipher, root) abort
       return 0
     endif
     let l:pf = s:temp_passfile(l:pw)
-    call system('gocryptfs -passfile=' . shellescape(l:pf) . ' '
-          \ . shellescape(a:cipher) . ' ' . shellescape(a:root) . ' 2>&1 | tail -1')
+    " 失敗の理由を見分ける: gocryptfs は「パスワードが違う」とき終了コード 12 を返す。それ以外の失敗
+    " （前回の遅延アンマウントがまだ残っている・マウントポイントが使用中 など）は、パスワードの間違いと
+    " 区別して、同じパスワードで少し待ってやり直す。
+    let l:out = ''
+    let l:code = 0
+    for l:try in range(4)
+      let l:out = system('gocryptfs -passfile=' . shellescape(l:pf) . ' '
+            \ . shellescape(a:cipher) . ' ' . shellescape(a:root) . ' 2>&1')
+      let l:code = v:shell_error
+      call s:mount_cache_reset()
+      " 成功してもマウントの反映が少し遅れることがあるので、短く待って確かめる
+      for l:w in range(10)
+        if simple_yurii_note#vault_mounted(escape(a:root, '\\'), 1) == 1
+          break
+        endif
+        execute 'sleep 150m'
+        call s:mount_cache_reset()
+      endfor
+      if simple_yurii_note#vault_mounted(escape(a:root, '\\'), 1) == 1 || l:code == 12
+        break
+      endif
+      execute 'sleep 700m'
+    endfor
     call s:secure_delete(l:pf)
     call s:mount_cache_reset()
     if simple_yurii_note#vault_mounted(escape(a:root, '\\'), 1) == 1
@@ -11841,7 +11862,13 @@ function! s:mount_by_password(cipher, root) abort
       return 1
     endif
     echohl ErrorMsg
-    echom 'simple_yurii_note: パスワードが違う (' . (l:i + 1) . '/3)'
+    if l:code == 12
+      echom 'simple_yurii_note: パスワードが違う (' . (l:i + 1) . '/3)'
+    else
+      " パスワードの間違いではない失敗。本当の理由を出す
+      let l:why = trim(get(split(l:out, "\n"), -1, ''))
+      echom 'simple_yurii_note: マウントできません（パスワードの間違いではありません・終了コード ' . l:code . '）: ' . l:why
+    endif
     echohl NONE
   endfor
   return 0
