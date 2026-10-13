@@ -54,6 +54,31 @@ step("html img is rendered with its width", () => {
   v.setVim({ cur: [4, 1], mode: "i" });
   if (document.querySelector(".cm-md-img img")) throw new Error("html img should be text in insert mode");
 });
+// Markdown の表が本物の表として描かれ、カーソルが表の中・インサート中は文字のままであること
+step("table is rendered as a real table", () => {
+  const doc = "# 表\\n\\n| 曜日 | 種目 | 備考 |\\n| --- | :-: | --: |\\n| 月 | **腕立て** | 10回 |\\n| 火 | 懸垂 | — |\\n\\n文\\n";
+  v.setText(doc);
+  v.setVim({ cur: [8, 1], mode: "n" });
+  const t = document.querySelector("table.cm-md-table");
+  if (!t) throw new Error("table not rendered");
+  const rows = t.querySelectorAll("tr").length, ths = [...t.querySelectorAll("th")].map((e) => e.textContent).join(",");
+  if (rows !== 3 || ths !== "曜日,種目,備考") throw new Error("bad table: " + rows + " " + ths);
+  if (!t.querySelector("td strong")) throw new Error("bold in cell not rendered");
+  if (t.querySelector("th:nth-child(2)").style.textAlign !== "center") throw new Error("alignment lost");
+  // 実際のノートの表（幅をそろえた空白つき・太字・「—」入り）も 14 行 × 5 列で描かれる
+  const big = ["| 曜日       | 種目         | セット数 | 主に鍛える部位 | 備考 |", "| ---------- | ------------ | -------- | -------------- | ---- |"]
+    .concat(Array.from({ length: 14 }, (_, i) => "| 月・水・金 | カーフレイズ | 4セット  | ふくらはぎ(腓腹筋) | **15〜20回**。段差 " + i + " |")).join("\\n");
+  v.setText("# 表\\n\\n" + big + "\\n\\n文\\n");
+  v.setVim({ cur: [20, 1], mode: "n" });
+  const bt = document.querySelector("table.cm-md-table");
+  if (!bt || bt.querySelectorAll("tbody tr").length !== 14 || bt.querySelectorAll("th").length !== 5) throw new Error("real-note table not rendered");
+  v.setText(doc);
+  v.setVim({ cur: [8, 1], mode: "n" });
+  v.setVim({ cur: [5, 1], mode: "n" });
+  if (document.querySelector("table.cm-md-table")) throw new Error("table should be raw text when the cursor is inside");
+  v.setVim({ cur: [8, 1], mode: "i" });
+  if (document.querySelector("table.cm-md-table")) throw new Error("table should be raw text in insert mode");
+});
 // アンカー（#見出し）つきのリンクも、クリックできるノートのリンク（data-md-href）になること
 step("anchor link is a clickable note link", () => {
   v.setText("# 見出し\\n\\n[二](n.md#2f)\\n[普通](m.md)\\n[外部](https://example.com/a.md#x)\\n");

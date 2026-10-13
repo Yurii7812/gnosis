@@ -32680,6 +32680,135 @@ ${h2.join(`
       provide: (plugin) => EditorView.atomicRanges.of((view2) => view2.plugin(plugin)?.decorations || Decoration.none)
     });
   }
+  function splitRow(text) {
+    let t2 = text.trim();
+    if (t2.startsWith("|")) t2 = t2.slice(1);
+    if (t2.endsWith("|") && !t2.endsWith("\\|")) t2 = t2.slice(0, -1);
+    return t2.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+  }
+  var DELIM_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$|^\s*\|\s*:?-+:?\s*\|?\s*$/;
+  function findTables(doc2) {
+    const out = [];
+    let inFence = false;
+    const n = doc2.lines;
+    let fmEnd = 0;
+    if (n >= 2 && doc2.line(1).text.trim() === "---") {
+      for (let i = 2; i <= n; i++) if (doc2.line(i).text.trim() === "---") {
+        fmEnd = i;
+        break;
+      }
+    }
+    for (let i = fmEnd + 1; i <= n; i++) {
+      const t2 = doc2.line(i).text;
+      if (RE.fence.test(t2)) {
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence || !t2.includes("|") || i === n) continue;
+      if (!DELIM_RE.test(doc2.line(i + 1).text)) continue;
+      const head = splitRow(t2);
+      const aligns = splitRow(doc2.line(i + 1).text).map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+      if (head.length !== aligns.length) continue;
+      const rows = [];
+      let j2 = i + 2;
+      while (j2 <= n && doc2.line(j2).text.trim() !== "" && doc2.line(j2).text.includes("|") && !RE.fence.test(doc2.line(j2).text)) {
+        rows.push(splitRow(doc2.line(j2).text));
+        j2++;
+      }
+      out.push({ from: doc2.line(i).from, to: doc2.line(j2 - 1).to, startLine: i, endLine: j2 - 1, head, aligns, rows });
+      i = j2 - 1;
+    }
+    return out;
+  }
+  function inlineInto(el2, text) {
+    const re2 = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\(([^)\s]+)\)/g;
+    let last3 = 0, m;
+    while ((m = re2.exec(text)) !== null) {
+      if (m.index > last3) el2.appendChild(document.createTextNode(text.slice(last3, m.index)));
+      let n;
+      if (m[1] != null) {
+        n = document.createElement("strong");
+        n.textContent = m[1];
+      } else if (m[2] != null) {
+        n = document.createElement("code");
+        n.className = "cm-md-code";
+        n.textContent = m[2];
+      } else {
+        n = document.createElement("span");
+        n.className = "cm-md-link";
+        n.textContent = m[3] || m[4];
+      }
+      el2.appendChild(n);
+      last3 = m.index + m[0].length;
+    }
+    if (last3 < text.length) el2.appendChild(document.createTextNode(text.slice(last3)));
+  }
+  var TableWidget = class extends WidgetType {
+    constructor(t2) {
+      super();
+      this.t = t2;
+      this.key = JSON.stringify([t2.head, t2.aligns, t2.rows]);
+    }
+    eq(o2) {
+      return o2.key === this.key;
+    }
+    toDOM() {
+      const { head, aligns, rows } = this.t;
+      const wrap = document.createElement("div");
+      wrap.className = "cm-md-tablewrap";
+      const table = document.createElement("table");
+      table.className = "cm-md-table";
+      const mk = (tag, cells, tr2) => {
+        for (let c = 0; c < head.length; c++) {
+          const cell2 = document.createElement(tag);
+          if (aligns[c]) cell2.style.textAlign = aligns[c];
+          inlineInto(cell2, cells[c] ?? "");
+          tr2.appendChild(cell2);
+        }
+      };
+      const thead = document.createElement("thead");
+      const htr = document.createElement("tr");
+      mk("th", head, htr);
+      thead.appendChild(htr);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const r of rows) {
+        const tr2 = document.createElement("tr");
+        mk("td", r, tr2);
+        tbody.appendChild(tr2);
+      }
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      return wrap;
+    }
+    ignoreEvent() {
+      return false;
+    }
+  };
+  function tableField(cfg) {
+    const build = (state) => {
+      const doc2 = state.doc;
+      const vmode = state.field(vimField, false)?.mode || "n";
+      const editing = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
+      const sel = state.selection.main;
+      const a = doc2.lineAt(sel.from).number, b2 = doc2.lineAt(sel.to).number;
+      const decos = [];
+      for (const t2 of findTables(doc2)) {
+        if (!cfg.viewOnly && (editing || a <= t2.endLine && b2 >= t2.startLine)) continue;
+        decos.push(Decoration.replace({ widget: new TableWidget(t2), block: true }).range(t2.from, t2.to));
+      }
+      return Decoration.set(decos, true);
+    };
+    return StateField.define({
+      create: (state) => build(state),
+      update(v2, tr2) {
+        const vm = (st2) => st2.field(vimField, false)?.mode;
+        if (tr2.docChanged || tr2.selection || vm(tr2.startState) !== vm(tr2.state) || tr2.effects.some((e) => e.is(refreshDecorations))) return build(tr2.state);
+        return v2;
+      },
+      provide: (f) => EditorView.decorations.from(f)
+    });
+  }
   var setVim = StateEffect.define();
   var vimField = StateField.define({
     create: () => ({ pos: 0, mode: "n", visFrom: null, visTo: null }),
@@ -32794,6 +32923,7 @@ ${h2.join(`
         vtextField,
         vtextDecorations,
         livePreview(cfg),
+        tableField(cfg),
         EditorView.domEventHandlers({
           mousedown: (e, view3) => {
             const el2 = e.target?.closest?.("[data-md-href]");

@@ -86,3 +86,10 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-vtext { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #bc4c00; background: color-mix(in srgb, #bc4c00 12%, transparent); border-radius: 4px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; user-select: none; }
 
 .err { color: #cf222e; font-weight: 700; margin-left: auto; padding-right: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 表 */
+.cm-md-tablewrap { overflow-x: auto; margin: 10px 0; }
+.cm-md-table { border-collapse: collapse; font-size: .95em; line-height: 1.5; }
+.cm-md-table th, .cm-md-table td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
+.cm-md-table th { background: var(--bg-2); font-weight: 700; }
+.cm-md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-2) 60%, transparent); }

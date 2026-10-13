@@ -295,6 +295,118 @@ function livePreview(cfg) {
 }
 
 
+
+// ---------------------------------------------------------------- 表（テーブル）
+
+// `| a | b |` の行 + `| --- | --- |` の行 + 続く行を、本物の表として描く。カーソルが表の中にあるとき
+// （とインサート中）は、編集できるよう文字のまま見せる。ブロックの置き換えなので StateField で出す。
+function splitRow(text) {
+  let t = text.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|") && !t.endsWith("\\|")) t = t.slice(0, -1);
+  return t.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+const DELIM_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$|^\s*\|\s*:?-+:?\s*\|?\s*$/;
+
+function findTables(doc) {
+  const out = [];
+  let inFence = false;
+  const n = doc.lines;
+  let fmEnd = 0;
+  if (n >= 2 && doc.line(1).text.trim() === "---") {
+    for (let i = 2; i <= n; i++) if (doc.line(i).text.trim() === "---") { fmEnd = i; break; }
+  }
+  for (let i = fmEnd + 1; i <= n; i++) {
+    const t = doc.line(i).text;
+    if (RE.fence.test(t)) { inFence = !inFence; continue; }
+    if (inFence || !t.includes("|") || i === n) continue;
+    if (!DELIM_RE.test(doc.line(i + 1).text)) continue;
+    const head = splitRow(t);
+    const aligns = splitRow(doc.line(i + 1).text).map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : ""));
+    if (head.length !== aligns.length) continue;
+    const rows = [];
+    let j = i + 2;
+    while (j <= n && doc.line(j).text.trim() !== "" && doc.line(j).text.includes("|") && !RE.fence.test(doc.line(j).text)) {
+      rows.push(splitRow(doc.line(j).text));
+      j++;
+    }
+    out.push({ from: doc.line(i).from, to: doc.line(j - 1).to, startLine: i, endLine: j - 1, head, aligns, rows });
+    i = j - 1;
+  }
+  return out;
+}
+
+function inlineInto(el, text) {
+  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\(([^)\s]+)\)/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+    let n;
+    if (m[1] != null) { n = document.createElement("strong"); n.textContent = m[1]; }
+    else if (m[2] != null) { n = document.createElement("code"); n.className = "cm-md-code"; n.textContent = m[2]; }
+    else { n = document.createElement("span"); n.className = "cm-md-link"; n.textContent = m[3] || m[4]; }
+    el.appendChild(n);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+}
+
+class TableWidget extends WidgetType {
+  constructor(t) { super(); this.t = t; this.key = JSON.stringify([t.head, t.aligns, t.rows]); }
+  eq(o) { return o.key === this.key; }
+  toDOM() {
+    const { head, aligns, rows } = this.t;
+    const wrap = document.createElement("div");
+    wrap.className = "cm-md-tablewrap";
+    const table = document.createElement("table");
+    table.className = "cm-md-table";
+    const mk = (tag, cells, tr) => {
+      for (let c = 0; c < head.length; c++) {
+        const cell = document.createElement(tag);
+        if (aligns[c]) cell.style.textAlign = aligns[c];
+        inlineInto(cell, cells[c] ?? "");
+        tr.appendChild(cell);
+      }
+    };
+    const thead = document.createElement("thead");
+    const htr = document.createElement("tr");
+    mk("th", head, htr);
+    thead.appendChild(htr);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    for (const r of rows) { const tr = document.createElement("tr"); mk("td", r, tr); tbody.appendChild(tr); }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+  ignoreEvent() { return false; }
+}
+
+function tableField(cfg) {
+  const build = (state) => {
+    const doc = state.doc;
+    const vmode = state.field(vimField, false)?.mode || "n";
+    const editing = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
+    const sel = state.selection.main;
+    const a = doc.lineAt(sel.from).number, b = doc.lineAt(sel.to).number;
+    const decos = [];
+    for (const t of findTables(doc)) {
+      if (!cfg.viewOnly && (editing || (a <= t.endLine && b >= t.startLine))) continue;
+      decos.push(Decoration.replace({ widget: new TableWidget(t), block: true }).range(t.from, t.to));
+    }
+    return Decoration.set(decos, true);
+  };
+  return StateField.define({
+    create: (state) => build(state),
+    update(v, tr) {
+      const vm = (st) => st.field(vimField, false)?.mode;
+      if (tr.docChanged || tr.selection || vm(tr.startState) !== vm(tr.state) || tr.effects.some((e) => e.is(refreshDecorations))) return build(tr.state);
+      return v;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+}
+
 // ---------------------------------------------------------------- Vim のカーソルと選択
 
 // Vim の状態（カーソル位置・モード・ビジュアル範囲）。表示だけに使う。
@@ -410,6 +522,7 @@ export function createView(opts) {
       vtextField,
       vtextDecorations,
       livePreview(cfg),
+      tableField(cfg),
       EditorView.domEventHandlers({
         mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
