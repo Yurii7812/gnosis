@@ -161,8 +161,10 @@ function initialSettings() {
 }
 
 // 起動サイズ（最大化は「最大化」であって全画面表示ではない）
+let maximizeRequested = null; // 試験用: 最後に求めた状態（ウィンドウマネージャーの無い xvfb では実際には最大化されない）
 function applyWindow(s, first) {
   if (!win || win.isDestroyed()) return;
+  maximizeRequested = !!s.window.maximized;
   if (s.window.maximized) {
     if (!win.isMaximized()) win.maximize();
   } else {
@@ -233,7 +235,16 @@ function createWindow() {
       if (result) { delete result.__png; delete result.__closeWindow; }
       if (result && typeof result === "object" && !Array.isArray(result)) {
         result.__console = consoleLog.slice(0, 20);
-        result.__window = { maximized: win.isMaximized(), fullscreen: win.isFullScreen(), zoom: win.webContents.getZoomLevel() };
+        result.__window = { maximized: win.isMaximized(), maximizeRequested, fullscreen: win.isFullScreen(), zoom: win.webContents.getZoomLevel() };
+        // Ctrl + = / Ctrl + 0 を本物のキー入力として送り、画面全体の拡大と元に戻すことを確かめる
+        try {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: "=", modifiers: ["control"] });
+          await new Promise((r) => setTimeout(r, 300));
+          result.__window.zoomAfterCtrlPlus = win.webContents.getZoomLevel();
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: "0", modifiers: ["control"] });
+          await new Promise((r) => setTimeout(r, 300));
+          result.__window.zoomAfterCtrl0 = win.webContents.getZoomLevel();
+        } catch (e) { result.__window.zoomError = String(e); }
       }
       const out = env("TEST_OUT");
       fs.writeFileSync(out, JSON.stringify(result, null, 2));

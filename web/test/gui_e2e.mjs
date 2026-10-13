@@ -137,6 +137,26 @@ const scenario = `(async () => {
     R.anchor.opened = base(G.state().file);
   }
 
+  // Alt + クリック: リンクを開かずにカーソルだけを動かし、zk → g でそのリンク 1 本をグループにする
+  {
+    await press(':e anchor.md\\r', 1500);
+    const el = document.querySelector('[data-md-href="m2.md#sec"]');
+    R.altClick = { found: !!el };
+    if (el) {
+      const r = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0, altKey: true }));
+      await sleep(900);
+      R.altClick.file = base(G.state().file);
+      R.altClick.line = G.view.getText().split('\\n')[G.state().cur[0] - 1];
+      await press('zk', 700);
+      R.altClick.prompt = G.screen().slice(-3).map((l) => l.trim()).join('|');
+      await press('g', 2000);
+      R.altClick.after = base(G.state().file);
+      R.altClick.body = G.view.getText();
+      await press('\\x1b', 300);
+    }
+  }
+
   // 画像: 画面に出入りしても、読み直さず（Blob を作り直さず）、見えている画像は表示され、全体の高さが跳ばない
   window.__blobs = 0; const origBlob = URL.createObjectURL.bind(URL); URL.createObjectURL = (b) => { window.__blobs++; return origBlob(b); };
   await press(':e img.md\\r', 2500);
@@ -314,6 +334,15 @@ try {
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.anchor?.found && R.anchor.opened === "m2.md", "clicking an anchor link (m2.md#sec) did not open the note: " + JSON.stringify(R.anchor));
+  {
+    const a = R.altClick || {};
+    check(a.found && a.file === "anchor.md" && /\(m2\.md#sec\)/.test(a.line || ""), "Alt+click moves the cursor onto the link without opening it: " + JSON.stringify(a));
+    check(/g=/.test(a.prompt || ""), "zk shows the g key: " + JSON.stringify(a.prompt));
+    check(/^\d{12}\.md$/.test(a.after || "") && (a.body || "").includes("[二](m2.md#sec)") && /attribute: group/.test(a.body || ""), "zk → g made a group with that one link: " + JSON.stringify(a));
+    const an = fs.readFileSync(path.join(vault, "anchor.md"), "utf8");
+    check(an.includes("(" + a.after + ")") && !an.includes("(m2.md#sec)"), "the link in the original note was replaced by the group link: " + an.slice(-200));
+  }
+  check(R.__window && R.__window.maximizeRequested === true && R.__window.fullscreen === false, "default: maximized (requested), not fullscreen: " + JSON.stringify(R.__window));
   check(R.images?.file === "img.md", "could not open the image note: " + JSON.stringify(R.images));
   check(R.images && R.images.blobs <= 4, "images were re-read on scroll (blob URLs created: " + R.images?.blobs + ", images: 4)");
   check(R.images && R.images.notLoaded === 0, "visible images were not loaded while scrolling: " + JSON.stringify(R.images));

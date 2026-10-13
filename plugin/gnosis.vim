@@ -657,7 +657,7 @@ function! s:expand_s_and_open() abort
   let l:file = expand('%:p')
   let l:root = fnamemodify(l:file, ':h')
   let l:py   = g:gnosis_expand_s_python
-  let l:cmd  = printf('python3 %s expand_s %s %s 1',
+  let l:cmd  = printf('%s %s expand_s %s %s 1', gnosis#python_cmd(),
         \ shellescape(l:py),
         \ shellescape(l:file),
         \ shellescape(l:root))

@@ -144,7 +144,9 @@ try {
   check(o.font === "22px", "font size from the vault settings: " + JSON.stringify(o));
   check(o.lang === "ja", "Vim uses the vault language: " + JSON.stringify(o));
   check(R.__window && R.__window.fullscreen === false, "never fullscreen: " + JSON.stringify(R.__window));
-  check(R.__window && R.__window.maximized === false, "vault 1 is set to 'not maximized': " + JSON.stringify(R.__window));
+  check(R.__window && R.__window.maximized === false && R.__window.maximizeRequested === false, "vault 1 is set to 'not maximized': " + JSON.stringify(R.__window));
+  check(R.__window && R.__window.zoomAfterCtrlPlus > 0 && R.__window.zoomAfterCtrl0 === 0, "Ctrl + / Ctrl 0 zoom the whole window: " + JSON.stringify(R.__window));
+  check(JSON.parse(fs.readFileSync(path.join(v1, ".gnosis", "settings.json"), "utf8")).fontSize === 22, "zooming does not change the font size setting");
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors: " + JSON.stringify(jsErrors));
   if (process.env.KEEP_PNG && fs.existsSync(path.join(tmp, "launcher.png"))) fs.copyFileSync(path.join(tmp, "launcher.png"), process.env.KEEP_PNG);

@@ -85,10 +85,31 @@ function! s:expand_path(p) abort
 endfunction
 
 function! s:python_cmd() abort
+  return gnosis#python_cmd()
+endfunction
+
+" Python の起動コマンド（g:gnosis_python_cmd で指定できる）。
+" Windows は py ランチャー（py -3）を優先する（python3 はストアへの案内だけのことがある）。
+function! gnosis#python_cmd() abort
+  if !empty(get(g:, 'gnosis_python_cmd', ''))
+    return g:gnosis_python_cmd
+  endif
   if has('win32')
-    return 'python'
+    return executable('py') ? 'py -3' : 'python'
   endif
   return executable('python3') ? 'python3' : 'python'
+endfunction
+
+function! gnosis#has_python() abort
+  return executable(split(gnosis#python_cmd())[0])
+endfunction
+
+" 外部コマンド文字列を job で動かすときの引数（Windows は 'shell'、それ以外は /bin/sh）
+function! gnosis#shell_job(cmd) abort
+  if has('win32')
+    return [&shell, &shellcmdflag, a:cmd]
+  endif
+  return ['/bin/sh', '-c', a:cmd]
 endfunction
 
 " 同期・並べ替えの外部プロセスを低優先度で走らせる（CPU/ディスクを独占して
@@ -358,14 +379,14 @@ function! s:outline_fzf(items, path, sink, none) abort
   endfor
   call writefile(l:rows, l:tsv)
   let l:py = shellescape(s:note_root . '/python/outline_pick.py')
-  let l:filter = 'python3 ' . l:py . ' filter ' . shellescape(l:tsv) . ' {q}'
+  let l:filter = gnosis#python_cmd() . ' ' . l:py . ' filter ' . shellescape(l:tsv) . ' {q}'
   call fzf#run(fzf#wrap({
-        \ 'source': systemlist('python3 ' . l:py . ' filter ' . shellescape(l:tsv) . ' ""'),
+        \ 'source': systemlist(gnosis#python_cmd() . ' ' . l:py . ' filter ' . shellescape(l:tsv) . ' ""'),
         \ 'sink': a:sink,
         \ 'options': '--delimiter="\t" --with-nth=1 --no-multi --disabled --ansi'
         \   . ' --bind ' . shellescape('change:reload:' . l:filter . ' || true')
         \   . ' --prompt=' . shellescape('見出し> ')
-        \   . ' --preview ' . shellescape('python3 ' . l:py . ' preview {3} {4} {q}')
+        \   . ' --preview ' . shellescape(gnosis#python_cmd() . ' ' . l:py . ' preview {3} {4} {q}')
         \   . ' --preview-window=right:50%',
         \ }))
 endfunction
@@ -3147,8 +3168,8 @@ function! s:rlp_build_index() abort
   if empty(l:root) || !isdirectory(l:root) | let l:root = getcwd() | endif
   let l:idx = get(g:, 'gnosis_search_index', '')
   let s:rlp_cands = []
-  if !empty(l:idx) && filereadable(l:idx) && executable('python3')
-    for l:ln in systemlist('python3 ' . shellescape(l:idx) . ' ' . shellescape(l:root))
+  if !empty(l:idx) && filereadable(l:idx) && gnosis#has_python()
+    for l:ln in systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
       let l:f = split(l:ln, "\t", 1)
       if len(l:f) >= 2
         call add(s:rlp_cands, {'p': l:f[0], 't': l:f[1], 'b': get(l:f, 2, '')})
@@ -4425,7 +4446,11 @@ function! s:clipboard_text_external() abort
       return l:out
     endif
   endif
+  if has('win32') || has('win32unix')
+    return has('clipboard') ? getreg('+') : ''
+  endif
   let l:cmds = [
+        \ ['pbpaste'],
         \ ['wl-paste', '--no-newline'],
         \ ['wl-paste', '--primary', '--no-newline'],
         \ ['qdbus6', 'org.kde.klipper', '/klipper', 'getClipboard'],
@@ -4471,6 +4496,15 @@ function! gnosis#clipboard_copy(text) abort
     catch
     endtry
     return
+  endif
+  if (has('mac') || has('macunix')) && executable('pbcopy') && has('job')
+    try
+      let s:clip_job = job_start(['pbcopy'], {'in_io': 'pipe', 'out_io': 'null', 'err_io': 'null', 'stoponexit': ''})
+      call ch_sendraw(s:clip_job, a:text)
+      call ch_close(s:clip_job)
+      return
+    catch
+    endtry
   endif
   if has('clipboard')
     let @+ = a:text
@@ -7334,7 +7368,7 @@ function! gnosis#update_all(arg) abort
   if !empty(l:pkm) && !empty(s:paper_index_path(l:pkm)) && filereadable(l:paper)
     let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:paper)
           \ . ' regen ' . shellescape(l:pkm)
-    call job_start(['/bin/sh', '-c', l:cmd], {
+    call job_start(gnosis#shell_job(l:cmd), {
           \ 'exit_cb': function('s:update_all_done', [l:root]),
           \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
   else
@@ -7377,7 +7411,7 @@ function! s:sort_index_async(root, ...) abort
         \ . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
         \ . ' --report-file ' . shellescape(l:rep)
         \ . ' < ' . shellescape(l:in) . ' > ' . shellescape(l:out)
-  call job_start(['/bin/sh', '-c', l:cmd], {
+  call job_start(gnosis#shell_job(l:cmd), {
         \ 'exit_cb': function('s:sort_index_done', [l:index, l:lines, l:in, l:out, l:rep, l:notify]),
         \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
 endfunction
@@ -7601,7 +7635,7 @@ function! gnosis#autosync_on_save() abort
       let l:pcmd = s:python_cmd() . ' ' . shellescape(l:paper)
             \ . ' regen ' . shellescape(l:root)
       if has('job') && has('channel')
-        call job_start(['/bin/sh', '-c', l:pcmd], {
+        call job_start(gnosis#shell_job(l:pcmd), {
               \ 'exit_cb': function('s:autosync_done'),
               \ 'out_io':  'null',
               \ 'err_io':  'null',
@@ -7631,7 +7665,7 @@ function! gnosis#autosync_on_save() abort
     " 非同期実行
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
     call gnosis#autosync_log('  start job: ' . l:cmd)
-    call job_start(['/bin/sh', '-c', l:cmd], {
+    call job_start(gnosis#shell_job(l:cmd), {
           \ 'exit_cb': function('s:autosync_done'),
           \ 'out_io':  'null',
           \ 'err_io':  'null',
@@ -7693,7 +7727,7 @@ function! s:run_update_one_for(target_fp) abort
   let l:cmd = s:update_one_command(a:target_fp)
   if empty(l:cmd) | return | endif
   if has('job') && has('channel')
-    call job_start(['/bin/sh', '-c', l:cmd], {
+    call job_start(gnosis#shell_job(l:cmd), {
           \ 'exit_cb': function('s:update_one_done', [a:target_fp]),
           \ 'out_io':  'null',
           \ 'err_io':  'null',
@@ -7782,7 +7816,7 @@ function! s:run_retitle_links_for_title_change(target_fp, old_title, new_title) 
         \    . ' ' . shellescape(a:new_title)
 
   if has('job') && has('channel')
-    call job_start(['/bin/sh', '-c', l:cmd], {
+    call job_start(gnosis#shell_job(l:cmd), {
           \ 'exit_cb': function('s:title_change_update_done'),
           \ 'out_io':  'null',
           \ 'err_io':  'null',
@@ -10081,7 +10115,7 @@ function! gnosis#paper_scan() abort
         \ . ' --root ' . shellescape(l:root)
         \ . ' --dest ' . shellescape(l:dest)
   if has('job') && has('channel')
-    call job_start(['/bin/sh', '-c', l:cmd], {
+    call job_start(gnosis#shell_job(l:cmd), {
           \ 'exit_cb': function('s:paper_scan_done'),
           \ 'out_io':  'null',
           \ 'err_io':  'null',
@@ -11860,10 +11894,7 @@ endfunction
 " ---------------------------------------------------------------------------
 
 function! s:python_executable() abort
-  if executable('python3')
-    return 'python3'
-  endif
-  return 'python'
+  return gnosis#python_cmd()
 endfunction
 
 
@@ -12009,50 +12040,34 @@ function! gnosis#open_web() abort
   if gnosis#is_vault_note(expand('%:p'))
     call gnosis#save_current_note()
   endif
-  " デスクトップアプリ (Electron) があればそれを使う。パス固定でフォルダ選択不要。
-  " Windows は .bin の shim（.cmd）ではなく、実体の electron.exe を直接起動する
+  " デスクトップアプリ (Electron)。今の vault と、今開いているノートを渡して起動する。
+  " Linux / macOS はランチャー（bin/gnosis --app。KDE Wayland 向けの起動オプション付き）、
+  " Windows は実体の electron.exe を直接起動する。
+  let l:env = {'GNOSIS_HOME': gnosis#home#dir()}
+  if !empty($MYVIMRC) && get(g:, 'gnosis_managed', 0)
+    let l:env.GNOSIS_VIMRC = $MYVIMRC
+  endif
+  if !empty(l:root)
+    let l:env.GNOSIS_ROOT = fnamemodify(l:root, ':p')
+  endif
+  if gnosis#is_vault_note(expand('%:p'))
+    let l:env.GNOSIS_FILE = expand('%:p')
+  endif
+  let l:launcher = fnamemodify(l:webdir, ':h') . '/bin/gnosis'
   if has('win32')
-    let l:electron = l:webdir . '/node_modules/electron/dist/electron.exe'
+    let l:cmd = [l:webdir . '/node_modules/electron/dist/electron.exe', l:webdir]
   else
-    let l:electron = l:webdir . '/node_modules/.bin/electron'
+    let l:cmd = [l:launcher, '--app']
   endif
-  if executable(l:electron) && filereadable(l:webdir . '/electron/main.cjs')
-    let l:opts = {'out_io': 'null', 'err_io': 'null'}
-    let l:env = {}
-    if !empty(l:root)
-      let l:env.PKM_ROOT = fnamemodify(l:root, ':p')
-    endif
-    " 今開いているノートを、アプリでも最初に開く
-    if gnosis#is_vault_note(expand('%:p'))
-      let l:env.PKM_FILE = expand('%:p')
-    endif
-    if !empty(l:env)
-      let l:opts.env = l:env
-    endif
-    call job_start([l:electron, l:webdir], l:opts)
-    echo 'Gnosis app: ' . (empty(l:root) ? '(既定)' : fnamemodify(l:root, ':p'))
+  if executable(l:cmd[0]) && filereadable(l:webdir . '/electron/main.cjs')
+        \ && (has('win32') || executable(l:webdir . '/node_modules/.bin/electron'))
+    call job_start(l:cmd, {'out_io': 'null', 'err_io': 'null', 'env': l:env, 'stoponexit': ''})
+    echo 'Gnosis app: ' . (empty(l:root) ? '' : fnamemodify(l:root, ':p'))
     return
   endif
-  " フォールバック: ブラウザで HTML を開く
-  let l:html = l:webdir . '/index.html'
-  if !filereadable(l:html)
-    echoerr 'Gnosis: app not found: ' . l:html
-    return
-  endif
-  let l:url = 'file://' . l:html
-  for l:b in ['brave-browser', 'google-chrome', 'chromium', 'chromium-browser']
-    if executable(l:b)
-      call job_start([l:b, '--app=' . l:url], {'out_io': 'null', 'err_io': 'null'})
-      echo 'Gnosis web: ' . l:url
-      return
-    endif
-  endfor
-  if executable('xdg-open')
-    call job_start(['xdg-open', l:url], {'out_io': 'null', 'err_io': 'null'})
-    echo 'Gnosis web: ' . l:url
-  else
-    echoerr 'Gnosis: no browser found'
-  endif
+  echohl WarningMsg
+  echo 'Gnosis: ' . gnosis#i18n#tr('アプリが入っていません（install/install.sh または install\install.ps1 で入れます）')
+  echohl NONE
 endfunction
 
 

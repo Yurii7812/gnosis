@@ -117,8 +117,8 @@ endfunction
 function! s:build_notes(root) abort
   let l:notes = []
   let l:idx = get(g:, 'gnosis_search_index', '')
-  if !empty(l:idx) && filereadable(l:idx) && executable('python3')
-    for l:ln in systemlist('python3 ' . shellescape(l:idx) . ' ' . shellescape(a:root))
+  if !empty(l:idx) && filereadable(l:idx) && gnosis#has_python()
+    for l:ln in systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(a:root))
       let l:f = split(l:ln, "\t", 1)
       if len(l:f) >= 2
         call add(l:notes, {'p': l:f[0], 't': l:f[1], 'b': get(l:f, 2, '')})
@@ -245,11 +245,11 @@ endfunction
 " a:1 に追加引数（例: "--only '/tmp/xxx'"）を渡せる。
 function! s:note_search_cmd(...) abort
   let l:script = get(g:, 'gnosis_search_notesearch', '')
-  if empty(l:script) || !filereadable(l:script) || !executable('python3')
+  if empty(l:script) || !filereadable(l:script) || !gnosis#has_python()
     return ''
   endif
   let l:extra = a:0 > 0 ? a:1 . ' ' : ''
-  return 'python3 ' . shellescape(l:script) . ' ' . l:extra . shellescape(s:root())
+  return gnosis#python_cmd() . ' ' . shellescape(l:script) . ' ' . l:extra . shellescape(s:root())
 endfunction
 
 function! s:strip_ansi(text) abort
@@ -324,7 +324,7 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
     " ヒットが下端で切れる）。preview_highlight.py が --line {3} でヒット行の
     " 少し上から出し、先頭付近に見せる。
     call extend(l:options, [
-          \ '--preview', 'python3 ' . shellescape(l:preview) . ' {1} {q} --line {3}',
+          \ '--preview', gnosis#python_cmd() . ' ' . shellescape(l:preview) . ' {1} {q} --line {3}',
           \ '--preview-window', 'right:50%:wrap',
           \ ])
   endif
@@ -459,7 +459,7 @@ function! gnosis_search#run_legacy(...) abort
   if empty(l:root) || !isdirectory(l:root)
     let l:root = getcwd()
   endif
-  let l:raw = systemlist('python3 ' . shellescape(l:idx) . ' ' . shellescape(l:root))
+  let l:raw = systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
   let s:cands = []
   for l:ln in l:raw
     let l:f = split(l:ln, "\t", 1)
@@ -734,7 +734,7 @@ function! s:tui_run() abort
     return
   endif
   let l:tmpfile = tempname()
-  let l:cmd = 'python3 ' . shellescape(l:script) . ' ' . shellescape(getcwd())
+  let l:cmd = gnosis#python_cmd() . ' ' . shellescape(l:script) . ' ' . shellescape(getcwd())
         \ . ' ' . shellescape(l:tmpfile)
   call term_start(['/bin/bash', '-c', l:cmd], {
         \ 'term_finish': 'close',

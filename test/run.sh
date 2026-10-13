@@ -64,3 +64,6 @@ sh "$REPO/test/vault_settings_net.sh"
 
 # Vim の起動画面（pty）
 sh "$REPO/test/start_screen_net.sh"
+
+# インストーラー（一時 HOME・空白/日本語/' を含むパス・ふだんの Vim は不変）
+sh "$REPO/test/install_net.sh"

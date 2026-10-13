@@ -243,6 +243,14 @@ function! s:open_with_default_app(path) abort
     return
   endif
 
+  if has('win32')
+    call s:spawn(['cmd.exe', '/C', 'start', '', l:path])
+    return
+  endif
+  if has('mac') || has('macunix')
+    call s:spawn(['open', l:path])
+    return
+  endif
   if executable('xdg-open')
     call s:spawn(['xdg-open', l:path])
   elseif executable('gio')
