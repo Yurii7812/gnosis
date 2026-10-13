@@ -409,6 +409,13 @@ def test_diary_register_and_keyword() -> None:
         check(pp._find_note_by_fm(root, "paper_diary_year", "2026") is None, "同じ年だけなら年グループは作られない")
         fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
         check(fi.count(f"[diary]({group.name})") == 1, f"Folgezettel-Index に diary（日記一覧）が 1 つ並ぶ: {fi}")
+        body_lines = gtext.split("---\n", 2)[2].rstrip("\n").split("\n")
+        check(body_lines[0] == "# 紙の日記" and body_lines[1] == "" and body_lines[2].startswith("[2026-")
+              and "" not in body_lines[2:] and body_lines[body_lines.index("### Context") - 1].startswith("[2026-"),
+              f"日記グループは 見出し・空行 1 つ・リンクの並び・### Context の順で、リンクと ### Context の間に空行がない: {body_lines}")
+        idx_lines = idx.read_text(encoding="utf-8").split("\n")
+        at = idx_lines.index("[日記](" + group.name + ")")
+        check(idx_lines[at + 1].startswith("### "), f"Index の「日記」と ### の間にも空行がない: {idx_lines[at:at+2]}")
         m10 = pp._find_note_by_fm(root, "paper_diary_month", "2026-10")
         mtext = m10.read_text(encoding="utf-8")
         check("title: 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")

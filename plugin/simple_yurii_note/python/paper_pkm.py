@@ -228,6 +228,36 @@ def read_note(path: Path) -> tuple[list[str], list[str]]:
     return parse_note(path.read_text(encoding="utf-8"))
 
 
+_LINK_ONLY_RE = re.compile(r"^\s*\[[^\]]*\]\([^)]*\)\s*$")
+
+
+def _tidy_generated(lines: list[str]) -> list[str]:
+    """生成ノートの本文の空行を整える:
+    - 連続した空行は 1 つにする。
+    - リンクだけの行と行のあいだの空行は取る（リンクの並びに空行を入れない）。
+    - 節の見出し（`### Context` など）の直前の空行は、直前がリンクの行のときは取る。
+    - 見出し `# …` の直後がリンクの行なら、空行を 1 つ挟む。
+    文章・画像の前後の空行は残す。"""
+    out: list[str] = []
+    for i, ln in enumerate(lines):
+        if ln.strip() == "":
+            if out and out[-1].strip() == "":
+                continue  # 連続した空行
+            nxt = next((x for x in lines[i + 1:] if x.strip()), None)
+            prev = next((x for x in reversed(out) if x.strip()), None)
+            if prev is not None and nxt is not None and _LINK_ONLY_RE.match(prev) and (
+                    _LINK_ONLY_RE.match(nxt) or _is_section_head(nxt)):
+                continue
+        out.append(ln)
+    # 見出し `# …` の直後がリンクの行なら、空行を 1 つ挟む
+    res: list[str] = []
+    for i, ln in enumerate(out):
+        res.append(ln)
+        if ln.startswith("# ") and i + 1 < len(out) and _LINK_ONLY_RE.match(out[i + 1]):
+            res.append("")
+    return res
+
+
 def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     """紙PKMの自動生成ノートの本文を、手で書いた内容を消さずに作る。
 
@@ -265,10 +295,11 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     if head_add:
         p = next((k for k, ln in enumerate(out) if _is_section_head(ln)), len(out))
         ins = list(head_add)
-        if p > 0 and out[p - 1].strip():
+        # 直前が文章などのときだけ空行を挟む（リンクの並びの続きや見出しの直後には挟まない）。
+        # 節の見出しの直前にも空行は足さない（リンクと `### Context` をくっつける）。
+        prev = out[p - 1] if p > 0 else ""
+        if prev.strip() and not _LINK_ONLY_RE.match(prev) and not prev.startswith("# ") and not ins[0].startswith("# "):
             ins.insert(0, "")
-        if p < len(out) and _is_section_head(out[p]):
-            ins.append("")
         out[p:p] = ins
 
     # 2) Parent のリンク: 無いものだけを、Parent の節の最後へ足す（節が無ければ作る）
@@ -290,7 +321,7 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
             while last > p + 1 and not out[last - 1].strip():
                 last -= 1
             out[last:last] = parent_links
-    return out
+    return _tidy_generated(out)
 
 
 def write_note(path: Path, fm: list[str], body: list[str]) -> None:
@@ -874,24 +905,6 @@ def build_diary_hierarchy(root: Path, diaries: dict[str, Path]) -> tuple[list[Pa
     return top, strip
 
 
-_LINK_ONLY_RE = re.compile(r"^\s*\[[^\]]*\]\([^)]*\)\s*$")
-
-
-def _remove_blank_between_links(lines: list[str]) -> list[str]:
-    """リンクだけの行と行のあいだにある空行を取り除く（Paper-Zettelkasten-Index の
-    リンクの並びに空行を入れない。見出し `# …` の下の空行や、節の前後は触らない）。"""
-    out: list[str] = []
-    n = len(lines)
-    for i, ln in enumerate(lines):
-        if ln.strip() == "":
-            prev = next((x for x in reversed(out) if x.strip()), None)
-            nxt = next((x for x in lines[i + 1:] if x.strip()), None)
-            if prev is not None and nxt is not None and _LINK_ONLY_RE.match(prev) and _LINK_ONLY_RE.match(nxt):
-                continue
-        out.append(ln)
-    return out
-
-
 def regen(root: Path, do_sync: bool = True) -> bool:
     """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。"""
     root = Path(root).resolve()
@@ -981,6 +994,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
         fm, old_group_body = read_note(group_path)
+        if group_title != display:
+            old_group_body = [f"# {group_title}" if ln.strip() == f"# {display}" else ln for ln in old_group_body]
         if old_group_body_extra:
             def _is_diary_link(ln: str, base=group_path.parent) -> bool:
                 m = re.search(r"\]\(([^)#]+)", ln)
@@ -1014,7 +1029,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     ]
     # キーワードリンクは Folgezettel-Index の直後にそのまま続ける（間に空行を入れない）
     body += inner
-    write_note(index_path, fm, _remove_blank_between_links(merge_note_body(old_index_body, body)))
+    write_note(index_path, fm, merge_note_body(old_index_body, body))
 
     # --- Folgezettel-Index（最上位IDだけ。各リンクは専用ノート folgezettel-Index-N#N） ---
     folge_index = root / FOLGE_INDEX
