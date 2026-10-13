@@ -6,6 +6,9 @@ set -e
 TMPDIR=${TMPDIR:-$HOME/Desktop/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
+# Gnosis ホーム（vault の登録簿など）も試験用の一時フォルダにする（本物の登録簿に触らない）
+GNOSIS_HOME=${GNOSIS_HOME:-$(mktemp -d)}
+export GNOSIS_HOME
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 GOLDEN="$REPO/test/api_public.txt"
 OUT=$(mktemp)
@@ -14,11 +17,11 @@ trap 'rm -f "$OUT" "$ERR"' EXIT
 
 python3 "$REPO/test/vim_static_check.py"
 python3 "$REPO/test/check_guide.py"
-python3 "$REPO/plugin/simple_yurii_note/python/test_sort_yomi.py"
-python3 "$REPO/plugin/simple_yurii_note/python/test_paper_pkm.py"
+python3 "$REPO/python/test_sort_yomi.py"
+python3 "$REPO/python/test_paper_pkm.py"
 
-timeout 60 vim -u "$REPO/vimrc_simple-yurii-note" -es \
-  -c "let g:simple_yurii_note_api_out='$OUT'" \
+timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
+  -c "let g:gnosis_api_out='$OUT'" \
   -c "source $REPO/test/vim_api_check.vim" \
   -c 'qa!' </dev/null 2>"$ERR" || true
 
@@ -45,7 +48,10 @@ sh "$REPO/test/autosave_net.sh"
 sh "$REPO/test/sort_yomi_net.sh"
 
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
-if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/plugin/simple_yurii_note/python/test_folgezettel_scan_diary.py"; fi
+if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/test_folgezettel_scan_diary.py"; fi
 
 # 紙の日記（題がデジタル日記と同じ形）を \d の機能が拾わない
 sh "$REPO/test/diary_paper_net.sh"
+
+# 同期の冪等性（試験用の小さな vault）
+sh "$REPO/test/sync_net.sh"

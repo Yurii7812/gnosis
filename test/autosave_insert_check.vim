@@ -3,10 +3,10 @@
 " -es では startinsert が維持されないため、この項目だけ pty で走らせる。
 set noswapfile
 let s:dir = $AUTOSAVE_WORK . '/vault'
-let g:simple_yurii_note_root = s:dir
-let g:simple_yurii_note_autosync = 0
-let g:simple_yurii_note_open_index_on_startup = 0
-let g:simple_yurii_note_autosave_delay = 300
+let g:gnosis_root = s:dir
+let g:gnosis_autosync = 0
+let g:gnosis_open_index_on_startup = 0
+let g:gnosis_autosave_delay = 300
 
 function! s:Tick() abort
   call writefile([printf('mode=%s modified=%d line=%s', mode(), &modified,

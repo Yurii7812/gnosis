@@ -16,13 +16,13 @@ printf -- "---\ntime: 2026-10-13 12:00:00\ntitle: 日記\nattribute: group\n---\
 printf -- "---\ntime: 2026-10-01 00:00:00\ntitle: 2026-10\nattribute: group\n---\n\n# 2026-10\n\n[2026-10-13-TU](digital.md)\n" > "$TMP/digital-month.md"
 cat > "$TMP/t.vim" <<EOF
 set nocp
-let g:simple_yurii_note_skip_interactive_mount=1
-set rtp^=$REPO/plugin/simple_yurii_note
-runtime autoload/simple_yurii_note.vim
+let g:gnosis_skip_interactive_mount=1
+set rtp^=$REPO
+runtime autoload/gnosis.vim
 redir => sn | silent scriptnames | redir END
 let sid = ''
 for l in split(sn, "\\n")
-  if l =~ 'autoload/simple_yurii_note.vim' | let sid = matchstr(l, '^\\s*\\zs\\d\\+') | endif
+  if l =~ 'autoload/gnosis.vim' | let sid = matchstr(l, '^\\s*\\zs\\d\\+') | endif
 endfor
 let notes = function('<SNR>'.sid.'_diary_scan')('$TMP')
 let found = function('<SNR>'.sid.'_diary_find')('$TMP', '2026-10-13', {'days': {}, 'notes': {}}, notes)

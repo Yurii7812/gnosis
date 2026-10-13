@@ -1,0 +1,33 @@
+{
+  "name": "simple-yurii-note-app",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Gnosis をマークダウンビューアの見た目で使うアプリ（本物の Vim を中で動かす・Electron）",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "app": "electron .",
+    "build": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --log-level=warning",
+    "watch": "esbuild src/main.js --bundle --format=iife --target=chrome100 --outfile=bundle.js --watch",
+    "test": "node test/view_swap.mjs && node test/gui_e2e.mjs",
+    "rebuild:pty": "electron-rebuild -f -w node-pty",
+    "app:win": "electron ."
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.35.0",
+    "@lezer/highlight": "^1.2.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "esbuild": "^0.24.2",
+    "@electron/rebuild": "^4.2.1"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
+  }
+}

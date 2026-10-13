@@ -33,7 +33,7 @@ printf '#!/bin/sh\necho "$@" >> "%s"\n' "$WORK/xdg_called.txt" > "$WORK/bin/xdg-
 chmod +x "$WORK/bin/xdg-open"
 
 AUTOSAVE_WORK="$WORK" PATH="$WORK/bin:$PATH" \
-  timeout 60 vim -u "$REPO/vimrc_simple-yurii-note" -N -es \
+  timeout 60 vim -u "$REPO/vimrc_gnosis" -N -es \
   -S "$REPO/test/autosave_check.vim" || true
 
 fail() { echo "NG: $1" >&2; exit 1; }
@@ -66,10 +66,10 @@ set nocompatible
 set noswapfile
 execute 'set runtimepath^=' . fnameescape('$REPO')
 execute 'set runtimepath^=' . fnameescape('$WORK')
-let g:simple_yurii_note_open_index_on_startup = 0
-let g:simple_yurii_note_autosync = 0
-let g:simple_yurii_note_root = '$VAULT'
-let g:simple_yurii_note_autosave_delay = 300
+let g:gnosis_open_index_on_startup = 0
+let g:gnosis_autosync = 0
+let g:gnosis_root = '$VAULT'
+let g:gnosis_autosave_delay = 300
 EOF
   FIFO="$WORK/fifo"
   mkfifo "$FIFO"

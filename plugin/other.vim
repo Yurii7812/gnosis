@@ -46,15 +46,15 @@ set shiftwidth=2
 " Vim の +/* レジスタ（XWayland 側）は使わない。大きなヤンクを XWayland の
 " クリップボードブリッジに通すと KWin / Klipper ごと固まることがあるため。
 " システムクリップボードとの受け渡しは wl-copy / wl-paste（SYN 連携）で行う。
-if exists('g:yurii_wsl_use_system_clipboard') && g:yurii_wsl_use_system_clipboard
+if exists('g:gnosis_wsl_use_system_clipboard') && g:gnosis_wsl_use_system_clipboard
   set clipboard=unnamedplus
 else
   set clipboard=
 endif
 
-inoremap <C-v> <C-r><C-o>=simple_yurii_note#clipboard_paste()<CR>
-vnoremap <C-v> "_d<Cmd>call simple_yurii_note#paste_clipboard('P')<CR>
-nnoremap <C-v> <Cmd>call simple_yurii_note#paste_clipboard('p')<CR>
+inoremap <C-v> <C-r><C-o>=gnosis#clipboard_paste()<CR>
+vnoremap <C-v> "_d<Cmd>call gnosis#paste_clipboard('P')<CR>
+nnoremap <C-v> <Cmd>call gnosis#paste_clipboard('p')<CR>
 vnoremap <C-c> y
 
 
@@ -63,8 +63,8 @@ vnoremap <C-c> y
 " =========================================================
 if has('wsl')
   " Windows クリップボード同期は Insert 中の体感遅延を起こしやすいので既定OFF
-  let g:yurii_wsl_use_system_clipboard = get(g:, 'yurii_wsl_use_system_clipboard', 0)
-  if !g:yurii_wsl_use_system_clipboard
+  let g:gnosis_wsl_use_system_clipboard = get(g:, 'gnosis_wsl_use_system_clipboard', 0)
+  if !g:gnosis_wsl_use_system_clipboard
     set clipboard=
   endif
 
@@ -103,18 +103,17 @@ inoremap <silent> <Down> <Cmd>call <SID>insert_screen_move(1)<CR>
 " 設定編集
 " =========================================================
 " 固定パスに依存させない。必要な場合だけ .vimrc 側で
-"   let g:simple_yurii_note_vimrc = expand('~/.vimrc')
+"   let g:gnosis_vimrc = expand('~/.vimrc')
 " のように指定する。
-if exists('g:simple_yurii_note_vimrc') && !empty(trim(get(g:, "simple_yurii_note_vimrc", "")))
-  execute "nnoremap <silent> <leader>ev :edit " . fnameescape(expand(g:simple_yurii_note_vimrc)) . "<CR>"
-  execute "nnoremap <silent> <leader>sv :source " . fnameescape(expand(g:simple_yurii_note_vimrc)) . "<CR>"
+if exists('g:gnosis_vimrc') && !empty(trim(get(g:, "gnosis_vimrc", "")))
+  execute "nnoremap <silent> <leader>ev :edit " . fnameescape(expand(g:gnosis_vimrc)) . "<CR>"
+  execute "nnoremap <silent> <leader>sv :source " . fnameescape(expand(g:gnosis_vimrc)) . "<CR>"
 endif
 
 " =========================================================
-" simple_yurii_note 見た目設定
+" Gnosis 見た目設定
 " =========================================================
-let g:simple_yurii_note_link_color_gui = '#66CCFF'
-let g:simple_yurii_note_link_color_cterm = '81'
+" リンクの色はテーマ（autoload/gnosis/theme.vim）が g:gnosis_link_color_* に入れる。
 
 " =========================================================
 " 自作プラグイン
@@ -174,7 +173,7 @@ function! s:activate_app_window(base) abort
   if empty(a:base) || !executable('qdbus6') || $XDG_SESSION_TYPE !=# 'wayland'
     return
   endif
-  let l:dir = expand('~/.vim/simple_yurii_note')
+  let l:dir = gnosis#home#path('state')
   if !isdirectory(l:dir)
     call mkdir(l:dir, 'p')
   endif
@@ -192,7 +191,7 @@ function! s:activate_app_window(base) abort
         \ '  }',
         \ '}',
         \ ], l:js)
-  let l:name = 'yurii_activate'
+  let l:name = 'gnosis_activate'
   call system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript ' . shellescape(l:js) . ' ' . l:name . ' >/dev/null 2>&1')
   call system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1')
   if has('timers')
@@ -262,7 +261,7 @@ endfunction
 " 既定アプリ（.md → ブラウザ、.csv → LibreOffice 等）は disk を読むので、
 " 未保存の変更があれば先に書き出してから開く。
 function! s:open_current_note() abort
-  call simple_yurii_note#save_current_note()
+  call gnosis#save_current_note()
   call s:open_with_default_app(expand('%:p'))
 endfunction
 
@@ -282,11 +281,11 @@ set autowriteall
 set nobackup
 set nowritebackup
 
-" indexを最初から開く（不要なら let g:simple_yurii_note_open_index_on_startup = 0）
-if get(g:, 'simple_yurii_note_open_index_on_startup', 1)
-  augroup simple_yurii_note_other_startup_index
+" indexを最初から開く（不要なら let g:gnosis_open_index_on_startup = 0）
+if get(g:, 'gnosis_open_index_on_startup', 1)
+  augroup gnosis_other_startup_index
     autocmd!
-    autocmd VimEnter * call timer_start(0, {-> execute('YuriiIndex')})
+    autocmd VimEnter * call timer_start(0, {-> execute('GnosisIndex')})
   augroup END
 endif
 
@@ -302,11 +301,17 @@ autocmd FileType markdown highlight link htmlError Normal
 " Rg検索のショートカット
 nnoremap rg :Rg<CR>
 
-let g:simple_yurii_note_link_color_gui = '#2F6690'
-let g:simple_yurii_note_link_color_cterm = '24'
-
-set background=light
-colorscheme kalisi
+" 配色: Gnosis のランチャー（vimrc_gnosis）で起動したときは、vault の設定のテーマ
+" （gnosis#theme#apply）が決める。旧 simple-yurii-note の vimrc で起動したときだけ、
+" 従来どおり kalisi を使う（無ければ Vim の既定のまま）。
+if !get(g:, 'gnosis_managed', 0)
+  if !exists('g:gnosis_link_color_gui')
+    let g:gnosis_link_color_gui = '#2F6690'
+    let g:gnosis_link_color_cterm = '24'
+  endif
+  set background=light
+  silent! colorscheme kalisi
+endif
 
 " !系コマンドを常にsilentで実行
 cmap <expr> <CR> getcmdtype() == ':' && getcmdline() =~ '^\s*!' ? '<C-\>e"silent " . getcmdline()<CR><CR>' : '<CR>'
@@ -330,14 +335,14 @@ endfunction
 " :! 系コマンドは silent 実行後に画面が再描画されないことがあるため、
 " 端末復帰後に強制 redraw を既定で行います。特に :!rm % のように現在の
 " ファイルを外部コマンドで削除した場合、端末の内容が黒いまま残るのを防ぎます。
-" ちらつきが気になる場合は g:yurii_redraw_after_silent_shell = 0 で無効化できます。
-if get(g:, 'yurii_redraw_after_silent_shell', 1)
-  augroup yurii_shell_redraw
+" ちらつきが気になる場合は g:gnosis_redraw_after_silent_shell = 0 で無効化できます。
+if get(g:, 'gnosis_redraw_after_silent_shell', 1)
+  augroup gnosis_shell_redraw
     autocmd!
     autocmd ShellCmdPost * call s:ScheduleRedrawAfterShell()
   augroup END
-elseif get(g:, 'yurii_force_redraw_after_shell', 0)
-  augroup yurii_shell_redraw
+elseif get(g:, 'gnosis_force_redraw_after_shell', 0)
+  augroup gnosis_shell_redraw
     autocmd!
     autocmd ShellCmdPost * redraw
   augroup END

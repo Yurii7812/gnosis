@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""操作ガイドの陳腐化チェック。
+"""操作ガイド（guide/ja.md・guide/en.md）の陳腐化チェック。
 
 1. plugin の nnoremap/xnoremap/vnoremap を全部拾い、s:guide_template() に
-   載っていなければ失敗（キーを足したらガイドも直せ）。
+   載っていなければ失敗（キーを足したらガイドも直せ）。日本語と英語は同じ行に同じキー。
 2. plugin の command! を全部拾い、s:guide_template() に載っていなければ失敗
    （コマンドを足したらガイドも直せ）。
 3. test/guide_keys.txt の必須トークンがガイドに無ければ失敗。
@@ -13,10 +13,10 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-AUTOLOAD = REPO / "plugin/simple_yurii_note/autoload/simple_yurii_note.vim"
+AUTOLOAD = REPO / "autoload/gnosis.vim"
 MAPPING_FILES = [
-    REPO / "plugin/simple_yurii_note/plugin/simple_yurii_note.vim",
-    REPO / "plugin/simple_yurii_search/plugin/simple_yurii_search.vim",
+    REPO / "plugin/gnosis.vim",
+    REPO / "plugin/gnosis_search.vim",
     REPO / "plugin/SetImageSize.vim",
     REPO / "plugin/other.vim",
 ]
@@ -27,16 +27,43 @@ MODIFIERS = {"<nowait>", "<silent>", "<buffer>", "<expr>", "<script>", "<unique>
 BANNED = ["yurii_pkm", "Child", "バックリンク", "タイトルだけ検索"]
 
 
+GUIDE_JA = REPO / "guide/ja.md"
+GUIDE_EN = REPO / "guide/en.md"
+
+
 def guide_source() -> str:
-    text = AUTOLOAD.read_text(encoding="utf-8")
-    m = re.search(r"function! s:guide_template\(\).*?\nendfunction", text, re.S)
-    if not m:
-        sys.exit("NG: s:guide_template() が見つからない")
-    return m.group(0)
+    return GUIDE_JA.read_text(encoding="utf-8")
+
+
+def code_spans(line: str) -> list:
+    return re.findall(r"`[^`]*`", line)
+
+
+def check_parallel() -> int:
+    """日本語と英語のガイドが同じ行に同じキー（ASCII のコード表記）を載せているか。"""
+    ja = GUIDE_JA.read_text(encoding="utf-8").split("\n")
+    en = GUIDE_EN.read_text(encoding="utf-8").split("\n")
+    ng = 0
+    if len(ja) != len(en):
+        print(f"NG: ガイドの行数が日本語 {len(ja)} / 英語 {len(en)} で違う", file=sys.stderr)
+        return 1
+    for i, (a, b) in enumerate(zip(ja, en), 1):
+        if (a.startswith("#") != b.startswith("#")) or (a.strip() == "") != (b.strip() == ""):
+            print(f"NG: guide {i} 行目の形（見出し・空行）が日本語と英語で違う", file=sys.stderr)
+            ng += 1
+        ca, cb = code_spans(a), code_spans(b)
+        if len(ca) != len(cb):
+            print(f"NG: guide {i} 行目のキーの数が違う: {ca} / {cb}", file=sys.stderr)
+            ng += 1
+            continue
+        if sorted(x for x in ca if x.isascii()) != sorted(x for x in cb if x in ca and x.isascii()):
+            print(f"NG: guide {i} 行目のキーが日本語と英語で違う: {ca} / {cb}", file=sys.stderr)
+            ng += 1
+    return ng
 
 
 def command_files() -> list:
-    files = []
+    files = [REPO / "vimrc_gnosis"]
     for path in (REPO / "plugin").glob("**/*.vim"):
         if "node_modules" in path.parts:
             continue
@@ -98,7 +125,12 @@ def main() -> int:
             print(f"NG: guide_keys.txt の {token} が操作ガイドに無い", file=sys.stderr)
             ng += 1
 
+    ng += check_parallel()
+
     for cmd in all_commands():
+        # 旧名 :Yurii* は、同じ名前の :Gnosis* の別名としてまとめて説明している
+        if cmd.startswith("Yurii") and re.search(r"(?<![\w:]):Gnosis" + re.escape(cmd[5:]) + r"(?![\w])", guide):
+            continue
         if not re.search(r"(?<![\w:]):" + re.escape(cmd) + r"(?![\w])", guide):
             print(f"NG: コマンド :{cmd} が操作ガイドに無い。guide_template を更新すること", file=sys.stderr)
             ng += 1

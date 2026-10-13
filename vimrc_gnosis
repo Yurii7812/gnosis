@@ -1,0 +1,134 @@
+" =========================================================
+" vimrc_gnosis — Gnosis 専用の Vim 設定
+"
+" 起動はランチャー（bin/gnosis）が行う:
+"   vim -u <Gnosis のフォルダ>/vimrc_gnosis
+"
+" この設定は、ふだんの Vim の設定（~/.vimrc・~/.vim・vimfiles・
+" ~/.vim/pack・init.vim）を読み込まず、変更もしない。使うのは次だけ:
+"   - Gnosis 本体（このファイルのあるフォルダ）
+"   - Gnosis 専用のプラグイン領域（<Gnosis ホーム>/plugins/*）
+"   - Gnosis 専用のテーマ領域（<Gnosis ホーム>/themes/*）
+"   - Vim 本体のランタイム（$VIMRUNTIME）と、OS 共通の vimfiles
+" Gnosis ホームは $GNOSIS_HOME、無ければ OS ごとの既定
+"   Linux   ~/.local/share/gnosis（$XDG_DATA_HOME/gnosis）
+"   macOS   ~/Library/Application Support/Gnosis
+"   Windows %APPDATA%\Gnosis
+" =========================================================
+
+set nocompatible
+let g:gnosis_managed = 1
+let g:gnosis_dir = expand('<sfile>:p:h')
+let g:gnosis_vimrc_path = expand('<sfile>:p')
+
+" ---------------------------------------------------------
+" ランタイムの分離（ふだんの ~/.vim / ~/vimfiles / pack を外す）
+" ---------------------------------------------------------
+let &runtimepath = join([g:gnosis_dir, $VIM . '/vimfiles', $VIMRUNTIME, $VIM . '/vimfiles/after', g:gnosis_dir . '/after'], ',')
+call gnosis#home#init()
+let &packpath = gnosis#home#path('pack')
+for s:dir in gnosis#home#plugin_dirs()
+  execute 'set runtimepath^=' . fnameescape(s:dir)
+  if isdirectory(s:dir . '/after')
+    execute 'set runtimepath+=' . fnameescape(s:dir . '/after')
+  endif
+endfor
+unlet! s:dir
+" fzf 本体（PATH に無ければ Gnosis のプラグイン領域の bin を使う）
+call gnosis#home#ensure_fzf_path()
+
+" 履歴（viminfo）は前回の vault の .state/viminfo（暗号化 vault でも中に入る）。
+" vault が決まるまでは Gnosis ホームの viminfo を使う。
+call gnosis#home#setup_viminfo()
+
+" 起動画面の配色（白背景・黒文字）。vault を開いたら、その vault の設定のテーマに切り替わる。
+set background=light
+" 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
+set t_ut=
+silent! colorscheme gnosis
+
+" =========================================================
+" fcitx の自動切り替え（Linux で fcitx5-remote / fcitx-remote があるときだけ）
+" 挿入モードを抜けたら日本語入力を OFF にする。無い環境では何もしない。
+" =========================================================
+if !exists('g:gnosis_fcitx_auto_switch')
+  let g:gnosis_fcitx_auto_switch = get(g:, 'yurii_fcitx_auto_switch', 1)
+endif
+if !exists('g:gnosis_fcitx_restore_previous_state')
+  let g:gnosis_fcitx_restore_previous_state = get(g:, 'yurii_fcitx_restore_previous_state', 0)
+endif
+let g:gnosis_fcitx_restore_on_insert = 0
+
+function! s:GnosisFcitxRemoteCmd() abort
+  if !empty(get(g:, 'gnosis_fcitx_remote_cmd', get(g:, 'yurii_fcitx_remote_cmd', '')))
+    return get(g:, 'gnosis_fcitx_remote_cmd', get(g:, 'yurii_fcitx_remote_cmd', ''))
+  endif
+  if has('win32') || has('mac')
+    return ''
+  endif
+  for l:c in ['fcitx5-remote', 'fcitx-remote']
+    if executable(l:c)
+      return l:c
+    endif
+  endfor
+  return ''
+endfunction
+
+function! s:GnosisFcitxState() abort
+  let l:cmd = s:GnosisFcitxRemoteCmd()
+  if empty(l:cmd)
+    return ''
+  endif
+  let l:state = substitute(system(l:cmd), '\n\+$', '', '')
+  return v:shell_error != 0 ? '' : l:state
+endfunction
+
+function! s:GnosisFcitxRun(arg) abort
+  let l:cmd = s:GnosisFcitxRemoteCmd()
+  if empty(l:cmd)
+    return
+  endif
+  if has('job')
+    silent! call job_start([l:cmd, a:arg], {'out_io': 'null', 'err_io': 'null'})
+  else
+    silent call system(l:cmd . ' ' . a:arg)
+  endif
+endfunction
+
+function! s:GnosisFcitxInsertLeave() abort
+  if !get(g:, 'gnosis_fcitx_auto_switch', 1)
+    return
+  endif
+  if get(g:, 'gnosis_fcitx_restore_previous_state', 0)
+    let g:gnosis_fcitx_restore_on_insert = (s:GnosisFcitxState() ==# '2')
+  else
+    let g:gnosis_fcitx_restore_on_insert = 0
+  endif
+  call s:GnosisFcitxRun('-c')
+endfunction
+
+function! s:GnosisFcitxInsertEnter() abort
+  if get(g:, 'gnosis_fcitx_auto_switch', 1) && get(g:, 'gnosis_fcitx_restore_on_insert', 0)
+    call s:GnosisFcitxRun('-o')
+    let g:gnosis_fcitx_restore_on_insert = 0
+  endif
+endfunction
+
+command! GnosisFcitxOff call s:GnosisFcitxRun('-c')
+command! GnosisFcitxOn call s:GnosisFcitxRun('-o')
+command! GnosisFcitxStatus echo s:GnosisFcitxState()
+
+augroup gnosis_fcitx_auto_switch
+  autocmd!
+  if exists('##InsertLeavePre')
+    autocmd InsertLeavePre * call s:GnosisFcitxInsertLeave()
+  else
+    autocmd InsertLeave * call s:GnosisFcitxInsertLeave()
+  endif
+  autocmd InsertEnter * call s:GnosisFcitxInsertEnter()
+augroup END
+
+" 利用者が Gnosis だけに足したい設定（任意）: <Gnosis ホーム>/vimrc.local
+if filereadable(gnosis#home#path('vimrc.local'))
+  execute 'source ' . fnameescape(gnosis#home#path('vimrc.local'))
+endif

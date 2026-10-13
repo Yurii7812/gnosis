@@ -25,11 +25,11 @@ attribute: group
 EOF
 cat > "$TMP/t.vim" <<EOF
 set nocp
-let g:simple_yurii_note_skip_interactive_mount=1
-set rtp^=$REPO/plugin/simple_yurii_note
-runtime plugin/simple_yurii_note.vim
+let g:gnosis_skip_interactive_mount=1
+set rtp^=$REPO
+runtime plugin/gnosis.vim
 edit $TMP/g.md
-call simple_yurii_note#sort_yomi()
+call gnosis#sort_yomi()
 call writefile(getline(1,'\$'), '$TMP/out.txt')
 qa!
 EOF

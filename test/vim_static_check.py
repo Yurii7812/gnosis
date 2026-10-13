@@ -2,7 +2,7 @@
 """Vim の関数参照が解決するかを静的に検査する（分割リファクタ用の網）。
 
 - `s:foo(` の参照は、**同じファイル内** に定義があること。
-- `simple_yurii_note#...(` の参照は、autoload/ 以下のどこかに定義があること
+- `gnosis#...(` の参照は、autoload/ 以下のどこかに定義があること
   （Vim の autoload は名前からファイルパスを決めるので、名前とファイルの対応も見る）。
 - どのファイルにも定義が無いのに呼ばれている関数を NG にする。
 
@@ -15,15 +15,15 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-AUTOLOAD_ROOT = REPO / "plugin" / "simple_yurii_note" / "autoload"
+AUTOLOAD_ROOT = REPO / "autoload"
 
 DEF_RE = re.compile(r"^\s*fu(?:nction)?!?\s+([A-Za-z0-9_:#]+)", re.M)
 S_CALL_RE = re.compile(r"\bs:([A-Za-z_][A-Za-z0-9_]*)\s*\(")
-NS_CALL_RE = re.compile(r"\b(simple_yurii_note#[A-Za-z0-9_#]+)\s*\(")
+NS_CALL_RE = re.compile(r"\b((?:gnosis|gnosis_search)#[A-Za-z0-9_#]+)\s*\(")
 
 
 def vim_files() -> list[Path]:
-    return sorted(p for p in REPO.rglob("*.vim") if ".git" not in p.parts)
+    return sorted(p for p in REPO.rglob("*.vim") if ".git" not in p.parts and "node_modules" not in p.parts)
 
 
 def defined_in(text: str) -> set[str]:
@@ -52,15 +52,12 @@ def main() -> int:
                 print(f"NG {p.relative_to(REPO)}: {name}() の定義がどこにも無い")
                 ng += 1
 
-    # autoload 名前空間とファイルパスの対応（simple_yurii_note#a#b -> autoload/simple_yurii_note/a.vim）
+    # autoload 名前空間とファイルパスの対応（gnosis#a#b -> autoload/gnosis/a.vim）
     for name in sorted(all_defs):
-        if not name.startswith("simple_yurii_note#"):
+        if "#" not in name or ":" in name:
             continue
         parts = name.split("#")
-        if len(parts) == 2:
-            expected = AUTOLOAD_ROOT / "simple_yurii_note.vim"
-        else:
-            expected = AUTOLOAD_ROOT / ("/".join(parts[1:-1]) + ".vim")
+        expected = AUTOLOAD_ROOT / ("/".join(parts[:-1]) + ".vim")
         if not expected.exists():
             print(f"NG: {name}() は {expected.relative_to(REPO)} に無いと autoload できない")
             ng += 1

@@ -1,10 +1,14 @@
-# s:guide_template() に必ず含めるトークン（1行1つ、# はコメント）。
+# 操作ガイド（guide/ja.md）に必ず含めるトークン（1行1つ、# はコメント）。
 # マッピング由来のキーは check_guide.py が plugin から自動照合するので、
 # ここには位置キー・コマンド・概念など「マッピングに無いが載せたいもの」を書く。
 h
 Enter
 o
-:LinkPick
+`g`=カーソル下のリンク 1 本を新しいグループへ
+`n`=表示名を入力して本文の最後へ
+`Enter`=本文の最後 / `t`=見出しを選んでその節の最後 / `o`=入れない
+空 `Enter` = リンク先ノートのタイトル
+:GnosisLinkPick
 :Rg
 :UpdateMD
 :UpdateAll
@@ -14,5 +18,9 @@ BackLink
 語:;
 語;
 語::
-:YuriiPaperIndex
-:YuriiScan
+:GnosisPaperIndex
+:GnosisScan
+:GnosisSettings
+:GnosisVaults
+`.gnosis/settings.json`
+最後の「空行で区切られたブロック」だけ
