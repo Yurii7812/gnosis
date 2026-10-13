@@ -11813,6 +11813,58 @@ function! s:temp_passfile(pw) abort
   return l:pf
 endfunction
 
+" vault をアンマウントして、実際に切れるまで待つ。切れたら 1、切れなければ 0。
+" 終了時に遅延アンマウント（-z）だけを投げると、切れかけのマウントが残って、すぐ開き直したときに
+" マウントに失敗する。そこで: 1) 普通のアンマウントを、使用中なら少し待って 10 回までやり直す
+" 2) それでも切れなければ最後の手段で遅延アンマウント 3) 実際に切れるまで最大 3 秒待つ。
+function! s:unmount_vault(root) abort
+  let l:r = shellescape(a:root)
+  for l:i in range(10)
+    call system('fusermount3 -u ' . l:r . ' 2>&1')
+    call s:mount_cache_reset()
+    if simple_yurii_note#vault_mounted(a:root, 1) != 1
+      return 1
+    endif
+    execute 'sleep 200m'
+  endfor
+  call system('fusermount3 -u -z ' . l:r . ' 2>&1')
+  for l:i in range(15)
+    call s:mount_cache_reset()
+    if simple_yurii_note#vault_mounted(a:root, 1) != 1
+      return 1
+    endif
+    execute 'sleep 200m'
+  endfor
+  return 0
+endfunction
+
+" 前回の切れかけ／壊れたマウント（デーモンが死んで stat が「Transport endpoint is not connected」に
+" なるなど）が残っていたら、マウントする前に片付ける。マウントポイントが /proc/mounts にあるのに
+" stat できないときだけ動く。普通の状態（ロック中・マウント中）には何もしない。
+function! s:release_stale_mount(root) abort
+  if empty(a:root) || !filereadable('/proc/mounts')
+    return
+  endif
+  let l:rootp = substitute(fnamemodify(a:root, ':p'), s:sep() . '\+$', '', '')
+  let l:listed = !empty(filter(readfile('/proc/mounts'), {_, l -> get(split(l), 1, '') ==# l:rootp}))
+  if !l:listed
+    return
+  endif
+  call system('stat ' . shellescape(l:rootp) . ' 2>&1')
+  if v:shell_error == 0
+    return
+  endif
+  call system('fusermount3 -u -z ' . shellescape(l:rootp) . ' 2>&1')
+  for l:i in range(15)
+    call system('stat ' . shellescape(l:rootp) . ' 2>&1')
+    if v:shell_error == 0
+      break
+    endif
+    execute 'sleep 200m'
+  endfor
+  call s:mount_cache_reset()
+endfunction
+
 " パスワードを聞いてマウント（成功=1、空入力/3回失敗=0）
 " マウント前に mountpoint 内のゴミ（.state / .undo / hacks 等）を掃除する。
 " gocryptfs は「空でないマウントポイント」を拒否するため、起動時の vimrc や
@@ -11823,6 +11875,7 @@ endfunction
 let s:mounted_by_me = 0
 
 function! s:mount_by_password(cipher, root) abort
+  call s:release_stale_mount(a:root)
   call s:clear_mountpoint_garbage(a:root)
   for l:i in range(3)
     let l:pw = inputsecret('vault password: ')
@@ -11888,6 +11941,7 @@ function! simple_yurii_note#maybe_mount_interactive() abort
   if !filereadable(l:cipher . s:sep() . 'gocryptfs.conf')
     return
   endif
+  call s:release_stale_mount(l:root)
   if !isdirectory(l:root)
     " mountpoint が無いと gocryptfs はマウントできない。yurii-note は
     " 死んだ root.txt が残っているだけかもしれないので、聞かずに止める。
@@ -12157,7 +12211,7 @@ function! simple_yurii_note#quit_unmount() abort
     return
   endif
   call s:cd_out_of_vault(l:root)
-  call system('fusermount3 -u -z ' . shellescape(l:root))
+  call s:unmount_vault(l:root)
   call s:mount_cache_reset()
 endfunction
 
