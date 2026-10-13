@@ -109,15 +109,15 @@ function! gnosis#theme#palette(s) abort
   return l:p
 endfunction
 
-" 起動画面の配色（白背景・黒文字）
+" 起動画面は chnoubis3.sh の10番（夜空×水色）。色は builtin.json の start から読む。
 function! gnosis#theme#apply_start() abort
   " 起動画面の前の配色（旧 vimrc の kalisi など）を覚えておく（vault に設定が無いときに戻す）
   if get(g:, 'colors_name', '') !=# 'gnosis' && !exists('s:before_start')
     let s:before_start = {'name': get(g:, 'colors_name', ''), 'bg': &background}
   endif
   let g:gnosis_palette = copy(gnosis#settings#builtin_palettes().start)
-  let g:gnosis_palette.base = 'light'
-  set background=light
+  let g:gnosis_palette.base = get(g:gnosis_palette, 'base', 'dark')
+  let &background = g:gnosis_palette.base
   call s:load_gnosis_colors()
   let g:gnosis_theme_state = {'kind': 'start', 'palette': g:gnosis_palette}
 endfunction
