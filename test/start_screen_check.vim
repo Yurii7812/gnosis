@@ -48,4 +48,7 @@ function! s:second(t) abort
   call writefile(s:res, s:w . '/result.txt')
   qa!
 endfunction
+" 前回の vault が plugin 初期化中に g:gnosis_root に復元された状況を再現。
+" この状態でもファイル指定なしの Gnosis 起動は必ず Chnoubis メニューから始める。
+let g:gnosis_root = $START_VAULT
 call timer_start(1200, function('s:first'))
