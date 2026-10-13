@@ -16,7 +16,7 @@
   キーワードリンクを生成する。旧タイムスタンプ名の Index は regen / create が
   `Paper-Zettelkasten-Index.md` へ改名して移行する（他ノートからのリンクも書き換える）。**複数IDのキーワードはグループノート**
   （`attribute: group`、中に各IDノートへのリンク）、単一IDは直接リンク。
-- `Folgezettel-Index.md`: 存在する全IDを自然順で並べた一覧。
+- `Folgezettel-Index.md`: 存在する全IDを自然順で並べた一覧。紙の日記があれば末尾に `diary`（日記一覧）が並ぶ。
 - **紙の日記**: `\\F` の GUI で「日記として登録」した画像は、日記が書かれた日付ごとに 1 ノート
   （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD-曜日2文字`（例 2026-10-13-TU。曜日は日付から自動計算。デジタル日記と同じ形）にまとめる。
   複数ページは同じノートに画像を並べる。ノートの `time:` はスキャンした日時で、日記の日付とは別。
@@ -80,6 +80,7 @@ FM_PAPER_DIARY_MONTH = "paper_diary_month"  # 紙の日記の月グループのf
 FM_PAPER_DIARY_YEAR = "paper_diary_year"    # 紙の日記の年グループのfm（値=YYYY。年が変わってから作る）
 FM_PAPER_DIARY = "paper_diary"          # 紙の日記ノートのfm（値=日記が書かれた日付 YYYY-MM-DD）
 DIARY_KEYWORD = "日記"                   # Paper-Zettelkasten-Index のキーワード表示名
+DIARY_FOLGE_LABEL = "diary"              # Folgezettel-Index に並ぶ日記一覧へのリンクの表示名
 DIARY_GROUP_TITLE = "紙の日記"           # そのグループノートの題（デジタル日記のグループ「日記」と区別する）
 DIARY_IMAGE_PREFIX = "paper-diary-"
 FM_PAPER_TOPIC = "paper_topic"          # トピック別Indexノートのfm（値=起点ID）
@@ -873,6 +874,24 @@ def build_diary_hierarchy(root: Path, diaries: dict[str, Path]) -> tuple[list[Pa
     return top, strip
 
 
+_LINK_ONLY_RE = re.compile(r"^\s*\[[^\]]*\]\([^)]*\)\s*$")
+
+
+def _remove_blank_between_links(lines: list[str]) -> list[str]:
+    """リンクだけの行と行のあいだにある空行を取り除く（Paper-Zettelkasten-Index の
+    リンクの並びに空行を入れない。見出し `# …` の下の空行や、節の前後は触らない）。"""
+    out: list[str] = []
+    n = len(lines)
+    for i, ln in enumerate(lines):
+        if ln.strip() == "":
+            prev = next((x for x in reversed(out) if x.strip()), None)
+            nxt = next((x for x in lines[i + 1:] if x.strip()), None)
+            if prev is not None and nxt is not None and _LINK_ONLY_RE.match(prev) and _LINK_ONLY_RE.match(nxt):
+                continue
+        out.append(ln)
+    return out
+
+
 def regen(root: Path, do_sync: bool = True) -> bool:
     """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。"""
     root = Path(root).resolve()
@@ -993,10 +1012,9 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         f"[{INDEX_WRITE[:-3]}]({INDEX_WRITE})",
         f"[{FOLGE_INDEX[:-3]}]({FOLGE_INDEX})",
     ]
-    if inner:
-        # キーワードリンクがあるときだけ Folgezettel-Index との間に空行を置く
-        body += ["", *inner]
-    write_note(index_path, fm, merge_note_body(old_index_body, body))
+    # キーワードリンクは Folgezettel-Index の直後にそのまま続ける（間に空行を入れない）
+    body += inner
+    write_note(index_path, fm, _remove_blank_between_links(merge_note_body(old_index_body, body)))
 
     # --- Folgezettel-Index（最上位IDだけ。各リンクは専用ノート folgezettel-Index-N#N） ---
     folge_index = root / FOLGE_INDEX
@@ -1004,6 +1022,11 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         markdown_link(fid, folge_index_path(root, fid), folge_index.parent, frag=fid)
         for fid in top_level_ids(folge)
     ]
+    # 紙の日記があれば、番号の一覧の末尾に「diary」を並べる: Folgezettel-Index → diary → 月 → その月のノート全部
+    # （日記が 2 つ以上の年にまたがったあとは diary → 年 → 月グループのリンク → その月のノート一覧）
+    diary_top = group_paths.get(DIARY_KEYWORD) if diaries else None
+    if diary_top is not None:
+        inner.append(markdown_link(DIARY_FOLGE_LABEL, diary_top, folge_index.parent))
     if not folge_index.is_file():
         fm_fi = [_time_line(), f"title: {FOLGE_INDEX[:-3]}"]
         write_note(folge_index, fm_fi, [])

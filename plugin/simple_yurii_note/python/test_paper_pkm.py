@@ -407,6 +407,8 @@ def test_diary_register_and_keyword() -> None:
         check("[2026-09](" in gtext and "[2026-10](" in gtext and gtext.index("[2026-09](") < gtext.index("[2026-10](")
               and "2026-10-07-WE" not in gtext, "「日記」の直下には月グループが古い順に並ぶ（年が変わるまで年グループは作らない）")
         check(pp._find_note_by_fm(root, "paper_diary_year", "2026") is None, "同じ年だけなら年グループは作られない")
+        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        check(fi.count(f"[diary]({group.name})") == 1, f"Folgezettel-Index に diary（日記一覧）が 1 つ並ぶ: {fi}")
         m10 = pp._find_note_by_fm(root, "paper_diary_month", "2026-10")
         mtext = m10.read_text(encoding="utf-8")
         check("title: 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
@@ -443,6 +445,8 @@ def test_diary_register_and_keyword() -> None:
         check("[2025](" in gtext and "[2026](" in gtext and "[2026-09](" not in gtext and gtext.index("[2025](") < gtext.index("[2026](")
               and gtext.count("[2025](") == 1, f"「日記」の直下は年グループ（古い順・重複なし）に替わる: {gtext}")
         check("[日記](" in idx.read_text(encoding="utf-8") and idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
+        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        check(fi.count(f"[diary]({group.name})") == 1, "年をまたいだあとも Folgezettel-Index の diary は 1 つ（年グループへ辿れる）")
 
 
 def test_diary_keyword_merges_with_index_write_entry() -> None:
@@ -476,6 +480,7 @@ def test_diary_errors_and_scan_unchanged() -> None:
         moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
         pp.regen(root)
         check("[日記](" not in idx.read_text(encoding="utf-8"), "日記を登録していなければ「日記」は出ない")
+        check("[diary](" not in (root / "Folgezettel-Index.md").read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
         check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"1", "2"}, "通常の ID 登録は今までどおり")
 
 
@@ -496,6 +501,28 @@ def test_diary_weekday_is_computed() -> None:
               "旧い題（曜日つきの紙の日記など）は YYYY-MM-DD-TH に直り、画像と日付はそのまま")
         month = pp._find_note_by_fm(root, "paper_diary_month", "2026-10").read_text(encoding="utf-8")
         check("[2026-10-01-TH](261001000000.md)" in month and "(木) 紙の日記](" not in month, "月グループの一覧のリンクも同じ題（曜日つきの旧題は残らない）")
+
+
+def test_index_has_no_blank_lines_between_links() -> None:
+    print("index: Paper-Zettelkasten-Index のリンクの並びに空行を入れない（既存の空行も取り除く）")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07")])
+        pp.regen(root)
+        lines = idx.read_text(encoding="utf-8").split("\n")
+        at = lines.index("[Folgezettel-Index](Folgezettel-Index.md)")
+        check(lines[at + 1].startswith("[日記]("), f"Folgezettel-Index の直後に「日記」が続く（空行なし）: {lines[at:at+3]}")
+        check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
+                      for i in range(1, len(lines) - 1)), "リンクとリンクのあいだに空行がない")
+        # 旧い Index（空行入り）も直る
+        text = idx.read_text(encoding="utf-8").replace("[Folgezettel-Index](Folgezettel-Index.md)\n[日記](", "[Folgezettel-Index](Folgezettel-Index.md)\n\n[日記](")
+        idx.write_text(text, encoding="utf-8")
+        pp.regen(root)
+        lines = idx.read_text(encoding="utf-8").split("\n")
+        at = lines.index("[Folgezettel-Index](Folgezettel-Index.md)")
+        check(lines[at + 1].startswith("[日記]("), "旧い空行も regen で取り除かれる")
 
 
 def test_regen_without_index() -> None:
