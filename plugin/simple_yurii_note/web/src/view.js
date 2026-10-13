@@ -115,6 +115,13 @@ function decorateLine(line, active, inFence, decos, cfg) {
     return;
   }
 
+  // 中身が空の Context / Group / Related / BackLink の見出しは出さない（カーソルがあるときは出す）
+  if (!active && cfg.emptySections?.has(line.number)) {
+    decos.push(Decoration.line({ class: "cm-md-sec-empty" }).range(base));
+    if (text.length > 0) decos.push(Decoration.replace({}).range(base, base + text.length));
+    return;
+  }
+
   const h = RE.heading.exec(text);
   if (h) {
     decos.push(Decoration.line({ class: `cm-md-h${Math.min(h[1].length, 6)}` }).range(base));
@@ -231,6 +238,28 @@ function decorateLine(line, active, inFence, decos, cfg) {
   });
 }
 
+
+// ノートの関係の節（### Context / Group / Related / BackLink。旧 Parent も）のうち、
+// 中身（空行でない行）が無いものの見出しの行番号。コードブロックの中は見ない。
+const SECTION_HEAD_RE = /^###\s+(Context|Group|Related|BackLink|Parent)\s*$/;
+function emptySectionLines(doc, fmEnd) {
+  const out = new Set();
+  let inFence = false;
+  let head = 0;
+  let hasContent = false;
+  const flush = () => { if (head && !hasContent) out.add(head); head = 0; hasContent = false; };
+  for (let n = fmEnd + 1; n <= doc.lines; n++) {
+    const t = doc.line(n).text;
+    if (RE.fence.test(t)) { inFence = !inFence; if (head) hasContent = true; continue; }
+    if (inFence) { if (head) hasContent = true; continue; }
+    if (SECTION_HEAD_RE.test(t.trim())) { flush(); head = n; continue; }
+    if (/^#{1,6}\s/.test(t)) { flush(); continue; }
+    if (head && t.trim() !== "") hasContent = true;
+  }
+  flush();
+  return out;
+}
+
 function buildDecorations(view, cfg) {
   const doc = view.state.doc;
   const decos = [];
@@ -249,6 +278,7 @@ function buildDecorations(view, cfg) {
     const cls = "cm-md-fm";
     for (let n = 1; n <= fmEnd; n++) decos.push(Decoration.line({ class: cls }).range(doc.line(n).from));
   }
+  cfg.emptySections = emptySectionLines(doc, fmEnd);
   const activeLines = new Set();
   // ``` で囲まれたコードブロックの行番号（開始・終了の行を含む）
   const fenceLines = new Set();

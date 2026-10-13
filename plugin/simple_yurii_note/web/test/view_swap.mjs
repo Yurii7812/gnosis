@@ -79,6 +79,18 @@ step("table is rendered as a real table", () => {
   v.setVim({ cur: [8, 1], mode: "i" });
   if (document.querySelector("table.cm-md-table")) throw new Error("table should be raw text in insert mode");
 });
+// 中身が空の Context / BackLink の見出しは出さない。中身がある節と、カーソルがある見出しは出す
+step("empty relation sections are hidden", () => {
+  const doc = "# 題\\n\\n本文\\n\\n### Context\\n[A](a.md)\\n### Group\\n### BackLink\\n";
+  v.setText(doc);
+  v.setVim({ cur: [3, 1], mode: "n" });
+  const shown = () => [...document.querySelectorAll(".cm-line")].filter((e) => !e.classList.contains("cm-md-sec-empty")).map((e) => e.textContent.trim());
+  const t = shown();
+  if (!t.includes("Context") && !t.some((x) => x.includes("Context"))) throw new Error("Context (has a link) should be shown: " + JSON.stringify(t));
+  if (t.some((x) => /Group|BackLink/.test(x))) throw new Error("empty Group/BackLink should be hidden: " + JSON.stringify(t));
+  v.setVim({ cur: [8, 1], mode: "n" });
+  if (!shown().some((x) => /BackLink/.test(x))) throw new Error("heading under the cursor should be shown");
+});
 // アンカー（#見出し）つきのリンクも、クリックできるノートのリンク（data-md-href）になること
 step("anchor link is a clickable note link", () => {
   v.setText("# 見出し\\n\\n[二](n.md#2f)\\n[普通](m.md)\\n[外部](https://example.com/a.md#x)\\n");

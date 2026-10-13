@@ -94,3 +94,5 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-table th { background: var(--bg-2); font-weight: 700; }
 .cm-md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-2) 60%, transparent); }
 .cm-vim-hit { background: color-mix(in srgb, #f5c400 28%, transparent); border-radius: 3px; }
+/* 中身が空の関係の節の見出し（Context / Group / Related / BackLink）は出さない */
+.cm-md-sec-empty { height: 0; line-height: 0; font-size: 0; padding: 0 !important; margin: 0 !important; border: 0 !important; overflow: hidden; }

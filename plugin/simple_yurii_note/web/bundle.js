@@ -32512,6 +32512,11 @@ ${h2.join(`
       decos.push(Decoration.line({ class: RE.fence.test(text) ? "cm-md-fence cm-md-fence-edge" : "cm-md-fence" }).range(base2));
       return;
     }
+    if (!active && cfg.emptySections?.has(line.number)) {
+      decos.push(Decoration.line({ class: "cm-md-sec-empty" }).range(base2));
+      if (text.length > 0) decos.push(Decoration.replace({}).range(base2, base2 + text.length));
+      return;
+    }
     const h2 = RE.heading.exec(text);
     if (h2) {
       decos.push(Decoration.line({ class: `cm-md-h${Math.min(h2[1].length, 6)}` }).range(base2));
@@ -32614,6 +32619,42 @@ ${h2.join(`
       decos.push(Decoration.replace({}).range(s15 + inner.length, base2 + b3));
     });
   }
+  var SECTION_HEAD_RE = /^###\s+(Context|Group|Related|BackLink|Parent)\s*$/;
+  function emptySectionLines(doc2, fmEnd) {
+    const out = /* @__PURE__ */ new Set();
+    let inFence = false;
+    let head = 0;
+    let hasContent2 = false;
+    const flush = () => {
+      if (head && !hasContent2) out.add(head);
+      head = 0;
+      hasContent2 = false;
+    };
+    for (let n = fmEnd + 1; n <= doc2.lines; n++) {
+      const t2 = doc2.line(n).text;
+      if (RE.fence.test(t2)) {
+        inFence = !inFence;
+        if (head) hasContent2 = true;
+        continue;
+      }
+      if (inFence) {
+        if (head) hasContent2 = true;
+        continue;
+      }
+      if (SECTION_HEAD_RE.test(t2.trim())) {
+        flush();
+        head = n;
+        continue;
+      }
+      if (/^#{1,6}\s/.test(t2)) {
+        flush();
+        continue;
+      }
+      if (head && t2.trim() !== "") hasContent2 = true;
+    }
+    flush();
+    return out;
+  }
   function buildDecorations(view2, cfg) {
     const doc2 = view2.state.doc;
     const decos = [];
@@ -32632,6 +32673,7 @@ ${h2.join(`
       const cls = "cm-md-fm";
       for (let n = 1; n <= fmEnd; n++) decos.push(Decoration.line({ class: cls }).range(doc2.line(n).from));
     }
+    cfg.emptySections = emptySectionLines(doc2, fmEnd);
     const activeLines = /* @__PURE__ */ new Set();
     const fenceLines = /* @__PURE__ */ new Set();
     let inBlock = false;
