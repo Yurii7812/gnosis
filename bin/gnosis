@@ -150,8 +150,10 @@ run_new_terminal() {
       if [ "$max" = 1 ]; then exec gnome-terminal --maximize -- "$vim" -u "$VIMRC" "$@"; fi
       exec gnome-terminal -- "$vim" -u "$VIMRC" "$@" ;;
     xfce4-terminal)
-      if [ "$max" = 1 ]; then exec xfce4-terminal --maximize -x "$vim" -u "$VIMRC" "$@"; fi
-      exec xfce4-terminal -x "$vim" -u "$VIMRC" "$@" ;;
+      # XFCE Terminal は --font を新規ウィンドウに渡せる。
+      # 既存ウィンドウのフォントは Vim から直接は変更できない。
+      if [ "$max" = 1 ]; then exec xfce4-terminal --font "Monospace $size" --maximize -x "$vim" -u "$VIMRC" "$@"; fi
+      exec xfce4-terminal --font "Monospace $size" -x "$vim" -u "$VIMRC" "$@" ;;
     konsole) exec konsole -e "$vim" -u "$VIMRC" "$@" ;;
     "") echo "gnosis: 端末エミュレーターが見つかりません / no terminal emulator found" >&2; exit 1 ;;
     *) exec "$term" -e "$vim" -u "$VIMRC" "$@" ;;

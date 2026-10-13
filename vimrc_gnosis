@@ -42,7 +42,12 @@ call gnosis#home#ensure_fzf_path()
 " vault が決まるまでは Gnosis ホームの viminfo を使う。
 call gnosis#home#setup_viminfo()
 
-" 起動画面は Chnoubis パレット10（夜空×水色）。vault を開いたらそのテーマに切り替わる。
+" Markdown の FileType と構文解析を Gnosis 専用環境で明示的に有効化。
+" これがないとリンクの [名前](URL) が生表示され、設定したリンク色も効かない。
+filetype plugin indent on
+syntax enable
+
+" 起動画面・ノート・設定は Chnoubis パレット10（夜空×水色）を既定とする。
 set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
 set t_ut=

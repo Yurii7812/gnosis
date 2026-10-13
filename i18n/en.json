@@ -345,7 +345,7 @@
     "settings.keys": "j k Move    Enter Change    q Close",
     "settings.light": "Light",
     "settings.need_vault": "Settings are saved per vault. Create or register a vault first.",
-    "settings.note_terminal": "In terminal Vim, font size and window size apply only in terminals supported by the Gnosis launcher.",
+    "settings.note_terminal": "Font size: Kitty can update live with +/- here. Other terminals require adjusting font size in terminal settings. XFCE Terminal applies the saved font size with gnosis --new-terminal.",
     "settings.off": "No",
     "settings.on": "Yes",
     "settings.prompt_color": "Color for %s (#rrggbb): ",

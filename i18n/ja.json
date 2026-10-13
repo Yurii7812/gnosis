@@ -24,7 +24,7 @@
     "settings.keys": "j k 移動    Enter 変更    q 閉じる",
     "settings.light": "ライト",
     "settings.need_vault": "設定は vault ごとに保存します。先に vault を作成・登録してください。",
-    "settings.note_terminal": "端末版 Vim では、文字サイズとウィンドウの大きさは Gnosis のランチャーが対応する端末でだけ反映します。",
+    "settings.note_terminal": "文字サイズ: Kittyは設定画面の+/-で即時変更できます。その他の端末では端末側で調整してください。XFCE Terminal は gnosis --new-terminal で設定値を使います。",
     "settings.off": "しない",
     "settings.on": "する",
     "settings.prompt_color": "%s の色（#rrggbb）: ",

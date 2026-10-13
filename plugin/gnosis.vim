@@ -752,7 +752,9 @@ function! s:setup_conceal() abort
     " 挿入モードは concealcursor に i が無いのでカーソル行が展開され、中身が
     " 見える。隠れた範囲の上では素の ←/→ が止まって見えるため、
     " move_visible で隠れた範囲をまとめて飛び越える。
-    setlocal concealcursor=n
+    " 文字リンクのURLは Normal / Insert / Visual の各モードで隠す。
+    " 編集時にURLを直接見る場合は :setlocal conceallevel=0 で切り替え可能。
+    setlocal concealcursor=nvi
     nnoremap <buffer><silent> <Right> :<C-u>call gnosis#move_visible(1, v:count1)<CR>
     nnoremap <buffer><silent> <Left>  :<C-u>call gnosis#move_visible(0, v:count1)<CR>
     nnoremap <buffer><silent> l :<C-u>call gnosis#move_visible(1, v:count1)<CR>
