@@ -1167,7 +1167,7 @@ class ScanApp:
                 parent_disp = pp.topic_display(fid, parent)
             else:
                 self.status_var.set(
-                    f"親トピック「{parent}」はありません（先に作るか fm topic_parent で後から指定）")
+                    f"親トピック「{parent}」はありません（先に作ってください）")
                 return "break"
         else:
             parent_disp = None

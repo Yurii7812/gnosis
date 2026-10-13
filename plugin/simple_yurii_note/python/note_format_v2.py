@@ -717,54 +717,82 @@ Rel = tuple[str, str, str]  # (src_id, type, tgt_id)  id = root からの相対 
 
 
 _ZK_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
-_ZK_IMAGE_FM_KEYS = ("folgezettel", "paper_topic")
+_ZK_ID_RE = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*(?:-.+)?$")
+_ZK_DIARY_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-(?:MO|TU|WE|TH|FR|SA|SU)$")
+_ZK_IMG_LINE = re.compile(r"^!\[[^\]]*\]\(([^)\s]+)\)\s*$")
 
 
-def _trash_zk_note_images(root: Path, cache: dict, keys_now: set) -> int:
+def _zk_note_images(title: str, body) -> list[str]:
+    """紙PKMのノート（スキャン/トピック/紙の日記）なら、削除に合わせて退避する画像名を返す。
+
+    判定は front matter の目印ではなく title と画像の参照による:
+    - スキャン / トピック … title が `ID` / `ID-トピック名` で、本文に title と同じ名前の画像 `![](<title>.<ext>)` がある
+    - 紙の日記 … title が `YYYY-MM-DD-曜日2文字` で、本文に `paper-diary-YYYYMMDD-N.<ext>` の画像がある
+    ID らしい title だけで画像を参照していない普通のノートは対象にしない。"""
+    names = []
+    for ln in body or []:
+        m = _ZK_IMG_LINE.match(ln.strip())
+        if m:
+            names.append(Path(m.group(1)).name)
+    if not names:
+        return []
+    out = []
+    dm = _ZK_DIARY_RE.match(title or "")
+    for nm in names:
+        stem, ext = os.path.splitext(nm)
+        if ext.lower() not in _ZK_IMAGE_EXTS:
+            continue
+        if _ZK_ID_RE.match(title or "") and stem == title:
+            out.append(nm)
+        elif dm and stem.startswith("paper-diary-" + "".join(dm.groups()) + "-"):
+            out.append(nm)
+    return out
+
+
+def _trash_zk_note_images(root: Path, cache: dict, keys_now: set, alive_bodies=None) -> int:
     """Zettelkasten ノートの削除に合わせて画像も .trash へ退避する（2026-10-09）。
 
-    前回パースキャッシュにあって今回ディスクに無いノート（＝削除/ゴミ箱移動）
-    を xf: fm の `folgezettel:` / `paper_topic:` /（トピックは title 表示名）で
-    判定し、同じフォルダにある `<stem>(拡張子=画像)` を vault の `.trash` に
-    <時刻>_ 接頭付きで退避する。フォルゲゼッテル以外（正気の本文だけノート等）
-    は触らない。" zettelkasten の画像だけね"（ユーザー指示）。
-    戻り値は退避した画像数。
+    前回パースキャッシュにあって今回ディスクに無いノート（＝削除/ゴミ箱移動）について、
+    title と本文の画像参照で紙PKMのノートと判定し（_zk_note_images）、同じフォルダの
+    その画像を vault の `.trash` に <時刻>_ 接頭付きで退避する。旧ノートの
+    `folgezettel:` / `paper_topic:` も互換として読む。生きている他のノートが同じ画像を参照して
+    いれば動かさない。紙PKM以外のノートの画像には触らない。戻り値は退避した画像数。
+    alive_bodies: 生きているノートの [(ノートのフォルダ, title, 本文)]（持ち主が残っている画像を守る）。
     """
     from datetime import datetime as _dt
 
     now_s = _dt.now().strftime("%Y%m%d-%H%M%S")
     trashed = 0
     trash_dir = root / ".trash"
+    in_use: set[str] = set()
+    # 生きている紙PKMのノート（スキャン/トピック/日記）が自分の画像として持っているものは動かさない。
+    # （専用ノート folgezettel-Index-N のように画像を並べるだけのノートは持ち主ではない）
+    for folder, title, body in alive_bodies or []:
+        for nm in _zk_note_images(title, body):
+            in_use.add(os.path.normpath(os.path.join(str(folder), nm)))
     for key, ent in cache.items():
-        if key in keys_now or not isinstance(ent, list) or len(ent) < 3:
+        if key in keys_now or not isinstance(ent, list) or len(ent) < 4:
             continue
-        fm = ent[1] if isinstance(ent[1], list) else None
-        if not fm:
-            continue
-        val = None
-        for ln in fm:
-            s = ln.strip()
-            if s.startswith("folgezettel:"):
-                val = s.split(":", 1)[1].strip()
-                break
-            if s.startswith("paper_topic:"):
-                title = s.split(":", 1)[1].strip() or None  # 後続
-            # トピック has は title 表示名で画像に対応する
-        if val is None:
-            for ln in fm:
-                if ln.strip().startswith("paper_topic:"):
-                    for ln2 in fm:
-                        if ln2.strip().startswith("title:"):
-                            val = ln2.split(":", 1)[1].strip()
-                            break
-                    break
-        if not val:
-            continue
+        fm = ent[1] if isinstance(ent[1], list) else []
+        title = ent[2] if isinstance(ent[2], str) else ""
         note_path = root / key  # key は vault 相対パス（_nid 由来）
         folder = note_path.parent
-        for ext in _ZK_IMAGE_EXTS:
-            img = folder / (val + ext)
-            if not img.is_file():
+        imgs = _zk_note_images(title, ent[3] if isinstance(ent[3], list) else [])
+        if not imgs:
+            # 旧ノート（目印の front matter が残っている）の互換: title と同じ名前の画像を探す
+            legacy = None
+            for ln in fm:
+                s = ln.strip()
+                if s.startswith("folgezettel:"):
+                    legacy = s.split(":", 1)[1].strip()
+                    break
+            if legacy is None and any(ln.strip().startswith("paper_topic:") for ln in fm):
+                legacy = title
+            if legacy:
+                imgs = [legacy + e for e in _ZK_IMAGE_EXTS]
+        for nm in imgs:
+            img = folder / nm
+            if not img.is_file() or os.path.normpath(str(img)) in in_use:
                 continue
             try:
                 trash_dir.mkdir(parents=True, exist_ok=True)
@@ -1611,7 +1639,8 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
         if key is not None:
             keys[rp] = key
     # 削除（ゴミ箱移動を含む）されたフォルゲゼッテル/トピックノートの画像も退避（2026-10-09）
-    _trash_zk_note_images(root, cache, set(keys.values()))
+    _trash_zk_note_images(root, cache, set(keys.values()),
+                          [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を

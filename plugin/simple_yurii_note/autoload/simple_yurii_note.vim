@@ -5011,8 +5011,8 @@ function! simple_yurii_note#trash_current() abort
 endfunction
 
 " ゴミ箱のファイルを vault 直下へ戻す。戻した絶対パスを返す（失敗時は空）。
-" フォルゲゼッテル/トピックノート（fm folgezettel:/paper_topic: あり）を戻す
-" ときは同名のスキャン画像も一緒に戻す（2026-10-09。fm(topic_parent) なし）。
+" フォルゲゼッテル/トピックノート（title と同名の画像を参照するノート）を戻す
+" ときは同名のスキャン画像も一緒に戻す（2026-10-09）。
 function! s:trash_restore(path) abort
   let l:root = s:get_pkm_root()
   if empty(l:root) | return '' | endif
@@ -9646,19 +9646,23 @@ function! s:paper_scan_script() abort
 endfunction
 
 " 紙PKM Index（Index・Index-write・Folgezettel-Index）を作成/再利用して開く。
-" 紙PKM索引（paper_index: true のノート）のパス。無ければ ''。名前の新しい方（paper_pkm.py と同じ）。
-" Paper-Zettelkasten-Index。固定ファイル名 Paper-Zettelkasten-Index.md（paper_index マーカー付き）を
-" 優先し、無ければ旧タイムスタンプ名などのマーカー付きノートを返す。
+" 紙PKM索引（Paper-Zettelkasten-Index）のパス。無ければ ''。
+" 固定ファイル名 Paper-Zettelkasten-Index.md（title が Paper-Zettelkasten-Index）を優先し、
+" 無ければ旧タイムスタンプ名で title が同じ（または旧 paper_index: true つき）ノートを返す。
 let s:paper_index_name = 'Paper-Zettelkasten-Index.md'
+
+function! s:is_paper_index_head(lines) abort
+  return index(a:lines, 'title: Paper-Zettelkasten-Index') >= 0 || index(a:lines, 'paper_index: true') >= 0
+endfunction
 
 function! s:paper_index_path(root) abort
   let l:fixed = a:root . s:sep() . s:paper_index_name
-  if filereadable(l:fixed) && index(readfile(l:fixed, '', 8), 'paper_index: true') >= 0
+  if filereadable(l:fixed) && s:is_paper_index_head(readfile(l:fixed, '', 8))
     return l:fixed
   endif
   let l:found = []
   for l:f in glob(a:root . s:sep() . '*.md', 0, 1)
-    if index(readfile(l:f, '', 8), 'paper_index: true') >= 0
+    if s:is_paper_index_head(readfile(l:f, '', 8))
       call add(l:found, l:f)
     endif
   endfor
@@ -12790,12 +12794,27 @@ endfunction
 function! s:diary_head(lines) abort
   " paper: 紙の日記（\F の GUI で登録したスキャン。題はデジタル日記と同じ YYYY-MM-DD-曜日2文字 だが、
   " デジタル日記（\d）の機能からは見えないようにする）
-  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0}
+  " 紙の日記かどうかは front matter の目印ではなく、本文の画像 `![](paper-diary-…)` で判定する
+  " （月・年・一番上のグループは s:diary_scan がリンク先から判定する）。links は本文の .md リンク先。
+  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'links': []}
   let l:fence = 0
   for l:ln in a:lines
     if l:ln ==# '---'
       let l:fence += 1
-      if l:fence >= 2 | break | endif
+      if l:fence >= 2 | continue | endif
+      continue
+    endif
+    if l:fence >= 2
+      if l:ln =~# '^!\[[^\]]*\](paper-diary-\d\{8}-\d\+\.\w\+)\s*$'
+        let l:r.paper = 1
+      endif
+      let l:rest = l:ln
+      while 1
+        let l:m = matchlist(l:rest, '\[[^\]]*\](\([^)#[:space:]]\+\.md\)')
+        if empty(l:m) | break | endif
+        call add(l:r.links, fnamemodify(l:m[1], ':t'))
+        let l:rest = substitute(l:rest, '\[[^\]]*\](\([^)#[:space:]]\+\.md\)', '', '')
+      endwhile
       continue
     endif
     if l:fence != 1 | break | endif
@@ -12806,7 +12825,7 @@ function! s:diary_head(lines) abort
     elseif l:ln =~# '^attribute:\s*group\>'
       let l:r.group = 1
     elseif l:ln =~# '^paper_diary\w*:'
-      " paper_diary: / paper_diary_month: / paper_diary_year:（紙の日記のノートと、その月・年グループ）
+      " 旧い目印（移行前のノート。paper_pkm.py の regen が外す）
       let l:r.paper = 1
     endif
   endfor
@@ -12842,13 +12861,36 @@ endfunction
 
 " vault 直下の .md を {file, title, group} で返す
 function! s:diary_scan(root) abort
-  let l:out = []
+  let l:all = []
   for l:f in glob(fnamemodify(a:root, ':p') . '*.md', 0, 1)
-    let l:h = s:diary_head(readfile(l:f, '', 30))
-    if l:h.paper
-      continue
-    endif
-    call add(l:out, {'file': fnamemodify(l:f, ':t'), 'title': l:h.title, 'group': l:h.group, 'time': l:h.time})
+    let l:h = s:diary_head(readfile(l:f, '', 200))
+    let l:h.file = fnamemodify(l:f, ':t')
+    call add(l:all, l:h)
+  endfor
+  " 紙の日記のグループ（月・年・一番上の「日記」）は、リンク先が紙の日記ノート（または紙の日記のグループ）
+  " のグループ。デジタル日記の同名のグループは別物なので、リンク階層で見分ける（不動点まで繰り返す）
+  let l:paper = {}
+  for l:h in l:all
+    if l:h.paper | let l:paper[l:h.file] = 1 | endif
+  endfor
+  let l:changed = 1
+  while l:changed
+    let l:changed = 0
+    for l:h in l:all
+      if !l:h.group || has_key(l:paper, l:h.file) | continue | endif
+      for l:t in l:h.links
+        if has_key(l:paper, l:t)
+          let l:paper[l:h.file] = 1
+          let l:changed = 1
+          break
+        endif
+      endfor
+    endfor
+  endwhile
+  let l:out = []
+  for l:h in l:all
+    if has_key(l:paper, l:h.file) | continue | endif
+    call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group, 'time': l:h.time})
   endfor
   return l:out
 endfunction
