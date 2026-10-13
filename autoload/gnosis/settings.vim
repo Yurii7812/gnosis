@@ -5,7 +5,8 @@
 "     "version": 1,
 "     "language": "ja" | "en",
 "     "window": {"maximized": true, "width": 1200, "height": 860},
-"     "fontSize": 16,
+"     "fontSize": 16,          ← 以前の版の文字サイズ（今は Gnosis ホームの terminal.json。
+"                                 アプリ向けに同じ値を書き写す。gnosis#termfont）
 "     "appearance": "light" | "dark",
 "     "theme": {"kind": "builtin"}
 "            | {"kind": "custom", "name": "名前"}
@@ -169,29 +170,22 @@ function! gnosis#settings#apply(s) abort
   else
     call gnosis#theme#apply(a:s)
   endif
+  " 文字サイズは vault ではなく Gnosis ホームの terminal.json（gnosis#termfont）。
+  " 端末の窓の文字はランチャーが開くときに決めるので、vault を開くたびには変えない。
   call gnosis#settings#apply_gui(a:s)
-  " ターミナル版では Vim の guifont は効かない。Kitty のみこの場で
-  " 実ウィンドウのフォントサイズを変更できる（失敗したら false）。
-  let g:gnosis_font_live_applied = has('gui_running') ? 1
-        \ : gnosis#settings#apply_terminal_font(a:s.fontSize)
   if exists('#User#GnosisSettingsChanged')
     doautocmd <nomodeline> User GnosisSettingsChanged
   endif
 endfunction
 
-" 通常の端末では Vim 自身はフォントを変更できない。
-" Kitty は kitty @ が使えれば、そのウィンドウでプレビュー可能。
-" 無効な権限/未対応端末では安全に失敗し、設定値は次回の対応端末で適用。
+" 端末の文字の大きさをその場で変える（できる端末だけ。gnosis#termfont）。戻り値は変わったか
 function! gnosis#settings#apply_terminal_font(size) abort
-  if empty($KITTY_WINDOW_ID) || !executable('kitty')
-    return 0
-  endif
-  try
-    silent call system('kitty @ set-font-size ' . str2nr(a:size) . ' 2>&1')
-    return v:shell_error == 0
-  catch
-    return 0
-  endtry
+  return gnosis#termfont#apply_live(extend(gnosis#termfont#load(), {'fontSize': a:size}))
+endfunction
+
+function! s:gui_family(default) abort
+  let l:f = gnosis#termfont#load().fontFamily
+  return !empty(l:f) ? l:f : get(g:, 'gnosis_gui_font_name', a:default)
 endfunction
 
 " GUI 版 Vim（gvim / MacVim）: 文字サイズは guifont、起動サイズは lines/columns。
@@ -200,13 +194,13 @@ function! gnosis#settings#apply_gui(s) abort
   if !has('gui_running')
     return
   endif
-  let l:size = a:s.fontSize
+  let l:size = get(a:s, 'gnosis_zoom_size', gnosis#termfont#load().fontSize)
   if has('win32')
-    let &guifont = get(g:, 'gnosis_gui_font_name', 'Consolas') . ':h' . l:size
+    let &guifont = s:gui_family('Consolas') . ':h' . l:size
   elseif has('mac') || has('macunix')
-    let &guifont = get(g:, 'gnosis_gui_font_name', 'Menlo-Regular') . ':h' . l:size
+    let &guifont = s:gui_family('Menlo-Regular') . ':h' . l:size
   else
-    let &guifont = get(g:, 'gnosis_gui_font_name', 'Monospace') . ' ' . l:size
+    let &guifont = s:gui_family('Monospace') . ' ' . l:size
   endif
   if get(s:, 'gui_window_done', 0)
     return
@@ -231,9 +225,9 @@ function! gnosis#settings#builtin_palettes() abort
     let s:palettes = gnosis#home#read_json(s:palette_file, {})
     if empty(s:palettes)
       let s:palettes = {
-            \ 'start': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
-            \ 'light': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
-            \ 'dark': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
+            \ 'start': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#5CD0FF', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
+            \ 'light': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#5CD0FF', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
+            \ 'dark': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#5CD0FF', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
             \ }
     endif
   endif
@@ -246,11 +240,11 @@ function! gnosis#settings#gui_zoom(delta) abort
   if !has('gui_running')
     return
   endif
-  let l:base = gnosis#settings#current().fontSize
+  let l:base = gnosis#termfont#load().fontSize
   let s:gui_zoom = a:delta == 0 ? 0 : get(s:, 'gui_zoom', 0) + a:delta
   let l:size = max([6, min([72, l:base + s:gui_zoom])])
   let l:s = deepcopy(gnosis#settings#current())
-  let l:s.fontSize = l:size
+  let l:s.gnosis_zoom_size = l:size
   let s:gui_window_done = 1
   call gnosis#settings#apply_gui(l:s)
 endfunction

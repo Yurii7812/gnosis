@@ -8,6 +8,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `:GnosisStart` start screen ・ `:GnosisVaults` vault list (switch while working) ・ `:GnosisSettings` settings
 - Settings are per vault (`.gnosis/settings.json`): language, maximize on start, normal window size, font size, light / dark, theme, custom colors
 - `:GnosisThemeAdd` `Plug 'author/repo'` … adds a Vim theme from GitHub and uses it for this vault ・ `:GnosisThemeReset` back to the standard theme
+- `:GnosisFontSize` font size (`20` / `+1` / `-1` / `reset`; saved, and applied at once where the terminal allows) ・ `:GnosisLinkSource` show / hide the Markdown source of links
 - In the app, `Ctrl` + `+` / `-` / `0` zooms the whole window in / out / back (only for now; the font size setting is not changed)
 - In GUI Vim, `<C-=>` / `<C-+>` / `<C-->` / `<C-0>` change the font size only for now (`<C-0>` goes back to the setting). In terminal Vim the terminal decides the font (the Gnosis launcher passes the size only to supported terminals)
 

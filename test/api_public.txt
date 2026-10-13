@@ -150,6 +150,7 @@ gnosis#set_yomi
 gnosis#settings#activate
 gnosis#settings#apply
 gnosis#settings#apply_gui
+gnosis#settings#apply_terminal_font
 gnosis#settings#builtin_palettes
 gnosis#settings#current
 gnosis#settings#current_vault
@@ -178,8 +179,10 @@ gnosis#stack_copy_yank_visual
 gnosis#start#active
 gnosis#start#art
 gnosis#start#begin
+gnosis#start#cell_ratio
 gnosis#start#click
 gnosis#start#key
+gnosis#start#logo
 gnosis#start#on_vim_enter
 gnosis#start#open
 gnosis#start#open_vaults
@@ -212,6 +215,19 @@ gnosis#table_tab
 gnosis#table_tab_action
 gnosis#table_to_csv
 gnosis#table_to_csv_current
+gnosis#termfont#apply_live
+gnosis#termfont#clamp
+gnosis#termfont#command
+gnosis#termfont#defaults
+gnosis#termfont#describe
+gnosis#termfont#detect
+gnosis#termfont#file
+gnosis#termfont#load
+gnosis#termfont#restore_on_exit
+gnosis#termfont#save
+gnosis#termfont#set
+gnosis#termfont#set_size
+gnosis#termfont#status
 gnosis#theme#add_command
 gnosis#theme#apply
 gnosis#theme#apply_start
@@ -227,6 +243,7 @@ gnosis#timestamp_filename
 gnosis#timestamp_yaml
 gnosis#toggle_alternate
 gnosis#toggle_checkbox
+gnosis#toggle_link_source
 gnosis#trash_current
 gnosis#trash_empty
 gnosis#trash_list

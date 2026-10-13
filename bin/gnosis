@@ -1,21 +1,24 @@
 #!/bin/sh
 # Gnosis のランチャー（Linux / macOS）。
 #
-#   gnosis                 現在の端末（Bash 等）で普通の Vim を起動。端末外からは端末を新規起動
-#   gnosis --app           旧 Electron アプリを明示したときだけ起動（任意）
-#   gnosis --gui           GUI 版 Vim（gvim / MacVim）で起動
+#   gnosis                 今の端末（Bash など）で普通の Vim を起動。端末の外（アイコン）からは端末の窓を新しく開く
+#   gnosis --new-terminal  新しい端末の窓を開いて、その中の Vim で起動（アイコンはこれ）
 #   gnosis --tui           今の端末の Vim で起動（--terminal も同じ）
-#   gnosis --new-terminal  新しい端末ウィンドウを開いて、その中の Vim で起動
+#   gnosis --gui           GUI 版 Vim（gvim / MacVim）で起動
+#   gnosis --app           旧 Electron アプリを明示したときだけ起動（任意）
 #   gnosis [ノート.md …]   そのノートを開く（起動画面は出さない）
-#   gnosis --where         Gnosis のフォルダ・Gnosis ホーム・使う vimrc を表示
+#   gnosis --where         どの Gnosis が起動するか（本体のフォルダ・コミット・Gnosis ホーム・vimrc・Vim）
+#   gnosis --doctor        導入の診断（古いランチャー・アプリメニュー・必要なもの・文字サイズ）
+#   gnosis --version       本体のコミット
 #
 # Vim は、Gnosis 専用の vimrc（<Gnosis ホーム>/vimrc。無ければ本体の vimrc_gnosis）で起動する。
 # ふだんの ~/.vimrc・~/.vim は読まない・変えない。ふつうに vim を起動すれば今までどおり。
 #
-# 端末の文字サイズ・最大化: 端末ごとに方法が違うため、--new-terminal で開く端末のうち、
-# 対応しているもの（kitty / alacritty / wezterm / xterm）だけに、vault の設定の文字サイズと
-# 最大化を渡す。それ以外の端末（gnome-terminal / konsole など）は、その端末の設定のまま。
-# 今の端末（--tui）の文字やウィンドウは変えない。
+# 文字サイズ: 端末の文字を描くのは端末エミュレーター。Gnosis ホームの terminal.json の大きさを、
+# --new-terminal で開く窓に渡す（Konsole・kitty・Alacritty・WezTerm・XFCE Terminal・xterm）。
+# Konsole は Gnosis 専用プロファイル（Gnosis-<大きさ>）をその窓にだけ見せる（ふだんの Konsole の
+# プロファイル一覧には出ない）。今の端末（--tui）の文字や設定は変えない。
+# 端末の窓を開けなかったときの記録: <Gnosis ホーム>/logs/launcher.log
 set -eu
 
 # ---- このファイルの場所（シンボリックリンクをたどる）から Gnosis のフォルダを求める
@@ -28,6 +31,7 @@ while [ -L "$self" ]; do
   esac
 done
 GNOSIS_DIR=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
+SELF="$GNOSIS_DIR/bin/gnosis"
 export GNOSIS_DIR
 
 if [ -n "${GNOSIS_HOME:-}" ]; then
@@ -53,10 +57,13 @@ if [ "$(uname -s)" = Darwin ] && [ -x "$GNOSIS_DIR/web/node_modules/electron/dis
   ELECTRON="$GNOSIS_DIR/web/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
 fi
 
-graphical() {
-  [ "$(uname -s)" = Darwin ] && return 0
-  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+LOG="$GNOSIS_HOME/logs/launcher.log"
+log() {
+  mkdir -p "$GNOSIS_HOME/logs" 2>/dev/null || return 0
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >> "$LOG" 2>/dev/null || true
 }
+
+have() { command -v "$1" >/dev/null 2>&1; }
 
 find_vim() {
   if [ -n "${GNOSIS_VIM:-}" ]; then echo "$GNOSIS_VIM"; return; fi
@@ -76,26 +83,197 @@ find_gvim() {
   command -v gvim 2>/dev/null || return 1
 }
 
-# vault の設定（最後に選んだ vault）から 1 つの値を読む: fontSize / maximized
-setting() {
+# ---- 文字サイズなど（<Gnosis ホーム>/terminal.json。Gnosis が書く JSON なので sed で読める）
+tf_get() { # キー 既定値
+  f="$GNOSIS_HOME/terminal.json"
+  v=""
+  if [ -f "$f" ]; then
+    v=$(sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$f" | head -1)
+  fi
+  if [ -z "$v" ] && [ "$1" = fontSize ]; then v=$(legacy_font_size); fi
+  [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
+}
+
+# 以前の版は文字サイズを最後の vault の設定（.gnosis/settings.json）にだけ保存していた
+legacy_font_size() {
   py=$(command -v python3 || command -v python || true)
   [ -n "$py" ] || return 0
-  "$py" - "$GNOSIS_HOME/vaults.json" "$1" <<'PY' 2>/dev/null || true
+  "$py" - "$GNOSIS_HOME/vaults.json" <<'PY' 2>/dev/null || true
 import json, os, sys
 try:
     reg = json.load(open(sys.argv[1], encoding="utf-8"))
     s = json.load(open(os.path.join(reg.get("last", ""), ".gnosis", "settings.json"), encoding="utf-8"))
+    print(int(s["fontSize"]))
 except Exception:
-    s = {}
-key = sys.argv[2]
-if key == "fontSize":
-    print(int(s.get("fontSize", 16)))
-elif key == "maximized":
-    print("1" if s.get("window", {}).get("maximized", True) else "0")
+    pass
 PY
 }
 
-run_tui() { exec "$(find_vim)" -u "$VIMRC" "$@"; }
+# 最大化（最後の vault の設定。読めなければ最大化する）
+maximized() {
+  py=$(command -v python3 || command -v python || true)
+  [ -n "$py" ] || { echo 1; return; }
+  "$py" - "$GNOSIS_HOME/vaults.json" <<'PY' 2>/dev/null || echo 1
+import json, os, sys
+try:
+    reg = json.load(open(sys.argv[1], encoding="utf-8"))
+    s = json.load(open(os.path.join(reg.get("last", ""), ".gnosis", "settings.json"), encoding="utf-8"))
+    print("1" if s.get("window", {}).get("maximized", True) else "0")
+except Exception:
+    print("1")
+PY
+}
+
+# フォント: terminal.json の fontFamily。空なら、読みやすい等幅フォントを入っているものから選ぶ
+# （日本語の文字は端末がフォントの置き換えで描く）。どれも無ければ fc-match の monospace。
+font_family() {
+  f=$(tf_get fontFamily "")
+  if [ -z "$f" ] && have fc-list; then
+    for c in "Hack" "DejaVu Sans Mono" "Noto Sans Mono" "Liberation Mono" "Ubuntu Mono" "Source Code Pro" "Menlo"; do
+      if [ -n "$(fc-list "$c" family 2>/dev/null | head -1)" ]; then f=$c; break; fi
+    done
+  fi
+  if [ -z "$f" ] && have fc-match; then f=$(fc-match -f '%{family[0]}' monospace 2>/dev/null || true); fi
+  [ -n "$f" ] || f=Monospace
+  printf '%s' "$f"
+}
+
+# ---- Gnosis の窓に使う端末（GNOSIS_TERMINAL > terminal.json > デスクトップに合うもの > 見つかったもの）
+pick_terminal() {
+  t=${GNOSIS_TERMINAL:-}
+  [ -n "$t" ] || t=$(tf_get terminal "")
+  if [ -n "$t" ] && have "$t"; then echo "$t"; return; fi
+  [ -z "$t" ] || log "terminal '$t' not found; choosing automatically"
+  case "${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}" in
+    *KDE*|*kde*|*plasma*) pref=konsole ;;
+    *XFCE*|*xfce*) pref=xfce4-terminal ;;
+    *GNOME*|*gnome*|*Unity*|*Cinnamon*|*ubuntu*) pref=gnome-terminal ;;
+    *) pref="" ;;
+  esac
+  for t in $pref kitty wezterm alacritty konsole xfce4-terminal gnome-terminal xterm x-terminal-emulator; do
+    if have "$t"; then echo "$t"; return; fi
+  done
+}
+
+# ---- Konsole: Gnosis 専用プロファイル（Gnosis-<大きさ>）と配色を Gnosis ホームに作る。
+# この窓にだけ XDG_DATA_DIRS で見せるので、ふだんの Konsole の一覧・設定は変わらない。
+# 大きさごとのプロファイルを全部作るのは、Konsole が起動時に読んだプロファイルにしか
+# 切り替えられないため（設定画面の + / - でその場で切り替える）。
+konsole_profiles() {
+  dir="$GNOSIS_HOME/terminal/share/konsole"
+  mkdir -p "$dir"
+  fam=$(font_family | tr -d ',')
+  ls_=$(tf_get lineSpacing 2)
+  cat > "$dir/Gnosis.colorscheme" <<'EOF'
+[General]
+Description=Gnosis
+Opacity=1
+
+[Background]
+Color=20,40,61
+
+[BackgroundIntense]
+Color=28,53,78
+
+[Foreground]
+Color=230,238,245
+
+[ForegroundIntense]
+Color=255,255,255
+
+[Color0]
+Color=20,40,61
+
+[Color0Intense]
+Color=48,88,121
+
+[Color1]
+Color=255,138,138
+
+[Color1Intense]
+Color=255,170,170
+
+[Color2]
+Color=143,227,168
+
+[Color2Intense]
+Color=180,240,198
+
+[Color3]
+Color=246,216,138
+
+[Color3Intense]
+Color=255,230,170
+
+[Color4]
+Color=92,208,255
+
+[Color4Intense]
+Color=150,225,255
+
+[Color5]
+Color=200,170,255
+
+[Color5Intense]
+Color=220,200,255
+
+[Color6]
+Color=121,207,255
+
+[Color6Intense]
+Color=188,238,255
+
+[Color7]
+Color=230,238,245
+
+[Color7Intense]
+Color=255,255,255
+EOF
+  s=6
+  while [ "$s" -le 48 ]; do
+    cat > "$dir/Gnosis-$s.profile" <<EOF
+[General]
+Name=Gnosis-$s
+Parent=FALLBACK/
+
+[Appearance]
+ColorScheme=Gnosis
+Font=$fam,$s,-1,5,50,0,0,0,0,0
+LineSpacing=$ls_
+AntiAliasFonts=true
+BoldIntense=false
+
+[Scrolling]
+ScrollBarPosition=2
+EOF
+    s=$((s + 1))
+  done
+}
+
+run_tui() {
+  vim=$(find_vim)
+  if [ -n "${GNOSIS_TERMINAL_KIND:-}" ]; then
+    # Gnosis が開いた窓の中: 端末のために変えた環境変数を戻す
+    if [ "${GNOSIS_ORIG_XDG_DATA_DIRS-__unset__}" = __unset__ ]; then
+      :
+    elif [ -z "$GNOSIS_ORIG_XDG_DATA_DIRS" ]; then
+      unset XDG_DATA_DIRS
+    else
+      XDG_DATA_DIRS=$GNOSIS_ORIG_XDG_DATA_DIRS; export XDG_DATA_DIRS
+    fi
+    unset GNOSIS_ORIG_XDG_DATA_DIRS
+    # すぐ閉じてしまうと原因が見えないので、Vim が起動できなかったら知らせて待つ
+    status=0
+    "$vim" -u "$VIMRC" "$@" || status=$?
+    if [ "$status" -ne 0 ]; then
+      log "vim exited with status $status (vim=$vim vimrc=$VIMRC)"
+      printf '\nGnosis: Vim が終了コード %s で終わりました（%s）。記録: %s\nEnter で閉じます / Press Enter to close. ' "$status" "$vim" "$LOG"
+      read -r _ || true
+    fi
+    exit "$status"
+  fi
+  exec "$vim" -u "$VIMRC" "$@"
+}
 
 run_gui() {
   g=$(find_gvim) || { echo "gnosis: GUI 版 Vim が見つかりません / GUI Vim not found" >&2; exit 1; }
@@ -104,7 +282,7 @@ run_gui() {
 
 run_app() {
   if [ ! -x "$ELECTRON" ]; then
-    echo "gnosis: アプリが入っていません。install/install.sh を実行してください / the app is not installed" >&2
+    echo "gnosis: アプリが入っていません。install/install.sh --app を実行してください / the app is not installed" >&2
     return 1
   fi
   if [ $# -ge 1 ] && [ -f "$1" ]; then
@@ -119,45 +297,210 @@ run_app() {
   exec "$ELECTRON" "$GNOSIS_DIR/web" --no-sandbox --ozone-platform=x11 --disable-gpu
 }
 
+fail_window() {
+  log "$1"
+  echo "gnosis: $1" >&2
+  if have notify-send; then notify-send -i gnosis "Gnosis" "$1 ($LOG)" >/dev/null 2>&1 || true; fi
+  exit 1
+}
+
 run_new_terminal() {
-  vim=$(find_vim)
-  size=$(setting fontSize); size=${size:-16}
-  max=$(setting maximized); max=${max:-1}
+  size=$(tf_get fontSize 16)
+  case "$size" in ''|*[!0-9]*) size=16 ;; esac
+  max=$(maximized)
   if [ "$(uname -s)" = Darwin ]; then
     # Terminal.app の文字サイズは、その端末のプロファイルの設定のまま
-    q=$(printf '%s' "$vim -u '$VIMRC'" | sed 's/"/\\"/g')
+    q=$(printf '%s' "'$SELF' --tui" | sed 's/"/\\"/g')
     exec osascript -e "tell application \"Terminal\" to do script \"$q\"" -e 'tell application "Terminal" to activate'
   fi
-  term=${GNOSIS_TERMINAL:-}
-  if [ -z "$term" ]; then
-    for t in kitty alacritty wezterm xterm gnome-terminal konsole xfce4-terminal x-terminal-emulator; do
-      if command -v "$t" >/dev/null 2>&1; then term=$t; break; fi
-    done
-  fi
-  case "$term" in
+  term=$(pick_terminal)
+  [ -n "$term" ] || fail_window "端末エミュレーターが見つかりません / no terminal emulator found"
+  kind=$(basename "$term")
+  GNOSIS_TERMINAL_KIND=$kind
+  export GNOSIS_TERMINAL_KIND
+  fam=$(font_family)
+  lsp=$(tf_get lineSpacing 2)
+  log "open $kind size=$size font='$fam' maximized=$max gnosis=$GNOSIS_DIR vimrc=$VIMRC"
+  # 端末が起動できたかは端末任せ（exec のあと）。起動できなければ launcher.log と通知で分かる
+  case "$kind" in
+    konsole)
+      konsole_profiles
+      GNOSIS_ORIG_XDG_DATA_DIRS=${XDG_DATA_DIRS-}
+      export GNOSIS_ORIG_XDG_DATA_DIRS
+      XDG_DATA_DIRS="$GNOSIS_HOME/terminal/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+      export XDG_DATA_DIRS
+      exec konsole --separate --hide-menubar --hide-tabbar --profile "Gnosis-$size" -e "$SELF" --tui "$@" ;;
     kitty)
-      if [ "$max" = 1 ]; then exec kitty -o "font_size=$size" --start-as=maximized "$vim" -u "$VIMRC" "$@"; fi
-      exec kitty -o "font_size=$size" "$vim" -u "$VIMRC" "$@" ;;
+      set -- -o "font_size=$size" -o "font_family=$fam" -o "modify_font=cell_height +${lsp}px" \
+        -o allow_remote_control=yes --title Gnosis "$SELF" --tui "$@"
+      if [ "$max" = 1 ]; then exec kitty --start-as=maximized "$@"; fi
+      exec kitty "$@" ;;
     alacritty)
       mode=Windowed; [ "$max" = 1 ] && mode=Maximized
-      exec alacritty -o "font.size=$size" -o "window.startup_mode=$mode" -e "$vim" -u "$VIMRC" "$@" ;;
+      exec alacritty -o "font.size=$size" -o "font.normal.family=\"$fam\"" -o "font.offset.y=$lsp" \
+        -o "window.startup_mode=\"$mode\"" --title Gnosis -e "$SELF" --tui "$@" ;;
     wezterm)
-      exec wezterm --config "font_size=$size" start -- "$vim" -u "$VIMRC" "$@" ;;
+      exec wezterm --config "font_size=$size" start -- "$SELF" --tui "$@" ;;
     xterm)
-      if [ "$max" = 1 ]; then exec xterm -maximized -fa Monospace -fs "$size" -e "$vim" -u "$VIMRC" "$@"; fi
-      exec xterm -fa Monospace -fs "$size" -e "$vim" -u "$VIMRC" "$@" ;;
+      if [ "$max" = 1 ]; then
+        exec xterm -maximized -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
+      fi
+      exec xterm -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
     gnome-terminal)
-      if [ "$max" = 1 ]; then exec gnome-terminal --maximize -- "$vim" -u "$VIMRC" "$@"; fi
-      exec gnome-terminal -- "$vim" -u "$VIMRC" "$@" ;;
+      # GNOME Terminal には窓ごとに文字の大きさを渡す方法が無い（端末のプロファイルのまま）
+      if [ "$max" = 1 ]; then exec gnome-terminal --maximize --title Gnosis -- "$SELF" --tui "$@"; fi
+      exec gnome-terminal --title Gnosis -- "$SELF" --tui "$@" ;;
     xfce4-terminal)
-      # XFCE Terminal は --font を新規ウィンドウに渡せる。
-      # 既存ウィンドウのフォントは Vim から直接は変更できない。
-      if [ "$max" = 1 ]; then exec xfce4-terminal --font "Monospace $size" --maximize -x "$vim" -u "$VIMRC" "$@"; fi
-      exec xfce4-terminal --font "Monospace $size" -x "$vim" -u "$VIMRC" "$@" ;;
-    konsole) exec konsole -e "$vim" -u "$VIMRC" "$@" ;;
-    "") echo "gnosis: 端末エミュレーターが見つかりません / no terminal emulator found" >&2; exit 1 ;;
-    *) exec "$term" -e "$vim" -u "$VIMRC" "$@" ;;
+      # XFCE Terminal は新しい窓に --font を渡せる（開いている窓の文字は変えられない）
+      if [ "$max" = 1 ]; then
+        exec xfce4-terminal --font "$fam $size" --maximize --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@"
+      fi
+      exec xfce4-terminal --font "$fam $size" --hide-menubar --hide-toolbar -T Gnosis -x "$SELF" --tui "$@" ;;
+    *) exec "$term" -e "$SELF" --tui "$@" ;;
   esac
+}
+
+# ---- どの Gnosis が起動するか
+git_info() {
+  if have git && { [ -d "$GNOSIS_DIR/.git" ] || [ -f "$GNOSIS_DIR/.git" ]; }; then
+    c=$(git -C "$GNOSIS_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')
+    b=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')
+    printf '%s (%s)' "$c" "$b"
+  else
+    printf '(git 管理外 / not a git checkout)'
+  fi
+}
+
+where() {
+  printf 'Gnosis:        %s\n' "$GNOSIS_DIR"
+  printf 'commit:        %s\n' "$(git_info)"
+  printf 'launcher:      %s\n' "$SELF"
+  printf 'Gnosis home:   %s\n' "$GNOSIS_HOME"
+  printf 'vimrc:         %s\n' "$VIMRC"
+  if [ -f "$VIMRC" ] && [ "$VIMRC" != "$GNOSIS_DIR/vimrc_gnosis" ]; then
+    src=$(sed -n "s/^execute 'source ' \. fnameescape('\(.*\)')$/\1/p" "$VIMRC" | head -1)
+    [ -z "$src" ] || printf '  -> sources:   %s\n' "$src"
+  fi
+  printf 'vim:           %s\n' "$(find_vim)"
+}
+
+doctor() {
+  ok=0; warn=0; bad=0
+  pass() { printf '  OK    %s\n' "$*"; ok=$((ok + 1)); }
+  note() { printf '  注意  %s\n' "$*"; warn=$((warn + 1)); }
+  ng() { printf '  NG    %s\n' "$*"; bad=$((bad + 1)); }
+  echo "Gnosis --doctor"
+  where | sed 's/^/  /'
+  echo
+  echo "[本体の版 / version]"
+  if have git && git -C "$GNOSIS_DIR" rev-parse HEAD >/dev/null 2>&1; then
+    if [ -n "$(git -C "$GNOSIS_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+      note "本体に未コミットの変更があります（更新時は残します）: $GNOSIS_DIR"
+    fi
+    up=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+    if [ -n "$up" ]; then
+      if [ "${GNOSIS_DOCTOR_FETCH:-1}" = 1 ]; then git -C "$GNOSIS_DIR" fetch --quiet 2>/dev/null || note "GitHub に接続できず、最新か確かめられません（前回取得した情報で比べます）"; fi
+      behind=$(git -C "$GNOSIS_DIR" rev-list --count "HEAD..$up" 2>/dev/null || echo 0)
+      ahead=$(git -C "$GNOSIS_DIR" rev-list --count "$up..HEAD" 2>/dev/null || echo 0)
+      if [ "$behind" -gt 0 ]; then
+        ng "$up より $behind コミット古い。更新: cd '$GNOSIS_DIR' && git pull --ff-only && ./install/install.sh"
+      else
+        pass "$up と同じか新しい（ahead $ahead）"
+      fi
+    else
+      note "追跡するブランチがありません（最新か確かめられません）"
+    fi
+  else
+    note "git 管理外のため版を確かめられません"
+  fi
+  echo
+  echo "[起動に使われるランチャー / launchers on PATH]"
+  first=""; seen=":"
+  oldifs=$IFS; IFS=:; set -f
+  for p in $PATH; do
+    IFS=$oldifs
+    case "$seen" in *":$p:"*) continue ;; esac
+    seen="$seen$p:"
+    [ -x "$p/gnosis" ] || continue
+    tgt=$(sed -n "s/^exec '\(.*\)' \"\$@\"$/\1/p" "$p/gnosis" 2>/dev/null | head -1)
+    [ -n "$tgt" ] || tgt=$(cd "$p" && readlink -f gnosis 2>/dev/null || echo "$p/gnosis")
+    if [ -z "$first" ]; then
+      first=$tgt
+      if [ "$tgt" = "$SELF" ]; then pass "$p/gnosis -> $tgt"; else ng "$p/gnosis -> $tgt（この本体 $SELF ではありません）"; fi
+    else
+      note "後ろにもあります（使われません）: $p/gnosis -> $tgt"
+    fi
+  done
+  IFS=$oldifs; set +f
+  [ -n "$first" ] || note "PATH に gnosis がありません（~/.local/bin を PATH に入れてください）"
+  echo
+  echo "[アプリメニュー / desktop entry]"
+  if [ "$(uname -s)" != Darwin ]; then
+    de="${XDG_DATA_HOME:-$HOME/.local/share}/applications/gnosis.desktop"
+    if [ -f "$de" ]; then
+      ex=$(sed -n 's/^Exec=//p' "$de" | head -1)
+      case "$ex" in
+        *--new-terminal*) pass "$de: $ex" ;;
+        *) ng "$de が古い形式です（$ex）。./install/install.sh をもう一度実行すると直ります" ;;
+      esac
+      if grep -q '^Terminal=true' "$de"; then note "Terminal=true（端末をデスクトップ任せにしています）"; fi
+    else
+      note "アプリメニューの項目がありません（./install/install.sh で作れます）"
+    fi
+    for old in simple-yurii-note.desktop yurii-note.desktop; do
+      f="${XDG_DATA_HOME:-$HOME/.local/share}/applications/$old"
+      [ -f "$f" ] && note "旧版の項目があります（消していません）: $f"
+    done
+  fi
+  echo
+  echo "[必要なもの / requirements]"
+  vim=$(find_vim)
+  if have "$vim"; then
+    vv=$("$vim" --version 2>/dev/null | head -40)
+    miss=""
+    for f in job channel timers textprop popupwin; do printf '%s' "$vv" | grep -q "+$f" || miss="$miss +$f"; done
+    if [ -z "$miss" ]; then pass "Vim: $vim ($(printf '%s' "$vv" | head -1 | sed 's/ (.*//'))"; else ng "Vim に足りない機能:$miss ($vim)"; fi
+    printf '%s' "$vv" | grep -q '+clipboard' || note "Vim が -clipboard（PC のクリップボードは wl-copy / xclip / xsel を使います）"
+  else
+    ng "Vim がありません"
+  fi
+  py=$(command -v python3 || true)
+  if [ -n "$py" ]; then
+    pass "Python 3: $py"
+    if "$py" -c 'import pykakasi' >/dev/null 2>&1 || { [ -x "$GNOSIS_HOME/venv/bin/python" ] && "$GNOSIS_HOME/venv/bin/python" -c 'import pykakasi' >/dev/null 2>&1; }; then
+      pass "pykakasi（よみ順の並べ替え）"
+    else
+      note "pykakasi が無い（よみ順の並べ替えは文字コード順になります）"
+    fi
+    "$py" -c 'import tkinter' >/dev/null 2>&1 || note "tkinter が無い（紙の日記の取り込み画面 \\F が使えません）"
+  else
+    ng "Python 3 がありません（リンクの同期・検索が動きません）"
+  fi
+  if have fzf || [ -x "$GNOSIS_HOME/plugins/fzf/bin/fzf" ]; then pass "fzf"; else ng "fzf がありません（検索）"; fi
+  have rg && pass "ripgrep" || note "ripgrep が無い（全文検索が遅くなります）"
+  have git && pass "git" || note "git が無い（テーマの追加・更新ができません）"
+  for p in fzf fzf.vim vim-surround; do
+    [ -d "$GNOSIS_HOME/plugins/$p" ] && pass "Gnosis 専用プラグイン: $p" || note "Gnosis 専用プラグインがありません: $p（./install/install.sh）"
+  done
+  if have gocryptfs; then pass "gocryptfs（暗号化 vault）"; else note "gocryptfs が無い（暗号化 vault を使うときだけ必要）"; fi
+  if [ "$(uname -s)" != Darwin ]; then
+    have fusermount3 || have fusermount || note "fusermount が無い（暗号化 vault を使うときだけ必要）"
+  fi
+  echo
+  echo "[文字サイズ / font]"
+  printf '  terminal.json: %s\n' "$GNOSIS_HOME/terminal.json"
+  printf '  文字サイズ %s / フォント %s / 行間 %s\n' "$(tf_get fontSize 16)" "$(font_family)" "$(tf_get lineSpacing 2)"
+  t=$(pick_terminal || true)
+  printf '  アイコンから開く端末: %s\n' "${t:-（見つかりません）}"
+  case "$(basename "${t:-none}")" in
+    konsole|kitty|alacritty) pass "この端末は Gnosis の窓で文字サイズをその場で変えられます" ;;
+    xfce4-terminal|xterm|wezterm) pass "この端末は Gnosis の窓を開くときに文字サイズを渡せます（その場では変わりません）" ;;
+    gnome-terminal) note "GNOME Terminal は窓ごとの文字サイズを渡せません（端末のプロファイルのまま）" ;;
+    *) note "この端末の文字サイズは Gnosis から変えられません" ;;
+  esac
+  echo
+  printf '結果 / result: OK %s, 注意 %s, NG %s\n' "$ok" "$warn" "$bad"
+  [ "$bad" -eq 0 ]
 }
 
 mode=auto
@@ -166,11 +509,11 @@ case "${1:-}" in
   --gui) mode=gui; shift ;;
   --tui|--terminal) mode=tui; shift ;;
   --new-terminal) mode=newterm; shift ;;
-  --where)
-    printf 'Gnosis: %s\nGnosis home: %s\nvimrc: %s\nvim: %s\n' "$GNOSIS_DIR" "$GNOSIS_HOME" "$VIMRC" "$(find_vim)"
-    exit 0 ;;
+  --where) where; exit 0 ;;
+  --doctor) doctor; exit $? ;;
+  --version) git_info; echo; exit 0 ;;
   -h|--help)
-    sed -n '2,20p' "$self" | sed 's/^# \{0,1\}//'
+    sed -n '2,24p' "$self" | sed 's/^# \{0,1\}//'
     exit 0 ;;
 esac
 

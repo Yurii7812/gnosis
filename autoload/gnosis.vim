@@ -1049,18 +1049,69 @@ function! s:guide_template(...) abort
         \ ] + l:body
 endfunction
 
-" 操作ガイドを最新のテンプレートへ更新する。無ければ作る。既存の time 行は
-" 引き継いで、内容が変わったときだけ書き換える（毎回の無駄な差分を避ける）。
+" 操作ガイドを最新のテンプレートへ更新する。無ければ作る。
+" ガイドも vault の普通のノートなので、本文（テンプレートの部分）だけを差し替え、
+" 同期が管理する関係の節（### Context / ### Group / ### Related / ### BackLink）と、
+" front matter の title 以外の行（time・attribute など）はそのまま引き継ぐ。
+" 以前は本文ごと上書きしていたため、起動のたびに Index やグループへの所属
+" （### Group）が消え、別のグループへ移していた場合は、次の同期で相手側の
+" リンクまで「消された」と扱われるおそれがあった。
+" 内容が変わったときだけ書き換える（毎回の無駄な差分を避ける）。
+let s:guide_relation_marks = ['### Context', '### Parent', '### Group', '### Related', '### BackLink']
+
+" 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
+function! s:guide_relation_tail(lines) abort
+  let l:fence = ''
+  let l:in_fm = get(a:lines, 0, '') ==# '---'
+  for l:i in range(len(a:lines))
+    let l:ln = a:lines[l:i]
+    if l:in_fm
+      if l:i > 0 && l:ln =~# '^---\s*$'
+        let l:in_fm = 0
+      endif
+      continue
+    endif
+    let l:m = matchstr(l:ln, '^\s\{0,3}\zs\(`\{3,}\|\~\{3,}\)')
+    if !empty(l:m)
+      if empty(l:fence)
+        let l:fence = l:m[0]
+      elseif l:m[0] ==# l:fence
+        let l:fence = ''
+      endif
+      continue
+    endif
+    if empty(l:fence) && index(s:guide_relation_marks, trim(l:ln)) >= 0
+      return a:lines[l:i :]
+    endif
+  endfor
+  return []
+endfunction
+
+" 古いガイドの front matter を引き継いだ、新しいガイドの行
+function! s:guide_merge(old, new) abort
+  let l:out = copy(a:new)
+  if get(a:old, 0, '') ==# '---'
+    let l:end = index(a:old, '---', 1)
+    if l:end > 0
+      let l:fm = copy(a:old[0 : l:end])
+      let l:title = get(filter(copy(a:new[1 : index(a:new, '---', 1) - 1]), 'v:val =~# "^title:"'), 0, '')
+      call map(l:fm, 'v:val =~# "^title:" ? l:title : v:val')
+      if empty(filter(copy(l:fm), 'v:val =~# "^title:"'))
+        call insert(l:fm, l:title, len(l:fm) - 1)
+      endif
+      let l:out = l:fm + a:new[index(a:new, '---', 1) + 1 :]
+    endif
+  endif
+  return l:out + s:guide_relation_tail(a:old)
+endfunction
+
 function! s:refresh_guide(root) abort
   let l:guide = fnamemodify(a:root, ':p') . s:guide_file_name(a:root)
   let l:new = s:guide_template()
   let l:old_title = ''
   if filereadable(l:guide)
     let l:old = readfile(l:guide)
-    let l:old_time = get(filter(copy(l:old), 'v:val =~# "^time:"'), 0, '')
-    if !empty(l:old_time)
-      call map(l:new, 'v:val =~# "^time:" ? l:old_time : v:val')
-    endif
+    let l:new = s:guide_merge(l:old, l:new)
     if l:old ==# l:new
       return
     endif
@@ -1131,6 +1182,11 @@ function! s:write_index_and_guide(root) abort
   call s:refresh_guide(a:root)
   call s:syn_writefile(s:index_template(l:first_guide), l:index)
   call s:mark_index_created()
+  " 新しく作ったガイドは Index の本文からリンクされる。すぐ同期して、ガイドにも
+  " 所属（### Group の Index）を書く（次に何かを保存するまで所属が無い状態にしない）
+  if l:first_guide && s:pkm_format() ==# 'v2' && filereadable(get(g:, 'gnosis_python', ''))
+    silent! call s:run_sync([g:gnosis_python, 'update', a:root])
+  endif
 endfunction
 
 function! s:setup_persistent_undo_for_root(root) abort
@@ -2457,6 +2513,22 @@ endfunction
 " 現在位置の次の文字の先頭バイト位置（マルチバイト対応）。
 function! s:byte_next(line, col) abort
   return a:col + strlen(matchstr(strpart(a:line, a:col - 1), '^.'))
+endfunction
+
+" :GnosisLinkSource … リンクの元の Markdown を見せる／隠す（このバッファだけ）。
+" ふだんは表示名だけを見せ、URL（ファイル名）を直接直したいときに切り替える。
+function! gnosis#toggle_link_source() abort
+  if &l:conceallevel == 0
+    let l:on = get(b:, 'gnosis_link_source_saved', [2, 'nvi'])
+    let &l:conceallevel = l:on[0]
+    let &l:concealcursor = l:on[1]
+    unlet! b:gnosis_link_source_saved
+    echo 'Gnosis: ' . gnosis#i18n#t('link.source_hidden')
+  else
+    let b:gnosis_link_source_saved = [&l:conceallevel, &l:concealcursor]
+    setlocal conceallevel=0 concealcursor=
+    echo 'Gnosis: ' . gnosis#i18n#t('link.source_shown')
+  endif
 endfunction
 
 " ←/→ と h/l 用の左右移動（カウント対応）。conceal で隠れた範囲（[ と ](url)）の上には Vim は

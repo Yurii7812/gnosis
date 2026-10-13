@@ -2,13 +2,16 @@
 " autoload/gnosis/settings_ui.vim — Gnosis の設定画面（Vim 版。:GnosisSettings）
 "
 " vimrc を書き換えずに、vault ごとの設定（<vault>/.gnosis/settings.json）を変える。
-"   言語 / 起動時に最大化 / 通常のウィンドウサイズ / 文字サイズ / ライト・ダーク /
+"   言語 / 起動時に最大化 / 通常のウィンドウサイズ / ライト・ダーク /
 "   テーマの選択・追加（Plug '作者/リポジトリ'）/ カスタム配色
-" キー: j k 移動 / Enter・Space 変更 / q・Esc 閉じる
+" 文字の大きさ・フォント・行間・Gnosis の窓に使う端末は vault ではなく Gnosis ホームの
+" terminal.json（gnosis#termfont。どの vault でも同じ。ランチャーが窓を開くときに使う）。
+" キー: j k 移動 / Enter・Space 変更 / 文字サイズの行で + - 0 / q・Esc 閉じる
 " Electron アプリは同じ設定を HTML の画面で変える（同じファイルを読み書きする）。
 " =============================================================================
 
-let s:items = ['language', 'maximized', 'window', 'fontSize', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset']
+let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset']
+let s:font_items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal']
 
 function! s:t(key, ...) abort
   return call('gnosis#i18n#t', [a:key] + a:000)
@@ -42,7 +45,11 @@ function! gnosis#settings_ui#open(...) abort
   setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nonumber norelativenumber nowrap nolist
   silent! file Gnosis\ Settings
   let b:gnosis_settings = 1
-  for l:k in ['<CR>', '<Space>', 'q', '<Esc>', 'j', 'k', '<Down>', '<Up>', 'h', 'l', '<Left>', '<Right>', '+', '-', '=']
+  augroup gnosis_settings_resize
+    autocmd! * <buffer>
+    autocmd VimResized <buffer> call gnosis#settings_ui#render()
+  augroup END
+  for l:k in ['<CR>', '<Space>', 'q', '<Esc>', 'j', 'k', '<Down>', '<Up>', 'h', 'l', '<Left>', '<Right>', '+', '-', '=', '0', '<kPlus>', '<kMinus>']
     execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#settings_ui#key(%s)<CR>', l:k, substitute(string(l:k), '<', '<lt>', 'g'))
   endfor
   for l:k in ['i', 'I', 'o', 'O', 'a', 'A', 'x', 'p', 'P', 'c', 'C', 'u', 'd']
@@ -63,14 +70,23 @@ endfunction
 
 function! s:value(item) abort
   let l:s = s:settings
-  if a:item ==# 'language'
+  if index(s:font_items, a:item) >= 0
+    let l:f = gnosis#termfont#load()
+    if a:item ==# 'fontSize'
+      return l:f.fontSize . ' pt    ( - / + / 0 )'
+    elseif a:item ==# 'fontFamily'
+      return empty(l:f.fontFamily) ? s:t('settings.font_auto') : l:f.fontFamily
+    elseif a:item ==# 'lineSpacing'
+      return l:f.lineSpacing . ' px'
+    else
+      return empty(l:f.terminal) ? s:t('settings.font_auto') : l:f.terminal
+    endif
+  elseif a:item ==# 'language'
     return l:s.language ==# 'ja' ? '日本語' : 'English'
   elseif a:item ==# 'maximized'
     return l:s.window.maximized ? s:t('settings.on') : s:t('settings.off')
   elseif a:item ==# 'window'
     return l:s.window.width . ' × ' . l:s.window.height
-  elseif a:item ==# 'fontSize'
-    return string(l:s.fontSize)
   elseif a:item ==# 'appearance'
     return l:s.appearance ==# 'dark' ? s:t('settings.dark') : s:t('settings.light')
   elseif a:item ==# 'theme'
@@ -83,30 +99,71 @@ function! gnosis#settings_ui#render() abort
   if !get(b:, 'gnosis_settings', 0)
     return
   endif
+  let l:width = winwidth(0)
   let l:lines = [' Gnosis — ' . s:t('settings.title'), ' ' . s:t('settings.vault') . ' ' . s:vault, '']
+  let l:hls = [['gnosisSettingsTitle', 1, 0], ['gnosisSettingsDim', 2, 0]]
   let l:w = 0
   for l:it in s:items
     let l:w = max([l:w, strdisplaywidth(s:t('settings.item.' . l:it))])
   endfor
+  " 画面が狭いときは、値を項目名の次の行に出す
+  let l:narrow = l:w + 8 + 24 > l:width
+  let s:rows = []
   for l:i in range(len(s:items))
     let l:it = s:items[l:i]
+    if l:it ==# 'language'
+      call add(l:lines, '')
+    endif
     let l:label = s:t('settings.item.' . l:it)
     let l:val = s:value(l:it)
-    let l:row = (l:i == s:sel ? ' > ' : '   ') . l:label . repeat(' ', l:w - strdisplaywidth(l:label) + 2) . l:val
-    call add(l:lines, l:row)
+    let l:mark = l:i == s:sel ? ' > ' : '   '
+    call add(s:rows, len(l:lines) + 1)
+    if l:narrow
+      call add(l:lines, l:mark . l:label)
+      if !empty(l:val)
+        call add(l:lines, '      ' . l:val)
+        call add(l:hls, ['gnosisSettingsValue', len(l:lines), 0])
+      endif
+    else
+      let l:row = l:mark . l:label . repeat(' ', l:w - strdisplaywidth(l:label) + 3) . l:val
+      call add(l:lines, l:row)
+      if !empty(l:val)
+        call add(l:hls, ['gnosisSettingsValue', len(l:lines), strlen(l:row) - strlen(l:val) + 1, strlen(l:val)])
+      endif
+    endif
+    if l:i == s:sel
+      call add(l:hls, ['gnosisSettingsSel', s:rows[-1], 0])
+    endif
+    if l:it ==# 'terminal'
+      " いまの端末で文字サイズをその場で変えられるか（保存と反映を分けて示す）
+      let l:t = gnosis#termfont#detect()
+      call add(l:lines, '      ' . gnosis#termfont#status())
+      call add(l:hls, [l:t.live ? 'gnosisSettingsOk' : 'gnosisSettingsWarn', len(l:lines), 0])
+    endif
   endfor
-  call extend(l:lines, ['', '   ' . s:t('settings.keys'), '   ' . s:t('settings.note_terminal')])
+  call extend(l:lines, ['', '   ' . s:t('settings.keys')])
+  call add(l:hls, ['gnosisSettingsDim', len(l:lines), 0])
+  if s:items[s:sel] ==# 'fontSize'
+    call add(l:lines, '   ' . s:t('settings.font_keys'))
+    call add(l:hls, ['gnosisSettingsDim', len(l:lines), 0])
+  endif
   if !empty(s:message)
     call extend(l:lines, ['', '   ' . s:message])
+    call add(l:hls, [get(s:, 'message_ok', 0) ? 'gnosisSettingsOk' : 'gnosisSettingsWarn', len(l:lines), 0])
   endif
   setlocal modifiable
   silent %delete _
   call setline(1, l:lines)
   setlocal nomodifiable
   call clearmatches()
-  call matchaddpos('Title', [1])
-  call matchaddpos('Visual', [4 + s:sel])
-  call cursor(4 + s:sel, 4)
+  for l:h in l:hls
+    if len(l:h) == 4
+      call matchaddpos(l:h[0], [[l:h[1], l:h[2], l:h[3]]], 10)
+    else
+      call matchaddpos(l:h[0], [l:h[1]], l:h[0] ==# 'gnosisSettingsSel' ? 5 : 10)
+    endif
+  endfor
+  call cursor(s:rows[s:sel], 4)
   redraw
 endfunction
 
@@ -118,17 +175,13 @@ function! s:save() abort
     call gnosis#settings#activate(s:vault)
   else
     call gnosis#i18n#set_lang(s:settings.language)
-    let g:gnosis_font_live_applied = has('gui_running') ? 1
-          \ : gnosis#settings#apply_terminal_font(s:settings.fontSize)
   endif
 endfunction
 
-function! s:font_feedback() abort
-  if has('gui_running') || get(g:, 'gnosis_font_live_applied', 0)
-    let s:message = printf('Font: %d pt (+/-)', s:settings.fontSize)
-  else
-    let s:message = s:t('settings.note_terminal')
-  endif
+" 文字サイズを変えた結果を伝える（保存できたか・その場で変わったかを分けて）
+function! s:font_result(r) abort
+  let s:message = gnosis#termfont#describe(a:r)
+  let s:message_ok = a:r.saved && a:r.applied
 endfunction
 
 function! s:ask(prompt, default) abort
@@ -147,6 +200,7 @@ endfunction
 
 function! gnosis#settings_ui#key(k) abort
   let s:message = ''
+  let s:message_ok = 0
   if a:k ==# 'j' || a:k ==# '<Down>'
     let s:sel = min([s:sel + 1, len(s:items) - 1])
   elseif a:k ==# 'k' || a:k ==# '<Up>'
@@ -154,11 +208,12 @@ function! gnosis#settings_ui#key(k) abort
   elseif a:k ==# 'q' || a:k ==# '<Esc>'
     call gnosis#settings_ui#close()
     return
-  elseif (a:k ==# '+' || a:k ==# '=' || a:k ==# '-') && s:items[s:sel] ==# 'fontSize'
-    " + / - で実際のフォントサイズをその場でプレビュー（対応端末のみ）。
-    let s:settings.fontSize = max([8, min([48, s:settings.fontSize + (a:k ==# '-' ? -1 : 1)])])
-    call s:save()
-    call s:font_feedback()
+  elseif index(['+', '=', '-', '0', '<kPlus>', '<kMinus>'], a:k) >= 0 && s:items[s:sel] ==# 'fontSize'
+    " + / - / 0 で保存し、その場で変えられる端末ではすぐ反映（設定画面の文字も変わる）
+    let l:cur = gnosis#termfont#load().fontSize
+    let l:n = a:k ==# '0' ? gnosis#termfont#defaults().fontSize
+          \ : l:cur + (a:k ==# '-' || a:k ==# '<kMinus>' ? -1 : 1)
+    call s:font_result(gnosis#termfont#set_size(l:n))
   elseif index(['<CR>', '<Space>', 'h', 'l', '<Left>', '<Right>'], a:k) >= 0
     call s:change(s:items[s:sel])
   endif
@@ -182,13 +237,42 @@ function! s:change(item) abort
     let l:s.window.width = str2nr(l:m[1])
     let l:s.window.height = str2nr(l:m[2])
   elseif a:item ==# 'fontSize'
-    let l:r = s:ask(s:t('settings.prompt_font'), string(l:s.fontSize))
+    let l:r = s:ask(s:t('settings.prompt_font'), string(gnosis#termfont#load().fontSize))
     if l:r ==# "\x01" | return | endif
     if l:r !~# '^\s*\d\+\s*$'
       let s:message = s:t('settings.bad_font')
       return
     endif
-    let l:s.fontSize = str2nr(l:r)
+    call s:font_result(gnosis#termfont#set_size(str2nr(l:r)))
+    return
+  elseif a:item ==# 'fontFamily'
+    let l:r = s:ask(s:t('settings.prompt_font_family'), gnosis#termfont#load().fontFamily)
+    if l:r ==# "\x01" | return | endif
+    call s:font_result(gnosis#termfont#set('fontFamily', trim(l:r)))
+    let s:message = s:t('settings.font_family_saved')
+    return
+  elseif a:item ==# 'lineSpacing'
+    let l:r = s:ask(s:t('settings.prompt_line_spacing'), string(gnosis#termfont#load().lineSpacing))
+    if l:r ==# "\x01" | return | endif
+    if l:r !~# '^\s*\d\+\s*$'
+      let s:message = s:t('settings.bad_font')
+      return
+    endif
+    call gnosis#termfont#set('lineSpacing', max([0, min([12, str2nr(l:r)])]))
+    let s:message = s:t('settings.font_family_saved')
+    return
+  elseif a:item ==# 'terminal'
+    let l:choices = [''] + filter(['konsole', 'xfce4-terminal', 'gnome-terminal', 'kitty', 'alacritty', 'wezterm', 'xterm'], 'executable(v:val)')
+    let l:labels = [s:t('settings.choose_terminal')]
+    for l:i in range(len(l:choices))
+      call add(l:labels, (l:i + 1) . '. ' . (empty(l:choices[l:i]) ? s:t('settings.font_auto') : l:choices[l:i]))
+    endfor
+    let l:n = inputlist(l:labels)
+    if l:n >= 1 && l:n <= len(l:choices)
+      call gnosis#termfont#set('terminal', l:choices[l:n - 1])
+      let s:message = s:t('settings.font_family_saved')
+    endif
+    return
   elseif a:item ==# 'appearance'
     let l:s.appearance = l:s.appearance ==# 'light' ? 'dark' : 'light'
   elseif a:item ==# 'theme'
@@ -208,9 +292,6 @@ function! s:change(item) abort
     let l:s.theme = {'kind': 'builtin'}
   endif
   call s:save()
-  if a:item ==# 'fontSize'
-    call s:font_feedback()
-  endif
 endfunction
 
 function! s:choose_theme() abort

@@ -59,20 +59,47 @@ function! gnosis#start#on_vim_enter() abort
 endfunction
 
 " アート（幅 a:width の行のリスト）。無ければ []
+" 標準は chnoubis3.sh の元の図案（点字の点がほぼ正方形に並ぶ普通の等幅フォント向け）。
+" 横に縮めた補正版（chnoubis-fit-*）は、文字のマスが横長で元の図案が横に伸びて見える
+" 端末のときだけ使う（gnosis#start#cell_ratio()）。24 桁は補正版だけがある（比率は元と同じ）。
+" g:gnosis_start_art = 'original' / 'fit' で固定できる。
 function! gnosis#start#art(width) abort
-  " 横につぶれて表示される環境用に、横幅を調整した点描版を優先する。
-  " 元の図案はそのまま残し、g:gnosis_start_original_art=1 で比較できる。
-  let l:name = get(g:, 'gnosis_start_original_art', 0) && a:width != 24
-        \ ? 'chnoubis-' . a:width : 'chnoubis-fit-' . a:width
-  let l:f = s:art_dir . '/' . l:name . '.txt'
-  if !filereadable(l:f)
-    return []
+  let l:kind = get(g:, 'gnosis_start_art', '')
+  if empty(l:kind)
+    let l:kind = get(g:, 'gnosis_start_original_art', 0) ? 'original'
+          \ : gnosis#start#cell_ratio() > 1.15 ? 'fit' : 'original'
   endif
-  let l:lines = readfile(l:f)
-  while !empty(l:lines) && l:lines[-1] ==# ''
-    call remove(l:lines, -1)
-  endwhile
-  return l:lines
+  let l:names = l:kind ==# 'fit' ? ['chnoubis-fit-' . a:width] : ['chnoubis-' . a:width]
+  if a:width == 24
+    let l:names = ['chnoubis-fit-24']
+  endif
+  for l:name in l:names
+    let l:f = s:art_dir . '/' . l:name . '.txt'
+    if filereadable(l:f)
+      let l:lines = readfile(l:f)
+      while !empty(l:lines) && l:lines[-1] ==# ''
+        call remove(l:lines, -1)
+      endwhile
+      return l:lines
+    endif
+  endfor
+  return []
+endfunction
+
+" 点字の点の横と縦の間隔の比（1 なら正方形）。マスの大きさ（ピクセル）が分かる端末だけ。
+" 分からなければ 1（元の図案）。1 マス = 横 2 点 × 縦 4 点なので (幅 / 2) / (高さ / 4)。
+function! gnosis#start#cell_ratio() abort
+  if exists('g:gnosis_test_cell_pixels')
+    let l:px = g:gnosis_test_cell_pixels
+  elseif exists('*getcellpixels')
+    let l:px = getcellpixels()
+  else
+    return 1.0
+  endif
+  if type(l:px) != v:t_list || len(l:px) < 2 || l:px[0] <= 0 || l:px[1] <= 0
+    return 1.0
+  endif
+  return (l:px[0] * 2.0) / l:px[1]
 endfunction
 
 " 画面に収まる大きさのアートを選ぶ（大きいものから。下の情報欄の行数 a:reserve を残す）
@@ -196,38 +223,61 @@ function! gnosis#start#render() abort
     endif
     let l:info += [['', '']]
     if !empty(l:v) && l:v.exists
-      let l:info += [[s:t('start.enter'), 'gnosisStartKey']]
+      let l:info += [[s:t('start.enter_open', l:v.name), 'gnosisStartKey']]
     endif
     let l:info += [[s:t('start.keys'), 'gnosisStartDim']]
     if !empty(s:message)
       let l:info += [['', ''], [s:message, 'gnosisStartWarn']]
     endif
-    " 小さな端末でも図案 + ロゴ + 開始キーを表示。収まるときは詳細も残す。
+    " 小さな端末でも図案 + ロゴ + 「Enter で（選択中の vault）を開く」を表示する。
     if l:rows < 43
-      let l:label = empty(l:v) ? s:t('start.no_vault') : l:v.name
-      let l:info = [[l:label, 'gnosisStartTitle']]
-      if !empty(l:v) && !l:v.exists
-        let l:info += [[s:t('start.vault_missing'), 'gnosisStartWarn']]
+      if empty(l:v)
+        let l:info = [[s:t('start.no_vault'), 'gnosisStartTitle']]
+      elseif !l:v.exists
+        let l:info = [[l:v.name, 'gnosisStartTitle'], [s:t('start.vault_missing'), 'gnosisStartWarn']]
+      else
+        let l:info = [[s:t('start.enter_open', l:v.name), 'gnosisStartKey']]
       endif
-      let l:info += [['Enter  |  v  |  s  |  q', 'gnosisStartKey']]
+      let l:info += [[s:t('start.keys_short'), 'gnosisStartDim']]
+      if !empty(s:message) && l:rows >= 30
+        let l:info += [[s:message, 'gnosisStartWarn']]
+      endif
     endif
+    " 配置: Chnoubis の図案を最優先に残す。入らなければ、余白 → 補足の行 → ロゴの大きさの順に詰める
     let l:logo = gnosis#start#logo(l:cols, l:rows)
-    let l:art = gnosis#start#pick_art(l:cols, l:rows, len(l:info) + len(l:logo) + 2)
-    let l:top = max([0, (l:rows - len(l:art) - len(l:logo) - len(l:info) - 2) / 2])
+    let l:small_logo = gnosis#start#logo(0, 0)
+    let l:layouts = [[l:logo, l:info, 1], [l:logo, l:info, 0], [l:logo, l:info[: 0], 0],
+          \ [l:small_logo, l:info[: 0], 0], [[], l:info[: 0], 0]]
+    let l:art = []
+    for [l:lg, l:inf, l:gap] in l:layouts
+      let l:art = gnosis#start#pick_art(l:cols, l:rows, len(l:inf) + len(l:lg) + 2 * l:gap)
+      if !empty(l:art)
+        break
+      endif
+    endfor
+    if empty(l:art)
+      let [l:lg, l:inf, l:gap] = l:layouts[0]
+    endif
+    let [l:logo, l:info] = [l:lg, l:inf]
+    let l:top = max([0, (l:rows - len(l:art) - len(l:logo) - len(l:info) - 2 * l:gap) / 2])
     let l:lines += repeat([''], l:top)
     let l:hl += repeat([''], l:top)
     for l:a in l:art
       call add(l:lines, s:center(l:a, l:cols))
       call add(l:hl, 'gnosisStartArt')
     endfor
-    call add(l:lines, '')
-    call add(l:hl, '')
+    if l:gap
+      call add(l:lines, '')
+      call add(l:hl, '')
+    endif
     for l:letter in l:logo
       call add(l:lines, s:center(l:letter, l:cols))
-      call add(l:hl, 'gnosisStartTitle')
+      call add(l:hl, 'gnosisStartLogo')
     endfor
-    call add(l:lines, '')
-    call add(l:hl, '')
+    if l:gap
+      call add(l:lines, '')
+      call add(l:hl, '')
+    endif
     for [l:text, l:group] in l:info
       call add(l:lines, s:center(l:text, l:cols))
       call add(l:hl, l:group)
@@ -268,9 +318,14 @@ function! gnosis#start#render() abort
   call setline(1, l:lines)
   setlocal nomodifiable
   call clearmatches()
+  " 色は文字のある部分だけに付ける（行全体に付けると、キーの案内が画面幅の帯になる）
   for l:i in range(len(l:hl))
     if !empty(l:hl[l:i])
-      call matchaddpos(l:hl[l:i], [l:i + 1], 10)
+      let l:start = match(l:lines[l:i], '\S')
+      if l:start >= 0
+        let l:len = strlen(substitute(l:lines[l:i], '\s\+$', '', '')) - l:start
+        call matchaddpos(l:hl[l:i], [[l:i + 1, l:start + 1, l:len]], 10)
+      endif
     endif
   endfor
   if s:mode ==# 'vaults' && !empty(gnosis#vault#list())

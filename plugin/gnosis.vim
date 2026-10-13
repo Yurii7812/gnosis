@@ -276,6 +276,10 @@ command!          GnosisVaults call gnosis#start#open_vaults()
 command!          GnosisSettings call gnosis#settings_ui#open()
 command! -nargs=1 GnosisThemeAdd call gnosis#theme#add_command(<q-args>)
 command!          GnosisThemeReset call gnosis#settings#set('theme', {'kind': 'builtin'})
+" 文字サイズ（Gnosis 全体。:GnosisFontSize 20 / +1 / -1 / reset。引数なしで今の大きさ）
+command! -nargs=? GnosisFontSize call gnosis#termfont#command(<q-args>)
+" リンクの元の Markdown（[表示名](ファイル名)）を見せる・隠すの切り替え（このバッファだけ）
+command!          GnosisLinkSource call gnosis#toggle_link_source()
 
 command!          GnosisChooseIndexDir call gnosis#choose_index_root()
 command!          GnosisChooseIndex call gnosis#choose_index_root()
@@ -730,7 +734,21 @@ augroup gnosis_conceal
   autocmd!
   autocmd FileType markdown,vimwiki call s:setup_conceal()
   autocmd BufRead,BufNewFile *.md   call s:setup_conceal()
+  " 構文を読み込んだ後にも付け直す。FileType の自動コマンドは定義順に動き、
+  " plugin/other.vim の `syntax on` が syntaxset（set syntax=…）を後ろへ並べ直すため、
+  " FileType だけだと Markdown の構文ファイルが `syntax clear` でリンクの構文を消していた
+  " （ファイルを読まずに filetype=markdown にしたバッファでリンクが生のまま見えた）。
+  autocmd Syntax markdown,vimwiki call s:setup_conceal()
+  " 配色を変えても（:colorscheme・テーマの切り替え）リンクの色と下線を保つ
+  autocmd ColorScheme * call s:link_highlight()
 augroup END
+
+" リンクの表示名の色（テーマの link の色。無ければ水色）。下線で本文と区別する。
+function! s:link_highlight() abort
+  let l:link_color_gui = get(g:, 'gnosis_link_color_gui', '#5CD0FF')
+  let l:link_color_cterm = get(g:, 'gnosis_link_color_cterm', '81')
+  execute 'highlight gnosisLinkText term=underline cterm=underline gui=underline ctermfg=' . l:link_color_cterm . ' guifg=' . l:link_color_gui
+endfunction
 
 function! s:setup_conceal() abort
   if &l:filetype !=# 'markdown' && &l:filetype !=# 'vimwiki'
@@ -797,9 +815,7 @@ function! s:setup_conceal() abort
   highlight default link gnosisCodeInline markdownCode
   syntax region gnosisLinkRegion start=/\[\ze[^\] \n][^\]\n]*\](\([^)\n]\{1,300}\))/ end=/\](\([^)\n]\{1,300}\))/ keepend oneline contains=gnosisLinkText,gnosisConcealOpen,gnosisConcealClose containedin=markdownItalic,markdownBold,markdownBoldItalic
   syntax match gnosisLinkText /\%(\[\)\@<=[^\] \n][^\]\n]*\ze\](\([^)\n]\{1,300}\))/ contained
-  let l:link_color_gui = get(g:, 'gnosis_link_color_gui', '#66CCFF')
-  let l:link_color_cterm = get(g:, 'gnosis_link_color_cterm', '81')
-  execute 'highlight gnosisLinkText term=underline cterm=underline gui=underline ctermfg=' . l:link_color_cterm . ' guifg=' . l:link_color_gui
+  call s:link_highlight()
 
   " [ と ](xxx) を隠して、リンク本文だけ見せる
   syntax match gnosisConcealOpen /\[/ contained conceal
@@ -1092,6 +1108,8 @@ command! CopyStack call gnosis#stack_copy_toggle()
 augroup gnosis_exit_cleanup
   autocmd!
   autocmd VimLeave * call gnosis#exit_cleanup()
+  " ふだんの端末の窓で文字サイズをその場で変えていたら元に戻す（kitty・Alacritty）
+  autocmd VimLeave * call gnosis#termfont#restore_on_exit()
 augroup END
 
 " ---------------------------------------------------------------------------

@@ -99,7 +99,13 @@ function! gnosis#theme#palette(s) abort
     let l:c = get(get(a:s, 'customThemes', {}), get(a:s.theme, 'name', ''), {})
     if !empty(l:c)
       let l:base = get(l:c, 'base', a:s.appearance)
-      let l:p = extend(copy(get(l:pals, l:base, l:pals.light)), filter(copy(l:c), 'v:val =~# "^#\\x\\{6}$" || v:key ==# "base"'))
+      let l:p = copy(get(l:pals, l:base, l:pals.light))
+      " 背景か本文の色を変えたカスタム配色では、補助の色（muted）は組み込みのものを使わず
+      " その配色の本文と背景から作る（明るい背景に暗い補助色、のような食い違いを防ぐ）
+      if has_key(l:c, 'bg') || has_key(l:c, 'fg')
+        call remove(l:p, 'muted')
+      endif
+      call extend(l:p, filter(copy(l:c), 'v:val =~# "^#\\x\\{6}$" || v:key ==# "base"'))
       let l:p.base = l:base
       return l:p
     endif
