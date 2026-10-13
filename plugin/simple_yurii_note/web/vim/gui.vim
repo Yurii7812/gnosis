@@ -49,6 +49,15 @@ function! s:snapshot(force) abort
         \ 'cols': &columns,
         \ 'cmdtype': getcmdtype(),
         \ }
+  " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
+  let l:pp = []
+  for l:id in popup_list()
+    let l:g = popup_getpos(l:id)
+    if !empty(l:g) && get(l:g, 'visible', 0)
+      call add(l:pp, [l:g.col, l:g.line, l:g.width, l:g.height])
+    endif
+  endfor
+  let l:d.popuppos = l:pp
   if l:m =~# '^[vV\x16sS\x13]'
     let l:p = getpos('v')
     let l:d.vis = [l:p[1], l:p[2]]

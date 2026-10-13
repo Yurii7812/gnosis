@@ -54,10 +54,36 @@ function setExpanded(on) {
   expanded = on;
   $("termwrap").classList.toggle("expanded", on);
   $("termwrap").classList.toggle("strip", !on);
+  if (!on) $("termwrap").style.clipPath = "";
   term.focus();
 }
 
+// 端末の全面表示のうち、ポップアップの長方形だけを見せる（背景は下のマークダウン表示のまま）
+function applyOverlay(s) {
+  const wrap = $("termwrap");
+  const scr = document.querySelector("#term .xterm-screen");
+  if (!expanded || !scr || !overlayOnly(s)) { wrap.style.clipPath = ""; return; }
+  const sr = scr.getBoundingClientRect();
+  const wr = wrap.getBoundingClientRect();
+  const cw = sr.width / term.cols;
+  const ch = sr.height / term.rows;
+  const ox = sr.left - wr.left;
+  const oy = sr.top - wr.top;
+  const parts = s.popuppos.map(([col, line, w, h]) => {
+    const x = Math.max(0, ox + (col - 1) * cw - 1), y = Math.max(0, oy + (line - 1) * ch - 1);
+    return `M${x} ${y}h${w * cw + 2}v${h * ch + 2}h${-(w * cw + 2)}z`;
+  });
+  wrap.style.clipPath = `path('${parts.join("")}')`;
+}
+
 // 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
+// ポップアップ（検索など）だけが理由のときは、背景の表示を変えず、ポップアップの場所にだけ端末を重ねる。
+// 確認・Enter 待ち・シェルなど、端末の画面全体が要る場面は、これまでどおり全面に広げる。
+function overlayOnly(s) {
+  const m = (s.mode || "n")[0];
+  return (s.popuppos || []).length > 0 && m !== "r" && m !== "!" && s.mode !== "rm";
+}
+
 function needsTerminal(s) {
   const m = (s.mode || "n")[0];
   return s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
@@ -86,6 +112,7 @@ function applyState(s) {
   } else if (expanded && !collapseTimer) {
     collapseTimer = setTimeout(() => { collapseTimer = null; if (!needsTerminal(last)) setExpanded(false); }, 120);
   }
+  applyOverlay(last);
 
   // バッファの内容とカーソルをマークダウンで映す（端末バッファは映さない）
   if (s.bt === "terminal") return;
@@ -268,8 +295,10 @@ function onClick({ pos, link }) {
   if (viewOnly && !link) return; // 見るだけ: カーソルは動かさない（リンクだけ開く）
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
-  if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
-  else if (m === "i") gui.write(`\x0f:call cursor(${l},${c})\r`);
+  // 打った :call … が下の行に残らないよう、直後に redraw して空のメッセージで消す
+  const mv = `:call cursor(${l},${c})|redraw|echo ""\r`;
+  if (m === "n") gui.write(mv + (link ? "\r" : ""));
+  else if (m === "i") gui.write("\x0f" + mv);
 }
 
 // 画面側のエラーを、下のバーに赤く出す（何が起きたか分かるように）。ログにも残る（main 側）。

@@ -32923,7 +32923,31 @@ ${h2.join(`
     expanded = on2;
     $2("termwrap").classList.toggle("expanded", on2);
     $2("termwrap").classList.toggle("strip", !on2);
+    if (!on2) $2("termwrap").style.clipPath = "";
     term.focus();
+  }
+  function applyOverlay(s15) {
+    const wrap = $2("termwrap");
+    const scr = document.querySelector("#term .xterm-screen");
+    if (!expanded || !scr || !overlayOnly(s15)) {
+      wrap.style.clipPath = "";
+      return;
+    }
+    const sr2 = scr.getBoundingClientRect();
+    const wr2 = wrap.getBoundingClientRect();
+    const cw = sr2.width / term.cols;
+    const ch = sr2.height / term.rows;
+    const ox = sr2.left - wr2.left;
+    const oy = sr2.top - wr2.top;
+    const parts = s15.popuppos.map(([col, line, w, h2]) => {
+      const x = Math.max(0, ox + (col - 1) * cw - 1), y = Math.max(0, oy + (line - 1) * ch - 1);
+      return `M${x} ${y}h${w * cw + 2}v${h2 * ch + 2}h${-(w * cw + 2)}z`;
+    });
+    wrap.style.clipPath = `path('${parts.join("")}')`;
+  }
+  function overlayOnly(s15) {
+    const m = (s15.mode || "n")[0];
+    return (s15.popuppos || []).length > 0 && m !== "r" && m !== "!" && s15.mode !== "rm";
   }
   function needsTerminal(s15) {
     const m = (s15.mode || "n")[0];
@@ -32950,6 +32974,7 @@ ${h2.join(`
         if (!needsTerminal(last2)) setExpanded(false);
       }, 120);
     }
+    applyOverlay(last2);
     if (s15.bt === "terminal") return;
     const fileChanged = viewOnly && s15.file && s15.file !== lastViewFile;
     if (s15.file) lastViewFile = s15.file;
@@ -33174,8 +33199,9 @@ ${h2.join(`
     if (viewOnly && !link) return;
     const [l, c] = view.lineColAt(pos);
     const m = (last2.mode || "n")[0];
-    if (m === "n") gui.write(`:call cursor(${l},${c})\r` + (link ? "\r" : ""));
-    else if (m === "i") gui.write(`:call cursor(${l},${c})\r`);
+    const mv = `:call cursor(${l},${c})|redraw|echo ""\r`;
+    if (m === "n") gui.write(mv + (link ? "\r" : ""));
+    else if (m === "i") gui.write("" + mv);
   }
   function showError(msg) {
     const el2 = $2("err");

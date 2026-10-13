@@ -72,6 +72,18 @@ const scenario = `(async () => {
   await press('\\t', 500);
   R.tab = { moved: G.state().cur[0] !== c0 || G.state().cur[1] !== 1, file: base(G.state().file), line: G.view.getText().split('\\n')[G.state().cur[0] - 1] };
 
+  // Space の検索ポップアップ: 背景のマークダウン表示は変えず、ポップアップの場所だけ端末を重ねる
+  {
+    const hBefore = G.view.view.dom.innerHTML.length;
+    await press(' ', 900);
+    const wrap = document.getElementById('termwrap');
+    R.popup = { n: (G.state().popuppos || []).length, expanded: G.isExpanded(), clip: wrap.style.clipPath.slice(0, 5), sameBg: G.view.view.dom.innerHTML.length === hBefore && !!document.querySelector('.cm-md-h1, .cm-line') };
+    await press('\x1b', 700);
+    R.popup.closed = !G.isExpanded() || (G.state().popuppos || []).length === 0;
+    await sleep(400);
+    R.popup.collapsed = !G.isExpanded() && wrap.style.clipPath === '';
+  }
+
   // zn で新しいノートを作る（位置を聞かれるので Enter）
   await press('zn', 700);
   R.znPrompt = G.screen().slice(-3).join('|').trim().slice(0, 80);
@@ -190,6 +202,7 @@ try {
   check(R.insertMode === "INSERT" && R.typed && R.normalAgain === "NORMAL" && R.visualMode === "V-LINE", "vim modes: " + JSON.stringify([R.insertMode, R.typed, R.normalAgain, R.visualMode]));
   check(R.modAfterSave === 0 && fs.readFileSync(path.join(vault, R.newNote), "utf8").includes("abc"), ":w did not save");
   check(R.expandedOnLs && R.collapsedAfter, "terminal strip did not expand/collapse for :ls: " + JSON.stringify([R.expandedOnLs, R.collapsedAfter]));
+  check(R.popup?.n > 0 && R.popup.expanded && R.popup.clip === "path(" && R.popup.sameBg && R.popup.collapsed, "search popup should overlay only its rectangle: " + JSON.stringify(R.popup));
   check(R.viewOnly?.vo.on && R.viewOnly.vo.label === "VIEW" && R.viewOnly.mode[0] === "n" && R.viewOnly.sameFile && R.viewOnly.unmodified && R.viewOnly.scrolled && R.viewOnly.passed && R.viewOnly.curHidden && R.viewOnly.backOff && R.viewOnly.backLabel === "NORMAL", "view-only mode: " + JSON.stringify(R.viewOnly));
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
