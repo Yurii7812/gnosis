@@ -170,9 +170,28 @@ function! gnosis#settings#apply(s) abort
     call gnosis#theme#apply(a:s)
   endif
   call gnosis#settings#apply_gui(a:s)
+  " ターミナル版では Vim の guifont は効かない。Kitty のみこの場で
+  " 実ウィンドウのフォントサイズを変更できる（失敗したら false）。
+  let g:gnosis_font_live_applied = has('gui_running') ? 1
+        \ : gnosis#settings#apply_terminal_font(a:s.fontSize)
   if exists('#User#GnosisSettingsChanged')
     doautocmd <nomodeline> User GnosisSettingsChanged
   endif
+endfunction
+
+" 通常の端末では Vim 自身はフォントを変更できない。
+" Kitty は kitty @ が使えれば、そのウィンドウでプレビュー可能。
+" 無効な権限/未対応端末では安全に失敗し、設定値は次回の対応端末で適用。
+function! gnosis#settings#apply_terminal_font(size) abort
+  if empty($KITTY_WINDOW_ID) || !executable('kitty')
+    return 0
+  endif
+  try
+    silent call system('kitty @ set-font-size ' . str2nr(a:size) . ' 2>&1')
+    return v:shell_error == 0
+  catch
+    return 0
+  endtry
 endfunction
 
 " GUI 版 Vim（gvim / MacVim）: 文字サイズは guifont、起動サイズは lines/columns。
