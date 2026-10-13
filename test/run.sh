@@ -2,6 +2,10 @@
 # 分割リファクタ用の回帰網: Vim の公開APIが変わっていないことを確認する。
 # 使い方: test/run.sh
 set -e
+# 試験の一時フォルダはデスクトップの test（本物の vault には触らない）
+TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+mkdir -p "$TMPDIR"
+export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 GOLDEN="$REPO/test/api_public.txt"
 OUT=$(mktemp)

@@ -9,10 +9,16 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 
+// 試験の一時フォルダは、デスクトップの test（TMPDIR があればそれ）。本物の vault には触らない。
+function testBase() {
+  const base = process.env.TMPDIR || path.join(os.homedir(), "Desktop", "test");
+  fs.mkdirSync(base, { recursive: true });
+  return base;
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "..");
 const realHome = os.homedir();
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "syn-gui-e2e-"));
+const tmp = fs.mkdtempSync(path.join(testBase(), "syn-gui-e2e-"));
 const home = path.join(tmp, "home");
 const vault = path.join(tmp, "vault", "note");
 fs.mkdirSync(path.join(home, ".vim"), { recursive: true });

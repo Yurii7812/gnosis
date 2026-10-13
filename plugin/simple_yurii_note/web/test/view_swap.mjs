@@ -9,9 +9,15 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+// 試験の一時フォルダは、デスクトップの test（TMPDIR があればそれ）。本物の vault には触らない。
+function testBase() {
+  const base = process.env.TMPDIR || path.join(os.homedir(), "Desktop", "test");
+  fs.mkdirSync(base, { recursive: true });
+  return base;
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "..");
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "syn-view-swap-"));
+const tmp = fs.mkdtempSync(path.join(testBase(), "syn-view-swap-"));
 
 const longDoc = "---\ntime: 2026-10-10 11:48:20\ntitle: Index\nattribute: group\n---\n\n# Index\n"
   + Array.from({ length: 6 }, (_, i) => `[ノート ${i}](n${i}.md)`).join("\n") + "\n";
