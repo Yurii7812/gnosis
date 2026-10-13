@@ -41,6 +41,7 @@ function makePng(w, h, seed) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]);
 }
 for (const [i, name] of ["a.png", "b.png", "c.png", "d.png"].entries()) fs.writeFileSync(path.join(vault, name), makePng(240, 900, i));
+fs.writeFileSync(path.join(vault, "plain.md"), "---\ntime: 2026-01-01 00:00:00\ntitle: 本文だけ\n---\n\n# 本文だけ\n\n本文だけのノート（関係の節が無い）。\n");
 mk("img.md", "画像", ["a", "b", "c", "d"].map((n) => `## 画像 ${n}\n\n![](${n}.png)\n`).join("\n"), "[Index](index.md)");
 
 const scenario = `(async () => {
@@ -177,7 +178,7 @@ const scenario = `(async () => {
 
   // zn の位置キー c: 新しいノートが今のノートの Context（文脈）になる
   {
-    await press(':e m1.md\\r', 1200);
+    await press(':e plain.md\\r', 1200);
     const baseFile = base(G.state().file);
     await press('zn', 700);
     await press('c', 1800);
@@ -226,12 +227,12 @@ try {
   check(R.viewOnly?.vo.on && R.viewOnly.vo.label === "VIEW" && R.viewOnly.mode[0] === "n" && R.viewOnly.sameFile && R.viewOnly.unmodified && R.viewOnly.scrolled && R.viewOnly.search.cmdline === '/' && R.viewOnly.search.scrolled && R.viewOnly.search.hit && R.viewOnly.search.modeBack && R.viewOnly.passed && R.viewOnly.curHidden && R.viewOnly.backOff && R.viewOnly.backLabel === "NORMAL", "view-only mode: " + JSON.stringify(R.viewOnly));
   {
     const z = R.znC || {};
-    check(/^\d{12}\.md$/.test(z.now || "") && z.from === "m1.md", "zn c did not create a new note: " + JSON.stringify(z));
-    const oldTxt = fs.readFileSync(path.join(vault, "m1.md"), "utf8");
+    check(/^\d{12}\.md$/.test(z.now || "") && z.from === "plain.md", "zn c did not create a new note: " + JSON.stringify(z));
+    const oldTxt = fs.readFileSync(path.join(vault, "plain.md"), "utf8");
     const ctx = oldTxt.split("### Context")[1] || "";
-    check(ctx.includes("(" + z.now + ")"), "zn c: the old note should have the new note under ### Context: " + oldTxt.slice(-200));
+    check(ctx.includes("(" + z.now + ")"), "zn c: the old note (no sections before) should get ### Context with the new note: " + oldTxt.slice(-200));
     check(!/\n### Parent\n/.test(oldTxt), "zn c: no ### Parent should remain");
-    check((z.body || "").includes("(m1.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
+    check((z.body || "").includes("(plain.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
   }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);

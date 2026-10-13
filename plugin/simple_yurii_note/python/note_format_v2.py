@@ -1328,8 +1328,11 @@ def _simple_parse_text(path: Path, text: str) -> dict:
             else related if cur == "related"
             else back
         ).append(ln)
+    # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
+    tail_blanks = max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": body, "parent": parent, "group": group,
-            "related": related, "back": back, "hash": _content_hash(text)}
+            "related": related, "back": back, "tail_blanks": tail_blanks,
+            "hash": _content_hash(text)}
 
 
 # パース結果の差分キャッシュ。`update` は保存のたびに vault 全体を走査するので、
@@ -1529,39 +1532,45 @@ _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
                    group_lines: list[str] | None = None) -> str:
+    """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
+    中身が空の節は見出しごと出さない（新しいノートは本文だけ）。"""
     lines = list(n["fm"]) if n["fm"] else ["---", "title: " + n["title"], "---"]
     lines += list(n["body"])
-    if name != "index.md":
-        # 本文末の空行（リンク行と `### Parent` の間）は残す。
-        # 2026-10-10: 空行を勝手に消さない（リンクと Parent をくっつけない）。
-        # Parent の上に余分な空行を入れない（本文の余白はそのまま）
-        last = next((ln for ln in reversed(lines) if ln.strip() != ""), None)
-        if last is not None and re.match(r"^#\s", last):
-            # 本文が見出しだけのときはテンプレート通り書くための余白を置く
-            if len(lines) == lines.index(last) + 1:
-                lines += ["", ""]
-        lines.append(CONTEXT_MARK)
-        lines += parent_lines
+    if name == "index.md":
         while lines and lines[-1].strip() == "":
             lines.pop()
-        # `### Group` はグループへのリンクがあるときだけ（空なら見出しも出さない）
-        if group_lines and any(ln.strip() for ln in group_lines):
-            lines.append(GROUP_MARK)
-            lines += group_lines
-            while lines and lines[-1].strip() == "":
-                lines.pop()
-        # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
-        # 中身が空（全部消えた）になったら見出しも外す。
-        related = [ln for ln in n.get("related", [])]
-        if any(ln.strip() for ln in related):
-            lines.append(RELATED_MARK)
-            lines += related
-        if name not in _NO_BACKLINK_NAMES:
-            lines.append(DOWN_MARK)
-            for t in back:
-                lines.append(f"[{titles[t]}]({_rel(path.parent, t)})")
-    while lines and lines[-1].strip() == "":
-        lines.pop()
+        return "\n".join(lines) + "\n"
+
+    def _has(ls) -> bool:
+        return bool(ls) and any(ln.strip() for ln in ls)
+
+    related = [ln for ln in n.get("related", [])]
+    back_lines = [f"[{titles[t]}]({_rel(path.parent, t)})" for t in back] if name not in _NO_BACKLINK_NAMES else []
+    sections: list[tuple[str, list[str]]] = []
+    if _has(parent_lines):
+        sections.append((CONTEXT_MARK, parent_lines))
+    if _has(group_lines):
+        sections.append((GROUP_MARK, group_lines))
+    # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
+    if _has(related):
+        sections.append((RELATED_MARK, related))
+    if back_lines:
+        sections.append((DOWN_MARK, back_lines))
+    if not sections:
+        # 節が無いノートは、末尾の空行（書き出しの余白）をそのまま残す
+        lines += [""] * int(n.get("tail_blanks", 0))
+        return "\n".join(lines) + "\n"
+    # 本文末の空行（リンク行と節の間）は残す。本文の余白はそのまま。
+    last = next((ln for ln in reversed(lines) if ln.strip() != ""), None)
+    if last is not None and re.match(r"^#\s", last):
+        # 本文が見出しだけのときはテンプレート通り書くための余白を置く
+        if len(lines) == lines.index(last) + 1:
+            lines += ["", ""]
+    for mark, ls in sections:
+        lines.append(mark)
+        lines += ls
+        while lines and lines[-1].strip() == "":
+            lines.pop()
     return "\n".join(lines) + "\n"
 
 
@@ -1590,10 +1599,10 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             continue
         h = _content_hash(text)
         ent = cache.get(key) if key is not None else None
-        if isinstance(ent, list) and len(ent) == 8 and ent[0] == h:
+        if isinstance(ent, list) and len(ent) == 9 and ent[0] == h:
             notes[rp] = {"fm": ent[1], "title": ent[2], "body": ent[3],
                          "parent": ent[4], "group": ent[5], "related": ent[6],
-                         "back": ent[7], "hash": h}
+                         "back": ent[7], "tail_blanks": ent[8], "hash": h}
         else:
             notes[rp] = _simple_parse_text(p, text)
             parsed_any = True
@@ -1696,7 +1705,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         key = keys.get(p)
         ent = cache.get(key) if key is not None else None
-        if not (isinstance(ent, list) and len(ent) == 8):
+        if not (isinstance(ent, list) and len(ent) == 9):
             continue
         old_targets = {rp for _d, tg in _links_from(ent[3])
                        for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
@@ -1859,7 +1868,8 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             if key is None:
                 continue
             out_cache[key] = [n["hash"], n["fm"], n["title"], n["body"],
-                              n["parent"], n["group"], n["related"], n["back"]]
+                              n["parent"], n["group"], n["related"], n["back"],
+                              n.get("tail_blanks", 0)]
         _save_parse_cache(root, out_cache)
     return changed
 
@@ -1879,7 +1889,7 @@ def make_new(path, title: str = "") -> Path:
     t = title.strip() or p.stem
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        f"---\ntime: {ts}\ntitle: {t}\n---\n\n# {t}\n\n\n{CONTEXT_MARK}\n{DOWN_MARK}\n",
+        f"---\ntime: {ts}\ntitle: {t}\n---\n\n# {t}\n\n\n",
         encoding="utf-8",
     )
     return p

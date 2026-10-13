@@ -1023,7 +1023,7 @@ function! s:guide_template() abort
         \ '- `語:;` … 相手側も `語:;`（括弧なし）',
         \ '- `語;` … 相手側には書かない',
         \ '- `語::` … 両方の同じセクションに `語:`',
-        \ '- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける（手で Context に書いても Group へ移る）。グループの本文に自分へのリンクがあれば、そのグループが自動で `### Group` に入る',
+        \ '- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける（手で Context に書いても Group へ移る）。グループの本文に自分へのリンクがあれば、そのグループが自動で `### Group` に入る。中身が空の節（Context / Group / Related / BackLink）は見出しごと無い',
         \ '',
         \ '## 同期',
         \ '',
@@ -1173,11 +1173,7 @@ function! s:guide_template() abort
         \ '',
         \ '# ' . l:title,
         \ '',
-        \ ] + l:body + [
-        \ '',
-        \ s:v2_up_mark,
-        \ s:v2_down_mark,
-        \ ]
+        \ ] + l:body
 endfunction
 
 " 操作ガイドを最新のテンプレートへ更新する。無ければ作る。既存の time 行は
@@ -1845,6 +1841,10 @@ function! s:section_end_line(name) abort
 endfunction
 
 function! s:append_link_to_buffer_section(name, link) abort
+  " Context は空なら見出しごと無い。足すときに作る（index.md は節を持たないので作らない）
+  if a:name ==# 'up' && s:find_section_line('up') <= 0 && !s:ensure_context_in_buffer()
+    return 0
+  endif
   let l:sec = s:find_section_line(a:name)
   if l:sec <= 0
     return 0
@@ -1894,7 +1894,12 @@ function! s:ensure_related_section_in_buffer() abort
     let l:ins = s:up_end_line()
   endif
   if l:ins <= 0
-    return 0
+    " 関係の節がまだ何も無い: 本文の終わり（最初の節の手前。無ければ末尾）に作る
+    if s:no_sections_buffer()
+      return 0
+    endif
+    let l:fs = s:first_section_line()
+    let l:ins = l:fs > 0 ? l:fs - 1 : line('$')
   endif
   call append(l:ins, s:v2_related_mark)
   return l:ins + 1
@@ -1996,7 +2001,13 @@ function! s:parent_insert_plan(lines, sec_idx, link, base_dir) abort
 endfunction
 
 function! s:add_link_to_lines_section(lines, name, link, ...) abort
-  let l:ensured = s:ensure_section_in_lines(a:lines, a:name)
+  " Context は空なら見出しごと無い。足すときに作る（a:2 が index.md なら作らない）
+  let l:in_lines = a:lines
+  if a:name ==# 'up' && s:find_section_index_in_lines(l:in_lines, 'up') < 0
+        \ && !(a:0 > 1 && fnamemodify(a:2, ':t') ==# 'index.md')
+    let l:in_lines = s:ensure_context_in_lines(l:in_lines)
+  endif
+  let l:ensured = s:ensure_section_in_lines(l:in_lines, a:name)
   let l:lines = l:ensured.lines
   let l:idx = l:ensured.idx
   if l:idx < 0
@@ -2361,12 +2372,17 @@ function! s:in_back_section(lnum) abort
 endfunction
 
 function! s:in_up_section(lnum) abort
-  let l:up = s:find_section_line('up')
-  if l:up <= 0
-    return 0
-  endif
-  let l:up_end = s:up_end_line()
-  return a:lnum >= l:up + 1 && a:lnum <= l:up_end
+  " 上側は Context と Group の 2 つの節（どちらも空なら見出しごと無い）
+  for l:name in ['up', 'group']
+    let l:sec = s:find_section_line(l:name)
+    if l:sec <= 0
+      continue
+    endif
+    if a:lnum >= l:sec + 1 && a:lnum <= s:section_end_line(l:name)
+      return 1
+    endif
+  endfor
+  return 0
 endfunction
 
 function! s:find_reciprocal_link_pos(target_path, source_name) abort
@@ -2592,6 +2608,9 @@ endfunction
 function! simple_yurii_note#jump_up() abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
+    let l:up = s:find_section_line('group')
+  endif
+  if l:up <= 0
     echo 'Context: section not found'
     return
   endif
@@ -2661,6 +2680,9 @@ endfunction
 function! simple_yurii_note#jump_up_cursor() abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
+    let l:up = s:find_section_line('group')
+  endif
+  if l:up <= 0
     echo 'Context: section not found'
     return
   endif
@@ -2703,10 +2725,10 @@ function! simple_yurii_note#jump_down_bottom() abort
 endfunction
 
 function! simple_yurii_note#jump_last_link_before_up() abort
-  let l:up = s:find_section_line('up')
+  " 本文の終わり = 最初の関係の節。節がまだ無いノートは本文全体
+  let l:up = s:first_section_line()
   if l:up <= 0
-    echo 'Context section not found'
-    return
+    let l:up = line('$') + 1
   endif
 
   let l:last_lnum = 0
@@ -2860,13 +2882,10 @@ function! s:v2_boundaries_in_lines(lines) abort
   let l:up_m = 0 | let l:dn_m = 0
   for l:i in range(0, len(a:lines) - 1)
     let l:s = trim(a:lines[l:i])
-    if l:s ==# s:v2_up_mark || index(s:v2_up_marks_legacy, l:s) >= 0     | let l:up_m = l:i + 1 | endif
+    if l:up_m == 0 && index(s:v2_any_marks, l:s) >= 0                        | let l:up_m = l:i + 1 | endif
     if l:s ==# s:v2_down_mark || index(s:v2_down_marks_legacy, l:s) >= 0 | let l:dn_m = l:i + 1 | endif
   endfor
-  if l:up_m > 0 && l:dn_m > l:up_m
-    return [l:up_m, l:dn_m]
-  endif
-  return [0, 0]
+  return l:up_m > 0 ? [l:up_m, l:dn_m] : [0, 0]
 endfunction
 
 function! s:section_link_positions_in_lines(lines, name) abort
@@ -5322,9 +5341,7 @@ function! s:k_note_template(title) abort
           \ '',
           \ '# ' . a:title,
           \ '',
-          \ '',
-          \ s:v2_up_mark,
-          \ s:v2_down_mark ]
+          \ '' ]
   endif
   return [
         \ '---',
@@ -5404,7 +5421,7 @@ function! simple_yurii_note#note_template(title, ...) abort
     " 普通のノート（zn）は本文の余白を 3 行（最初のカーソルは真ん中）、
     " グループノート（zk）は 1 行だけ空ける（グループは容器で本文を持たないため）。
     let l:gap = l:is_cat ? [''] : ['', '', '']
-    return l:header + ['', '# ' . a:title] + l:gap + [s:v2_up_mark, s:v2_down_mark]
+    return l:header + ['', '# ' . a:title] + l:gap
   endif
   return l:header + [
         \ '',
@@ -5612,6 +5629,91 @@ let s:v2_down_marks_legacy = ['Child', '<!-- そっちにとって -->', '<!-- �
 " 「最後に一致した行」という同じ意味になる（複数あれば最後が返る）。
 let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちにとって -->\|<!-- している -->\)\s*$'
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+" 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
+" あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
+let s:v2_any_marks = ['### Context', '### Parent', '### Group', '### Related', '### BackLink',
+      \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
+let s:v2_any_pat = '\C^\s*\%(### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+
+function! s:v2_first_mark(pat) abort
+  let l:save = winsaveview()
+  try
+    call cursor(1, 1)
+    return search(a:pat, 'cW')
+  finally
+    call winrestview(l:save)
+  endtry
+endfunction
+
+" 本文の終わり（最初の関係の節の見出し）の行番号（1 始まり）。節が無ければ 0。
+function! s:first_section_line() abort
+  return s:v2_first_mark(s:v2_any_pat)
+endfunction
+
+" 行配列版。0 始まりの index。節が無ければ -1。
+function! s:first_section_index_in_lines(lines) abort
+  for l:i in range(0, len(a:lines) - 1)
+    if index(s:v2_any_marks, trim(a:lines[l:i])) >= 0
+      return l:i
+    endif
+  endfor
+  return -1
+endfunction
+
+" ### Context が無いときに作る位置（0 始まり）。あるなら -1。
+" Group / Related / BackLink のうち最初のものの手前、どれも無ければ末尾。
+function! s:context_insert_index(lines) abort
+  for l:l in a:lines
+    if trim(l:l) ==# s:v2_up_mark || index(s:v2_up_marks_legacy, trim(l:l)) >= 0
+      return -1
+    endif
+  endfor
+  let l:fs = s:first_section_index_in_lines(a:lines)
+  return l:fs >= 0 ? l:fs : len(a:lines)
+endfunction
+
+" 行配列に ### Context を（無ければ）作って返す。
+function! s:ensure_context_in_lines(lines) abort
+  let l:at = s:context_insert_index(a:lines)
+  if l:at < 0 | return a:lines | endif
+  let l:lines = copy(a:lines)
+  call insert(l:lines, s:v2_up_mark, l:at)
+  return l:lines
+endfunction
+
+" 行配列に ### BackLink を（無ければ）末尾に作って返す。
+function! s:ensure_backlink_in_lines(lines) abort
+  for l:l in a:lines
+    if trim(l:l) ==# s:v2_down_mark || index(s:v2_down_marks_legacy, trim(l:l)) >= 0
+      return a:lines
+    endif
+  endfor
+  return a:lines + [s:v2_down_mark]
+endfunction
+
+" index.md のように関係の節を持たないノートか
+function! s:no_sections_buffer() abort
+  return expand('%:t') ==# 'index.md'
+endfunction
+
+" 今のバッファに ### Context を（無ければ）作る。作れた／あったら 1、index.md なら 0。
+function! s:ensure_context_in_buffer() abort
+  if s:no_sections_buffer() | return 0 | endif
+  let l:at = s:context_insert_index(getline(1, '$'))
+  if l:at >= 0
+    call append(l:at, s:v2_up_mark)
+  endif
+  return 1
+endfunction
+
+" 今のバッファに ### BackLink を（無ければ）末尾に作る。
+function! s:ensure_backlink_in_buffer() abort
+  if s:no_sections_buffer() | return 0 | endif
+  if s:v2_last_mark(s:v2_down_pat) <= 0
+    call append(line('$'), s:v2_down_mark)
+  endif
+  return 1
+endfunction
 
 function! s:v2_last_mark(pat) abort
   let l:save = winsaveview()
@@ -5633,9 +5735,10 @@ function! s:v2_boundaries() abort
   if get(b:, 'yurii_v2_bounds_tick', -1) ==# l:tick
     return b:yurii_v2_bounds
   endif
-  let l:up_m = s:v2_last_mark(s:v2_up_pat)
+  " up_m = 最初の関係の節の見出し（本文の終わり）、dn_m = BackLink の見出し（無ければ 0）
+  let l:up_m = s:v2_first_mark(s:v2_any_pat)
   let l:dn_m = s:v2_last_mark(s:v2_down_pat)
-  let l:res = (l:up_m > 0 && l:dn_m > l:up_m) ? [l:up_m, l:dn_m] : [0, 0]
+  let l:res = l:up_m > 0 ? [l:up_m, l:dn_m] : [0, 0]
   let b:yurii_v2_bounds = l:res
   let b:yurii_v2_bounds_tick = l:tick
   return l:res
@@ -5657,10 +5760,17 @@ endfunction
 " 対して同じ処理をするために使う）。target_dir は重複チェックの相対パス
 " 解決基準（そのファイル自身のディレクトリ）。戻り値: {lines, ok, reason}
 function! s:v2_insert_link_in_lines(lines, target_dir, rel, linktext, below) abort
-  let l:lines = a:lines
+  " 関係の節は空なら見出しごと無いので、書く前に必要な見出し（Context / BackLink）を作る
+  let l:lines = s:ensure_context_in_lines(a:lines)
+  if a:below
+    let l:lines = s:ensure_backlink_in_lines(l:lines)
+  endif
   let [l:up_m, l:dn_m] = s:v2_boundaries_in_lines(l:lines)
   if l:up_m == 0
     return {'lines': l:lines, 'ok': 0, 'reason': 'no_marks'}
+  endif
+  if !a:below && l:dn_m == 0
+    let l:dn_m = len(l:lines) + 1
   endif
   let l:n = len(l:lines)
   if a:below
@@ -5722,6 +5832,7 @@ endfunction
 " 書き込みは !a:below 側へ行う。
 function! s:v2_write_other_side_label(target_path, label, cur_path, cur_title, below) abort
   if !filereadable(a:target_path) | return 0 | endif
+  if fnamemodify(a:target_path, ':t') ==# 'index.md' | return 0 | endif
   let l:lines = readfile(a:target_path)
   let l:target_dir = fnamemodify(a:target_path, ':h')
   let l:linktext = s:make_link_from_dir(a:cur_path, a:cur_title, l:target_dir)
@@ -5736,12 +5847,22 @@ endfunction
 " a:below … 0 = 上側（こっちにとって、見張りの間）、1 = 下側（そっちにとって、最後の見張り以降）
 function! s:v2_insert_link(rel, linktext, ...) abort
   let l:below = a:0 > 0 ? a:1 : 0
+  " 関係の節は空なら見出しごと無いので、書く前に必要な見出し（Context / BackLink）を作る
+  if !s:ensure_context_in_buffer() || (l:below && !s:ensure_backlink_in_buffer())
+    echohl WarningMsg
+    echo 'simple_yurii_note: このノートには関係を書けません（index.md など）'
+    echohl NONE
+    return 0
+  endif
   let [l:up_m, l:dn_m] = s:v2_boundaries()
   if l:up_m == 0
     echohl WarningMsg
     echo 'simple_yurii_note: このノートは v2 形式じゃない（見張りコメントなし）。:V2Migrate で変換して'
     echohl NONE
     return 0
+  endif
+  if !l:below && l:dn_m == 0
+    let l:dn_m = line('$') + 1
   endif
   " 以降は必ず 1 を返す（末尾で return 1）
   if l:below
@@ -6192,7 +6313,6 @@ function! simple_yurii_note#v2_new_group_visual() abort range
         \ ] + l:body + [
         \ s:v2_up_mark,
         \ s:make_link_from_dir(l:cur, l:cur_title, l:dir),
-        \ s:v2_down_mark,
         \ ]
   call s:write_new_note(l:content, l:file)
 
@@ -6219,12 +6339,8 @@ endfunction
 "   位置キー: h=カーソル直下 / Enter=Child末尾 / o=リンク無し(孤立) / p=Parent末尾。
 " simple: 本文の最後（### Context の手前）へ link を、空行 1 つを挟んで置く
 function! s:simple_body_append(link) abort
-  let l:up = 0
-  for l:i in range(1, line('$'))
-    if trim(getline(l:i)) ==# s:v2_up_mark
-      let l:up = l:i | break
-    endif
-  endfor
+  " 本文の終わり = 最初の関係の節の見出し（Context / Group / Related / BackLink のうち最初のもの）
+  let l:up = s:first_section_line()
   if l:up == 0
     call append(line('$'), a:link)
     return
@@ -6247,16 +6363,15 @@ endfunction
 "   この並びに置き換わる（空行が累積しない）。
 function! s:simple_body_append_to_file(file, link, is_group) abort
   let l:lines = readfile(a:file)
-  let l:hdr = -1
-  for l:i in range(0, len(l:lines) - 1)
-    if trim(l:lines[l:i]) ==# s:v2_up_mark
-      let l:hdr = l:i | break
-    endif
-  endfor
+  let l:hdr = s:first_section_index_in_lines(l:lines)
   if l:hdr < 0
-    call add(l:lines, a:link)
+    " 関係の節が無い新ノート: 末尾の空行を剥がして、リンクの前後に空行を置く
+    while !empty(l:lines) && trim(l:lines[-1]) ==# ''
+      call remove(l:lines, -1)
+    endwhile
+    call extend(l:lines, a:is_group ? ['', a:link] : ['', a:link, ''])
   else
-    " ### Context の直前まで続く空行の連なりを剥がす。
+    " 最初の節の見出しの直前まで続く空行の連なりを剥がす。
     let l:top = l:hdr
     while l:top > 0 && trim(l:lines[l:top - 1]) ==# ''
       let l:top -= 1
@@ -6274,19 +6389,20 @@ endfunction
 function! s:simple_add_parent(file, parent_path, parent_title) abort
   let l:lines = readfile(a:file)
   let l:link = s:make_link_from_dir(a:parent_path, a:parent_title, fnamemodify(a:file, ':h'))
-  let l:hdr = -1
-  for l:i in range(0, len(l:lines) - 1)
-    if trim(l:lines[l:i]) ==# s:v2_up_mark
-      let l:hdr = l:i | break
-    endif
+  " 関係の節は空なら見出しごと無い。重複は Context / Group / Related / BackLink 全体で見る
+  for l:ln in l:lines
+    if l:ln ==# l:link | return | endif
   endfor
-  if l:hdr < 0
-    call add(l:lines, s:v2_up_mark)
-    call add(l:lines, l:link)
+  let l:at = s:context_insert_index(l:lines)
+  if l:at >= 0
+    " Context が無い: 最初の節の手前（無ければ末尾）に見出しごと作る
+    call extend(l:lines, [s:v2_up_mark, l:link], l:at)
   else
-    for l:i in range(l:hdr + 1, len(l:lines) - 1)
-      if trim(l:lines[l:i]) ==# s:v2_down_mark | break | endif
-      if l:lines[l:i] ==# l:link | return | endif
+    let l:hdr = -1
+    for l:i in range(0, len(l:lines) - 1)
+      if trim(l:lines[l:i]) ==# s:v2_up_mark || index(s:v2_up_marks_legacy, trim(l:lines[l:i])) >= 0
+        let l:hdr = l:i | break
+      endif
     endfor
     call insert(l:lines, l:link, l:hdr + 1)
   endif
@@ -6314,11 +6430,11 @@ function! s:simple_add_related(file, other_path, other_title) abort
       let l:back = l:i
     endif
   endfor
-  if l:up < 0 && l:back < 0
+  if fnamemodify(a:file, ':t') ==# 'index.md'
     return 0
   endif
   let l:rel = -1
-  for l:i in range(l:up + 1, (l:back >= 0 ? l:back : len(l:lines)) - 1)
+  for l:i in range(0, (l:back >= 0 ? l:back : len(l:lines)) - 1)
     if trim(l:lines[l:i]) ==# s:v2_related_mark
       let l:rel = l:i
       break
@@ -8330,7 +8446,7 @@ function! s:ensure_blank_before_up() abort
   " `### Context` の直前の行が**散文**のときだけ空行を 1 つ足す。
   " リンク行で終わっているときは空行を挟まない（リンク群と `### Context` をくっつけたまま）。
   " 既に空行があれば足さない。
-  let l:up = s:find_section_line('up')
+  let l:up = s:first_section_line()
   if l:up <= 1
     return 0
   endif
@@ -8570,7 +8686,7 @@ function! s:in_diary_list(lnum) abort
 endfunction
 
 function! s:insert_link_before_up_note(link) abort
-  let l:up = s:find_section_line('up')
+  let l:up = s:first_section_line()
   if l:up <= 0
     " 見張りが無いとき（index.md など）は末尾へ
     if s:buffer_has_link(a:link)
@@ -8877,7 +8993,7 @@ function! simple_yurii_note#add_clipboard_before_up() abort
     let l:target_lines = readfile(l:target_path)
     let l:current_link = s:make_link_from_dir(
           \ l:current_file, l:current_title, fnamemodify(l:target_path, ':h'))
-    let l:up_result = s:add_link_to_lines_section(l:target_lines, 'up', l:current_link, fnamemodify(l:target_path, ':h'))
+    let l:up_result = s:add_link_to_lines_section(l:target_lines, 'up', l:current_link, fnamemodify(l:target_path, ':h'), l:target_path)
     if l:up_result.added
       call s:syn_writefile(l:up_result.lines, l:target_path)
       let l:up_added += 1
@@ -9056,8 +9172,6 @@ function! simple_yurii_note#linkify_selection_new_note() abort range
           \ '',
           \ '',
           \ '',
-          \ s:v2_up_mark,
-          \ s:v2_down_mark,
           \ ]
     call s:syn_writefile(l:new_content, l:new_file)
     call s:diary_place_safe(l:new_file, l:new_content)
@@ -12493,8 +12607,13 @@ function! s:diary_new_lines(title, is_group, parent_link, ...) abort
     call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
   endif
   if !empty(a:parent_link)
+    " テンプレートは関係の節を持たない。親リンクがあるときだけ Context を作る
     let l:p = index(l:lines, s:v2_up_mark)
-    call insert(l:lines, a:parent_link, l:p >= 0 ? l:p + 1 : len(l:lines))
+    if l:p >= 0
+      call insert(l:lines, a:parent_link, l:p + 1)
+    else
+      call extend(l:lines, [s:v2_up_mark, a:parent_link])
+    endif
   endif
   return l:lines
 endfunction
@@ -12510,7 +12629,7 @@ endfunction
 " 見出しの直後が空行・次の見出し・節の終わりなら触らない。
 function! s:diary_section_blank(lines, section) abort
   let l:lines = copy(a:lines)
-  let l:p = index(l:lines, s:v2_up_mark)
+  let l:p = s:first_section_index_in_lines(l:lines)
   let l:end = l:p >= 0 ? l:p : len(l:lines)
   let l:h = index(l:lines[0 : l:end - 1], '## ' . a:section)
   if l:h >= 0 && l:h + 1 < l:end && trim(l:lines[l:h + 1]) !=# '' && l:lines[l:h + 1] !~# '^#'
@@ -12526,7 +12645,7 @@ endfunction
 function! s:diary_op_add_raw(link, section, lines) abort
   let l:lines = copy(a:lines)
   let l:tgt = matchstr(a:link, '](\zs[^)]*\ze)')
-  let l:p = index(l:lines, s:v2_up_mark)
+  let l:p = s:first_section_index_in_lines(l:lines)
   let l:end = l:p >= 0 ? l:p : len(l:lines)
   if empty(a:section)
     for l:i in range(0, l:end - 1)
@@ -12578,7 +12697,7 @@ endfunction
 " 節の中から、そのファイルへのリンク行を外す。リンクが無くなった節は見出しごと消す。
 function! s:diary_op_remove(tgt, section, lines) abort
   let l:lines = copy(a:lines)
-  let l:p = index(l:lines, s:v2_up_mark)
+  let l:p = s:first_section_index_in_lines(l:lines)
   let l:end = l:p >= 0 ? l:p : len(l:lines)
   let l:h = index(l:lines[0 : l:end - 1], '## ' . a:section)
   if l:h < 0
@@ -12643,7 +12762,7 @@ endfunction
 " 本文（### Context より前）から、そのファイルだけのリンク行を外す
 function! s:diary_op_unlink_body(tgt, lines) abort
   let l:lines = copy(a:lines)
-  let l:p = index(l:lines, s:v2_up_mark)
+  let l:p = s:first_section_index_in_lines(l:lines)
   let l:end = l:p >= 0 ? l:p : len(l:lines)
   for l:i in range(l:end - 1, 0, -1)
     if l:lines[l:i] =~# '^\s*\[[^\]]*\](' . escape(a:tgt, '.') . ')\s*$'
@@ -12653,41 +12772,60 @@ function! s:diary_op_unlink_body(tgt, lines) abort
   return l:lines
 endfunction
 
-" ### Context の中の a:old へのリンク行を a:newlink に差し替える。無ければ Parent の先頭に足す
-function! s:diary_op_parent_swap(old, newlink, lines) abort
-  let l:lines = copy(a:lines)
-  let l:p = index(l:lines, s:v2_up_mark)
+" 上側（### Context と ### Group）の範囲 [始まり, 終わり) を返す（0 始まりの行 index）。
+" 上側の節が無ければ [-1, -1]。
+function! s:diary_up_range(lines) abort
+  let l:up_marks = [s:v2_up_mark, s:v2_group_mark] + s:v2_up_marks_legacy
+  let l:p = -1
+  for l:i in range(0, len(a:lines) - 1)
+    if index(l:up_marks, trim(a:lines[l:i])) >= 0
+      let l:p = l:i | break
+    endif
+  endfor
   if l:p < 0
-    return l:lines
+    return [-1, -1]
   endif
-  let l:end = len(l:lines)
-  for l:j in range(l:p + 1, len(l:lines) - 1)
-    if l:lines[l:j] =~# '^#' && l:lines[l:j] !=# s:v2_group_mark
+  let l:end = len(a:lines)
+  for l:j in range(l:p + 1, len(a:lines) - 1)
+    if a:lines[l:j] =~# '^#' && index(l:up_marks, trim(a:lines[l:j])) < 0
       let l:end = l:j
       break
     endif
   endfor
-  for l:j in range(l:p + 1, l:end - 1)
-    if stridx(l:lines[l:j], '](' . a:old . ')') >= 0
-      let l:lines[l:j] = a:newlink
-      return l:lines
-    endif
-  endfor
-  call insert(l:lines, a:newlink, l:p + 1)
+  return [l:p, l:end]
+endfunction
+
+" ### Context / ### Group の中の a:old へのリンク行を a:newlink に差し替える。
+" 無ければ Context（無ければ作る）の先頭に足す。
+function! s:diary_op_parent_swap(old, newlink, lines) abort
+  let l:lines = copy(a:lines)
+  let [l:p, l:end] = s:diary_up_range(l:lines)
+  if l:p >= 0
+    for l:j in range(l:p + 1, l:end - 1)
+      if stridx(l:lines[l:j], '](' . a:old . ')') >= 0
+        let l:lines[l:j] = a:newlink
+        return l:lines
+      endif
+    endfor
+  endif
+  let l:c = index(l:lines, s:v2_up_mark)
+  if l:c >= 0
+    call insert(l:lines, a:newlink, l:c + 1)
+  else
+    let l:at = s:context_insert_index(l:lines)
+    call extend(l:lines, [s:v2_up_mark, a:newlink], l:at < 0 ? len(l:lines) : l:at)
+  endif
   return l:lines
 endfunction
 
-" グループ a:file の ### Context に a:tgt へのリンクがあるか
+" グループ a:file の上側（### Context / ### Group）に a:tgt へのリンクがあるか
 function! s:diary_parent_has(root, file, tgt) abort
   let l:lines = readfile(fnamemodify(a:root, ':p') . a:file)
-  let l:p = index(l:lines, s:v2_up_mark)
+  let [l:p, l:end] = s:diary_up_range(l:lines)
   if l:p < 0
     return 0
   endif
-  for l:ln in l:lines[l:p + 1 :]
-    if l:ln =~# '^#' && l:ln !=# s:v2_group_mark
-      break
-    endif
+  for l:ln in l:lines[l:p + 1 : l:end - 1]
     if stridx(l:ln, '](' . a:tgt . ')') >= 0
       return 1
     endif
@@ -12765,11 +12903,13 @@ function! s:diary_create(root, date, notes, ...) abort
   let l:file = s:diary_new_filename(a:root)
   let l:lines = call('s:diary_new_lines', [l:title, 0, s:diary_link(l:mg, l:month)] + a:000)
   " 本文の余白 3 行（真ん中がカーソル位置）のあとに、空の「今日のノート」の節を置く
-  let l:u = index(l:lines, s:v2_up_mark)
-  if l:u >= 0
-    call insert(l:lines, '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート'), l:u)
-    call insert(l:lines, '', l:u + 1)
+  let l:u = s:first_section_index_in_lines(l:lines)
+  if l:u < 0
+    " 関係の節を持たないテンプレート: 末尾に空の「今日のノート」の節を置く
+    let l:u = len(l:lines)
   endif
+  call insert(l:lines, '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート'), l:u)
+  call insert(l:lines, '', l:u + 1)
   call s:syn_writefile(l:lines, l:dir . l:file)
   call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
   return l:file
@@ -13090,9 +13230,10 @@ function! s:diary_cursor() abort
   let l:lines = getline(1, '$')
   let l:n = index(l:lines, l:sec) + 1
   if l:n <= 0
-    let l:u = index(l:lines, s:v2_up_mark) + 1
+    let l:u = s:first_section_index_in_lines(l:lines) + 1
     if l:u <= 0
-      return
+      " 関係の節がまだ無い日記: 末尾に節を作る
+      let l:u = len(l:lines) + 1
     endif
     call append(l:u - 1, [l:sec, ''])
     let l:n = l:u

@@ -30,14 +30,19 @@ DOWN_MARK = v2.DOWN_MARK
 
 
 def regions(text: str) -> tuple[str, str]:
-    """(上側リージョン, 下側リージョン) を返す。見張りコメント行で区切る。"""
-    lines = text.split("\n")
+    """(上側リージョン, 下側リージョン) を返す。上側 = 最初の関係の節（Context / Group / Related /
+    旧 Parent）から BackLink まで、下側 = BackLink 以降。節が無ければ ("", "")。"""
+    lines = text.rstrip("\n").split("\n")
     sl = [l.strip() for l in lines]
-    up = CTX_MARK if CTX_MARK in sl else UP_MARK  # 現行は ### Context、旧エンジンは ### Parent
-    if up not in sl or DOWN_MARK not in sl:
+    heads = (CTX_MARK, UP_MARK, v2.GROUP_MARK, RELATED_MARK)
+    ups = [i for i, l in enumerate(sl) if l in heads]
+    d = sl.index(DOWN_MARK) if DOWN_MARK in sl else None
+    if not ups and d is None:
         return "", ""
-    u, d = sl.index(up), sl.index(DOWN_MARK)
-    return "\n".join(lines[u + 1:d]), "\n".join(lines[d + 1:])
+    u = ups[0] if ups else d
+    if d is None:
+        return "\n".join(lines[u + 1:]), ""
+    return "\n".join(lines[u + 1:d]) if u < d else "", "\n".join(lines[d + 1:])
 
 
 def note(path: Path, title: str, up: str = "", down: str = "") -> None:
@@ -345,7 +350,7 @@ def test_new_skeleton() -> None:
         txt = p.read_text(encoding="utf-8")
         check(txt.startswith("---\ntime: "), "front matter で始まる")
         check("# テスト" in txt, "H1 を含む")
-        check(txt.rstrip().endswith(CTX_MARK + "\n" + DOWN_MARK), "末尾に見張り 2 行（### Context / ### BackLink）")
+        check(CTX_MARK not in txt and DOWN_MARK not in txt and txt.endswith("# テスト\n\n\n"), "新しいノートは本文だけ（見出しは関係ができたときだけ出る）")
 
 
 
@@ -1142,7 +1147,11 @@ def _region(text: str, mark: str) -> list[str] | None:
         return None
     s = lines.index(mark) + 1
     e = next((i for i in range(s, len(lines)) if lines[i].startswith("### ")), len(lines))
-    return lines[s:e]
+    reg = lines[s:e]
+    if e == len(lines):
+        while reg and reg[-1] == "":
+            reg.pop()
+    return reg
 
 
 def _parent_region(text: str) -> list[str]:
@@ -1182,8 +1191,8 @@ def test_simple_sync_groups_move_to_group_section() -> None:
         check(_parent_region(text) == ["[N1](n1.md)", "[N2](n2.md)"], f"Context はノートだけ: {_parent_region(text)}")
         check(_group_region(text) == ["[G](g.md)", "[G2](g2.md)"], f"Group はグループだけ（元の順）: {_group_region(text)}")
         lines = text.split("\n")
-        check(lines.index(CTX_MARK) < lines.index(v2.GROUP_MARK) < lines.index(DOWN_MARK),
-              "並びは上から Context, Group, BackLink")
+        check(lines.index(CTX_MARK) < lines.index(v2.GROUP_MARK) and DOWN_MARK not in lines,
+              "並びは上から Context, Group（BackLink は空なので出ない）")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
@@ -1235,7 +1244,7 @@ def test_simple_sync_group_with_my_link_is_added_to_group() -> None:
         text = (root / "x.md").read_text(encoding="utf-8")
         check(_group_region(text) == ["[G](g.md)"], f"G が Group に自動で入る: {_group_region(text)}")
         check(_parent_region(text) == ["[N1](n1.md)"], f"Context はそのまま: {_parent_region(text)}")
-        check("[G](g.md)" not in text.split(DOWN_MARK)[1], "BackLink には出ない")
+        check(DOWN_MARK not in text, "BackLink には出ない（空なので見出しも無い）")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
         # グループの本文からリンクを消すと、Group からも外れる
         (root / "g.md").write_text(
@@ -1261,6 +1270,31 @@ def test_simple_sync_not_group_anymore_goes_back_to_context() -> None:
         text = (root / "x.md").read_text(encoding="utf-8")
         check(_group_region(text) is None and _parent_region(text) == ["[G](g.md)"],
               f"普通のノートになったら Context へ: {_parent_region(text)} / {_group_region(text)}")
+
+
+def test_simple_sync_empty_sections_are_not_written() -> None:
+    print("simple_sync: 中身が空の Context / Group / Related / BackLink は見出しごと書かない")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\n---\n\n# Index\n", encoding="utf-8")
+        v2.make_new(root / "a.md", "A")
+        v2.make_new(root / "b.md", "B")
+        raw = (root / "a.md").read_text(encoding="utf-8")
+        check(v2.simple_sync(root) == 0, "見出し無しの新ノートは sync しても変わらない（書き出しの余白も残る）")
+        check((root / "a.md").read_text(encoding="utf-8") == raw, "新ノートの中身がそのまま")
+        # A が B にリンクすると、B に BackLink だけが出る（Context / Group は出ない）
+        (root / "a.md").write_text(raw.rstrip("\n") + "\n[B](b.md)\n", encoding="utf-8")
+        v2.simple_sync(root)
+        b = (root / "b.md").read_text(encoding="utf-8")
+        check(DOWN_MARK in b and CTX_MARK not in b and v2.GROUP_MARK not in b, f"BackLink だけ: {b[-60:]!r}")
+        a = (root / "a.md").read_text(encoding="utf-8")
+        check(DOWN_MARK not in a and CTX_MARK not in a, "A には節が無い")
+        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+        # リンクを消すと BackLink の見出しも消える
+        (root / "a.md").write_text(raw, encoding="utf-8")
+        v2.simple_sync(root)
+        check((root / "b.md").read_text(encoding="utf-8") == raw.replace("title: A", "title: B").replace("# A", "# B"),
+              "BackLink が空になったら見出しごと消え、元の新ノートの形に戻る")
 
 
 def main() -> int:

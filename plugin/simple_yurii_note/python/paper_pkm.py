@@ -181,6 +181,18 @@ def _is_context_head(ln: str) -> bool:
     return ln.strip() in CONTEXT_HEADS
 
 
+# 関係の節の見出し（本文はこれより前）。中身が空の節は見出しごと無いので、どれが最初に来るかは決まっていない。
+SECTION_HEADS = ("### Context", "### Parent", "### Group", "### Related", "### BackLink")
+
+
+def _is_section_head(ln: str) -> bool:
+    return ln.strip() in SECTION_HEADS
+
+
+def _first_section(lines: list[str]) -> int | None:
+    return next((k for k, ln in enumerate(lines) if _is_section_head(ln)), None)
+
+
 def parse_note(text: str) -> tuple[list[str], list[str]]:
     """front matter（`---` の内側）と本文に分ける。"""
     lines = text.split("\n")
@@ -232,11 +244,11 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
         head_add.append(ln)
         present.add(t)
     if head_add:
-        p = next((k for k, ln in enumerate(out) if _is_context_head(ln)), len(out))
+        p = next((k for k, ln in enumerate(out) if _is_section_head(ln)), len(out))
         ins = list(head_add)
         if p > 0 and out[p - 1].strip():
             ins.insert(0, "")
-        if p < len(out) and _is_context_head(out[p]):
+        if p < len(out) and _is_section_head(out[p]):
             ins.append("")
         out[p:p] = ins
 
@@ -245,9 +257,14 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     if parent_links:
         p = next((k for k, ln in enumerate(out) if _is_context_head(ln)), None)
         if p is None:
-            if out and out[-1].strip():
-                out.append("")
-            out += [CONTEXT_HEAD, *parent_links]
+            fs = _first_section(out)
+            if fs is not None:
+                # Context が無く Group 等だけある → その手前に Context を作る
+                out[fs:fs] = [CONTEXT_HEAD, *parent_links]
+            else:
+                if out and out[-1].strip():
+                    out.append("")
+                out += [CONTEXT_HEAD, *parent_links]
         else:
             e = next((k for k in range(p + 1, len(out)) if _is_heading(out[k])), len(out))
             last = e
@@ -583,7 +600,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             slots = [i for i, _ in keyword_line_order]
             for slot, entry in zip(slots, entries, strict=False):
                 body[slot] = entry["key"] + ": " + ", ".join(entry["ids"])
-        if not any(_is_context_head(ln) for ln in body):
+        if not any(_is_section_head(ln) for ln in body):
             body += [CONTEXT_HEAD,
                      markdown_link(index_display, index_path, root)]
             write_note(index_write, iw_fm, body)
@@ -741,7 +758,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                                     if ln.strip().startswith(f"{FM_PAPER_TOPIC}:")), None)
                     if key_idx is not None:
                         fm_t.insert(key_idx + 1, f"{FM_TOPIC_PARENT}: ")
-            ci = next((k for k, ln in enumerate(body_t) if _is_context_head(ln)), None)
+            ci = _first_section(body_t)
             if ci is not None:
                 body_t = body_t[:ci]
             while body_t and body_t[-1].strip() == "":
