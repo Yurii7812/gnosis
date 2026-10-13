@@ -111,6 +111,10 @@ endfunction
 
 " 起動画面の配色（白背景・黒文字）
 function! gnosis#theme#apply_start() abort
+  " 起動画面の前の配色（旧 vimrc の kalisi など）を覚えておく（vault に設定が無いときに戻す）
+  if get(g:, 'colors_name', '') !=# 'gnosis' && !exists('s:before_start')
+    let s:before_start = {'name': get(g:, 'colors_name', ''), 'bg': &background}
+  endif
   let g:gnosis_palette = copy(gnosis#settings#builtin_palettes().start)
   let g:gnosis_palette.base = 'light'
   set background=light
@@ -131,6 +135,25 @@ endfunction
 
 function! s:truecolor_terminal() abort
   return $COLORTERM =~? 'truecolor\|24bit' || exists('$GNOSIS_GUI_PORT') || has('win32')
+endfunction
+
+" 旧 vimrc（Gnosis のランチャーを使わない起動）で、vault にまだ Gnosis の設定が無いときは、
+" vimrc の配色（起動画面の前のもの）をそのまま使う。
+function! gnosis#theme#restore_vimrc_colors() abort
+  let l:b = get(s:, 'before_start', {})
+  if empty(l:b)
+    return 0
+  endif
+  let &background = l:b.bg
+  if !empty(l:b.name)
+    try
+      execute 'colorscheme ' . fnameescape(l:b.name)
+    catch
+    endtry
+  endif
+  let g:gnosis_palette = s:palette_from_highlights(l:b.bg)
+  let g:gnosis_theme_state = {'kind': 'vimrc', 'name': l:b.name, 'palette': g:gnosis_palette}
+  return 1
 endfunction
 
 " 設定のテーマを反映する。失敗したら組み込みテーマへ戻し、メッセージを出す。

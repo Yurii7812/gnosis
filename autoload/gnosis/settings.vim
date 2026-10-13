@@ -162,7 +162,13 @@ endfunction
 " 設定を Vim に反映する（言語・テーマ・GUI の文字サイズ・GUI のウィンドウ）
 function! gnosis#settings#apply(s) abort
   call gnosis#i18n#set_lang(a:s.language)
-  call gnosis#theme#apply(a:s)
+  " 旧 vimrc で起動し、vault にまだ設定ファイルが無いときは、vimrc の配色のまま
+  let l:vault = gnosis#settings#current_vault()
+  if !get(g:, 'gnosis_managed', 0) && (empty(l:vault) || !filereadable(gnosis#settings#file(l:vault)))
+        \ && gnosis#theme#restore_vimrc_colors()
+  else
+    call gnosis#theme#apply(a:s)
+  endif
   call gnosis#settings#apply_gui(a:s)
   if exists('#User#GnosisSettingsChanged')
     doautocmd <nomodeline> User GnosisSettingsChanged

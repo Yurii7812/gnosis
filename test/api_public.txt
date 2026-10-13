@@ -156,6 +156,7 @@ gnosis#settings#current_vault
 gnosis#settings#deactivate
 gnosis#settings#defaults
 gnosis#settings#file
+gnosis#settings#gui_zoom
 gnosis#settings#load
 gnosis#settings#merge
 gnosis#settings#save
@@ -220,6 +221,7 @@ gnosis#theme#installed
 gnosis#theme#palette
 gnosis#theme#parse
 gnosis#theme#remove
+gnosis#theme#restore_vimrc_colors
 gnosis#theme#to_cterm
 gnosis#timestamp_filename
 gnosis#timestamp_yaml
