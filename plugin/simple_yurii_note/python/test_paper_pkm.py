@@ -283,6 +283,19 @@ def test_index_has_fixed_file_name() -> None:
               "Index は 1 つだけ")
         parent = (root / "index.md").read_text(encoding="utf-8")
         check("(Paper-Zettelkasten-Index.md)" in parent, "index.md から固定名でリンクされる")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n"
+                                       "[ガイド](simple-yurii-note-guide.md)\n[問題](261012130347.md)\n", encoding="utf-8")
+        for name in ("simple-yurii-note-guide.md", "261012130347.md"):  # 消えたファイルへのリンクは sync が掃除するので実在させる
+            (root / name).write_text("---\ntitle: " + name + "\n---\n\n# x\n", encoding="utf-8")
+        pp.create_paper_index(root)
+        lines = (root / "index.md").read_text(encoding="utf-8").split("\n")
+        at = lines.index("[Paper-Zettelkasten-Index](Paper-Zettelkasten-Index.md)")
+        check(lines[at - 1] == "[問題](261012130347.md)", f"index.md には空行を挟まず、最後のリンクの直後に足す: {lines[at-2:at+1]}")
+        before = (root / "index.md").read_text(encoding="utf-8")
+        pp.create_paper_index(root)
+        check((root / "index.md").read_text(encoding="utf-8") == before, "2 回目はリンクを足さない（冪等）")
 
 
 def test_index_migrates_from_timestamp_name() -> None:
@@ -375,7 +388,7 @@ def test_diary_register_and_keyword() -> None:
         notes = pp.scan_diary_notes(root)
         check(set(notes) == {"2026-10-07", "2026-09-30"}, "日記が書かれた日付ごとに 1 ノート")
         n7 = notes["2026-10-07"].read_text(encoding="utf-8")
-        check("paper_diary: 2026-10-07" in n7 and "title: 2026-10-07(水) 紙の日記" in n7, "日記の日付と題")
+        check("paper_diary: 2026-10-07" in n7 and "title: 2026-10-07-WE" in n7, "日記の日付と題")
         check("![](paper-diary-20261007-1.jpg)" in n7 and "![](paper-diary-20261007-2.jpg)" in n7, "複数ページの画像が並ぶ")
         check((root / "paper-diary-20261007-1.jpg").is_file() and (root / "paper-diary-20260930-1.png").is_file(), "画像が dest へ移る")
         import re as _re
@@ -391,7 +404,7 @@ def test_diary_register_and_keyword() -> None:
         check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
         gtext = group.read_text(encoding="utf-8")
         check("title: 紙の日記" in gtext and "attribute: group" in gtext, "題は「紙の日記」（デジタル日記の「日記」と区別）")
-        check(gtext.index("2026-09-30(水) 紙の日記") < gtext.index("2026-10-07(水) 紙の日記"), "日付順（古い日記から）に並ぶ")
+        check(gtext.index("2026-09-30-WE") < gtext.index("2026-10-07-WE"), "日付順（古い日記から）に並ぶ")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         link = f"({group.name})"
         check(link in index_text, "Index の「日記」は紙の日記グループを指す")
@@ -408,8 +421,8 @@ def test_diary_register_and_keyword() -> None:
         check("paper-diary-20261007-3.jpg" in n7b and n7b.count("![](") == 3, "同じ日付の続きのページは同じノートに足される（上書きしない）")
         pp.regen(root)
         gtext = group.read_text(encoding="utf-8")
-        order = [gtext.index(x) for x in ("2026-09-30(水) 紙の日記", "2026-10-01(木) 紙の日記", "2026-10-07(水) 紙の日記")]
-        check(order == sorted(order) and gtext.count("2026-10-07(水) 紙の日記](") == 1, "追加後も日付順で、重複しない")
+        order = [gtext.index(x) for x in ("2026-09-30-WE", "2026-10-01-TH", "2026-10-07-WE")]
+        check(order == sorted(order) and gtext.count("2026-10-07-WE](") == 1, "追加後も日付順で、重複しない")
 
 
 def test_diary_keyword_merges_with_index_write_entry() -> None:
@@ -427,7 +440,7 @@ def test_diary_keyword_merges_with_index_write_entry() -> None:
         check(text.count("[日記](") == 1, f"「日記」は 1 つだけ: {text}")
         group = pp.find_group(root, "日記")
         gtext = group.read_text(encoding="utf-8")
-        check("2026-10-07(水) 紙の日記" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記が同じグループに並ぶ")
+        check("2026-10-07-WE" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記が同じグループに並ぶ")
 
 
 def test_diary_errors_and_scan_unchanged() -> None:
@@ -447,25 +460,22 @@ def test_diary_errors_and_scan_unchanged() -> None:
 
 
 def test_diary_weekday_is_computed() -> None:
-    print("diary: 曜日は日付から自動で計算して題・一覧に付く。旧い題（曜日なし）は regen で直る")
-    check(pp.weekday_ja("2026-10-07") == "水" and pp.weekday_ja("2026-10-11") == "日" and pp.weekday_ja("2024-02-29") == "木",
-          "曜日の計算（水・日・うるう日の木）")
-    check(pp.diary_label("2026-10-05") == "2026-10-05(月)" and pp.diary_title("2026-10-05") == "2026-10-05(月) 紙の日記",
-          "題は 日付(曜日) 紙の日記")
-    import re as _re
-    check(not _re.match(r"^\d{4}-\d{2}-\d{2}-[A-Z]{2}", pp.diary_title("2026-10-05")) and not _re.match(r"^\d{4}-\d{2}-\d{2}-", pp.diary_title("2026-10-05")),
-          "デジタル日記の題（YYYY-MM-DD-曜日2文字…）の形にはならない")
+    print("diary: 題は デジタル日記と同じ YYYY-MM-DD-曜日2文字（曜日は日付から自動計算）。旧い題は regen で直る")
+    check(pp.weekday_en("2026-10-07") == "WE" and pp.weekday_en("2026-10-11") == "SU" and pp.weekday_en("2024-02-29") == "TH"
+          and pp.weekday_en("2026-10-13") == "TU" and pp.weekday_en("2026-10-12") == "MO", "曜日の計算（MO..SU。うるう日も）")
+    check(pp.diary_title("2026-10-13") == "2026-10-13-TU" and pp.diary_label("2026-10-05") == "2026-10-05-MO",
+          "題は 2026-10-13-TU の形")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         old = root / "261001000000.md"
-        _write(old, "---\ntime: 2026-10-01 00:00:00\ntitle: 2026-10-01 紙の日記\npaper_diary: 2026-10-01\n---\n# 2026-10-01 紙の日記\n\n![](paper-diary-20261001-1.jpg)\n")
+        _write(old, "---\ntime: 2026-10-01 00:00:00\ntitle: 2026-10-01(木) 紙の日記\npaper_diary: 2026-10-01\n---\n# 2026-10-01(木) 紙の日記\n\n![](paper-diary-20261001-1.jpg)\n")
         (root / "paper-diary-20261001-1.jpg").write_bytes(b"x")
         pp.regen(root)
         text = old.read_text(encoding="utf-8")
-        check("title: 2026-10-01(木) 紙の日記" in text and "# 2026-10-01(木) 紙の日記" in text and "paper-diary-20261001-1.jpg" in text,
-              "旧い題は曜日つきに直り、画像はそのまま")
+        check("title: 2026-10-01-TH\n" in text and "# 2026-10-01-TH\n" in text and "paper-diary-20261001-1.jpg" in text and "paper_diary: 2026-10-01" in text,
+              "旧い題（曜日つきの紙の日記など）は YYYY-MM-DD-TH に直り、画像と日付はそのまま")
         group = pp.find_group(root, "日記").read_text(encoding="utf-8")
-        check("[2026-10-01(木) 紙の日記](261001000000.md)" in group and "[2026-10-01 紙の日記]" not in group, "一覧のリンクも曜日つき")
+        check("[2026-10-01-TH](261001000000.md)" in group and "紙の日記](" not in group, "一覧のリンクも同じ題")
 
 
 def test_regen_without_index() -> None:

@@ -18,7 +18,7 @@
   （`attribute: group`、中に各IDノートへのリンク）、単一IDは直接リンク。
 - `Folgezettel-Index.md`: 存在する全IDを自然順で並べた一覧。
 - **紙の日記**: `\\F` の GUI で「日記として登録」した画像は、日記が書かれた日付ごとに 1 ノート
-  （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD(曜) 紙の日記`。曜日は日付から自動計算）にまとめる。
+  （タイムスタンプ名・`paper_diary: YYYY-MM-DD`・題 `YYYY-MM-DD-曜日2文字`（例 2026-10-13-TU。曜日は日付から自動計算。デジタル日記と同じ形）にまとめる。
   複数ページは同じノートに画像を並べる。ノートの `time:` はスキャンした日時で、日記の日付とは別。
   日記があると Paper-Zettelkasten-Index のキーワードに「日記」が 1 つ自動で入り、
   開くと日付順に日記の一覧（グループ `紙の日記`）になる。デジタル日記（`\\d`）とは題の形が違い、
@@ -488,21 +488,23 @@ def normalize_diary_date(raw: str) -> str:
     return d.strftime("%Y-%m-%d")
 
 
-_WEEKDAYS_JA = "月火水木金土日"
+_WEEKDAYS_EN = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")  # デジタル日記（\\d）と同じ表記
 
 
-def weekday_ja(date: str) -> str:
-    """YYYY-MM-DD の曜日（月〜日）。"""
-    return _WEEKDAYS_JA[datetime.strptime(date, "%Y-%m-%d").weekday()]
+def weekday_en(date: str) -> str:
+    """YYYY-MM-DD の曜日（MO〜SU。デジタル日記の題と同じ 2 文字）。日付から自動で計算する。"""
+    return _WEEKDAYS_EN[datetime.strptime(date, "%Y-%m-%d").weekday()]
 
 
 def diary_label(date: str) -> str:
-    """曜日つきの日付（例: 2026-10-07(水)）。デジタル日記の題（YYYY-MM-DD-WE…）とは形を変えてある。"""
-    return f"{date}({weekday_ja(date)})"
+    """曜日つきの日付（例: 2026-10-13-TU）。"""
+    return f"{date}-{weekday_en(date)}"
 
 
 def diary_title(date: str) -> str:
-    return f"{diary_label(date)} 紙の日記"
+    """紙の日記ノートの題。デジタル日記（\\d）と同じ YYYY-MM-DD-曜日2文字。
+    Vim 側のデジタル日記の機能は front matter の `paper_diary:` で紙の日記を見分けて無視する。"""
+    return diary_label(date)
 
 
 def _diary_image_name(date: str, page: int, suffix: str) -> str:
@@ -520,7 +522,7 @@ def register_diary_pages(
     """スキャン画像を「紙の日記」として登録する。
 
     pages: [(画像パス, 日記が書かれた日付)]（指定順がページ順）。同じ日付の画像は 1 つの
-    ノート（`paper_diary: 日付`・題 `日付 紙の日記`）に画像を並べる。同じ日付の日記が既にあれば
+    ノート（`paper_diary: 日付`・題 `日付-曜日2文字`）に画像を並べる。同じ日付の日記が既にあれば
     そのノートの末尾にページを足す（ページ番号は続き番号。既存の画像は上書きしない）。
     ノートの `time:` はスキャンした日時（画像の撮影日時、無ければ今）で、日記の日付とは別。
     戻り値は (moved, errors): moved = [(日付, ノートパス)]（日付ごとに 1 件）/ errors = [(元パス, 日付, 理由)]。
@@ -1143,8 +1145,10 @@ def create_paper_index(root: Path) -> Path:
     if parent_index.is_file():
         fm, body = read_note(parent_index)
         if all(index_path.name not in ln for ln in body):
-            body += ["",
-                     f"[{DEFAULT_INDEX_TITLE}]({_rel(parent_index.parent, index_path)})"]
+            # 空行は入れない: 最後のリンク行（内容のある最後の行）の直後に 1 行足す
+            link = f"[{DEFAULT_INDEX_TITLE}]({_rel(parent_index.parent, index_path)})"
+            last = max((i for i, ln in enumerate(body) if ln.strip()), default=-1)
+            body.insert(last + 1, link)
             write_note(parent_index, fm, body)
 
     regen(root)

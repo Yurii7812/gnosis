@@ -42,3 +42,6 @@ sh "$REPO/test/sort_yomi_net.sh"
 
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
 if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/plugin/simple_yurii_note/python/test_folgezettel_scan_diary.py"; fi
+
+# 紙の日記（題がデジタル日記と同じ形）を \d の機能が拾わない
+sh "$REPO/test/diary_paper_net.sh"

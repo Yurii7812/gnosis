@@ -66,7 +66,7 @@ def main() -> int:
         app.show_diary_input()
         check(app.diary_date_var.get() == __import__("datetime").datetime.now().strftime("%Y-%m-%d"), "最初の既定は今日")
         app.diary_date_var.set("2026/10/07")
-        check(app.diary_preview_var.get() == "→ 2026-10-07(水)", f"入力中の日付に曜日が自動で出る: {app.diary_preview_var.get()}")
+        check(app.diary_preview_var.get() == "→ 2026-10-07-WE", f"入力中の日付に曜日が自動で出る: {app.diary_preview_var.get()}")
         app.confirm_diary()
         app.show_diary_input()
         check(app.diary_date_var.get() == "2026-10-07", "続きのページの既定は直前の日記の日付")
