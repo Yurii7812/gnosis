@@ -40,7 +40,7 @@ function! gnosis#settings#defaults() abort
         \ 'language': l:lang,
         \ 'window': {'maximized': v:true, 'width': 1200, 'height': 860},
         \ 'fontSize': 16,
-        \ 'appearance': 'light',
+        \ 'appearance': 'dark',
         \ 'theme': {'kind': 'builtin'},
         \ 'customThemes': {},
         \ }
@@ -153,7 +153,7 @@ function! gnosis#settings#activate(vault) abort
   call gnosis#settings#apply(s:current)
 endfunction
 
-" 起動画面に戻るとき: 既定値（白背景・黒文字）
+" 起動画面に戻るとき: Chnoubis 10番（夜空×水色）
 function! gnosis#settings#deactivate() abort
   let g:gnosis_active_vault = ''
   unlet! s:current
@@ -212,9 +212,9 @@ function! gnosis#settings#builtin_palettes() abort
     let s:palettes = gnosis#home#read_json(s:palette_file, {})
     if empty(s:palettes)
       let s:palettes = {
-            \ 'start': {'bg': '#ffffff', 'fg': '#000000', 'link': '#000000', 'heading': '#000000', 'selection': '#d0d0d0', 'cursorline': '#f0f0f0'},
-            \ 'light': {'bg': '#ffffff', 'fg': '#1f2328', 'link': '#0969da', 'heading': '#1f2328', 'selection': '#b6d6ff', 'cursorline': '#f6f8fa'},
-            \ 'dark': {'bg': '#0d1117', 'fg': '#e6edf3', 'link': '#4493f8', 'heading': '#f0f6fc', 'selection': '#264f78', 'cursorline': '#161b22'},
+            \ 'start': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
+            \ 'light': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
+            \ 'dark': {'base': 'dark', 'bg': '#14283D', 'fg': '#79CFFF', 'link': '#BCEEFF', 'heading': '#79CFFF', 'selection': '#305879', 'cursorline': '#1C354E'},
             \ }
     endif
   endif
