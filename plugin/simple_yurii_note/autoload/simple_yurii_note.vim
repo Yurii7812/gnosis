@@ -12186,6 +12186,8 @@ function! s:adopt_vault_runtime(root) abort
   endif
   " ロック中は読めなかった vault 内の履歴をここで読み込む
   silent! rviminfo
+  " 読み込んだ前回のハイライト状態は捨てる（:nohlsearch は関数内で効かないので v:hlsearch で）
+  let v:hlsearch = 0
   call s:setup_persistent_undo_for_root(l:root)
 endfunction
 
