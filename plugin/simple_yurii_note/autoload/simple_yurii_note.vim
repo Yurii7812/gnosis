@@ -925,8 +925,8 @@ function! s:guide_template() abort
         \ '## ノート作成',
         \ '',
         \ '- `zn` … ノート作成。位置キーを 1 つ選ぶ:',
-        \ '  `h`=カーソル直下（本文） / `Enter`=本文の最後 / `p`=Parent の末尾 / `o`=リンク無し（孤立）',
-        \ '  `h`/`Enter` は新ノートの Parent に元ノート。`p` は新ノートの本文リンクに元ノートを置く。',
+        \ '  `h`=カーソル直下（本文） / `Enter`=本文の最後 / `c`=Context の末尾 / `o`=リンク無し（孤立）',
+        \ '  `h`/`Enter` は新ノートの Context に元ノート（元ノートがグループなら Group）。`c` は新ノートの本文リンクに元ノートを置く。',
         \ '- `zk` … グループノート作成（`attribute: group`）。位置キーは `zn` と同じ',
         \ '- `zk`（ビジュアル）… 選択範囲を中身にしたグループを作り、選択をそのグループへのリンクに置換',
         \ '- `zh` … カーソル直下にリンク（本文扱い → 相手には BackLink）',
@@ -934,15 +934,15 @@ function! s:guide_template() abort
         \ '## リンク',
         \ '',
         \ '- `\l`（ノーマル）… カーソル下のファイル名を Markdown リンク化',
-        \ '- `\l`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Parent は付けない＝元ノートは BackLink に出る。付けるなら `\P`）',
+        \ '- `\l`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Context は付けない＝元ノートは BackLink に出る。付けるなら `\P`）',
         \ '- `\p`（ノーマル）… カーソル下 or クリップボードのリンクを 1 本追加（`h`/`Enter` で位置を選ぶ）',
         \ '- `\p`（ビジュアル）… クリップボードのファイル名/URL を選択範囲のリンクに（無ければ何もしない）',
-        \ '- `za` … リンク 1 本を今のノートに追加（`h`=カーソル直下 / `Enter`=本文の最後 / `p`=Parent末尾 / `r`=Related）',
+        \ '- `za` … リンク 1 本を今のノートに追加（`h`=カーソル直下 / `Enter`=本文の最後 / `c`=Context末尾 / `r`=Related）',
         \ '- `zA` … `za` と同じだが、追加前に**表示名**を入力する（空 Enter / Esc で中止）',
-        \ '- `zp` … `za` と同じ追加＋今のノートを相手の Parent に書く',
-        \ '- `zap` … カーソル下（無ければクリップボード）のリンクを、今のノートの Parent の最後に足す（`za` → `p` と同じ。本文に同じリンクがあっても足す）',
+        \ '- `zp` … `za` と同じ追加＋今のノートを相手の Context に書く',
+        \ '- `zap` … カーソル下（無ければクリップボード）のリンクを、今のノートの Context の最後に足す（`za` → `c` と同じ。本文に同じリンクがあっても足す）',
         \ '- 関連: `za` 等で `r` を押すと `### Related` に**相互追加**（両ノートに。セクションはこの時だけ作る。片側で消すと次回同期で両方から消える。BackLink には出ない）',
-        \ '- `\P` … カーソル下リンクの Parent に今のノートを確認なしで追加',
+        \ '- `\P` … カーソル下リンクの Context に今のノートを確認なしで追加',
         \ '- クリップボードを関係付きで追加: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc`（`\ca`= `ca`、`\at`= `at` の逆方向）',
         \ '- `\L`（ノーマル）… 全ノートを全文検索（タイトル優先）→ カーソル位置にリンク挿入（`:LinkPick`）',
         \ '- `\L`（ビジュアル）… 同じ検索で選んだノートへのリンクで選択範囲を置換',
@@ -951,7 +951,7 @@ function! s:guide_template() abort
         \ '',
         \ '- `zt` / `zT` … タイトル変更（空から / 現在を残して編集）',
         \ '- `zl` / `zL` … リンク表示名の変更（空から / 現在を残して編集）',
-        \ '- `zo` … カーソル下の .md リンク先の見出し（アウトライン）を選び、リンク先に `#スラッグ` を付ける（先頭の「（見出しなし）」で解除。タイトルと Parent/Related/BackLink は一覧に出ない）',
+        \ '- `zo` … カーソル下の .md リンク先の見出し（アウトライン）を選び、リンク先に `#スラッグ` を付ける（先頭の「（見出しなし）」で解除。タイトルと Context/Group/Related/BackLink は一覧に出ない）',
         \ '- `zy` / `zY` … **今開いているノート**の**よみ**を変更（`zy`=空欄から / `zY`=現在のよみを残して。`zY` で全部消して Enter は削除。Esc で中止）。`yomi:` に表示名が複数あるときは番号で表示名を選ぶ',
         \ '- `zd` … 子リンクの表示名をリンク先タイトルに更新',
         \ '- `mp` … YAML `filetype` を変更 ・ `yn` … 今のファイル名をヤンク',
@@ -960,9 +960,9 @@ function! s:guide_template() abort
         \ '',
         \ '- `<Tab>` / `<S-Tab>` … 次の / 前のリンクへ ・ `<CR>` … カーソル下のリンクを開く',
         \ '- `<BS>` … 戻る ・ `<S-BS>` / `\.` … 進む ・ `_` … 直前のノートと往復',
-        \ '- `1`〜`9` / `0` … 本文→Parent/BackLink の通し番号のリンクを開く',
-        \ '- `\k` / `\j` / `\J` … Parent へ / BackLink の先頭へ / BackLink の末尾へ',
-        \ '- `\bu` … Parent 付近の最後のリンクへ ・ `<S-Space>` … リンク一覧から選んで移動',
+        \ '- `1`〜`9` / `0` … 本文→Context/Group/BackLink の通し番号のリンクを開く',
+        \ '- `\k` / `\j` / `\J` … Context へ / BackLink の先頭へ / BackLink の末尾へ',
+        \ '- `\bu` … Context 付近の最後のリンクへ ・ `<S-Space>` … リンク一覧から選んで移動',
         \ '- `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加',
         \ '- `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）',
         \ '- `\i` … `index.md` を開く ・ `\A` … ノートアプリ（Electron / ブラウザ）',
@@ -1023,7 +1023,7 @@ function! s:guide_template() abort
         \ '- `語:;` … 相手側も `語:;`（括弧なし）',
         \ '- `語;` … 相手側には書かない',
         \ '- `語::` … 両方の同じセクションに `語:`',
-        \ '- 見出し無しの裸リンクは、Parent の先頭ブロックが `group`、2 番目以降が `ノート`',
+        \ '- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける（手で Context に書いても Group へ移る）。グループの本文に自分へのリンクがあれば、そのグループが自動で `### Group` に入る',
         \ '',
         \ '## 同期',
         \ '',
@@ -1048,7 +1048,7 @@ function! s:guide_template() abort
         \ '- `\S`（ノーマル）… バッファ内の**リンクだけの行**を表示名のよみ順（五十音 → ローマ字は末尾）に並べ替え（未登録のよみは `yomi:` に自動追加）',
         \ '- `\S`（ビジュアル）… 選択した行のリンクだけの行を同じ規則で並べ替え',
         \ '- `:SortYomi` … `\S`（ノーマル）と同じ',
-        \ '- 文章（リンクでない行）と、`### Parent` / `### Related` / `### BackLink` 以降のリンクは動かさない（グループに文章があってもそのまま）',
+        \ '- 文章（リンクでない行）と、`### Context` / `### Related` / `### BackLink` 以降のリンクは動かさない（グループに文章があってもそのまま）',
         \ '- よみはリンク先ノートの front matter `yomi:`（表示名 → よみ）を優先。未登録は pykakasi で `yomi:` に自動追加',
         \ '- `zy` / `zY` で表示名ごとのよみを手で修正/削除できる（表示名が複数あれば番号で選ぶ）。表示名が Index から消えると同期時に掃除される',
         \ '',
@@ -1075,7 +1075,7 @@ function! s:guide_template() abort
         \ '',
         \ '### 移動',
         \ '- `:JumpParent` / `:JumpUp` 親へ ・ `:JumpChildTop` / `:JumpDownTop` 子の先頭 ・ `:JumpChildBottom` / `:JumpDownBottom` 子の末尾',
-        \ '- `:JumpLastLinkBeforeParent` / `:JumpLastLinkBeforeUp` Parent 付近の最後のリンクへ',
+        \ '- `:JumpLastLinkBeforeParent` / `:JumpLastLinkBeforeUp` Context 付近の最後のリンクへ',
         \ '',
         \ '### 展開・索引・Web・アウトライン',
         \ '- `:SE` / `:ExpandToT` / `:ExpandLinks` S ノートを展開 ・ `:OutlineEdit` 見出し編集（`:OutlineApply` で反映）',
@@ -1651,8 +1651,11 @@ endfunction
 
 function! s:section_aliases(name) abort
   let l:target = tolower(a:name)
-  if l:target ==# 'parent' || l:target ==# 'up'
-    return ['parent', 'up']
+  if l:target ==# 'parent' || l:target ==# 'up' || l:target ==# 'context'
+    return ['context', 'parent', 'up']
+  endif
+  if l:target ==# 'group'
+    return ['group']
   endif
   if l:target ==# 'child' || l:target ==# 'down' || l:target ==# 'branch'
     return ['child', 'down', 'branch']
@@ -1684,7 +1687,7 @@ endfunction
 
 function! s:is_known_section_header_text(text) abort
   let l:sec = s:bare_section_name(a:text)
-  return index(['parent', 'up', 'related', 'child', 'down', 'branch', 'back', 'backlink'], l:sec) >= 0
+  return index(['context', 'group', 'parent', 'up', 'related', 'child', 'down', 'branch', 'back', 'backlink'], l:sec) >= 0
 endfunction
 
 function! s:find_section_index_in_lines(lines, name) abort
@@ -1874,19 +1877,21 @@ function! s:append_link_to_buffer_section(name, link) abort
   return 1
 endfunction
 
-" ### Related を無ければ ### Parent と ### BackLink の間に作る。見出し行番号を返す（無理なら 0）。
+" ### Related を無ければ ### Context と ### BackLink の間に作る。見出し行番号を返す（無理なら 0）。
 " index.md など見張りの無いノートでは作らない（関連はノート間の機能）。
 function! s:ensure_related_section_in_buffer() abort
   let l:rel = s:find_section_line('related')
   if l:rel > 0
     return l:rel
   endif
-  let l:ins = s:up_end_line()
+  " 並びは Context → Group → Related → BackLink。BackLink の直前に作る。
+  let l:ins = 0
+  let l:back = s:find_section_line('back')
+  if l:back > 1
+    let l:ins = l:back - 1
+  endif
   if l:ins <= 0
-    let l:back = s:find_section_line('back')
-    if l:back > 1
-      let l:ins = l:back - 1
-    endif
+    let l:ins = s:up_end_line()
   endif
   if l:ins <= 0
     return 0
@@ -1959,7 +1964,7 @@ function! s:parent_line_is_group(line, base_dir) abort
   return s:v2_path_attr(simple_yurii_note#resolve_link(l:tgt, a:base_dir)) ==# 'group'
 endfunction
 
-" ### Parent に a:link を入れる位置と行。並びは「グループ（先頭ブロック）→ 1 行あけ → 普通のノート」。
+" ### Context に a:link を入れる位置と行。並びは「グループ（先頭ブロック）→ 1 行あけ → 普通のノート」。
 " 戻り値 {at, lines}: at は 0 始まりで、この index の直前に lines を入れる。
 function! s:parent_insert_plan(lines, sec_idx, link, base_dir) abort
   let l:end = s:section_end_index_in_lines(a:lines, a:sec_idx)
@@ -2018,6 +2023,14 @@ endfunction
 let s:realtime_sync_busy = 0
 
 function! s:section_link_targets_from_lines(lines, name, base_dir) abort
+  if a:name ==# 'up'
+    return s:section_link_targets_from_lines_one(a:lines, 'up', a:base_dir)
+          \ + s:section_link_targets_from_lines_one(a:lines, 'group', a:base_dir)
+  endif
+  return s:section_link_targets_from_lines_one(a:lines, a:name, a:base_dir)
+endfunction
+
+function! s:section_link_targets_from_lines_one(lines, name, base_dir) abort
   let l:idx = s:find_section_index_in_lines(a:lines, a:name)
   if l:idx < 0
     return []
@@ -2542,6 +2555,14 @@ function! simple_yurii_note#jump_section_header(name) abort
 endfunction
 
 function! s:section_link_positions(name) abort
+  " 上側は Context と Group の 2 つの節に分かれた（Group はグループへのリンク）
+  if a:name ==# 'up'
+    return s:section_link_positions_one('up') + s:section_link_positions_one('group')
+  endif
+  return s:section_link_positions_one(a:name)
+endfunction
+
+function! s:section_link_positions_one(name) abort
   let l:sec = s:find_section_line(a:name)
   if l:sec <= 0
     return []
@@ -2571,7 +2592,7 @@ endfunction
 function! simple_yurii_note#jump_up() abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
-    echo 'Parent: section not found'
+    echo 'Context: section not found'
     return
   endif
 
@@ -2640,10 +2661,10 @@ endfunction
 function! simple_yurii_note#jump_up_cursor() abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
-    echo 'Parent: section not found'
+    echo 'Context: section not found'
     return
   endif
-  " 「### Parent」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
+  " 「### Context」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
   " 見出しは、下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
   " 来るところまでで止める（末尾より下の空白は出さない）。
   call s:jump_to_line(l:up)
@@ -2684,7 +2705,7 @@ endfunction
 function! simple_yurii_note#jump_last_link_before_up() abort
   let l:up = s:find_section_line('up')
   if l:up <= 0
-    echo 'Parent section not found'
+    echo 'Context section not found'
     return
   endif
 
@@ -2720,7 +2741,7 @@ function! simple_yurii_note#jump_last_link_before_up() abort
   endif
 
   if l:last_lnum <= 0
-    echo 'No links before Parent or in Parent'
+    echo 'No links before Context or in Context'
     return
   endif
 
@@ -2849,6 +2870,13 @@ function! s:v2_boundaries_in_lines(lines) abort
 endfunction
 
 function! s:section_link_positions_in_lines(lines, name) abort
+  if a:name ==# 'up'
+    return s:section_link_positions_in_lines_one(a:lines, 'up') + s:section_link_positions_in_lines_one(a:lines, 'group')
+  endif
+  return s:section_link_positions_in_lines_one(a:lines, a:name)
+endfunction
+
+function! s:section_link_positions_in_lines_one(lines, name) abort
   let l:idx = s:find_section_index_in_lines(a:lines, a:name)
   if l:idx < 0 | return [] | endif
   let l:end = s:section_end_index_in_lines(a:lines, l:idx)
@@ -5568,20 +5596,21 @@ endfunction
 
 " front matter 終端行と、本文側で末尾寄りの --- 2 本（上側開始 / 下側開始）を返す。
 " 2 本無ければ EOF に補って返す。本文中の --- は末尾 2 本にならないので無視される。
-let s:v2_up_mark   = '### Parent'
+let s:v2_up_mark   = '### Context'
+let s:v2_group_mark = '### Group'
 let s:v2_related_mark = '### Related'
 let s:v2_down_mark = '### BackLink'
 " 旧見張り（新しい順: `##` なしの Parent/Child -> こっちにとって/そっちにとって
 " -> している/されている）。まだ移行していないノートも読めるように残す。
 " sync（note_format_v2.py）が保存時に新表記（## Parent / ## Child）へ書き換える。
-let s:v2_up_marks_legacy   = ['Parent', '<!-- こっちにとって -->', '<!-- している -->']
+let s:v2_up_marks_legacy   = ['### Parent', 'Parent', '<!-- こっちにとって -->', '<!-- している -->']
 let s:v2_down_marks_legacy = ['Child', '<!-- そっちにとって -->', '<!-- されている -->']
 
 " v2_boundaries_in_lines と同じ判定を、バッファ上では search()（C 実装）で行う。
 " 旧: 全行を Vimscript ループで trim 比較しており、1 万行の index.md では
 " ヒント更新・数字ジャンプのたびに 200ms 超かかっていた。後方検索 1 回ずつで
 " 「最後に一致した行」という同じ意味になる（複数あれば最後が返る）。
-let s:v2_up_pat = '\C^\s*\%(### Parent\|Parent\|<!-- こっちにとって -->\|<!-- している -->\)\s*$'
+let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちにとって -->\|<!-- している -->\)\s*$'
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_last_mark(pat) abort
@@ -6099,7 +6128,7 @@ endfunction
 
 " zk（ビジュアル）… 選択範囲を中身にしたグループノートを作る。
 "   選択範囲は新しいグループへのリンクで**置き換える**（リンクをグループへ移す）。
-"   グループの ### Parent は今のノート。作成後グループを開いて本文末にカーソル。
+"   グループの ### Context は今のノート。作成後グループを開いて本文末にカーソル。
 function! simple_yurii_note#v2_new_group_visual() abort range
   if s:pkm_format() !=# 'v2'
     echo 'simple_yurii_note: v2 専用' | return
@@ -6150,7 +6179,7 @@ function! simple_yurii_note#v2_new_group_visual() abort range
   let l:ts  = simple_yurii_note#timestamp_filename()
   let l:file = s:join_path(l:dir, l:ts . '.md')
 
-  " グループ本体: 選択内容を本文に、### Parent に今のノート
+  " グループ本体: 選択内容を本文に、### Context に今のノート
   let l:content = [
         \ '---',
         \ 'time: ' . simple_yurii_note#timestamp_yaml(),
@@ -6188,7 +6217,7 @@ endfunction
 "   作成時にリレーション（ノート: など）は一切書かない。置くのは素のリンク 1 行で、
 "   あとから手で グループ / きっかけ: などを書く。`:` / `;` は sync がそのまま扱う。
 "   位置キー: h=カーソル直下 / Enter=Child末尾 / o=リンク無し(孤立) / p=Parent末尾。
-" simple: 本文の最後（### Parent の手前）へ link を、空行 1 つを挟んで置く
+" simple: 本文の最後（### Context の手前）へ link を、空行 1 つを挟んで置く
 function! s:simple_body_append(link) abort
   let l:up = 0
   for l:i in range(1, line('$'))
@@ -6200,7 +6229,7 @@ function! s:simple_body_append(link) abort
     call append(line('$'), a:link)
     return
   endif
-  " ### Parent の直前（本文の最後）にリンクを挿入。
+  " ### Context の直前（本文の最後）にリンクを挿入。
   " 直前が**散文**なら空行 1 つを挟む。直前が**リンク行**なら空行なしで並べる。
   " Enter で連続で置いても空行が累積しない。既存の空行はそのまま。
   let l:prev = l:up - 1
@@ -6212,8 +6241,8 @@ function! s:simple_body_append(link) abort
   endif
 endfunction
 
-" simple: file の本文末尾（### Parent の直前）へ link を 1 行置く。
-"   a:is_group が真（zk のグループノート）なら、リンクと ### Parent は隣り合う。
+" simple: file の本文末尾（### Context の直前）へ link を 1 行置く。
+"   a:is_group が真（zk のグループノート）なら、リンクと ### Context は隣り合う。
 "   偽（zn）なら上下に空行 1 つずつ。テンプレートが持つ本文の空行は
 "   この並びに置き換わる（空行が累積しない）。
 function! s:simple_body_append_to_file(file, link, is_group) abort
@@ -6227,7 +6256,7 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
   if l:hdr < 0
     call add(l:lines, a:link)
   else
-    " ### Parent の直前まで続く空行の連なりを剥がす。
+    " ### Context の直前まで続く空行の連なりを剥がす。
     let l:top = l:hdr
     while l:top > 0 && trim(l:lines[l:top - 1]) ==# ''
       let l:top -= 1
@@ -6241,7 +6270,7 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
   call s:syn_writefile(l:lines, a:file)
 endfunction
 
-" simple: file の ### Parent に parent_path へのリンクを 1 本足す
+" simple: file の ### Context に parent_path へのリンクを 1 本足す
 function! s:simple_add_parent(file, parent_path, parent_title) abort
   let l:lines = readfile(a:file)
   let l:link = s:make_link_from_dir(a:parent_path, a:parent_title, fnamemodify(a:file, ':h'))
@@ -6265,7 +6294,7 @@ function! s:simple_add_parent(file, parent_path, parent_title) abort
 endfunction
 
 " simple: file の ### Related に other_path へのリンクを 1 本足す（zr の相手側）。
-"   見出しが無ければ ### Parent と ### BackLink の間に作る。Related 内に同じ
+"   見出しが無ければ ### Context と ### BackLink の間に作る。Related 内に同じ
 "   リンク先が既にあれば何もしない。追加したら 1 を返す。
 function! s:simple_add_related(file, other_path, other_title) abort
   if !filereadable(a:file)
@@ -6368,8 +6397,8 @@ function! simple_yurii_note#add_clipboard() abort
   echo 'simple_yurii_note: 追加 → ' . fnamemodify(l:tf, ':t')
 endfunction
 
-" 旧: 今のノートを、相手（カーソル下のリンク or クリップボード）の ### Parent に追加
-" 公開: カーソル下の .md リンク先の ### Parent に、今のノートを 1 本足す。
+" 旧: 今のノートを、相手（カーソル下のリンク or クリップボード）の ### Context に追加
+" 公開: カーソル下の .md リンク先の ### Context に、今のノートを 1 本足す。
 " 確認プロンプトは出さない（\P）。リンクが無ければ何もしない。
 function! simple_yurii_note#add_current_as_parent_here() abort
   let l:cur = expand('%:p')
@@ -6389,7 +6418,7 @@ function! simple_yurii_note#add_current_as_parent_here() abort
   endif
   call s:simple_add_parent(l:tgt, l:cur, simple_yurii_note#current_title())
   call s:write_current_and_sync_now()
-  echo 'simple_yurii_note: Parent に追加 → ' . fnamemodify(l:tgt, ':t')
+  echo 'simple_yurii_note: Context に追加 → ' . fnamemodify(l:tgt, ':t')
 endfunction
 
 function! simple_yurii_note#add_to_parent() abort
@@ -6413,7 +6442,7 @@ function! simple_yurii_note#add_to_parent() abort
     endfor
   endif
   if empty(l:target)
-    let l:target = trim(input('Parent に追加する相手 (.md): ', '', 'file'))
+    let l:target = trim(input('Context に追加する相手 (.md): ', '', 'file'))
   endif
   if empty(l:target)
     echo 'キャンセル'
@@ -6426,7 +6455,7 @@ function! simple_yurii_note#add_to_parent() abort
   endif
   call s:simple_add_parent(l:tgt, l:cur, l:cur_title)
   call s:write_current_and_sync_now()
-  echo 'simple_yurii_note: Parent に追加 → ' . fnamemodify(l:tgt, ':t')
+  echo 'simple_yurii_note: Context に追加 → ' . fnamemodify(l:tgt, ':t')
 endfunction
 
 function! s:v2_new_interactive(attr) abort
@@ -6437,7 +6466,7 @@ function! s:v2_new_interactive(attr) abort
   if empty(l:cur)
     echohl WarningMsg | echo 'simple_yurii_note: 名前付きバッファで実行して' | echohl NONE | return
   endif
-  echo 'h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / p=Parent末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)'
+  echo 'h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)'
   let l:ch = nr2char(getchar())
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
@@ -6448,6 +6477,10 @@ function! s:v2_new_interactive(attr) abort
     " 続きは s:v2_new_run をコールバックで呼ぶ。
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
     return
+  endif
+  " 位置キー以外（旧 p を含む）では何も作らない
+  if l:ch !~? '^[hco]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'simple_yurii_note: キャンセル（h / Enter / t / c / o のどれか）' | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -6556,14 +6589,14 @@ function! s:v2_new_run(attr, ch, head_lnum) abort
   elseif l:ch ==? 't'
     call s:insert_link_under_heading(a:head_lnum, l:link)  " 見出しの本文の最後
     let l:added = 1
-  elseif l:ch ==? 'p'
-    " 今のノートの ### Parent 末尾に置く → 今のノートは**新ノートの子**。
+  elseif l:ch ==? 'c'
+    " 今のノートの ### Context 末尾に置く → 今のノートは**新ノートの子**。
     " よって新ノート側は親を持たず、本文リンク（子）で今のノートを指す。
     if s:append_link_to_buffer_section('up', l:link)
       let l:added = 1
     endif
   elseif l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
-    call s:simple_body_append(l:link)  " 本文の最後（### Parent の手前に空行1つ）
+    call s:simple_body_append(l:link)  " 本文の最後（### Context の手前に空行1つ）
     let l:added = 1
   endif
   " o … リンク無し（孤立）
@@ -6575,14 +6608,14 @@ function! s:v2_new_run(attr, ch, head_lnum) abort
   let l:in_body = 0
   let l:hl = 0
   if l:added
-    if l:ch ==? 'p'
+    if l:ch ==? 'c'
       " 新ノート側は「もと開いていたノート」を**本文リンク**（子）に置く。
-      " p は「親を作る」操作なので、ここを ### Parent にすると循環して読めない。
+      " c は「親（文脈）を作る」操作なので、ここを ### Context にすると循環して読めない。
       let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
       call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
       let l:in_body = 1
     else
-      " h / Enter は今のノートが親。新ノート側は ### Parent にだけ入れる。
+      " h / Enter は今のノートが親。新ノート側は ### Context にだけ入れる。
       " 本文（中央）には入れない。本文はテンプレートのまま（余白 2 行）を残す。潰さない。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
     endif
@@ -8271,9 +8304,9 @@ function! simple_yurii_note#add_from_clipboard(...) abort
 endfunction
 
 " 本文中の連続する空行を 1 行に潰す（テンプレートの余白 2 行を 1 行にする）。
-" 見出し行は残す。`### Parent` より上だけを対象にする。
+" 見出し行は残す。`### Context` より上だけを対象にする。
 function! s:squeeze_body_blanks() abort
-  " 空行の連続（2 行以上）を 1 行に潰す。`### Parent` より上が対象。
+  " 空行の連続（2 行以上）を 1 行に潰す。`### Context` より上が対象。
   " テンプレートの余白 2 行を 1 行にして、本文リンクが中央に 1 つだけ見えるようにする。
   let l:up = s:find_section_line('up')
   let l:end = (l:up > 0) ? l:up - 1 : line('$')
@@ -8291,11 +8324,11 @@ function! s:squeeze_body_blanks() abort
   return l:changes
 endfunction
 
-" ### Parent の直前の行が本文（空行でない）なら、空行を 1 つ足す。
-" リンクを本文に置いたときの見た目を「本文 / 空行 / ### Parent」に揃える。
+" ### Context の直前の行が本文（空行でない）なら、空行を 1 つ足す。
+" リンクを本文に置いたときの見た目を「本文 / 空行 / ### Context」に揃える。
 function! s:ensure_blank_before_up() abort
-  " `### Parent` の直前の行が**散文**のときだけ空行を 1 つ足す。
-  " リンク行で終わっているときは空行を挟まない（リンク群と `### Parent` をくっつけたまま）。
+  " `### Context` の直前の行が**散文**のときだけ空行を 1 つ足す。
+  " リンク行で終わっているときは空行を挟まない（リンク群と `### Context` をくっつけたまま）。
   " 既に空行があれば足さない。
   let l:up = s:find_section_line('up')
   if l:up <= 1
@@ -8314,12 +8347,12 @@ endfunction
 
 " リンクを「どこに置くか」を 1 文字で選ばせる（h / Enter / p / r。zn と同じ約束）。
 "   h     … カーソル行の直下（本文）
-"   Enter … 本文の最後（### Parent の直前）
-"   p     … 今のノートの ### Parent 末尾（相手が親になる）
+"   Enter … 本文の最後（### Context の直前）
+"   p     … 今のノートの ### Context 末尾（相手が親になる）
 "   r     … ### Related へ（今のノートと相手の両方に相互追加）
 " Esc / q / o は「何も置かない」で終わる。
-" za,p: 今のノートの本文の中、### Parent の直前にリンクを入れる。文中に同じリンクが既にあれば入れない。
-" 入れたら、相手（リンク先）の本文の ### Parent の直前にも、今のノートへのリンクを入れる。
+" za,p: 今のノートの本文の中、### Context の直前にリンクを入れる。文中に同じリンクが既にあれば入れない。
+" 入れたら、相手（リンク先）の本文の ### Context の直前にも、今のノートへのリンクを入れる。
 
 " a:links を置き場所キーで今のノートに入れる。a:1 に Funcref（Done）を渡すと t（見出しの下）
 " が使える: 見出しの選択は非同期なので、入れ終わったあとの処理は Done を選択後に呼ぶ。
@@ -8330,7 +8363,7 @@ function! s:insert_links_core(links, ...) abort
     return 0
   endif
   echo 'h=カーソル直下 / Enter=本文の最後 / '
-        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . 'p=Parent末尾 / r=Related  (Esc で取り止め)'
+        \ . (a:0 > 0 ? 't=見出しの下 / ' : '') . 'c=Context末尾 / r=Related  (Esc で取り止め)'
   let l:ch = nr2char(getchar())
   redraw
   let l:num = char2nr(l:ch)
@@ -8343,8 +8376,12 @@ function! s:insert_links_core(links, ...) abort
     return -1
   endif
   if l:ch ==? 'p'
-    " 今のノートの ### Parent 末尾に置く（相手が親になる）。zn / zk の p と同じ。
-    " za,p: 今のノートの Parent の節の末尾に入れ、相手の本文に今のノートが無ければ相手の ### Parent の直前に入れる。
+    echo 'simple_yurii_note: 位置キー p は c（Context 末尾）に変わりました。何も追加しません'
+    return 0
+  endif
+  if l:ch ==? 'c'
+    " 今のノートの ### Context 末尾に置く（相手が親になる）。zn / zk の c と同じ。
+    " za,p: 今のノートの Parent の節の末尾に入れ、相手の本文に今のノートが無ければ相手の ### Context の直前に入れる。
     let l:added = 0
     for l:lk in l:links
       if s:add_parent_with_reverse(l:lk)
@@ -8352,7 +8389,7 @@ function! s:insert_links_core(links, ...) abort
       endif
     endfor
     if l:added == 0
-      echo 'simple_yurii_note: 追加できるリンクがありません（Parent に既にある or 取れなかった）'
+      echo 'simple_yurii_note: 追加できるリンクがありません（Context に既にある or 取れなかった）'
     endif
     return l:added > 0
   endif
@@ -8394,7 +8431,7 @@ function! s:insert_links_core(links, ...) abort
     endfor
     return 1
   endif
-  " 既定（Enter）: 本文の最後 = ### Parent の直前
+  " 既定（Enter）: 本文の最後 = ### Context の直前
   let l:added = 0
   for l:lk in l:links
     if s:insert_link_before_up_note(l:lk)
@@ -8509,11 +8546,11 @@ function! simple_yurii_note#add_clipboard_to_branch() abort
   endfor
   call s:realtime_sync_apply()
   silent write
-  echo 'Parent added ' . l:added . ' link(s)'
+  echo 'Context added ' . l:added . ' link(s)'
 endfunction
 
 
-" 本文中（`### Parent` の直前の行）にリンクを足す。simple 形式では
+" 本文中（`### Context` の直前の行）にリンクを足す。simple 形式では
 " 「子」は本文リンクなので、BackLink 側ではなくここに入れる。
 " 行 a:lnum が、日記の「今日のノート」の節の中のリンク行か（直近の見出しがその節）。
 " za / zn の Enter で入れるリンクを、一覧と空行 1 つ空けて区別するために使う。
@@ -8600,8 +8637,8 @@ endfunction
 "     引数に文字列を渡すと input() を出さずその表示名を使う（テスト・自動化用）。
 " zap: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の節の最後へ足す。
 "     本文に同じリンクがあっても Parent には足す（Parent に既にあるときだけ足さない）。
-"     Parent の節が無ければ、末尾に「### Parent」を作って足す。
-" 相手ノート（親にしたノート）の本文の、### Parent の手前に、このノートへのリンクを足す。
+"     Parent の節が無ければ、末尾に「### Context」を作って足す。
+" 相手ノート（親にしたノート）の本文の、### Context の手前に、このノートへのリンクを足す。
 " 相手の本文に既にあれば足さない。相手が開いていて未保存の変更があるときは触らない。
 function! s:zap_add_child_link(rel_target) abort
   let l:self = expand('%:p')
@@ -8620,14 +8657,14 @@ function! s:zap_add_child_link(rel_target) abort
   let l:link = s:make_link_from_dir(l:self, l:title, fnamemodify(l:parent_file, ':h'))
   let l:relself = matchstr(l:link, '](\zs[^)]*\ze)')
   let l:lines = readfile(l:parent_file)
-  let l:p = index(l:lines, '### Parent')
+  let l:p = index(l:lines, '### Context')
   let l:body_end = l:p >= 0 ? l:p : len(l:lines)
   for l:i in range(0, l:body_end - 1)
     if stridx(l:lines[l:i], '](' . l:relself) >= 0
       return
     endif
   endfor
-  " ### Parent の直前に入れる（既存の空行はそのまま。Parent が無ければ末尾）
+  " ### Context の直前に入れる（既存の空行はそのまま。Parent が無ければ末尾）
   call insert(l:lines, l:link, l:body_end)
   call writefile(l:lines, l:parent_file)
   if l:nr > 0
@@ -8639,14 +8676,14 @@ function! s:add_parent_with_reverse(link) abort
   " A（今のノート）の Parent の節の末尾に B（リンク先）を入れる。
   " A の本文に B へのリンクが既にあっても入れる（本文で引用しつつ親にもできる。
   " sync は Parent を消さず、BackLink は Parent と本文のどちらにあっても出さない）。
-  " 入れたら、B の本文に A が無ければ、B の ### Parent の直前に A を入れる（s:zap_add_child_link）。
+  " 入れたら、B の本文に A が無ければ、B の ### Context の直前に A を入れる（s:zap_add_child_link）。
   let l:target = s:extract_target(a:link)
   if empty(l:target)
     return 0
   endif
   let l:bare = substitute(l:target, '#.*$', '', '')
   if !s:append_link_to_buffer_section('up', a:link)
-    echo 'simple_yurii_note: Parent に追加できませんでした（重複 or ### Parent 無し）'
+    echo 'simple_yurii_note: Context に追加できませんでした（重複 or ### Context 無し）'
     return 0
   endif
   call s:realtime_sync_apply()
@@ -8657,14 +8694,14 @@ endfunction
 
 function! simple_yurii_note#add_link_to_parent() abort
   " zap / za,p: カーソル下（またはクリップボード）のリンクを、今のノートの Parent の末尾に入れ、
-  " 相手（リンク先）の本文に今のノートが無ければ相手の ### Parent の直前に入れる。
+  " 相手（リンク先）の本文に今のノートが無ければ相手の ### Context の直前に入れる。
   let l:link = s:pick_one_link()
   if empty(l:link)
     echo 'simple_yurii_note: クリップボードにもヤンクにも、追加できるノートへのリンクがありません'
     return
   endif
   if s:add_parent_with_reverse(l:link)
-    echo 'simple_yurii_note: Parent に追加しました'
+    echo 'simple_yurii_note: Context に追加しました'
   endif
 endfunction
 
@@ -8754,10 +8791,10 @@ function! simple_yurii_note#add_clipboard_before_up_reverse() abort
 endfunction
 
 " zp: 今のノートにクリップボードのリンクを追加（h/Enter で位置を選ぶ）し、
-"     さらに「今のノート」側のリンクを相手ノートの ### Parent にも書く。
+"     さらに「今のノート」側のリンクを相手ノートの ### Context にも書く。
 "     今のノートがグループの場合は本文リンクだけで十分（sync が親側を作る）。
 function! simple_yurii_note#add_clipboard_as_child_with_parent() abort
-  " zp: za と同じことをしたうえで、今開いてるノートを「相手の ### Parent」에도書く。
+  " zp: za と同じことをしたうえで、今開いてるノートを「相手の ### Context」에도書く。
   "     今のノートがグループなら本文リンクだけで足りるので親は sync に任せる。
   let l:cur = expand('%:p')
   if empty(l:cur)
@@ -8774,7 +8811,7 @@ function! simple_yurii_note#add_clipboard_as_child_with_parent() abort
   if empty(l:target) || !filereadable(l:target)
     call s:realtime_sync_apply()
     silent write
-    echo 'リンクのみ追加（相手ノートが見つからず Parent には書けません）'
+    echo 'リンクのみ追加（相手ノートが見つからず Context には書けません）'
     return
   endif
   if s:buf_is_group()
@@ -8847,7 +8884,7 @@ function! simple_yurii_note#add_clipboard_before_up() abort
     endif
   endfor
   silent write
-  echo 'ca: Child added ' . l:down_added . ', reciprocal Parent added ' . l:up_added
+  echo 'ca: Child added ' . l:down_added . ', reciprocal Context added ' . l:up_added
 endfunction
 
 function! simple_yurii_note#add_clipboard_to_top() abort
@@ -9272,7 +9309,7 @@ function! simple_yurii_note#at_add() abort
   endfor
 
   silent write
-  echo 'AT: Child added ' . l:down_added . ', Parent added ' . l:up_added . ', already ' . l:already . ', missing ' . l:missing
+  echo 'AT: Child added ' . l:down_added . ', Context added ' . l:up_added . ', already ' . l:already . ', missing ' . l:missing
 endfunction
 
 
@@ -9411,7 +9448,7 @@ endfunction
 
 " 指定行範囲のリンクだけの行を表示名のよみ順に並べ替える。
 " リンクでない行（front matter・見出し・空行・文章など）は位置ごと動かさない。
-" `### Parent` / `### Related` / `### BackLink` 以降のリンクも動かさない（本文だけ）。
+" `### Context` / `### Related` / `### BackLink` 以降のリンクも動かさない（本文だけ）。
 " 未登録の表示名は pykakasi のよみをリンク先の yomi: に書き込む（\S の副作用）。
 function! s:sort_lines_by_yomi(first, last) abort
   if expand('%:t') ==# 'Folgezettel-Index.md'
@@ -9466,7 +9503,7 @@ function! s:sort_lines_by_yomi(first, last) abort
 endfunction
 
 " \S（ノーマル）/ :SortYomi … バッファ内の本文リンク行をよみ順にソート（主に index.md）。
-" ### Parent / ### Related / ### BackLink 以降のリンクは動かさない。
+" ### Context / ### Related / ### BackLink 以降のリンクは動かさない。
 function! simple_yurii_note#sort_yomi() abort
   call s:sort_lines_by_yomi(1, line('$'))
 endfunction
@@ -12462,7 +12499,7 @@ function! s:diary_new_lines(title, is_group, parent_link, ...) abort
   return l:lines
 endfunction
 
-" a:section が空なら本文の最後（### Parent の直前）に足す。あれば `## 節` に足す。
+" a:section が空なら本文の最後（### Context の直前）に足す。あれば `## 節` に足す。
 " 重複判定は同じ節の中だけ（文中にあっても節に足す）。
 function! s:diary_op_add(link, section, lines) abort
   let l:lines = s:diary_op_add_raw(a:link, a:section, a:lines)
@@ -12511,7 +12548,7 @@ function! s:diary_op_add_raw(link, section, lines) abort
     if l:end > 0 && trim(l:lines[l:end - 1]) !=# ''
       let l:add = [''] + l:add
     endif
-    " 節の最後（### Parent の直前）に空行を 1 つ空ける
+    " 節の最後（### Context の直前）に空行を 1 つ空ける
     if l:p >= 0
       let l:add += ['']
     endif
@@ -12603,7 +12640,7 @@ function! s:diary_edit_file(file, Fn) abort
   return 1
 endfunction
 
-" 本文（### Parent より前）から、そのファイルだけのリンク行を外す
+" 本文（### Context より前）から、そのファイルだけのリンク行を外す
 function! s:diary_op_unlink_body(tgt, lines) abort
   let l:lines = copy(a:lines)
   let l:p = index(l:lines, s:v2_up_mark)
@@ -12616,7 +12653,7 @@ function! s:diary_op_unlink_body(tgt, lines) abort
   return l:lines
 endfunction
 
-" ### Parent の中の a:old へのリンク行を a:newlink に差し替える。無ければ Parent の先頭に足す
+" ### Context の中の a:old へのリンク行を a:newlink に差し替える。無ければ Parent の先頭に足す
 function! s:diary_op_parent_swap(old, newlink, lines) abort
   let l:lines = copy(a:lines)
   let l:p = index(l:lines, s:v2_up_mark)
@@ -12625,7 +12662,7 @@ function! s:diary_op_parent_swap(old, newlink, lines) abort
   endif
   let l:end = len(l:lines)
   for l:j in range(l:p + 1, len(l:lines) - 1)
-    if l:lines[l:j] =~# '^#'
+    if l:lines[l:j] =~# '^#' && l:lines[l:j] !=# s:v2_group_mark
       let l:end = l:j
       break
     endif
@@ -12640,7 +12677,7 @@ function! s:diary_op_parent_swap(old, newlink, lines) abort
   return l:lines
 endfunction
 
-" グループ a:file の ### Parent に a:tgt へのリンクがあるか
+" グループ a:file の ### Context に a:tgt へのリンクがあるか
 function! s:diary_parent_has(root, file, tgt) abort
   let l:lines = readfile(fnamemodify(a:root, ':p') . a:file)
   let l:p = index(l:lines, s:v2_up_mark)
@@ -12648,7 +12685,7 @@ function! s:diary_parent_has(root, file, tgt) abort
     return 0
   endif
   for l:ln in l:lines[l:p + 1 :]
-    if l:ln =~# '^#'
+    if l:ln =~# '^#' && l:ln !=# s:v2_group_mark
       break
     endif
     if stridx(l:ln, '](' . a:tgt . ')') >= 0
@@ -13046,7 +13083,7 @@ endfunction
 
 " 日記を開いたときのカーソル位置と、その周りの形を整える。
 "   本文 / 空行 / ここにカーソル / 空行 / ## 今日のノート
-" 「今日のノート」の節の直前に空行が 3 つ無ければ足し（節が無ければ ### Parent の前に
+" 「今日のノート」の節の直前に空行が 3 つ無ければ足し（節が無ければ ### Context の前に
 " 空の節も作る）、真ん中の空行にカーソルを置く。
 function! s:diary_cursor() abort
   let l:sec = '## ' . get(g:, 'simple_yurii_note_diary_section', '今日のノート')

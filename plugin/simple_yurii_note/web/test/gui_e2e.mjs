@@ -175,6 +175,17 @@ const scenario = `(async () => {
     R.viewOnly = { search, vo, mode: after.mode, sameFile: after.file === before.file, unmodified: !after.mod, scrolled, passed, curHidden, backOff: !G.isViewOnly(), backLabel: label() };
   }
 
+  // zn の位置キー c: 新しいノートが今のノートの Context（文脈）になる
+  {
+    await press(':e m1.md\\r', 1200);
+    const baseFile = base(G.state().file);
+    await press('zn', 700);
+    await press('c', 1800);
+    R.znC = { from: baseFile, now: base(G.state().file), body: G.view.getText(), mode: G.state().mode };
+    await press('\\x1b', 300);
+    await press(':w\\r', 800);
+  }
+
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -213,6 +224,15 @@ try {
   check(R.expandedOnLs && R.collapsedAfter, "terminal strip did not expand/collapse for :ls: " + JSON.stringify([R.expandedOnLs, R.collapsedAfter]));
   check(R.popup?.n > 0 && R.popup.expanded && R.popup.clip === "path(" && R.popup.sameBg && R.popup.collapsed, "search popup should overlay only its rectangle: " + JSON.stringify(R.popup));
   check(R.viewOnly?.vo.on && R.viewOnly.vo.label === "VIEW" && R.viewOnly.mode[0] === "n" && R.viewOnly.sameFile && R.viewOnly.unmodified && R.viewOnly.scrolled && R.viewOnly.search.cmdline === '/' && R.viewOnly.search.scrolled && R.viewOnly.search.hit && R.viewOnly.search.modeBack && R.viewOnly.passed && R.viewOnly.curHidden && R.viewOnly.backOff && R.viewOnly.backLabel === "NORMAL", "view-only mode: " + JSON.stringify(R.viewOnly));
+  {
+    const z = R.znC || {};
+    check(/^\d{12}\.md$/.test(z.now || "") && z.from === "m1.md", "zn c did not create a new note: " + JSON.stringify(z));
+    const oldTxt = fs.readFileSync(path.join(vault, "m1.md"), "utf8");
+    const ctx = oldTxt.split("### Context")[1] || "";
+    check(ctx.includes("(" + z.now + ")"), "zn c: the old note should have the new note under ### Context: " + oldTxt.slice(-200));
+    check(!/\n### Parent\n/.test(oldTxt), "zn c: no ### Parent should remain");
+    check((z.body || "").includes("(m1.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
+  }
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
   if (failed) process.exit(1);

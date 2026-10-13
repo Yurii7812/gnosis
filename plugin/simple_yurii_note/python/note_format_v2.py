@@ -96,6 +96,10 @@ BACKLINK = "バックリンク"
 UP_MARK = "### Parent"
 RELATED_MARK = "### Related"
 DOWN_MARK = "### BackLink"
+# 現行（simple_sync）の見張り。上側は `### Context`（旧 `### Parent`）と `### Group`。
+# 旧 `### Parent` は parse だけが読み、sync が `### Context` へ移行する。
+CONTEXT_MARK = "### Context"
+GROUP_MARK = "### Group"
 # 旧見張り（新しい順）。parse だけが読む。render は新表記（## Parent / ## Child）に統一する。
 LEGACY_UP_MARK3 = "Parent"  # `##` なしの旧 v2 見張り
 LEGACY_DOWN_MARK3 = "Child"
@@ -1299,13 +1303,17 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     title = _fm_title(fm) or path.stem
     body: list[str] = []
     parent: list[str] = []
+    group: list[str] = []
     related: list[str] = []
     back: list[str] = []
     cur = "body"
     for ln in rest:
         s = ln.strip()
-        if s == UP_MARK:
+        if s == CONTEXT_MARK or s == UP_MARK:  # UP_MARK = 旧 `### Parent`
             cur = "parent"
+            continue
+        if s == GROUP_MARK:
+            cur = "group"
             continue
         if s == RELATED_MARK:
             cur = "related"
@@ -1316,10 +1324,11 @@ def _simple_parse_text(path: Path, text: str) -> dict:
         (
             body if cur == "body"
             else parent if cur == "parent"
+            else group if cur == "group"
             else related if cur == "related"
             else back
         ).append(ln)
-    return {"fm": fm, "title": title, "body": body, "parent": parent,
+    return {"fm": fm, "title": title, "body": body, "parent": parent, "group": group,
             "related": related, "back": back, "hash": _content_hash(text)}
 
 
@@ -1439,6 +1448,18 @@ def _separate_parent_groups(lines: list[str], kind_of) -> list[str]:
     return out
 
 
+def _tidy_blanks(lines: list[str]) -> list[str]:
+    """先頭・末尾の空行を落とし、連続する空行を 1 つにする（仕分けで動かしたあとの整形）。"""
+    out: list[str] = []
+    for ln in lines:
+        if ln.strip() == "" and (not out or out[-1].strip() == ""):
+            continue
+        out.append(ln)
+    while out and out[-1].strip() == "":
+        out.pop()
+    return out
+
+
 def _prune_dangling(lines: list[str], path: Path, resolver) -> list[str]:
     """存在しない .md へのリンクを掃除する（消えたファイルの残骸を消す）。
 
@@ -1506,7 +1527,8 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
 _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 
-def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict) -> str:
+def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
+                   group_lines: list[str] | None = None) -> str:
     lines = list(n["fm"]) if n["fm"] else ["---", "title: " + n["title"], "---"]
     lines += list(n["body"])
     if name != "index.md":
@@ -1518,10 +1540,16 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
             # 本文が見出しだけのときはテンプレート通り書くための余白を置く
             if len(lines) == lines.index(last) + 1:
                 lines += ["", ""]
-        lines.append(UP_MARK)
+        lines.append(CONTEXT_MARK)
         lines += parent_lines
         while lines and lines[-1].strip() == "":
             lines.pop()
+        # `### Group` はグループへのリンクがあるときだけ（空なら見出しも出さない）
+        if group_lines and any(ln.strip() for ln in group_lines):
+            lines.append(GROUP_MARK)
+            lines += group_lines
+            while lines and lines[-1].strip() == "":
+                lines.pop()
         # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
         # 中身が空（全部消えた）になったら見出しも外す。
         related = [ln for ln in n.get("related", [])]
@@ -1562,10 +1590,10 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             continue
         h = _content_hash(text)
         ent = cache.get(key) if key is not None else None
-        if isinstance(ent, list) and len(ent) == 7 and ent[0] == h:
+        if isinstance(ent, list) and len(ent) == 8 and ent[0] == h:
             notes[rp] = {"fm": ent[1], "title": ent[2], "body": ent[3],
-                         "parent": ent[4], "related": ent[5], "back": ent[6],
-                         "hash": h}
+                         "parent": ent[4], "group": ent[5], "related": ent[6],
+                         "back": ent[7], "hash": h}
         else:
             notes[rp] = _simple_parse_text(p, text)
             parsed_any = True
@@ -1668,7 +1696,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         key = keys.get(p)
         ent = cache.get(key) if key is not None else None
-        if not (isinstance(ent, list) and len(ent) == 7):
+        if not (isinstance(ent, list) and len(ent) == 8):
             continue
         old_targets = {rp for _d, tg in _links_from(ent[3])
                        for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
@@ -1684,55 +1712,64 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
         # リンクは掃除する（文章中に埋もれたリンクは表示名の文字だけ残す）。
         n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
         n["body"] = _prune_dangling(n["body"], p, res)
-        # Parent はユーザー管理（追加・削除はしない）。ただし消えたファイルへの
-        # リンクは残骸なので掃除する（行全体がリンクの行のみ）。表示名は追従。
+        # Context（旧 Parent）と Group はユーザー管理（追加・削除はしない）。ただし消えた
+        # ファイルへのリンクは残骸なので掃除する（行全体がリンクの行のみ）。表示名は追従。
         parent_lines = _preserve_parent(n["parent"], p, res, titles)
         parent_lines = _prune_dangling(parent_lines, p, res)
+        group_lines = _preserve_parent(n["group"], p, res, titles)
+        group_lines = _prune_dangling(group_lines, p, res)
         parent_set: set[Path] = set()
-        for _d, tg in _links_from(n["parent"]):
+        for _d, tg in _links_from(n["parent"] + n["group"]):
             rp = res(tg, dirs[p])
             if rp is not None:
                 parent_set.add(rp)
-        # 親の本文からリンクを消した → この子の Parent からその親を外す
+        # 親の本文からリンクを消した → この子の Context / Group からその親を外す
         gone = removed_parent_of.get(p, set())
         if gone:
-            keep_p: list[str] = []
-            for ln in parent_lines:
-                tgt = _link_target(ln)
-                rp = res(tgt, dirs[p]) if tgt else None
-                if rp is not None and rp in gone:
-                    continue
-                keep_p.append(ln)
-            parent_lines = keep_p
+            def _drop_gone(lines, gone=gone, p=p):
+                keep_l: list[str] = []
+                for ln in lines:
+                    tgt = _link_target(ln)
+                    rp = res(tgt, dirs[p]) if tgt else None
+                    if rp is not None and rp in gone:
+                        continue
+                    keep_l.append(ln)
+                return keep_l
+            parent_lines = _drop_gone(parent_lines)
+            group_lines = _drop_gone(group_lines)
             parent_set -= gone
-        # index.md 側のリンク = 親。
-        #   - Index の本文にこのノートがある  → Parent 先頭に [Index] を置く
-        #   - 無いのに [Index] が Parent に残っている → 外す（放置させない）
+        # index.md 側のリンク = 親（グループ）。
+        #   - Index の本文にこのノートがある  → Group 先頭に [Index] を置く
+        #   - 無いのに [Index] が残っている → 外す（放置させない）
         # Index との対応は sync が管理する（残骸を掃除する）。
         idx = index_of.get(p)
         if idx is not None and idx not in parent_set:
             parent_set.add(idx)
             rel = _rel(p.parent, idx)
-            parent_lines.insert(0, f"[{titles[idx]}]({rel})")
+            group_lines.insert(0, f"[{titles[idx]}]({rel})")
         elif idx is None:
             drop: set[Path] = set()
-            keep: list[str] = []
-            for ln in parent_lines:
-                tgt = _link_target(ln)
-                rp = res(tgt, dirs[p]) if tgt else None
-                if rp is not None and rp.name == "index.md":
-                    drop.add(rp)
-                else:
-                    keep.append(ln)
-            if drop:
-                parent_lines = keep
-                parent_set -= drop
-        # Parent に入るもの（グループ → 子供）の判定:
+
+            def _drop_index(lines, p=p):
+                keep_l: list[str] = []
+                for ln in lines:
+                    tgt = _link_target(ln)
+                    rp = res(tgt, dirs[p]) if tgt else None
+                    if rp is not None and rp.name == "index.md":
+                        drop.add(rp)
+                    else:
+                        keep_l.append(ln)
+                return keep_l
+            parent_lines = _drop_index(parent_lines)
+            group_lines = _drop_index(group_lines)
+            parent_set -= drop
+        # グループ → 子供 の判定:
         #   - 本文でリンクしている相手がグループ（index.md を含む）なら、そのリンクは
-        #     「グループ → 子供」という containership なので Parent に入る。
-        #   - それ以外は BackLink（incoming − Parent − 自分）。
+        #     「グループ → 子供」という containership なので、子の Group に入る。
+        #     （グループの本文に自分へのリンクがあれば、自動で Group にそのグループが入る）
+        #   - それ以外は BackLink（incoming − Context − Group − 自分）。
         # 既存の並びを保ち、新しく増えた分は末尾に追加する。
-        auto_parent: list[Path] = []
+        auto_group: list[Path] = []
         desired: list[Path] = []
         dseen: set[Path] = set()
         # 自分の本文（outgoing）または Related にもリンクがある相手は BackLink に
@@ -1748,28 +1785,56 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
                 continue
             dseen.add(s)
             if s in group_set:
-                auto_parent.append(s)
+                auto_group.append(s)
                 continue
             if s in parent_set:
                 continue
             desired.append(s)
-        # グループからのリンクは Parent に入れる（sync が管理する）
-        for s in auto_parent:
+        for s in auto_group:
             if s in parent_set:
                 continue
             parent_set.add(s)
-            parent_lines.append(f"[{titles[s]}]({_rel(p.parent, s)})")
+            group_lines.append(f"[{titles[s]}]({_rel(p.parent, s)})")
 
-        # Parent の並び: グループは上、普通のノートは下（間に空行）。分離だけを強制し、
-        # それ以外（文字・空行・並び替え）は自由に残す。
-        def _parent_kind(ln: str, p=p):
+        # Context と Group の仕分け: グループへのリンクは Group、普通のノートへのリンクは
+        # Context。文字・空行・ノート以外へのリンクは動かさない。
+        def _link_kind(ln: str, p=p):
             if not _SIMPLE_LINK_LINE_RE.match(ln):
                 return None
             tg = _link_target(ln)
             rp = res(tg, dirs[p]) if tg else None
             return None if rp is None else rp in group_set
 
-        parent_lines = _separate_parent_groups(parent_lines, _parent_kind)
+        moved = False
+        new_ctx: list[str] = []
+        for ln in parent_lines:
+            if _link_kind(ln) is True:
+                group_lines.append(ln)
+                moved = True
+            else:
+                new_ctx.append(ln)
+        new_grp: list[str] = []
+        for ln in group_lines:
+            if _link_kind(ln) is False:
+                new_ctx.append(ln)
+                moved = True
+            else:
+                new_grp.append(ln)
+        parent_lines, group_lines = new_ctx, new_grp
+        # 同じ相手のリンクが Group に重なったら 1 本にする
+        seen_g: set[Path] = set()
+        dedup: list[str] = []
+        for ln in group_lines:
+            if _link_kind(ln) is True:
+                rp = res(_link_target(ln), dirs[p])
+                if rp in seen_g:
+                    continue
+                seen_g.add(rp)
+            dedup.append(ln)
+        group_lines = dedup
+        if moved:
+            parent_lines = _tidy_blanks(parent_lines)
+            group_lines = _tidy_blanks(group_lines)
         existing_back: list[Path] = []
         for _d, tg in _links_from(n["back"]):
             rp = res(tg, dirs[p])
@@ -1778,7 +1843,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
         dset = set(desired)
         back = [t for t in existing_back if t in dset]
         back += [t for t in desired if t not in set(back)]
-        new_text = _simple_render(p.name, n, p, parent_lines, back, titles)
+        new_text = _simple_render(p.name, n, p, parent_lines, back, titles, group_lines)
         new_hash = _content_hash(new_text)
         if new_hash != n["hash"]:
             p.write_text(new_text, encoding="utf-8")
@@ -1794,7 +1859,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             if key is None:
                 continue
             out_cache[key] = [n["hash"], n["fm"], n["title"], n["body"],
-                              n["parent"], n["related"], n["back"]]
+                              n["parent"], n["group"], n["related"], n["back"]]
         _save_parse_cache(root, out_cache)
     return changed
 
@@ -1814,7 +1879,7 @@ def make_new(path, title: str = "") -> Path:
     t = title.strip() or p.stem
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        f"---\ntime: {ts}\ntitle: {t}\n---\n\n# {t}\n\n\n{UP_MARK}\n{DOWN_MARK}\n",
+        f"---\ntime: {ts}\ntitle: {t}\n---\n\n# {t}\n\n\n{CONTEXT_MARK}\n{DOWN_MARK}\n",
         encoding="utf-8",
     )
     return p

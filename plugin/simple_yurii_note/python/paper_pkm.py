@@ -19,7 +19,7 @@
 - 生成物（Index・グループ・Folgezettel-Index・スキャンノート）の本文は regen が
   毎回まるごと作り直す（管理コメントは書かない）。`Index-write.md` だけは
   手書きの本文＝キーワード行をサイ博（並び順のみ整える）。
-- `Index-write.md` と `Folgezettel-Index.md` の `### Parent` は
+- `Index-write.md` と `Folgezettel-Index.md` の `### Context` は
   Paper-Zettelkasten-Index へのリンク（regen が無ければ足す）。
 - `create` 時に vault 親Index（`index.md`）へ Paper-Zettelkasten-Index へのリンクを足す。
 - 実行後は `note_format_v2.simple_sync()` で SYN 同期まで行う。
@@ -172,6 +172,15 @@ def keyword_sort_key(entry: dict):
 # ---------------------------------------------------------------------------
 
 
+# 上側の見出し。現行は `### Context`（旧 `### Context`）。旧表記も読む。
+CONTEXT_HEAD = "### Context"
+CONTEXT_HEADS = ("### Context", "### Parent")
+
+
+def _is_context_head(ln: str) -> bool:
+    return ln.strip() in CONTEXT_HEADS
+
+
 def parse_note(text: str) -> tuple[list[str], list[str]]:
     """front matter（`---` の内側）と本文に分ける。"""
     lines = text.split("\n")
@@ -192,15 +201,15 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     """紙PKMの自動生成ノートの本文を、手で書いた内容を消さずに作る。
 
     規則（作り方）は守る。手書きは消さない:
-    - 見出し・画像などの規則の行は、無いものだけを `### Parent` の前に足す（既にあれば足さない）。
-    - `### Parent` の中の規則のリンクは、無いものだけを足す（既存の行は残す）。
+    - 見出し・画像などの規則の行は、無いものだけを `### Context` の前に足す（既にあれば足さない）。
+    - `### Context` の中の規則のリンクは、無いものだけを足す（既存の行は残す）。
     - `# 見出し` は既存に `# ` 見出しがあれば足さない（タイトルを二重にしない）。
     - 行を消すことは、しない（削除は手でする）。
     """
     gen_head: list[str] = []
     gen_parent: list[str] = []
     for ln in generated:
-        if ln.strip() == "### Parent" or gen_parent:
+        if _is_context_head(ln) or gen_parent:
             gen_parent.append(ln)
         else:
             gen_head.append(ln)
@@ -212,7 +221,7 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
     def _is_heading(ln: str) -> bool:
         return ln.lstrip().startswith("### ")
 
-    # 1) 見出し・画像など: `### Parent` の前に足す（無ければ末尾）
+    # 1) 見出し・画像など: `### Context` の前に足す（無ければ末尾）
     head_add: list[str] = []
     for ln in gen_head:
         t = ln.strip()
@@ -223,22 +232,22 @@ def merge_note_body(existing: list[str], generated: list[str]) -> list[str]:
         head_add.append(ln)
         present.add(t)
     if head_add:
-        p = next((k for k, ln in enumerate(out) if ln.strip() == "### Parent"), len(out))
+        p = next((k for k, ln in enumerate(out) if _is_context_head(ln)), len(out))
         ins = list(head_add)
         if p > 0 and out[p - 1].strip():
             ins.insert(0, "")
-        if p < len(out) and out[p].strip() == "### Parent":
+        if p < len(out) and _is_context_head(out[p]):
             ins.append("")
         out[p:p] = ins
 
     # 2) Parent のリンク: 無いものだけを、Parent の節の最後へ足す（節が無ければ作る）
     parent_links = [ln for ln in gen_parent[1:] if ln.strip() and ln.strip() not in present]
     if parent_links:
-        p = next((k for k, ln in enumerate(out) if ln.strip() == "### Parent"), None)
+        p = next((k for k, ln in enumerate(out) if _is_context_head(ln)), None)
         if p is None:
             if out and out[-1].strip():
                 out.append("")
-            out += ["### Parent", *parent_links]
+            out += [CONTEXT_HEAD, *parent_links]
         else:
             e = next((k for k in range(p + 1, len(out)) if _is_heading(out[k])), len(out))
             last = e
@@ -540,7 +549,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
             fm_g, _bg = read_note(id_index)
             gd = fm_value(fm_g, "title") or id_index.stem
             inner.append(markdown_link(gd, id_index, path.parent))
-        inner += ["### Parent",
+        inner += [CONTEXT_HEAD,
                   markdown_link(FOLGE_INDEX[:-3], root / FOLGE_INDEX, path.parent)]
         write_note(path, fm_fi, merge_note_body(old_fi_body, inner))
 
@@ -574,8 +583,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             slots = [i for i, _ in keyword_line_order]
             for slot, entry in zip(slots, entries, strict=False):
                 body[slot] = entry["key"] + ": " + ", ".join(entry["ids"])
-        if not any(ln.strip() == "### Parent" for ln in body):
-            body += ["### Parent",
+        if not any(_is_context_head(ln) for ln in body):
+            body += [CONTEXT_HEAD,
                      markdown_link(index_display, index_path, root)]
             write_note(index_write, iw_fm, body)
         elif keyword_line_order:
@@ -602,7 +611,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                 (f for f in entry["ids"] if f in folge), key=natural_key
             )
         ]
-        inner.append("### Parent")
+        inner.append(CONTEXT_HEAD)
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
         fm, old_group_body = read_note(group_path)
@@ -648,7 +657,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     fm, old_folge_body = read_note(folge_index)
     write_note(folge_index, fm, merge_note_body(old_folge_body, [
         f"# {FOLGE_INDEX[:-3]}", "", *inner,
-        "### Parent",
+        CONTEXT_HEAD,
         markdown_link(index_display, index_path, folge_index.parent)]))
 
     # --- トピック別Index（B案: `1-Index` グループにノートと `1-仏教` を入れる） ---
@@ -719,8 +728,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             if disp not in used_t:
                 children.append(markdown_link(disp, tmap[disp][0], gid.parent))
         p_lines = _parent_link_lines(fid, gid.parent, exclude=gid)
-        write_note(gid, fm_g, merge_note_body(read_note(gid)[1], [f"# {fid}-Index"] + children + ["### Parent"] + p_lines))
-        # トピックノート自身の Parent（既存の `### Parent` 以降を置き換え）+
+        write_note(gid, fm_g, merge_note_body(read_note(gid)[1], [f"# {fid}-Index"] + children + [CONTEXT_HEAD] + p_lines))
+        # トピックノート自身の Parent（既存の `### Context` 以降を置き換え）+
         # fm `topic_parent:` は常に持たせる（無ければ追加・手書きで変更可）
         for disp, tpath, tp in tlist:
             fm_t, body_t = read_note(tpath)
@@ -732,9 +741,9 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                                     if ln.strip().startswith(f"{FM_PAPER_TOPIC}:")), None)
                     if key_idx is not None:
                         fm_t.insert(key_idx + 1, f"{FM_TOPIC_PARENT}: ")
-            if "### Parent" in body_t:
-                i = body_t.index("### Parent")
-                body_t = body_t[:i]
+            ci = next((k for k, ln in enumerate(body_t) if _is_context_head(ln)), None)
+            if ci is not None:
+                body_t = body_t[:ci]
             while body_t and body_t[-1].strip() == "":
                 body_t.pop()
             # Parent は folgezettel-Index-N ＋（親トピックがあればそのリンク、
@@ -752,7 +761,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                     p_lines = head + ["", folge_link]
                 else:
                     p_lines = [folge_link] + head
-            body_t += ["### Parent"] + p_lines
+            body_t += [CONTEXT_HEAD] + p_lines
             write_note(tpath, fm_t, body_t)
 
     # --- 番号専用ノート folgezettel-Index-N ----------------------------------
@@ -771,7 +780,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         inner = [f"# {fid}", "", *images]
         if images or intra:
             inner.append("")
-        inner += intra + ["### Parent"]
+        inner += intra + [CONTEXT_HEAD]
 
         # 専用ノート folgezettel-Index-N の自ID節（#ID）を Parent に入れる。
         # 最上位IDはこれだけ、子は親ID の下に並べる（BackLink に出さない）。

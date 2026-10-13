@@ -24,6 +24,7 @@ def check(cond: bool, msg: str) -> None:
 
 
 UP_MARK = v2.UP_MARK
+CTX_MARK = v2.CONTEXT_MARK  # 現行（simple_sync）の上側見出し。旧 ### Parent は読み込みだけ
 RELATED_MARK = v2.RELATED_MARK
 DOWN_MARK = v2.DOWN_MARK
 
@@ -32,9 +33,10 @@ def regions(text: str) -> tuple[str, str]:
     """(上側リージョン, 下側リージョン) を返す。見張りコメント行で区切る。"""
     lines = text.split("\n")
     sl = [l.strip() for l in lines]
-    if UP_MARK not in sl or DOWN_MARK not in sl:
+    up = CTX_MARK if CTX_MARK in sl else UP_MARK  # 現行は ### Context、旧エンジンは ### Parent
+    if up not in sl or DOWN_MARK not in sl:
         return "", ""
-    u, d = sl.index(UP_MARK), sl.index(DOWN_MARK)
+    u, d = sl.index(up), sl.index(DOWN_MARK)
     return "\n".join(lines[u + 1:d]), "\n".join(lines[d + 1:])
 
 
@@ -343,7 +345,7 @@ def test_new_skeleton() -> None:
         txt = p.read_text(encoding="utf-8")
         check(txt.startswith("---\ntime: "), "front matter で始まる")
         check("# テスト" in txt, "H1 を含む")
-        check(txt.rstrip().endswith(UP_MARK + "\n" + DOWN_MARK), "末尾に見張りコメント 2 行")
+        check(txt.rstrip().endswith(CTX_MARK + "\n" + DOWN_MARK), "末尾に見張り 2 行（### Context / ### BackLink）")
 
 
 
@@ -1134,107 +1136,131 @@ def test_simple_sync_backlink_has_no_fragment() -> None:
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
-def _parent_region(text: str) -> list[str]:
+def _region(text: str, mark: str) -> list[str] | None:
     lines = text.split("\n")
-    s = lines.index(UP_MARK) + 1
+    if mark not in lines:
+        return None
+    s = lines.index(mark) + 1
     e = next((i for i in range(s, len(lines)) if lines[i].startswith("### ")), len(lines))
     return lines[s:e]
 
 
-def _sep_vault(root: Path, parent_body: str) -> None:
-    """index.md + group G(group.md) + 普通のノート N1/N2 + 検証対象 X(x.md)。X の Parent を parent_body にする。"""
+def _parent_region(text: str) -> list[str]:
+    """### Context の中身。"""
+    return _region(text, CTX_MARK) or []
+
+
+def _group_region(text: str) -> list[str] | None:
+    """### Group の中身（見出しが無ければ None）。"""
+    return _region(text, v2.GROUP_MARK)
+
+
+def _sep_vault(root: Path, parent_body: str, up_mark: str = CTX_MARK) -> None:
+    """index.md + group G(group.md) + 普通のノート N1/N2 + 検証対象 X(x.md)。X の Context を parent_body にする。"""
     (root / "index.md").write_text(
         "---\ntime: 2026-01-01 00:00:00\ntitle: Index\n---\n\n# Index\n", encoding="utf-8")
     (root / "g.md").write_text(
         "---\ntime: 2026-01-01 00:00:00\ntitle: G\nattribute: group\n---\n\n# G\n\n"
-        f"{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+        f"{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
     (root / "g2.md").write_text(
         "---\ntime: 2026-01-01 00:00:00\ntitle: G2\nattribute: group\n---\n\n# G2\n\n"
-        f"{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+        f"{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
     _plain_note(root / "n1.md", "N1", "")
     _plain_note(root / "n2.md", "N2", "")
     (root / "x.md").write_text(
         "---\ntime: 2026-01-01 00:00:00\ntitle: X\n---\n\n# X\n\n本文。\n\n"
-        f"{UP_MARK}\n{parent_body}{DOWN_MARK}\n", encoding="utf-8")
+        f"{up_mark}\n{parent_body}{DOWN_MARK}\n", encoding="utf-8")
 
 
-def test_simple_sync_parent_separates_group_above_notes() -> None:
-    print("simple_sync: Parent は グループ が上、普通のノート が下（間に空行）")
+def test_simple_sync_groups_move_to_group_section() -> None:
+    print("simple_sync: Context に書いたグループのリンクは ### Group へ、普通のノートは ### Context に残る")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _sep_vault(root, "[N1](n1.md)\n[G](g.md)\n[N2](n2.md)\n[G2](g2.md)\n")
         v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[G](g.md)", "[G2](g2.md)", "", "[N1](n1.md)", "[N2](n2.md)"],
-              f"グループが上・空行・ノートが下（元の順序は保つ）: {region}")
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_parent_region(text) == ["[N1](n1.md)", "[N2](n2.md)"], f"Context はノートだけ: {_parent_region(text)}")
+        check(_group_region(text) == ["[G](g.md)", "[G2](g2.md)"], f"Group はグループだけ（元の順）: {_group_region(text)}")
+        lines = text.split("\n")
+        check(lines.index(CTX_MARK) < lines.index(v2.GROUP_MARK) < lines.index(DOWN_MARK),
+              "並びは上から Context, Group, BackLink")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
-def test_simple_sync_parent_inserts_blank_between_group_and_notes() -> None:
-    print("simple_sync: グループとノートの間に空行が無ければ 1 つ入れる")
+def test_simple_sync_legacy_parent_becomes_context() -> None:
+    print("simple_sync: 旧 ### Parent は ### Context に移行し、グループは ### Group へ")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        _sep_vault(root, "[G](g.md)\n[N1](n1.md)\n")
+        _sep_vault(root, "[G](g.md)\n\n[N1](n1.md)\n", up_mark=UP_MARK)
         v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[G](g.md)", "", "[N1](n1.md)"], f"空行が入る: {region}")
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check("### Parent" not in text.split("\n"), "### Parent は残らない")
+        check(_parent_region(text) == ["[N1](n1.md)"], f"Context: {_parent_region(text)}")
+        check(_group_region(text) == ["[G](g.md)"], f"Group: {_group_region(text)}")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
-def test_simple_sync_parent_keeps_free_text_and_extra_blanks() -> None:
-    print("simple_sync: 分離以外（文字・空行・並び替え）は自由に残る")
+def test_simple_sync_context_keeps_free_text() -> None:
+    print("simple_sync: Context の文字・並びは自由に残る（グループを抜いたあと空行は整う）")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        body = "メモ\n[G](g.md)\n\n\n途中の文字\n[N2](n2.md)\n[N1](n1.md)\n"
-        _sep_vault(root, body)
+        _sep_vault(root, "メモ\n[G](g.md)\n\n\n途中の文字\n[N2](n2.md)\n[N1](n1.md)\n")
         v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["メモ", "[G](g.md)", "", "", "途中の文字", "[N2](n2.md)", "[N1](n1.md)"],
-              f"既に分離済みなら一切触らない（文字・複数の空行・ノートの並びはそのまま）: {region}")
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_parent_region(text) == ["メモ", "", "途中の文字", "[N2](n2.md)", "[N1](n1.md)"],
+              f"文字と並びはそのまま。連続した空行は 1 つ: {_parent_region(text)}")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
-def test_simple_sync_parent_moves_only_stray_groups() -> None:
-    print("simple_sync: 下にはみ出たグループだけを引き上げる（文字は動かさない）")
-    with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        body = "[G](g.md)\n\n[N1](n1.md)\n手書きメモ\n[G2](g2.md)\n"
-        _sep_vault(root, body)
-        v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[G](g.md)", "[G2](g2.md)", "", "[N1](n1.md)", "手書きメモ"],
-              f"G2 だけが G の塊へ上がる: {region}")
-        check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
-
-
-def test_simple_sync_parent_only_notes_or_only_groups_untouched() -> None:
-    print("simple_sync: グループだけ／ノートだけの Parent には何もしない")
+def test_simple_sync_no_groups_no_group_section() -> None:
+    print("simple_sync: グループが無ければ ### Group は出ない。ノートだけの Context は触らない")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _sep_vault(root, "[N2](n2.md)\n\n[N1](n1.md)\n")
         v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[N2](n2.md)", "", "[N1](n1.md)"], f"ノートだけ: {region}")
-    with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        _sep_vault(root, "[G2](g2.md)\n[G](g.md)\n")
-        v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[G2](g2.md)", "[G](g.md)"], f"グループだけ: {region}")
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_parent_region(text) == ["[N2](n2.md)", "", "[N1](n1.md)"], f"ノートだけ: {_parent_region(text)}")
+        check(_group_region(text) is None, "Group 見出しは出ない")
 
 
-def test_simple_sync_parent_auto_group_goes_above_notes() -> None:
-    print("simple_sync: グループの本文リンクで自動で入る Parent も上に分離される")
+def test_simple_sync_group_with_my_link_is_added_to_group() -> None:
+    print("simple_sync: グループの本文に自分へのリンクがあれば、自動で ### Group に入る")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _sep_vault(root, "[N1](n1.md)\n")
         (root / "g.md").write_text(
             "---\ntime: 2026-01-01 00:00:00\ntitle: G\nattribute: group\n---\n\n# G\n\n"
-            f"[X](x.md)\n\n{UP_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+            f"[X](x.md)\n\n{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
         v2.simple_sync(root)
-        region = _parent_region((root / "x.md").read_text(encoding="utf-8"))
-        check(region == ["[G](g.md)", "", "[N1](n1.md)"], f"自動で入る G は N1 より上: {region}")
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_group_region(text) == ["[G](g.md)"], f"G が Group に自動で入る: {_group_region(text)}")
+        check(_parent_region(text) == ["[N1](n1.md)"], f"Context はそのまま: {_parent_region(text)}")
+        check("[G](g.md)" not in text.split(DOWN_MARK)[1], "BackLink には出ない")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
+        # グループの本文からリンクを消すと、Group からも外れる
+        (root / "g.md").write_text(
+            "---\ntime: 2026-01-01 00:00:00\ntitle: G\nattribute: group\n---\n\n# G\n\n"
+            f"{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+        v2.simple_sync(root)
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_group_region(text) is None, f"本文から消すと Group から外れる: {_group_region(text)}")
+
+
+def test_simple_sync_not_group_anymore_goes_back_to_context() -> None:
+    print("simple_sync: Group にあるノートが group でなくなったら Context に戻る")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _sep_vault(root, "[G](g.md)\n")
+        v2.simple_sync(root)
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_group_region(text) == ["[G](g.md)"], "まず Group に入る")
+        (root / "g.md").write_text(
+            "---\ntime: 2026-01-01 00:00:00\ntitle: G\n---\n\n# G\n\n"
+            f"{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
+        v2.simple_sync(root)
+        text = (root / "x.md").read_text(encoding="utf-8")
+        check(_group_region(text) is None and _parent_region(text) == ["[G](g.md)"],
+              f"普通のノートになったら Context へ: {_parent_region(text)} / {_group_region(text)}")
 
 
 def main() -> int:

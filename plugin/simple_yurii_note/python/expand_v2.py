@@ -95,7 +95,7 @@ def _directions(note_path: Path, n: dict, root: Path, by_name,
         return out
 
     return {
-        "parent": targets(n["parent"]),
+        "parent": targets(n["parent"]) | targets(n["group"]),
         "child": targets(n["body"]),
         "backlink": targets(n["back"]),
         "related": targets(n["related"]),
@@ -245,7 +245,8 @@ def _relation_lines(note_path: Path, n: dict, root: Path, by_name, tmp_dir: Path
     lines: list[str] = []
     for key, label in _REL_SECTIONS:
         links: list[str] = []
-        for disp, tg in v2._links_from(n[key]):
+        src = n[key] + n.get("group", []) if key == "parent" else n[key]
+        for disp, tg in v2._links_from(src):
             tp = v2._resolve(tg, note_path.parent, root, by_name)
             rel = v2._rel(tmp_dir, tp) if tp is not None else tg
             links.append(f"[{disp}]({rel})")
