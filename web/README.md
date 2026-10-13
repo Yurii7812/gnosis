@@ -33,8 +33,9 @@ npm run app            # = electron .
 
 Vim からは `\A` / `:GnosisWeb`。直接: `bin/simple-yurii-note-app.sh [VAULT_DIR]`。
 
-環境変数: `GNOSIS_ROOT`（SYN の root。省略すると Vim が前回の root を使う）、`GNOSIS_FILE`（最初に開くノート）、
-`GNOSIS_VIMRC`（使う vimrc。既定 `~/.vimrc-simple-yurii-note`）。
+環境変数: `GNOSIS_ROOT`（vault。指定すると起動画面を出さずにその vault で始める）、`GNOSIS_FILE`（最初に開くノート）、
+`GNOSIS_VIMRC`（使う vimrc。既定は Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）、`GNOSIS_HOME`、`GNOSIS_VIM`。旧 `PKM_*` も読む。
+
 
 ## 作り
 
