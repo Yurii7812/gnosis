@@ -28,6 +28,8 @@ set ignorecase
 set smartcase
 set incsearch
 set hlsearch
+" viminfo が前回のハイライト状態を復元して、開くたびに同じ語が光るのを防ぐ
+set viminfo^=h
 
 " =========================================================
 " インデント
