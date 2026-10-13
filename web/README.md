@@ -1,7 +1,8 @@
-# simple_yurii_note app
+# Gnosis app
 
-SYN（simple_yurii_note）を、**マークダウンのビューアの見た目**で使うアプリ（Electron）。
-中身は**本物の Vim**（`~/.vimrc-simple-yurii-note`、SYN・fzf・vim-surround などのプラグイン入り）。
+Gnosis を、**マークダウンのビューアの見た目**で使うアプリ（Electron）。
+中身は**本物の Vim**（Gnosis 専用の vimrc。Gnosis・fzf・vim-surround などのプラグイン入り。ふだんの ~/.vimrc は読まない）。
+起動すると、まず起動画面（白背景・黒文字の Chnoubis・vault の選択と管理・設定）。Enter でその vault の Vim を起動する。
 機能を作り直していないので、操作は Vim で使っているものと同じ（`zn`・Tab・数字キー・`\ua`・`\l` ほか全部）。
 違いは、バッファがマークダウンとして描画されること（見出し・箇条書き・チェックボックス・引用・画像・リンク）だけ。
 
@@ -16,7 +17,7 @@ Vim ──(TCP/JSON)──► 画面 ……… バッファの全文・カーソ
   Enter 待ちのときは、端末の画面全体に広がる。
 - **Alt+V: 見るだけモード ⇔ 普通の Vim**。見るだけ（下に VIEW と出る）は、カーソルも選択も出さず、ノートを
   変えるキーは Vim に送らない。j/k・矢印・PageUp/Down・gg/G・Ctrl-d/u はスクロール。`/` `?` `n` `N` `*` `#` で検索
-  （見つけた行まで動いて色づく）。編集しない SYN の操作は
+  （見つけた行まで動いて色づく）。編集しない Gnosis の操作は
   Vim に届く: `gs` `gm` Space Tab/Shift-Tab Enter Backspace `_` 数字キー(0-9) `\h` `\H` `\0` `\i` `\d` `\.`
   `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc`。リンクはクリックでも開く。確認・fzf・コマンドライン入力中は
   すべてのキーが Vim へ届く。起動時は普通の Vim。許可するキーは `src/app.js` の `VIEW_PASS`。
