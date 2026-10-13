@@ -9,15 +9,16 @@ import { tags } from "@lezer/highlight";
 // 画像。画面から外れるとウィジェットは壊されて、戻ると作り直される。そのたびに空白・高さ 0 から
 // 読み直すと「消えて、位置が跳ぶ」ので、読み込んだ URL と大きさを覚えて、すぐ表示・場所を先に確保する。
 class ImageWidget extends WidgetType {
-  constructor(alt, src, cfg) {
+  constructor(alt, src, cfg, width) {
     super();
     this.alt = alt;
     this.src = src;
     this.cfg = cfg;
+    this.width = width || ""; // <img width="50%"> の指定（空なら指定なし）
     // 大きさが分かっているか。分かった前後で別のウィジェットとみなして、高さを取り直させる。
     this.sized = !!(cfg.getImageSize && cfg.getImageSize(src));
   }
-  eq(o) { return o.src === this.src && o.alt === this.alt && o.sized === this.sized; }
+  eq(o) { return o.src === this.src && o.alt === this.alt && o.width === this.width && o.sized === this.sized; }
   // スクロールの長さの見積もり（本文の幅 約 800px に縮めたときの高さ）。分からないうちは 320。
   get estimatedHeight() {
     const sz = this.cfg.getImageSize?.(this.src);
@@ -33,6 +34,7 @@ class ImageWidget extends WidgetType {
     const sz = cfg.getImageSize?.(this.src);
     if (sz) { img.width = sz.w; img.height = sz.h; } // 読み込む前から、場所を確保する
     else wrap.style.minHeight = "160px";
+    if (this.width) { img.style.width = this.width; img.style.height = "auto"; }
     img.addEventListener("load", () => {
       wrap.style.minHeight = "";
       cfg.onImageSize?.(this.src, img.naturalWidth, img.naturalHeight);
@@ -89,6 +91,7 @@ const RE = {
   hr: /^\s*([-*_])(?:\s*\1){2,}\s*$/,
   code: /`([^`\n]+)`/g,
   image: /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+  htmlimg: /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi,
   link: /\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
   bold: /\*\*([^*\n]+)\*\*|__([^_\n]+)__/g,
   italic: /(?<![*_])\*([^*\n]+)\*(?!\*)|(?<![*_])_([^_\n]+)_(?!_)/g,
@@ -177,6 +180,13 @@ function decorateLine(line, active, inFence, decos, cfg) {
     // リンクとしても描かれない。
     if (active || cfg.insertMode) return;
     decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base + a, base + b));
+  });
+
+  addSpan(RE.htmlimg, (m, a, b) => {
+    if (active || cfg.insertMode) return;
+    const w = /\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)(%|px)?/i.exec(m[0]);
+    const width = w ? w[1] + (w[2] || "px") : "";
+    decos.push(Decoration.replace({ widget: new ImageWidget("", m[1], cfg, width) }).range(base + a, base + b));
   });
 
   addSpan(RE.link, (m, a, b) => {

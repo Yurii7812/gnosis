@@ -32400,15 +32400,16 @@ ${h2.join(`
 
   // src/view.js
   var ImageWidget = class extends WidgetType {
-    constructor(alt, src, cfg) {
+    constructor(alt, src, cfg, width) {
       super();
       this.alt = alt;
       this.src = src;
       this.cfg = cfg;
+      this.width = width || "";
       this.sized = !!(cfg.getImageSize && cfg.getImageSize(src));
     }
     eq(o2) {
-      return o2.src === this.src && o2.alt === this.alt && o2.sized === this.sized;
+      return o2.src === this.src && o2.alt === this.alt && o2.width === this.width && o2.sized === this.sized;
     }
     // スクロールの長さの見積もり（本文の幅 約 800px に縮めたときの高さ）。分からないうちは 320。
     get estimatedHeight() {
@@ -32427,6 +32428,10 @@ ${h2.join(`
         img.width = sz.w;
         img.height = sz.h;
       } else wrap.style.minHeight = "160px";
+      if (this.width) {
+        img.style.width = this.width;
+        img.style.height = "auto";
+      }
       img.addEventListener("load", () => {
         wrap.style.minHeight = "";
         cfg.onImageSize?.(this.src, img.naturalWidth, img.naturalHeight);
@@ -32489,6 +32494,7 @@ ${h2.join(`
     hr: /^\s*([-*_])(?:\s*\1){2,}\s*$/,
     code: /`([^`\n]+)`/g,
     image: /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    htmlimg: /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi,
     link: /\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
     bold: /\*\*([^*\n]+)\*\*|__([^_\n]+)__/g,
     italic: /(?<![*_])\*([^*\n]+)\*(?!\*)|(?<![*_])_([^_\n]+)_(?!_)/g,
@@ -32564,6 +32570,12 @@ ${h2.join(`
     addSpan(RE.image, (m, a, b3) => {
       if (active || cfg.insertMode) return;
       decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base2 + a, base2 + b3));
+    });
+    addSpan(RE.htmlimg, (m, a, b3) => {
+      if (active || cfg.insertMode) return;
+      const w = /\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)(%|px)?/i.exec(m[0]);
+      const width = w ? w[1] + (w[2] || "px") : "";
+      decos.push(Decoration.replace({ widget: new ImageWidget("", m[1], cfg, width) }).range(base2 + a, base2 + b3));
     });
     addSpan(RE.link, (m, a, b3) => {
       const disp = m[1];
@@ -32983,14 +32995,14 @@ ${h2.join(`
   var PRELOAD_PARALLEL = 4;
   function preloadImages(lines) {
     const file = last2.file;
-    const re2 = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+    const re2 = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)|<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
     const seen = /* @__PURE__ */ new Set();
     const queue = [];
     for (const ln2 of lines) {
       re2.lastIndex = 0;
       let m;
       while ((m = re2.exec(ln2)) !== null) {
-        const src = m[1];
+        const src = m[1] || m[2];
         if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:") || seen.has(src)) continue;
         seen.add(src);
         const c = imgCache.get(imgKey(file, src));

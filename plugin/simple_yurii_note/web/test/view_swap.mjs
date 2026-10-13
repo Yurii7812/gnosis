@@ -41,6 +41,19 @@ for (let round = 0; round < 3; round++) {
   step("vtext short", () => v.setVtext([]));
   step("insert at end of short", () => v.setVim({ cur: [n(B) - 1, 13], mode: "i" }));
 }
+// HTML の <img src="…" width="50%"> も画像として描き、width を反映すること（インサート中は文字のまま）
+step("html img is rendered with its width", () => {
+  const holder = document.createElement("div");
+  document.body.appendChild(holder);
+  const v = createView({ parent: holder, getImageURL: () => "data:image/gif;base64,R0lGODlhAQABAAAAACw=" });
+  v.setText("# 画像\\n\\n<img src='a.jpeg' width='50%'>\\n\\n文\\n");
+  v.setVim({ cur: [4, 1], mode: "n" });
+  const im = document.querySelector(".cm-md-img img");
+  if (!im) throw new Error("html img not rendered");
+  if (im.style.width !== "50%") throw new Error("width not applied: " + im.style.width);
+  v.setVim({ cur: [4, 1], mode: "i" });
+  if (document.querySelector(".cm-md-img img")) throw new Error("html img should be text in insert mode");
+});
 // アンカー（#見出し）つきのリンクも、クリックできるノートのリンク（data-md-href）になること
 step("anchor link is a clickable note link", () => {
   v.setText("# 見出し\\n\\n[二](n.md#2f)\\n[普通](m.md)\\n[外部](https://example.com/a.md#x)\\n");

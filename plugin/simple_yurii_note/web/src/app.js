@@ -148,14 +148,14 @@ const PRELOAD_MAX = 24; // 1 ノートで先に調べる画像の上限
 const PRELOAD_PARALLEL = 4; // 同時に読む数
 function preloadImages(lines) {
   const file = last.file;
-  const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)|<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
   const seen = new Set();
   const queue = [];
   for (const ln of lines) {
     re.lastIndex = 0;
     let m;
     while ((m = re.exec(ln)) !== null) {
-      const src = m[1];
+      const src = m[1] || m[2];
       if (/^[a-z]+:\/\//i.test(src) || src.startsWith("data:") || seen.has(src)) continue;
       seen.add(src);
       const c = imgCache.get(imgKey(file, src));
