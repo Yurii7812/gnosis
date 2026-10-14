@@ -26,7 +26,21 @@ try
   call gnosis#vault#create(s:v)
   let g:gnosis_root = s:v . '/'
   let s:g = s:guide()
+  let s:idx0 = readfile(s:v . '/index.md')
+  let s:header = index(s:idx0, '# Index')
+  call s:ok('作成直後: # Index の次に空行', s:header >= 0 && get(s:idx0, s:header + 1, 'missing') ==# '')
+  call s:ok('作成直後: Index に操作ガイドへのリンク', index(s:idx0, '[Gnosis 操作ガイド](gnosis-guide.md)') >= 0)
   call s:ok('作成直後: ### Group に Index', s:tail(s:g) ==# ['### Group', '[Index](index.md)'])
+
+  " 既存の操作ガイドで Group が欠落していても、起動時更新で Index の所属を修復する
+  let s:broken = s:guide()
+  if s:tail(s:broken) ==# ['### Group', '[Index](index.md)']
+    call remove(s:broken, -1)
+    call remove(s:broken, -1)
+  endif
+  call writefile(s:broken, s:v . '/gnosis-guide.md')
+  call gnosis#refresh_guide()
+  call s:ok('欠落した ### Group / Index を修復', s:tail(s:guide()) ==# ['### Group', '[Index](index.md)'])
   call s:ok('作成直後: 同期しても変わらない', s:sync() =~# 'updated 0 file')
 
   " 起動時の更新（プラグインの更新でテンプレートが変わった場合も含む）
