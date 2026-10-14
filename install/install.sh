@@ -5,8 +5,8 @@
 #   更新する:      cd <入れたフォルダ> && ./install/install.sh      （GitHub の新しい版があれば取り込んでから入れ直す）
 #
 # 行うこと（ふだんの ~/.vimrc・~/.vim・vimfiles・~/.vim/pack は読まない・変えない）:
-#   0. このフォルダが GitHub の最新か確かめる。古ければ git pull --ff-only で更新する（確認してから。
-#      未コミットの変更があるときは更新しない＝消さない）
+#   0. このフォルダが GitHub の最新か確かめる。古ければ git pull --ff-only で自動更新する。
+#      未コミットの変更があるときは安全のため停止する（変更は消さない）。
 #   1. 必要なものを確かめ、無ければ OS のパッケージ管理（apt / dnf / pacman / zypper / Homebrew）で入れる（確認してから）
 #        必須   … Vim 8.2 以上（+job +channel +timers +textprop +popupwin）・git・Python 3
 #        推奨   … fzf（検索。無ければ Gnosis 専用に取得）・ripgrep（全文検索）・クリップボード
@@ -85,44 +85,61 @@ vimq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 deskq() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/`/\\`/g; s/\$/\\$/g' | sed 's/\\/\\\\/g')"; }
 
 # ---------------------------------------------------------------- 0. 本体の版
+# 通常の再インストールは最新版へ自動更新する。意図的に固定したい場合だけ --no-update。
+# 更新に失敗した場合、古い版を「インストール成功」として処理しない。
 IS_GIT=0
 if have git && git -C "$GNOSIS_DIR" rev-parse --git-dir >/dev/null 2>&1; then IS_GIT=1; fi
 UPTODATE="?"
 if [ "$IS_GIT" = 1 ]; then
   step "Gnosis 本体の版を確かめます: $GNOSIS_DIR" "Checking the Gnosis version: $GNOSIS_DIR"
   up=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
-  if [ -z "$up" ]; then
-    say "  追跡するブランチが無いため、最新か確かめられません。" "  No upstream branch; cannot tell whether this is the latest."
-  elif [ "$NO_UPDATE" = 1 ]; then
-    # 取り込まない。前に取得した情報で、最新かどうかだけ比べる
-    if [ "$(git -C "$GNOSIS_DIR" rev-list --count "HEAD..$up" 2>/dev/null || echo 1)" -eq 0 ]; then
-      UPTODATE=yes
-      say "  最新です（$up。GitHub の版は取り込みません）。" "  Up to date with $up (not pulling)."
-    else
-      UPTODATE=no
-      say "  --no-update: GitHub の新しい版は取り込みません。" "  --no-update: not pulling the newer version from GitHub."
-    fi
-  elif ! git -C "$GNOSIS_DIR" fetch --quiet 2>/dev/null; then
-    say "  GitHub に接続できません。今の版のまま入れます。" "  Cannot reach GitHub; installing the current version."
+  if [ "$NO_UPDATE" = 1 ]; then
+    say "  --no-update: GitHub から更新せずに現在の版をインストールします。" \
+        "  --no-update: installing the current revision without updating from GitHub."
+  elif [ -z "$up" ]; then
+    say "  エラー: 追跡するリモートブランチがありません。git branch -vv を確認してください。" \
+        "  ERROR: no upstream branch. Check git branch -vv."
+    say "  更新しないで入れるには ./install/install.sh --no-update を指定してください。" \
+        "  To install without updating, use ./install/install.sh --no-update."
+    exit 1
+  elif ! git -C "$GNOSIS_DIR" fetch --quiet; then
+    say "  エラー: GitHub の更新確認に失敗しました。古い版のままインストールしません。" \
+        "  ERROR: unable to fetch updates. Refusing to silently install an old revision."
+    exit 1
   else
     behind=$(git -C "$GNOSIS_DIR" rev-list --count "HEAD..$up" 2>/dev/null || echo 0)
+    ahead=$(git -C "$GNOSIS_DIR" rev-list --count "$up..HEAD" 2>/dev/null || echo 0)
     if [ "$behind" -eq 0 ]; then
-      UPTODATE=yes
-      say "  最新です（$up）。" "  Up to date ($up)."
+      if [ "$ahead" -gt 0 ]; then
+        say "  注意: リモートより $ahead コミット進んだローカル版です（取り消しません）。" \
+            "  Note: local branch is $ahead commit(s) ahead of $up (preserving local commits)."
+      else
+        UPTODATE=yes
+        say "  GitHub の $up と一致しています。" "  Up to date with $up."
+      fi
+    elif [ "$ahead" -gt 0 ]; then
+      say "  エラー: ローカルと $up の履歴が分岐しています。自動で上書きしません。" \
+          "  ERROR: local branch has diverged from $up. No automatic overwrite."
+      exit 1
     elif [ -n "$(git -C "$GNOSIS_DIR" status --porcelain --untracked-files=no)" ]; then
-      UPTODATE=no
-      say "  $up より $behind コミット古いですが、未コミットの変更があるので更新しません（変更は消しません）。" \
-          "  $behind commit(s) behind $up, but there are uncommitted changes; not updating (nothing is discarded)."
-    elif ask "  $up より $behind コミット古い版です。更新してから入れますか？" "  $behind commit(s) behind $up. Update before installing?"; then
+      say "  エラー: ローカルの Git 管理対象ファイルが変更されています。安全のため更新を停止します。" \
+          "  ERROR: tracked local files are modified; stopping update to preserve them."
+      git -C "$GNOSIS_DIR" status --short
+      say "  変更をコミット/退避後に再実行してください。古い版を使うなら --no-update。" \
+          "  Commit or stash changes and rerun; use --no-update to intentionally install the old revision."
+      exit 1
+    else
+      say "  $up より $behind コミット古いため自動更新します。" \
+          "  $behind commit(s) behind $up; updating automatically."
       if git -C "$GNOSIS_DIR" pull --ff-only --quiet; then
-        say "  更新しました。新しいインストーラーで続けます。" "  Updated. Continuing with the new installer."
+        say "  更新完了。新しいインストーラーで続行します。" \
+            "  Updated. Continuing with the new installer."
         # shellcheck disable=SC2086
         exec sh "$GNOSIS_DIR/install/install.sh" --no-update $ORIG_ARGS
       fi
-      UPTODATE=no
-      say "  更新できませんでした（手元の変更と食い違うなど）。今の版のまま入れます。" "  Could not update (diverged?); installing the current version."
-    else
-      UPTODATE=no
+      say "  エラー: git pull --ff-only に失敗しました。古い版は入れません。" \
+          "  ERROR: git pull --ff-only failed. Not installing the old revision."
+      exit 1
     fi
   fi
 fi
