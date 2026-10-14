@@ -26,7 +26,7 @@ if schema == "org.gnome.Terminal.ProfilesList" and key == "list":
     else:
         raise SystemExit(3)
 elif schema.startswith("org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:"):
-    name = schema.split(":")[-2].strip("/")
+    name = schema.split(":")[-1].strip("/")
     if verb == "set":
         state["settings"].setdefault(name, {})[key] = args[0]
     elif verb == "get":
