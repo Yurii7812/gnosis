@@ -175,6 +175,8 @@ endif
 " ---------------------------------------------------------------------------
 
 command!          GnosisToday call gnosis#diary_today()
+command!          GnosisRefreshColors call gnosis#color#refresh()
+command!          GnosisColorDoctor call gnosis#color#doctor()
 command!          GnosisDiaryAdopt call gnosis#diary_adopt()
 command!          SimpleDiaryUpdate call gnosis#diary_update()
 command! -nargs=? UpdateMD   call gnosis#update_md(<q-args>)
@@ -431,6 +433,8 @@ nnoremap <silent> \tdr :TDR<CR>
 nnoremap <silent> \tdc :TDC<CR>
 nnoremap <silent> \ua  :UpdateAll<CR>
 nnoremap <silent> \d   <Cmd>call gnosis#diary_today()<CR>
+" \\r はリンクの内容を触らず、Vim側の検索/matchハイライトと色を再適用。
+nnoremap <silent> \r   <Cmd>call gnosis#color#refresh()<CR>
 
 nnoremap <silent> \se  <Cmd>call <SID>expand_s_and_open()<CR>
 nnoremap <nowait> <silent> mp  <Cmd>call gnosis#rename_prefix()<CR>
@@ -992,6 +996,11 @@ augroup END
 " 旧 state_dir の状態を vault 内 .state/ へ1回だけ移行（root.txt は残す）
 augroup gnosis_migrate_state
   autocmd!
+augroup END
+
+augroup gnosis_color_on_note
+  autocmd!
+  autocmd BufWinEnter *.md,*.markdown call gnosis#color#on_note_enter()
 augroup END
 
 " ---------------------------------------------------------------------------
