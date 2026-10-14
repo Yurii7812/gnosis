@@ -22,6 +22,19 @@ The UI and the generated guide are available in Japanese and English (see [Engli
 
 ## インストール
 
+**コマンドを 1 回コピーして、1 回貼り付けるだけです。** あとは自動で、必要なもの（git・Vim・Python など）の確認と導入、取得、設定、アイコンづくりまで行います（導入の前に確認を聞きます）。
+
+| OS | 貼り付けるもの |
+| --- | --- |
+| **Linux・macOS** | `curl -fsSL https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.sh \| sh` |
+| **新しい Debian / Ubuntu（git も curl も無い。スマホの UserLAnd など）** | `sudo apt update && sudo apt install -y curl && curl -fsSL https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.sh \| sh` |
+| **Windows 10 / 11**（PowerShell） | `irm https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.ps1 \| iex` |
+
+- 入れたあとの更新は `gnosis --update`（Windows はアイコンから開いた Gnosis の中でも、同じ 1 行をもう一度実行してもよい）。
+- 画面（GUI）の無い環境（スマホの Debian・SSH）では、`gnosis` は今の端末の中で起動します。
+- コマンドは**1 行ずつ**貼り付けてください（2 つをつなげて貼ると `./install/install.shgit clone …` のようになって動きません）。
+- 以下は、手順を自分で確かめたい人・開発者向けの詳しい説明です。
+
 ふだんの Vim の設定（`~/.vimrc`・`~/.vim`・`_vimrc`・`vimfiles`）は**読み込まず、変更もしません**。
 インストーラーは Gnosis 専用の vimrc とプラグイン領域を **Gnosis ホーム**に作り、その vimrc を指定して起動するランチャーとアイコンを作ります。
 Vim が無ければ入れ、Gnosis に使える Vim（8.2 以上、`+job +channel +timers +textprop +popupwin`）が既にあればそれを使います。
@@ -29,7 +42,13 @@ Vim が無ければ入れ、Gnosis に使える Vim（8.2 以上、`+job +channe
 
 ### Linux
 
-新しく入れる:
+1 行で入れる（上の表。git が無くても入ります）:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.sh | sh
+```
+
+自分で取得して入れる（git が必要）:
 
 ```sh
 git clone https://github.com/Yurii7812/gnosis.git
@@ -356,8 +375,7 @@ python3 tools/extract_chnoubis.py  # assets/chnoubis/chnoubis.sh から起動画
 
 Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on real Vim.
 
-- **Install**: `git clone https://github.com/Yurii7812/gnosis.git && cd gnosis && ./install/install.sh` (Linux / macOS) or
-  `powershell -ExecutionPolicy Bypass -File install\install.ps1` (Windows). The installer creates a Gnosis-only vimrc and plugin area in the
+- **Install (copy once, paste once)**: Linux / macOS: `curl -fsSL https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.sh | sh` (installs git first if missing; on a fresh Debian/Ubuntu run `sudo apt update && sudo apt install -y curl` before it, or use the one-liner in the Japanese table above). Windows (PowerShell): `irm https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.ps1 | iex`. Developers: `git clone … && cd gnosis && ./install/install.sh`. The installer creates a Gnosis-only vimrc and plugin area in the
   Gnosis home (`~/.local/share/gnosis`, `~/Library/Application Support/Gnosis`, `%APPDATA%\Gnosis`), a launcher (`gnosis`) and an icon.
   Your own `~/.vimrc` / `~/.vim` are never read or changed.
 - **Launch**: `gnosis` always opens a separate, dedicated terminal window and applies the stored font settings. Use `gnosis --tui` to run in the current terminal.

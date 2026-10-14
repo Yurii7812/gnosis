@@ -98,6 +98,9 @@ sh "$REPO/test/start_screen_net.sh"
 # インストーラー（一時 HOME・空白/日本語/' を含むパス・ふだんの Vim は不変）
 sh "$REPO/test/install_net.sh"
 
+# Linux / macOS の 1 行インストーラー（空の環境から 1 回・更新・未コミットの変更を消さない・git が無いとき）
+sh "$REPO/test/bootstrap_net.sh"
+
 # インストーラーの更新（古い版の取り込み・未コミットの変更は残す・別の clone への切り替え）
 sh "$REPO/test/install_update_net.sh"
 
