@@ -58,6 +58,10 @@ if !has('gui_running') && exists('+t_fe') && exists('+t_fd')
 endif
 
 " 起動画面・ノート・設定は Chnoubis パレット10（夜空×水色）を既定とする。
+" 標準の「-- 挿入 --」を消し、目立つモード表示を専用ステータスバーに出す。
+set noshowmode
+set laststatus=2
+set statusline=%!gnosis#ui#statusline()
 set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
 set t_ut=
