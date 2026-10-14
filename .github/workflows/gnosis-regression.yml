@@ -33,6 +33,10 @@ jobs:
         run: sh test/autosync_dirty_guard_net.sh
       - name: Test diary hierarchy across year rollover
         run: sh test/diary_hierarchy_net.sh
+      - name: Test Gnosis color highlight recovery
+        run: sh test/color_highlight_net.sh
+      - name: Test startup icon colors
+        run: sh test/icon_palette_net.sh
       - name: Test Index and guide relations
         run: sh test/guide_relations_net.sh
       - name: Test auto-updater using local Git repositories

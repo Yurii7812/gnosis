@@ -242,6 +242,10 @@ B がグループなら、表示名を入力します。入力欄は空から始
 操作ガイド（`gnosis-guide.md`）も vault の普通のノートです。Index の本文からリンクされていれば `### Group` に Index、別のグループの本文に移せばそのグループ、複数なら全部が、他のノートと同じ同期の規則で入ります（`### Context` / `### Related` / `### BackLink` も同じ）。
 起動のたびにガイドの**本文**は Gnosis の版と言語に合わせて更新しますが、関係の節（`### Context` 以下）と front matter はそのまま残します。ガイド本文の中の `### Group` などは説明の文で、関係の節とは扱いません。
 
+### デスクトップアイコンの配色
+
+Gnosis のアイコンは起動画面の Chnoubis #10 と同じ夜空色（`#14283D`）と水色（`#79CFFF`）です。インストールや `gnosis --update` 時に Gnosis 専用ホーム内へ再生成するため、`~/gnosis` の Git 管理ファイルは変更しません。Linux のアプリメニューは生成済み SVG を直接参照します（Pillow 未導入でも SVG は生成します）。
+
 ## トラブルシューティング
 
 | 症状 | 確かめること・直し方 |
@@ -249,6 +253,7 @@ B がグループなら、表示名を入力します。入力欄は空から始
 | 新しく入れたのに古い Gnosis が起動する | `gnosis --where` で本体のフォルダとコミット、`gnosis --doctor` で PATH の古いランチャー・古いアプリメニュー項目を確認。入れたいフォルダで `./install/install.sh` を実行し直し、`hash -r` |
 | アイコンを押しても何も起きない | `gnosis --doctor` の「アプリメニュー」が NG なら `./install/install.sh` で作り直す（古い版は `Terminal=false` で Electron を起動する形だった）。端末を開けなかったときは `~/.local/share/gnosis/logs/launcher.log` に記録し、通知を出します。端末は設定画面の「Gnosis の窓に使う端末」か `GNOSIS_TERMINAL=konsole` で指定できます |
 | 文字サイズを変えても画面が変わらない | 設定画面の「Gnosis の窓に使う端末」の下に、その窓でその場で変わるかを表示します。変わらない端末でも値は保存され、次に Gnosis の窓を開いたときに使われます（上の「文字サイズ」） |
+| ノートの一部が選択されたような灰色や暗い文字に変わる | ノートを開く時にGnosisが検索・一時ハイライトを消します。手動では `\\r` か `:GnosisRefreshColors` で色を再設定できます。再発する場合、変色箇所にカーソルを置いて `:GnosisColorDoctor` を実行。ハイライトの診断内容はGnosis専用 `logs/color-doctor.txt` に保存されます。Vim側の表示かKonsoleの描画かを判別する手掛かりになります |
 | リンクが `[名前](ファイル名)` のまま見える | `:GnosisLinkSource` で表示を切り替えていないか。`:set conceallevel?` が 2 か |
 | よみ順の並べ替えが効かない | `gnosis --doctor` の pykakasi。Debian では `sudo apt install python3-venv` のあと `./install/install.sh` |
 | 暗号化 vault が開けない | `gnosis --doctor` の gocryptfs・fusermount。`./install/install.sh --with-crypt` |
