@@ -132,7 +132,7 @@ if [ "$IS_GIT" = 1 ]; then
       say "  $up より $behind コミット古いため自動更新します。" \
           "  $behind commit(s) behind $up; updating automatically."
       if git -C "$GNOSIS_DIR" pull --ff-only --quiet; then
-        say "  更新完了。新しいインストーラーで続行します。" \
+        say "  更新しました。新しいインストーラーで続行します。" \
             "  Updated. Continuing with the new installer."
         # shellcheck disable=SC2086
         exec sh "$GNOSIS_DIR/install/install.sh" --no-update $ORIG_ARGS
