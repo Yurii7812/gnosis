@@ -94,8 +94,9 @@ cd gnosis
 powershell -ExecutionPolicy Bypass -File install\install.ps1
 ```
 
-winget で足りないもの（Vim・Git・Python・fzf・ripgrep・Node.js）を入れ、デスクトップとスタートメニューに **Gnosis** のショートカットを作ります。
-Bash は要りません（起動画面のシンボルは静的なアセットから表示します）。
+Windows PowerShell 5.1でも実行できる `install.ps1` が、WSL2・Ubuntu・WezTermの導入を案内します。OS設定変更や追加インストールは同意を求めます。再起動が必要な場合は、再起動後に同じコマンドを再実行してください。
+
+Gnosis本体はWSL2のUbuntu内にインストールされます。WindowsデスクトップのショートカットからWezTermで起動できます。通常のWindows用Vim設定は変更しません。
 
 ### アンインストール
 
