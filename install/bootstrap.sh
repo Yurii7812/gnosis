@@ -36,6 +36,11 @@ if ! have git; then
   elif have pacman; then cmd="$SUDO pacman -S --needed --noconfirm git"
   elif have zypper; then cmd="$SUDO zypper install -y git"
   elif have brew; then cmd="brew install git"
+  elif [ "$(uname -s)" = Darwin ]; then
+    # Homebrew が無い Mac: git は Apple の「コマンドライン・デベロッパ・ツール」に入っている。導入画面を出す
+    say "Mac のコマンドライン・ツール（git を含む）の導入画面を開きます。終わったら、同じ 1 行をもう一度実行してください。" "Opening the Mac command line tools installer (includes git). When it finishes, run the same one line again."
+    xcode-select --install 2>/dev/null || true
+    exit 1
   else
     say "パッケージ管理（apt / dnf / pacman / zypper / brew）が見つかりません。git を自分で入れてから、もう一度実行してください。" "No package manager found. Install git yourself and run this again."
     exit 1
