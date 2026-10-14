@@ -2010,6 +2010,10 @@ function! s:up_end_line() abort
   if l:up <= 0
     return 0
   endif
+  " 本文冒頭の `Context:` ブロックは、直下のリンク行までが範囲（次の見出しまでではない）
+  if trim(getline(l:up)) ==# 'Context:'
+    return s:context_block_last(l:up)
+  endif
   for l:i in range(l:up + 1, line('$'))
     if s:is_known_section_header_text(getline(l:i))
       return l:i - 1
@@ -2018,10 +2022,22 @@ function! s:up_end_line() abort
   return line('$')
 endfunction
 
+" `Context:` の行（1 始まり）の直下に続くリンク行の最後の行番号
+function! s:context_block_last(head_lnum) abort
+  let l:last = a:head_lnum
+  while l:last + 1 <= line('$') && getline(l:last + 1) =~# '^\s*\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\s*\%(—\s*\S\+\)\?\s*$'
+    let l:last += 1
+  endwhile
+  return l:last
+endfunction
+
 function! s:section_end_line(name) abort
   let l:sec = s:find_section_line(a:name)
   if l:sec <= 0
     return 0
+  endif
+  if trim(getline(l:sec)) ==# 'Context:'
+    return s:context_block_last(l:sec)
   endif
   let l:end = l:sec
   for l:i in range(l:sec + 1, line('$'))
@@ -2033,10 +2049,45 @@ function! s:section_end_line(name) abort
   return l:end
 endfunction
 
-function! s:append_link_to_buffer_section(name, link) abort
-  " Context は空なら見出しごと無い。足すときに作る（index.md は節を持たないので作らない）
-  if a:name ==# 'up' && s:find_section_line('up') <= 0 && !s:ensure_context_in_buffer()
+" バッファの行を a:new に差し替える。変わった最初の行より下にカーソルがあれば、増減した行数だけ追従させる。
+function! s:replace_buffer_lines(new) abort
+  let l:old = getline(1, '$')
+  let l:view = winsaveview()
+  let l:first = 0
+  while l:first < len(l:old) && l:first < len(a:new) && l:old[l:first] ==# a:new[l:first]
+    let l:first += 1
+  endwhile
+  let l:delta = len(a:new) - len(l:old)
+  call setline(1, a:new)
+  if l:delta < 0
+    silent! execute (len(a:new) + 1) . ',$delete _'
+  endif
+  if l:view.lnum - 1 >= l:first
+    let l:view.lnum = max([1, l:view.lnum + l:delta])
+    let l:view.topline = max([1, l:view.topline + (l:view.topline - 1 >= l:first ? l:delta : 0)])
+  endif
+  call winrestview(l:view)
+endfunction
+
+" 今のノートの Context（本文冒頭の `Context:` ブロック）に a:link を足す。既存リンクの最後へ。
+" 同じノートが既にあれば足さない。Context が無ければ H1 の直後に作る。旧 `### Context` はリンクを失わず移す。
+" index.md は Context を持たない。足したら 1。
+function! s:append_link_to_context(link) abort
+  if s:no_sections_buffer()
     return 0
+  endif
+  let l:r = gnosis#context#add(getline(1, '$'), a:link, expand('%:p:h'))
+  if !l:r.added
+    return 0
+  endif
+  call s:replace_buffer_lines(l:r.lines)
+  return 1
+endfunction
+
+function! s:append_link_to_buffer_section(name, link) abort
+  " Context は本文の冒頭の `Context:` ブロック（旧 `### Context` 節ではない）
+  if a:name ==# 'up'
+    return s:append_link_to_context(a:link)
   endif
   let l:sec = s:find_section_line(a:name)
   if l:sec <= 0
@@ -2137,6 +2188,13 @@ endfunction
 
 function! s:section_end_index_in_lines(lines, start_idx) abort
   let l:end = len(a:lines)
+  " 本文冒頭の `Context:` ブロックは、直下のリンク行までが範囲
+  if trim(get(a:lines, a:start_idx, '')) ==# 'Context:'
+    let l:b = gnosis#context#find_block(a:lines)
+    if !empty(l:b) && l:b[0] == a:start_idx
+      return l:b[1] + 1
+    endif
+  endif
   if a:start_idx + 1 >= len(a:lines)
     return l:end
   endif
@@ -6749,7 +6807,7 @@ function! gnosis#v2_new_group_visual() abort range
   let l:ts  = gnosis#timestamp_filename()
   let l:file = s:join_path(l:dir, l:ts . '.md')
 
-  " グループ本体: 選択内容を本文に、### Context に今のノート
+  " グループ本体: 冒頭（H1 の直後）の Context に今のノート、そのあとに選択内容を本文として
   let l:content = [
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
@@ -6759,10 +6817,7 @@ function! gnosis#v2_new_group_visual() abort range
         \ '',
         \ '# ' . l:ts,
         \ '',
-        \ ] + l:body + [
-        \ s:v2_up_mark,
-        \ s:make_link_from_dir(l:cur, l:cur_title, l:dir),
-        \ ]
+        \ ] + gnosis#context#block_lines([s:make_link_from_dir(l:cur, l:cur_title, l:dir)]) + [''] + l:body
   call s:write_new_note(l:content, l:file)
 
   " 元の選択をグループへのリンクで置き換える
@@ -6773,11 +6828,9 @@ function! gnosis#v2_new_group_visual() abort range
 
   call gnosis#push_history()
   silent execute 'edit ' . fnameescape(l:file)
-  let l:up = search('^' . escape(s:v2_up_mark, '*[]~\.'), 'nw')
-  if l:up > 1
-    call cursor(l:up - 1, 1)
-    call cursor(l:up - 1, col('$'))
-  endif
+  " 本文（選択内容）の最後にカーソルを置く
+  call cursor(line('$'), 1)
+  call cursor(line('$'), col('$'))
   startinsert
 endfunction
 
@@ -6834,32 +6887,16 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
   call s:syn_writefile(l:lines, a:file)
 endfunction
 
-" simple: file の ### Context に parent_path へのリンクを 1 本足す
+" simple: file の Context（本文冒頭の `Context:` ブロック）に parent_path へのリンクを 1 本足す
 function! s:simple_add_parent(file, parent_path, parent_title) abort
   let l:lines = readfile(a:file)
   let l:link = s:make_link_from_dir(a:parent_path, a:parent_title, fnamemodify(a:file, ':h'))
-  " Branch と Context は独立の関係。同じ親へのリンクが ParentBranch に存在しても、
-  " Context にも登録できるように、重複判定は Context 節の中だけで行う。
-  let l:at = s:context_insert_index(l:lines)
-  if l:at >= 0
-    " Context が無い: 最初の節の手前（無ければ末尾）に見出しごと作る
-    call extend(l:lines, [s:v2_up_mark, l:link], l:at)
-  else
-    let l:hdr = -1
-    for l:i in range(0, len(l:lines) - 1)
-      if trim(l:lines[l:i]) ==# s:v2_up_mark || index(s:v2_up_marks_legacy, trim(l:lines[l:i])) >= 0
-        let l:hdr = l:i | break
-      endif
-    endfor
-    let l:end = s:section_end_index_in_lines(l:lines, l:hdr)
-    for l:i in range(l:hdr + 1, l:end - 1)
-      if l:lines[l:i] ==# l:link
-        return
-      endif
-    endfor
-    call insert(l:lines, l:link, l:hdr + 1)
+  " Branch と Context は独立の関係。同じ親へのリンクが ParentBranch にあっても Context に登録できる
+  " （重複の判定は Context の中だけ）。新しいリンクは Context リンク群の最後。
+  let l:r = gnosis#context#add(l:lines, l:link, fnamemodify(a:file, ':h'))
+  if l:r.added
+    call s:syn_writefile(l:r.lines, a:file)
   endif
-  call s:syn_writefile(l:lines, a:file)
 endfunction
 
 " simple: file の ### Related に other_path へのリンクを 1 本足す（zr の相手側）。
@@ -7113,10 +7150,7 @@ function! s:group_link_under_cursor() abort
         \ '',
         \ '# ' . l:ts,
         \ '',
-        \ l:span.text,
-        \ s:v2_up_mark,
-        \ s:make_link_from_dir(l:cur, l:cur_title, l:dir),
-        \ ]
+        \ ] + gnosis#context#block_lines([s:make_link_from_dir(l:cur, l:cur_title, l:dir)]) + ['', l:span.text]
   call s:write_new_note(l:content, l:file)
   let l:line = getline(l:span.lnum)
   call setline(l:span.lnum, strpart(l:line, 0, l:span.start) . '[' . l:ts . '](' . l:ts . '.md)' . strpart(l:line, l:span.end))
@@ -7124,7 +7158,7 @@ function! s:group_link_under_cursor() abort
   call s:run_update_one_for(l:cur)
   call gnosis#push_history()
   silent execute 'edit ' . fnameescape(l:file)
-  call cursor(9, 1)
+  call cursor(len(l:content), 1)
 endfunction
 
 " カーソル下の Markdown リンク（画像・コードの中は除く）の {lnum, start, end, text}（0 始まりのバイト位置）
@@ -7314,11 +7348,13 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     if l:ch ==? 'c'
       " 新ノート側は「もと開いていたノート」を**本文リンク**（子）に置く（o を選んだら置かない）。
       " c は「親（文脈）を作る」操作なので、ここを ### Context にすると循環して読めない。
-      if l:choice.mode !=# 'none'
+      if l:choice.mode !=# 'none' && l:choice.mode !=# 'write'
         let l:name = empty(l:choice.name) ? l:cur_title : s:md_link_text(l:choice.name)
         let l:back = s:make_link_from_dir(l:cur, l:name, fnamemodify(l:file, ':h'))
         call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
         let l:in_body = 1
+      elseif l:choice.mode ==# 'write'
+        call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
       endif
     elseif !empty(a:attr) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
@@ -7335,7 +7371,11 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   if l:in_body
     let l:hl = search('(' . escape(fnamemodify(l:cur, ':t'), '.*[]~\') . ')$', 'nw')
   endif
-  if l:h1 > 0 && l:hl == 0 | let l:hl = l:h1 + (empty(a:attr) ? 2 : 1) | endif
+  if l:h1 > 0 && l:hl == 0
+    " Context が H1 の直後にあるノートは、Context のリンクの次の空行のさらに次（zn）／次（zk）。
+    let l:cb = gnosis#context#find_block(getline(1, '$'))
+    let l:hl = !empty(l:cb) ? l:cb[1] + 1 + (empty(a:attr) ? 2 : 1) : l:h1 + (empty(a:attr) ? 2 : 1)
+  endif
   if l:hl > 0 | call cursor(l:hl, 1) | call cursor(l:hl, col('$')) | endif
   startinsert
 endfunction
@@ -7426,7 +7466,7 @@ endfunction
 " B 側への入れ方を聞く。a:target … B のパス（まだ無い新ノートなら ''）、a:lines … B の行、
 " a:is_group … B がグループか、a:a_title … A のタイトル（表示名の既定）。
 function! s:ask_back_link(target, lines, is_group, a_title, Cont) abort
-  echo gnosis#i18n#tr('リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / o=入れない  (Esc で取り消し)')
+  echo gnosis#i18n#tr('リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / w=リンク先を開いて編集 / o=入れない  (Esc で取り消し)')
   let l:ch = s:getkey()
   redraw
   let l:n = char2nr(l:ch)
@@ -7436,6 +7476,12 @@ function! s:ask_back_link(target, lines, is_group, a_title, Cont) abort
   endif
   if l:ch ==? 'o'
     call a:Cont({'mode': 'none', 'lnum': 0, 'name': ''})
+    return
+  endif
+  if l:ch ==? 'w'
+    " w = Write: リンク先には自動で何も書かない。元のノートのファイル名をヤンクして、リンク先を開き、
+    " 利用者が自分で編集する（貼り付けたり、Markdown リンクに直したり）。
+    call a:Cont({'mode': 'write', 'lnum': 0, 'name': ''})
     return
   endif
   if l:ch ==? 't'
@@ -7451,7 +7497,7 @@ function! s:ask_back_link(target, lines, is_group, a_title, Cont) abort
     call s:ask_back_link_named(a:is_group, a:a_title, a:Cont, 'end', 0)
     return
   endif
-  echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（Enter / t / o のどれか。何も変更していません）')
+  echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（Enter / t / w / o のどれか。何も変更していません）')
 endfunction
 
 function! s:ask_back_link_named(is_group, a_title, Cont, mode, lnum) abort
@@ -7528,6 +7574,11 @@ endfunction
 function! s:body_links_to(lines, b_dir, a_path) abort
   let l:hdr = s:first_section_index_in_lines(a:lines)
   let l:body = l:hdr < 0 ? a:lines : (l:hdr > 0 ? a:lines[: l:hdr - 1] : [])
+  " 冒頭の Context ブロックのリンクは「本文のリンク」とは数えない（Context と本文リンクは別の関係）
+  let l:cb = gnosis#context#find_block(l:body)
+  if !empty(l:cb)
+    let l:body = l:body[: l:cb[0] - 1] + l:body[l:cb[1] + 1 :]
+  endif
   let l:want = fnamemodify(a:a_path, ':p')
   for l:t in s:body_link_targets_from_lines(l:body, a:b_dir)
     if fnamemodify(l:t, ':p') ==# l:want
@@ -7539,7 +7590,7 @@ endfunction
 
 " B（a:target）に A（a:a_path）へのリンクを、選んだ入れ方 a:choice で書く。書いたら 1。
 function! s:apply_back_link(target, a_path, a_title, choice) abort
-  if a:choice.mode ==# 'none' || !filereadable(a:target)
+  if a:choice.mode ==# 'none' || a:choice.mode ==# 'write' || !filereadable(a:target)
     return 0
   endif
   let l:nr = bufnr(fnamemodify(a:target, ':p'))
@@ -9639,14 +9690,18 @@ function! s:zap_add_child_link(rel_target) abort
   let l:link = s:make_link_from_dir(l:self, l:title, fnamemodify(l:parent_file, ':h'))
   let l:relself = matchstr(l:link, '](\zs[^)]*\ze)')
   let l:lines = readfile(l:parent_file)
-  let l:p = index(l:lines, '### Context')
+  let l:p = s:first_section_index_in_lines(l:lines)
   let l:body_end = l:p >= 0 ? l:p : len(l:lines)
+  let l:cb = gnosis#context#find_block(l:lines)
   for l:i in range(0, l:body_end - 1)
+    if !empty(l:cb) && l:i >= l:cb[0] && l:i <= l:cb[1]
+      continue   " Context のリンクは「本文にある」とは数えない
+    endif
     if stridx(l:lines[l:i], '](' . l:relself) >= 0
       return
     endif
   endfor
-  " ### Context の直前に入れる（既存の空行はそのまま。Parent が無ければ末尾）
+  " 本文の最後（最初の関係の節の直前。節が無ければ末尾）に入れる
   call insert(l:lines, l:link, l:body_end)
   call writefile(l:lines, l:parent_file)
   if l:nr > 0
@@ -9715,6 +9770,59 @@ function! s:c_mode_apply(links, choices, a, Done) abort
     echo 'Gnosis: ' . gnosis#i18n#tr('追加できるリンクがありません（Context に既にある or 取れなかった）')
   endif
   call a:Done()
+  " w: リンク先に自動では書かず、元のノートのファイル名をヤンクしてリンク先を開く（1 件ずつ）
+  let l:writes = []
+  for l:i in range(len(a:links))
+    if a:choices[l:i].mode ==# 'write'
+      let l:t = gnosis#resolve_link(substitute(s:extract_target(a:links[l:i]), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
+      if filereadable(l:t)
+        call add(l:writes, l:t)
+      endif
+    endif
+  endfor
+  if !empty(l:writes)
+    call s:write_mode_open(l:writes, a:a.path)
+  endif
+endfunction
+
+" w モード: 元のノート（a:src）のファイル名だけを無名レジスタと 0 レジスタに入れ、a:targets の最初を開く。
+" 残りは :GnosisWNext で 1 件ずつ開く（途中のリンクを黙って捨てない）。元のノートに未保存の変更が残っていれば、
+" ノートは開かない（未保存の変更を失わない）。
+let s:w_queue = []
+function! s:yank_filename(path) abort
+  let l:name = fnamemodify(a:path, ':t')
+  call setreg('"', l:name, 'v')
+  call setreg('0', l:name, 'v')
+endfunction
+
+function! s:write_mode_open(targets, src) abort
+  call s:yank_filename(a:src)
+  let s:w_queue = map(copy(a:targets[1:]), {_, t -> {'path': t, 'src': a:src}})
+  call s:write_mode_goto(a:targets[0], a:src)
+endfunction
+
+function! s:write_mode_goto(target, src) abort
+  if &modified && &buftype ==# ''
+    echohl WarningMsg
+    echom 'Gnosis: ' . gnosis#i18n#t('write.unsaved')
+    echohl NONE
+    return
+  endif
+  call s:yank_filename(a:src)
+  call gnosis#push_history()
+  silent execute 'edit ' . fnameescape(a:target)
+  let l:more = len(s:w_queue)
+  echom 'Gnosis: ' . gnosis#i18n#t('write.opened', fnamemodify(a:src, ':t')) . (l:more ? '  ' . gnosis#i18n#t('write.more', l:more) : '')
+endfunction
+
+" 次の w のリンク先を開く（:GnosisWNext）。そのリンク元のファイル名をもう一度ヤンクする。
+function! gnosis#write_next() abort
+  if empty(s:w_queue)
+    echo 'Gnosis: ' . gnosis#i18n#t('write.none')
+    return
+  endif
+  let l:it = remove(s:w_queue, 0)
+  call s:write_mode_goto(l:it.path, l:it.src)
 endfunction
 
 function! gnosis#add_link_to_parent() abort

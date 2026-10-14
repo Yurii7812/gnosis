@@ -383,12 +383,19 @@ def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
     """
     slots: list[int] = []
     in_fence = False
+    in_ctx = False  # `Context:` ブロックのリンクは、追加した順のまま並べ替えない
     for i, ln in enumerate(lines):
         if _FENCE_RE.match(ln):
             in_fence = not in_fence
             continue
         if in_fence:
             continue  # コードブロックの中の文字列は対象にしない
+        if ln.strip() == "Context:":
+            in_ctx = True
+            continue
+        if in_ctx and _LINK_LINE_RE.match(ln):
+            continue
+        in_ctx = False
         if _SECTION_HEAD_RE.match(ln.strip()):
             break
         if _LINK_LINE_RE.match(ln):
@@ -419,12 +426,19 @@ def persist_readings(lines: list[str], base_dir) -> int:
     count = 0
     seen: set[tuple[str, str]] = set()
     in_fence = False
+    in_ctx = False
     for line in lines:
         if _FENCE_RE.match(line):
             in_fence = not in_fence
             continue
         if in_fence:
             continue
+        if line.strip() == "Context:":
+            in_ctx = True
+            continue
+        if in_ctx and _LINK_LINE_RE.match(line):
+            continue
+        in_ctx = False
         if _SECTION_HEAD_RE.match(line.strip()):
             break
         if not _LINK_LINE_RE.match(line):

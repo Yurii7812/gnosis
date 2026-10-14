@@ -56,7 +56,7 @@ let s:n1 = s:newest_except(s:before)
 call s:ok('zn b: 新ノートができる', !empty(s:n1))
 call s:ok('zn b: A に ChildBranch と新ノートへのリンク', index(s:file('a.md'), '### ChildBranch') >= 0 && s:count('a.md', '(' . s:n1 . ')') == 1)
 call s:ok('zn b: 新ノートに ParentBranch と A へのリンク', index(s:file(s:n1), '### ParentBranch') >= 0 && s:count(s:n1, '^\[ノートA\](a\.md)$') == 1)
-call s:ok('zn b: Context には入れない', index(s:file('a.md'), '### Context') < 0 && index(s:file(s:n1), '### Context') < 0)
+call s:ok('zn b: Context には入れない', empty(gnosis#context#find_block(s:file('a.md'))) && empty(gnosis#context#find_block(s:file(s:n1))) && index(s:file('a.md'), '### Context') < 0)
 call s:ok('zn b: 新ノートが開いている', expand('%:t') ==# s:n1)
 
 " ---------------------------------------------------------------- 2 本目の子（1 つの親から複数の子）
@@ -167,10 +167,10 @@ call gnosis#v2_new_plain()
 stopinsert
 let s:nc = s:newest_except(s:before)
 call s:ok('zn c Enter: Context と自動 Branch が共存', !empty(s:nc)
-      \ && index(s:file('d.md'), '### Context') >= 0
+      \ && !empty(gnosis#context#find_block(s:file('d.md')))
       \ && s:count('d.md', '^### ChildBranch$') == 1
       \ && s:count(s:nc, '^### ParentBranch$') == 1
-      \ && s:count(s:nc, '^### Context$') == 0
+      \ && empty(gnosis#context#find_block(s:file(s:nc)))
       \ && s:count(s:nc, '^\[ノートD\](d\.md)$') >= 1)
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()
@@ -181,8 +181,8 @@ stopinsert
 let s:ne = s:newest_except(s:before)
 call s:ok('zn Enter: 本文リンク・Branch・Context が共存', !empty(s:ne)
       \ && s:count('d.md', '(' . s:ne . ')') >= 2
-      \ && s:count(s:ne, '^### ParentBranch$') == 1 && s:count(s:ne, '^### Context$') == 1
-      \ && index(s:file(s:ne), '### ParentBranch') < index(s:file(s:ne), '### Context')
+      \ && s:count(s:ne, '^### ParentBranch$') == 1 && !empty(gnosis#context#find_block(s:file(s:ne)))
+      \ && gnosis#context#find_block(s:file(s:ne))[1] < index(s:file(s:ne), '### ParentBranch')
       \ && s:count(s:ne, '^\[ノートD\](d\.md)
 
 
@@ -197,7 +197,7 @@ stopinsert
 let s:nh = s:newest_except(s:before)
 call s:ok('zn h: 自動 Branch / 新ノートの Context は無し', !empty(s:nh)
       \ && s:count(s:nh, '^### ParentBranch$') == 1
-      \ && s:count(s:nh, '^### Context$') == 0 && s:count('d.md', '(' . s:nh . ')') >= 2)
+      \ && empty(gnosis#context#find_block(s:file(s:nh))) && s:count('d.md', '(' . s:nh . ')') >= 2)
 
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()
@@ -504,7 +504,7 @@ stopinsert
 let s:nh = s:newest_except(s:before)
 call s:ok('zn h: 自動 Branch / 新ノートの Context は無し', !empty(s:nh)
       \ && s:count(s:nh, '^### ParentBranch$') == 1
-      \ && s:count(s:nh, '^### Context$') == 0 && s:count('d.md', '(' . s:nh . ')') >= 2)
+      \ && empty(gnosis#context#find_block(s:file(s:nh))) && s:count('d.md', '(' . s:nh . ')') >= 2)
 
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()

@@ -54,7 +54,7 @@ call gnosis#v2_new_plain()
 let s:new = s:newest_except(s:before)
 stopinsert
 call s:ok('zn c Enter: 新ノートができる', !empty(s:new))
-call s:ok('zn c Enter: A の Context に新ノート', s:has('a.md', '(' . s:new . ')') && index(s:file('a.md'), '### Context') >= 0)
+call s:ok('zn c Enter: A の Context に新ノート', s:has('a.md', '(' . s:new . ')') && !empty(gnosis#context#find_block(s:file('a.md'))) && index(s:file('a.md'), '### Context') < 0)
 call s:ok('zn c Enter: 新ノートの本文に A へのリンク', s:has(s:new, '^\[ノートA\](a\.md)$'))
 
 " ------------------------------------------------------------------ zn → c → o

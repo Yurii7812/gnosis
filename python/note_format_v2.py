@@ -105,7 +105,11 @@ GROUP_MARK = "### Group"
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
 PARENT_BRANCH_MARK = "### ParentBranch"
 CHILD_BRANCH_MARK = "### ChildBranch"
-# 関係の節の並び順（sync が書き出す順）
+# Context は本文の冒頭（H1 の直後）の `Context:` ブロック（見出しではなく、ふつうのテキスト行 + 直下のリンク群）。
+# 旧形式の `### Context` 節（旧 `### Parent`）も読める。
+CONTEXT_HEAD = "Context:"
+
+# 関係の節の並び順（sync が書き出す順。Context は本文の冒頭のブロックなので含まない。旧形式の節は互換のため読む）
 SECTION_ORDER = (PARENT_BRANCH_MARK, CONTEXT_MARK, GROUP_MARK, CHILD_BRANCH_MARK,
                  RELATED_MARK, DOWN_MARK)
 # 旧見張り（新しい順）。parse だけが読む。render は新表記（## Parent / ## Child）に統一する。
@@ -429,6 +433,29 @@ def migrate_note(text: str, path: str = "note.md") -> str | None:
 
 _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1|(`+)[^`]*$")
+
+
+def find_context_block(lines: list[str], start: int = 0) -> tuple[int, int] | None:
+    """新形式の Context ブロックの (`Context:` の行, リンクの最後の行)（0 始まり）。無ければ None。
+    H1 の直後（間は空行だけ。H1 が無ければ先頭）にあるものだけ。リンク行が続く間がブロック。コードブロックの中は見ない。"""
+    fenced = _fenced(lines)
+    seen_h1 = False
+    for i in range(start, len(lines)):
+        if fenced[i]:
+            return None
+        s = lines[i].strip()
+        if s == CONTEXT_HEAD:
+            j = i
+            while j + 1 < len(lines) and not fenced[j + 1] and _SIMPLE_LINK_LINE_RE.match(lines[j + 1]):
+                j += 1
+            return (i, j)
+        if s == "":
+            continue
+        if re.match(r"^#\s+\S", lines[i]) and not seen_h1:
+            seen_h1 = True
+            continue
+        return None
+    return None
 
 
 def _fenced(lines: list[str]) -> list[bool]:
@@ -1350,7 +1377,7 @@ def _used_display_names(notes: dict, incoming: dict | None = None) -> set[str]:
     """
     used: set[str] = set()
     for n in notes.values():
-        for kind in ("body", "parent", "related", "pbranch", "cbranch"):
+        for kind in ("body", "parent", "ctx", "related", "pbranch", "cbranch"):
             for disp, _tg in _links_from(n.get(kind, [])):
                 if disp:
                     used.add(disp)
@@ -1390,6 +1417,14 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # `### Parent` より前の空行（本文の途中の余白）は残る。
     fm, rest = _split_front_matter(text.rstrip("\n").split("\n"))
     title = _fm_title(fm) or path.stem
+    # 新形式の Context ブロックを先に取り出す（本文の位置 ctx_at を覚えて、書き戻すとき同じ場所へ戻す）
+    ctx: list[str] = []
+    ctx_at = -1
+    blk = find_context_block(rest)
+    if blk:
+        ctx = rest[blk[0] + 1:blk[1] + 1]
+        ctx_at = blk[0]
+        rest = rest[:blk[0]] + rest[blk[1] + 1:]
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
@@ -1409,7 +1444,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
             "group": sec["group"], "related": sec["related"], "back": sec["back"],
-            "pbranch": sec["pbranch"], "cbranch": sec["cbranch"],
+            "pbranch": sec["pbranch"], "cbranch": sec["cbranch"], "ctx": ctx, "ctx_at": ctx_at,
             "tail_blanks": tail_blanks, "hash": _content_hash(text)}
 
 
@@ -1614,16 +1649,44 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
 _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 
+def _body_with_context(n: dict, links: list[str], enabled: bool) -> list[str]:
+    """本文に Context ブロックを戻す。ブロックがあった場所（ctx_at）へ、無ければ H1 の直後へ。
+    リンクが無ければブロックごと出さない（取り出した跡の余計な空行は 1 つ詰める）。"""
+    body = list(n["body"])
+    links = [ln for ln in links if ln.strip()]
+    at = n.get("ctx_at", -1)
+    if not links:
+        if 0 <= at < len(body) and at > 0 and body[at].strip() == "" and body[at - 1].strip() == "":
+            del body[at]
+        return body
+    block = [CONTEXT_HEAD] + links
+    if at >= 0:
+        body[at:at] = block
+        return body
+    fenced = _fenced(body)
+    h1 = next((i for i in range(len(body)) if not fenced[i] and re.match(r"^#\s+\S", body[i])), None)
+    pos = (h1 + 1) if h1 is not None else 0
+    if pos < len(body) and body[pos].strip() == "":
+        body[pos + 1:pos + 1] = block + [""]
+    else:
+        body[pos:pos] = [""] + block + [""]
+    return body
+
+
 def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
                    group_lines: list[str] | None = None) -> str:
     """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
     中身が空の節は見出しごと出さない（新しいノートは本文だけ）。"""
     lines = list(n["fm"]) if n["fm"] else ["---", "title: " + n["title"], "---"]
-    lines += list(n["body"])
+    # Context は本文の冒頭（H1 の直後）の `Context:` ブロック。新形式のノート（既にブロックがある・旧節が無い）はこれ。
+    # 旧形式の `### Context` 節だけのノートは、勝手に移行せず旧形式のまま書く。
+    use_block = n.get("ctx_at", -1) >= 0 or not n["parent"]
     if name == "index.md":
+        lines += _body_with_context(n, n.get("ctx", []), True)
         while lines and lines[-1].strip() == "":
             lines.pop()
         return "\n".join(lines) + "\n"
+    lines += _body_with_context(n, parent_lines, True) if use_block else list(n["body"])
 
     def _has(ls) -> bool:
         return bool(ls) and any(ln.strip() for ln in ls)
@@ -1634,8 +1697,10 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     # 並びは ParentBranch → Context → Group → ChildBranch → Related → BackLink
     if _has(n.get("pbranch")):
         sections.append((PARENT_BRANCH_MARK, n["pbranch"]))
-    if _has(parent_lines):
+    if not use_block and _has(parent_lines):
         sections.append((CONTEXT_MARK, parent_lines))
+    elif use_block and _has(n.get("_leftover")):
+        sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     if _has(group_lines):
         sections.append((GROUP_MARK, group_lines))
     if _has(n.get("cbranch")):
@@ -1721,11 +1786,11 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             continue
         h = _content_hash(text)
         ent = cache.get(key) if key is not None else None
-        if isinstance(ent, list) and len(ent) == 11 and ent[0] == h:
+        if isinstance(ent, list) and len(ent) == 13 and ent[0] == h:
             notes[rp] = {"fm": ent[1], "title": ent[2], "body": ent[3],
                          "parent": ent[4], "group": ent[5], "related": ent[6],
                          "back": ent[7], "tail_blanks": ent[8],
-                         "pbranch": ent[9], "cbranch": ent[10], "hash": h}
+                         "pbranch": ent[9], "cbranch": ent[10], "ctx": ent[11], "ctx_at": ent[12], "hash": h}
         else:
             notes[rp] = _simple_parse_text(p, text)
             parsed_any = True
@@ -1834,7 +1899,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         key = keys.get(p)
         ent = cache.get(key) if key is not None else None
-        if not (isinstance(ent, list) and len(ent) in (9, 11)):  # 9 = Branch 対応前の旧キャッシュ
+        if not (isinstance(ent, list) and len(ent) in (9, 11, 13)):  # 9 / 11 = 旧キャッシュ
             continue
         old_targets = {rp for _d, tg in _links_from(ent[3])
                        for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
@@ -1852,12 +1917,26 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         n["body"] = _prune_dangling(n["body"], p, res)
         # Context（旧 Parent）と Group はユーザー管理（追加・削除はしない）。ただし消えた
         # ファイルへのリンクは残骸なので掃除する（行全体がリンクの行のみ）。表示名は追従。
-        parent_lines = _preserve_parent(n["parent"], p, res, titles)
+        # 新形式（本文冒頭の `Context:` ブロック）があれば、旧形式の節のリンクも合わせて 1 つのブロックにする
+        # （リンクは 1 本も失わない）。旧形式だけのノートは旧形式のまま（sync は勝手に移行しない）。
+        if n["ctx_at"] >= 0:
+            legacy_links = [ln for ln in n["parent"] if _SIMPLE_LINK_LINE_RE.match(ln)]
+            n["_leftover"] = [ln for ln in n["parent"] if ln.strip() and not _SIMPLE_LINK_LINE_RE.match(ln)]
+            seen_ctx: set[str] = set()
+            parent_src: list[str] = []
+            for ln in n["ctx"] + legacy_links:
+                if ln.strip() not in seen_ctx:
+                    seen_ctx.add(ln.strip())
+                    parent_src.append(ln)
+        else:
+            parent_src = list(n["parent"])
+            n["_leftover"] = []
+        parent_lines = _preserve_parent(parent_src, p, res, titles)
         parent_lines = _prune_dangling(parent_lines, p, res)
         group_lines = _preserve_parent(n["group"], p, res, titles)
         group_lines = _prune_dangling(group_lines, p, res)
         parent_set: set[Path] = set()
-        for _d, tg in _links_from(n["parent"] + n["group"]):
+        for _d, tg in _links_from(parent_src + n["group"]):
             rp = res(tg, dirs[p])
             if rp is not None:
                 parent_set.add(rp)
@@ -2016,7 +2095,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 continue
             out_cache[key] = [n["hash"], n["fm"], n["title"], n["body"],
                               n["parent"], n["group"], n["related"], n["back"],
-                              n.get("tail_blanks", 0), n["pbranch"], n["cbranch"]]
+                              n.get("tail_blanks", 0), n["pbranch"], n["cbranch"], n["ctx"], n["ctx_at"]]
         _save_parse_cache(root, out_cache)
     return changed
 

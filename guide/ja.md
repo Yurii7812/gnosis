@@ -17,7 +17,7 @@
 - `zn` … ノート作成。位置キーを 1 つ選ぶ:
   `h`=カーソル直下（本文） / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context の末尾 / `b`=ChildBranch（直接の子） / `p`=ParentBranch（直接の親） / `o`=リンク無し（孤立）
   普通の `zn` は `h`/`Enter`/`t`/`c` の置き場所と独立して、元ノートを親・新ノートを子とする Branch（元ノートの `### ChildBranch`、新ノートの `### ParentBranch`）を自動作成する。`Enter` はさらに新ノートの `### Context` に元ノートも置く。`c` の文脈リンクは既存の動作を維持する。`b` は Branch のみ、`p` は逆向き、`o` は孤立。`index.md` からの通常作成と `zk` のグループ作成は自動 Branch を付けない（明示的な `b`/`p` は使用可能）。
-- `c` のあと … 新しいノート（リンク先）に、今のノートへのリンクをどう入れるかを選ぶ: `Enter`=本文の最後 / `t`=見出しを選んでその節の最後 / `o`=入れない（今のノートの Context への追加はそのまま）
+- `c` のあと … 新しいノート（リンク先）に、今のノートへのリンクをどう入れるかを選ぶ: `Enter`=本文の最後 / `t`=見出しを選んでその節の最後 / `w`=リンク先を開いて自分で編集（自動では書かない。元のノートの**ファイル名だけ**をヤンクしてリンク先を開くので、`p` で貼り付けたり Markdown リンクに直したりできる。複数のリンクは 1 件ずつ、残りは `:GnosisWNext`）/ `o`=入れない（今のノートの Context への追加はそのまま）
 - `b`（ChildBranch=直接の子）/ `p`（ParentBranch=直接の親）（`zn` / `zk` / `za` / `\l` の位置キー）… `b` は今のノートが親・選んだ（作った）ノートが子、`p` は選んだ（作った）ノートが親・今のノートが子。どちらも内部では同じ処理で、**親のノートの `### ChildBranch` と、子のノートの `### ParentBranch`** の両方にリンクを書く。`p` で親にできるのは 1 つだけ。1 つのノートが持てる親（ParentBranch）は最大 1 つ（子は何本でも）。既に親があるノート・自分自身・循環になる組は拒否して、どちらのノートも変更しない（既存の親は付け替えない。現在の親のタイトルを表示）。Context / Related とは別の関係。`:GnosisBranchCheck` で整合性を検査
 - `zk` … グループノート作成（`attribute: group`）。位置キーは `zn` と同じ。さらに `g`=カーソル下のリンク 1 本を新しいグループへ移す（元の位置はグループへのリンクになる。マウスでリンクを選んだときも使える）
 - `zk`（ビジュアル）… 選択範囲を中身にしたグループを作り、選択をそのグループへのリンクに置換
@@ -55,7 +55,7 @@
 
 - `<Tab>` / `<S-Tab>` … 次の / 前のリンクへ ・ `<CR>` … カーソル下のリンクを開く
 - `<BS>` … 戻る ・ `<S-BS>` / `\.` … 進む ・ `_` … 直前のノートと往復
-- `1`〜`9` / `0` … 本文→Context/Group/BackLink の通し番号のリンクを開く
+- `1`〜`9` / `0` … ドキュメントの上から順（冒頭の Context も含む）の通し番号のリンクを開く
 - `\k` / `\j` / `\J` … Context へ / BackLink の先頭へ / BackLink の末尾へ
 - `\bu` … Context 付近の最後のリンクへ ・ `<S-Space>` … リンク一覧から選んで移動
 - `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加
@@ -122,8 +122,9 @@
 - `語:;` … 相手側も `語:;`（括弧なし）
 - `語;` … 相手側には書かない
 - `語::` … 両方の同じセクションに `語:`
-- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける。中身が空の節（ParentBranch / Context / Group / ChildBranch / Related / BackLink）は見出しごと無い
-- 節の並びは ParentBranch → Context → Group → ChildBranch → Related → BackLink。`### ParentBranch` / `### ChildBranch` は `b` で明示した関係で、sync は追加も削除もしない（表示名の追従と、消えたファイルの掃除だけ。Context には変換しない）。コードブロックの中の見出しは節として扱わない
+- **Context は本文の冒頭（H1 タイトルの直後）の `Context:` ブロック**（Markdown の見出しではなく、ふつうのテキスト行。直下にリンクが並ぶ）。`c` で足したリンクは既存リンクの最後に入り、同じノートは重複しない。旧形式 `### Context` も読める（`c` で足したノートは、リンクを失わず新形式へ移る。旧形式のノートは開いただけ・同期しただけでは書き換えない。移行は `:GnosisContextMigrate`（今のノート）/ `:GnosisContextMigrate all`（試走）/ `:GnosisContextMigrate! all`（vault 全体）で明示的に）。コードブロックの中の `Context:` は Context ではない
+- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `Context:` に、sync が自動で振り分ける。中身が空の節（ParentBranch / Group / ChildBranch / Related / BackLink）は見出しごと無い
+- 本文の後ろの節の並びは ParentBranch → Group → ChildBranch → Related → BackLink（Context は冒頭のブロックなので含まない）。`### ParentBranch` / `### ChildBranch` は `b` で明示した関係で、sync は追加も削除もしない（表示名の追従と、消えたファイルの掃除だけ。Context には変換しない）。コードブロックの中の見出しは節として扱わない
 
 ## 同期
 
@@ -176,7 +177,7 @@
 - `:GnosisLinkify` / `:Linkify` カーソル下をリンク化 ・ `:GnosisLinkifySelection` / `:LinkifySelection` 選択を新ノートに ・ `:GnosisPasteLink` / `:PasteLink` クリップボードをリンク追加
 - `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … クリップボードを関係付きで追加 ・ `:GnosisYN` / `:YN` ファイル名ヤンク
 - `:GnosisLT` / `:LT` / `:GnosisRenameLinkText` / `:RenameLinkText` 表示名変更 ・ `:GnosisNT` / `:NT` タイトル変更 ・ `:GnosisRenameChildLinkTitles` / `:RenameChildLinkTitles` / `:GnosisRenameDownLinkTitles` / `:RenameDownLinkTitles` 子リンク表示名を追従
-- `:GnosisBranchCheck` Branch の整合性を検査（親が複数・片側だけ・循環・自己参照を報告。何も書き換えない） ・ `:GnosisLinkPick` / `:LinkPick` 全文検索してリンク挿入 ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` 全文検索 ・ `:GnosisFileContentSearch` / `:FileContentSearch` 全文検索
+- `:GnosisWNext` w で残したリンク先を次々に開く ・ `:GnosisContextMigrate` 旧形式の Context を新形式へ明示的に移す ・ `:GnosisBranchCheck` Branch の整合性を検査（親が複数・片側だけ・循環・自己参照を報告。何も書き換えない） ・ `:GnosisLinkPick` / `:LinkPick` 全文検索してリンク挿入 ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` 全文検索 ・ `:GnosisFileContentSearch` / `:FileContentSearch` 全文検索
 
 ### 移動
 - `:GnosisTabs` 作業タブの一覧（`\q`） ・ `:GnosisOpenLinkTab` リンクを新しい作業タブで開く（`\o`）

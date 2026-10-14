@@ -21,6 +21,7 @@ python3 "$REPO/test/i18n_check.py"
 python3 "$REPO/python/test_sort_yomi.py"
 python3 "$REPO/python/test_paper_pkm.py"
 python3 "$REPO/python/test_branch_ops.py"
+python3 "$REPO/python/test_context_ops.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \
@@ -64,6 +65,9 @@ sh "$REPO/test/diary_hierarchy_net.sh"
 # Branch（b モード: ChildBranch / ParentBranch・親は最大 1 つ・循環と自己参照の拒否・同期後の維持）
 sh "$REPO/test/branch_net.sh"
 
+# Context（本文冒頭の Context: ブロック）と w モード・旧 ### Context の保護・同期後の維持
+sh "$REPO/test/context_net.sh"
+
 # テーマ（配色）: 通常の Vim の標準配色・\A の白い既定・独立した設定・カスタムテーマ編集のリアルタイムプレビュー・取り消し/保存
 sh "$REPO/test/theme_net.sh"
 
@@ -102,5 +106,7 @@ sh "$REPO/test/install_update_net.sh"
 python3 "$REPO/test/keys_pty_check.py"
 # カスタムテーマ編集画面（プレビューの色を画面の 1 文字ごとの色で確かめる）
 python3 "$REPO/test/theme_pty_check.py"
+# 新規ノート（zn → Enter）の本文入力位置（Context の後ろの空行に、すぐ書ける）
+python3 "$REPO/test/context_pty_check.py"
 # 本物の gocryptfs の暗号化 vault を複数のウィンドウで使う（gocryptfs / fusermount3 / /dev/fuse が無ければ省略）
 python3 "$REPO/test/session_real_check.py"

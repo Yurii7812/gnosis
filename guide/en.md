@@ -17,7 +17,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `zn` … create a note. Choose one position key:
   `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch (direct child) / `p`=ParentBranch (direct parent) / `o`=no link (orphan)
   For ordinary `zn` notes, `h`/`Enter`/`t`/`c` automatically record the current note as the parent and the new note as its child, independently of the link's placement (current note's `### ChildBranch` and new note's `### ParentBranch`). `Enter` additionally puts the current note in the new note's `### Context`; `c` retains its existing contextual link behavior. `b` records only the Branch, `p` reverses its direction, and `o` remains orphaned. Ordinary notes created from `index.md` and groups created with `zk` do not get automatic Branch links (explicit `b`/`p` still work).
-- After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `o`=do not add (the link in the current note's Context is still added)
+- After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `w`=open the target and edit it yourself (nothing is written automatically; only the **file name** of the original note is yanked and the target is opened, so you can paste it with `p` or turn it into a Markdown link; several links are handled one by one, the rest with `:GnosisWNext`) / `o`=do not add (the link in the current note's Context is still added)
 - `b` (ChildBranch = direct child) / `p` (ParentBranch = direct parent) (position keys of `zn` / `zk` / `za` / `\l`) … with `b` the current note is the parent and the chosen (new) note the child; with `p` the chosen (new) note is the parent and the current note the child. Both use the same code and write the link into **the parent's `### ChildBranch` and the child's `### ParentBranch`**. With `p` only one note can be chosen as the parent. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
 - `zk` … create a group note (`attribute: group`). Same position keys as `zn`. Also `g`=move the one link under the cursor into a new group (the old place becomes a link to the group; also works after selecting a link with the mouse)
 - `zk` (visual) … create a group whose content is the selection, and replace the selection with a link to the group
@@ -55,7 +55,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 - `<Tab>` / `<S-Tab>` … next / previous link ・ `<CR>` … open the link under the cursor
 - `<BS>` … back ・ `<S-BS>` / `\.` … forward ・ `_` … toggle with the previous note
-- `1`〜`9` / `0` … open links by their running number (body → Context/Group/BackLink)
+- `1`〜`9` / `0` … open links by their running number (top to bottom of the document, including the Context at the top)
 - `\k` / `\j` / `\J` … to Context / to the first BackLink / to the last BackLink
 - `\bu` … last link near Context ・ `<S-Space>` … pick from the link list and move
 - `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub
@@ -122,8 +122,9 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `語:;` … the other side also gets `語:;` (no parentheses)
 - `語;` … nothing is written on the other side
 - `語::` … `語:` in the same section on both sides
-- Links to groups (`attribute: group`) go to `### Group`, links to normal notes to `### Context`, sorted by sync. Empty sections (ParentBranch / Context / Group / ChildBranch / Related / BackLink) have no heading
-- Section order: ParentBranch → Context → Group → ChildBranch → Related → BackLink. `### ParentBranch` / `### ChildBranch` are the relation made explicit with `b`; sync never adds or removes them (it only follows display names and cleans up links to deleted files, and never turns them into Context). Headings inside code blocks are not treated as sections
+- **Context is a `Context:` block at the top of the body (right after the H1 title)** (plain text line, not a Markdown heading; the links follow directly). A link added with `c` goes to the end of the existing links, and the same note is never added twice. The old `### Context` is still read (a note you add to with `c` moves to the new format without losing links; old-style notes are not rewritten just by opening them or syncing; migrate explicitly with `:GnosisContextMigrate` (current note) / `:GnosisContextMigrate all` (dry run) / `:GnosisContextMigrate! all` (whole vault)). A `Context:` inside a code block is not a Context
+- Links to groups (`attribute: group`) go to `### Group`, links to normal notes to `Context:`, sorted by sync. Empty sections (ParentBranch / Group / ChildBranch / Related / BackLink) have no heading
+- Order of the sections after the body: ParentBranch → Group → ChildBranch → Related → BackLink (Context is the block at the top, so it is not in this list). `### ParentBranch` / `### ChildBranch` are the relation made explicit with `b`; sync never adds or removes them (it only follows display names and cleans up links to deleted files, and never turns them into Context). Headings inside code blocks are not treated as sections
 
 ## Sync
 
@@ -176,7 +177,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 - `:GnosisLinkify` / `:Linkify` link the text under the cursor ・ `:GnosisLinkifySelection` / `:LinkifySelection` selection to a new note ・ `:GnosisPasteLink` / `:PasteLink` add links from the clipboard
 - `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … add from the clipboard with a relation ・ `:GnosisYN` / `:YN` yank the file name
 - `:GnosisLT` / `:LT` / `:GnosisRenameLinkText` / `:RenameLinkText` change a display name ・ `:GnosisNT` / `:NT` change the title ・ `:GnosisRenameChildLinkTitles` / `:RenameChildLinkTitles` / `:GnosisRenameDownLinkTitles` / `:RenameDownLinkTitles` update child link names
-- `:GnosisBranchCheck` check Branch consistency (reports several parents, one-sided links, cycles and self references; rewrites nothing) ・ `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
+- `:GnosisWNext` open the next link target left by w ・ `:GnosisContextMigrate` migrate an old-style Context to the new format explicitly ・ `:GnosisBranchCheck` check Branch consistency (reports several parents, one-sided links, cycles and self references; rewrites nothing) ・ `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
 
 ### Moving
 - `:GnosisTabs` list of work tabs (`\q`) ・ `:GnosisOpenLinkTab` open a link in a new work tab (`\o`)

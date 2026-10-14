@@ -256,7 +256,6 @@
     "プリセットを呼び出す": "Load a preset",
     "プリセット名: ": "Preset name: ",
     "リンクのみ追加（相手ノートが見つからず Context には書けません）": "only the link was added (the other note was not found, so Context could not be written)",
-    "リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / o=入れない  (Esc で取り消し)": "Link back from the target to this note: Enter=end of its body / t=choose a heading, end of that section / o=do not add  (Esc cancels)",
     "リンク先に未保存の変更があるため、リンク先には入れませんでした": "the target note has unsaved changes, so nothing was added to it",
     "リンク先に見出しがないので、本文の最後に入れます": "the target note has no headings, so the link goes to the end of its body",
     "リンク追加 + 親に登録 → ": "link added + registered as parent → ",
@@ -268,7 +267,6 @@
     "全ノート": "All notes",
     "削除するプリセット": "Preset to delete",
     "前回の設定で展開": "Expand with the last settings",
-    "取り消しました（Enter / t / o のどれか。何も変更していません）": "cancelled (choose Enter / t / o; nothing was changed)",
     "取り消しました（何も変更していません）": "cancelled (nothing was changed)",
     "名前を付けて保存して展開する": "Save with a name and expand",
     "名前付きバッファで実行して": "run this in a buffer with a file name",
@@ -321,7 +319,9 @@
     "c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related  (Esc)": "c=end of Context / b=Branch(child) / p=Parent / r=Related  (Esc)",
     "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch(child) / p=Parent / o=no link (orphan)  (Esc/q cancel)",
     "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / g=グループ化  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch(child) / p=Parent / o=orphan / g=group  (Esc/q cancel)",
-    "キャンセル（h / Enter / t / c / b / p / o のどれか）": "Cancelled (use one of h / Enter / t / c / b / p / o)"
+    "キャンセル（h / Enter / t / c / b / p / o のどれか）": "Cancelled (use one of h / Enter / t / c / b / p / o)",
+    "リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / w=リンク先を開いて編集 / o=入れない  (Esc で取り消し)": "Put a link back to the current note in the target: Enter=end of body / t=end of a chosen section / w=open the target and edit it yourself / o=do not add  (Esc cancels)",
+    "取り消しました（Enter / t / w / o のどれか。何も変更していません）": "Cancelled (use Enter / t / w / o; nothing was changed)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",
@@ -477,6 +477,15 @@
     "session.kept_unlocked": "Another window (%s) is using this vault, so it was not locked: %s",
     "session.lock_refused": "Not locked: another window (%s) is using this vault. To lock it anyway use :GnosisLock! (the other windows will no longer be able to use it)",
     "session.exclusive_refused": "Cannot do this while another window (%s) is using this vault. Close the other windows and try again (nothing was changed)",
-    "branch.one_parent_only": "Only one note can be the parent (ParentBranch). Choose exactly one note (nothing was changed)"
+    "branch.one_parent_only": "Only one note can be the parent (ParentBranch). Choose exactly one note (nothing was changed)",
+    "write.unsaved": "This note has unsaved changes, so the link target was not opened (save it, then :GnosisWNext opens it)",
+    "write.opened": "Opened the link target. The file name of \"%s\" is yanked (paste with p). No link was written automatically",
+    "write.more": "(%s more: open them one by one with :GnosisWNext)",
+    "write.none": "No more link targets to open for w",
+    "context.migrated": "Moved the Context to the new format (Context: at the top of the body) (%s links; no other line changed)",
+    "context.nothing": "This note has no old-style ### Context (nothing to migrate)",
+    "context.dry": "Notes with an old-style Context: %s (nothing was rewritten. Run :GnosisContextMigrate! all to migrate)",
+    "context.done": "Context migrated: %s note(s) (%s failed)",
+    "context.confirm": "Move the Context of %s notes in the vault to the new format (links are verified before and after writing). Continue?"
   }
 }

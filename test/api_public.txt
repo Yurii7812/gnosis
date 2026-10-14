@@ -50,6 +50,14 @@ gnosis#conflict#handle
 gnosis#conflict#on_changed_shell
 gnosis#conflict#record
 gnosis#conflict#safe_update
+gnosis#context#add
+gnosis#context#block_lines
+gnosis#context#find_block
+gnosis#context#head
+gnosis#context#legacy
+gnosis#context#links
+gnosis#context#migrate
+gnosis#context#migrate_command
 gnosis#create_atomic
 gnosis#create_note
 gnosis#create_vault_files
@@ -332,6 +340,7 @@ gnosis#vault_mounted
 gnosis#visual_new_prefix_note
 gnosis#visual_new_quick_no_title
 gnosis#write_guide
+gnosis#write_next
 gnosis#yank_name
 gnosis_search#ensure_hl_group
 gnosis_search#pick_insert_link

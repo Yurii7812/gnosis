@@ -153,6 +153,15 @@
     "session.kept_unlocked": "別のウィンドウ（%s 件）がこの vault を使っているので、ロックしませんでした: %s",
     "session.lock_refused": "別のウィンドウ（%s 件）がこの vault を使っているため、ロックしません。それでもロックするなら :GnosisLock! （使っているウィンドウは続けて使えなくなります）",
     "session.exclusive_refused": "別のウィンドウ（%s 件）がこの vault を使っているため、この操作はできません。他のウィンドウを閉じてからやり直してください（何も変更していません）",
-    "branch.one_parent_only": "親（ParentBranch）にできるノートは 1 つだけです。親にするノートを 1 つだけ選んでください（何も変更していません）"
+    "branch.one_parent_only": "親（ParentBranch）にできるノートは 1 つだけです。親にするノートを 1 つだけ選んでください（何も変更していません）",
+    "write.unsaved": "このノートに未保存の変更があるため、リンク先は開きませんでした（保存してから :GnosisWNext で開けます）",
+    "write.opened": "リンク先を開きました。「%s」のファイル名をヤンクしてあります（p で貼り付け）。自動ではリンクを書いていません",
+    "write.more": "（あと %s 件: :GnosisWNext で順に開く）",
+    "write.none": "w で開く残りのリンク先はありません",
+    "context.migrated": "Context を新しい形式（本文冒頭の Context:）へ移しました（リンクは %s 本・他の行は変えていません）",
+    "context.nothing": "このノートに旧形式の ### Context はありません（移行するものがありません）",
+    "context.dry": "旧形式の Context があるノート: %s 件（書き換えていません。:GnosisContextMigrate! all で移行）",
+    "context.done": "Context を移行しました: %s 件（失敗 %s 件）",
+    "context.confirm": "vault のノート %s 件の Context を新しい形式へ移します（移行前後のリンクを検証してから書きます）。続けますか？"
   }
 }
