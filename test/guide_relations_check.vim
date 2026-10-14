@@ -30,6 +30,12 @@ try
   let s:header = index(s:idx0, '# Index')
   call s:ok('作成直後: # Index の次に空行', s:header >= 0 && get(s:idx0, s:header + 1, 'missing') ==# '')
   call s:ok('作成直後: Index に操作ガイドへのリンク', index(s:idx0, '[Gnosis 操作ガイド](gnosis-guide.md)') >= 0)
+  let s:broken_index = copy(s:idx0)
+  call remove(s:broken_index, s:header + 1)
+  call writefile(s:broken_index, s:v . '/index.md')
+  call gnosis#refresh_guide()
+  call s:ok('既存 Index の # Index 直後の空行を復元',
+        \ get(readfile(s:v . '/index.md'), s:header + 1, 'missing') ==# '')
   call s:ok('作成直後: ### Group に Index', s:tail(s:g) ==# ['### Group', '[Index](index.md)'])
 
   " 既存の操作ガイドで Group が欠落していても、起動時更新で Index の所属を修復する
