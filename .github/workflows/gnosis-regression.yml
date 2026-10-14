@@ -29,6 +29,8 @@ jobs:
           node --check bin/gnosis-kwin-maximize.js
       - name: Test saved font settings and terminal launch arguments
         run: sh test/termfont_net.sh
+      - name: Test autosave versus asynchronous sync while editing
+        run: sh test/autosync_dirty_guard_net.sh
       - name: Test Index and guide relations
         run: sh test/guide_relations_net.sh
       - name: Test auto-updater using local Git repositories
