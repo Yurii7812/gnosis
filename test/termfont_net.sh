@@ -122,45 +122,16 @@ check "Ghostty: saved Gnosis font size" 'font-size=17' "$WORK/ghostty.txt"
 launch "$WORK/gnome.txt" gnome-terminal
 check "GNOME: select a dedicated Gnosis profile" 'profile=Gnosis' "$WORK/gnome.txt"
 
-# 端末の自動選択: デスクトップに合うもの
+# 端末自動選択は WezTerm を優先し、明示指定を最優先に保つ。
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": ""\n}\n' > "$H/terminal.json"
 launch "$WORK/kde.txt" "" KDE
-check "自動選択: WezTerm があれば最優先" '^wezterm
+check "自動選択: WezTerm priority" '^wezterm$' "$WORK/kde.txt"
+check "自動選択: Gnosis WezTerm config" 'wezterm.lua' "$WORK/kde.txt"
 launch "$WORK/xfce2.txt" "" XFCE
-check "自動選択: XFCE でも WezTerm があれば最優先" '^wezterm
+check "自動選択: XFCE also prioritizes WezTerm" '^wezterm$' "$WORK/xfce2.txt"
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
 launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
-# ふだんの Vim の設定は作らない・変えない
-[ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
-[ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }
-echo "termfont OK ($n 項目)"
- "$WORK/kde.txt"
-check "自動選択: Gnosis 専用 WezTerm profile" 'wezterm.lua' "$WORK/kde.txt"
-launch "$WORK/xfce2.txt" "" XFCE
-check "自動選択: XFCE なら XFCE Terminal" '^xfce4-terminal$' "$WORK/xfce2.txt"
-printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
-launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
-# ふだんの Vim の設定は作らない・変えない
-[ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
-[ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }
-echo "termfont OK ($n 項目)"
- "$WORK/xfce2.txt"
-printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
-launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
-# ふだんの Vim の設定は作らない・変えない
-[ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
-[ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }
-echo "termfont OK ($n 項目)"
- "$WORK/kde.txt"
-check "自動選択: Gnosis 専用 WezTerm profile" 'wezterm.lua' "$WORK/kde.txt"
-launch "$WORK/xfce2.txt" "" XFCE
-check "自動選択: XFCE なら XFCE Terminal" '^xfce4-terminal$' "$WORK/xfce2.txt"
-printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
-launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
+check "明示指定を優先" '^xterm$' "$WORK/pref.txt"
 # ふだんの Vim の設定は作らない・変えない
 [ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
 [ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }
