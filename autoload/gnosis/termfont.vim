@@ -84,6 +84,7 @@ function! gnosis#termfont#detect() abort
   endif
   let l:labels = {'konsole': 'Konsole', 'kitty': 'kitty', 'alacritty': 'Alacritty', 'wezterm': 'WezTerm',
         \ 'xfce4-terminal': 'XFCE Terminal', 'gnome-terminal': 'GNOME Terminal', 'xterm': 'xterm',
+        \ 'foot': 'foot', 'ghostty': 'Ghostty',
         \ 'gui': 'GUI Vim', 'unknown': '?'}
   let l:live = 0
   if l:name ==# 'gui'
@@ -95,9 +96,12 @@ function! gnosis#termfont#detect() abort
     let l:live = !empty($KITTY_WINDOW_ID) && executable('kitty')
   elseif l:name ==# 'alacritty'
     let l:live = !empty($ALACRITTY_SOCKET) && executable('alacritty')
+  elseif l:name ==# 'gnome-terminal'
+    let l:live = l:own && executable('gsettings') && executable('python3')
+          \ && filereadable(gnosis#home#path('terminal', 'gnome-profile-id'))
   endif
   return {'name': l:name, 'label': get(l:labels, l:name, l:name), 'live': l:live,
-        \ 'launch': index(['konsole', 'kitty', 'alacritty', 'wezterm', 'xfce4-terminal', 'xterm', 'gui'], l:name) >= 0,
+        \ 'launch': index(['konsole', 'kitty', 'alacritty', 'wezterm', 'xfce4-terminal', 'xterm', 'gnome-terminal', 'foot', 'ghostty', 'gui'], l:name) >= 0,
         \ 'own': l:own}
 endfunction
 
@@ -212,6 +216,17 @@ function! gnosis#termfont#apply_live(d) abort
     if v:shell_error == 0
       let s:restore_alacritty = !l:t.own
       return 1
+    endif
+  elseif l:t.name ==# 'gnome-terminal'
+    " GNOME Terminal は Gnosis 専用プロファイルを更新すると現在の窓にも反映する。
+    " 非 Gnosis ウィンドウ、既定プロファイルは一切変更しない。
+    let l:dir = get(g:, 'gnosis_dir', '')
+    if !empty(l:dir)
+      let l:family = empty(a:d.fontFamily) ? 'Monospace' : a:d.fontFamily
+      let l:cmd = ['python3', l:dir . '/python/gnome_font_profile.py',
+            \ fnamemodify(gnosis#home#path(''), ':p'), l:family, string(l:size)]
+      call system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1')
+      return v:shell_error == 0
     endif
   endif
   return 0
