@@ -44,9 +44,9 @@ function Need([string]$name,[string]$id,[bool]$missing) {
   if ($LASTEXITCODE -ne 0) { throw ('Installation failed: ' + $name) }
   Refresh-Path
 }
-function Run([string]$exe,[string[]]$args,[string]$label) {
+function Run([string]$exe,[string[]]$argv,[string]$label) {
   Write-Host ('Setting up: ' + $label)
-  & $exe @args
+  & $exe @argv
   if ($LASTEXITCODE -ne 0) { throw ($label + ' failed with exit code ' + $LASTEXITCODE) }
 }
 function PSQuote([string]$text) { return "'" + $text.Replace("'","''") + "'" }
