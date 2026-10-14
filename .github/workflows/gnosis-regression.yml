@@ -31,6 +31,8 @@ jobs:
         run: sh test/termfont_net.sh
       - name: Test autosave versus asynchronous sync while editing
         run: sh test/autosync_dirty_guard_net.sh
+      - name: Test diary hierarchy across year rollover
+        run: sh test/diary_hierarchy_net.sh
       - name: Test Index and guide relations
         run: sh test/guide_relations_net.sh
       - name: Test auto-updater using local Git repositories

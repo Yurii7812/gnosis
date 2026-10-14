@@ -13570,12 +13570,13 @@ function! s:diary_new_lines(title, is_group, parent_link, ...) abort
     call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
   endif
   if !empty(a:parent_link)
-    " テンプレートは関係の節を持たない。親リンクがあるときだけ Context を作る
-    let l:p = index(l:lines, s:v2_up_mark)
+    " 親はすべてグループ（日記 / YYYY / YYYY-MM / Index）。
+    " 「親に属する」関係を Context ではなく ### Group に記録する。
+    let l:p = index(l:lines, s:v2_group_mark)
     if l:p >= 0
       call insert(l:lines, a:parent_link, l:p + 1)
     else
-      call extend(l:lines, [s:v2_up_mark, a:parent_link])
+      call extend(l:lines, [s:v2_group_mark, a:parent_link])
     endif
   endif
   return l:lines
@@ -13771,19 +13772,19 @@ function! s:diary_op_parent_swap(old, newlink, lines) abort
       endif
     endfor
   endif
-  let l:c = index(l:lines, s:v2_up_mark)
+  let l:c = index(l:lines, s:v2_group_mark)
   if l:c >= 0
     call insert(l:lines, a:newlink, l:c + 1)
   else
     let l:at = s:context_insert_index(l:lines)
-    call extend(l:lines, [s:v2_up_mark, a:newlink], l:at < 0 ? len(l:lines) : l:at)
+    call extend(l:lines, [s:v2_group_mark, a:newlink], l:at < 0 ? len(l:lines) : l:at)
   endif
   return l:lines
 endfunction
 
 " グループ a:file の上側（### Context / ### Group）に a:tgt へのリンクがあるか
 function! s:diary_parent_has(root, file, tgt) abort
-  let l:lines = readfile(fnamemodify(a:root, ':p') . a:file)
+  let l:lines = s:note_lines_for_path(fnamemodify(a:root, ':p') . a:file)
   let [l:p, l:end] = s:diary_up_range(l:lines)
   if l:p < 0
     return 0
@@ -13810,6 +13811,78 @@ function! s:diary_new_group(root, notes, title, parent_file, parent_title, ...) 
   return l:file
 endfunction
 
+" 「日記」は Index に載る最上位グループ。初回の \\d で作成し、
+" 以前の版で孤立していた日記グループも Index に再接続する。
+" index.md 自体はグループ階層のルートであり、日記の本文に手動の変更がある
+" 場合はバッファ優先で読み書きして、未保存の編集を壊さない。
+function! s:diary_ensure_top(root, notes, ...) abort
+  let l:top = s:diary_find_group(a:notes, '日記')
+  if empty(l:top)
+    return call('s:diary_new_group',
+          \ [a:root, a:notes, '日記', 'index.md', 'Index'] + a:000)
+  endif
+  let l:dir = fnamemodify(a:root, ':p')
+  call s:diary_edit_file(l:dir . 'index.md',
+        \ function('s:diary_op_add', [s:diary_link(l:top, '日記'), '']))
+  " Index に所属する親リンクを持たない既存トップグループも修復する。
+  if !s:diary_parent_has(a:root, l:top, 'index.md')
+    call s:diary_edit_file(l:dir . l:top,
+          \ function('s:diary_op_parent_swap', ['', s:diary_link('index.md', 'Index')]))
+  endif
+  return l:top
+endfunction
+
+" 旧版の \d が作った孤立月グループのみ、日記階層に再接続する。
+" 日付形式の日記本文へのリンクを持つ月だけを対象にして、無関係のグループは触らない。
+function! s:diary_repair_orphan_months(root, notes, top) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  for l:mg in copy(a:notes)
+    if !l:mg.group || l:mg.title !~# '^\d\{4}-\d\{2}$'
+      continue
+    endif
+    let l:lines = s:note_lines_for_path(l:dir . l:mg.file)
+    let [l:p, l:end] = s:diary_up_range(l:lines)
+    " 既に所属リンクがある月は移動しない。
+    let l:has_parent = 0
+    if l:p >= 0
+      for l:line in l:lines[l:p + 1 : l:end - 1]
+        if stridx(l:line, '](') >= 0
+          let l:has_parent = 1
+          break
+        endif
+      endfor
+    endif
+    if l:has_parent
+      continue
+    endif
+    let l:diary_month = 0
+    for l:n in a:notes
+      if !l:n.group && s:diary_is_diary_title(l:n.title)
+            \ && l:n.title[0 : 6] ==# l:mg.title
+            \ && stridx(join(l:lines, "\n"), '](' . l:n.file . ')') >= 0
+        let l:diary_month = 1
+        break
+      endif
+    endfor
+    if !l:diary_month
+      continue
+    endif
+    let l:year = l:mg.title[0 : 3]
+    let l:yg = s:diary_find_group(a:notes, l:year)
+    if !empty(l:yg)
+      let l:parent = l:yg
+      let l:parent_title = l:year
+    else
+      let l:parent = a:top
+      let l:parent_title = '日記'
+    endif
+    call s:diary_edit_file(l:dir . l:parent,
+          \ function('s:diary_op_add', [s:diary_link(l:mg.file, l:mg.title), '']))
+    call s:diary_edit_file(l:dir . l:mg.file,
+          \ function('s:diary_op_parent_swap', ['', s:diary_link(l:parent, l:parent_title)]))
+  endfor
+endfunction
+
 " 年越し: 年グループ a:year が無く、それ以前の月グループ（親が「日記」のもの）があるとき、
 " それらを年ごとの年グループ（YYYY）に入れ、新しい年の年グループも作る。
 " 戻り値は新しい年の年グループのファイル名（作らなかったときは ''）。
@@ -13823,7 +13896,18 @@ function! s:diary_rollover(root, notes, year, top, ...) abort
     endif
   endfor
   if empty(l:old)
-    return ''
+    " 3 年目以降は直下の旧月がもう無い。それでも年グループを追加する。
+    let l:has_years = 0
+    for l:n in a:notes
+      if l:n.group && l:n.title =~# '^\d\{4}$'
+            \ && s:diary_parent_has(a:root, l:n.file, a:top)
+        let l:has_years = 1
+        break
+      endif
+    endfor
+    if !l:has_years
+      return ''
+    endif
   endif
   for [l:yr, l:mgs] in items(l:old)
     let l:yg = s:diary_find_group(a:notes, l:yr)
@@ -13850,9 +13934,10 @@ function! s:diary_create(root, date, notes, ...) abort
   let l:title = a:date . '-' . s:diary_weekday(a:date)
   let l:month = a:date[0 : 6]
   let l:year = a:date[0 : 3]
+  let l:top = call('s:diary_ensure_top', [a:root, a:notes] + a:000)
+  call s:diary_repair_orphan_months(a:root, a:notes, l:top)
   let l:mg = s:diary_find_group(a:notes, l:month)
   if empty(l:mg)
-    let l:top = s:diary_find_group(a:notes, '日記')
     let l:yg = s:diary_find_group(a:notes, l:year)
     if empty(l:yg) && !empty(l:top)
       let l:yg = call('s:diary_rollover', [a:root, a:notes, l:year, l:top] + a:000)
@@ -14169,6 +14254,9 @@ function! gnosis#diary_today() abort
   let l:date = s:diary_day_of_time('')
   let l:st = s:diary_state_read()
   let l:notes = s:diary_scan(l:root)
+  " 既存の日記を開くだけでも、旧版で欠けた Index/日記/月のリンクを修復する。
+  let l:top = s:diary_ensure_top(l:root, l:notes)
+  call s:diary_repair_orphan_months(l:root, l:notes, l:top)
   let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
   if empty(l:diary)
     for l:n in l:notes
