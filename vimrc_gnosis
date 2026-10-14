@@ -55,18 +55,25 @@ if !has('gui_running') && exists('+t_fe') && exists('+t_fd')
   let &t_fd = "\<Esc>[?1004l"
   execute "set <FocusGained>=\<Esc>[I"
   execute "set <FocusLost>=\<Esc>[O"
-  " SS3 application-cursor key sequences: ESC O B is Down, not prose.
-  " Separate keypad termcodes preserve normal CSI arrows (ESC [ B).
-  execute "set <kUp>=\<Esc>OA"
-  execute "set <kDown>=\<Esc>OB"
-  execute "set <kRight>=\<Esc>OC"
-  execute "set <kLeft>=\<Esc>OD"
-  for s:direction in ['Up', 'Down', 'Right', 'Left']
-    execute 'inoremap <silent> <k' . s:direction . '> <' . s:direction . '>'
-    execute 'nnoremap <silent> <k' . s:direction . '> <' . s:direction . '>'
-    execute 'xnoremap <silent> <k' . s:direction . '> <' . s:direction . '>'
-  endfor
-  unlet s:direction
+  " SS3 application-cursor arrows (ESC O A/B/C/D) are not supported by
+  " some terminfo tables. Register spare function-key termcodes and
+  " translate them to arrows without shadowing Vim's bare Escape key.
+  execute "set <F13>=\<Esc>OA"
+  execute "set <F14>=\<Esc>OB"
+  execute "set <F15>=\<Esc>OC"
+  execute "set <F16>=\<Esc>OD"
+  inoremap <silent> <F13> <Up>
+  inoremap <silent> <F14> <Down>
+  inoremap <silent> <F15> <Right>
+  inoremap <silent> <F16> <Left>
+  nnoremap <silent> <F13> <Up>
+  nnoremap <silent> <F14> <Down>
+  nnoremap <silent> <F15> <Right>
+  nnoremap <silent> <F16> <Left>
+  xnoremap <silent> <F13> <Up>
+  xnoremap <silent> <F14> <Down>
+  xnoremap <silent> <F15> <Right>
+  xnoremap <silent> <F16> <Left>
 endif
 
 " 起動画面・ノート・設定は Chnoubis パレット10（夜空×水色）を既定とする。
