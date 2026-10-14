@@ -94,6 +94,8 @@ if [ "$IS_GIT" = 1 ]; then
   step "Gnosis 本体の版を確かめます: $GNOSIS_DIR" "Checking the Gnosis version: $GNOSIS_DIR"
   up=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
   if [ "$NO_UPDATE" = 1 ]; then
+    # 自動更新した同じインストーラーから再実行された場合だけ、最新確認済みとする。
+    if [ "${GNOSIS_JUST_UPDATED:-0}" = 1 ]; then UPTODATE=yes; fi
     say "  --no-update: GitHub から更新せずに現在の版をインストールします。" \
         "  --no-update: installing the current revision without updating from GitHub."
   elif [ -z "$up" ]; then
@@ -134,6 +136,7 @@ if [ "$IS_GIT" = 1 ]; then
       if git -C "$GNOSIS_DIR" pull --ff-only --quiet; then
         say "  更新しました。新しいインストーラーで続行します。" \
             "  Updated. Continuing with the new installer."
+        export GNOSIS_JUST_UPDATED=1
         # shellcheck disable=SC2086
         exec sh "$GNOSIS_DIR/install/install.sh" --no-update $ORIG_ARGS
       fi
