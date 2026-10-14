@@ -94,7 +94,14 @@ if [ "$IS_GIT" = 1 ]; then
   if [ -z "$up" ]; then
     say "  追跡するブランチが無いため、最新か確かめられません。" "  No upstream branch; cannot tell whether this is the latest."
   elif [ "$NO_UPDATE" = 1 ]; then
-    say "  --no-update: GitHub の版は取り込みません。" "  --no-update: not pulling from GitHub."
+    # 取り込まない。前に取得した情報で、最新かどうかだけ比べる
+    if [ "$(git -C "$GNOSIS_DIR" rev-list --count "HEAD..$up" 2>/dev/null || echo 1)" -eq 0 ]; then
+      UPTODATE=yes
+      say "  最新です（$up。GitHub の版は取り込みません）。" "  Up to date with $up (not pulling)."
+    else
+      UPTODATE=no
+      say "  --no-update: GitHub の新しい版は取り込みません。" "  --no-update: not pulling the newer version from GitHub."
+    fi
   elif ! git -C "$GNOSIS_DIR" fetch --quiet 2>/dev/null; then
     say "  GitHub に接続できません。今の版のまま入れます。" "  Cannot reach GitHub; installing the current version."
   else
@@ -448,8 +455,13 @@ step "完了" "Done"
 commit="(git 管理外)"
 [ "$IS_GIT" = 1 ] && commit="$(git -C "$GNOSIS_DIR" rev-parse --short HEAD) ($(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref HEAD))"
 case "$UPTODATE" in yes) latest="最新 / latest" ;; no) latest="最新ではない / not the latest" ;; *) latest="確かめられず / unknown" ;; esac
-printf '  %-16s %s\n' "インストール先" "$GNOSIS_DIR" "Gnosis ホーム" "$GNOSIS_HOME" "vimrc" "$GNOSIS_HOME/vimrc" \
-  "Vim" "$VIM_BIN" "Python" "$PY_CMD" "コミット" "$commit" "版" "$latest" "ランチャー" "$LAUNCHER" "起動項目" "$DESKTOP_FILE"
+if [ "$JA" = 1 ]; then
+  printf '  インストール先    %s\n  Gnosis ホーム     %s\n  vimrc             %s\n  Vim               %s\n  Python            %s\n  コミット          %s\n  版                %s\n  ランチャー        %s\n  起動項目          %s\n' \
+    "$GNOSIS_DIR" "$GNOSIS_HOME" "$GNOSIS_HOME/vimrc" "$VIM_BIN" "$PY_CMD" "$commit" "$latest" "$LAUNCHER" "$DESKTOP_FILE"
+else
+  printf '  Installed from    %s\n  Gnosis home       %s\n  vimrc             %s\n  Vim               %s\n  Python            %s\n  Commit            %s\n  Version           %s\n  Launcher          %s\n  App entry         %s\n' \
+    "$GNOSIS_DIR" "$GNOSIS_HOME" "$GNOSIS_HOME/vimrc" "$VIM_BIN" "$PY_CMD" "$commit" "$latest" "$LAUNCHER" "$DESKTOP_FILE"
+fi
 say "  アイコン（アプリメニュー / Gnosis.app）か、端末で gnosis を実行すると起動します。" \
     "  Start Gnosis from its icon (app menu / Gnosis.app), or run gnosis in a terminal."
 say "  開いている端末では、古い場所を覚えていることがあります。hash -r を実行するか、端末を開き直してください。" \
