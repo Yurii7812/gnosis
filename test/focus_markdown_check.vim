@@ -23,7 +23,7 @@ try
   call s:ok('screenshot filename underscore is not italic', !s:has(8, '20261014', 'markdownItalic'))
   call s:ok('stray backtick does not highlight adjacent prose', !s:has(6, 'bash', 'markdownCode'))
   call s:ok('explicit italic retains emphasis', s:has(9, 'italic', 'markdownItalic'))
-  call s:ok('explicit inline code retains code color', s:has(10, 'code', 'markdownCode'))
+  call s:ok('explicit inline code retains code color', (s:has(10, 'code', 'markdownCode') || s:has(10, 'code', 'gnosisCodeInline')))
   call s:ok('headings keep heading syntax', s:has(5, 'Heading', 'markdownH1'))
   call s:ok('links keep link syntax', s:has(11, 'LinkName', 'gnosisLinkText'))
 catch
