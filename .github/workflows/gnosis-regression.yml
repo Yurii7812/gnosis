@@ -55,6 +55,28 @@ jobs:
       - name: Verify documented installer in Windows PowerShell 5.1
         shell: powershell
         run: .\\test\\windows_ps51_installer.ps1
+      - name: Build the actual Windows Electron GUI and native PTY
+        shell: pwsh
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund --include=optional
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+          npm run rebuild:pty
+          if ($LASTEXITCODE -ne 0) { throw 'node-pty Electron rebuild failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Gnosis UI build failed' }
+          if (-not (Test-Path node_modules/electron/dist/electron.exe)) {
+            Write-Host 'Installing missing Electron executable separately'
+            Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
+            Push-Location node_modules/electron
+            try {
+              node install.js
+              if ($LASTEXITCODE -ne 0) { throw 'Electron binary download failed' }
+            } finally { Pop-Location }
+          }
+          if (-not (Test-Path node_modules/electron/dist/electron.exe)) { throw 'Missing Electron GUI executable' }
+          if (-not (Test-Path node_modules/node-pty)) { throw 'Missing Windows native PTY' }
+          if (-not (Test-Path bundle.js)) { throw 'Missing Gnosis GUI bundle' }
       - name: Validate Windows installer PowerShell syntax
         shell: pwsh
         run: |

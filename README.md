@@ -94,9 +94,11 @@ cd gnosis
 powershell -ExecutionPolicy Bypass -File install\install.ps1
 ```
 
-Windows PowerShell 5.1でも実行できる `install.ps1` が、WSL2・Ubuntu・WezTermの導入を案内します。OS設定変更や追加インストールは同意を求めます。再起動が必要な場合は、再起動後に同じコマンドを再実行してください。
+Windowsでは**Gnosisの独立したデスクトップアプリ（Electron GUI）を標準でインストール**します。Windows版Vim、Git、Python、Node.js、fzf、ripgrep、Gnosis専用プラグインを確認・導入し、GUI画面とWindows用の擬似端末（node-pty）を構築して、**デスクトップとスタートメニューにGnosisの起動アイコン**を作ります。アイコンから直接GUIを開けます。WSL2は不要で、通常のVimや端末設定は変更しません。
 
-Gnosis本体はWSL2のUbuntu内にインストールされます。WindowsデスクトップのショートカットからWezTermで起動できます。通常のWindows用Vim設定は変更しません。
+既存のWSL2＋Ubuntu＋WezTerm方式を使いたい場合だけ、`powershell -ExecutionPolicy Bypass -File install\install.ps1 -WSL` を指定します。これは**ターミナル版**であり、Electron GUIをインストールするものではありません。
+
+依存関係のインストール・ビルドに失敗した場合は正常終了を表示せず、ショートカットも作りません。Gnosisのノートファイルや既存WSL環境は削除しません。
 
 ### アンインストール
 
@@ -264,7 +266,7 @@ Gnosisは常設タブバーを持たず、\q のポップアップで開いて�
 
 WezTermをGnosis専用の標準端末にします。Gnosisは専用の terminal/wezterm.lua を生成し、保存したフォントサイズと配色を適用します。個人の通常のWezTermやVimの設定は変更しません。
 
-Windows: PowerShellから install/install-windows.ps1 を実行します。WSL2、Ubuntu、WezTermの導入にそれぞれ同意を求めます。WSLには管理者権限や再起動が必要な場合があるため、その際は再実行してください。WindowsショートカットからWezTermを介してWSLのGnosisを直接起動します。
+Windows: **標準はネイティブElectronデスクトップアプリ**（`install/install.ps1`）。WSL2＋Ubuntu＋WezTermは`-WSL`を指定した場合のみ導入するターミナル版です。
 
 macOS: Homebrewがある場合はインストーラーがWezTerm Caskの導入を提案します。無ければ手動導入を案内し、標準Terminal.appへフォールバックします。
 
