@@ -314,6 +314,12 @@ function! gnosis#tabs#snapshot() abort
   return {'tabs': deepcopy(s:tabs), 'active': s:active}
 endfunction
 
+" Public tab commands also make close safety and restoration testable.
+function! gnosis#tabs#close(action) abort
+  call s:ensure()
+  call s:close_selection(a:action)
+endfunction
+
 " Tests and future API: programmatic navigation without triggering UI.
 function! gnosis#tabs#select(idx) abort
   call s:ensure()
