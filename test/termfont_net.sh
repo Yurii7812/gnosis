@@ -35,6 +35,63 @@ launch() { # 出力 端末 [デスクトップ]
 }
 # Vim 側の試験で最後に保存した大きさ（17）とフォント・行間を使う
 launch "$WORK/konsole.txt" konsole
+# デフォルトの gnosis は、既に対話端末内で実行されていても新しい専用窓を開く。
+# pty を付けない試験だと従来の不具合（-t なら run_tui）が検出できない。
+if python3 - "$REPO/bin/gnosis" "$WORK" "$H" <<'PY'
+import os
+import pty
+import select
+import subprocess
+import sys
+import time
+
+launcher, work, home = sys.argv[1:]
+env = os.environ.copy()
+for key in ("KONSOLE_DBUS_SESSION", "KONSOLE_DBUS_SERVICE", "GNOSIS_TERMINAL_KIND"):
+    env.pop(key, None)
+env.update({
+    "HOME": work + "/home",
+    "GNOSIS_HOME": home,
+    "GNOSIS_DRY_RUN": "1",
+    "GNOSIS_TERMINAL": "konsole",
+    "XDG_CURRENT_DESKTOP": "KDE",
+    "PATH": work + "/bin:" + env.get("PATH", ""),
+})
+master, slave = pty.openpty()
+process = subprocess.Popen(["sh", launcher], stdin=slave, stdout=slave, stderr=slave, env=env)
+os.close(slave)
+output = bytearray()
+deadline = time.monotonic() + 8
+try:
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([master], [], [], 0.2)
+        if ready:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output.extend(chunk)
+        if process.poll() is not None and not ready:
+            break
+    if process.poll() is None:
+        process.kill()
+    process.wait(timeout=3)
+finally:
+    os.close(master)
+text = output.decode("utf-8", errors="replace")
+if process.returncode != 0 or "Gnosis-17.profile" not in text or "Font=DejaVu Sans Mono,17," not in text:
+    print("NG: 対話端末からの gnosis が専用 Konsole を開きませんでした")
+    print(text[:1200])
+    sys.exit(1)
+print("OK: 対話端末からの gnosis は専用 Konsole を開く")
+PY
+then
+  n=$((n + 1))
+else
+  ng=1
+fi
 check "Konsole: 保存した大きさのプロファイル" 'Gnosis-17.profile' "$WORK/konsole.txt"
 check "Konsole: フォントサイズを起動時に指定" '^Font=DejaVu Sans Mono,17,' "$WORK/konsole.txt"
 check "Konsole: タイトルに Gnosis を指定" '^LocalTabTitleFormat=Gnosis$' "$WORK/konsole.txt"

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Gnosis のランチャー（Linux / macOS）。
 #
-#   gnosis                 今の端末（Bash など）で普通の Vim を起動。端末の外（アイコン）からは端末の窓を新しく開く
+#   gnosis                 Gnosis 専用端末ウィンドウを開く（文字サイズなどを適用）。現在の端末はそのまま
 #   gnosis --new-terminal  新しい端末の窓を開いて、その中の Vim で起動（アイコンはこれ）
 #   gnosis --tui           今の端末の Vim で起動（--terminal も同じ）
 #   gnosis --gui           GUI 版 Vim（gvim / MacVim）で起動
@@ -9,6 +9,7 @@
 #   gnosis [ノート.md …]   そのノートを開く（起動画面は出さない）
 #   gnosis --where         どの Gnosis が起動するか（本体のフォルダ・コミット・Gnosis ホーム・vimrc・Vim）
 #   gnosis --doctor        導入の診断（古いランチャー・アプリメニュー・必要なもの・文字サイズ）
+#   gnosis --update        origin/main の最新版へ安全に更新し、Gnosis専用環境・ランチャーも再構築
 #   gnosis --version       本体のコミット
 #
 # Vim は、Gnosis 専用の vimrc（<Gnosis ホーム>/vimrc。無ければ本体の vimrc_gnosis）で起動する。
@@ -419,6 +420,47 @@ run_new_terminal() {
   esac
 }
 
+# ---- コマンド一つで GitHub の main に安全に更新し、Gnosis の環境を再構築。
+# 作業中のブランチやノートを勝手に変更せず、旧インストーラーの
+# 更新チェック（fetch + ff-only + インストール）をそのまま再利用する。
+update_gnosis() {
+  if [ "$#" -ne 0 ]; then
+    echo "gnosis: --update に追加の引数は指定できません / --update takes no arguments" >&2
+    return 2
+  fi
+  if ! have git || ! git -C "$GNOSIS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "gnosis: Git 管理された Gnosis が必要です。~/gnosis に clone してから実行してください。" >&2
+    return 1
+  fi
+  git_root=$(git -C "$GNOSIS_DIR" rev-parse --show-toplevel) || return 1
+  if [ "$git_root" != "$GNOSIS_DIR" ]; then
+    echo "gnosis: Gnosis 本体は Git の独立したリポジトリではありません: $GNOSIS_DIR" >&2
+    return 1
+  fi
+  branch=$(git -C "$GNOSIS_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ "$branch" != "main" ]; then
+    printf 'gnosis: main ブランチではありません（現在: %s）。\n' "${branch:-detached HEAD}" >&2
+    printf '  cd "%s" && git switch main\n' "$GNOSIS_DIR" >&2
+    echo "変更を勝手に捨てたり別のブランチへ切り替えたりしません。" >&2
+    return 1
+  fi
+  upstream=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  if [ "$upstream" != 'origin/main' ]; then
+    printf 'gnosis: 更新元が origin/main ではありません（現在: %s）。\n' "${upstream:-未設定}" >&2
+    echo '  git branch -u origin/main main で追跡ブランチを設定してください。' >&2
+    return 1
+  fi
+  if [ ! -f "$GNOSIS_DIR/install/install.sh" ]; then
+    echo "gnosis: install/install.sh がありません / installer missing" >&2
+    return 1
+  fi
+  printf 'Gnosis: origin/main を確認し、最新版に更新して再インストールします。\n'
+  printf 'Gnosis: 本体 %s / ノートや通常の Vim 設定は変更しません。\n' "$GNOSIS_DIR"
+  # --yes は確認なし、--no-system はシステムパッケージのインストールなし。
+  # installer 自身がローカル変更・fetch 失敗・分岐を確認し、危険な更新を止める。
+  exec sh "$GNOSIS_DIR/install/install.sh" --yes --no-system
+}
+
 # ---- どの Gnosis が起動するか
 git_info() {
   if have git && { [ -d "$GNOSIS_DIR/.git" ] || [ -f "$GNOSIS_DIR/.git" ]; }; then
@@ -570,6 +612,7 @@ case "${1:-}" in
   --new-terminal) mode=newterm; shift ;;
   --where) where; exit 0 ;;
   --doctor) doctor; exit $? ;;
+  --update) shift; update_gnosis "$@"; exit $? ;;
   --version) git_info; echo; exit 0 ;;
   -h|--help)
     sed -n '2,24p' "$self" | sed 's/^# \{0,1\}//'
@@ -582,7 +625,7 @@ case "$mode" in
   tui) run_tui "$@" ;;
   newterm) run_new_terminal "$@" ;;
   auto)
-    # デフォルトは必ず本物の端末 Vim。Electron / gvim を自動選択しない。
-    if [ -t 0 ] && [ -t 1 ]; then run_tui "$@"; fi
+    # 端末内からの実行も必ず Gnosis 専用の新しい窓で開く。
+    # 現在の端末で開きたい場合は明示的に --tui を指定する。
     run_new_terminal "$@" ;;
 esac
