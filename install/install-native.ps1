@@ -91,6 +91,22 @@ try {
   Run $npm @('run','build') 'Gnosis desktop interface'
 } finally { Pop-Location }
 $electron = Join-Path $web 'node_modules\electron\dist\electron.exe'
+if (-not (Test-Path $electron)) {
+  # Electron's package can be installed without its binary on some npm setups.
+  # Do not consider installation complete until electron.exe really exists.
+  Write-Host 'Electron package is present but executable is missing. Downloading Electron binary.'
+  $node = Which 'node.exe'
+  $download = Join-Path $web 'node_modules\electron\install.js'
+  if (-not $node -or -not (Test-Path $download)) { throw 'Electron binary installer is unavailable.' }
+  $previousSkip = $env:ELECTRON_SKIP_BINARY_DOWNLOAD
+  Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
+  Push-Location (Join-Path $web 'node_modules\electron')
+  try { Run $node @($download) 'Electron binary' }
+  finally {
+    Pop-Location
+    if ($null -ne $previousSkip) { $env:ELECTRON_SKIP_BINARY_DOWNLOAD = $previousSkip }
+  }
+}
 if (-not (Test-Path $electron)) { throw 'Electron executable is missing; desktop setup incomplete.' }
 if (-not (Test-Path (Join-Path $web 'bundle.js'))) { throw 'Interface build is missing; desktop setup incomplete.' }
 if (-not (Test-Path (Join-Path $web 'node_modules\node-pty'))) { throw 'Terminal backend is missing; desktop setup incomplete.' }
