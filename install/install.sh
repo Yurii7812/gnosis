@@ -365,6 +365,18 @@ fi
 
 # ---------------------------------------------------------------- 4. ランチャーとアイコン
 step "ランチャーとアイコンを作ります" "Creating the launcher and icons"
+# Git 管理下の PNG を更新するのではなく、Gnosis 専用ホームに毎回再生成する。
+# Pillow が無くても SVG アイコンは生成できる。ユーザーの通常のアイコン設定には触らない。
+ICON_OUT="$GNOSIS_HOME/generated-icons"
+mkdir -p "$ICON_OUT"
+if ! GNOSIS_ICON_OUTPUT_ROOT="$ICON_OUT" "$PY_CMD" "$GNOSIS_DIR/tools/build_icons.py"; then
+  say "  アイコンの再生成に失敗したため、同梱の SVG を使用します。" \
+      "  Icon rebuild failed. Falling back to the bundled SVG."
+fi
+ICON_SVG="$ICON_OUT/icons/gnosis-symbol.svg"
+[ -f "$ICON_SVG" ] || ICON_SVG="$GNOSIS_DIR/assets/icons/gnosis-symbol.svg"
+ICON_ICNS="$ICON_OUT/icons/gnosis.icns"
+[ -f "$ICON_ICNS" ] || ICON_ICNS="$GNOSIS_DIR/assets/icons/gnosis.icns"
 mkdir -p "$BIN_DIR"
 LAUNCHER="$BIN_DIR/gnosis"
 if [ -f "$LAUNCHER" ]; then
@@ -396,7 +408,7 @@ fi
 if [ "$OS" = Darwin ]; then
   APP="$HOME/Applications/Gnosis.app"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-  cp "$GNOSIS_DIR/assets/icons/gnosis.icns" "$APP/Contents/Resources/gnosis.icns"
+  cp "$ICON_ICNS" "$APP/Contents/Resources/gnosis.icns"
   cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -422,10 +434,12 @@ else
   ICON_BASE="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
   for s in 16 24 32 48 64 128 256 512; do
     mkdir -p "$ICON_BASE/${s}x${s}/apps"
-    cp "$GNOSIS_DIR/assets/icons/gnosis-$s.png" "$ICON_BASE/${s}x${s}/apps/gnosis.png"
+    if [ -f "$ICON_OUT/icons/gnosis-$s.png" ]; then
+      cp "$ICON_OUT/icons/gnosis-$s.png" "$ICON_BASE/${s}x${s}/apps/gnosis.png"
+    fi
   done
   mkdir -p "$ICON_BASE/scalable/apps"
-  cp "$GNOSIS_DIR/assets/icons/gnosis-symbol.svg" "$ICON_BASE/scalable/apps/gnosis.svg"
+  cp "$ICON_SVG" "$ICON_BASE/scalable/apps/gnosis.svg"
   APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   mkdir -p "$APPS"
   # 端末の窓はランチャー自身が開く（--new-terminal）。Terminal=true にするとデスクトップが選んだ端末で
@@ -440,7 +454,7 @@ Name=Gnosis
 Comment=Markdown notes with Vim
 Comment[ja]=Vim で書く Markdown のノート
 Exec=$exec_path --new-terminal %F
-Icon=gnosis
+Icon=$ICON_SVG
 Terminal=false
 Categories=Utility;TextEditor;
 MimeType=text/markdown;
