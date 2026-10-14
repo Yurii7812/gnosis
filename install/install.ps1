@@ -1,8 +1,7 @@
 #Requires -Version 5.1
-# Gnosis Windows installer. ASCII only for Windows PowerShell 5.1.
-#
-# Default: complete native Windows GUI desktop app with one-click shortcut.
-# Optional: -WSL installs the separate Ubuntu/WezTerm terminal edition.
+# Gnosis terminal installer on Windows. ASCII-only for PowerShell 5.1.
+# Default: WSL2 + Ubuntu + WezTerm + desktop shortcut that launches Vim.
+# Electron is optional, never the default.
 #
 # powershell -ExecutionPolicy Bypass -File install\install.ps1
 [CmdletBinding()]
@@ -10,28 +9,27 @@ param(
   [switch]$NoSystem,
   [switch]$NoShortcut,
   [switch]$WSL,
+  [switch]$NativeApp,
   [switch]$Yes,
   [switch]$NoApp,
   [switch]$SkipInstall
 )
 $ErrorActionPreference = 'Stop'
-if ($NoApp -and -not $WSL) {
-  throw 'A native desktop install requires the Electron app. Use -WSL for terminal-only installation.'
+if ($NativeApp -and $NoApp) {
+  throw 'Conflicting flags: -NativeApp and -NoApp.'
 }
-$script = if ($WSL) { 'install-windows.ps1' } else { 'install-native.ps1' }
-$installer = Join-Path $PSScriptRoot $script
+$installer = Join-Path $PSScriptRoot $(if ($NativeApp) { 'install-native.ps1' } else { 'install-windows.ps1' })
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
-  throw ('The Windows installer is missing: ' + $installer)
+  throw ('Installer is missing: ' + $installer)
 }
 $skip = [bool]($NoSystem -or $SkipInstall)
 try {
-  # The native app is installed by default. WSL system changes remain opt-in.
-  if ($WSL) {
-    & $installer -NoShortcut:$NoShortcut -SkipInstall:$skip
-  } else {
+  if ($NativeApp) {
     & $installer -NoShortcut:$NoShortcut -NoSystem:$skip
+  } else {
+    & $installer -NoShortcut:$NoShortcut -SkipInstall:$skip
   }
-  if (-not $?) { throw 'Gnosis installer returned a failure.' }
+  if (-not $?) { throw 'Gnosis setup did not complete.' }
 } catch {
   Write-Error $_
   exit 1

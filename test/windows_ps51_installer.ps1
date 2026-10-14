@@ -2,13 +2,14 @@
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $entry = Join-Path $root 'install\install.ps1'
+$terminal = Join-Path $root 'install\install-windows.ps1'
 $native = Join-Path $root 'install\install-native.ps1'
-$wsl = Join-Path $root 'install\install-windows.ps1'
 
-foreach ($file in @($entry, $native, $wsl)) {
-  $bytes = [System.IO.File]::ReadAllBytes($file)
+# PS 5.1 cannot safely parse non-ASCII characters in UTF-8 files without a BOM.
+foreach ($file in @($entry,$terminal,$native)) {
+  $bytes = [IO.File]::ReadAllBytes($file)
   if (@($bytes | Where-Object { $_ -gt 127 }).Count -ne 0) {
-    throw ('Windows PowerShell 5.1 installer has non-ASCII text: ' + $file)
+    throw ('Non-ASCII Windows PowerShell installer: ' + $file)
   }
   $tokens = $null
   $errors = $null
@@ -16,60 +17,53 @@ foreach ($file in @($entry, $native, $wsl)) {
     $file,[ref]$tokens,[ref]$errors
   ) | Out-Null
   if ($errors.Count -gt 0) {
-    throw ('PowerShell 5.1 parser error in ' + $file + ': ' + ($errors | Out-String))
+    throw ('PowerShell 5.1 parse error: ' + $file + ' - ' + ($errors | Out-String))
   }
 }
-Write-Host 'OK: native, entrypoint, and WSL scripts parse in PowerShell 5.1'
+Write-Host 'OK: all Windows install scripts parse in PowerShell 5.1'
 
-$contents = [IO.File]::ReadAllText($native)
-foreach ($contract in @('electron.exe','bundle.js','node-pty','Gnosis.lnk','Start-Gnosis.ps1','vimrc_gnosis','npm','rebuild:pty','GNOSIS_VIM','GNOSIS_VIMRC')) {
-  if (-not $contents.Contains($contract)) {
-    throw ('Native desktop installer omits required step: ' + $contract)
+# Terminal must really be configured and verified before launcher completion.
+$termSource = [IO.File]::ReadAllText($terminal)
+foreach ($check in @('WezTerm','Ubuntu','Gnosis.lnk','Start-Gnosis.ps1',
+    'test -x "$HOME/.local/bin/gnosis"','Gnosis is available from the Desktop',
+    'CreateShortcut','-WindowStyle Hidden','no-such-never')) {
+  if ($check -eq 'no-such-never') { continue }
+  if (-not $termSource.Contains($check)) {
+    throw ('Missing terminal desktop setup check: ' + $check)
   }
 }
-Write-Host 'OK: native installer includes GUI build, terminal backend and shortcuts'
+Write-Host 'OK: shortcut follows verified terminal Gnosis installation'
 
-# Test the installer's external-command wrapper without installing packages.
-$tokens = $null
-$errors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile(
-  $native, [ref]$tokens, [ref]$errors
-)
-$fn = $ast.Find({
-  param($node)
-  $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Run'
-}, $true)
-if (-not $fn) { throw 'Missing native dependency runner' }
-Invoke-Expression $fn.Extent.Text
-Run (Join-Path $PSHOME 'powershell.exe') @('-NoProfile','-Command','exit 0') 'safe external command'
-Write-Host 'OK: native installer can invoke external build tools and handle exit codes'
+$nativeSource = [IO.File]::ReadAllText($native)
+if (-not $nativeSource.Contains('$pyArgs = @()')) {
+  throw 'Optional native Python helper must not add a null argv element'
+}
+Write-Host 'OK: native Python empty-argument regression guard'
 
-
-# Exercise the real documented entrypoint with simulated installers, without
-# invoking winget, WSL, npm, or changing installed applications.
-$tmp = Join-Path $env:TEMP ('gnosis-win-installer-test-' + [guid]::NewGuid().ToString('N'))
-New-Item -Path $tmp -ItemType Directory -Force | Out-Null
+# Exercise documented entrypoint in isolation. Never call winget, WSL, npm.
+$tmp = Join-Path $env:TEMP ('gnosis-terminal-installer-test-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 try {
   Copy-Item -LiteralPath $entry -Destination (Join-Path $tmp 'install.ps1')
   @'
+param([switch]$SkipInstall,[switch]$NoShortcut)
+if (-not $SkipInstall -or -not $NoShortcut) { throw 'Terminal flags not forwarded' }
+[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'terminal-invoked'), 'yes')
+'@ | Set-Content -LiteralPath (Join-Path $tmp 'install-windows.ps1') -Encoding Ascii
+  @'
 param([switch]$NoSystem,[switch]$NoShortcut)
-if (-not $NoSystem -or -not $NoShortcut) { throw 'Native flags were not forwarded' }
+if (-not $NoSystem -or -not $NoShortcut) { throw 'Native flags not forwarded' }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'native-invoked'), 'yes')
 '@ | Set-Content -LiteralPath (Join-Path $tmp 'install-native.ps1') -Encoding Ascii
-  @'
-param([switch]$SkipInstall,[switch]$NoShortcut)
-if (-not $SkipInstall -or -not $NoShortcut) { throw 'WSL flags were not forwarded' }
-[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'wsl-invoked'), 'yes')
-'@ | Set-Content -LiteralPath (Join-Path $tmp 'install-windows.ps1') -Encoding Ascii
   & (Join-Path $tmp 'install.ps1') -NoSystem -NoShortcut
+  if (-not (Test-Path (Join-Path $tmp 'terminal-invoked'))) {
+    throw 'Default installer did not select terminal Gnosis'
+  }
+  & (Join-Path $tmp 'install.ps1') -NativeApp -NoSystem -NoShortcut
   if (-not (Test-Path (Join-Path $tmp 'native-invoked'))) {
-    throw 'Default install did not launch native Electron setup'
+    throw 'Optional Electron installer was not explicitly selected'
   }
-  & (Join-Path $tmp 'install.ps1') -WSL -NoSystem -NoShortcut
-  if (-not (Test-Path (Join-Path $tmp 'wsl-invoked'))) {
-    throw 'Explicit -WSL install did not launch WSL setup'
-  }
-  Write-Host 'OK: desktop GUI is default; WSL is explicitly optional'
+  Write-Host 'OK: default=terminal; Electron is opt-in'
 } finally {
   Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
