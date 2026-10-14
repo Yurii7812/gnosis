@@ -38,6 +38,20 @@ if (-not $wez) {
   & winget install --exact --id wez.wezterm --accept-package-agreements --accept-source-agreements
   if ($LASTEXITCODE -ne 0) { throw 'WezTerm installation failed' }
 }
+# Validate WezTerm before modifying the Ubuntu installation.
+# Package managers may finish without updating PATH in the current shell.
+$wezExe = Get-Command wezterm.exe -ErrorAction SilentlyContinue
+if (-not $wezExe) {
+  foreach ($p in @(
+    "$env:LOCALAPPDATA\Programs\WezTerm\wezterm.exe",
+    "$env:ProgramFiles\WezTerm\wezterm.exe"
+  )) {
+    if (Test-Path -LiteralPath $p) { $wezExe = $p; break }
+  }
+}
+if (-not $wezExe) {
+  throw 'WezTerm executable could not be found after installation. Open a new PowerShell and retry; setup is incomplete.'
+}
 Write-Host 'Installing terminal-based Gnosis in Ubuntu (sudo may request password).'
 $bootstrap = @'
 set -eu
@@ -128,4 +142,8 @@ if (-not $NoShortcut) {
   }
 }
 Write-Host "Gnosis terminal launcher ready: $start"
-Write-Host 'Gnosis is available from the Desktop and Start Menu.'
+if (-not $NoShortcut) {
+  Write-Host 'Gnosis is available from the Desktop and Start Menu.'
+} else {
+  Write-Host 'Gnosis shortcuts were skipped by request (-NoShortcut).'
+}
