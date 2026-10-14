@@ -389,7 +389,7 @@ where() {
   printf 'Gnosis home:   %s\n' "$GNOSIS_HOME"
   printf 'vimrc:         %s\n' "$VIMRC"
   if [ -f "$VIMRC" ] && [ "$VIMRC" != "$GNOSIS_DIR/vimrc_gnosis" ]; then
-    src=$(sed -n "s/^execute 'source ' \. fnameescape('\(.*\)')$/\1/p" "$VIMRC" | head -1)
+    src=$(sed -n "s/^execute 'source ' \. fnameescape('\(.*\)')$/\1/p" "$VIMRC" | head -1 | sed "s/''/'/g")
     [ -z "$src" ] || printf '  -> sources:   %s\n' "$src"
   fi
   printf 'vim:           %s\n' "$(find_vim)"

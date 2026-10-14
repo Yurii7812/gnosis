@@ -40,8 +40,32 @@ printf 'let g:user_plugin_loaded = 1\n' > "$H/.vim/plugin/mine.vim"
 printf 'let g:user_pack_loaded = 1\n' > "$H/.vim/pack/p/start/x/plugin/x.vim"
 before=$(cd "$H" && find .vimrc .vim -type f -exec md5sum {} + | sort)
 
+# 前の別の場所へのインストール（古いランチャーと、古い形式のアプリメニュー項目）と、既存の vault
+mkdir -p "$H/.local/bin" "$H/.local/share/applications" "$H/vault"
+printf "#!/bin/sh\nGNOSIS_HOME='%s'\nexport GNOSIS_HOME\nexec '%s' \"\$@\"\n" "$H/.local/share/gnosis" "$WORK/old-gnosis/bin/gnosis" > "$H/.local/bin/gnosis"
+chmod +x "$H/.local/bin/gnosis"
+printf '[Desktop Entry]\nType=Application\nName=Gnosis\nExec="%s" %%F\nTerminal=false\nStartupWMClass=Gnosis\n' "$H/.local/bin/gnosis" > "$H/.local/share/applications/gnosis.desktop"
+printf -- '---\ntitle: Index\n---\n\n# Index\n[メモ](m.md)\n' > "$H/vault/index.md"
+printf -- '---\ntitle: メモ\n---\n\n# メモ\n大事な本文\n' > "$H/vault/m.md"
+vault_before=$(cd "$H/vault" && find . -type f -exec md5sum {} + | sort)
+
+# 必須のもの（Python 3）が無ければ、成功と言わずに終わる
+mkdir -p "$WORK/nopy"
+for f in /usr/bin/* /bin/*; do
+  b=$(basename "$f"); case "$b" in python*) continue ;; esac
+  [ -e "$WORK/nopy/$b" ] || ln -s "$f" "$WORK/nopy/$b"
+done
+if HOME="$H" XDG_DATA_HOME= GNOSIS_HOME= GNOSIS_PLUGIN_MIRROR="$WORK/mirror" PATH="$WORK/nopy" LANG=ja_JP.UTF-8 \
+  sh "$G/install/install.sh" --yes --no-system --no-app --no-update >"$WORK/nopy.log" 2>&1; then
+  cat "$WORK/nopy.log" >&2; fail "Python が無いのに成功と表示した"
+fi
+grep -q '必須のものが足りない' "$WORK/nopy.log" || { cat "$WORK/nopy.log" >&2; fail "必須のものが足りない説明が無い"; }
+grep -q '^完了' "$WORK/nopy.log" && fail "Python が無いのに完了と表示した"
+
 HOME="$H" XDG_DATA_HOME= GNOSIS_HOME= GNOSIS_PLUGIN_MIRROR="$WORK/mirror" PATH="$PATH" LANG=ja_JP.UTF-8 \
-  sh "$G/install/install.sh" --yes --no-system --no-app >"$WORK/install.log" 2>&1 || { cat "$WORK/install.log" >&2; fail "install.sh が失敗した"; }
+  sh "$G/install/install.sh" --yes --no-system --no-app --no-venv --no-update >"$WORK/install.log" 2>&1 || { cat "$WORK/install.log" >&2; fail "install.sh が失敗した"; }
+grep -q "$WORK/old-gnosis/bin/gnosis" "$WORK/install.log" || fail "前のインストール先からの切り替えを知らせていない"
+grep -q "インストール先" "$WORK/install.log" && grep -q "コミット" "$WORK/install.log" || fail "最後の要約（インストール先・コミット）が無い"
 
 GH="$H/.local/share/gnosis"
 [ -f "$GH/vimrc" ] || fail "専用 vimrc が無い"
@@ -55,8 +79,8 @@ after=$(cd "$H" && find .vimrc .vim -type f -exec md5sum {} + | sort)
 
 # ランチャー: 空白・日本語・' を含むパスでも正しい場所を指す
 where=$(HOME="$H" "$H/.local/bin/gnosis" --where)
-printf '%s\n' "$where" | grep -qF "Gnosis: $G" || fail "ランチャーの Gnosis の場所: $where"
-printf '%s\n' "$where" | grep -qF "vimrc: $GH/vimrc" || fail "ランチャーの vimrc: $where"
+printf '%s\n' "$where" | grep -qxF "Gnosis:        $G" || fail "ランチャーの Gnosis の場所: $where"
+printf '%s\n' "$where" | grep -qxF "vimrc:         $GH/vimrc" || fail "ランチャーの vimrc: $where"
 
 # アプリメニューの Exec を規則どおりに読むと、ランチャーを指す
 python3 - "$H/.local/share/applications/gnosis.desktop" "$H/.local/bin/gnosis" <<'PY' || fail "desktop の Exec が読めない"
@@ -69,8 +93,11 @@ arg0 = re.sub(r'\\([\\"`$])', r"\1", m.group(1))
 assert arg0 == sys.argv[2], (arg0, sys.argv[2])
 desktop = open(sys.argv[1], encoding="utf-8").read()
 assert "Icon=gnosis" in desktop
-assert "Terminal=true" in desktop
+assert "Terminal=false" in desktop, desktop
+assert re.search(r"^Exec=.* --new-terminal %F$", desktop, re.M), desktop
+assert "StartupWMClass" not in desktop
 PY
+HOME="$H" "$H/.local/bin/gnosis" --where | grep -qxF "launcher:      $G/bin/gnosis" || fail "ランチャーが今回のフォルダを指していない"
 if command -v desktop-file-validate >/dev/null 2>&1; then
   desktop-file-validate "$H/.local/share/applications/gnosis.desktop" || fail "desktop-file-validate"
 fi
@@ -87,7 +114,9 @@ rm -f "$H/plain.txt"
 
 # もう一度入れても壊れない（プラグインは更新、vimrc は作り直し）
 HOME="$H" XDG_DATA_HOME= GNOSIS_HOME= GNOSIS_PLUGIN_MIRROR="$WORK/mirror" LANG=C \
-  sh "$G/install/install.sh" --yes --no-system --no-app >"$WORK/install2.log" 2>&1 || { cat "$WORK/install2.log" >&2; fail "2 回目の install.sh が失敗した"; }
+  PIP_NO_INDEX=1 sh "$G/install/install.sh" --yes --no-system --no-app --no-update >"$WORK/install2.log" 2>&1 || { cat "$WORK/install2.log" >&2; fail "2 回目の install.sh が失敗した"; }
+vault_after=$(cd "$H/vault" && find . -type f -exec md5sum {} + | sort)
+[ "$vault_before" = "$vault_after" ] || fail "インストーラーの再実行で vault が変わった"
 after2=$(cd "$H" && find .vimrc .vim -type f -exec md5sum {} + | sort)
 [ "$before" = "$after2" ] || fail "2 回目でふだんの ~/.vimrc・~/.vim が変わった"
 echo "install OK (専用 vimrc・プラグイン領域・ランチャー・アプリメニュー・アイコン、ふだんの Vim は不変、空白・日本語・' を含むパス)"

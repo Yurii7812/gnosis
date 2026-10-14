@@ -1,21 +1,36 @@
 #!/bin/sh
-# Gnosis のインストーラー（Linux / macOS）。
+# Gnosis のインストーラー（Linux / macOS）。新しく入れるときも、更新するときも同じ。
 #
-#   git clone https://github.com/Yurii7812/gnosis.git
-#   cd gnosis && ./install/install.sh
+#   新しく入れる:  git clone https://github.com/Yurii7812/gnosis.git && cd gnosis && ./install/install.sh
+#   更新する:      cd <入れたフォルダ> && ./install/install.sh      （GitHub の新しい版があれば取り込んでから入れ直す）
 #
 # 行うこと（ふだんの ~/.vimrc・~/.vim・vimfiles・~/.vim/pack は読まない・変えない）:
-#   1. 必要なもの（Vim・git・Python 3・fzf・ripgrep、アプリ用に Node.js）を確かめ、
-#      無ければ OS のパッケージ管理（apt / dnf / pacman / zypper / Homebrew）で入れる（確認してから）
-#   2. Gnosis ホームに、Gnosis 専用の vimrc とプラグイン領域（fzf / fzf.vim / vim-surround）を作る
+#   0. このフォルダが GitHub の最新か確かめる。古ければ git pull --ff-only で更新する（確認してから。
+#      未コミットの変更があるときは更新しない＝消さない）
+#   1. 必要なものを確かめ、無ければ OS のパッケージ管理（apt / dnf / pacman / zypper / Homebrew）で入れる（確認してから）
+#        必須   … Vim 8.2 以上（+job +channel +timers +textprop +popupwin）・git・Python 3
+#        推奨   … fzf（検索。無ければ Gnosis 専用に取得）・ripgrep（全文検索）・クリップボード
+#                  （Wayland は wl-clipboard、X11 は +clipboard の Vim＝Debian では vim-gtk3 か xclip）
+#        機能別 … 暗号化 vault: gocryptfs と FUSE（--with-crypt、または暗号化 vault が登録済みのとき）
+#                  紙の日記の取り込み（\F）: tkinter と Pillow（--with-scan）
+#      必須のものが足りないままなら、成功とは表示せずに終わる（終了コード 1）
+#   2. Gnosis ホームに、Gnosis 専用の vimrc・プラグイン領域（fzf / fzf.vim / vim-surround）・
+#      Python の仮想環境（venv。よみ順の並べ替えの pykakasi など python/requirements.txt）を作る
 #   3. Electron は --app が指定されたときだけ入れる（標準では不要）
-#   4. ランチャー（~/.local/bin/gnosis）と、アイコン付きの起動項目を作る
-#        Linux … アプリメニュー（~/.local/share/applications/gnosis.desktop）
+#   4. ランチャー（~/.local/bin/gnosis）と、アイコン付きの起動項目を作り直す（前のインストール先を指していても
+#      今回のフォルダに向け直す）
+#        Linux … アプリメニュー（~/.local/share/applications/gnosis.desktop）。端末の窓を開いて Vim を起動
 #        macOS … ~/Applications/Gnosis.app
+#   5. 何を入れたか（場所・コミット・最新か）を表示する。あとから確かめるときは gnosis --doctor
+# ノート・vault・vault の設定・暗号化したデータには触れない。
 #
 # オプション:
 #   --yes          確認せずに進める
 #   --no-system    OS のパッケージを入れない（足りないものは表示だけ）
+#   --no-update    GitHub の新しい版を取り込まない
+#   --with-crypt   暗号化 vault 用のもの（gocryptfs・FUSE）も入れる
+#   --with-scan    紙の日記の取り込み用のもの（tkinter・Pillow）も入れる
+#   --no-venv      Python の仮想環境を作らない（pykakasi は入れない）
 #   --app          オプションの Electron アプリを追加で入れる
 #   --no-app       Electron を入れない（標準動作）
 #   --desktop-icon Linux でデスクトップにもアイコンを置く
@@ -25,17 +40,22 @@
 #           既定は GitHub。試験やオフライン用に、fzf / fzf.vim / vim-surround を置いたフォルダを指定できる）
 set -eu
 
-YES=0; NO_SYSTEM=0; NO_APP=1; DESKTOP_ICON=0
+YES=0; NO_SYSTEM=0; NO_APP=1; DESKTOP_ICON=0; NO_UPDATE=0; WITH_CRYPT=0; WITH_SCAN=0; NO_VENV=0
 BIN_DIR="$HOME/.local/bin"
+ORIG_ARGS="$*"
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) YES=1 ;;
     --no-system) NO_SYSTEM=1 ;;
+    --no-update) NO_UPDATE=1 ;;
+    --with-crypt) WITH_CRYPT=1 ;;
+    --with-scan) WITH_SCAN=1 ;;
+    --no-venv) NO_VENV=1 ;;
     --app) NO_APP=0 ;;
     --no-app) NO_APP=1 ;;
     --desktop-icon) DESKTOP_ICON=1 ;;
     --bin) shift; BIN_DIR=$1 ;;
-    -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "不明なオプション / unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -64,6 +84,42 @@ vimq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 # desktop entry の Exec の引数（二重引用符で囲み、" ` $ \ をエスケープ。値の \ もエスケープ）
 deskq() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/`/\\`/g; s/\$/\\$/g' | sed 's/\\/\\\\/g')"; }
 
+# ---------------------------------------------------------------- 0. 本体の版
+IS_GIT=0
+if have git && git -C "$GNOSIS_DIR" rev-parse --git-dir >/dev/null 2>&1; then IS_GIT=1; fi
+UPTODATE="?"
+if [ "$IS_GIT" = 1 ]; then
+  step "Gnosis 本体の版を確かめます: $GNOSIS_DIR" "Checking the Gnosis version: $GNOSIS_DIR"
+  up=$(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  if [ -z "$up" ]; then
+    say "  追跡するブランチが無いため、最新か確かめられません。" "  No upstream branch; cannot tell whether this is the latest."
+  elif [ "$NO_UPDATE" = 1 ]; then
+    say "  --no-update: GitHub の版は取り込みません。" "  --no-update: not pulling from GitHub."
+  elif ! git -C "$GNOSIS_DIR" fetch --quiet 2>/dev/null; then
+    say "  GitHub に接続できません。今の版のまま入れます。" "  Cannot reach GitHub; installing the current version."
+  else
+    behind=$(git -C "$GNOSIS_DIR" rev-list --count "HEAD..$up" 2>/dev/null || echo 0)
+    if [ "$behind" -eq 0 ]; then
+      UPTODATE=yes
+      say "  最新です（$up）。" "  Up to date ($up)."
+    elif [ -n "$(git -C "$GNOSIS_DIR" status --porcelain --untracked-files=no)" ]; then
+      UPTODATE=no
+      say "  $up より $behind コミット古いですが、未コミットの変更があるので更新しません（変更は消しません）。" \
+          "  $behind commit(s) behind $up, but there are uncommitted changes; not updating (nothing is discarded)."
+    elif ask "  $up より $behind コミット古い版です。更新してから入れますか？" "  $behind commit(s) behind $up. Update before installing?"; then
+      if git -C "$GNOSIS_DIR" pull --ff-only --quiet; then
+        say "  更新しました。新しいインストーラーで続けます。" "  Updated. Continuing with the new installer."
+        # shellcheck disable=SC2086
+        exec sh "$GNOSIS_DIR/install/install.sh" --no-update $ORIG_ARGS
+      fi
+      UPTODATE=no
+      say "  更新できませんでした（手元の変更と食い違うなど）。今の版のまま入れます。" "  Could not update (diverged?); installing the current version."
+    else
+      UPTODATE=no
+    fi
+  fi
+fi
+
 # ---------------------------------------------------------------- 1. 必要なもの
 PM=""
 if [ "$OS" = Darwin ]; then have brew && PM=brew
@@ -73,12 +129,28 @@ elif have pacman; then PM=pacman
 elif have zypper; then PM=zypper
 fi
 
-pkg_name() { # 汎用名 → パッケージ名
+pkg_name() { # 汎用名 → パッケージ名（空ならこの OS では入れない）
   case "$PM:$1" in
-    apt:vim) echo vim ;; dnf:vim) echo vim-enhanced ;; pacman:vim) echo vim ;; zypper:vim) echo vim ;; brew:vim) echo vim ;;
-    *:python3) case "$PM" in pacman) echo python ;; brew) echo python ;; *) echo python3 ;; esac ;;
-    *:node) case "$PM" in apt) echo nodejs npm ;; dnf|zypper) echo nodejs npm ;; pacman) echo nodejs npm ;; brew) echo node ;; esac ;;
+    dnf:vim) echo vim-enhanced ;;
+    *:vim) echo vim ;;
+    apt:vim-clip) echo vim-gtk3 ;;
+    *:vim-clip) echo "" ;;
+    pacman:python3|brew:python3) echo python ;;
+    *:python3) echo python3 ;;
+    apt:venv) echo python3-venv ;;
+    *:venv) echo "" ;;
+    pacman:pip) echo python-pip ;;
+    brew:pip) echo "" ;;
+    *:pip) echo python3-pip ;;
+    apt:node|dnf:node|zypper:node|pacman:node) echo nodejs npm ;;
+    brew:node) echo node ;;
     *:rg) echo ripgrep ;;
+    brew:wl-clipboard|brew:xclip) echo "" ;;
+    brew:gocryptfs|brew:fuse) echo "" ;;
+    apt:fuse|pacman:fuse|zypper:fuse) echo fuse3 ;;
+    dnf:fuse) echo fuse ;;
+    apt:tk) echo python3-tk ;; dnf:tk) echo python3-tkinter ;; pacman:tk) echo tk ;; zypper:tk) echo python3-tk ;; brew:tk) echo python-tk ;;
+    apt:pil) echo python3-pil ;; dnf:pil) echo python3-pillow ;; pacman:pil) echo python-pillow ;; zypper:pil) echo python3-Pillow ;; brew:pil) echo pillow ;;
     *) echo "$1" ;;
   esac
 }
@@ -86,12 +158,15 @@ pkg_name() { # 汎用名 → パッケージ名
 pm_install() {
   pkgs=""
   for p in "$@"; do pkgs="$pkgs $(pkg_name "$p")"; done
-  [ -n "$PM" ] || return 1
+  pkgs=$(echo $pkgs)
+  [ -n "$PM" ] && [ -n "$pkgs" ] || return 1
+  SUDO=""; [ "$PM" = brew ] || [ "$(id -u)" = 0 ] || SUDO=sudo
+  say "  実行: $SUDO $PM で $pkgs" "  running: $SUDO $PM for $pkgs"
   case "$PM" in
-    apt) sudo apt-get update && sudo apt-get install -y $pkgs ;;
-    dnf) sudo dnf install -y $pkgs ;;
-    pacman) sudo pacman -S --needed --noconfirm $pkgs ;;
-    zypper) sudo zypper install -y $pkgs ;;
+    apt) $SUDO apt-get update && $SUDO apt-get install -y $pkgs ;;
+    dnf) $SUDO dnf install -y $pkgs ;;
+    pacman) $SUDO pacman -S --needed --noconfirm $pkgs ;;
+    zypper) $SUDO zypper install -y $pkgs ;;
     brew) brew install $pkgs ;;
   esac
 }
@@ -108,41 +183,83 @@ vim_ok() {
   set -- $ver
   [ "${1:-0}" -gt 8 ] || { [ "${1:-0}" -eq 8 ] && [ "${2:-0}" -ge 2 ]; }
 }
+find_vim_ok() {
+  for v in vim /usr/local/bin/vim /opt/homebrew/bin/vim; do
+    if vim_ok "$v"; then command -v "$v" || echo "$v"; return 0; fi
+  done
+  return 1
+}
+
+# 登録済みの vault に暗号化 vault（.crypt）があれば、暗号化の道具も要る
+crypt_in_use() {
+  [ -f "$GNOSIS_HOME/vaults.json" ] && have python3 || return 1
+  python3 - "$GNOSIS_HOME/vaults.json" <<'PY' 2>/dev/null
+import json, os, sys
+reg = json.load(open(sys.argv[1], encoding="utf-8"))
+sys.exit(0 if any(os.path.isdir(os.path.join(v.get("path", ""), ".crypt")) for v in reg.get("vaults", [])) else 1)
+PY
+}
 
 step "必要なものを確かめます" "Checking requirements"
-missing=""
-VIM_BIN=""
-for v in vim /usr/local/bin/vim /opt/homebrew/bin/vim; do
-  if vim_ok "$v"; then VIM_BIN=$(command -v "$v" || echo "$v"); break; fi
-done
+required=""; recommended=""; feature=""
+VIM_BIN=$(find_vim_ok || true)
 if [ -n "$VIM_BIN" ]; then
-  say "  Vim: $VIM_BIN（使えます。ふだんの設定は読み込みません）" "  Vim: $VIM_BIN (usable; your own Vim settings are not loaded)"
+  say "  必須  Vim: $VIM_BIN（使えます。ふだんの設定は読み込みません）" "  required  Vim: $VIM_BIN (usable; your own Vim settings are not loaded)"
 else
-  missing="$missing vim"
+  required="$required vim"
 fi
-for c in git python3 fzf rg; do have "$c" || missing="$missing $c"; done
-if [ "$NO_APP" = 0 ] && ! have npm; then missing="$missing node"; fi
+have git || required="$required git"
+have python3 || required="$required python3"
+if [ "$NO_VENV" = 0 ] && have python3 && ! python3 -c 'import venv, ensurepip' >/dev/null 2>&1; then required="$required venv"; fi
+have fzf || [ -x "$GNOSIS_HOME/plugins/fzf/bin/fzf" ] || recommended="$recommended fzf"
+have rg || recommended="$recommended rg"
+if [ "$OS" != Darwin ]; then
+  if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    have wl-copy || recommended="$recommended wl-clipboard"
+  elif [ -n "${DISPLAY:-}" ]; then
+    vc=0; [ -n "$VIM_BIN" ] && "$VIM_BIN" --version 2>/dev/null | grep -q '+clipboard' && vc=1
+    if [ "$vc" = 0 ] && ! have xclip && ! have xsel; then
+      if [ "$PM" = apt ]; then recommended="$recommended vim-clip"; else recommended="$recommended xclip"; fi
+    fi
+  fi
+fi
+if [ "$WITH_CRYPT" = 1 ] || crypt_in_use; then
+  if [ "$OS" = Darwin ]; then
+    have gocryptfs || say "  機能別 暗号化 vault: macOS では macFUSE と gocryptfs を手で入れてください" "  feature  encrypted vaults: on macOS install macFUSE and gocryptfs manually"
+  else
+    have gocryptfs || feature="$feature gocryptfs"
+    have fusermount3 || have fusermount || feature="$feature fuse"
+  fi
+fi
+if [ "$WITH_SCAN" = 1 ] && have python3; then
+  python3 -c 'import tkinter' >/dev/null 2>&1 || feature="$feature tk"
+  python3 -c 'import PIL' >/dev/null 2>&1 || feature="$feature pil"
+fi
+if [ "$NO_APP" = 0 ] && ! have npm; then feature="$feature node"; fi
+
+[ -z "$required" ] || say "  必須で足りないもの:$required" "  Missing (required):$required"
+[ -z "$recommended" ] || say "  推奨で足りないもの:$recommended" "  Missing (recommended):$recommended"
+[ -z "$feature" ] || say "  使う機能に足りないもの:$feature" "  Missing (for the features you chose):$feature"
+missing="$required$recommended$feature"
 if [ -n "$missing" ]; then
-  say "  足りないもの:$missing" "  Missing:$missing"
-  if [ "$NO_SYSTEM" = 0 ] && [ -n "$PM" ] && ask "  $PM で入れますか？" "  Install them with $PM?"; then
+  if [ "$NO_SYSTEM" = 0 ] && [ -n "$PM" ] && ask "  $PM で入れますか？（管理者のパスワードを聞かれることがあります）" "  Install them with $PM? (may ask for the administrator password)"; then
     # shellcheck disable=SC2086
-    pm_install $missing || say "  一部を入れられませんでした。続けます。" "  Some packages could not be installed; continuing."
+    pm_install $missing || say "  一部を入れられませんでした。" "  Some packages could not be installed."
   else
     say "  OS のパッケージは入れません。" "  Not installing OS packages."
   fi
 fi
-if [ -z "$VIM_BIN" ]; then
-  for v in vim /usr/local/bin/vim /opt/homebrew/bin/vim; do
-    if vim_ok "$v"; then VIM_BIN=$(command -v "$v" || echo "$v"); break; fi
-  done
-fi
-if [ -z "$VIM_BIN" ]; then
-  say "Gnosis に使える Vim（8.2 以上、+job +channel +timers +textprop +popupwin）が見つかりません。入れてからもう一度実行してください。" \
-      "No usable Vim found (8.2+, +job +channel +timers +textprop +popupwin). Install it and run again."
+[ -n "$VIM_BIN" ] || VIM_BIN=$(find_vim_ok || true)
+FAIL=""
+[ -n "$VIM_BIN" ] || FAIL="$FAIL Vim(8.2+,+job,+channel,+timers,+textprop,+popupwin)"
+have git || FAIL="$FAIL git"
+have python3 || FAIL="$FAIL python3"
+if [ -n "$FAIL" ]; then
+  say "必須のものが足りないため、インストールを終えられません:$FAIL" "Required tools are missing; installation cannot finish:$FAIL"
+  say "入れてから、もう一度 ./install/install.sh を実行してください。" "Install them and run ./install/install.sh again."
   exit 1
 fi
-have git || { say "git が必要です。" "git is required."; exit 1; }
-have python3 || say "  注意: Python 3 が無いと、リンクの同期・検索が動きません。" "  Note: without Python 3, link sync and search do not work."
+have rg || say "  注意: ripgrep が無いと全文検索が遅くなります。" "  Note: without ripgrep, full-text search is slower."
 
 # ---------------------------------------------------------------- 2. Gnosis 専用の Vim 環境
 step "Gnosis 専用の Vim 環境を作ります: $GNOSIS_HOME" "Creating the Gnosis-only Vim environment: $GNOSIS_HOME"
@@ -165,20 +282,48 @@ if ! have fzf && [ ! -x "$GNOSIS_HOME/plugins/fzf/bin/fzf" ]; then
   say "  fzf 本体を取得します" "  Fetching the fzf binary"
   "$GNOSIS_HOME/plugins/fzf/install" --bin >/dev/null 2>&1 || say "  fzf を取得できませんでした（検索に fzf が要ります）" "  could not fetch fzf (search needs it)"
 fi
+
+# Python: Gnosis 専用の仮想環境（Debian などの externally-managed な Python にも入れられる）。
+# OS の Python のモジュール（tkinter・Pillow）も使えるよう --system-site-packages。
+PY_CMD=python3
+if [ "$NO_VENV" = 0 ]; then
+  VENV="$GNOSIS_HOME/venv"
+  if [ ! -x "$VENV/bin/python" ]; then
+    python3 -m venv --system-site-packages "$VENV" >/dev/null 2>&1 || rm -rf "$VENV"
+  fi
+  if [ -x "$VENV/bin/python" ]; then
+    # Gnosis は Python のコマンドを文字列のままシェルに渡す箇所があるので、空白や引用符を含む場所の
+    # venv は使わない（その場合は OS の python3）
+    case "$VENV" in
+      *[!A-Za-z0-9_./+-]*) say "  Python の仮想環境の場所に空白などが含まれるため、OS の python3 を使います" "  The venv path contains spaces or quotes; using the system python3" ;;
+      *) PY_CMD="$VENV/bin/python" ;;
+    esac
+    if "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check -r "$GNOSIS_DIR/python/requirements.txt" >/dev/null 2>&1; then
+      say "  Python: $VENV（$(tr '\n' ' ' < "$GNOSIS_DIR/python/requirements.txt")）" "  Python: $VENV ($(tr '\n' ' ' < "$GNOSIS_DIR/python/requirements.txt"))"
+    else
+      say "  Python の追加モジュール（pykakasi）を入れられませんでした（よみ順の並べ替えは文字コード順になります）" \
+          "  Could not install the extra Python modules (pykakasi); sorting by reading falls back to code order"
+    fi
+  else
+    say "  Python の仮想環境を作れませんでした（python3-venv が必要）。OS の python3 を使います。" \
+        "  Could not create a Python venv (needs python3-venv); using the system python3."
+  fi
+fi
+"$PY_CMD" -c 'import json, pathlib, re, hashlib' >/dev/null 2>&1 || { say "Python 3 が動きません: $PY_CMD" "Python 3 does not work: $PY_CMD"; exit 1; }
+
 # 専用の vimrc（本体の vimrc_gnosis を読むだけ。Gnosis だけの設定は vimrc.local に書ける）
 q=$(vimq "$GNOSIS_DIR/vimrc_gnosis")
+pyq=$(vimq "$PY_CMD")
 cat > "$GNOSIS_HOME/vimrc" <<EOF
 " Gnosis 専用の vimrc（インストーラーが作成。もう一度インストールすると作り直す）。
 " この Vim は、ふだんの ~/.vimrc・~/.vim を読まない。Gnosis だけの追加設定は
 " 同じフォルダの vimrc.local に書く（このファイルは書き換えない）。
+if !exists('g:gnosis_python_cmd') && executable($pyq)
+  let g:gnosis_python_cmd = $pyq
+endif
 execute 'source ' . fnameescape($q)
 EOF
 say "  vimrc: $GNOSIS_HOME/vimrc" "  vimrc: $GNOSIS_HOME/vimrc"
-if have python3; then
-  if python3 -c 'import pykakasi' >/dev/null 2>&1; then :
-  elif python3 -m pip install --user --quiet pykakasi >/dev/null 2>&1; then say "  pykakasi（よみ順の並べ替え）を入れました" "  installed pykakasi (sorting by reading)"
-  else say "  pykakasi は入れませんでした（よみ順の並べ替えは文字コード順になります）" "  pykakasi not installed (sorting by reading falls back to code order)"; fi
-fi
 
 # ---------------------------------------------------------------- 3. アプリ
 if [ "$NO_APP" = 0 ]; then
@@ -195,6 +340,13 @@ fi
 step "ランチャーとアイコンを作ります" "Creating the launcher and icons"
 mkdir -p "$BIN_DIR"
 LAUNCHER="$BIN_DIR/gnosis"
+if [ -f "$LAUNCHER" ]; then
+  prev=$(sed -n "s/^exec '\(.*\)' \"\$@\"$/\1/p" "$LAUNCHER" 2>/dev/null | head -1)
+  if [ -n "$prev" ] && [ "$prev" != "$GNOSIS_DIR/bin/gnosis" ]; then
+    say "  前のインストール先 $prev から、このフォルダ $GNOSIS_DIR へ切り替えます（前のフォルダは消しません）" \
+        "  Switching from the previous install $prev to $GNOSIS_DIR (the old folder is not deleted)"
+  fi
+fi
 H_Q=$(shq "$GNOSIS_HOME")
 L_Q=$(shq "$GNOSIS_DIR/bin/gnosis")
 cat > "$LAUNCHER" <<EOF
@@ -207,6 +359,12 @@ EOF
 chmod +x "$LAUNCHER" "$GNOSIS_DIR/bin/gnosis"
 say "  ランチャー: $LAUNCHER" "  launcher: $LAUNCHER"
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) say "  （$BIN_DIR を PATH に入れると、端末から gnosis で起動できます）" "  (add $BIN_DIR to PATH to run gnosis from a terminal)" ;; esac
+# PATH でこのランチャーより前にある別の gnosis（古いインストールなど）
+first=$(command -v gnosis 2>/dev/null || true)
+if [ -n "$first" ] && [ "$first" != "$LAUNCHER" ]; then
+  say "  注意: PATH では $first が先に見つかります（そちらが起動します）。消すか、$BIN_DIR を PATH の前に置いてください。" \
+      "  Note: $first comes first on PATH and would be started instead. Remove it or put $BIN_DIR earlier on PATH."
+fi
 
 if [ "$OS" = Darwin ]; then
   APP="$HOME/Applications/Gnosis.app"
@@ -228,10 +386,11 @@ EOF
   LA_Q=$(shq "$LAUNCHER")
   cat > "$APP/Contents/MacOS/Gnosis" <<EOF
 #!/bin/sh
-exec $LA_Q
+exec $LA_Q --new-terminal
 EOF
   chmod +x "$APP/Contents/MacOS/Gnosis"
   say "  アプリ: $APP（Finder・Launchpad から起動できます）" "  app: $APP (open it from Finder / Launchpad)"
+  DESKTOP_FILE="$APP"
 else
   ICON_BASE="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
   for s in 16 24 32 48 64 128 256 512; do
@@ -242,33 +401,39 @@ else
   cp "$GNOSIS_DIR/assets/icons/gnosis-symbol.svg" "$ICON_BASE/scalable/apps/gnosis.svg"
   APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   mkdir -p "$APPS"
+  # 端末の窓はランチャー自身が開く（--new-terminal）。Terminal=true にするとデスクトップが選んだ端末で
+  # 開き、Gnosis の文字サイズを渡せないうえ、環境によっては何も起きないことがあるため。
   # Exec は空白などを含むパスでも動くよう二重引用符で囲む（desktop entry の規則）
   exec_path=$(deskq "$LAUNCHER")
-  cat > "$APPS/gnosis.desktop" <<EOF
+  DESKTOP_FILE="$APPS/gnosis.desktop"
+  cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Gnosis
 Comment=Markdown notes with Vim
 Comment[ja]=Vim で書く Markdown のノート
-Exec=$exec_path %F
+Exec=$exec_path --new-terminal %F
 Icon=gnosis
-Terminal=true
+Terminal=false
 Categories=Utility;TextEditor;
 MimeType=text/markdown;
-StartupNotify=true
+StartupNotify=false
 EOF
   have update-desktop-database && update-desktop-database "$APPS" >/dev/null 2>&1 || true
   have gtk-update-icon-cache && gtk-update-icon-cache -q -t "$ICON_BASE" >/dev/null 2>&1 || true
-  say "  アプリメニュー: $APPS/gnosis.desktop" "  app menu: $APPS/gnosis.desktop"
-  if [ "$DESKTOP_ICON" = 1 ]; then
-    desk=$(have xdg-user-dir && xdg-user-dir DESKTOP || echo "$HOME/Desktop")
-    if [ -d "$desk" ]; then
-      cp "$APPS/gnosis.desktop" "$desk/gnosis.desktop"
-      chmod +x "$desk/gnosis.desktop"
-      have gio && gio set "$desk/gnosis.desktop" metadata::trusted true >/dev/null 2>&1 || true
-      say "  デスクトップ: $desk/gnosis.desktop" "  desktop: $desk/gnosis.desktop"
-    fi
+  have kbuildsycoca6 && kbuildsycoca6 >/dev/null 2>&1 || true
+  say "  アプリメニュー: $DESKTOP_FILE" "  app menu: $DESKTOP_FILE"
+  desk=$(have xdg-user-dir && xdg-user-dir DESKTOP || echo "$HOME/Desktop")
+  # デスクトップのアイコンは、頼まれたとき・前に置いたものがあるときだけ（あれば新しい内容にする）
+  if [ -d "$desk" ] && { [ "$DESKTOP_ICON" = 1 ] || [ -f "$desk/gnosis.desktop" ]; }; then
+    cp "$DESKTOP_FILE" "$desk/gnosis.desktop"
+    chmod +x "$desk/gnosis.desktop"
+    have gio && gio set "$desk/gnosis.desktop" metadata::trusted true >/dev/null 2>&1 || true
+    say "  デスクトップ: $desk/gnosis.desktop" "  desktop: $desk/gnosis.desktop"
   fi
+  for old in simple-yurii-note.desktop yurii-note.desktop; do
+    [ -f "$APPS/$old" ] && say "  旧版のアプリメニュー項目があります（消していません）: $APPS/$old" "  An old app-menu entry exists (kept): $APPS/$old"
+  done
 fi
 
 # ---------------------------------------------------------------- 旧 simple-yurii-note からの移行
@@ -278,7 +443,16 @@ if [ -f "$HOME/.vim/simple_yurii_note/root.txt" ] && [ ! -f "$GNOSIS_HOME/vaults
       "  It is added to the vault list automatically on the first start (root.txt and the old setup are kept)."
 fi
 
+# ---------------------------------------------------------------- 5. 何を入れたか
 step "完了" "Done"
+commit="(git 管理外)"
+[ "$IS_GIT" = 1 ] && commit="$(git -C "$GNOSIS_DIR" rev-parse --short HEAD) ($(git -C "$GNOSIS_DIR" rev-parse --abbrev-ref HEAD))"
+case "$UPTODATE" in yes) latest="最新 / latest" ;; no) latest="最新ではない / not the latest" ;; *) latest="確かめられず / unknown" ;; esac
+printf '  %-16s %s\n' "インストール先" "$GNOSIS_DIR" "Gnosis ホーム" "$GNOSIS_HOME" "vimrc" "$GNOSIS_HOME/vimrc" \
+  "Vim" "$VIM_BIN" "Python" "$PY_CMD" "コミット" "$commit" "版" "$latest" "ランチャー" "$LAUNCHER" "起動項目" "$DESKTOP_FILE"
 say "  アイコン（アプリメニュー / Gnosis.app）か、端末で gnosis を実行すると起動します。" \
     "  Start Gnosis from its icon (app menu / Gnosis.app), or run gnosis in a terminal."
-say "  ふだんの Vim（vim / ~/.vimrc）は変えていません。" "  Your normal Vim (vim / ~/.vimrc) was not changed."
+say "  開いている端末では、古い場所を覚えていることがあります。hash -r を実行するか、端末を開き直してください。" \
+    "  An open shell may remember an old location; run hash -r or open a new terminal."
+say "  確かめるには: gnosis --doctor     ふだんの Vim（vim / ~/.vimrc）は変えていません。" \
+    "  To check: gnosis --doctor     Your normal Vim (vim / ~/.vimrc) was not changed."
