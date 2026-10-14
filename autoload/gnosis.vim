@@ -5983,11 +5983,27 @@ endfunction
 " ### Context が無いときに作る位置（0 始まり）。あるなら -1。
 " Group / Related / BackLink のうち最初のものの手前、どれも無ければ末尾。
 function! s:context_insert_index(lines) abort
-  for l:l in a:lines
-    if trim(l:l) ==# s:v2_up_mark || index(s:v2_up_marks_legacy, trim(l:l)) >= 0
+  let l:flags = s:fence_flags(a:lines)
+  let l:pb = -1
+  for l:i in range(0, len(a:lines) - 1)
+    if l:flags[l:i] | continue | endif
+    let l:mark = trim(a:lines[l:i])
+    if l:mark ==# s:v2_up_mark || index(s:v2_up_marks_legacy, l:mark) >= 0
       return -1
     endif
+    if l:mark ==# '### ParentBranch' && l:pb < 0
+      let l:pb = l:i
+    endif
   endfor
+  " ParentBranch が先に存在するときはその節の後ろに Context を入れる。
+  if l:pb >= 0
+    for l:i in range(l:pb + 1, len(a:lines) - 1)
+      if !l:flags[l:i] && index(s:v2_any_marks, trim(a:lines[l:i])) >= 0
+        return l:i
+      endif
+    endfor
+    return len(a:lines)
+  endif
   let l:fs = s:first_section_index_in_lines(a:lines)
   return l:fs >= 0 ? l:fs : len(a:lines)
 endfunction
@@ -6670,7 +6686,7 @@ function! gnosis#v2_new_here() abort
   execute 'edit ' . fnameescape(l:file)
 endfunction
 
-" zn: ノート作成。リレーションは書かず、位置だけ h/Enter/o/p で選ぶ。
+" zn: 新規ノートは明示的な孤立(o)・親(p)以外、派生元への Branch を自動記録する。
 function! gnosis#v2_new_plain() abort
   call s:v2_new_interactive('')
 endfunction
@@ -6767,7 +6783,7 @@ endfunction
 
 " zn / zk の共通本体。
 "   a:attr が空なら普通のノート、'グループ' なら容器ノート（attribute: グループ）。
-"   作成時にリレーション（ノート: など）は一切書かない。置くのは素のリンク 1 行で、
+"   通常の zn は新ノートとの Branch 関係も記録する。zk は明示的な b/p 以外 Branch を付けない。
 "   あとから手で グループ / きっかけ: などを書く。`:` / `;` は sync がそのまま扱う。
 "   位置キー: h=カーソル直下 / Enter=Child末尾 / o=リンク無し(孤立) / p=Parent末尾。
 " simple: 本文の最後（### Context の手前）へ link を、空行 1 つを挟んで置く
@@ -7177,6 +7193,16 @@ function! s:outline_pick_here(Cb) abort
     echo gnosis#i18n#tr('Gnosis: 見出しがありません')
     return
   endif
+  " 回帰テストでは実際の fzf を起動せず見出しを選択する。
+  if exists('g:gnosis_test_heading')
+    for l:it in l:items
+      if l:it.text ==# g:gnosis_test_heading
+        call call(a:Cb, [l:it.lnum])
+        return
+      endif
+    endfor
+    return
+  endif
   let s:outline_pick_cb = a:Cb
   if !exists('*fzf#run')
     let l:choices = []
@@ -7216,6 +7242,14 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ts  = gnosis#timestamp_filename()
   let l:file = s:join_path(l:dir, l:ts . '.md')
 
+  " zn で新しいノートを作ったときの系譜は、リンクの配置場所から独立させる。
+  " zk / o / p / index.md を起点とする通常作成は自動 Branch の対象外。
+  let l:auto_branch = empty(a:attr) && fnamemodify(l:cur, ':t') !=# 'index.md'
+        \ && (index(['h', 't', 'c'], tolower(l:ch)) >= 0 || l:ch ==# "\<CR>" || l:ch ==# "\<NL>")
+  if l:auto_branch && !gnosis#branch#can_parent_here()
+    return
+  endif
+
   " 新ノートを先に作る（sync がリンク先を解決できるように）
   " t は見出しの下に直接リンクを置くので、元のノートが日記なら「今日のノート」には重ねない
   let s:diary_skip_from = (l:ch ==? 't') ? l:cur : ''
@@ -7225,12 +7259,12 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let s:diary_skip_from = ''
   endtry
 
-  " b: 今のノートの ChildBranch と新ノートの ParentBranch に書く（python が検証して 2 ファイルを書く）。
-  " 失敗したら、いま作った新ノートを消して何も残さない（今のノートは変更していない）。
+  " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
+  " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
-  if l:ch ==? 'b' || l:ch ==? 'p'
-    " b: 今のノートが親・新ノートが子 / p: 新ノートが親・今のノートが子（同じ add_paths）
-    let l:br = l:ch ==? 'b' ? gnosis#branch#add_paths(l:cur, [l:file]) : gnosis#branch#add_paths(l:file, [l:cur])
+  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch
+    " p のみ逆向き。b と zn の自動関係は今のノートが親。
+    let l:br = l:ch ==? 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
     if !get(l:br, 'ok', 0)
       call delete(l:file)
       redraw
@@ -7266,7 +7300,8 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
   let &autoindent = l:save_ai | let &smartindent = l:save_si
   silent noautocmd write
-  if l:branch_ok
+  " b/p は本文リンクが無いのでここで同期。通常の zn は本文への配置後に同期する。
+  if l:branch_ok && !l:added
     call s:run_update_one_for(l:cur)
   endif
   let l:in_body = 0
@@ -7281,9 +7316,9 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
         call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
         let l:in_body = 1
       endif
-    else
-      " h / Enter は今のノートが親。新ノート側は ### Context にだけ入れる。
-      " 本文（中央）には入れない。本文はテンプレートのまま（余白 2 行）を残す。潰さない。
+    elseif !empty(a:attr) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+      " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
+      " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
     endif
     call s:run_update_one_for(l:cur)
