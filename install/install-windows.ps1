@@ -11,6 +11,7 @@
 param(
   [switch]$SkipInstall,   # never install anything; report what is missing and stop
   [switch]$NoShortcut,
+  [switch]$NoApp,         # skip the optional Electron note app (\A from Vim)
   [switch]$Resume,        # started by the post-reboot RunOnce entry
   [switch]$Yes,           # do not ask before installing WSL / WezTerm (reboot is still asked)
   [string]$Ref = '',      # optional Git tag/branch for the Linux-side checkout
@@ -292,10 +293,50 @@ function Invoke-WslBash([string]$name,[string]$source,[string]$operation) {
     Fail ($operation + ' failed inside Ubuntu (exit code ' + $LASTEXITCODE + ').') 'Read the messages above (network or sudo problems are most common), then run the installer again; finished steps are skipped.'
   }
 }
+
+# Linux pieces of the optional Electron app (\A in Vim). Node is kept in a Gnosis-only folder
+# (checksum-verified from nodejs.org) so Ubuntu's own packages are not replaced.
+$script:AppSetup = @'
+H="${XDG_DATA_HOME:-$HOME/.local/share}/gnosis"
+pk=""
+for p in build-essential libnss3 libgbm1 libgtk-3-0 libxss1 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxdamage1 libxrandr2 libxtst6 xdg-utils; do
+  dpkg -s "$p" >/dev/null 2>&1 || pk="$pk $p"
+done
+dpkg -s libasound2t64 >/dev/null 2>&1 || dpkg -s libasound2 >/dev/null 2>&1 || pk="$pk libasound2t64"
+if [ -n "$pk" ]; then
+  echo "Installing app libraries:$pk"
+  sudo apt-get update
+  sudo apt-get install -y $pk || sudo apt-get install -y $(echo "$pk" | sed 's/libasound2t64/libasound2/')
+fi
+nodemajor=0
+command -v node >/dev/null 2>&1 && nodemajor=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+case "$(command -v node 2>/dev/null)" in /mnt/*) nodemajor=0 ;; esac
+if [ "$nodemajor" -lt 20 ]; then
+  if [ -x "$H/node/bin/node" ]; then
+    echo "Using Gnosis Node.js: $("$H/node/bin/node" -v)"
+  else
+    case "$(uname -m)" in x86_64) na=x64 ;; aarch64) na=arm64 ;; *) echo "Unsupported CPU for the app: $(uname -m)" >&2; exit 40 ;; esac
+    base=https://nodejs.org/dist/latest-v22.x
+    tmp=$(mktemp -d)
+    curl -fsSL "$base/SHASUMS256.txt" -o "$tmp/SUMS" || { echo "Could not reach nodejs.org (check the network)." >&2; exit 41; }
+    line=$(grep "node-v[0-9.]*-linux-$na.tar.xz\$" "$tmp/SUMS" | head -1)
+    [ -n "$line" ] || { echo "No Node.js 22 build found for linux-$na." >&2; exit 41; }
+    file=${line##* }
+    curl -fsSL "$base/$file" -o "$tmp/$file" || { echo "Node.js download failed." >&2; exit 41; }
+    (cd "$tmp" && echo "$line" | sha256sum -c -) || { echo "Node.js checksum mismatch; not installing it." >&2; exit 42; }
+    mkdir -p "$H/node"
+    tar -xJf "$tmp/$file" -C "$H/node" --strip-components=1 || { echo "Could not unpack Node.js (xz-utils missing?)." >&2; exit 43; }
+    rm -rf "$tmp"
+  fi
+  PATH="$H/node/bin:$PATH"; export PATH
+fi
+'@
 function Get-LinuxBootstrapScript([string]$ref) {
   if ($ref -and $ref -notmatch '^[A-Za-z0-9._/-]+$') { Fail 'Invalid -Ref value.' 'Use a plain branch or tag name.' }
   $branchArg = ''; $installArg = ''
-  if ($ref) { $branchArg = '--branch ' + $ref; $installArg = ' --no-update' }
+  $appBlock = ''
+  if (-not $NoApp) { $appBlock = $script:AppSetup; $installArg = ' --app' }
+  if ($ref) { $branchArg = '--branch ' + $ref; $installArg = $installArg + ' --no-update' }
   $t = @'
 set -eu
 trap 'rc=$?; echo "[gnosis-installer] failed near line $LINENO (exit $rc)" >&2' EXIT
@@ -317,13 +358,16 @@ else
   git clone __BRANCH__ __REPO__ "$HOME/gnosis"
 fi
 cd "$HOME/gnosis"
+__APPSETUP__
 trap - EXIT
 exec sh install/install.sh --yes__NOUPDATE__
 '@
-  return $t.Replace('__BRANCH__',$branchArg).Replace('__REPO__',$script:RepoUrl).Replace('__NOUPDATE__',$installArg)
+  return $t.Replace('__BRANCH__',$branchArg).Replace('__REPO__',$script:RepoUrl).Replace('__NOUPDATE__',$installArg).Replace('__APPSETUP__',$appBlock)
 }
 function Get-LinuxVerifyScript {
-  return @'
+  $pre = ''
+  if ($NoApp) { $pre = 'GNOSIS_VERIFY_APP=0' + [char]10 }
+  $body = @'
 set -eu
 fail() { echo "VERIFY FAILED: $1" >&2; exit 30; }
 test -x "$HOME/.local/bin/gnosis" || fail "launcher ~/.local/bin/gnosis missing"
@@ -342,8 +386,16 @@ set -- $ver
 { [ "${1:-0}" -gt 8 ] || { [ "${1:-0}" -eq 8 ] && [ "${2:-0}" -ge 2 ]; }; } || fail "Vim older than 8.2"
 grep -q -- '--tui' "$HOME/gnosis/bin/gnosis" || fail "launcher has no --tui mode"
 "$HOME/.local/bin/gnosis" --doctor >/dev/null 2>&1 || fail "gnosis --doctor reported problems (run: wsl -d Ubuntu -- ~/.local/bin/gnosis --doctor)"
+if [ -f "$HOME/gnosis/web/electron/main.cjs" ] && [ "${GNOSIS_VERIFY_APP:-1}" = 1 ]; then
+  el="$HOME/gnosis/web/node_modules/.bin/electron"
+  test -x "$el" || fail "app (Electron) not installed; \A will not work. Re-run the installer"
+  test -f "$HOME/gnosis/web/bundle.js" || fail "app bundle (web/bundle.js) not built"
+  missing=$(ldd "$HOME/gnosis/web/node_modules/electron/dist/electron" 2>/dev/null | grep 'not found' || true)
+  [ -z "$missing" ] || fail "app libraries missing: $missing"
+fi
 echo "VERIFY OK"
 '@
+  return ($pre + $body)
 }
 
 # ---------------------------------------------------------------- Windows launcher
