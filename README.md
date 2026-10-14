@@ -11,7 +11,7 @@ The UI and the generated guide are available in Japanese and English (see [Engli
 - 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、`### Context` / `### Group` / `### Related` / `### BackLink` を保存時に自動で同期
 - 中身は本物の Vim。Vim を知らなくても、インストーラーが Gnosis 専用の Vim 環境を作り、アイコンから起動できる
 - 標準の画面は Bash などのターミナルで起動する本物の Vim。独自 GUI ではない（Electron は明示的な `--app` のときだけ使用できるオプション）
-- 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・文字サイズ・起動サイズ・テーマ）
+- 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・起動サイズ・テーマ）。文字サイズは Gnosis 全体で 1 つ
 - 日本語 / 英語。操作ガイドも選んだ言語で作られる
 
 リポジトリ: https://github.com/Yurii7812/gnosis
@@ -27,15 +27,41 @@ Vim が無ければ入れ、Gnosis に使える Vim（8.2 以上、`+job +channe
 
 ### Linux
 
+新しく入れる:
+
 ```sh
 git clone https://github.com/Yurii7812/gnosis.git
 cd gnosis
 ./install/install.sh
 ```
 
-- 足りないもの（Vim・git・Python 3・fzf・ripgrep・Node.js）は、確認してから apt / dnf / pacman / zypper で入れます（`--no-system` で入れない）
-- アプリメニューの **Gnosis** はターミナルを開いて Vim を起動します。Bash などの端末では `gnosis`（`~/.local/bin/gnosis`）でその端末の Vim を起動します
-- デスクトップにもアイコンを置くなら `--desktop-icon`。Electron は標準でインストールされません。追加する場合だけ `--app`
+更新する（前に入れたフォルダで同じインストーラーを動かす）:
+
+```sh
+cd <前に clone したフォルダ>
+./install/install.sh      # GitHub に新しい版があれば git pull --ff-only してから入れ直す
+```
+
+- 未コミットの変更があるフォルダは更新しません（変更は消しません）。`--no-update` で取り込みを止められます
+- 別のフォルダに新しく clone して入れると、ランチャーとアプリメニューはそのフォルダを指すように作り直されます（前のフォルダは消しません）
+- 開いている端末は古い場所を覚えていることがあります。`hash -r` を実行するか、端末を開き直してください
+- 最後に、インストール先・Gnosis ホーム・vimrc・Vim・Python・コミット・最新かどうか・ランチャー・起動項目を表示します
+- どの Gnosis が起動するかは `gnosis --where`、導入の問題は `gnosis --doctor` で確かめられます
+
+必要なもの（足りなければ、確認してから apt / dnf / pacman / zypper / Homebrew で入れます。`--no-system` で入れない）:
+
+| 種類 | もの | 無いとき |
+| --- | --- | --- |
+| 必須 | Vim 8.2 以上（`+job +channel +timers +textprop +popupwin`）・git・Python 3 | インストールは失敗で終わります |
+| 推奨 | fzf（無ければ Gnosis 専用に取得）・ripgrep | 検索が使えない・遅い |
+| 推奨 | python3-venv と pykakasi（Gnosis ホームの `venv` に入れる。Debian の externally-managed な Python でも可） | よみ順の並べ替えが文字コード順 |
+| 推奨 | クリップボード: Wayland は wl-clipboard、X11 は `+clipboard` の Vim（Debian は `vim-gtk3`）か xclip | PC のクリップボードとの受け渡しができない |
+| 機能別 | 暗号化 vault: gocryptfs・FUSE（`--with-crypt`。暗号化 vault が登録済みなら自動で確かめる） | 暗号化 vault を開けない |
+| 機能別 | 紙の日記の取り込み（`\F`）: tkinter・Pillow（`--with-scan`） | その画面が開かない |
+| 機能別 | Electron アプリ: Node.js（`--app` のときだけ） | — |
+
+- アプリメニューの **Gnosis** は、ランチャーが端末の窓を開いて Vim を起動します（`Exec=… --new-terminal`）。Bash などの端末では `gnosis`（`~/.local/bin/gnosis`）でその端末の Vim を起動します
+- デスクトップにもアイコンを置くなら `--desktop-icon`（前に置いたものがあれば作り直します）
 
 ### macOS
 
@@ -72,13 +98,14 @@ Bash は要りません（起動画面のシンボルは静的なアセットか
 | アイコン（Linux アプリメニュー / macOS Gnosis.app） | ターミナルを開いて Vim で起動（Windows は別ランチャー） |
 | `gnosis` | 現在の端末で Vim を起動。端末外からは新しい端末を開く。Electron / GUI Vim は自動起動しない |
 | `gnosis --app` / `--gui` / `--tui` | 明示的な場合のみ Electron / GUI Vim / 今の端末の Vim |
-| `gnosis --new-terminal` | 新しい端末ウィンドウの Vim（対応端末には文字サイズと最大化を渡す） |
+| `gnosis --new-terminal` | 新しい端末ウィンドウの Vim（保存した文字サイズ・フォント・行間を渡す。下の表） |
 | `gnosis ノート.md` | そのノートを開く（起動画面は出さない） |
-| `gnosis --where` | Gnosis のフォルダ・Gnosis ホーム・使う vimrc を表示 |
+| `gnosis --where` | Gnosis のフォルダ・コミット・Gnosis ホーム・使う vimrc・Vim を表示 |
+| `gnosis --doctor` | 導入の診断（古い版・PATH の古いランチャー・古いアプリメニュー項目・必要なもの・文字サイズ） |
 
 ### 起動画面
 
-ノートを開く前に、**夜空色背景 `#14283D`・水色文字 `#79CFFF`**（`chnoubis3.sh` の10番）の起動画面が出ます。Chnoubisは横幅を調整したUnicode Braille図案で、下の **GNOSISロゴも文字列ではなく点描グラフィック**です。端末サイズにより図案とロゴを切り替えます: Chnoubis のシンボル・「Gnosis」・選択中の vault の名前とパス・「Enter で開始」。
+ノートを開く前に、**夜空色背景 `#14283D`・水色 `#79CFFF` の Chnoubis**（`chnoubis3.sh` の10番）の起動画面が出ます。Chnoubis は `chnoubis3.sh` の元の Unicode Braille 図案で、下の **GNOSIS ロゴも文字列ではなく点描グラフィック**です。端末の大きさに合わせて図案とロゴの大きさを選び、窓の大きさや文字サイズが変わると描き直します（狭いときは余白・補足の行・ロゴの順に省き、図案と「Enter で開く」を残します）。文字のマスが横長で元の図案が横に伸びて見える端末だけ、横幅を詰めた図案を使います（`let g:gnosis_start_art = 'original'` / `'fit'` で固定）。案内には「Enter で「前回の vault 名」を開く」と出ます。
 
 | キー | 動き |
 | --- | --- |
@@ -91,31 +118,58 @@ vault の一覧: `j` / `k` で選ぶ・`Enter` で開く・`a` 既存のフォ�
 初めての起動（vault が無い）でも Chnoubis の起動画面を表示し、`Enter` / `v` から vault を作るか登録するか選びます。前回の vault が見つからないときは、元の場所に勝手に作らず、選び直し・場所の指定し直しを案内します。
 使用中に vault を切り替えるときは `:GnosisVaults`（保存先・検索・同期・設定がその vault に切り替わります）。
 
-### フォントと見た目（ターミナルVim）
-- **Gnosis本文・設定メニュー・起動画面の標準配色は10番「夜空×水色」**です。本文のリンクは水色の下線付き表示名だけになり、`[表示名](URL)` の括弧とURLは通常隠れます。隠れたURLを直接編集したいときは一時的に `:setlocal conceallevel=0` とします。
-- フォントサイズはVimの描画設定ではなくターミナル自体が管理します。Kittyでリモート制御が使用できる場合は、設定画面の「文字サイズ」で `+` / `-` を押すと設定画面ごと即時反映できます。その他の端末の現在のウィンドウには反映されません。
-- **XFCE Terminal**は `gnosis --new-terminal` で新しいウィンドウを開くと保存済みの文字サイズを適用します。現在のターミナルでは端末自体のズーム操作を使ってください。端末で即時変更ができない場合でも設定値は保存されます。
+### 見た目（読みやすさ）
+
+Chnoubis 10番の夜空×水色を土台に、**役割ごとに色を分けて**います（`assets/themes/builtin.json`・`colors/gnosis.vim`）。
+
+| 要素 | 色 | 背景 #14283D とのコントラスト比 |
+| --- | --- | --- |
+| 本文 | オフホワイト `#E6EEF5` | 12.8 : 1 |
+| リンクの表示名 | シアン `#5CD0FF` ＋下線 | 8.5 : 1 |
+| 見出し | 淡い金 `#F6D88A` ＋太字（`###` の記号は控えめな色） | 10.8 : 1 |
+| 補助の文字（行番号・パス・front matter の項目名） | `#9FB4C8` | 7.0 : 1 |
+| 選択範囲 | 背景 `#2A4F72`（文字は白に近い色） | 本文 7.3 : 1 |
+| Chnoubis・GNOSIS ロゴ | `#79CFFF` | 8.7 : 1 |
+
+以前は本文・見出しも `#79CFFF`、リンクが本文より明るい `#BCEEFF` で、リンクが本文に紛れ、水色の細い字画は長文で読みにくくなっていました。
+斜体は Markdown の `*強調*` だけに使い、コメントなどには使いません。リンクの手前の番号（`1`〜`9`・`0`・`g1` …）は控えめな色の札で出ます。
+
+- Markdown のリンクは、ふだんは**表示名だけ**が見えます（`[表示名](ファイル名)` の括弧とファイル名は隠れる）。元の Markdown を直したいときは `:GnosisLinkSource` で見せる／隠すを切り替えます（そのバッファだけ）
+- 配色を変えるには、設定画面の「カスタム配色」（背景・本文・リンク・見出し・選択範囲・カーソル行）か、追加テーマ
+- 端末が 24bit 色に対応していれば（`COLORTERM=truecolor`）その色、そうでなければ近い 256 色で表示します
+- **フォントの種類・太さ・アンチエイリアス・行間・透過は端末が描く**ので、Vim の配色では変えられません。Gnosis が開く Konsole の窓では、Gnosis 専用プロファイルで、等幅フォント（既定は Hack など入っているもの。日本語は端末のフォント置き換え）・行間 2px・アンチエイリアス・Gnosis の配色を使います
+
+### 文字サイズ
+
+文字サイズは vault ごとではなく **Gnosis 全体で 1 つ**です（Gnosis ホームの `terminal.json`。暗号化 vault を開く前のランチャーも読めます）。設定画面の「文字サイズ」の行で `+` 大きく・`-` 小さく・`0` 標準（16）・`Enter` 数字で指定、または `:GnosisFontSize 20`（`+1` / `-1` / `reset`）。フォント名・行間・**Gnosis の窓に使う端末**も設定画面で選べます（自動ならデスクトップに合う端末: KDE は Konsole、XFCE は XFCE Terminal、GNOME は GNOME Terminal）。
+
+文字を描いているのは Bash でも Vim でもなく**端末エミュレーター**なので、できることは端末ごとに違います。
+
+| 端末 | Gnosis の窓を開くとき（アイコン・`gnosis --new-terminal`） | その場で変える（設定画面の `+` / `-`） | 確認 |
+| --- | --- | --- | --- |
+| Konsole | Gnosis 専用プロファイル `Gnosis-<大きさ>` で開く（その窓にだけ見せる。ふだんのプロファイル一覧には出ない） | Gnosis が開いた窓でだけ、D-Bus でプロファイルを切り替えて変える（切り替わったことを Konsole に聞いて確かめる）。ふだんの Konsole の窓では変えない | Konsole 25.04 で確認 |
+| XFCE Terminal | `--font "フォント 大きさ"` | できない（保存して、次の窓から） | 起動時の指定を確認 |
+| xterm | `-fa フォント -fs 大きさ` | できない | 起動時の指定を確認 |
+| kitty | `-o font_size`。Gnosis の窓は遠隔操作を許可 | `kitty @ set-font-size`（ふだんの窓で変えたら終了時に戻す） | 未確認（未導入） |
+| Alacritty | `-o font.size` | `alacritty msg config`（0.13 以降） | 未確認（未導入） |
+| WezTerm | `--config font_size` | できない | 未確認（未導入） |
+| GNOME Terminal | 渡せない（端末のプロファイルのまま） | できない | 未確認（未導入） |
+| GUI 版 Vim | `guifont` | `guifont` | — |
+
+- その場で変わらない端末でも、値は保存され、**次に Gnosis の窓（アイコン・`gnosis --new-terminal`）を開いたときに使われます**。画面には「保存した」と「この窓に反映した」を分けて表示します
+- 端末の `Ctrl` + `+` / `-` / `0` は**端末が処理して Vim には届かず**、変えた大きさを Vim から読み取る方法もないため、Gnosis には保存されません（その場だけ）
+- 既にある Bash の窓で `gnosis` を実行したときは、その窓の端末の設定を変えません
+- ふだんの端末の設定・プロファイル・ふだんの Vim は変更しません
 
 ### 設定（`:GnosisSettings` / 起動画面の `s` / アプリの「設定」）
 
-vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/settings.json`）。
+vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/settings.json`）。文字サイズ・フォント・行間・使う端末は Gnosis 全体の設定です（上の「文字サイズ」）。
 
 - 言語（日本語 / English）… メッセージ・メニュー・入力案内・操作ガイド
 - 起動時に最大化（既定: する。全画面表示ではありません）・通常のウィンドウサイズ
-- 文字サイズ … 次に開くときから使われます
 - ライト / ダーク
 - テーマ … 標準・カスタム配色（背景・本文・リンク・見出し・選択範囲・カーソル行）・追加テーマ
 - テーマの追加 … `Plug 'cocopon/iceberg.vim'` のように入力。Vim script としては実行せず、`作者/リポジトリ` だけを取り出して Gnosis ホームの `themes/` に取得します。読み込めないテーマは標準に戻ります
-
-文字サイズと拡大縮小:
-
-| 環境 | 文字サイズの設定 | Ctrl + / − / 0 |
-| --- | --- | --- |
-| アプリ | 本文と端末部分の文字の大きさ | 画面全体の拡大・縮小・元に戻す（その場だけ。設定は変わらない） |
-| GUI 版 Vim | `guifont` の大きさ・起動サイズ | 文字の大きさをその場だけ変える（`Ctrl 0` で設定の大きさ） |
-| 端末版 Vim | 端末の文字は Vim から変えられない。`gnosis --new-terminal` が kitty / alacritty / wezterm / xterm にだけ大きさと最大化を渡す | 端末の機能のまま |
-
-ふだんの端末の設定は変更しません。gnome-terminal / konsole / Terminal.app などは、その端末の設定の文字サイズのままです。
 
 ---
 
@@ -154,16 +208,35 @@ B がグループなら、表示名を入力します。入力欄は空から始
 
 | もの | 場所 |
 | --- | --- |
-| Gnosis 本体 | `git clone` したフォルダ（更新は `git pull` してもう一度インストーラー） |
+| Gnosis 本体 | `git clone` したフォルダ（更新はそのフォルダで `./install/install.sh`） |
 | Gnosis ホーム（Gnosis 側の状態） | Linux `~/.local/share/gnosis`（`$XDG_DATA_HOME/gnosis`）・macOS `~/Library/Application Support/Gnosis`・Windows `%APPDATA%\Gnosis`。`$GNOSIS_HOME` で変更可 |
 | ├ `vaults.json` | 登録済みの vault と最後に選んだ vault |
 | ├ `vimrc` / `vimrc.local` | 専用の vimrc（インストーラーが作る）/ Gnosis だけの追加設定（任意） |
 | ├ `plugins/` / `themes/` | 専用のプラグイン（fzf・fzf.vim・vim-surround）/ 追加したテーマ |
-| └ `logs/` / `state/` | アプリのログ / vault を選ぶ前の一時的な状態 |
+| ├ `terminal.json` | 文字サイズ・フォント・行間・Gnosis の窓に使う端末（Gnosis 全体） |
+| ├ `terminal/share/konsole/` | Gnosis が開く Konsole の窓だけが読む専用プロファイル（ランチャーが毎回作る） |
+| ├ `venv/` | Gnosis 専用の Python（pykakasi） |
+| └ `logs/` / `state/` | ランチャー（`launcher.log`）・アプリのログ / vault を選ぶ前の一時的な状態 |
 | vault ごとの設定 | `<vault>/.gnosis/settings.json` |
 | ノート | vault の中（`.md`）。履歴など vault の状態は `<vault>/.state/` |
 
 設定の優先順位: 設定画面の項目は vault の `settings.json` → 既定値。設定画面に無い細かな動作は vimrc の `g:gnosis_*`（無ければ旧名 `g:simple_yurii_note_*`）→ 既定値。
+
+### 操作ガイドの所属関係
+
+操作ガイド（`gnosis-guide.md`）も vault の普通のノートです。Index の本文からリンクされていれば `### Group` に Index、別のグループの本文に移せばそのグループ、複数なら全部が、他のノートと同じ同期の規則で入ります（`### Context` / `### Related` / `### BackLink` も同じ）。
+起動のたびにガイドの**本文**は Gnosis の版と言語に合わせて更新しますが、関係の節（`### Context` 以下）と front matter はそのまま残します。ガイド本文の中の `### Group` などは説明の文で、関係の節とは扱いません。
+
+## トラブルシューティング
+
+| 症状 | 確かめること・直し方 |
+| --- | --- |
+| 新しく入れたのに古い Gnosis が起動する | `gnosis --where` で本体のフォルダとコミット、`gnosis --doctor` で PATH の古いランチャー・古いアプリメニュー項目を確認。入れたいフォルダで `./install/install.sh` を実行し直し、`hash -r` |
+| アイコンを押しても何も起きない | `gnosis --doctor` の「アプリメニュー」が NG なら `./install/install.sh` で作り直す（古い版は `Terminal=false` で Electron を起動する形だった）。端末を開けなかったときは `~/.local/share/gnosis/logs/launcher.log` に記録し、通知を出します。端末は設定画面の「Gnosis の窓に使う端末」か `GNOSIS_TERMINAL=konsole` で指定できます |
+| 文字サイズを変えても画面が変わらない | 設定画面の「Gnosis の窓に使う端末」の下に、その窓でその場で変わるかを表示します。変わらない端末でも値は保存され、次に Gnosis の窓を開いたときに使われます（上の「文字サイズ」） |
+| リンクが `[名前](ファイル名)` のまま見える | `:GnosisLinkSource` で表示を切り替えていないか。`:set conceallevel?` が 2 か |
+| よみ順の並べ替えが効かない | `gnosis --doctor` の pykakasi。Debian では `sudo apt install python3-venv` のあと `./install/install.sh` |
+| 暗号化 vault が開けない | `gnosis --doctor` の gocryptfs・fusermount。`./install/install.sh --with-crypt` |
 
 ---
 
@@ -188,6 +261,7 @@ B がグループなら、表示名を入力します。入力欄は空から始
 | アプリ（Electron） | 実機で確認（xvfb 上の自動試験を含む） | 実装済み・実機未確認 | 実装済み・実機未確認（node-pty の作り直しが要る） |
 | インストーラー | 一時 HOME で確認（パッケージの導入以外） | 実装済み・実機未確認 | 構文の確認のみ |
 | GUI 版 Vim | gvim で確認 | MacVim 用に実装・未確認 | gvim 用に実装・未確認 |
+| 端末の文字サイズ・アイコンからの起動 | Konsole（その場の変更・再起動後）・XFCE Terminal・xterm（開くとき）を仮想ディスプレイで確認。kitty・Alacritty・WezTerm・GNOME Terminal は未確認 | Terminal.app の設定のまま | — |
 
 ---
 
@@ -215,7 +289,15 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
   Your own `~/.vimrc` / `~/.vim` are never read or changed.
 - **Start screen**: the Chnoubis symbol, "Gnosis", the selected vault, `Enter` to start, `v` to choose / register / create / remove vaults
   (removing never deletes notes), `s` for settings.
-- **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, font size, light / dark,
+- **Update**: run `./install/install.sh` again in the cloned folder; it pulls the newer version (`git pull --ff-only`, never when there are
+  uncommitted changes) and points the launcher and the app-menu entry at that folder. `gnosis --where` / `gnosis --doctor` show which
+  Gnosis starts and diagnose stale launchers, old app-menu entries and missing requirements (Vim, git, Python 3 are required).
+- **Readability**: off-white body text, cyan underlined link names (the `[name](file.md)` syntax is hidden; `:GnosisLinkSource` toggles it),
+  pale-gold bold headings on the Chnoubis #10 navy background.
+- **Font size** is Gnosis-wide (`terminal.json` in the Gnosis home): `+` / `-` / `0` on the settings screen or `:GnosisFontSize 20`.
+  Konsole windows opened by Gnosis change at once (a Gnosis-only profile, invisible to your normal Konsole); kitty / Alacritty can too;
+  XFCE Terminal, xterm and WezTerm get the size when a Gnosis window opens. The terminal's own Ctrl + / − / 0 cannot be saved.
+- **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, light / dark,
   themes (standard, custom colors, or `Plug 'author/repo'` themes from GitHub, safely parsed).
 - **New keys**: `zk` → `g` groups the link under the cursor; `\l` → `n` adds a link with a typed display name;
   after `c` in `zn` / `zk` / `za` / `\l`, choose how the target links back: `Enter` end of body, `t` end of a chosen section, `o` none.

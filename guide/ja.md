@@ -6,11 +6,11 @@
 - 起動画面 … Chnoubis のシンボル・選択中の vault・`Enter` で開始。`v` で vault の選択・管理、`s` で設定、`q` で終了
 - vault の一覧 … `j` / `k` で選ぶ ・ `Enter` で開く ・ `a` 既存のフォルダを登録 ・ `n` 新しい vault を作る ・ `d` 一覧から外す（ノートとフォルダは消さない） ・ `Esc` 戻る
 - `:GnosisStart` 起動画面 ・ `:GnosisVaults` vault の一覧（使用中に切り替える） ・ `:GnosisSettings` 設定画面
-- 設定は vault ごと（`.gnosis/settings.json`）: 言語・起動時に最大化・通常のウィンドウサイズ・文字サイズ・ライト／ダーク・テーマ・カスタム配色
+- 設定は vault ごと（`.gnosis/settings.json`）: 言語・起動時に最大化・通常のウィンドウサイズ・ライト／ダーク・テーマ・カスタム配色。文字サイズ・フォント・行間・使う端末は Gnosis 全体（Gnosis ホームの `terminal.json`）
 - `:GnosisThemeAdd` `Plug '作者/リポジトリ'` … GitHub の Vim テーマを追加してこの vault のテーマにする ・ `:GnosisThemeReset` 標準テーマに戻す
 - `:GnosisFontSize` 文字サイズ（`20` / `+1` / `-1` / `reset`。保存して、できる端末ではその場で反映） ・ `:GnosisLinkSource` リンクの元の Markdown を見せる／隠す
 - アプリでは `Ctrl` + `+` / `-` / `0` で画面全体の拡大・縮小・元に戻す（その場だけ。文字サイズの設定は変わらない）
-- GUI 版 Vim では `<C-=>` / `<C-+>` / `<C-->` / `<C-0>` で文字の大きさをその場だけ変える（`<C-0>` で設定の大きさに戻る）。端末版 Vim の文字の大きさは端末の設定（Gnosis のランチャーが対応端末にだけ設定の大きさを渡す）
+- GUI 版 Vim では `<C-=>` / `<C-+>` / `<C-->` / `<C-0>` で文字の大きさをその場だけ変える。端末の `Ctrl` + `+` / `-` / `0` は端末が処理し、保存されない。保存される大きさは設定画面の文字サイズで `+` / `-` / `0`（Konsole・kitty・Alacritty の Gnosis の窓ではその場で変わる。他の端末は次に Gnosis の窓を開いたとき）
 
 ## ノート作成
 

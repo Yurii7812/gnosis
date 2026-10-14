@@ -6,11 +6,11 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - Start screen … the Chnoubis symbol, the selected vault, and `Enter` to start. `v` chooses / manages vaults, `s` opens the settings, `q` quits
 - Vault list … `j` / `k` select ・ `Enter` opens ・ `a` registers an existing folder ・ `n` creates a new vault ・ `d` removes it from the list (notes and folders are kept) ・ `Esc` goes back
 - `:GnosisStart` start screen ・ `:GnosisVaults` vault list (switch while working) ・ `:GnosisSettings` settings
-- Settings are per vault (`.gnosis/settings.json`): language, maximize on start, normal window size, font size, light / dark, theme, custom colors
+- Settings are per vault (`.gnosis/settings.json`): language, maximize on start, normal window size, light / dark, theme, custom colors. Font size, font, line spacing and terminal are Gnosis-wide (`terminal.json` in the Gnosis home)
 - `:GnosisThemeAdd` `Plug 'author/repo'` … adds a Vim theme from GitHub and uses it for this vault ・ `:GnosisThemeReset` back to the standard theme
 - `:GnosisFontSize` font size (`20` / `+1` / `-1` / `reset`; saved, and applied at once where the terminal allows) ・ `:GnosisLinkSource` show / hide the Markdown source of links
 - In the app, `Ctrl` + `+` / `-` / `0` zooms the whole window in / out / back (only for now; the font size setting is not changed)
-- In GUI Vim, `<C-=>` / `<C-+>` / `<C-->` / `<C-0>` change the font size only for now (`<C-0>` goes back to the setting). In terminal Vim the terminal decides the font (the Gnosis launcher passes the size only to supported terminals)
+- In GUI Vim, `<C-=>` / `<C-+>` / `<C-->` / `<C-0>` change the font size for now only. The terminal's own `Ctrl` + `+` / `-` / `0` are handled by the terminal and not saved. The saved size is changed with `+` / `-` / `0` on the font size row of the settings screen (immediately in Gnosis windows of Konsole, kitty, Alacritty; elsewhere the next time a Gnosis window opens)
 
 ## Creating notes
 

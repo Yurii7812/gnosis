@@ -18,7 +18,9 @@ function! s:first(t) abort
   call s:ok('起動画面: vault の名前とパス', l:text =~# '保管庫' && stridx(l:text, $START_VAULT) >= 0)
   call s:ok('起動画面: Enter で開始の案内', l:text =~# 'Enter')
   call s:ok('起動画面: vault の選択・管理への入口', l:text =~# 'v ')
-  call s:ok('起動画面: chnoubis3.sh の10番', tolower(s:hl('bg')) ==# '#14283d' && tolower(s:hl('fg')) ==# '#79cfff', s:hl('bg') . ' ' . s:hl('fg'))
+  " 背景は10番の #14283D、Chnoubis の図案は #79CFFF のまま。案内の文字は読みやすい白系
+  let s:art = tolower(synIDattr(synIDtrans(hlID('gnosisStartArt')), 'fg#', 'gui'))
+  call s:ok('起動画面: chnoubis3.sh の10番', tolower(s:hl('bg')) ==# '#14283d' && s:art ==# '#79cfff' && tolower(s:hl('fg')) ==# '#e6eef5', s:hl('bg') . ' ' . s:art . ' ' . s:hl('fg'))
   call s:ok('起動画面: 標準80x24端末でもロゴ+図案が収まる',
         \ len(gnosis#start#pick_art(80, 23, 2 + len(gnosis#start#logo(80, 23)) + 2))
         \ + len(gnosis#start#logo(80, 23)) + 2 + 2 <= 23)
@@ -45,7 +47,7 @@ function! s:back(t) abort
 endfunction
 function! s:second(t) abort
   call s:ok('Enter: vault の Index が開く', expand('%:t') ==# 'index.md' && stridx(expand('%:p'), $START_VAULT) == 0, expand('%:p'))
-  call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && s:hl('bg') ==# '#0d1117', &background . ' ' . s:hl('bg'))
+  call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && tolower(s:hl('bg')) ==# '#14283d', &background . ' ' . s:hl('bg'))
   call s:ok('Enter: vault の言語（英語）', gnosis#i18n#lang() ==# 'en', execute('messages'))
   call writefile(s:res, s:w . '/result.txt')
   qa!

@@ -84,6 +84,8 @@ gnosis#jump_relation_link
 gnosis#jump_section_header
 gnosis#jump_up
 gnosis#jump_up_cursor
+gnosis#link_highlight
+gnosis#link_syntax
 gnosis#link_to_outline
 gnosis#linkify_filename_under_cursor
 gnosis#linkify_selection

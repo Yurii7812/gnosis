@@ -242,7 +242,6 @@ ColorScheme=Gnosis
 Font=$fam,$s,-1,5,50,0,0,0,0,0
 LineSpacing=$ls_
 AntiAliasFonts=true
-BoldIntense=false
 
 [Scrolling]
 ScrollBarPosition=2
