@@ -73,7 +73,7 @@ git pull --ff-only origin main
 | 機能別 | 紙の日記の取り込み（`\F`）: tkinter・Pillow（`--with-scan`） | その画面が開かない |
 | 機能別 | Electron アプリ: Node.js（`--app` のときだけ） | — |
 
-- アプリメニューの **Gnosis** は、ランチャーが端末の窓を開いて Vim を起動します（`Exec=… --new-terminal`）。Bash などの端末では `gnosis`（`~/.local/bin/gnosis`）でその端末の Vim を起動します
+- アプリメニューの **Gnosis** でも、Bash などの端末から `gnosis`（`~/.local/bin/gnosis`）を実行しても、Gnosis専用の新しい端末ウィンドウを開いて Vim を起動します。今の端末内で開く場合だけ `gnosis --tui` を指定してください
 - デスクトップにもアイコンを置くなら `--desktop-icon`（前に置いたものがあれば作り直します）
 
 ### macOS
@@ -109,9 +109,10 @@ Bash は要りません（起動画面のシンボルは静的なアセットか
 | 方法 | 動き |
 | --- | --- |
 | アイコン（Linux アプリメニュー / macOS Gnosis.app） | ターミナルを開いて Vim で起動（Windows は別ランチャー） |
-| `gnosis` | 現在の端末で Vim を起動。端末外からは新しい端末を開く。Electron / GUI Vim は自動起動しない |
+| `gnosis` | **必ず Gnosis 専用の新しい端末ウィンドウ**で起動。保存した文字サイズ・フォント・行間を適用。現在の端末には影響しない |
 | `gnosis --app` / `--gui` / `--tui` | 明示的な場合のみ Electron / GUI Vim / 今の端末の Vim |
-| `gnosis --new-terminal` | 新しい端末ウィンドウの Vim（保存した文字サイズ・フォント・行間を渡す。下の表） |
+| `gnosis --tui` / `--terminal` | いま開いている端末内の Vim で起動。フォントサイズは現在の端末の設定を使用 |
+| `gnosis --new-terminal` | `gnosis` と同じく専用の新しい端末で起動（従来との互換性） |
 | `gnosis ノート.md` | そのノートを開く（起動画面は出さない） |
 | `gnosis --where` | Gnosis のフォルダ・コミット・Gnosis ホーム・使う vimrc・Vim を表示 |
 | `gnosis --doctor` | 導入の診断（古い版・PATH の古いランチャー・古いアプリメニュー項目・必要なもの・文字サイズ） |
@@ -159,7 +160,7 @@ Chnoubis 10番の夜空×水色を土台に、**役割ごとに色を分けて**
 
 文字を描いているのは Bash でも Vim でもなく**端末エミュレーター**なので、できることは端末ごとに違います。
 
-| 端末 | Gnosis の窓を開くとき（アイコン・`gnosis --new-terminal`） | その場で変える（設定画面の `+` / `-`） | 確認 |
+| 端末 | Gnosis の窓を開くとき（`gnosis`・アイコン・`gnosis --new-terminal`） | その場で変える（設定画面の `+` / `-`） | 確認 |
 | --- | --- | --- | --- |
 | Konsole | Gnosis 専用プロファイルの絶対パスと `-p Font` によって起動時サイズを明示（専用 state に分離） | Gnosis が開いた窓でだけ、D-Bus でプロファイルを切り替えて変える（切り替わったことを Konsole に聞いて確かめる）。ふだんの Konsole の窓では変えない | Konsole 25.04 で確認 |
 | XFCE Terminal | `--font "フォント 大きさ"` | できない（保存して、次の窓から） | 起動時の指定を確認 |
@@ -170,9 +171,9 @@ Chnoubis 10番の夜空×水色を土台に、**役割ごとに色を分けて**
 | GNOME Terminal | 渡せない（端末のプロファイルのまま） | できない | 未確認（未導入） |
 | GUI 版 Vim | `guifont` | `guifont` | — |
 
-- その場で変わらない端末でも、値は保存され、**次に Gnosis の窓（アイコン・`gnosis --new-terminal`）を開いたときに使われます**。画面には「保存した」と「この窓に反映した」を分けて表示します
+- その場で変わらない端末でも、値は保存され、**次に Gnosis の窓（`gnosis`・アイコン・`gnosis --new-terminal`）を開いたときに使われます**。画面には「保存した」と「この窓に反映した」を分けて表示します
 - 端末の `Ctrl` + `+` / `-` / `0` は**端末が処理して Vim には届かず**、変えた大きさを Vim から読み取る方法もないため、Gnosis には保存されません（その場だけ）
-- 既にある Bash の窓で `gnosis` を実行したときは、その窓の端末の設定を変えません
+- 既にある Bash の窓で `gnosis` を実行しても、新しいGnosis専用ウィンドウを開きます。元のBashの文字サイズ・設定は変更しません。現在の端末で開きたいときだけ `gnosis --tui` を使います
 - ふだんの端末の設定・プロファイル・ふだんの Vim は変更しません
 
 ### 設定（`:GnosisSettings` / 起動画面の `s` / アプリの「設定」）
@@ -301,6 +302,7 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
   `powershell -ExecutionPolicy Bypass -File install\install.ps1` (Windows). The installer creates a Gnosis-only vimrc and plugin area in the
   Gnosis home (`~/.local/share/gnosis`, `~/Library/Application Support/Gnosis`, `%APPDATA%\Gnosis`), a launcher (`gnosis`) and an icon.
   Your own `~/.vimrc` / `~/.vim` are never read or changed.
+- **Launch**: `gnosis` always opens a separate, dedicated terminal window and applies the stored font settings. Use `gnosis --tui` to run in the current terminal.
 - **Start screen**: the Chnoubis symbol, "Gnosis", the selected vault, `Enter` to start, `v` to choose / register / create / remove vaults
   (removing never deletes notes), `s` for settings.
 - **Update**: run `gnosis --update` (after its initial installation) to fetch the latest `origin/main`, perform a fast-forward-only update, and reinstall the Gnosis environment and launchers without modifying system packages or discarding local changes. `gnosis --where` / `gnosis --doctor` show which
