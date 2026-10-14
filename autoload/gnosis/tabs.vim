@@ -94,8 +94,9 @@ endfunction
 
 function! s:ensure() abort
   call s:load()
+  let l:first = !s:armed
   let s:armed = 1
-  if s:active < 0 && s:eligible(expand('%:p'))
+  if l:first && s:active < 0 && s:eligible(expand('%:p'))
     call add(s:tabs, {'file': expand('%:p'), 'back': [], 'forward': []})
     let s:active = 0
     call s:save()
@@ -247,8 +248,16 @@ function! s:close_selection(which) abort
     elseif l:target < s:active
       let s:active -= 1
     elseif l:target == s:active
+      " Capture the remaining tab's own history, not the closed tab's history.
       let s:active = min([l:target, len(s:tabs)-1])
-      call s:switch(s:active)
+      let s:switching = 1
+      try
+        let g:gnosis_history = deepcopy(get(s:tabs[s:active], 'back', []))
+        let g:gnosis_forward = deepcopy(get(s:tabs[s:active], 'forward', []))
+        execute 'hide edit ' . fnameescape(s:tabs[s:active].file)
+      finally
+        let s:switching = 0
+      endtry
     endif
   endif
   let s:selection = 0
