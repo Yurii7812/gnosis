@@ -202,7 +202,9 @@ pm_install() {
 vim_ok() {
   v=$1
   have "$v" || return 1
-  out=$("$v" --version 2>/dev/null | head -40) || return 1
+  # Feature rows can appear past line 40 (e.g. +job on Vim 9.1 in Ubuntu).
+  # Read the complete --version output or a valid Vim is rejected.
+  out=$("$v" --version 2>/dev/null) || return 1
   for f in job channel timers textprop popupwin; do
     printf '%s' "$out" | grep -q "+$f" || return 1
   done
