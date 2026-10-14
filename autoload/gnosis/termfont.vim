@@ -224,7 +224,7 @@ function! gnosis#termfont#apply_live(d) abort
     if !empty(l:dir)
       let l:family = empty(a:d.fontFamily) ? 'Monospace' : a:d.fontFamily
       let l:cmd = ['python3', l:dir . '/python/gnome_font_profile.py',
-            \ fnamemodify(gnosis#home#path(''), ':p'), l:family, string(l:size)]
+            \ $GNOSIS_HOME, l:family, string(l:size)]
       call system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1')
       return v:shell_error == 0
     endif
