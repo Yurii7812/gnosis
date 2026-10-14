@@ -1138,7 +1138,7 @@ function! s:ensure_guide_index_group(root) abort
       endfor
     endif
     for l:line in l:tail[l:pos + 1 : l:end - 1]
-      if l:line =~# '\](index\.md)'
+      if stridx(l:line, '](index.md)') >= 0
         return
       endif
     endfor
