@@ -5,7 +5,7 @@
 
 作るもの（assets/ の下）:
   icons/gnosis-symbol.svg        シンボルだけ（ベクター。点を円で描く）
-  icons/gnosis-<N>.png           シンボルだけのアイコン（16〜1024 px。白い角丸の地に黒）
+  icons/gnosis-<N>.png           シンボルだけのアイコン（16〜1024 px。夜空色の角丸地に水色）
   icons/gnosis.ico               Windows 用（16〜256）
   icons/gnosis.icns              macOS 用
   logo/gnosis-logo.svg           シンボル＋「Gnosis」の文字
@@ -19,13 +19,20 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ART = ROOT / "assets" / "chnoubis" / "chnoubis-80.txt"
-ICONS = ROOT / "assets" / "icons"
-LOGO = ROOT / "assets" / "logo"
+# インストール時は GNOSIS_ICON_OUTPUT_ROOT に生成して Git 管理の asset を書き換えない。
+OUTPUT_ROOT = Path(os.environ.get("GNOSIS_ICON_OUTPUT_ROOT", ROOT / "assets"))
+ICONS = OUTPUT_ROOT / "icons"
+LOGO = OUTPUT_ROOT / "logo"
+# 起動画面 Chnoubis #10 と同じ配色（assets/themes/builtin.json の start）。
+BG = "#14283D"
+ACCENT = "#79CFFF"
+FG = "#E6EEF5"
 SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024]
 
 # Braille の点の位置（ビット → 列, 行）。1 文字は 2 列 × 4 行の点
@@ -65,8 +72,8 @@ def symbol_svg(pts) -> str:
     circles = "".join(f'<circle cx="{x + ox + 0.5:.2f}" cy="{y + oy + 0.5:.2f}" r="0.46"/>' for x, y in pts)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vb:.2f} {vb:.2f}">\n'
             f'<title>Gnosis</title>\n'
-            f'<rect width="{vb:.2f}" height="{vb:.2f}" rx="{vb * 0.18:.2f}" fill="#ffffff"/>\n'
-            f'<g fill="#000000">{circles}</g>\n</svg>\n')
+            f'<rect width="{vb:.2f}" height="{vb:.2f}" rx="{vb * 0.18:.2f}" fill="{BG}"/>\n'
+            f'<g fill="{ACCENT}">{circles}</g>\n</svg>\n')
 
 
 def logo_svg(pts) -> str:
@@ -78,9 +85,9 @@ def logo_svg(pts) -> str:
     circles = "".join(f'<circle cx="{x - x0 + 0.5:.2f}" cy="{y - y0 + 0.5:.2f}" r="0.46"/>' for x, y in pts)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {total_w:.2f} {h:.2f}">\n'
             f'<title>Gnosis</title>\n'
-            f'<g fill="#000000">{circles}</g>\n'
+            f'<g fill="{ACCENT}">{circles}</g>\n'
             f'<text x="{w + gap:.2f}" y="{h / 2 + text_h * 0.36:.2f}" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" '
-            f'font-size="{text_h:.2f}" letter-spacing="{text_h * 0.06:.2f}" fill="#000000">Gnosis</text>\n</svg>\n')
+            f'font-size="{text_h:.2f}" letter-spacing="{text_h * 0.06:.2f}" fill="{ACCENT}">Gnosis</text>\n</svg>\n')
 
 
 def render_symbol(pts, size: int, Image, ImageDraw):
@@ -89,7 +96,7 @@ def render_symbol(pts, size: int, Image, ImageDraw):
     big = size * scale
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([0, 0, big - 1, big - 1], radius=big * 0.18, fill=(255, 255, 255, 255))
+    d.rounded_rectangle([0, 0, big - 1, big - 1], radius=big * 0.18, fill=BG)
     x0, y0, x1, y1 = bbox(pts)
     w, h = x1 - x0, y1 - y0
     side = max(w, h)
@@ -101,21 +108,24 @@ def render_symbol(pts, size: int, Image, ImageDraw):
     for x, y in pts:
         cx = (x + ox + 0.5) * unit
         cy = (y + oy + 0.5) * unit
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(0, 0, 0, 255))
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ACCENT)
     return img.resize((size, size), Image.LANCZOS)
 
 
 def main() -> int:
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-    except ImportError:
-        print("Pillow が必要です: pip install pillow", file=sys.stderr)
-        return 1
     ICONS.mkdir(parents=True, exist_ok=True)
     LOGO.mkdir(parents=True, exist_ok=True)
     pts, _w, _h = dots_from_art(ART)
+    # Linux の SVG は Pillow が無い環境でも必ず最新版の色で生成する。
+    (ICONS / "gnosis-symbol.svg").write_text(symbol_svg(pts), encoding="utf-8")
+    (LOGO / "gnosis-logo.svg").write_text(logo_svg(pts), encoding="utf-8")
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("Pillow 未導入: SVG アイコンを生成しました。PNG/ICNS は省略します。", file=sys.stderr)
+        return 0
 
-    src_symbol = ICONS / "source" / "symbol.png"
+    src_symbol = ROOT / "assets" / "icons" / "source" / "symbol.png"
     if src_symbol.exists():
         base = Image.open(src_symbol).convert("RGBA")
         images = {s: base.resize((s, s), Image.LANCZOS) for s in SIZES}
@@ -130,14 +140,14 @@ def main() -> int:
     except Exception as e:  # 古い Pillow
         print("icns を作れませんでした: " + str(e), file=sys.stderr)
 
-    src_logo = LOGO / "source" / "logo.png"
+    src_logo = ROOT / "assets" / "logo" / "source" / "logo.png"
     if src_logo.exists():
         Image.open(src_logo).convert("RGBA").save(LOGO / "gnosis-logo.png")
     else:
         (LOGO / "gnosis-logo.svg").write_text(logo_svg(pts), encoding="utf-8")
         sym = render_symbol(pts, 400, Image, ImageDraw)
         W, H = 1200, 400
-        img = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+        img = Image.new("RGBA", (W, H), BG)
         img.alpha_composite(sym, (0, 0))
         d = ImageDraw.Draw(img)
         font = None
@@ -149,7 +159,7 @@ def main() -> int:
                 continue
         if font is None:
             font = ImageFont.load_default()
-        d.text((440, H / 2), "Gnosis", fill=(0, 0, 0, 255), font=font, anchor="lm")
+        d.text((440, H / 2), "Gnosis", fill=ACCENT, font=font, anchor="lm")
         img.save(LOGO / "gnosis-logo.png")
     print("icons:", ", ".join(sorted(p.name for p in ICONS.glob("gnosis*"))))
     print("logo:", ", ".join(sorted(p.name for p in LOGO.glob("gnosis*"))))
