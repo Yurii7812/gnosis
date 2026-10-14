@@ -152,7 +152,7 @@ pick_terminal() {
     *GNOME*|*gnome*|*Unity*|*Cinnamon*|*ubuntu*) pref=gnome-terminal ;;
     *) pref="" ;;
   esac
-  for t in $pref kitty wezterm alacritty konsole xfce4-terminal gnome-terminal xterm x-terminal-emulator; do
+  for t in $pref kitty wezterm alacritty konsole xfce4-terminal ghostty foot gnome-terminal xterm x-terminal-emulator; do
     if have "$t"; then echo "$t"; return; fi
   done
 }
@@ -407,9 +407,28 @@ run_new_terminal() {
       fi
       run_term xterm -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
     gnome-terminal)
-      # GNOME Terminal には窓ごとに文字の大きさを渡す方法が無い（端末のプロファイルのまま）
+      # GNOME Terminal は CLI でフォント指定できないため、Gnosis 専用の
+      # GSettings profile を作って適用する。既定/他のプロファイルは変更しない。
+      prof=""
+      if [ "${GNOSIS_DRY_RUN:-0}" = 1 ]; then
+        prof=Gnosis
+      elif command -v python3 >/dev/null 2>&1 && command -v gsettings >/dev/null 2>&1; then
+        if python3 "$GNOSIS_DIR/python/gnome_font_profile.py" "$GNOSIS_HOME" "$fam" "$size" >/dev/null; then
+          prof=Gnosis
+        else
+          log "GNOME dedicated font profile unavailable; terminal's existing profile will be used"
+        fi
+      fi
+      if [ -n "$prof" ]; then
+        if [ "$max" = 1 ]; then run_term gnome-terminal --profile="$prof" --maximize --title Gnosis -- "$SELF" --tui "$@"; fi
+        run_term gnome-terminal --profile="$prof" --title Gnosis -- "$SELF" --tui "$@" 
+      fi
       if [ "$max" = 1 ]; then run_term gnome-terminal --maximize --title Gnosis -- "$SELF" --tui "$@"; fi
       run_term gnome-terminal --title Gnosis -- "$SELF" --tui "$@" ;;
+    foot)
+      run_term foot --title Gnosis --font "$fam:size=$size" "$SELF" --tui "$@" ;;
+    ghostty)
+      run_term ghostty --font-family="$fam" --font-size="$size" -e "$SELF" --tui "$@" ;;
     xfce4-terminal)
       # XFCE Terminal は新しい窓に --font を渡せる（開いている窓の文字は変えられない）
       if [ "$max" = 1 ]; then
