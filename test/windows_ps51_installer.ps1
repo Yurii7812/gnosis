@@ -34,6 +34,59 @@ foreach ($check in @('WezTerm','Ubuntu','Gnosis.lnk','Start-Gnosis.ps1',
 }
 Write-Host 'OK: shortcut follows verified terminal Gnosis installation'
 
+# Exercise the same encoding function with real Git Bash on Windows CI.
+$bash = @(
+  (Join-Path $env:ProgramFiles 'Git\bin\bash.exe'),
+  (Join-Path $env:ProgramFiles 'Git\usr\bin\bash.exe')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $bash) { throw 'Git Bash is required for the WSL transport test' }
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+  $terminal,[ref]$tokens,[ref]$errors
+)
+$fn = $ast.Find({
+  param($node)
+  $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+  $node.Name -eq 'ConvertTo-WslBashCommand'
+},$true)
+if (-not $fn) { throw 'Missing WSL transport function' }
+Invoke-Expression $fn.Extent.Text
+
+$crlf = ([string][char]13 + [string][char]10)
+$sample = @(
+  'set -eu',
+  'value="hello world"',
+  'if test "$value" = "hello world"; then',
+  '  printf "WSL_TRANSPORT_OK:%s\n" "$value"',
+  'fi'
+) -join $crlf
+$line = ConvertTo-WslBashCommand $sample
+if ($line.Contains([string][char]10) -or $line.Contains([string][char]13)) {
+  throw 'The encoded Bash command contains an unexpected newline'
+}
+$output = & $bash -c $line
+if ($LASTEXITCODE -ne 0 -or (($output -join '') -ne 'WSL_TRANSPORT_OK:hello world')) {
+  throw ('WSL transport did not preserve CRLF and quotes: ' + ($output -join ' '))
+}
+Write-Host 'OK: PowerShell 5.1 transports CRLF and quoting to Bash'
+
+# Syntax-check the actual bootstrap and verify scripts (no installation).
+foreach ($name in @('bootstrap','verify')) {
+  $begin = '$' + $name + ' = @' + [char]39
+  $start = $termSource.IndexOf($begin)
+  if ($start -lt 0) { throw ('WSL script is missing: ' + $name) }
+  $start = $termSource.IndexOf([string][char]10,$start) + 1
+  $end = $termSource.IndexOf(([string][char]10 + [char]39 + '@'),$start)
+  if ($end -lt $start) { throw ('Unterminated WSL script: ' + $name) }
+  $body = $termSource.Substring($start,$end-$start)
+  $check = (ConvertTo-WslBashCommand $body) -replace ' \| bash$',' | bash -n'
+  & $bash -c $check
+  if ($LASTEXITCODE -ne 0) { throw ('Bash syntax failure: ' + $name) }
+}
+Write-Host 'OK: actual WSL install and verification scripts parse under Bash'
+
+
 $nativeSource = [IO.File]::ReadAllText($native)
 if (-not $nativeSource.Contains('$pyArgs = @()')) {
   throw 'Optional native Python helper must not add a null argv element'

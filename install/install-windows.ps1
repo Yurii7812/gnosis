@@ -52,6 +52,23 @@ if (-not $wezExe) {
 if (-not $wezExe) {
   throw 'WezTerm executable could not be found after installation. Open a new PowerShell and retry; setup is incomplete.'
 }
+# PowerShell 5.1 can corrupt multi-line script arguments passed to WSL.
+# Transport a single ASCII base64 argument; decode and run under Bash in Ubuntu.
+function ConvertTo-WslBashCommand([string]$source) {
+  $cr = [string][char]13
+  $lf = [string][char]10
+  $normalized = $source.Replace(($cr + $lf),$lf).Replace($cr,$lf)
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($normalized + $lf)
+  $encoded = [Convert]::ToBase64String($bytes)
+  return ('printf %s ' + $encoded + ' | base64 -d | bash')
+}
+function Invoke-WslBash([string]$source,[string]$operation) {
+  $command = ConvertTo-WslBashCommand $source
+  & wsl.exe -d $ubuntuName --exec bash -c $command
+  if ($LASTEXITCODE -ne 0) {
+    throw ($operation + ' failed inside Ubuntu, exit code ' + $LASTEXITCODE)
+  }
+}
 Write-Host 'Installing terminal-based Gnosis in Ubuntu (sudo may request password).'
 $bootstrap = @'
 set -eu
@@ -65,8 +82,7 @@ fi
 cd "$HOME/gnosis"
 sh install/install.sh --yes
 '@
-& wsl.exe -d $ubuntuName --exec bash -lc $bootstrap
-if ($LASTEXITCODE -ne 0) { throw 'Linux-side Gnosis setup failed' }
+Invoke-WslBash $bootstrap 'Linux-side Gnosis setup'
 
 # Completion means the terminal version is actually installed, not merely
 # that WSL and Git were downloaded. Do not make a broken desktop shortcut.
@@ -78,10 +94,7 @@ test -d "$HOME/.local/share/gnosis/plugins/fzf"
 command -v vim >/dev/null
 command -v python3 >/dev/null
 '@
-& wsl.exe -d $ubuntuName --exec bash -lc $verify
-if ($LASTEXITCODE -ne 0) {
-  throw 'Gnosis dependencies are incomplete in Ubuntu. Shortcut creation was cancelled.'
-}
+Invoke-WslBash $verify 'Gnosis dependency verification'
 
 $dest = Join-Path $env:LOCALAPPDATA 'Gnosis'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
@@ -104,7 +117,7 @@ if ($found) { $exe = $found.Source } else {
          Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 if (-not $exe) { throw 'WezTerm executable missing' }
-& $exe --config "font_size=$size" --config "enable_tab_bar=false" start -- wsl.exe -d $distro --exec bash -lc 'exec "$HOME/.local/bin/gnosis" --tui'
+& $exe --config "font_size=$size" --config "enable_tab_bar=false" start -- wsl.exe -d $distro --exec bash -c 'exec $HOME/.local/bin/gnosis --tui'
 '@
 $startContent = $startContent.Replace('__GNOSIS_DISTRO__', $ubuntuName)
 $startContent | Set-Content -LiteralPath $start -Encoding Ascii
