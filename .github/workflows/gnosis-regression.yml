@@ -1,0 +1,31 @@
+name: Gnosis regression checks
+on:
+  pull_request:
+    paths:
+      - "bin/**"
+      - "install/**"
+      - "autoload/**"
+      - "test/**"
+      - ".github/workflows/gnosis-regression.yml"
+  workflow_dispatch:
+
+jobs:
+  focused-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y vim git python3
+      - name: Check launcher and installer syntax
+        run: |
+          sh -n bin/gnosis
+          sh -n install/install.sh
+          node --check bin/gnosis-kwin-maximize.js
+      - name: Test saved font settings and terminal launch arguments
+        run: sh test/termfont_net.sh
+      - name: Test Index and guide relations
+        run: sh test/guide_relations_net.sh
+      - name: Test auto-updater using local Git repositories
+        run: sh test/install_update_net.sh
