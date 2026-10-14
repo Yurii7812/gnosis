@@ -67,7 +67,12 @@ stopinsert
 let s:new = s:newest_except(s:before)
 call s:ok('zn c o: 新ノートができる', !empty(s:new))
 call s:ok('zn c o: A の Context に新ノート（c の追加は維持）', s:has('a.md', '(' . s:new . ')'))
-call s:ok('zn c o: 新ノートに A へのリンクは無い', !s:has(s:new, '(a\.md)'))
+let s:b_lines = s:file(s:new)
+let s:pb = index(s:b_lines, '### ParentBranch')
+call s:ok('zn c o: 本文には A を置かず ParentBranch のみ記録',
+      \ s:pb > 0 && get(s:b_lines, s:pb + 1, '') ==# '[ノートA](a.md)'
+      \ && index(s:b_lines, '### Context') < 0
+      \ && index(s:b_lines[: s:pb - 1], '[ノートA](a.md)') < 0, string(s:b_lines))
 
 " ------------------------------------------------------------------ zn → c → t（新ノートは見出しが無いので本文の最後）
 execute 'edit ' . fnameescape(s:v . '/a.md')
