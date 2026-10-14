@@ -103,6 +103,13 @@ foreach ($pair in @(@('bootstrap',(Get-LinuxBootstrapScript '')),@('bootstrap-re
   & $bash -c $c
   if ($LASTEXITCODE -ne 0) { throw ('Bash syntax failure: ' + $pair[0]) }
 }
+$NoApp = $false
+$b1 = Get-LinuxBootstrapScript ''
+if ($b1 -notmatch 'install/install\.sh --yes --app' -or $b1 -notmatch 'SHASUMS256' -or $b1 -notmatch 'sha256sum -c') { throw 'Default install must include the verified Electron app setup' }
+$NoApp = $true
+if ((Get-LinuxBootstrapScript '') -match '--app') { throw '-NoApp must skip the app' }
+if ((Get-LinuxVerifyScript) -notmatch 'GNOSIS_VERIFY_APP=0') { throw '-NoApp must skip app verification' }
+$NoApp = $false
 $threw = $false
 try { Get-LinuxBootstrapScript 'x; rm -rf ~' | Out-Null } catch { $threw = $true }
 if (-not $threw) { throw 'Unsafe -Ref was accepted' }

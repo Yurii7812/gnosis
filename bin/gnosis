@@ -312,6 +312,8 @@ run_gui() {
 }
 
 run_app() {
+  # Windows(WSL) インストーラーは Node.js を Gnosis 専用の場所に入れる。electron の起動スクリプトが要る。
+  if [ -x "$GNOSIS_HOME/node/bin/node" ]; then PATH="$GNOSIS_HOME/node/bin:$PATH"; export PATH; fi
   if [ ! -x "$ELECTRON" ]; then
     echo "gnosis: アプリが入っていません。install/install.sh --app を実行してください / the app is not installed" >&2
     return 1
