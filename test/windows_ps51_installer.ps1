@@ -29,6 +29,22 @@ foreach ($contract in @('electron.exe','bundle.js','node-pty','Gnosis.lnk','Star
 }
 Write-Host 'OK: native installer includes GUI build, terminal backend and shortcuts'
 
+# Test the installer's external-command wrapper without installing packages.
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+  $native, [ref]$tokens, [ref]$errors
+)
+$fn = $ast.Find({
+  param($node)
+  $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Run'
+}, $true)
+if (-not $fn) { throw 'Missing native dependency runner' }
+Invoke-Expression $fn.Extent.Text
+Run (Join-Path $PSHOME 'powershell.exe') @('-NoProfile','-Command','exit 0') 'safe external command'
+Write-Host 'OK: native installer can invoke external build tools and handle exit codes'
+
+
 # Exercise the real documented entrypoint with simulated installers, without
 # invoking winget, WSL, npm, or changing installed applications.
 $tmp = Join-Path $env:TEMP ('gnosis-win-installer-test-' + [guid]::NewGuid().ToString('N'))
