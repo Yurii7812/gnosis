@@ -29,6 +29,8 @@ jobs:
           node --check bin/gnosis-kwin-maximize.js
       - name: Test GNOME Terminal's isolated font profile
         run: sh test/gnome_font_profile_net.sh
+      - name: Test tab management, outline visual range and mode readability
+        run: sh test/work_tabs_outline_net.sh
       - name: Test saved font settings and terminal launch arguments
         run: sh test/termfont_net.sh
       - name: Test autosave versus asynchronous sync while editing
