@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""Branch（ParentBranch / ChildBranch）の回帰試験。一時フォルダ（~/Desktop/test）だけを使う。
+
+    python3 python/test_branch_ops.py
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import branch_ops as bo  # noqa: E402
+import note_format_v2 as nf  # noqa: E402
+
+TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+
+
+def note(title: str, body: str = "", extra_fm: str = "", sections: str = "") -> str:
+    fm = f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n{extra_fm}---\n"
+    return fm + f"\n# {title}\n\n{body}\n" + sections
+
+
+class Base(unittest.TestCase):
+    def setUp(self) -> None:
+        os.makedirs(TMP_BASE, exist_ok=True)
+        self.root = Path(tempfile.mkdtemp(dir=TMP_BASE, prefix="branch-"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.env_backup = os.environ.pop("GNOSIS_SYNC_GUARD_DIR", None)
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self) -> None:
+        os.environ.pop("GNOSIS_SYNC_GUARD_DIR", None)
+        if self.env_backup is not None:
+            os.environ["GNOSIS_SYNC_GUARD_DIR"] = self.env_backup
+
+    def w(self, name: str, text: str) -> Path:
+        p = self.root / name
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def r(self, name: str) -> str:
+        return (self.root / name).read_text(encoding="utf-8")
+
+    def snap(self) -> dict[str, str]:
+        return {p.name: p.read_text(encoding="utf-8") for p in self.root.glob("*.md")}
+
+    def add(self, parent: str, *children: str, **kw) -> dict:
+        return bo.add_branches(self.root, self.root / parent, [self.root / c for c in children], **kw)
+
+    def sync(self) -> None:
+        nf.simple_sync(self.root)
+
+
+class TestAdd(Base):
+    def test_creates_both_sides_and_keeps_body(self) -> None:
+        a = note("ノートA", "本文A。\n\n```\n### ChildBranch\n[fake](zzz.md)\n```\n")
+        b = note("ノートB", "本文B。")
+        self.w("a.md", a)
+        self.w("b.md", b)
+        res = self.add("a.md", "b.md")
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["code"], "added")
+        # 本文は 1 バイトも変わらない。本文の末尾の空行 1 つはそのまま節との間の空行になる
+        self.assertEqual(self.r("a.md"), a + "### ChildBranch\n[ノートB](b.md)\n")
+        self.assertEqual(self.r("b.md"), b + "\n### ParentBranch\n[ノートA](a.md)\n")
+
+    def test_one_parent_many_children(self) -> None:
+        for n in "abcd":
+            self.w(f"{n}.md", note(n.upper()))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        self.assertTrue(self.add("a.md", "c.md", "d.md")["ok"])
+        a = self.r("a.md")
+        for n in "BCD":
+            self.assertEqual(a.count(f"[{n}]({n.lower()}.md)"), 1)
+        self.assertEqual(a.count("### ChildBranch"), 1)
+        for n in "bcd":
+            self.assertEqual(self.r(f"{n}.md").count("### ParentBranch\n[A](a.md)"), 1)
+        self.assertTrue(bo.check(self.root)["ok"])
+
+    def test_second_parent_rejected_nothing_changes(self) -> None:
+        for n in "abc":
+            self.w(f"{n}.md", note(n.upper()))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        before = self.snap()
+        res = self.add("c.md", "b.md")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "has_parent")
+        self.assertEqual(res["parent_title"], "A")  # 現在の親のタイトルを知らせる
+        self.assertEqual(res["title"], "B")
+        self.assertEqual(self.snap(), before)  # どちらのノートも（親 A も）変更しない
+
+    def test_batch_with_one_bad_child_is_all_or_nothing(self) -> None:
+        for n in "abcd":
+            self.w(f"{n}.md", note(n.upper()))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        before = self.snap()
+        res = self.add("c.md", "d.md", "b.md")  # d は足せるが b には親 A がいる
+        self.assertFalse(res["ok"])
+        self.assertEqual(self.snap(), before)
+
+    def test_same_relation_is_not_duplicated(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        before = self.snap()
+        res = self.add("a.md", "b.md")
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["code"], "already")
+        self.assertEqual(self.snap(), before)
+
+    def test_self_reference_rejected(self) -> None:
+        self.w("a.md", note("A"))
+        before = self.snap()
+        res = self.add("a.md", "a.md")
+        self.assertEqual((res["ok"], res["code"]), (False, "self"))
+        self.assertEqual(self.snap(), before)
+
+    def test_cycles_rejected(self) -> None:
+        for n in "abc":
+            self.w(f"{n}.md", note(n.upper()))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        self.assertTrue(self.add("b.md", "c.md")["ok"])
+        before = self.snap()
+        for parent, child in (("c.md", "a.md"), ("b.md", "a.md")):
+            res = self.add(parent, child)
+            self.assertFalse(res["ok"], (parent, child))
+            self.assertIn(res["code"], ("cycle", "has_parent"))
+        # A→B→C→A は、A に親が無いので「循環」で拒否される
+        self.assertEqual(self.add("c.md", "a.md")["code"], "cycle")
+        self.assertEqual(self.snap(), before)
+
+    def test_index_and_missing_rejected(self) -> None:
+        self.w("index.md", "---\ntitle: Index\nattribute: group\n---\n\n# Index\n")
+        self.w("a.md", note("A"))
+        before = self.snap()
+        self.assertEqual(self.add("a.md", "index.md")["code"], "index")
+        self.assertEqual(self.add("index.md", "a.md")["code"], "index")
+        self.assertEqual(self.add("a.md", "nothing.md")["code"], "missing")
+        self.assertEqual(self.snap(), before)
+
+    def test_order_with_existing_sections(self) -> None:
+        a = note("A", "本文A", sections="### Context\n[X](x.md)\n### Group\n[G](g.md)\n### Related\n[R](r.md)\n### BackLink\n[Z](z.md)\n")
+        self.w("a.md", a)
+        self.w("b.md", note("B", sections="### Context\n[X](x.md)\n### BackLink\n[Y](y.md)\n"))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        marks = [ln for ln in self.r("a.md").split("\n") if ln.startswith("### ")]
+        self.assertEqual(marks, ["### Context", "### Group", "### ChildBranch", "### Related", "### BackLink"])
+        marks = [ln for ln in self.r("b.md").split("\n") if ln.startswith("### ")]
+        self.assertEqual(marks, ["### ParentBranch", "### Context", "### BackLink"])
+        # 既存の節の中身は 1 行も変わらない
+        self.assertIn("### Context\n[X](x.md)\n### Group\n[G](g.md)\n### ChildBranch\n[B](b.md)\n### Related\n[R](r.md)", self.r("a.md"))
+
+    def test_code_fence_headings_are_not_sections(self) -> None:
+        b = note("B", "```\n### ParentBranch\n[fake](zzz.md)\n```\n\n~~~\n### ChildBranch\n[fake2](yyy.md)\n~~~\n")
+        self.w("a.md", note("A"))
+        self.w("b.md", b)
+        self.w("c.md", note("C"))
+        # コードブロック内の偽の ParentBranch は親として数えない
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        out = self.r("b.md")
+        self.assertTrue(out.startswith(b))
+        self.assertTrue(out.endswith("\n### ParentBranch\n[A](a.md)\n"))
+        self.assertTrue(bo.check(self.root)["ok"])
+
+    def test_one_sided_state_is_completed_not_duplicated(self) -> None:
+        self.w("a.md", note("A", sections="### ChildBranch\n[B](b.md)\n"))
+        b = note("B")
+        self.w("b.md", b)
+        a = self.r("a.md")
+        res = self.add("a.md", "b.md")
+        self.assertTrue(res["ok"])
+        self.assertEqual(self.r("a.md"), a)  # 既にある側は触らない
+        self.assertIn("### ParentBranch\n[A](a.md)", self.r("b.md"))
+
+    def test_manual_multiple_parents_is_an_error_and_not_resolved(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("c.md", note("C"))
+        self.w("b.md", note("B", sections="### ParentBranch\n[A](a.md)\n[C](c.md)\n"))
+        self.w("d.md", note("D"))
+        report = bo.check(self.root)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["multi_parent"][0]["note"], "b.md")
+        before = self.snap()
+        res = self.add("d.md", "b.md")
+        self.assertEqual(res["code"], "multi_parent")
+        self.sync()
+        self.sync()
+        out = self.r("b.md")
+        self.assertIn("[A](a.md)", out)  # どちらの親も勝手に消さない
+        self.assertIn("[C](c.md)", out)
+        self.assertEqual(self.r("d.md"), before["d.md"])
+
+    def test_no_inference_from_identifiers(self) -> None:
+        self.w("n1.md", note("1"))
+        self.w("n1a.md", note("1a"))
+        self.w("n2.md", note("2"))
+        self.assertTrue(bo.check(self.root)["ok"])
+        self.assertTrue(self.add("n2.md", "n1a.md")["ok"])  # 1a は 1 の子と決めつけない
+        self.assertNotIn("Branch", self.r("n1.md"))
+
+
+class TestAtomic(Base):
+    def test_second_write_failure_rolls_back_first(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        before = self.snap()
+        real_replace = os.replace
+        calls = {"n": 0}
+
+        def flaky(src, dst, *a, **k):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("disk full")
+            return real_replace(src, dst, *a, **k)
+
+        with mock.patch.object(bo.os, "replace", flaky):
+            res = self.add("a.md", "b.md")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "error")
+        self.assertEqual(self.snap(), before)  # 片側だけ更新された状態を残さない
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.endswith(".tmp")], [])
+
+    def test_concurrent_edit_detected_and_nothing_replaced(self) -> None:
+        a = self.w("a.md", note("A"))
+        b = self.w("b.md", note("B"))
+        old_a, old_b = a.read_text(encoding="utf-8"), b.read_text(encoding="utf-8")
+        b.write_text(old_b + "\n他のプロセスが書いた追記\n", encoding="utf-8")
+        with self.assertRaises(RuntimeError) as cm:
+            bo._atomic_pair_write([(a, old_a, old_a + "X\n"), (b, old_b, old_b + "Y\n")])
+        self.assertTrue(str(cm.exception).startswith("conflict:"))
+        self.assertEqual(a.read_text(encoding="utf-8"), old_a)
+        self.assertIn("他のプロセスが書いた追記", b.read_text(encoding="utf-8"))
+        self.assertNotIn("Y", b.read_text(encoding="utf-8").replace("他のプロセスが書いた追記", ""))
+
+    def test_unsaved_editor_buffer_blocks(self) -> None:
+        self.w("a.md", note("A"))
+        b = self.w("b.md", note("B"))
+        guard = self.root / "guard"
+        guard.mkdir()
+        digest = hashlib.sha256(str(b.resolve()).encode()).hexdigest()[:16]
+        (guard / f"{digest}.{os.getpid()}.dirty").write_text("", encoding="utf-8")
+        os.environ["GNOSIS_SYNC_GUARD_DIR"] = str(guard)
+        before = self.snap()
+        res = self.add("a.md", "b.md")
+        self.assertEqual((res["ok"], res["code"]), (False, "dirty"))
+        self.assertEqual(self.snap(), before)
+
+
+class TestSync(Base):
+    def test_sync_keeps_branch_sections_and_is_idempotent(self) -> None:
+        self.w("a.md", note("A", "本文A [Z](z.md)", sections="### Context\n[X](x.md)\n"))
+        self.w("b.md", note("B", "本文B"))
+        self.w("c.md", note("C", "本文C"))
+        self.w("x.md", note("X"))
+        self.w("z.md", note("Z"))
+        self.assertTrue(self.add("a.md", "b.md", "c.md")["ok"])
+        self.sync()
+        first = self.snap()
+        self.sync()
+        self.assertEqual(self.snap(), first)  # 冪等
+        a, b = first["a.md"], first["b.md"]
+        self.assertEqual(a.count("[B](b.md)"), 1)
+        self.assertEqual(a.count("[C](c.md)"), 1)
+        self.assertEqual(b.count("[A](a.md)"), 1)
+        # ChildBranch / ParentBranch が Context に変換されない・BackLink に出ない
+        self.assertIn("### ChildBranch\n[B](b.md)\n[C](c.md)", a)
+        self.assertIn("### ParentBranch\n[A](a.md)", b)
+        self.assertNotIn("### Context", b)
+        self.assertNotIn("### BackLink", b)
+        self.assertIn("### Context\n[X](x.md)\n### ChildBranch", a)
+        self.assertTrue(bo.check(self.root)["ok"])
+
+    def test_sync_does_not_add_second_parent(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        self.w("c.md", note("C", "C の本文から [B](b.md) を引用する"))
+        self.sync()
+        self.sync()
+        b = self.r("b.md")
+        self.assertEqual(b.count("[A](a.md)"), 1)
+        self.assertIn("### ParentBranch\n[A](a.md)", b)
+        self.assertEqual(b.count("### ParentBranch"), 1)
+        # C は本文リンクなので BackLink に出る（親にはならない）
+        self.assertIn("### BackLink\n[C](c.md)", b)
+        self.assertNotIn("(c.md)", b.split("### BackLink")[0])
+        self.assertTrue(bo.check(self.root)["ok"])
+
+    def test_sync_follows_titles_and_prunes_deleted(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        self.w("b.md", self.r("b.md").replace("title: B", "title: B改"))
+        self.sync()
+        self.assertIn("[B改](b.md)", self.r("a.md"))
+        (self.root / "b.md").unlink()
+        self.sync()
+        self.assertNotIn("b.md", self.r("a.md"))
+        self.assertNotIn("ChildBranch", self.r("a.md"))  # 空になった節は見出しごと消える
+
+    def test_sync_leaves_unrelated_notes_alone(self) -> None:
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        other = note("無関係", "そのまま", sections="### Context\n[A](a.md)\n")
+        self.w("o.md", other)
+        self.sync()
+        other_after = self.r("o.md")
+        self.assertTrue(self.add("a.md", "b.md")["ok"])
+        self.sync()
+        self.assertEqual(self.r("o.md"), other_after)
+
+
+class TestCli(Base):
+    def test_cli_json(self) -> None:
+        import subprocess
+        self.w("a.md", note("A"))
+        self.w("b.md", note("B"))
+        script = str(Path(__file__).resolve().parent / "branch_ops.py")
+        p = subprocess.run([sys.executable, script, "add", str(self.root), str(self.root / "a.md"), str(self.root / "b.md")],
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(p.stdout)["code"], "added")
+        p = subprocess.run([sys.executable, script, "check", str(self.root)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0)
+        self.assertTrue(json.loads(p.stdout)["ok"])
+        p = subprocess.run([sys.executable, script, "add", str(self.root), str(self.root / "b.md"), str(self.root / "a.md")],
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 1)
+        self.assertEqual(json.loads(p.stdout)["code"], "cycle")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=1)

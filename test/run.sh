@@ -20,6 +20,7 @@ python3 "$REPO/test/check_guide.py"
 python3 "$REPO/test/i18n_check.py"
 python3 "$REPO/python/test_sort_yomi.py"
 python3 "$REPO/python/test_paper_pkm.py"
+python3 "$REPO/python/test_branch_ops.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \
@@ -59,6 +60,9 @@ sh "$REPO/test/diary_paper_net.sh"
 
 # 日記の初回作成・Indexリンク・年越し・3年目の階層
 sh "$REPO/test/diary_hierarchy_net.sh"
+
+# Branch（b モード: ChildBranch / ParentBranch・親は最大 1 つ・循環と自己参照の拒否・同期後の維持）
+sh "$REPO/test/branch_net.sh"
 
 # 同期の冪等性（試験用の小さな vault）
 sh "$REPO/test/sync_net.sh"
