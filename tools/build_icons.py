@@ -33,6 +33,9 @@ LOGO = OUTPUT_ROOT / "logo"
 # Desktop launcher symbol needs higher contrast than the main editor canvas.
 BG = "#071827"
 ACCENT = "#D7F8FF"
+# アプリアイコン（シンボル）だけの配色。地は少し明るい青、線は白
+ICON_BG = "#234566"
+ICON_INK = "#FFFFFF"
 FG = "#E6EEF5"
 SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024]
 
@@ -73,8 +76,8 @@ def symbol_svg(pts) -> str:
     circles = "".join(f'<circle cx="{x + ox + 0.5:.2f}" cy="{y + oy + 0.5:.2f}" r="0.55"/>' for x, y in pts)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vb:.2f} {vb:.2f}">\n'
             f'<title>Gnosis</title>\n'
-            f'<rect width="{vb:.2f}" height="{vb:.2f}" rx="{vb * 0.18:.2f}" fill="{BG}"/>\n'
-            f'<g fill="{ACCENT}">{circles}</g>\n</svg>\n')
+            f'<rect width="{vb:.2f}" height="{vb:.2f}" rx="{vb * 0.18:.2f}" fill="{ICON_BG}"/>\n'
+            f'<g fill="{ICON_INK}">{circles}</g>\n</svg>\n')
 
 
 def logo_svg(pts) -> str:
@@ -97,7 +100,7 @@ def render_symbol(pts, size: int, Image, ImageDraw):
     big = size * scale
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([0, 0, big - 1, big - 1], radius=big * 0.18, fill=BG)
+    d.rounded_rectangle([0, 0, big - 1, big - 1], radius=big * 0.18, fill=ICON_BG)
     x0, y0, x1, y1 = bbox(pts)
     w, h = x1 - x0, y1 - y0
     side = max(w, h)
@@ -105,11 +108,13 @@ def render_symbol(pts, size: int, Image, ImageDraw):
     unit = big / (side + 2 * pad)
     ox = pad + (side - w) / 2 - x0
     oy = pad + (side - h) / 2 - y0
-    r = max(0.55 * unit, 0.6)
+    # 小さいサイズは点が灰色に潰れるので、最小の太さを確保する（48px 以下）
+    min_r = 0.8 * scale if size <= 48 else 0.6
+    r = max(0.55 * unit, min_r)
     for x, y in pts:
         cx = (x + ox + 0.5) * unit
         cy = (y + oy + 0.5) * unit
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ACCENT)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ICON_INK)
     return img.resize((size, size), Image.LANCZOS)
 
 

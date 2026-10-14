@@ -13,19 +13,19 @@ repo, out = map(Path, sys.argv[1:])
 for root in (out,):
     sym = (root / "icons" / "gnosis-symbol.svg").read_text()
     ET.fromstring(sym)
-    assert 'fill="#071827"' in sym, root
-    assert 'fill="#D7F8FF"' in sym, root
+    assert 'fill="#234566"' in sym, root
+    assert 'fill="#FFFFFF"' in sym, root
     logo = (root / "logo" / "gnosis-logo.svg").read_text()
     ET.fromstring(logo)
     assert 'fill="#D7F8FF"' in logo, root
-print("OK: SVG palette #071827 / #D7F8FF")
+print("OK: SVG palette #234566 tile / #FFFFFF ink")
 try:
     from PIL import Image
 except ImportError:
     print("OK: Pillow unavailable: SVG-only icon build supported")
 else:
     im = Image.open(out / "icons" / "gnosis-256.png").convert("RGB")
-    assert im.getpixel((3, 128)) == (7, 24, 39), im.getpixel((3, 128))
+    assert im.getpixel((3, 128)) == (35, 69, 102), im.getpixel((3, 128))
     print("OK: generated PNG palette matches SVG")
 PY
 echo 'icon palette OK'
