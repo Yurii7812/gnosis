@@ -79,6 +79,14 @@ try
   call s:repair(s:legacy, s:old_notes, s:old_top)
   call s:assert('旧月の再接続は重複しない',
         \ len(filter(readfile(s:legacy . '/' . s:old_top), 'v:val ==# "[2026-10](old-month.md)"')) == 1)
+  let s:old_new = s:create(s:legacy, '2027-01-01', s:old_notes, '2027-01-01 09:00:00')
+  let s:old2026 = s:find(s:old_notes, '2026')
+  let s:old2027 = s:find(s:old_notes, '2027')
+  call s:assert('旧版で作った月も2027年に年別再編成',
+        \ !empty(s:old2026) && !empty(s:old2027)
+        \ && s:parent_has(s:legacy, 'old-month.md', s:old2026)
+        \ && s:parent_has(s:legacy, s:old_new, s:find(s:old_notes, '2027-01')))
+
 
 catch
   call add(s:results, 'NG exception: ' . v:exception . ' at ' . v:throwpoint)
