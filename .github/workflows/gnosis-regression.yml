@@ -52,6 +52,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify documented installer in Windows PowerShell 5.1
+        shell: powershell
+        run: .\\test\\windows_ps51_installer.ps1
       - name: Validate Windows installer PowerShell syntax
         shell: pwsh
         run: |
