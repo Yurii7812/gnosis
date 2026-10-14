@@ -6838,10 +6838,8 @@ endfunction
 function! s:simple_add_parent(file, parent_path, parent_title) abort
   let l:lines = readfile(a:file)
   let l:link = s:make_link_from_dir(a:parent_path, a:parent_title, fnamemodify(a:file, ':h'))
-  " 関係の節は空なら見出しごと無い。重複は Context / Group / Related / BackLink 全体で見る
-  for l:ln in l:lines
-    if l:ln ==# l:link | return | endif
-  endfor
+  " Branch と Context は独立の関係。同じ親へのリンクが ParentBranch に存在しても、
+  " Context にも登録できるように、重複判定は Context 節の中だけで行う。
   let l:at = s:context_insert_index(l:lines)
   if l:at >= 0
     " Context が無い: 最初の節の手前（無ければ末尾）に見出しごと作る
@@ -6851,6 +6849,12 @@ function! s:simple_add_parent(file, parent_path, parent_title) abort
     for l:i in range(0, len(l:lines) - 1)
       if trim(l:lines[l:i]) ==# s:v2_up_mark || index(s:v2_up_marks_legacy, trim(l:lines[l:i])) >= 0
         let l:hdr = l:i | break
+      endif
+    endfor
+    let l:end = s:section_end_index_in_lines(l:lines, l:hdr)
+    for l:i in range(l:hdr + 1, l:end - 1)
+      if l:lines[l:i] ==# l:link
+        return
       endif
     endfor
     call insert(l:lines, l:link, l:hdr + 1)
