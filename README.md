@@ -8,7 +8,9 @@
 *Gnosis is a PKM for Markdown notes written in real Vim. Notes are linked into Context / Group / BackLink automatically.
 The UI and the generated guide are available in Japanese and English (see [English summary](#english-summary)).*
 
-- 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、`### Context` / `### Group` / `### Related` / `### BackLink` を保存時に自動で同期
+<p align="center"><img src="docs/images/start-screen.png" alt="Gnosis の起動画面" width="720"><br><sub>起動画面（ターミナルの Vim。<code>tools/make_start_screenshot.py</code> で作り直せます）</sub></p>
+
+- 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、冒頭の `Context:` と `### Group` / `### Related` / `### BackLink` などを保存時に自動で同期
 - 中身は本物の Vim。Vim を知らなくても、インストーラーが Gnosis 専用の Vim 環境を作り、アイコンから起動できる
 - 標準の画面は Bash などのターミナルで起動する本物の Vim。独自 GUI ではない（Electron は明示的な `--app` のときだけ使用できるオプション）
 - 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・起動サイズ・テーマ）。文字サイズは Gnosis 全体で 1 つ
