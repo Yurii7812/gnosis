@@ -822,6 +822,65 @@ if !exists('g:gnosis_autosave_delay')
   let g:gnosis_autosave_delay = 1500
 endif
 
+" 非同期同期プロセスが編集途中のノートをディスク上で上書きしないためのガード。
+" `TextChanged` だけでなく `InsertEnter` でも立て、最初の入力と同期完了が
+" 競合する時間を減らす。別の Vim との衝突を避け、ファイル名には PID を含める。
+let $GNOSIS_SYNC_GUARD_DIR = gnosis#home#path('state', 'sync-dirty')
+let s:gnosis_dirty_guard_paths = {}
+
+function! s:dirty_guard_mark() abort
+  let l:file = expand('%:p')
+  if &buftype !=# '' || empty(l:file) || !gnosis#is_vault_path(l:file)
+    return
+  endif
+  let l:dir = $GNOSIS_SYNC_GUARD_DIR
+  if !isdirectory(l:dir)
+    try
+      call mkdir(l:dir, 'p')
+    catch
+      return
+    endtry
+  endif
+  let l:marker = l:dir . '/' . strpart(sha256(fnamemodify(l:file, ':p')), 0, 16)
+        \ . '.' . getpid() . '.dirty'
+  if !filereadable(l:marker)
+    call writefile([], l:marker)
+  endif
+  let b:gnosis_sync_dirty_guard = l:marker
+  let s:gnosis_dirty_guard_paths[l:marker] = 1
+endfunction
+
+function! s:dirty_guard_clear(...) abort
+  let l:marker = get(b:, 'gnosis_sync_dirty_guard', '')
+  if !empty(l:marker)
+    call delete(l:marker)
+    unlet! b:gnosis_sync_dirty_guard
+    if has_key(s:gnosis_dirty_guard_paths, l:marker)
+      call remove(s:gnosis_dirty_guard_paths, l:marker)
+    endif
+  endif
+endfunction
+
+function! s:dirty_guard_after_save() abort
+  " デバウンスによる挿入中の保存では、次のキー入力に備えてガードを残す。
+  if mode(1) !~# '^[iR]'
+    call s:dirty_guard_clear()
+  endif
+endfunction
+
+function! s:dirty_guard_after_leave() abort
+  if !&modified
+    call s:dirty_guard_clear()
+  endif
+endfunction
+
+function! s:dirty_guard_clear_all() abort
+  for l:marker in keys(s:gnosis_dirty_guard_paths)
+    call delete(l:marker)
+  endfor
+  let s:gnosis_dirty_guard_paths = {}
+endfunction
+
 function! s:schedule_autosave() abort
   if !g:gnosis_autosave || !has('timers') | return | endif
   if exists('s:autosave_timer') && s:autosave_timer > 0
@@ -887,10 +946,15 @@ endfunction
 
 augroup gnosis_autosave
   autocmd!
+  autocmd InsertEnter *.md call s:dirty_guard_mark()
+  autocmd TextChanged,TextChangedI *.md call s:dirty_guard_mark()
   autocmd TextChanged,TextChangedI *.md,*.csv call s:schedule_autosave()
-  autocmd InsertLeave *.md,*.csv call s:autosave_on_insert_leave()
-  autocmd BufLeave,WinLeave *.md,*.csv call s:autosave_before_leave()
+  autocmd InsertLeave *.md,*.csv call s:autosave_on_insert_leave() | call s:dirty_guard_after_leave()
+  autocmd BufLeave,WinLeave *.md,*.csv call s:autosave_before_leave() | call s:dirty_guard_after_leave()
   autocmd FocusLost *.md,*.csv call s:autosave_before_leave()
+  autocmd BufWritePost *.md call s:dirty_guard_after_save()
+  autocmd BufUnload,BufDelete *.md call s:dirty_guard_clear()
+  autocmd VimLeavePre * call s:dirty_guard_clear_all()
 augroup END
 
 " ---------------------------------------------------------------------------
