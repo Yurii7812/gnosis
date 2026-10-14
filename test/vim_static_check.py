@@ -26,8 +26,12 @@ def vim_files() -> list[Path]:
     return sorted(p for p in REPO.rglob("*.vim") if ".git" not in p.parts and "node_modules" not in p.parts)
 
 
+# `let s:name = function('...')` / `funcref(...)` で作った Funcref 変数も `s:name(` で呼べる
+FUNCREF_RE = re.compile(r"^\s*let\s+(s:[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:function|funcref)\(", re.M)
+
+
 def defined_in(text: str) -> set[str]:
-    return set(DEF_RE.findall(text))
+    return set(DEF_RE.findall(text)) | set(FUNCREF_RE.findall(text))
 
 
 def main() -> int:
