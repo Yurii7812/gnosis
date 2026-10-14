@@ -35,9 +35,10 @@ launch() { # 出力 端末 [デスクトップ]
 }
 # Vim 側の試験で最後に保存した大きさ（17）とフォント・行間を使う
 launch "$WORK/konsole.txt" konsole
-check "Konsole: 保存した大きさの専用プロファイルの絶対パス" "Gnosis-17.profile" "$WORK/konsole.txt"
-check "Konsole: フォントサイズを起動時に明示的に指定" '^Font=DejaVu Sans Mono,17,' "$WORK/konsole.txt"
-check "Konsole: 専用ウィンドウのタイトル" '^LocalTabTitleFormat=Gnosis
+check "Konsole: 保存した大きさのプロファイル" 'Gnosis-17.profile' "$WORK/konsole.txt"
+check "Konsole: フォントサイズを起動時に指定" '^Font=DejaVu Sans Mono,17,' "$WORK/konsole.txt"
+check "Konsole: タイトルに Gnosis を指定" '^LocalTabTitleFormat=Gnosis$' "$WORK/konsole.txt"
+check "Konsole: state を専用に分離" "XDG_STATE_HOME=$H/terminal/state" "$WORK/konsole.txt"
 check "Konsole: Gnosis が開いた窓の印" 'GNOSIS_TERMINAL_KIND=konsole' "$WORK/konsole.txt"
 check "Konsole: 専用プロファイルはこの窓にだけ見せる" "XDG_DATA_DIRS=$H/terminal/share:" "$WORK/konsole.txt"
 grep -q '^Font=DejaVu Sans Mono,20,' "$H/terminal/share/konsole/Gnosis-20.profile" && n=$((n + 1)) || { echo "NG launcher: Konsole プロファイルのフォント" >&2; ng=1; }
@@ -60,39 +61,6 @@ printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "termi
 launch "$WORK/kde.txt" "" KDE
 check "自動選択: KDE なら Konsole" '^konsole$' "$WORK/kde.txt"
 check "自動選択: 保存した大きさ（15）" 'Gnosis-15.profile' "$WORK/kde.txt"
-launch "$WORK/xfce2.txt" "" XFCE
-check "自動選択: XFCE なら XFCE Terminal" '^xfce4-terminal$' "$WORK/xfce2.txt"
-printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
-launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
-# ふだんの Vim の設定は作らない・変えない
-[ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
-[ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }
-echo "termfont OK ($n 項目)"
- "$WORK/konsole.txt"
-check "Konsole: 独立した state" "XDG_STATE_HOME=$H/terminal/state" "$WORK/konsole.txt"
-check "Konsole: Gnosis が開いた窓の印" 'GNOSIS_TERMINAL_KIND=konsole' "$WORK/konsole.txt"
-check "Konsole: 専用プロファイルはこの窓にだけ見せる" "XDG_DATA_DIRS=$H/terminal/share:" "$WORK/konsole.txt"
-grep -q '^Font=DejaVu Sans Mono,20,' "$H/terminal/share/konsole/Gnosis-20.profile" && n=$((n + 1)) || { echo "NG launcher: Konsole プロファイルのフォント" >&2; ng=1; }
-grep -q '^LineSpacing=4$' "$H/terminal/share/konsole/Gnosis-17.profile" && n=$((n + 1)) || { echo "NG launcher: Konsole プロファイルの行間" >&2; ng=1; }
-[ ! -e "$WORK/home/.local/share/konsole" ] && n=$((n + 1)) || { echo "NG launcher: ふだんの Konsole のプロファイル置き場に書いた" >&2; ng=1; }
-launch "$WORK/xfce.txt" xfce4-terminal
-check "XFCE: --font に名前と大きさ" '^DejaVu Sans Mono 17$' "$WORK/xfce.txt"
-launch "$WORK/kitty.txt" kitty
-check "kitty: font_size" '^font_size=17$' "$WORK/kitty.txt"
-check "kitty: Gnosis の窓は遠隔操作を許可（その場で変える）" '^allow_remote_control=yes$' "$WORK/kitty.txt"
-launch "$WORK/alacritty.txt" alacritty
-check "Alacritty: font.size" '^font.size=17$' "$WORK/alacritty.txt"
-launch "$WORK/xterm.txt" xterm
-check "xterm: -fs" '^17$' "$WORK/xterm.txt"
-check "xterm: 実際のフォント名（Monospace ではない）" '^DejaVu Sans Mono$' "$WORK/xterm.txt"
-launch "$WORK/wezterm.txt" wezterm
-check "WezTerm: font_size" '^font_size=17$' "$WORK/wezterm.txt"
-# 端末の自動選択: デスクトップに合うもの
-printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": ""\n}\n' > "$H/terminal.json"
-launch "$WORK/kde.txt" "" KDE
-check "自動選択: KDE なら Konsole" '^konsole$' "$WORK/kde.txt"
-check "自動選択: 保存した大きさ（15）" '^Gnosis-15$' "$WORK/kde.txt"
 launch "$WORK/xfce2.txt" "" XFCE
 check "自動選択: XFCE なら XFCE Terminal" '^xfce4-terminal$' "$WORK/xfce2.txt"
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
