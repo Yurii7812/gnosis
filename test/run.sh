@@ -57,6 +57,9 @@ if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/t
 # 紙の日記（題がデジタル日記と同じ形）を \d の機能が拾わない
 sh "$REPO/test/diary_paper_net.sh"
 
+# 日記の初回作成・Indexリンク・年越し・3年目の階層
+sh "$REPO/test/diary_hierarchy_net.sh"
+
 # 同期の冪等性（試験用の小さな vault）
 sh "$REPO/test/sync_net.sh"
 
