@@ -1,7 +1,7 @@
 #!/bin/sh
 # Gnosis のランチャー（Linux / macOS）。
 #
-#   gnosis                 今の端末（Bash など）で普通の Vim を起動。端末の外（アイコン）からは端末の窓を新しく開く
+#   gnosis                 Gnosis 専用端末ウィンドウを開く（文字サイズなどを適用）。現在の端末はそのまま
 #   gnosis --new-terminal  新しい端末の窓を開いて、その中の Vim で起動（アイコンはこれ）
 #   gnosis --tui           今の端末の Vim で起動（--terminal も同じ）
 #   gnosis --gui           GUI 版 Vim（gvim / MacVim）で起動
@@ -625,7 +625,7 @@ case "$mode" in
   tui) run_tui "$@" ;;
   newterm) run_new_terminal "$@" ;;
   auto)
-    # デフォルトは必ず本物の端末 Vim。Electron / gvim を自動選択しない。
-    if [ -t 0 ] && [ -t 1 ]; then run_tui "$@"; fi
+    # 端末内からの実行も必ず Gnosis 専用の新しい窓で開く。
+    # 現在の端末で開きたい場合は明示的に --tui を指定する。
     run_new_terminal "$@" ;;
 esac
