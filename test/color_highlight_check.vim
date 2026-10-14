@@ -16,15 +16,17 @@ try
   set hlsearch
   let v:hlsearch = 1
   call gnosis#color#on_note_enter()
+  call feedkeys('', 'x')
   call s:ok('最初のノートで一時matchを削除', empty(getmatches()))
-  call s:ok('検索の残留ハイライトを削除', !&hlsearch)
+  call s:ok('検索の残留ハイライトを削除', &hlsearch && v:hlsearch == 0)
   call s:ok('ノートの本文は書き換えない', s:before ==# getline(1, '$'))
   call s:ok('Markdown の filetype を保持', &filetype ==# 'markdown')
   call s:ok('構文のリンク強調は存在', hlexists('gnosisLinkText'))
   call matchadd('Visual', 'Index')
   let v:hlsearch = 1
   call gnosis#color#refresh()
-  call s:ok('再描画コマンドでマッチを消す', empty(getmatches()) && !&hlsearch)
+  call feedkeys('', 'x')
+  call s:ok('再描画コマンドでマッチを消す', empty(getmatches()) && &hlsearch && v:hlsearch == 0)
   call s:ok('\\r の色修復マッピングを提供', !empty(maparg('\r', 'n')))
   call s:ok('手動色修復コマンドを提供', exists(':GnosisRefreshColors') == 2)
   call gnosis#color#doctor()
