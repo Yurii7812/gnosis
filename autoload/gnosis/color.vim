@@ -5,9 +5,10 @@ function! gnosis#color#refresh() abort
   if &buftype !=# ''
     return
   endif
-  " 関数内の :nohlsearch は呼び出し後に復元されるため、設定自体を明示的に無効化。
-  " Gnosis のノートに入るまでは通常 Vim に影響しない。
-  set nohlsearch
+  " 関数内の :nohlsearch は復帰時に v:hlsearch が戻る。
+  " typeahead に <Cmd>nohlsearch を積み関数外で実行する。
+  " &hlsearch 自体は維持し、ユーザーが新たに検索した結果は引き続き表示する。
+  call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
   call clearmatches()
   if get(g:, 'colors_name', '') ==# 'gnosis'
     " 再描画だけでは回復しない古いハイライト属性を再設定する。
@@ -24,9 +25,10 @@ function! gnosis#color#on_note_enter() abort
   if &buftype !=# '' || (&filetype !=# 'markdown' && &filetype !=# 'vimwiki')
     return
   endif
-  " 関数内の :nohlsearch は呼び出し後に復元されるため、設定自体を明示的に無効化。
-  " Gnosis のノートに入るまでは通常 Vim に影響しない。
-  set nohlsearch
+  " 関数内の :nohlsearch は復帰時に v:hlsearch が戻る。
+  " typeahead に <Cmd>nohlsearch を積み関数外で実行する。
+  " &hlsearch 自体は維持し、ユーザーが新たに検索した結果は引き続き表示する。
+  call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
   call clearmatches()
   " 各ウィンドウの初回だけパレットを再適用。通常のカーソル移動では重い処理をしない。
   if !get(w:, 'gnosis_color_entered', 0)
