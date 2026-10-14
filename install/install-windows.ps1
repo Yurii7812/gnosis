@@ -38,7 +38,7 @@ if (-not $wez) {
   & winget install --exact --id wez.wezterm --accept-package-agreements --accept-source-agreements
   if ($LASTEXITCODE -ne 0) { throw 'WezTerm installation failed' }
 }
-Write-Host 'Installing Gnosis in Ubuntu (sudo may ask for password).'
+Write-Host 'Installing terminal-based Gnosis in Ubuntu (sudo may request password).'
 $bootstrap = @'
 set -eu
 if ! command -v git >/dev/null 2>&1; then
@@ -53,6 +53,21 @@ sh install/install.sh --yes
 '@
 & wsl.exe -d $ubuntuName --exec bash -lc $bootstrap
 if ($LASTEXITCODE -ne 0) { throw 'Linux-side Gnosis setup failed' }
+
+# Completion means the terminal version is actually installed, not merely
+# that WSL and Git were downloaded. Do not make a broken desktop shortcut.
+$verify = @'
+set -eu
+test -x "$HOME/.local/bin/gnosis"
+test -f "$HOME/.local/share/gnosis/vimrc"
+test -d "$HOME/.local/share/gnosis/plugins/fzf"
+command -v vim >/dev/null
+command -v python3 >/dev/null
+'@
+& wsl.exe -d $ubuntuName --exec bash -lc $verify
+if ($LASTEXITCODE -ne 0) {
+  throw 'Gnosis dependencies are incomplete in Ubuntu. Shortcut creation was cancelled.'
+}
 
 $dest = Join-Path $env:LOCALAPPDATA 'Gnosis'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
@@ -75,27 +90,42 @@ if ($found) { $exe = $found.Source } else {
          Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 if (-not $exe) { throw 'WezTerm executable missing' }
-& $exe --config "font_size=$size" --config "enable_tab_bar=false" start -- wsl.exe -d $distro --exec bash -lc '"$HOME/.local/bin/gnosis" --tui'
+& $exe --config "font_size=$size" --config "enable_tab_bar=false" start -- wsl.exe -d $distro --exec bash -lc 'exec "$HOME/.local/bin/gnosis" --tui'
 '@
 $startContent = $startContent.Replace('__GNOSIS_DISTRO__', $ubuntuName)
-$startContent | Set-Content -LiteralPath $start -Encoding UTF8
+$startContent | Set-Content -LiteralPath $start -Encoding Ascii
+# Confirm the startup script was written before making a shortcut.
+if (-not (Test-Path -LiteralPath $start)) { throw 'Gnosis startup script was not created.' }
 if (-not $NoShortcut) {
-  $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gnosis.lnk'
   $shell = New-Object -ComObject WScript.Shell
-  $link = $shell.CreateShortcut($shortcut)
-  $link.TargetPath = 'powershell.exe'
-  $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $start + '"'
-  $link.Description = 'Gnosis in WezTerm + WSL Ubuntu'
-  # Preserve the generated high-contrast Gnosis icon if WSL files are accessible.
+  $iconPath = Join-Path $PSScriptRoot '..\assets\icons\gnosis.ico'
   try {
     $wslUser = ((& wsl.exe -d $ubuntuName --exec id -un | Select-Object -First 1) -as [string]).Trim()
     $unc = '\\wsl.localhost\' + $ubuntuName + '\home\' + $wslUser + '\.local\share\gnosis\generated-icons\icons\gnosis.ico'
-    if (Test-Path $unc) {
-      $localIcon = Join-Path $dest 'gnosis.ico'
-      Copy-Item -LiteralPath $unc -Destination $localIcon -Force
-      $link.IconLocation = $localIcon
+    if (Test-Path $unc) { $iconPath = $unc }
+  } catch { Write-Host 'Using the bundled Gnosis icon instead.' }
+  $localIcon = Join-Path $dest 'gnosis.ico'
+  if (Test-Path $iconPath) {
+    Copy-Item -LiteralPath $iconPath -Destination $localIcon -Force
+  }
+  $links = @(
+    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gnosis.lnk'),
+    (Join-Path ([Environment]::GetFolderPath('Programs')) 'Gnosis.lnk')
+  )
+  foreach ($shortcut in $links) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $shortcut -Parent) | Out-Null
+    $link = $shell.CreateShortcut($shortcut)
+    $link.TargetPath = (Join-Path $PSHOME 'powershell.exe')
+    $link.Arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $start + '"'
+    $link.WorkingDirectory = $dest
+    $link.Description = 'Gnosis (Vim in WezTerm / Ubuntu WSL)'
+    if (Test-Path $localIcon) { $link.IconLocation = $localIcon }
+    $link.Save()
+    if (-not (Test-Path -LiteralPath $shortcut)) {
+      throw ('Could not create Gnosis shortcut: ' + $shortcut)
     }
-  } catch { Write-Host 'Custom shortcut icon unavailable; using the default icon.' }
-  $link.Save()
+    Write-Host ('Gnosis shortcut: ' + $shortcut)
+  }
 }
-Write-Host "Gnosis launcher created: $start"
+Write-Host "Gnosis terminal launcher ready: $start"
+Write-Host 'Gnosis is available from the Desktop and Start Menu.'
