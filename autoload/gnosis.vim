@@ -991,6 +991,7 @@ function! s:index_template(...) abort
         \ '---',
         \ '',
         \ '# Index',
+        \ '',
         \ ]
   if l:v2
     " インデックスには Parent/Child 等の見出しを置かない。
@@ -1105,6 +1106,61 @@ function! s:guide_merge(old, new) abort
   return l:out + s:guide_relation_tail(a:old)
 endfunction
 
+" Index の本文が操作ガイドを含むなら、ガイドの ### Group に Index を保証する。
+" 初回作成直後は Python sync に依存しない。既存 vault でも不足している関係だけ修復する。
+" Index からリンクが消されている場合は何もしない（別グループへ移した場合を尊重）。
+function! s:ensure_guide_index_group(root) abort
+  if s:pkm_format() !=# 'v2'
+    return
+  endif
+  let l:index = s:index_path(a:root)
+  let l:name = s:guide_file_name(a:root)
+  let l:guide = fnamemodify(a:root, ':p') . l:name
+  if !filereadable(l:index) || !filereadable(l:guide)
+    return
+  endif
+  if empty(filter(readfile(l:index), 'stridx(v:val, "](" . l:name . ")") >= 0'))
+    return
+  endif
+
+  let l:lines = readfile(l:guide)
+  let l:old_tail = s:guide_relation_tail(l:lines)
+  let l:tail = copy(l:old_tail)
+  let l:pos = index(l:tail, '### Group')
+  if l:pos >= 0
+    let l:end = len(l:tail)
+    if l:pos + 1 < len(l:tail)
+      for l:i in range(l:pos + 1, len(l:tail) - 1)
+        if index(s:guide_relation_marks, trim(l:tail[l:i])) >= 0
+          let l:end = l:i
+          break
+        endif
+      endfor
+    endif
+    for l:line in l:tail[l:pos + 1 : l:end - 1]
+      if stridx(l:line, '](index.md)') >= 0
+        return
+      endif
+    endfor
+    call insert(l:tail, '[Index](index.md)', l:pos + 1)
+  else
+    let l:at = len(l:tail)
+    for l:section in ['### Related', '### BackLink']
+      let l:p = index(l:tail, l:section)
+      if l:p >= 0
+        let l:at = min([l:at, l:p])
+      endif
+    endfor
+    call extend(l:tail, ['### Group', '[Index](index.md)'], l:at)
+  endif
+
+  let l:prefix = empty(l:old_tail) ? l:lines : l:lines[0 : len(l:lines) - len(l:old_tail) - 1]
+  if get(l:prefix, -1, 'nonempty') !=# ''
+    call add(l:prefix, '')
+  endif
+  call s:syn_writefile(l:prefix + l:tail, l:guide)
+endfunction
+
 function! s:refresh_guide(root) abort
   let l:guide = fnamemodify(a:root, ':p') . s:guide_file_name(a:root)
   let l:new = s:guide_template()
@@ -1113,11 +1169,13 @@ function! s:refresh_guide(root) abort
     let l:old = readfile(l:guide)
     let l:new = s:guide_merge(l:old, l:new)
     if l:old ==# l:new
+      call s:ensure_guide_index_group(a:root)
       return
     endif
     let l:old_title = trim(substitute(get(filter(copy(l:old), 'v:val =~# "^title:"'), 0, ''), '^title:', '', ''))
   endif
   call s:syn_writefile(l:new, l:guide)
+  call s:ensure_guide_index_group(a:root)
   " 題が変わった（言語の切り替え・旧名からの更新）ら、ガイドへのリンクの表示名も追従させる
   let l:new_title = s:guide_title()
   if !empty(l:old_title) && l:old_title !=# l:new_title
@@ -1182,6 +1240,7 @@ function! s:write_index_and_guide(root) abort
   call s:refresh_guide(a:root)
   call s:syn_writefile(s:index_template(l:first_guide), l:index)
   call s:mark_index_created()
+  call s:ensure_guide_index_group(a:root)
   " 新しく作ったガイドは Index の本文からリンクされる。すぐ同期して、ガイドにも
   " 所属（### Group の Index）を書く（次に何かを保存するまで所属が無い状態にしない）
   if l:first_guide && s:pkm_format() ==# 'v2' && filereadable(get(g:, 'gnosis_python', ''))
