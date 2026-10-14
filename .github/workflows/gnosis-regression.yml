@@ -39,6 +39,11 @@ jobs:
         run: sh test/autosync_dirty_guard_net.sh
       - name: Test diary hierarchy across year rollover
         run: sh test/diary_hierarchy_net.sh
+      - name: Test Folgezettel Branch relationships and new-note placement
+        run: |
+          python3 python/test_branch_ops.py
+          sh test/branch_net.sh
+          sh test/link_ops_net.sh
       - name: Test focus escape recognition and consistent Markdown prose colors
         run: sh test/focus_markdown_net.sh
       - name: Test Gnosis color highlight recovery
@@ -47,11 +52,6 @@ jobs:
         run: sh test/icon_palette_net.sh
       - name: Test Index and guide relations
         run: sh test/guide_relations_net.sh
-      - name: Test Folgezettel Branch relationships and new-note placement
-        run: |
-          python3 python/test_branch_ops.py
-          sh test/branch_net.sh
-          sh test/link_ops_net.sh
       - name: Test auto-updater using local Git repositories
         run: sh test/install_update_net.sh
 
