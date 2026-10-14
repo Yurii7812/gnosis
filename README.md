@@ -35,12 +35,25 @@ cd gnosis
 ./install/install.sh
 ```
 
-更新する（前に入れたフォルダで同じインストーラーを動かす）:
+**2回目以降の更新は、このコマンドだけで実行できます。**
 
 ```sh
-cd <前に clone したフォルダ>
-./install/install.sh      # GitHub に新しい版があれば git pull --ff-only してから入れ直す
+gnosis --update
 ```
+
+`gnosis --update` は GitHub の `origin/main` から最新版を確認し、Gnosis 本体・専用プラグイン・ランチャー・アプリメニューを更新します。確認の入力は不要で、システムパッケージのインストールは行いません。現在のブランチが `main` で、`origin/main` を追跡していることが必要です。
+
+初めてこのコマンドを導入するときは、古い Gnosis にはまだ `--update` がないため、最初の1回だけ次を実行してください（PRのマージ後）。
+
+```sh
+cd ~/gnosis
+git status --short
+git switch main
+git pull --ff-only origin main
+./install/install.sh
+```
+
+`git status --short` で変更がある場合は、変更を残すため `git switch` / `git pull` の前に確認してください。以降は `gnosis --update` だけで更新できます。
 
 - 未コミットの変更があるフォルダは更新しません（変更は消しません）。`--no-update` で取り込みを止められます
 - 別のフォルダに新しく clone して入れると、ランチャーとアプリメニューはそのフォルダを指すように作り直されます（前のフォルダは消しません）
@@ -102,6 +115,7 @@ Bash は要りません（起動画面のシンボルは静的なアセットか
 | `gnosis ノート.md` | そのノートを開く（起動画面は出さない） |
 | `gnosis --where` | Gnosis のフォルダ・コミット・Gnosis ホーム・使う vimrc・Vim を表示 |
 | `gnosis --doctor` | 導入の診断（古い版・PATH の古いランチャー・古いアプリメニュー項目・必要なもの・文字サイズ） |
+| `gnosis --update` | GitHub の `origin/main` を確認し、最新版を安全に取得して Gnosis 専用環境・ランチャーを更新 |
 
 ### 起動画面
 
@@ -289,8 +303,7 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
   Your own `~/.vimrc` / `~/.vim` are never read or changed.
 - **Start screen**: the Chnoubis symbol, "Gnosis", the selected vault, `Enter` to start, `v` to choose / register / create / remove vaults
   (removing never deletes notes), `s` for settings.
-- **Update**: run `./install/install.sh` again in the cloned folder; it pulls the newer version (`git pull --ff-only`, never when there are
-  uncommitted changes) and points the launcher and the app-menu entry at that folder. `gnosis --where` / `gnosis --doctor` show which
+- **Update**: run `gnosis --update` (after its initial installation) to fetch the latest `origin/main`, perform a fast-forward-only update, and reinstall the Gnosis environment and launchers without modifying system packages or discarding local changes. `gnosis --where` / `gnosis --doctor` show which
   Gnosis starts and diagnose stale launchers, old app-menu entries and missing requirements (Vim, git, Python 3 are required).
 - **Readability**: off-white body text, cyan underlined link names (the `[name](file.md)` syntax is hidden; `:GnosisLinkSource` toggles it),
   pale-gold bold headings on the Chnoubis #10 navy background.
