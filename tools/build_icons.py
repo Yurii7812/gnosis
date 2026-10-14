@@ -30,8 +30,9 @@ OUTPUT_ROOT = Path(os.environ.get("GNOSIS_ICON_OUTPUT_ROOT", ROOT / "assets"))
 ICONS = OUTPUT_ROOT / "icons"
 LOGO = OUTPUT_ROOT / "logo"
 # 起動画面 Chnoubis #10 と同じ配色（assets/themes/builtin.json の start）。
-BG = "#14283D"
-ACCENT = "#79CFFF"
+# Desktop launcher symbol needs higher contrast than the main editor canvas.
+BG = "#071827"
+ACCENT = "#D7F8FF"
 FG = "#E6EEF5"
 SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024]
 
@@ -65,11 +66,11 @@ def symbol_svg(pts) -> str:
     x0, y0, x1, y1 = bbox(pts)
     w, h = x1 - x0, y1 - y0
     side = max(w, h)
-    pad = side * 0.08
+    pad = side * 0.035
     vb = side + 2 * pad
     ox = pad + (side - w) / 2 - x0
     oy = pad + (side - h) / 2 - y0
-    circles = "".join(f'<circle cx="{x + ox + 0.5:.2f}" cy="{y + oy + 0.5:.2f}" r="0.46"/>' for x, y in pts)
+    circles = "".join(f'<circle cx="{x + ox + 0.5:.2f}" cy="{y + oy + 0.5:.2f}" r="0.55"/>' for x, y in pts)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vb:.2f} {vb:.2f}">\n'
             f'<title>Gnosis</title>\n'
             f'<rect width="{vb:.2f}" height="{vb:.2f}" rx="{vb * 0.18:.2f}" fill="{BG}"/>\n'
@@ -82,7 +83,7 @@ def logo_svg(pts) -> str:
     text_h = h * 0.42
     gap = h * 0.12
     total_w = w + gap + text_h * 3.2
-    circles = "".join(f'<circle cx="{x - x0 + 0.5:.2f}" cy="{y - y0 + 0.5:.2f}" r="0.46"/>' for x, y in pts)
+    circles = "".join(f'<circle cx="{x - x0 + 0.5:.2f}" cy="{y - y0 + 0.5:.2f}" r="0.55"/>' for x, y in pts)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {total_w:.2f} {h:.2f}">\n'
             f'<title>Gnosis</title>\n'
             f'<g fill="{ACCENT}">{circles}</g>\n'
@@ -100,11 +101,11 @@ def render_symbol(pts, size: int, Image, ImageDraw):
     x0, y0, x1, y1 = bbox(pts)
     w, h = x1 - x0, y1 - y0
     side = max(w, h)
-    pad = side * 0.08
+    pad = side * 0.035
     unit = big / (side + 2 * pad)
     ox = pad + (side - w) / 2 - x0
     oy = pad + (side - h) / 2 - y0
-    r = max(0.46 * unit, 0.6)
+    r = max(0.55 * unit, 0.6)
     for x, y in pts:
         cx = (x + ox + 0.5) * unit
         cy = (y + oy + 0.5) * unit
