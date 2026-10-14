@@ -21,7 +21,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y vim git python3
+          sudo apt-get install -y vim git python3 python3-venv
       - name: Check launcher and installer syntax
         run: |
           sh -n bin/gnosis
@@ -41,6 +41,10 @@ jobs:
         run: sh test/diary_hierarchy_net.sh
       - name: Test Folgezettel Branch relationships and new-note placement
         run: |
+          # Japanese kana sorting tests require pykakasi (Gnosis normally installs it in a venv).
+          python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
+          "$RUNNER_TEMP/gnosis-test-venv/bin/python" -m pip install --quiet pykakasi
+          export PATH="$RUNNER_TEMP/gnosis-test-venv/bin:$PATH"
           python3 python/test_branch_ops.py
           sh test/branch_net.sh
           sh test/link_ops_net.sh
