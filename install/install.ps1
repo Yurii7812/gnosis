@@ -1,40 +1,38 @@
 #Requires -Version 5.1
-# Gnosis Windows installer entry point.
+# Gnosis Windows installer. ASCII only for Windows PowerShell 5.1.
 #
-# Usage:
-#   powershell -ExecutionPolicy Bypass -File install\install.ps1
+# Default: complete native Windows GUI desktop app with one-click shortcut.
+# Optional: -WSL installs the separate Ubuntu/WezTerm terminal edition.
 #
-# IMPORTANT: Keep this file ASCII-only so Windows PowerShell 5.1 reads it
-# correctly even when it assumes the system code page instead of UTF-8.
-# The supported Windows installation uses WSL2 + Ubuntu + WezTerm.
+# powershell -ExecutionPolicy Bypass -File install\install.ps1
 [CmdletBinding()]
 param(
-    [switch]$Yes,
-    [switch]$NoSystem,
-    [switch]$NoApp,
-    [switch]$SkipInstall,
-    [switch]$NoShortcut
+  [switch]$NoSystem,
+  [switch]$NoShortcut,
+  [switch]$WSL,
+  [switch]$Yes,
+  [switch]$NoApp,
+  [switch]$SkipInstall
 )
-
 $ErrorActionPreference = 'Stop'
-$installer = Join-Path $PSScriptRoot 'install-windows.ps1'
+if ($NoApp -and -not $WSL) {
+  throw 'A native desktop install requires the Electron app. Use -WSL for terminal-only installation.'
+}
+$script = if ($WSL) { 'install-windows.ps1' } else { 'install-native.ps1' }
+$installer = Join-Path $PSScriptRoot $script
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
-    Write-Error 'Missing install/install-windows.ps1. Update your Gnosis checkout.'
-    exit 1
-}
-if ($Yes) {
-    Write-Host 'For safety, WSL/Ubuntu and WezTerm installation still require explicit confirmation.'
-}
-if ($NoApp) {
-    Write-Host 'Electron is not installed by the WSL2/WezTerm installer.'
+  throw ('The Windows installer is missing: ' + $installer)
 }
 $skip = [bool]($NoSystem -or $SkipInstall)
 try {
-    & $installer -SkipInstall:$skip -NoShortcut:$NoShortcut
-    if (-not $?) {
-        exit 1
-    }
+  # The native app is installed by default. WSL system changes remain opt-in.
+  if ($WSL) {
+    & $installer -NoShortcut:$NoShortcut -SkipInstall:$skip
+  } else {
+    & $installer -NoShortcut:$NoShortcut -NoSystem:$skip
+  }
+  if (-not $?) { throw 'Gnosis installer returned a failure.' }
 } catch {
-    Write-Error $_
-    exit 1
+  Write-Error $_
+  exit 1
 }
