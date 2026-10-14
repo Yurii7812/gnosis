@@ -1200,6 +1200,29 @@ endfunction
 " 公開: 操作ガイドを最新にする（VimEnter 用）。
 " 起動のたびに vault のガイドを最新テンプレートと比較し、変わっていれば書き換える
 " （プラグイン更新に自動追従）。Index がありガイドが無ければ作る。開いていれば読み直す。
+" 既存の Index で見出し直後の空行が抜けている場合、そこだけ直す。
+" 未保存の編集中 Index は触れず、ガイド以外のノートやユーザーのリンクはそのまま。
+function! s:repair_index_heading_spacing(root) abort
+  let l:path = s:index_path(a:root)
+  if !filereadable(l:path)
+    return
+  endif
+  let l:nr = bufnr(l:path)
+  if l:nr > 0 && getbufvar(l:nr, '&modified')
+    return
+  endif
+  let l:lines = readfile(l:path)
+  let l:at = index(l:lines, '# Index')
+  if l:at < 0 || l:at > 20 || get(l:lines, l:at + 1, '') ==# ''
+    return
+  endif
+  call insert(l:lines, '', l:at + 1)
+  call s:syn_writefile(l:lines, l:path)
+  if l:nr > 0 && bufloaded(l:nr)
+    silent! execute 'checktime ' . l:nr
+  endif
+endfunction
+
 function! gnosis#refresh_guide() abort
   " ロック中の vault には書けない（mount後に自動で走らせる前提）
   if gnosis#vault_locked_flag() == 1
@@ -1214,6 +1237,7 @@ function! gnosis#refresh_guide() abort
         \ && !filereadable(s:index_path(l:root))
     return
   endif
+  call s:repair_index_heading_spacing(l:root)
   call s:refresh_guide(l:root)
   call s:reload_guide_if_open(l:root)
 endfunction
