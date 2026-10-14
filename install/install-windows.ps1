@@ -294,6 +294,34 @@ function Invoke-WslBash([string]$name,[string]$source,[string]$operation) {
   }
 }
 
+# Ubuntu in WSL ships no Japanese font, so the Electron app (\A) shows boxes. When none is
+# installed, link the Windows ones into the user's font folder (no sudo) and prefer good ones.
+$script:JaFontSetup = @'
+command -v fc-list >/dev/null 2>&1 || exit 0
+[ -d /mnt/c/Windows/Fonts ] || exit 0
+[ -z "$(fc-list :lang=ja family 2>/dev/null | head -1)" ] || exit 0
+D="$HOME/.local/share/fonts/windows-ja"
+mkdir -p "$D"
+for f in BIZ-UDGothicR.ttc BIZ-UDGothicB.ttc YuGothR.ttc YuGothB.ttc meiryo.ttc meiryob.ttc msgothic.ttc NotoSansJP-VF.ttf; do
+  [ -e "/mnt/c/Windows/Fonts/$f" ] && ln -sf "/mnt/c/Windows/Fonts/$f" "$D/$f"
+done
+C="$HOME/.config/fontconfig/fonts.conf"
+if [ ! -e "$C" ]; then
+  mkdir -p "$HOME/.config/fontconfig"
+  cat > "$C" <<'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <alias><family>sans-serif</family><prefer><family>Noto Sans JP</family><family>Yu Gothic</family><family>Meiryo</family></prefer></alias>
+  <alias><family>monospace</family><prefer><family>BIZ UDGothic</family><family>MS Gothic</family></prefer></alias>
+  <alias><family>Noto Sans Mono CJK JP</family><prefer><family>BIZ UDGothic</family></prefer></alias>
+</fontconfig>
+EOF
+fi
+fc-cache -f >/dev/null 2>&1
+exit 0
+'@
+
 # Linux pieces of the optional Electron app (\A in Vim). Node is kept in a Gnosis-only folder
 # (checksum-verified from nodejs.org) so Ubuntu's own packages are not replaced.
 $script:AppSetup = @'
@@ -419,6 +447,16 @@ try {
       if ($data.fontSize -ge 6 -and $data.fontSize -le 48) { $size = [int]$data.fontSize }
     }
   } catch {}
+  # Maximize on start: window.maximized of the last vault's .gnosis/settings.json (default: maximize)
+  $max = '1'
+  try {
+    $reg = (@(& wsl.exe -d $distro --exec bash -c 'cat "${XDG_DATA_HOME:-$HOME/.local/share}/gnosis/vaults.json"' 2>$null) -join "`n") | ConvertFrom-Json
+    if ($reg.last) {
+      $set = (@(& wsl.exe -d $distro --exec cat -- ($reg.last + '/.gnosis/settings.json') 2>$null) -join "`n") | ConvertFrom-Json
+      if ($set.window -and $set.window.maximized -eq $false) { $max = '0' }
+    }
+  } catch {}
+  $env:GNOSIS_MAXIMIZED = $max
   $exe = $null
   foreach ($n in @('wezterm-gui.exe','wezterm.exe')) {
     $c = Get-Command $n -ErrorAction SilentlyContinue
@@ -466,6 +504,13 @@ config.window_close_confirmation = 'NeverPrompt'
 config.exit_behavior = 'Close'
 config.window_padding = { left = 8, right = 8, top = 8, bottom = 8 }
 config.color_scheme = 'Builtin Dark'
+wezterm.on('gui-attached', function(domain)
+  if os.getenv('GNOSIS_MAXIMIZED') == '0' then return end
+  for _, w in ipairs(wezterm.mux.all_windows()) do
+    local g = w:gui_window()
+    if g then g:maximize() end
+  end
+end)
 return config
 '@
 }
@@ -545,6 +590,7 @@ function Invoke-GnosisWindowsInstall {
     Say 'Installing/updating Gnosis inside Ubuntu (sudo may ask for your Ubuntu password)...'
     Invoke-WslBash $name (Get-LinuxBootstrapScript $Ref) 'Linux-side Gnosis setup'
     Invoke-WslBash $name (Get-LinuxVerifyScript) 'Gnosis verification'
+    Invoke-WslBash $name $script:JaFontSetup 'Japanese font setup'
 
     Set-State 'launcher' $name
     Install-Launcher $name $user
