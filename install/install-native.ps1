@@ -82,7 +82,12 @@ foreach ($p in @(@('fzf','junegunn/fzf'),@('fzf.vim','junegunn/fzf.vim'),@('vim-
 $vsrc = (Join-Path $repo 'vimrc_gnosis').Replace('\','/').Replace("'","''")
 $vimrc = "execute 'source ' . fnameescape('" + $vsrc + "')" + [Environment]::NewLine
 [IO.File]::WriteAllText((Join-Path $homeDir 'vimrc'),$vimrc,(New-Object Text.UTF8Encoding $false))
-$pyArgs = if ([IO.Path]::GetFileName($py).ToLowerInvariant() -eq 'py.exe') { @('-3') } else { @() }
+# PowerShell 5.1 assignment from an empty @() expression can produce $null.
+# $null + @(...) adds an empty argv[0], making python.exe print usage / exit 2.
+$pyArgs = @()
+if ([IO.Path]::GetFileName($py).ToLowerInvariant() -eq 'py.exe') {
+  $pyArgs = @('-3')
+}
 Run $py ($pyArgs + @('-m','pip','install','--user','-r',(Join-Path $repo 'python\requirements.txt'),'pillow')) 'Python helpers'
 Push-Location $web
 try {
