@@ -679,5 +679,10 @@ case "$mode" in
   auto)
     # 端末内からの実行も必ず Gnosis 専用の新しい窓で開く。
     # 現在の端末で開きたい場合は明示的に --tui を指定する。
-    run_new_terminal "$@" ;;
+    # ただし画面（GUI）が無い環境（スマホの Debian・SSH・コンソール）は、窓を開けないので今の端末で開く。
+    if [ "$(uname -s)" != Darwin ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && [ -t 0 ]; then
+      run_tui "$@"
+    else
+      run_new_terminal "$@"
+    fi ;;
 esac
