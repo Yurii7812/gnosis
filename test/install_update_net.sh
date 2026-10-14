@@ -1,7 +1,7 @@
 #!/bin/sh
 # インストーラーの更新の回帰網。手元に作った「GitHub の代わり」のリポジトリで試す（ネットに出ない）。
 #   - 古い版のフォルダで install.sh を動かすと、新しい版を取り込んでから入れ直す
-#   - 未コミットの変更があるときは更新しない（変更は残る）
+#   - 未コミットの変更があるときは、ファイルを残してエラー終了する
 set -e
 TMPDIR=${TMPDIR:-$HOME/Desktop/test}
 mkdir -p "$TMPDIR"
@@ -39,13 +39,13 @@ git clone -q "$WORK/origin.git" "$WORK/dirty"
 git -C "$WORK/dirty" reset -q --hard HEAD~1
 echo '自分の変更' >> "$WORK/dirty/README.md"
 old_head=$(git -C "$WORK/dirty" rev-parse HEAD)
-run "$WORK/dirty" "$WORK/dirty.log" || { cat "$WORK/dirty.log" >&2; fail "install.sh（変更あり）が失敗した"; }
+if run "$WORK/dirty" "$WORK/dirty.log"; then fail "変更があるのに古い版を正常にインストールした"; fi
 [ "$(git -C "$WORK/dirty" rev-parse HEAD)" = "$old_head" ] || fail "未コミットの変更があるのに更新した"
 tail -1 "$WORK/dirty/README.md" | grep -q '自分の変更' || fail "未コミットの変更が消えた"
-grep -q '最新ではない' "$WORK/dirty.log" || { cat "$WORK/dirty.log" >&2; fail "要約で最新ではないと表示していない"; }
+grep -q '安全のため更新を停止' "$WORK/dirty.log" || { cat "$WORK/dirty.log" >&2; fail "更新失敗理由を表示していない"; }
 # 3. 別のフォルダに新しく clone して入れると、ランチャーはそちらを指す
 git clone -q "$WORK/origin.git" "$WORK/new"
 run "$WORK/new" "$WORK/new.log" || { cat "$WORK/new.log" >&2; fail "新しい clone で失敗した"; }
 HOME="$WORK/home" "$WORK/home/.local/bin/gnosis" --where | grep -qxF "launcher:      $WORK/new/bin/gnosis" || fail "ランチャーが新しい clone を指していない"
-grep -q "$WORK/dirty/bin/gnosis" "$WORK/new.log" || fail "前のインストール先からの切り替えを知らせていない"
-echo "install_update OK (古い版の更新・未コミットの変更は残す・新しい clone へ切り替え)"
+grep -q "$WORK/old/bin/gnosis" "$WORK/new.log" || fail "前のインストール先からの切り替えを知らせていない"
+echo "install_update OK (自動更新・dirty repository は明示的に失敗・新しい clone へ切り替え)"

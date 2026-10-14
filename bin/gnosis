@@ -16,8 +16,8 @@
 #
 # 文字サイズ: 端末の文字を描くのは端末エミュレーター。Gnosis ホームの terminal.json の大きさを、
 # --new-terminal で開く窓に渡す（Konsole・kitty・Alacritty・WezTerm・XFCE Terminal・xterm）。
-# Konsole は Gnosis 専用プロファイル（Gnosis-<大きさ>）をその窓にだけ見せる（ふだんの Konsole の
-# プロファイル一覧には出ない）。今の端末（--tui）の文字や設定は変えない。
+# Konsole は Gnosis 専用プロファイルを絶対パスで指定し、-p Font でも大きさを明示する。
+# Gnosis 専用プロファイルだけに適用し、通常の Konsole と Vim は変更しない。
 # 端末の窓を開けなかったときの記録: <Gnosis ホーム>/logs/launcher.log
 set -eu
 
@@ -262,6 +262,14 @@ run_tui() {
       XDG_DATA_DIRS=$GNOSIS_ORIG_XDG_DATA_DIRS; export XDG_DATA_DIRS
     fi
     unset GNOSIS_ORIG_XDG_DATA_DIRS
+    if [ "${GNOSIS_ORIG_XDG_STATE_HOME-__unset__}" != __unset__ ]; then
+      if [ -n "$GNOSIS_ORIG_XDG_STATE_HOME" ]; then
+        XDG_STATE_HOME=$GNOSIS_ORIG_XDG_STATE_HOME; export XDG_STATE_HOME
+      else
+        unset XDG_STATE_HOME
+      fi
+      unset GNOSIS_ORIG_XDG_STATE_HOME
+    fi
     # すぐ閉じてしまうと原因が見えないので、Vim が起動できなかったら知らせて待つ
     status=0
     "$vim" -u "$VIMRC" "$@" || status=$?
@@ -297,11 +305,38 @@ run_app() {
   exec "$ELECTRON" "$GNOSIS_DIR/web" --no-sandbox --ozone-platform=x11 --disable-gpu
 }
 
+# Gnosis が開く Konsole だけを最大化する KWin 6 スクリプト。
+# タイトルに Gnosis があるウィンドウのみ対象（他の Konsole を変更しない）。
+# スクリプトは起動直前に読み込み、最大化を済ませたら自動的に解除する。
+start_gnosis_kwin_maximize() {
+  [ "${GNOSIS_DRY_RUN:-0}" != 1 ] || return 0
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || return 0
+  script="$GNOSIS_DIR/bin/gnosis-kwin-maximize.js"
+  [ -f "$script" ] || { log "maximize: KWin script missing: $script"; return 0; }
+  qdbus=""
+  for tool in qdbus6 qdbus; do
+    if have "$tool"; then qdbus=$tool; break; fi
+  done
+  [ -n "$qdbus" ] || { log "maximize: qdbus6/qdbus unavailable"; return 0; }
+  name=gnosis-konsole-maximize
+  "$qdbus" org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$name" >/dev/null 2>&1 || true
+  if ! "$qdbus" org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$script" "$name" >/dev/null 2>&1; then
+    log "maximize: could not load KWin script"
+    return 0
+  fi
+  if ! "$qdbus" org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1; then
+    log "maximize: could not start KWin script"
+  fi
+  ( sleep 10
+    "$qdbus" org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$name" >/dev/null 2>&1 || true
+  ) </dev/null >/dev/null 2>&1 &
+}
+
 # 端末を起動する。GNOSIS_DRY_RUN=1 のときは起動せず、渡す引数を 1 行ずつ表示する（試験用）
 run_term() {
   if [ "${GNOSIS_DRY_RUN:-0}" = 1 ]; then
     printf '%s\n' "$@"
-    printf 'env GNOSIS_TERMINAL_KIND=%s XDG_DATA_DIRS=%s\n' "${GNOSIS_TERMINAL_KIND:-}" "${XDG_DATA_DIRS:-}"
+    printf 'env GNOSIS_TERMINAL_KIND=%s XDG_DATA_DIRS=%s XDG_STATE_HOME=%s\n' "${GNOSIS_TERMINAL_KIND:-}" "${XDG_DATA_DIRS:-}" "${XDG_STATE_HOME:-}"
     exit 0
   fi
   exec "$@"
@@ -339,7 +374,21 @@ run_new_terminal() {
       export GNOSIS_ORIG_XDG_DATA_DIRS
       XDG_DATA_DIRS="$GNOSIS_HOME/terminal/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
       export XDG_DATA_DIRS
-      run_term konsole --separate --hide-menubar --hide-tabbar --profile "Gnosis-$size" -e "$SELF" --tui "$@" ;;
+      # 通常の Konsole の保存済みウィンドウサイズは Gnosis に引き継がない。
+      GNOSIS_ORIG_XDG_STATE_HOME=${XDG_STATE_HOME-}
+      export GNOSIS_ORIG_XDG_STATE_HOME
+      XDG_STATE_HOME="$GNOSIS_HOME/terminal/state"
+      mkdir -p "$XDG_STATE_HOME"
+      rm -f "$XDG_STATE_HOME/konsolestaterc"
+      export XDG_STATE_HOME
+      # --profile の名前検索だけに依存せず、Gnosis のファイルを絶対パスで指定する。
+      # -p Font は起動時サイズを明示的に指定する保険。変更はこのセッションのみ。
+      if [ "$max" = 1 ]; then start_gnosis_kwin_maximize; fi
+      run_term konsole --separate --hide-menubar --hide-tabbar \
+        --profile "$GNOSIS_HOME/terminal/share/konsole/Gnosis-$size.profile" \
+        -p "Font=$fam,$size,-1,5,50,0,0,0,0,0" \
+        -p "LocalTabTitleFormat=Gnosis" \
+        -e "$SELF" --tui "$@" ;;
     kitty)
       set -- -o "font_size=$size" -o "font_family=$fam" -o "modify_font=cell_height +${lsp}px" \
         -o allow_remote_control=yes --title Gnosis "$SELF" --tui "$@"
