@@ -57,17 +57,6 @@ jobs:
       - name: Verify documented installer in Windows PowerShell 5.1
         shell: powershell
         run: .\\test\\windows_ps51_installer.ps1
-      - name: Validate Windows installer PowerShell syntax
+      - name: Run the same installer tests in PowerShell 7
         shell: pwsh
-        run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path "install/install.ps1").Path,
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | Format-List
-            exit 1
-          }
+        run: ./test/windows_ps51_installer.ps1

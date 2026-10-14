@@ -607,7 +607,7 @@ doctor() {
   echo "[必要なもの / requirements]"
   vim=$(find_vim)
   if have "$vim"; then
-    vv=$("$vim" --version 2>/dev/null | head -40)
+    vv=$("$vim" --version 2>/dev/null)
     miss=""
     for f in job channel timers textprop popupwin; do printf '%s' "$vv" | grep -q "+$f" || miss="$miss +$f"; done
     if [ -z "$miss" ]; then pass "Vim: $vim ($(printf '%s' "$vv" | head -1 | sed 's/ (.*//'))"; else ng "Vim に足りない機能:$miss ($vim)"; fi

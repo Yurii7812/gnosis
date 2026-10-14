@@ -52,3 +52,9 @@ export GNOSIS_TEST_VIM_VERSION="$WORK/old.txt"
 sh "$WORK/check.sh" fail
 
 echo 'OK: full Vim output checked; later +job accepted; missing feature and old version rejected'
+
+# No script may judge Vim from a truncated --version (the bug also lived in `gnosis --doctor`).
+if grep -nE 'version[^|]*\| *head -[0-9]{2,}' "$ROOT/bin/gnosis" "$ROOT/install/install.sh"; then
+  echo 'FAIL: Vim --version is truncated with head -N'; exit 1
+fi
+echo 'OK: no truncated Vim version reads'

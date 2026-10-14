@@ -12,7 +12,10 @@ param(
   [switch]$NativeApp,
   [switch]$Yes,
   [switch]$NoApp,
-  [switch]$SkipInstall
+  [switch]$SkipInstall,
+  [switch]$Resume,
+  [string]$Ref = '',
+  [string]$Distro = ''
 )
 $ErrorActionPreference = 'Stop'
 if ($NativeApp -and $NoApp) {
@@ -27,7 +30,7 @@ try {
   if ($NativeApp) {
     & $installer -NoShortcut:$NoShortcut -NoSystem:$skip
   } else {
-    & $installer -NoShortcut:$NoShortcut -SkipInstall:$skip
+    & $installer -NoShortcut:$NoShortcut -SkipInstall:$skip -Resume:$Resume -Yes:$Yes -Ref $Ref -Distro $Distro
   }
   if (-not $?) { throw 'Gnosis setup did not complete.' }
 } catch {
