@@ -1472,6 +1472,7 @@ function! gnosis#startup_sequence() abort
   call gnosis#cleanup_stale_locks()
   call gnosis#migrate_state_into_vault()
   call gnosis#startup_restore_root()
+  call s:session_register_current()
   call gnosis#refresh_guide()
   " Index を開く（ファイルを指定して起動したときは、そのファイルのまま）
   if get(g:, 'gnosis_open_index_on_startup', 1) && argc() == 0 && has('timers')
@@ -1733,12 +1734,12 @@ function! gnosis#choose_index_root() abort
     " 前 vault が暗号化・マウント中ならロックする（VimLeave と同じ流儀）。
     " バッファは setup_root_and_index 内で閉じ済み。
     " lock_vault は現在 root を見るので一時的に戻して呼ぶ。
+    " 別のウィンドウが使っている vault は、ここで切り替えてもロックしない（最後の 1 人のときだけロック）
     let g:gnosis_root = l:current_root
-    if gnosis#vault_mounted() == 1
-      call gnosis#lock_vault()
-      redraw
-    endif
+    call s:release_session(l:current_root)
+    redraw
     let g:gnosis_root = l:new_root
+    call s:session_register_current()
     call gnosis#settings#activate(gnosis#vault#of_root(l:new_root))
     redraw
     echom 'Switched PKM root to: ' . l:new_root
@@ -1746,6 +1747,41 @@ function! gnosis#choose_index_root() abort
     echom 'PKM root set to: ' . l:new_root
   endif
   return l:new_root
+endfunction
+
+" いまの vault を、このセッションの使用中として登録する（暗号化 vault がロック中なら登録しない）。
+" 登録簿は gnosis#session（別のウィンドウ・アプリが同じ vault を使っているかを知るため）。
+function! s:session_register_current() abort
+  let l:root = s:vault_clean()
+  if empty(l:root) || !isdirectory(l:root)
+    return
+  endif
+  if gnosis#vault_locked_flag() == 1
+    return
+  endif
+  call gnosis#session#register(l:root)
+endfunction
+
+" a:root の使用登録を外す。他のセッションが残っていなければ、マウント中の暗号化 vault をロックする。
+" 残っていれば、ロックしない（使っているウィンドウを不意に使えなくしない）。
+" 呼ぶときは g:gnosis_root が a:root を指していること（lock_vault は今の root を見る）。
+function! s:release_session(root) abort
+  let l:root = substitute(a:root, s:sep() . '\+$', '', '')
+  if empty(l:root)
+    return
+  endif
+  let l:r = gnosis#session#release(l:root, function('s:lock_if_mounted'))
+  if !l:r.last && gnosis#vault_mounted(l:root, 1) == 1
+    echohl WarningMsg
+    echom 'Gnosis: ' . gnosis#i18n#t('session.kept_unlocked', len(l:r.others), l:root)
+    echohl NONE
+  endif
+endfunction
+
+function! s:lock_if_mounted() abort
+  if gnosis#vault_mounted() == 1
+    call gnosis#lock_vault(1)
+  endif
 endfunction
 
 " 使用中に vault を切り替える（起動画面の vault 一覧・:GnosisVaults から）。
@@ -1756,9 +1792,9 @@ function! gnosis#switch_vault(path) abort
   let l:prev = s:get_pkm_root()
   if !empty(l:prev) && fnamemodify(l:prev, ':p') !=# l:new_root
     call s:close_vault_buffers(l:prev)
-    if gnosis#vault_mounted() == 1
-      call gnosis#lock_vault()
-    endif
+    " 前の vault: 自分の使用登録を外す。別のウィンドウ・アプリが使っていればロックしない。
+    " 最後の 1 人のときだけ、今までどおりロックする。
+    call s:release_session(l:prev)
   endif
   let g:gnosis_root = l:new_root
   call s:save_persisted_root(l:new_root)
@@ -1770,6 +1806,7 @@ function! gnosis#switch_vault(path) abort
       return
     endif
   endif
+  call s:session_register_current()
   call s:setup_persistent_undo_for_root(l:new_root)
   let l:index = s:index_path(l:new_root)
   if !filereadable(l:index)
@@ -6979,9 +7016,9 @@ function! s:v2_new_interactive(attr) abort
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前付きバッファで実行して') | echohl NONE | return
   endif
   if empty(a:attr)
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立)  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立) / g=カーソル下のリンクをグループ化  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / g=グループ化  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -7014,9 +7051,17 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, 'b', 0)
     return
   endif
+  if l:ch ==? 'p'
+    " p: 新ノートを今のノートの親（ParentBranch）として作る。今のノートが子になれるか先に確かめる
+    if !gnosis#branch#can_child_here()
+      return
+    endif
+    call s:v2_new_run(a:attr, 'p', 0)
+    return
+  endif
   " 位置キー以外（旧 p を含む）では何も作らない
   if l:ch !~? '^[ho]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / o のどれか）') | return
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / p / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -7183,8 +7228,9 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " b: 今のノートの ChildBranch と新ノートの ParentBranch に書く（python が検証して 2 ファイルを書く）。
   " 失敗したら、いま作った新ノートを消して何も残さない（今のノートは変更していない）。
   let l:branch_ok = 0
-  if l:ch ==? 'b'
-    let l:br = gnosis#branch#add_paths(l:cur, [l:file])
+  if l:ch ==? 'b' || l:ch ==? 'p'
+    " b: 今のノートが親・新ノートが子 / p: 新ノートが親・今のノートが子（同じ add_paths）
+    let l:br = l:ch ==? 'b' ? gnosis#branch#add_paths(l:cur, [l:file]) : gnosis#branch#add_paths(l:file, [l:cur])
     if !get(l:br, 'ok', 0)
       call delete(l:file)
       redraw
@@ -7611,8 +7657,7 @@ function! gnosis#save_current_note() abort
   if empty(expand('%:p'))
     return 0
   endif
-  silent! update
-  return !&modified
+  return gnosis#conflict#safe_update()
 endfunction
 
 " ---------------------------------------------------------------------------
@@ -9207,10 +9252,10 @@ function! s:insert_links_core(links, ...) abort
     return 0
   endif
   let l:inline = !empty(get(s:, 'inline_pos', []))
-  echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / ')
-        \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出しの下 / ') : '')
-        \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名を入力して本文の最後 / ') : '')
-        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子として直接) / r=Related  (Esc で取り止め)')
+  echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文末 / ')
+        \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出し / ') : '')
+        \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名 / ') : '')
+        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related  (Esc)')
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -9223,8 +9268,9 @@ function! s:insert_links_core(links, ...) abort
     return -1
   endif
   if l:ch ==? 'p'
-    echo gnosis#i18n#tr('Gnosis: 位置キー p は c（Context 末尾）に変わりました。何も追加しません')
-    return 0
+    " p: ParentBranch（直接の親）。選んだノートが親、今のノートが子。b の逆向きで、同じ検証・更新を通る。
+    " （以前の p = Context 末尾は c に変わっていた。p は Branch の親として使う）
+    return gnosis#branch#add_parent_links(l:links)
   endif
   if l:ch ==# 'n' && l:inline
     " \l → n: 表示名を入力して、今のノートの本文の最後へ入れる（入力欄は空から。
@@ -12753,7 +12799,24 @@ function! gnosis#before_write_viminfo() abort
 endfunction
 
 " :GnosisLock（保存フラッシュしてからアンマウント）
-function! gnosis#lock_vault() abort
+" 別のウィンドウ・アプリが使っている vault では、アンマウントや中身の入れ替えを伴う操作を行わない。
+" 使っていれば理由を出して 1 を返す（何も変更していない）。
+function! s:refuse_if_shared(root) abort
+  let l:others = gnosis#session#others(substitute(a:root, s:sep() . '\+$', '', ''))
+  if empty(l:others)
+    return 0
+  endif
+  echohl ErrorMsg
+  echom 'Gnosis: ' . gnosis#i18n#t('session.exclusive_refused', len(l:others))
+  echohl NONE
+  return 1
+endfunction
+
+" :GnosisLock / :GnosisLock!（a:1 が真なら、他のウィンドウが使っていても強制的にロックする）。
+" 利用者が明示したロックと、「別のウィンドウが使っている」状態は区別する: 使っているウィンドウがあれば、
+" 強制（!）でなければロックしない（その旨を伝えて何も変えない）。
+function! gnosis#lock_vault(...) abort
+  let l:force = a:0 > 0 && a:1
   let l:root = s:vault_clean()
   if empty(l:root)
     return
@@ -12761,6 +12824,15 @@ function! gnosis#lock_vault() abort
   if gnosis#vault_mounted() != 1
     echom gnosis#i18n#tr('Gnosis: vault は既にロック中です')
     return
+  endif
+  if !l:force
+    let l:others = gnosis#session#others(l:root)
+    if !empty(l:others)
+      echohl WarningMsg
+      echom 'Gnosis: ' . gnosis#i18n#t('session.lock_refused', len(l:others))
+      echohl NONE
+      return
+    endif
   endif
   call gnosis#save_current_note()
   for l:b in range(1, bufnr('$'))
@@ -12935,20 +13007,27 @@ function! gnosis#strip_stray_escape() abort
   call cursor(l:lnum, strlen(l:before) + 1)
 endfunction
 
+" 終了時: この Vim が使っていた vault ごとに、自分の使用登録を外す。ほかに使っているウィンドウ・アプリが
+" 残っていなければ（最後の 1 人）だけロックする。残っていればマウントしたままにする
+" （別のウィンドウで使っている vault を、こちらの終了で不意にロックしない）。
+" この Vim が登録していない vault（起動画面で選ぶ前の前回の vault など）には触らない。
 function! gnosis#quit_unmount() abort
-  if gnosis#vault_mounted() != 1
+  for l:root in gnosis#session#mine()
+    call s:quit_release(l:root)
+  endfor
+endfunction
+
+function! s:quit_release(root) abort
+  let l:Last = {-> s:unmount_root_if_mounted(a:root)}
+  call gnosis#session#release(a:root, l:Last)
+endfunction
+
+function! s:unmount_root_if_mounted(root) abort
+  if gnosis#vault_mounted(a:root, 1) != 1
     return
   endif
-  " アプリの Vim は、別の Vim がマウントした vault をそのままにして終わる（閉じるのは元の Vim の仕事）
-  if !empty($SYN_GUI_PORT) && !s:mounted_by_me
-    return
-  endif
-  let l:root = s:vault_clean()
-  if empty(l:root)
-    return
-  endif
-  call s:cd_out_of_vault(l:root)
-  call s:unmount_vault(l:root)
+  call s:cd_out_of_vault(a:root)
+  call s:unmount_vault(a:root)
   call s:mount_cache_reset()
 endfunction
 
@@ -13025,6 +13104,10 @@ function! s:init_encrypted_impl() abort
     echohl WarningMsg
     echom gnosis#i18n#tr('Gnosis: 既にマウント済み（暗号化済み vault）。:GnosisSetPassword はパスワード変更用')
     echohl NONE
+    return
+  endif
+  " ノートを別の場所へ移すので、別のウィンドウが使っているあいだは行わない
+  if s:refuse_if_shared(l:cur)
     return
   endif
   " vault 本体は常に A/note、暗号箱は A/.crypt（プロジェクトの中。隣には作らない）
@@ -13166,6 +13249,10 @@ function! s:remove_encryption_impl() abort
     echohl WarningMsg
     echom gnosis#i18n#tr('Gnosis: この vault は暗号化されていません（解除する必要はありません）')
     echohl NONE
+    return
+  endif
+  " アンマウントして中身を入れ替えるので、別のウィンドウが使っているあいだは行わない
+  if s:refuse_if_shared(l:st.root)
     return
   endif
   " ロック中ならパスワードを聞いてマウントしてから解除する
@@ -13366,6 +13453,8 @@ function! s:adopt_vault_runtime(root) abort
   if empty(l:root)
     return
   endif
+  " マウントできた vault は、このセッションの使用中として登録する（終了時に、最後の 1 人ならロックする）
+  call gnosis#session#register(l:root)
   let l:state = l:root . s:sep() . '.state'
   if !isdirectory(l:state)
     try

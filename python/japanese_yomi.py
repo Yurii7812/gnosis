@@ -63,8 +63,8 @@ _YOMI_PAIR_RE = re.compile(r'^\s+("(?:[^"\\]|\\.)*")\s*:\s*("(?:[^"\\]|\\.)*")\s
 # 並べ替えの対象は「リンクだけの行」（`— 注記` 付きも可）。文章に埋もれた
 # リンク（例: 「〜は [これ](x.md) を参照」）は行ごと動かさない。
 _LINK_LINE_RE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)]+\)\s*(?:—\s*\S+)?\s*$")
-# ここから後ろ（### Parent / ### Related / ### BackLink）は本文ではない。
-_SECTION_HEAD_RE = re.compile(r"^###\s*(?:Parent|Context|Group|Related|BackLink)\s*$")
+# ここから後ろ（### ParentBranch / ### ChildBranch / ### Context / ### Related / ### BackLink など）は本文ではない。
+_SECTION_HEAD_RE = re.compile(r"^###\s*(?:ParentBranch|ChildBranch|Parent|Context|Group|Related|BackLink)\s*$")
 
 # --- pykakasi（遅延 import） ------------------------------------------------
 

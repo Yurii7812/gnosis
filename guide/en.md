@@ -15,10 +15,10 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Creating notes
 
 - `zn` … create a note. Choose one position key:
-  `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch (direct branch) / `o`=no link (orphan)
+  `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch (direct child) / `p`=ParentBranch (direct parent) / `o`=no link (orphan)
   With `h`/`Enter`, the new note gets the current note in its Context (in Group if the current note is a group).
 - After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `o`=do not add (the link in the current note's Context is still added)
-- `b` (Branch = direct branch; a position key of `zn` / `zk` / `za` / `\l`) … the current note is the parent, the chosen (new) note is the child. Writes the link into the current note's `### ChildBranch` and the other note's `### ParentBranch`. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
+- `b` (ChildBranch = direct child) / `p` (ParentBranch = direct parent) (position keys of `zn` / `zk` / `za` / `\l`) … with `b` the current note is the parent and the chosen (new) note the child; with `p` the chosen (new) note is the parent and the current note the child. Both use the same code and write the link into **the parent's `### ChildBranch` and the child's `### ParentBranch`**. With `p` only one note can be chosen as the parent. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
 - `zk` … create a group note (`attribute: group`). Same position keys as `zn`. Also `g`=move the one link under the cursor into a new group (the old place becomes a link to the group; also works after selecting a link with the mouse)
 - `zk` (visual) … create a group whose content is the selection, and replace the selection with a link to the group
 - `zh` … link right below the cursor (as body → BackLink on the other side)
@@ -30,14 +30,14 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\L` (visual) … replace the selection with a link to a new note named by the selection (the new note's title stays the timestamp; no Context = the original note shows up in BackLink; use `\P` to add it)
 - `\p` (normal) … add one link from under the cursor or the clipboard (choose the position with `h`/`Enter`)
 - `\p` (visual) … turn the selection into a link to the clipboard file name / URL (nothing if there is none)
-- `za` … add the copied / yanked links to the current note (all lines, all links) (`h`=below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch / `r`=Related). After `c`, choose how the target gets the current note (`Enter` / `t` / `o`)
+- `za` … add the copied / yanked links to the current note (all lines, all links) (`h`=below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch / `p`=ParentBranch / `r`=Related). After `c`, choose how the target gets the current note (`Enter` / `t` / `o`)
 - `zA` … like `za`, but asks for the **display name** first (empty Enter / Esc cancels)
 - `zp` … same as `za`, and also writes the current note into the other note's Context
 - `zap` … add the link under the cursor (or in the clipboard) to the end of the current note's Context (even if the body already has it)
 - Related: pressing `r` in `za` etc. adds to `### Related` **on both notes** (deleting it on one side removes it from both at the next sync; not shown in BackLink)
 - `\P` … add the current note to the Context of the linked note under the cursor, without asking
 - Add from the clipboard with a relation: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc` (`\ca`= reverse of `ca`, `\at`= reverse of `at`)
-- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link (`h`=new line below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch / `r`=Related / `i`=right at the cursor / `n`=type a display name, end of the body) (`:GnosisLinkPick`)
+- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link (`h`=new line below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch / `p`=ParentBranch / `r`=Related / `i`=right at the cursor / `n`=type a display name, end of the body) (`:GnosisLinkPick`)
 - `\l` → `n` … the display name field starts empty. Empty `Enter` = the target note's title, typed text + `Enter` = that text, `Esc` = cancel (the note's title and file name are not changed)
 - `\l` (visual) … replace the selection with a link to the note chosen by the same search
 - Auto-generated BackLink entries are different from the links you add here. Added links (also with display names) stay after saving and syncing
@@ -107,7 +107,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Vault encryption (gocryptfs)
 
 - An encrypted vault is `A/note` (plain view) + `A/.crypt` (encrypted data) side by side. Gnosis asks for the password on start, mounts it, and locks it on exit
-- `:GnosisMount` … mount by hand ・ `:GnosisLock` … lock by hand (unmount)
+- `:GnosisMount` … mount by hand ・ `:GnosisLock` … lock by hand (unmount). A vault that another window or app is using is not locked (`:GnosisLock!` forces it)
+- Several windows (Vim, the `\A` app) can open different vaults, or the same vault, at the same time. An encrypted vault is locked only when **the last window using it** ends (or switches to another vault). The registry lives outside the vault (`sessions/` in the Gnosis home), and entries of processes that crashed are removed automatically. If a note you are editing in several windows was changed elsewhere, autosave does not overwrite it: your unsaved content is backed up to `.state/conflicts/` and you get a warning
 - `:GnosisBackup` `[destination]` … pack the project folder (`.crypt` and others; not the contents of `note/`) into a 7z with the vault password
 - `:GnosisSetPassword` … encrypt an unencrypted vault, or change the password
 - `:GnosisRemovePassword` … remove the encryption and go back to plain files

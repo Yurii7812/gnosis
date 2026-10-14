@@ -64,6 +64,12 @@ sh "$REPO/test/diary_hierarchy_net.sh"
 # Branch（b モード: ChildBranch / ParentBranch・親は最大 1 つ・循環と自己参照の拒否・同期後の維持）
 sh "$REPO/test/branch_net.sh"
 
+# テーマ（配色）: 通常の Vim の標準配色・\A の白い既定・独立した設定・カスタムテーマ編集のリアルタイムプレビュー・取り消し/保存
+sh "$REPO/test/theme_net.sh"
+
+# 複数ウィンドウで vault を使う: 暗号化 vault のロック管理（偽 gocryptfs）・異常終了した登録の掃除・同時編集の上書き防止
+sh "$REPO/test/session_net.sh"
+
 # 同期の冪等性（試験用の小さな vault）
 sh "$REPO/test/sync_net.sh"
 
@@ -90,3 +96,11 @@ sh "$REPO/test/install_net.sh"
 
 # インストーラーの更新（古い版の取り込み・未コミットの変更は残す・別の clone への切り替え）
 sh "$REPO/test/install_update_net.sh"
+
+# --- 擬似端末（pty）で本物の Vim を動かす試験（pyte が要る。無ければ省略） ---
+# 矢印キー: `:` の履歴・ノーマル/挿入/ビジュアル・起動画面・設定画面・作業タブ（\q）・fzf の検索画面
+python3 "$REPO/test/keys_pty_check.py"
+# カスタムテーマ編集画面（プレビューの色を画面の 1 文字ごとの色で確かめる）
+python3 "$REPO/test/theme_pty_check.py"
+# 本物の gocryptfs の暗号化 vault を複数のウィンドウで使う（gocryptfs / fusermount3 / /dev/fuse が無ければ省略）
+python3 "$REPO/test/session_real_check.py"

@@ -3,7 +3,7 @@ let s:errors = []
 call gnosis#theme#apply(gnosis#settings#defaults())
 call assert_equal('#14283D', g:gnosis_palette.bg, 'Gnosis #10 background')
 call assert_equal('#E6EEF5', g:gnosis_palette.fg, 'Gnosis #10 foreground')
-call assert_equal('#5CD0FF', g:gnosis_palette.link, 'Gnosis #10 link')
+call assert_equal('#E6F5EA', g:gnosis_palette.link, 'Gnosis #10 link (pale mint)')
 
 let s:logo = gnosis#start#logo(80, 23)
 let s:art = gnosis#start#pick_art(80, 23, len(s:logo) + 4)
@@ -20,7 +20,7 @@ call assert_equal('nvi', &l:concealcursor, 'Markdown links stay hidden in insert
 call assert_equal(1, synconcealed(1, 1)[0], 'Open bracket hidden')
 call assert_equal(1, synconcealed(1, 13)[0], 'Link destination hidden')
 call assert_equal('gnosisLinkText', synIDattr(synID(1, 2, 1), 'name'), 'Link title highlighted')
-call assert_equal('#5cd0ff', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link highlight color')
+call assert_equal('#e6f5ea', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link highlight color')
 
 " 日本語の表示名・長いファイル名
 call setline(2, ['本文 [ローズマリーの育て方](261013140412-very-long-file-name.md) 続き'])
@@ -31,7 +31,7 @@ syntax on
 call assert_equal(1, synconcealed(1, 13)[0], 'Concealed after :syntax on')
 call assert_equal('gnosisLinkText', synIDattr(synID(1, 2, 1), 'name'), 'Link syntax after :syntax on')
 call gnosis#theme#apply(gnosis#settings#defaults())
-call assert_equal('#5cd0ff', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link color after theme reapply')
+call assert_equal('#e6f5ea', tolower(synIDattr(synIDtrans(hlID('gnosisLinkText')), 'fg#', 'gui')), 'Link color after theme reapply')
 call assert_equal('1', synIDattr(synIDtrans(hlID('gnosisLinkText')), 'underline', 'gui'), 'Link underline after theme reapply')
 colorscheme default
 call assert_equal('1', synIDattr(synIDtrans(hlID('gnosisLinkText')), 'underline', 'gui'), 'Link underline survives another colorscheme')

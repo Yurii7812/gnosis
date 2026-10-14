@@ -287,7 +287,7 @@ const scenario = `(async () => {
     await press('\\\\e', 800);
     await press('2', 600);
     await press('4', 800);                 // プリセットを削除する
-    R.eDeleteList = G.screen().filter((r) => r.trim()).slice(-6).join('|').replace(/\\s+/g, ' ').slice(0, 300);
+    R.eDeleteList = G.screen().filter((r) => r.trim()).join('|').replace(/\\s+/g, ' ').slice(0, 3000);  // 一覧は矢印で選べるポップアップ（画面の中ほど）に出る
     await press('1\\r', 800);              // 一覧の 1 番（名前順で「テスト設定」）
     await press('y', 800);                 // 削除の確認 Yes
     R.eAfterDelete = menu();

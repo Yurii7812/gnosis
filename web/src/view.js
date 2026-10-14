@@ -115,7 +115,7 @@ function decorateLine(line, active, inFence, decos, cfg) {
     return;
   }
 
-  // 中身が空の Context / Group / Related / BackLink の見出しは出さない（カーソルがあるときは出す）
+  // 中身が空の ParentBranch / ChildBranch / Context / Group / Related / BackLink の見出しは出さない（カーソルがあるときは出す）
   if (!active && cfg.emptySections?.has(line.number)) {
     decos.push(Decoration.line({ class: "cm-md-sec-empty" }).range(base));
     if (text.length > 0) decos.push(Decoration.replace({}).range(base, base + text.length));
@@ -239,9 +239,9 @@ function decorateLine(line, active, inFence, decos, cfg) {
 }
 
 
-// ノートの関係の節（### Context / Group / Related / BackLink。旧 Parent も）のうち、
+// ノートの関係の節（### ParentBranch / ChildBranch / Context / Group / Related / BackLink。旧 Parent も）のうち、
 // 中身（空行でない行）が無いものの見出しの行番号。コードブロックの中は見ない。
-const SECTION_HEAD_RE = /^###\s+(Context|Group|Related|BackLink|Parent)\s*$/;
+const SECTION_HEAD_RE = /^###\s+(ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)\s*$/;
 function emptySectionLines(doc, fmEnd) {
   const out = new Set();
   let inFence = false;

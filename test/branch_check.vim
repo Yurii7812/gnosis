@@ -24,6 +24,12 @@ endfunction
 function! s:count(name, pat) abort
   return len(filter(s:file(a:name), 'v:val =~# a:pat'))
 endfunction
+function! s:msgs() abort
+  redir => l:m
+  silent messages
+  redir END
+  return l:m
+endfunction
 function! s:files() abort
   return map(glob(s:v . '/*.md', 1, 1), 'fnamemodify(v:val, ":t")')
 endfunction
@@ -169,6 +175,110 @@ call gnosis#v2_new_plain()
 stopinsert
 let s:ne = s:newest_except(s:before)
 call s:ok('zn Enter は従来どおり（子の Context に親・Branch は作らない）', !empty(s:ne) && s:count(s:ne, '^### Context$') == 1 && s:count(s:ne, 'Branch') == 0)
+
+
+" ================================================================ p モード（現在のノートの親を追加）
+call s:mk('p1.md', 'ノートP1', ['P1 の本文。'])
+call s:mk('q1.md', 'ノートQ1', ['Q1 の本文。'])
+call s:mk('r1.md', 'ノートR1', ['R1 の本文。'])
+call s:mk('s1.md', 'ノートS1', ['S1 の本文。'])
+call s:mk('t1.md', 'ノートT1', ['T1 の本文。'])
+" b: P1 → Q1 / p: S1 の親に R1（どちらも「親 ChildBranch・子 ParentBranch」の同じ形になる）
+execute 'edit ' . fnameescape(s:v . '/p1.md')
+let @" = '[ノートQ1](q1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['b']
+call gnosis#add_clipboard_before_up_note()
+execute 'edit ' . fnameescape(s:v . '/s1.md')
+let @" = '[ノートR1](r1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p: 現在のノート S1 の ParentBranch に R1', index(s:file('s1.md'), '### ParentBranch') >= 0 && s:count('s1.md', '^\[ノートR1\](r1\.md)$') == 1)
+call s:ok('p: 相手 R1 の ChildBranch に S1', index(s:file('r1.md'), '### ChildBranch') >= 0 && s:count('r1.md', '^\[ノートS1\](s1\.md)$') == 1)
+call s:ok('p: バッファが読み直されている', !&modified && join(getline(1, '$'), "\n") ==# join(s:file('s1.md'), "\n"))
+call s:ok('b と p は同じ形の関係を作る（親に ChildBranch・子に ParentBranch）',
+      \ s:file('p1.md')[-2 :] ==# ['### ChildBranch', '[ノートQ1](q1.md)'] && s:file('q1.md')[-2 :] ==# ['### ParentBranch', '[ノートP1](p1.md)']
+      \ && s:file('r1.md')[-2 :] ==# ['### ChildBranch', '[ノートS1](s1.md)'] && s:file('s1.md')[-2 :] ==# ['### ParentBranch', '[ノートR1](r1.md)'])
+" 同じ関係をもう一度（重複しない）
+let s:s1 = s:file('s1.md')
+let s:r1 = s:file('r1.md')
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p 再実行: 重複を作らない', s:file('s1.md') ==# s:s1 && s:file('r1.md') ==# s:r1)
+" 既に親がある S1 に、別の親 T1 を p で足せない（どちらも変更しない）
+let s:t1 = s:file('t1.md')
+let @" = '[ノートT1](t1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p: 既に親がある S1 に別の親は付けられない（S1・T1・R1 は変わらない）', s:file('s1.md') ==# s:s1 && s:file('t1.md') ==# s:t1 && s:file('r1.md') ==# s:r1 && getline(1, '$') ==# s:s1)
+call s:ok('p: 拒否の理由に現在の親のタイトルを出す', s:msgs() =~# 'ノートR1' || s:msgs() =~# 'R1')
+" b でも、既に親がある S1 を別のノート T1 の子にはできない
+execute 'edit ' . fnameescape(s:v . '/t1.md')
+let @" = '[ノートS1](s1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['b']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('b: 既に親がある S1 を別のノートの子にはできない', s:file('s1.md') ==# s:s1 && s:file('t1.md') ==# s:t1 && s:file('r1.md') ==# s:r1)
+" p で自己参照・循環は拒否（R1 の親に、子孫の S1 は選べない）
+execute 'edit ' . fnameescape(s:v . '/t1.md')
+let @" = '[ノートT1](t1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p: 自己参照は拒否', s:file('t1.md') ==# s:t1)
+execute 'edit ' . fnameescape(s:v . '/r1.md')
+let s:r1 = s:file('r1.md')
+let @" = '[ノートS1](s1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p: 循環（R1 の親に子の S1）は拒否', s:file('r1.md') ==# s:r1 && s:file('s1.md') ==# s:s1)
+" p は親を 1 つだけ（2 つ選ぶと何も変えない）
+execute 'edit ' . fnameescape(s:v . '/t1.md')
+let @" = "[ノートP1](p1.md)\n[ノートR1](r1.md)"
+let @0 = @"
+let g:gnosis_test_keys = ['p']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('p: 親を 2 つ同時には選べない（何も変えない）', s:file('t1.md') ==# s:t1 && s:file('p1.md')[-1] ==# '[ノートQ1](q1.md)')
+" p を使える \l（insert_links_pick）
+execute 'edit ' . fnameescape(s:v . '/t1.md')
+let g:gnosis_test_keys = ['p']
+call gnosis#insert_links_pick(['[ノートP1](p1.md)'], getpos('.'))
+call s:ok('\l p: T1 の親が P1', s:count('t1.md', '^\[ノートP1\](p1\.md)$') == 1 && s:count('p1.md', '^\[ノートT1\](t1\.md)$') == 1)
+" zn → p（新ノートが今のノートの親になる）
+call s:mk('u1.md', 'ノートU1', ['U1 の本文。'])
+execute 'edit ' . fnameescape(s:v . '/u1.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ['p']
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:np = s:newest_except(s:before)
+call s:ok('zn p: 新ノートが U1 の親になる（U1 に ParentBranch・新ノートに ChildBranch）', !empty(s:np) && s:count('u1.md', '](' . s:np . ')$') == 1 && index(s:file(s:np), '### ChildBranch') >= 0 && s:count(s:np, '^\[ノートU1\](u1\.md)$') == 1)
+" 既に親がある U1 で zn → p: 新ノートを作らず、何も変えない
+execute 'edit ' . fnameescape(s:v . '/u1.md')
+let s:before = s:files()
+let s:u1 = s:file('u1.md')
+let g:gnosis_test_keys = ['p']
+sleep 1100m
+call gnosis#v2_new_plain()
+call s:ok('zn p: 既に親がある U1 では新ノートを作らず何も変えない', s:files() ==# s:before && s:file('u1.md') ==# s:u1)
+" index.md の zn → p も何も作らない
+execute 'edit ' . fnameescape(s:v . '/index.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ['p']
+sleep 1100m
+call gnosis#v2_new_plain()
+call s:ok('index.md の zn p: 何も作らない', s:files() ==# s:before)
+" 既存の c / t / Enter は p を足しても変わらない（za の Enter・c）
+execute 'edit ' . fnameescape(s:v . '/t1.md')
+let @" = '[ノートQ1](q1.md)'
+let @0 = @"
+let g:gnosis_test_keys = ["\r"]
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za Enter は従来どおり（本文の最後に本文リンク・Branch は作らない）', s:count('t1.md', '^\[ノートQ1\](q1\.md)$') == 1 && s:count('q1.md', 'ChildBranch') == 0, string(s:file('t1.md')))
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

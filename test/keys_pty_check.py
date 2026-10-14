@@ -140,6 +140,66 @@ class TestCommandLine(Env):
                     s.send(ESC, 0.9)
 
 
+class TestTerminals(Env):
+    """端末の種類（TERM）が違っても、矢印キーがコマンド履歴で効く（terminfo の矢印が ESC O A か ESC [ A かの違い）"""
+
+    TERMS = ["xterm", "xterm-256color", "screen-256color", "tmux-256color", "linux", "rxvt-unicode-256color",
+             "alacritty", "foot", "konsole", "wezterm", "vt100"]
+
+    def test_history_with_various_terminals(self) -> None:
+        import subprocess
+        terms = [t for t in self.TERMS if subprocess.run(["infocmp", t], capture_output=True).returncode == 0]
+        self.assertTrue(terms)
+        for term in terms:
+            for mode in MODES:
+                with self.subTest(term=term, mode=mode):
+                    with Session(self.rc(), str(self.home), str(self.gh), term=term) as s:
+                        s.send(":echo 'first'\r")
+                        s.send(":echo 'second'\r")
+                        s.send(":")
+                        s.key(mode, "up")
+                        self.assertTrue(s.last_line().startswith(":echo 'second'"), (term, mode, s.last_line()))
+                        s.key(mode, "up")
+                        self.assertTrue(s.last_line().startswith(":echo 'first'"), (term, mode, s.last_line()))
+                        s.key(mode, "down")
+                        self.assertTrue(s.last_line().startswith(":echo 'second'"), (term, mode, s.last_line()))
+                        self.assertNotIn("<F1", s.text())
+                        s.send(ESC, 0.9)
+
+
+class TestConcurrentEdit(Env):
+    """別のプロセスが同じノートを書き換えたとき（FileChangedShell は本物の端末で動く）"""
+
+    def test_unsaved_edit_survives_external_change(self) -> None:
+        import time
+        v = self.make_vault("vc", {"n.md": note("N", "最初の本文")})
+        f = v / "n.md"
+        with Session(self.rc("let g:gnosis_autosave = 0", root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            s.send("GA 未保存で打った文字", 0.5)
+            s.send(ESC, 0.9)
+            time.sleep(1.2)
+            f.write_text(note("N", "別のプロセスが書いた本文"), encoding="utf-8")
+            s.send(":checktime\r", 1.0)
+            self.assertIn("未保存で打った文字", s.text(), "外で書き換えられても、未保存の変更を読み直しで失った\n" + s.text())
+            self.assertNotIn("別のプロセスが書いた本文", s.text())
+            self.assertIn("別のウィンドウ", s.text() + s.last_line())
+            self.assertEqual(f.read_text(encoding="utf-8"), note("N", "別のプロセスが書いた本文"), "自動保存の前に、相手のファイルを上書きしていない")
+            backups = list((v / ".state" / "conflicts").glob("*-n.md"))
+            self.assertTrue(backups and "未保存で打った文字" in backups[0].read_text(encoding="utf-8"), "未保存の内容を退避していない")
+            s.send(":qa!\r", 0.5)
+
+    def test_unmodified_buffer_follows_external_change(self) -> None:
+        import time
+        v = self.make_vault("vd", {"n.md": note("N", "最初の本文")})
+        f = v / "n.md"
+        with Session(self.rc(root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            time.sleep(1.2)
+            f.write_text(note("N", "別のプロセスが書いた本文"), encoding="utf-8")
+            s.send(":checktime\r", 1.0)
+            self.assertIn("別のプロセスが書いた本文", s.text(), "未保存の変更が無いときは、外の変更を読み込む\n" + s.text())
+            s.send(":qa!\r", 0.5)
+
+
 class TestEditorModes(Env):
     def test_normal_insert_visual_arrows_and_escape(self) -> None:
         for mode in MODES:

@@ -288,6 +288,21 @@ def add_branches(root, parent_file, child_files, dry_run: bool = False) -> dict:
     1 つでも足せない子がいれば全体を拒否し、どのファイルも変更しない（部分的な追加をしない）。
     """
     try:
+        # 同じ vault の同期と順番にする（別の vault とは何も共有しない）
+        with nf.vault_lock(root, 20.0) as got:
+            if not got:
+                return _result(False, "conflict", path="(sync)")
+            return _add_branches_locked(root, parent_file, child_files, dry_run)
+    except RuntimeError as e:
+        if str(e).startswith("conflict:"):
+            return _result(False, "conflict", path=str(e)[9:])
+        return _result(False, "error", message=str(e))
+    except OSError as e:
+        return _result(False, "error", message=str(e))
+
+
+def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) -> dict:
+    try:
         v = Vault(root)
         parent = _norm(parent_file)
         children: list[Path] = []

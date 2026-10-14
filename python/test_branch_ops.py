@@ -317,6 +317,85 @@ class TestSync(Base):
         self.assertEqual(self.r("o.md"), other_after)
 
 
+def _worker(args):
+    root, guard, parent, child = args
+    os.environ["GNOSIS_SYNC_GUARD_DIR"] = guard
+    r = bo.add_branches(root, parent, [child])
+    return r["code"]
+
+
+def _sync_worker(args):
+    root, guard = args
+    os.environ["GNOSIS_SYNC_GUARD_DIR"] = guard
+    return nf.simple_sync(root)
+
+
+class TestVaultLock(Base):
+    def setUp(self) -> None:
+        super().setUp()
+        self.guard = self.root / "state" / "sync-dirty"
+        self.guard.mkdir(parents=True)
+        os.environ["GNOSIS_SYNC_GUARD_DIR"] = str(self.guard)
+
+    def test_same_vault_is_serialized_other_vaults_are_independent(self) -> None:
+        other = Path(tempfile.mkdtemp(dir=TMP_BASE, prefix="branch-other-"))
+        self.addCleanup(shutil.rmtree, other, True)
+        with nf.vault_lock(self.root, 1.0) as got:
+            self.assertTrue(got)
+            with nf.vault_lock(other, 1.0) as got_other:  # 別の vault は待たされない
+                self.assertTrue(got_other)
+            with nf.vault_lock(self.root, 0.3) as got_again:  # 同じ vault は待ち、取れない
+                self.assertFalse(got_again)
+        with nf.vault_lock(self.root, 1.0) as got_after:  # 解放後は取れる
+            self.assertTrue(got_after)
+
+    def test_lock_is_released_when_the_owner_process_dies(self) -> None:
+        import subprocess
+        code = (
+            "import os, sys, time\n"
+            f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
+            "import note_format_v2 as nf\n"
+            f"os.environ['GNOSIS_SYNC_GUARD_DIR'] = {str(self.guard)!r}\n"
+            f"cm = nf.vault_lock({str(self.root)!r}, 5)\n"
+            "cm.__enter__()\n"
+            "print('locked', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(p.stdout.readline().strip(), "locked")
+            with nf.vault_lock(self.root, 0.3) as got:
+                self.assertFalse(got)
+            p.kill()  # 異常終了
+            p.wait()
+            with nf.vault_lock(self.root, 3.0) as got:
+                self.assertTrue(got, "異常終了したプロセスのロックが残っている")
+        finally:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
+
+    def test_concurrent_branch_adds_and_syncs_lose_nothing(self) -> None:
+        import multiprocessing as mp
+        self.w("a.md", note("A", "本文A"))
+        kids = [f"k{i}.md" for i in range(6)]
+        for k in kids:
+            self.w(k, note(k[:-3].upper(), f"本文{k}"))
+        jobs = [(str(self.root), str(self.guard), str(self.root / "a.md"), str(self.root / k)) for k in kids]
+        with mp.get_context("fork").Pool(6) as pool:
+            sync_res = pool.map_async(_sync_worker, [(str(self.root), str(self.guard))] * 4)
+            codes = pool.map(_worker, jobs)
+            sync_res.get(60)
+        self.assertEqual(sorted(set(codes)), ["added"], codes)
+        a = self.r("a.md")
+        for k in kids:
+            self.assertEqual(a.count(f"({k})"), 1, a)
+            self.assertIn("### ParentBranch\n[A](a.md)", self.r(k))
+        self.assertEqual(a.count("### ChildBranch"), 1)
+        self.sync()
+        self.assertTrue(bo.check(self.root)["ok"])
+
+
 class TestCli(Base):
     def test_cli_json(self) -> None:
         import subprocess

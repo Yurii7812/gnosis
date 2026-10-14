@@ -55,6 +55,7 @@ CLI:
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import hashlib
 import json
@@ -1700,7 +1701,7 @@ def _editor_has_unsaved_changes(path: Path) -> bool:
 #   CLI の update / update_one / new / retitle_links が呼ぶのはこちら。
 #   ノートを実際に書き換えるのはこの経路。
 # =============================================================================
-def simple_sync(root, old_titles: dict | None = None) -> int:
+def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     """old_titles: {ノートのパス: 変更前のタイトル}。タイトルを変えた瞬間に呼び出し側
     （Vim）が渡す。表示名がこの旧タイトルと同じリンクだけ新タイトルへ追従させる
     （状態ファイルは持たない）。"""
@@ -2018,6 +2019,67 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
                               n.get("tail_blanks", 0), n["pbranch"], n["cbranch"]]
         _save_parse_cache(root, out_cache)
     return changed
+
+
+def _sync_lock_path(root: Path) -> Path | None:
+    """同じ vault の同期どうしを順番にするロックファイル。Gnosis ホームの state/sync-locks に vault ごとに置く
+    （vault の中には作らない。別の vault とは何も共有しない）。Gnosis の外から呼ばれたとき（環境変数なし）は None。"""
+    guard = os.environ.get("GNOSIS_SYNC_GUARD_DIR", "")
+    if not guard:
+        return None
+    digest = hashlib.sha256(str(Path(root).resolve()).encode("utf-8")).hexdigest()[:16]
+    return Path(guard).parent / "sync-locks" / f"{digest}.lock"
+
+
+@contextlib.contextmanager
+def vault_lock(root, timeout: float = 30.0):
+    """同じ vault の同期・Branch 追加どうしを順番にする排他（flock。ロックが取れたら True、待ちきれなければ False を渡す）。
+    持ち主のプロセスが終われば（異常終了でも）OS が外す。Gnosis の外から呼ばれたとき・Windows では排他なしで True。"""
+    lock_path = _sync_lock_path(Path(root))
+    if lock_path is None:
+        yield True
+        return
+    try:
+        import fcntl
+    except ImportError:
+        yield True
+        return
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(lock_path, "a+")
+    except OSError:
+        yield True
+        return
+    got = False
+    try:
+        import time
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                got = True
+                break
+            except OSError:
+                if time.monotonic() > deadline:
+                    break
+                time.sleep(0.05)
+        yield got
+    finally:
+        if got:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+            except OSError:
+                pass
+        fh.close()
+
+
+def simple_sync(root, old_titles: dict | None = None, lock_timeout: float = 30.0) -> int:
+    """同期の本体（_simple_sync_unlocked）を、同じ vault を別のウィンドウ・プロセスが同期している間は待ってから行う。
+    待ちきれなければこの回は何もしない（相手の同期が同じ内容を処理している）。"""
+    with vault_lock(root, lock_timeout) as got:
+        if not got:
+            return 0
+        return _simple_sync_unlocked(root, old_titles)
 
 
 def update_one(file_path, root, old_title: str = "") -> str:

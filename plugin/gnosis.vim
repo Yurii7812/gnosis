@@ -313,7 +313,7 @@ command!          GnosisTrashEmpty call gnosis#trash_empty()
 command!          GnosisSetPassword call gnosis#set_password()
 command!          GnosisRemovePassword call gnosis#remove_password()
 command!          GnosisMount call gnosis#mount_vault()
-command!          GnosisLock call gnosis#lock_vault()
+command! -bang    GnosisLock call gnosis#lock_vault(<bang>0)
 " 暗号箱(.crypt)を vault のパスワードで 7z 化して <出力先>/<日時>-<名前>.7z に出力
 command! -nargs=? -complete=dir GnosisBackup call gnosis#backup_vault(<q-args>)
 command!          GnosisExitCleanup call gnosis#exit_cleanup()
@@ -399,7 +399,7 @@ if get(g:, 'gnosis_legacy_commands', get(g:, 'simple_yurii_note_legacy_commands'
   command! YuriiSetPassword call gnosis#set_password()
   command! YuriiRemovePassword call gnosis#remove_password()
   command! YuriiMount call gnosis#mount_vault()
-  command! YuriiLock call gnosis#lock_vault()
+  command! -bang YuriiLock call gnosis#lock_vault(<bang>0)
   command! -nargs=? -complete=dir YuriiBackup call gnosis#backup_vault(<q-args>)
   command! YuriiExitCleanup call gnosis#exit_cleanup()
   command! -nargs=* YuriiTableNew call gnosis#table_new(<q-args>)
@@ -931,8 +931,7 @@ function! s:autosave_write() abort
     call timer_stop(s:autosave_timer)
     let s:autosave_timer = 0
   endif
-  silent! update
-  return 1
+  return gnosis#conflict#safe_update()
 endfunction
 
 " Esc（挿入モードを抜けた時）は無操作デバウンスを待たず即保存する。
@@ -1022,7 +1021,10 @@ augroup gnosis_autosync
     autocmd BufReadPost,BufEnter *.md call gnosis#realtime_sync_snapshot()
     autocmd TextChanged,TextChangedI *.md call gnosis#realtime_sync_on_text_changed()
   endif
-  autocmd FileChangedShell *.md let v:fcs_choice = 'reload'
+  " 他のウィンドウ・プロセスが同じノートを書き換えたとき: 未保存の変更が無ければ読み直す。
+  " 未保存の変更があれば読み直さず、退避して警告する（変更を失わない・相手の変更も上書きしない）
+  autocmd FileChangedShell *.md call gnosis#conflict#on_changed_shell()
+  autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
 augroup END
 
 function! s:on_write_post() abort

@@ -76,6 +76,7 @@ class TestThemeEditor(unittest.TestCase):
 
     def test_live_preview_cancel_save(self) -> None:
         before = self.settings.read_text(encoding="utf-8")
+        notes_before = {p.name: p.read_bytes() for p in self.v.glob("*.md")}
         with self.session() as s:
             s.send("s", 0.8)  # 起動画面から設定画面
             self.goto_item(s, "custom")
@@ -123,6 +124,7 @@ class TestThemeEditor(unittest.TestCase):
             s.send("\r", 0.4)
             s.send("s", 1.0)  # 保存して使う
             self.assertIn("設定", s.text())
+        self.assertEqual({p.name: p.read_bytes() for p in self.v.glob("*.md")}, notes_before, "プレビューや保存でノートが変わった")
         saved = json.loads(self.settings.read_text(encoding="utf-8"))
         self.assertEqual(saved["theme"], {"kind": "custom", "name": "my-theme"})
         self.assertEqual(saved["customThemes"]["my-theme"]["bg"], "#ffffff")
@@ -133,6 +135,43 @@ class TestThemeEditor(unittest.TestCase):
             s.send("\r", 2.0)  # 起動画面から vault を開く
             s.send(":echo 'x'\r", 0.3)
             self.assertEqual(self.cell_bg(s, "Index"), "ffffff", s.text()[:400])
+
+    def test_theme_chooser_uses_arrow_keys(self) -> None:
+        custom = {"base": "dark", "bg": "#101010", "fg": "#eeeeee", "link": "#99ccff", "heading": "#ffcc66", "selection": "#333333", "cursorline": "#1a1a1a"}
+        self.settings.write_text(json.dumps({"version": 1, "language": "ja", "appearance": "dark", "theme": {"kind": "builtin"},
+                                             "customThemes": {"x": custom, "y": custom},
+                                             "appTheme": {"kind": "builtin"}, "appCustomThemes": {"z": custom}}), encoding="utf-8")
+        for mode in ("ss3", "csi"):
+            with self.subTest(mode=mode):
+                with self.session() as s:
+                    s.send("s", 0.8)
+                    self.goto_item(s, "theme")
+                    s.send("\r", 0.6)  # テーマの選択（↑ ↓ で選べる一覧）
+                    self.assertIn("カスタム: x", s.text())
+                    s.key(mode, "down", 0.3)
+                    s.key(mode, "down", 0.3)
+                    s.key(mode, "down", 0.3)
+                    s.key(mode, "up", 0.3)  # 標準 → x → y → (y のまま) → ↑ で x
+                    s.send("\r", 0.8)
+                    saved = json.loads(self.settings.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["theme"], {"kind": "custom", "name": "x"}, saved)
+                    self.assertEqual(saved["appTheme"], {"kind": "builtin"})
+                    # アプリ用の選択も同じ（別の設定。Vim のテーマは変わらない）
+                    self.goto_item_from(s, "theme", "app_theme", mode)
+                    s.send("\r", 0.6)
+                    self.assertIn("アプリ", s.text())
+                    s.key(mode, "down", 0.3)
+                    s.send("\r", 0.8)
+                    saved = json.loads(self.settings.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["appTheme"], {"kind": "custom", "name": "z"}, saved)
+                    self.assertEqual(saved["theme"], {"kind": "custom", "name": "x"}, "アプリのテーマを選んでも Vim のテーマは変わらない")
+                self.settings.write_text(json.dumps({"version": 1, "language": "ja", "appearance": "dark", "theme": {"kind": "builtin"},
+                                                     "customThemes": {"x": custom, "y": custom},
+                                                     "appTheme": {"kind": "builtin"}, "appCustomThemes": {"z": custom}}), encoding="utf-8")
+
+    def goto_item_from(self, s: Session, cur: str, item: str, mode: str) -> None:
+        for _ in range(ITEMS.index(item) - ITEMS.index(cur)):
+            s.key(mode, "down", 0.15)
 
     def test_app_theme_starts_white_and_is_separate(self) -> None:
         with self.session() as s:

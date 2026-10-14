@@ -111,18 +111,21 @@ function! gnosis#branch#add_paths(parent, paths, ...) abort
     return {'ok': 0, 'code': 'not_in_vault'}
   endif
   " ディスク上の内容で検証・追記するので、今のノートの未保存の変更を先に保存する（保存できなければ中止）
-  let l:pb = bufnr(a:parent)
-  if l:pb > 0 && getbufvar(l:pb, '&modified')
-    if l:pb == bufnr('%')
-      try
-        silent update
-      catch
-      endtry
+  " 関わるノートのうち、開いていて未保存のものを先に保存する（今のノートは保存する。別のバッファは保存できないので中止）
+  for l:f in [a:parent] + a:paths
+    let l:nr = bufnr(l:f)
+    if l:nr > 0 && getbufvar(l:nr, '&modified')
+      if l:nr == bufnr('%')
+        try
+          silent update
+        catch
+        endtry
+      endif
+      if getbufvar(l:nr, '&modified')
+        return {'ok': 0, 'code': 'save_failed'}
+      endif
     endif
-    if getbufvar(l:pb, '&modified')
-      return {'ok': 0, 'code': 'save_failed'}
-    endif
-  endif
+  endfor
   let l:r = gnosis#branch#run(l:root, a:parent, a:paths)
   if get(l:r, 'ok', 0)
     call s:reload([a:parent] + a:paths)
@@ -146,6 +149,34 @@ function! gnosis#branch#add_links(links) abort
   endif
   echo gnosis#branch#message(l:r)
   return 1
+endfunction
+
+" p モード: 今のノートの親（ParentBranch）として a:links のノートを追加する。親は 1 つだけなので、
+" リンクが 2 つ以上なら何も変えずに断る。b と同じ add_paths（parent と child を決めて同じ検証・更新）を使う。
+function! gnosis#branch#add_parent_links(links) abort
+  let l:cur = expand('%:p')
+  let l:ps = s:targets(a:links, expand('%:p:h'))
+  if empty(l:ps)
+    call s:warn(gnosis#i18n#t('branch.no_target'))
+    return 0
+  endif
+  if len(l:ps) > 1
+    call s:warn(gnosis#i18n#t('branch.one_parent_only'))
+    return 0
+  endif
+  let l:r = gnosis#branch#add_paths(l:ps[0], [l:cur])
+  if !get(l:r, 'ok', 0)
+    call s:warn(gnosis#branch#message(l:r))
+    return 0
+  endif
+  echo gnosis#branch#message(l:r)
+  return 1
+endfunction
+
+" zn / zk の p: 作る前に、今のノートが子になれるか（index.md は不可・保存できる）を確かめる。
+" 既に親があるかは、作ったあとの検証で分かる（その場合は作ったノートを消して何も残さない）。
+function! gnosis#branch#can_child_here() abort
+  return gnosis#branch#can_parent_here()
 endfunction
 
 " 新しいノートを今のノートの ChildBranch として作るとき（zn / zk の b）に、作る前に確かめる。

@@ -81,7 +81,7 @@ const scenario = `(async () => {
   await L.refresh(${JSON.stringify(v1)});
   L.go('settings');
   await sleep(300);
-  R.settingsForm = !!document.getElementById('s-lang') && !!document.getElementById('s-font') && !!document.getElementById('s-max') && !!document.getElementById('s-theme') && !!document.getElementById('s-plug') && document.querySelectorAll('.l-colors input[type=color]').length === 6;
+  R.settingsForm = !!document.getElementById('s-lang') && !!document.getElementById('s-font') && !!document.getElementById('s-max') && !!document.getElementById('s-theme') && !!document.getElementById('s-plug') && !!document.getElementById('s-vim-custom') && !!document.getElementById('s-app-custom') && !!document.getElementById('s-app-theme');
   L.setDraft((d) => { d.language = 'ja'; d.fontSize = 22; });
   await L.saveSettings();
   await sleep(300);
@@ -91,11 +91,11 @@ const scenario = `(async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   const G = await waitFor(() => window.__gui);
   await waitFor(() => G.state().file && G.state().file.endsWith('index.md'), 15000);
-  await waitFor(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#0d1117', 6000);
+  await waitFor(() => G.state().palette && G.state().palette.bg, 8000);
   await sleep(500);
   const rs = getComputedStyle(document.documentElement);
   R.opened = { file: G.state().file, launcherHidden: lau.hidden, bg: rs.getPropertyValue('--bg').trim(), font: rs.getPropertyValue('--content-font-size').trim(),
-    bodyBg: getComputedStyle(document.body).backgroundColor, vault: G.state().vault, lang: G.state().lang, screen: G.screen().filter((r) => r.trim()).slice(-6) };
+    bodyBg: getComputedStyle(document.body).backgroundColor, palette: G.state().palette && G.state().palette.bg, vault: G.state().vault, lang: G.state().lang, screen: G.screen().filter((r) => r.trim()).slice(-6) };
   R.__png = ${JSON.stringify(path.join(tmp, "launcher.png"))};
   return R;
 })()`;
@@ -133,14 +133,15 @@ try {
   check(R.created?.ok && fs.existsSync(path.join(v4, ".gnosis", "settings.json")), "create a new vault: " + JSON.stringify(R.created));
   const reg = JSON.parse(fs.readFileSync(path.join(gh, "vaults.json"), "utf8"));
   check(reg.vaults.some((v) => v.path === v4) && reg.last === v1, "registry after create / select: " + JSON.stringify(reg));
-  check(R.settingsForm, "settings form has language / maximize / size / font / theme / Plug / 6 colors");
+  check(R.settingsForm, "settings form has language / maximize / size / font / theme / Plug / both color editors");
   const saved = JSON.parse(fs.readFileSync(path.join(v1, ".gnosis", "settings.json"), "utf8"));
   check(saved.language === "ja" && saved.fontSize === 22 && saved.appearance === "dark", "settings saved in the vault: " + JSON.stringify(saved));
   check(R.afterSave?.lang === "ja" && R.afterSave.enter === "Enter で開始", "language switched to ja: " + JSON.stringify(R.afterSave));
   check(!fs.existsSync(path.join(v3, ".gnosis")) || true, "");
   const o = R.opened || {};
   check(o.launcherHidden && /index\.md$/.test(o.file || ""), "Enter opens the vault in Vim: " + JSON.stringify(o));
-  check(o.bg === "#0d1117" && o.bodyBg === "rgb(13, 17, 23)", "the vault theme (dark) is applied after opening: " + JSON.stringify(o));
+  // \A のアプリの既定は白（通常の Vim の標準配色とは別。vault の「ダーク」設定にも左右されない）
+  check(String(o.bg).toLowerCase() === "#ffffff" && o.bodyBg === "rgb(255, 255, 255)" && String(o.palette).toLowerCase() === "#ffffff", "the app default theme (white) is applied after opening: " + JSON.stringify(o));
   check(o.font === "22px", "font size from the vault settings: " + JSON.stringify(o));
   check(o.lang === "ja", "Vim uses the vault language: " + JSON.stringify(o));
   check(R.__window && R.__window.fullscreen === false, "never fullscreen: " + JSON.stringify(R.__window));

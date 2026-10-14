@@ -203,7 +203,6 @@
     "gnosis_search: このノートにリンクがありません": "gnosis_search: this note has no links",
     "gnosis_search: ノートが見つかりません": "gnosis_search: no notes found",
     "gnosis_search: ノートが見つかりません（": "gnosis_search: no notes found (",
-    "h=カーソル直下 / Enter=本文の最後 / ": "h=below the cursor / Enter=end of the body / ",
     "hl ページ  jk 1件  数字=見る 同数字=開く  ⇥ 入力  ⎋ 閉じる": "hl page  jk one  digit=view, same digit=open  ⇥ type  ⎋ close",
     "i=カーソル位置 / n=表示名を入力して本文の最後 / ": "i=at the cursor / n=type a display name, end of the body / ",
     "init 失敗: ": "init failed: ",
@@ -213,7 +212,6 @@
     "open-default: xdg-open / gio が見つかりません": "open-default: xdg-open / gio not found",
     "relation（空でキャンセル）: ": "relation (empty cancels): ",
     "restore 不一致: ": "restore mismatch: ",
-    "t=見出しの下 / ": "t=under a heading / ",
     "v2 専用": "v2 format only",
     "vault の新しいパスワード: ": "New vault password: ",
     "vault を切り替えました: ": "switched the vault: ",
@@ -317,10 +315,13 @@
     "（見出しなし）": "(no heading)",
     "# Normal: h/左 = 浅く・l/右 = 深く": "# Normal: h/Left = shallower / l/Right = deeper",
     "# Visual: 複数行を選択して h/l/左右キーで一括変更": "# Visual: select several lines and change them at once with h/l/Left/Right",
-    "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立)  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch (direct child) / o=no link (orphan)  (Esc/q cancel)",
-    "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立) / g=カーソル下のリンクをグループ化  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch (direct child) / o=no link (orphan) / g=group the link under the cursor  (Esc/q cancel)",
-    "キャンセル（h / Enter / t / c / b / o のどれか）": "Cancelled (use one of h / Enter / t / c / b / o)",
-    "c=Context末尾 / b=Branch(子として直接) / r=Related  (Esc で取り止め)": "c=end of Context / b=Branch (direct child) / r=Related  (Esc to cancel)"
+    "h=カーソル直下 / Enter=本文末 / ": "h=below the cursor / Enter=end of body / ",
+    "t=見出し / ": "t=heading / ",
+    "i=カーソル位置 / n=表示名 / ": "i=at the cursor / n=display name / ",
+    "c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related  (Esc)": "c=end of Context / b=Branch(child) / p=Parent / r=Related  (Esc)",
+    "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch(child) / p=Parent / o=no link (orphan)  (Esc/q cancel)",
+    "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / g=グループ化  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch(child) / p=Parent / o=orphan / g=group  (Esc/q cancel)",
+    "キャンセル（h / Enter / t / c / b / p / o のどれか）": "Cancelled (use one of h / Enter / t / c / b / p / o)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",
@@ -471,6 +472,11 @@
     "web.lighter": "Lighter",
     "web.reset_color": "Reset this color",
     "web.editor_keys": "Type a HEX (#rrggbb) directly, or use the color picker or the palette. ↑ ↓ move between rows ・ changes show in the preview at once ・ nothing is saved until \"Save and use\" ・ Esc cancels",
-    "theme_edit.cursor_line": "cursor line"
+    "theme_edit.cursor_line": "cursor line",
+    "conflict.warn": "Another window (or process) changed \"%s\". Your unsaved changes in this window were kept (backup: %s). Saving with :w overwrites their change (you will be asked). To load their change use :e! (your unsaved changes are already backed up)",
+    "session.kept_unlocked": "Another window (%s) is using this vault, so it was not locked: %s",
+    "session.lock_refused": "Not locked: another window (%s) is using this vault. To lock it anyway use :GnosisLock! (the other windows will no longer be able to use it)",
+    "session.exclusive_refused": "Cannot do this while another window (%s) is using this vault. Close the other windows and try again (nothing was changed)",
+    "branch.one_parent_only": "Only one note can be the parent (ParentBranch). Choose exactly one note (nothing was changed)"
   }
 }

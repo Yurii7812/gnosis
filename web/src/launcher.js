@@ -247,11 +247,11 @@ async function saveEdit() {
 }
 
 // 色を 1 つ変える。画面は作り直さず、その場で更新する（カラーピッカーを閉じさせないため）。
-function setColor(key, hex) {
+function setColor(key, hex, fromHexField = false) {
   const c = normHex(hex);
   if (!c || !editing) return;
   editing.colors[key] = c;
-  syncEditor(key);
+  syncEditor(fromHexField ? key : null);  // HEX 欄に打っている最中は、その欄を書き換えない
 }
 
 function syncEditor(except) {
@@ -303,7 +303,7 @@ function renderEditor() {
         onfocus: () => selectRow(k), oninput: (ev) => setColor(k, ev.target.value) }),
       h("input", { type: "text", id: "e-h-" + k, class: "e-hex", value: e.colors[k], maxlength: 7, spellcheck: false, "aria-label": label + " HEX",
         onfocus: () => selectRow(k),
-        oninput: (ev) => { const n = normHex(ev.target.value); if (n) setColor(k, n); },
+        oninput: (ev) => { const n = normHex(ev.target.value); if (n) setColor(k, n, true); },
         onblur: (ev) => { ev.target.value = e.colors[k]; } }),
       h("span", { class: "e-swatch", id: "e-sw-" + k, style: "background:" + e.colors[k] }));
     return row;

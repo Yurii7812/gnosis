@@ -358,4 +358,17 @@ app.whenReady().then(() => {
   createWindow();
 });
 app.on("window-all-closed", () => { if (!TEST) app.quit(); });
-app.on("before-quit", () => { try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ } });
+// 終了: Vim に「未保存を書いて終了」を送り、VimLeave を走らせる（暗号化 vault のロック判定は VimLeave で行う。
+// この窓が vault を使う最後のウィンドウならロックし、ほかのウィンドウが使っていればロックしない）。
+// 2.5 秒たっても終わらなければ強制終了する（Vim が確認や fzf で待っていても閉じられる）。
+let quitting = false;
+app.on("before-quit", (e) => {
+  if (!quitting && bridge && !TEST) {
+    quitting = true;
+    e.preventDefault();
+    try { bridge.write("\x1b\x1b:silent! wall | qa!\r"); } catch { /* ignore */ }
+    setTimeout(() => { try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ } app.quit(); }, 2500);
+    return;
+  }
+  try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ }
+});

@@ -32619,7 +32619,7 @@ ${h3.join(`
       decos.push(Decoration.replace({}).range(s15 + inner.length, base2 + b3));
     });
   }
-  var SECTION_HEAD_RE = /^###\s+(Context|Group|Related|BackLink|Parent)\s*$/;
+  var SECTION_HEAD_RE = /^###\s+(ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)\s*$/;
   function emptySectionLines(doc2, fmEnd) {
     const out = /* @__PURE__ */ new Set();
     let inFence = false;
@@ -33404,11 +33404,11 @@ ${h3.join(`
     editing = null;
     await saveSettings();
   }
-  function setColor(key, hex) {
+  function setColor(key, hex, fromHexField = false) {
     const c = normHex(hex);
     if (!c || !editing) return;
     editing.colors[key] = c;
-    syncEditor(key);
+    syncEditor(fromHexField ? key : null);
   }
   function syncEditor(except) {
     if (!editing) return;
@@ -33481,7 +33481,7 @@ ${h3.join(`
           onfocus: () => selectRow(k),
           oninput: (ev) => {
             const n = normHex(ev.target.value);
-            if (n) setColor(k, n);
+            if (n) setColor(k, n, true);
           },
           onblur: (ev) => {
             ev.target.value = e.colors[k];

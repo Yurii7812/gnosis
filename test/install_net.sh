@@ -92,7 +92,7 @@ m = re.match(r'"((?:\\.|[^"\\])*)"', val)
 arg0 = re.sub(r'\\([\\"`$])', r"\1", m.group(1))
 assert arg0 == sys.argv[2], (arg0, sys.argv[2])
 desktop = open(sys.argv[1], encoding="utf-8").read()
-assert "Icon=gnosis" in desktop
+assert re.search(r"^Icon=/.*gnosis(-symbol)?\.svg$", desktop, re.M), desktop  # 絶対パスの SVG（配色に合わせて再生成したもの。アイコンテーマの更新を待たずに表示される）
 assert "Terminal=false" in desktop, desktop
 assert re.search(r"^Exec=.* --new-terminal %F$", desktop, re.M), desktop
 assert "StartupWMClass" not in desktop
