@@ -27,12 +27,16 @@ jobs:
           sh -n bin/gnosis
           sh -n install/install.sh
           node --check bin/gnosis-kwin-maximize.js
+      - name: Test GNOME Terminal's isolated font profile
+        run: sh test/gnome_font_profile_net.sh
       - name: Test saved font settings and terminal launch arguments
         run: sh test/termfont_net.sh
       - name: Test autosave versus asynchronous sync while editing
         run: sh test/autosync_dirty_guard_net.sh
       - name: Test diary hierarchy across year rollover
         run: sh test/diary_hierarchy_net.sh
+      - name: Test focus escape recognition and consistent Markdown prose colors
+        run: sh test/focus_markdown_net.sh
       - name: Test Gnosis color highlight recovery
         run: sh test/color_highlight_net.sh
       - name: Test startup icon colors

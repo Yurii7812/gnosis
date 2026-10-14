@@ -47,6 +47,16 @@ call gnosis#home#setup_viminfo()
 filetype plugin indent on
 syntax enable
 
+" Konsole/xterm/kitty 等のフォーカス通知 ESC [ I / ESC [ O を入力文字にしない。
+" Vim の端末情報では認識されない環境があるため Gnosis 専用 Vim で明示する。
+" 通常の ~/.vimrc / 通常のターミナルの設定は変更しない。
+if !has('gui_running') && exists('+t_fe') && exists('+t_fd')
+  let &t_fe = "\<Esc>[?1004h"
+  let &t_fd = "\<Esc>[?1004l"
+  execute "set <FocusGained>=\<Esc>[I"
+  execute "set <FocusLost>=\<Esc>[O"
+endif
+
 " 起動画面・ノート・設定は Chnoubis パレット10（夜空×水色）を既定とする。
 set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。

@@ -22,7 +22,7 @@ n=$(grep -c '^OK' "$WORK/result.txt")
 
 # ---- ランチャー（GNOSIS_DRY_RUN=1 で端末を起動せず引数を表示）。端末は偽物の実行ファイルで用意する
 mkdir -p "$WORK/bin"
-for t in konsole kitty alacritty wezterm xterm gnome-terminal xfce4-terminal; do
+for t in konsole kitty alacritty wezterm xterm gnome-terminal xfce4-terminal foot ghostty; do
   printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/$t"; chmod +x "$WORK/bin/$t"
 done
 check() { # 名前 条件の grep パターン ファイル
@@ -113,6 +113,13 @@ check "xterm: -fs" '^17$' "$WORK/xterm.txt"
 check "xterm: 実際のフォント名（Monospace ではない）" '^DejaVu Sans Mono$' "$WORK/xterm.txt"
 launch "$WORK/wezterm.txt" wezterm
 check "WezTerm: font_size" '^font_size=17$' "$WORK/wezterm.txt"
+launch "$WORK/foot.txt" foot
+check "foot: saved Gnosis font size" 'DejaVu Sans Mono:size=17' "$WORK/foot.txt"
+launch "$WORK/ghostty.txt" ghostty
+check "Ghostty: saved Gnosis font size" 'font-size=17' "$WORK/ghostty.txt"
+launch "$WORK/gnome.txt" gnome-terminal
+check "GNOME: select a dedicated Gnosis profile" 'profile=Gnosis' "$WORK/gnome.txt"
+
 # 端末の自動選択: デスクトップに合うもの
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": ""\n}\n' > "$H/terminal.json"
 launch "$WORK/kde.txt" "" KDE
