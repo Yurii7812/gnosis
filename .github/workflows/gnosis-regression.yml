@@ -47,6 +47,11 @@ jobs:
         run: sh test/icon_palette_net.sh
       - name: Test Index and guide relations
         run: sh test/guide_relations_net.sh
+      - name: Test Folgezettel Branch relationships and new-note placement
+        run: |
+          python3 python/test_branch_ops.py
+          sh test/branch_net.sh
+          sh test/link_ops_net.sh
       - name: Test auto-updater using local Git repositories
         run: sh test/install_update_net.sh
 
