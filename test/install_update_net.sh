@@ -47,5 +47,5 @@ grep -q '安全のため更新を停止' "$WORK/dirty.log" || { cat "$WORK/dirty
 git clone -q "$WORK/origin.git" "$WORK/new"
 run "$WORK/new" "$WORK/new.log" || { cat "$WORK/new.log" >&2; fail "新しい clone で失敗した"; }
 HOME="$WORK/home" "$WORK/home/.local/bin/gnosis" --where | grep -qxF "launcher:      $WORK/new/bin/gnosis" || fail "ランチャーが新しい clone を指していない"
-grep -q "$WORK/dirty/bin/gnosis" "$WORK/new.log" || fail "前のインストール先からの切り替えを知らせていない"
+grep -q "$WORK/old/bin/gnosis" "$WORK/new.log" || fail "前のインストール先からの切り替えを知らせていない"
 echo "install_update OK (自動更新・dirty repository は明示的に失敗・新しい clone へ切り替え)"
