@@ -88,15 +88,30 @@ Homebrew で足りないものを入れ、`~/Applications/Gnosis.app` を作り�
 
 ### Windows 10 / 11
 
+**PowerShell（Windows PowerShell 5.1 で可）に次の1行を貼り付けて実行します。** Git・Python・Vim・Ubuntu・WezTermを事前に用意する必要はありません。
+
+```powershell
+irm https://raw.githubusercontent.com/Yurii7812/gnosis/main/install/bootstrap.ps1 | iex
+```
+
+動作: GitHubの最新コミットを1つに特定してHTTPSで取得し、コミットとの一致を確認してから実行します。WSL2・Ubuntu・WezTermが無ければ確認のうえ導入し、Ubuntu内（`~/gnosis`）にGnosis専用のVim・プラグイン・Python環境を作り、検証に成功してからデスクトップとスタートメニューに「Gnosis」を作成します。以後はアイコンのダブルクリックだけで、**WezTerm → WSL2 Ubuntu → `gnosis --tui`（通常のVim）**が開きます。
+
+利用者の操作が必要な場面（自動化できません）:
+- WSL2の有効化時のWindowsの管理者確認（UAC）と、必要な場合の**再起動**。再起動後は次回サインイン時に続きから自動再開します（1回のみ）。
+- Ubuntu初回のユーザー名・パスワード設定（Ubuntu自身の画面で入力。インストーラーは保存しません）。
+- Linuxパッケージ導入時にUbuntuのパスワード（sudo）を聞かれることがあります。
+
+対応条件: Windows 11、またはWindows 10 バージョン2004（ビルド19041）以上／CPUの仮想化が有効／インターネット接続／WezTermの自動導入にはwinget（App Installer）が必要。Windows 10では未検証です。企業ポリシーでWSL・管理者権限・ダウンロードが禁止されている環境では完了できません（その場合は理由を表示して終了し、成功とは表示しません）。
+
+バージョンを固定する場合は、実行前に `$env:GNOSIS_REF = 'タグ名またはブランチ名'` を設定します。ログは `%LOCALAPPDATA%\Gnosis\install.log` です。失敗しても、同じ1行をもう一度実行すれば済んだ手順は飛ばして続きから進みます。
+
+開発者向け（リポジトリを既に持っている場合）:
+
 ```bat
-git clone https://github.com/Yurii7812/gnosis.git
-cd gnosis
 powershell -ExecutionPolicy Bypass -File install\install.ps1
 ```
 
 Windowsの標準構成は、**Gnosisのターミナル版（Vim）**です。Windows版Electron GUIへの置換は行いません。WSL2上のUbuntuとWezTermを使用し、GnosisのLinux用依存関係・Vim・プラグインをインストールします。必要なファイルが揃ったことを確認してから、Windowsの**デスクトップとスタートメニューに「Gnosis」起動アイコン**を作成します。アイコンからGnosis専用のターミナルが開き、その中でVimを直接実行します。
-
-WSL2・Ubuntuの初回導入に再起動が必要な場合は、Windowsの再起動とUbuntuの初期設定を終えてから、同じインストールコマンドを再実行してください。この段階ではまだGnosisのインストールは完了していません。
 
 Electron GUIは標準ではインストールされません。別途明示的に試したい場合のみ、`powershell -ExecutionPolicy Bypass -File install\install.ps1 -NativeApp` を使用します。WSL2や既存ノートを削除せず、通常のVim設定も変更しません。
 

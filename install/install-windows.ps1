@@ -14,7 +14,8 @@ param(
   [switch]$Resume,        # started by the post-reboot RunOnce entry
   [switch]$Yes,           # do not ask before installing WSL / WezTerm (reboot is still asked)
   [string]$Ref = '',      # optional Git tag/branch for the Linux-side checkout
-  [string]$Distro = ''    # optional explicit WSL distribution name
+  [string]$Distro = '',   # optional explicit WSL distribution name
+  [string]$ShortcutDir = '' # tests only: write one Gnosis.lnk here instead of Desktop/Start menu
 )
 $ErrorActionPreference = 'Stop'
 $script:RepoUrl  = 'https://github.com/Yurii7812/gnosis.git'
@@ -346,6 +347,7 @@ echo "VERIFY OK"
 
 # ---------------------------------------------------------------- Windows launcher
 function Get-LauncherPs1([string]$name) {
+  if (-not $name) { Fail 'Internal error: empty WSL distribution name for the launcher.' 'Report this bug.' }
   $t = @'
 # Gnosis launcher (generated). Opens ordinary Vim Gnosis in WezTerm via WSL: gnosis --tui
 $ErrorActionPreference = 'Stop'
@@ -438,6 +440,7 @@ function Install-Launcher([string]$name,[string]$user) {
     (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gnosis.lnk'),
     (Join-Path ([Environment]::GetFolderPath('Programs')) 'Gnosis.lnk')
   )
+  if ($ShortcutDir) { $links = @((Join-Path $ShortcutDir 'Gnosis.lnk')) }
   foreach ($path in $links) {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
     $l = $shell.CreateShortcut($path)
