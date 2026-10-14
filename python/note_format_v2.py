@@ -1667,6 +1667,37 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     return "\n".join(lines) + "\n"
 
 
+def _editor_has_unsaved_changes(path: Path) -> bool:
+    """編集中マーカーがあるファイルを background sync は書き換えない。
+
+    Vim が生成したマーカーは Gnosis ホームの state/sync-dirty に置かれ、
+    PID のプロセスが生きている間だけ有効。クラッシュ後の古いファイルは除去する。
+    CLI 等で Gnosis 以外から呼ばれたときは従来どおり処理する。
+    """
+    guard_dir = os.environ.get("GNOSIS_SYNC_GUARD_DIR", "")
+    if not guard_dir:
+        return False
+    digest = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
+    for marker in Path(guard_dir).glob(f"{digest}.*.dirty"):
+        try:
+            pid = int(marker.name.split(".")[1])
+            if pid <= 0:
+                continue
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            try:
+                marker.unlink()
+            except OSError:
+                pass
+            continue
+        except PermissionError:
+            pass  # PID exists but is owned by another user
+        except (ValueError, OSError):
+            continue
+        return True
+    return False
+
+
 # =============================================================================
 # 【現役エンジン】 simple_sync 〜
 #   CLI の update / update_one / new / retitle_links が呼ぶのはこちら。
@@ -1949,6 +1980,17 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
         new_text = _simple_render(p.name, n, p, parent_lines, back, titles, group_lines)
         new_hash = _content_hash(new_text)
         if new_hash != n["hash"]:
+            # 保存済みの入力を同期のスナップショットで上書きしない。
+            # 1. Vim の未保存編集（InsertEnter/TextChanged）中は書かない
+            # 2. 同期開始時に読んだファイルが途中で変わっていたら書かない
+            #    （別の自動保存 / 並行同期が先に保存した場合）
+            if _editor_has_unsaved_changes(p):
+                continue
+            try:
+                if _content_hash(p.read_text(encoding="utf-8")) != n["hash"]:
+                    continue
+            except OSError:
+                continue
             p.write_text(new_text, encoding="utf-8")
             changed += 1
             n["hash"] = new_hash
