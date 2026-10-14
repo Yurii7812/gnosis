@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # install_update_net.sh needs a branch checkout, not GitHub's detached merge SHA.
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
