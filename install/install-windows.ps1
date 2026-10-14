@@ -82,6 +82,7 @@ function Register-Resume {
   $cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $script1 + '" -Resume'
   if ($Ref) { $cmd += ' -Ref "' + $Ref + '"' }
   $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+  if (-not (Test-Path -LiteralPath $key)) { New-Item -Path $key -Force | Out-Null }  # absent on fresh profiles
   Set-ItemProperty -Path $key -Name $script:RunOnceName -Value $cmd
   Write-Log ('Registered RunOnce: ' + $cmd)
 }
