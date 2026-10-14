@@ -48,6 +48,8 @@ jobs:
           python3 python/test_branch_ops.py
           sh test/branch_net.sh
           sh test/link_ops_net.sh
+          python3 test/check_guide.py
+          sh test/guide_relations_net.sh
       - name: Test focus escape recognition and consistent Markdown prose colors
         run: sh test/focus_markdown_net.sh
       - name: Test Gnosis color highlight recovery
