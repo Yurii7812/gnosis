@@ -2607,6 +2607,25 @@ endfunction
 
 " Markdown リンクの構文: [表示名](ファイル名) の [ と ](…) を隠し、表示名だけを見せる。
 " 隠すかどうかは conceallevel（plugin/gnosis.vim の s:setup_conceal が決める）。
+" 標準 markdown.vim の斜体や inline code は閉じ記号が無くても
+" 複数行に連続することがある。日本語の後の '_' や孤立した '`' で
+" 本文全体が意図せず別色になるのを防ぐ。
+function! s:gnosis_safe_markdown_inline() abort
+  silent! syntax clear markdownItalic
+  silent! syntax clear markdownCode
+  " 閉じ記号が同じ行に存在する時だけ有効にする（未閉じは通常の本文色）。
+  " 'oneline' が標準 markdown.vim の多行連結を防ぐ。
+  syntax region markdownItalic matchgroup=markdownItalicDelimiter
+        \ start=/\*\ze\S[^*\n]*\*/ end=/\S\@<=\*/ oneline keepend
+  " \\k は日本語文字も含む。ファイル名 'スクリーンショット_2026.png' は斜体ではない。
+  syntax region markdownItalic matchgroup=markdownItalicDelimiter
+        \ start=/\k\@<!_\ze\S[^_\n]*_\k\@!/ end=/\S\@<=_\k\@!/ oneline keepend
+  syntax region markdownCode matchgroup=markdownCodeDelimiter
+        \ start=/``\ze[^`\n]\+``/ end=/``/ oneline keepend
+  syntax region markdownCode matchgroup=markdownCodeDelimiter
+        \ start=/`\ze[^`\n]\+`/ end=/`/ oneline keepend
+endfunction
+
 function! gnosis#link_syntax() abort
   " 再実行時の重複定義を防ぐ
   silent! syntax clear gnosisLinkRegion
@@ -2616,6 +2635,7 @@ function! gnosis#link_syntax() abort
   silent! syntax clear gnosisEmptyBracket
   silent! syntax clear gnosisCheckboxBracket
   silent! syntax clear gnosisCheckedBracket
+  call s:gnosis_safe_markdown_inline()
 
   " リンク全体は region で保持し、見える本文だけを水色にする。
   " containedin=... が要る: 日本語の直後の `_` は Vim の markdown 斜体
