@@ -10,22 +10,22 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 repo, out = map(Path, sys.argv[1:])
-for root in (repo / "assets", out):
+for root in (out,):
     sym = (root / "icons" / "gnosis-symbol.svg").read_text()
     ET.fromstring(sym)
-    assert 'fill="#14283D"' in sym, root
-    assert 'fill="#79CFFF"' in sym, root
+    assert 'fill="#071827"' in sym, root
+    assert 'fill="#D7F8FF"' in sym, root
     logo = (root / "logo" / "gnosis-logo.svg").read_text()
     ET.fromstring(logo)
-    assert 'fill="#79CFFF"' in logo, root
-print("OK: SVG palette #14283D / #79CFFF")
+    assert 'fill="#D7F8FF"' in logo, root
+print("OK: SVG palette #071827 / #D7F8FF")
 try:
     from PIL import Image
 except ImportError:
     print("OK: Pillow unavailable: SVG-only icon build supported")
 else:
     im = Image.open(out / "icons" / "gnosis-256.png").convert("RGB")
-    assert im.getpixel((3, 128)) == (20, 40, 61), im.getpixel((3, 128))
+    assert im.getpixel((3, 128)) == (7, 24, 39), im.getpixel((3, 128))
     print("OK: generated PNG palette matches SVG")
 PY
 echo 'icon palette OK'

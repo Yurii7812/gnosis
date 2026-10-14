@@ -112,7 +112,9 @@ launch "$WORK/xterm.txt" xterm
 check "xterm: -fs" '^17$' "$WORK/xterm.txt"
 check "xterm: 実際のフォント名（Monospace ではない）" '^DejaVu Sans Mono$' "$WORK/xterm.txt"
 launch "$WORK/wezterm.txt" wezterm
-check "WezTerm: font_size" '^font_size=17$' "$WORK/wezterm.txt"
+check "WezTerm: dedicated profile file" 'wezterm.lua' "$WORK/wezterm.txt"
+grep -q 'font_size = tonumber(os.getenv' "$H/terminal/wezterm.lua" && n=$((n+1)) || { echo 'NG: saved Gnosis font was not read by the WezTerm profile' >&2; ng=1; }
+grep -q 'enable_tab_bar = false' "$H/terminal/wezterm.lua" && n=$((n+1)) || { echo 'NG: native tab bar is not disabled' >&2; ng=1; }
 launch "$WORK/foot.txt" foot
 check "foot: saved Gnosis font size" 'DejaVu Sans Mono:size=17' "$WORK/foot.txt"
 launch "$WORK/ghostty.txt" ghostty
@@ -120,16 +122,16 @@ check "Ghostty: saved Gnosis font size" 'font-size=17' "$WORK/ghostty.txt"
 launch "$WORK/gnome.txt" gnome-terminal
 check "GNOME: select a dedicated Gnosis profile" 'profile=Gnosis' "$WORK/gnome.txt"
 
-# 端末の自動選択: デスクトップに合うもの
+# 端末自動選択は WezTerm を優先し、明示指定を最優先に保つ。
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": ""\n}\n' > "$H/terminal.json"
 launch "$WORK/kde.txt" "" KDE
-check "自動選択: KDE なら Konsole" '^konsole$' "$WORK/kde.txt"
-check "自動選択: 保存した大きさ（15）" 'Gnosis-15.profile' "$WORK/kde.txt"
+check "自動選択: WezTerm priority" '^wezterm$' "$WORK/kde.txt"
+check "自動選択: Gnosis WezTerm config" 'wezterm.lua' "$WORK/kde.txt"
 launch "$WORK/xfce2.txt" "" XFCE
-check "自動選択: XFCE なら XFCE Terminal" '^xfce4-terminal$' "$WORK/xfce2.txt"
+check "自動選択: XFCE also prioritizes WezTerm" '^wezterm$' "$WORK/xfce2.txt"
 printf '{\n  "fontFamily": "",\n  "fontSize": 15,\n  "lineSpacing": 2,\n  "terminal": "xterm"\n}\n' > "$H/terminal.json"
 launch "$WORK/pref.txt" "" KDE
-check "設定で選んだ端末を優先" '^xterm$' "$WORK/pref.txt"
+check "明示指定を優先" '^xterm$' "$WORK/pref.txt"
 # ふだんの Vim の設定は作らない・変えない
 [ ! -e "$WORK/home/.vimrc" ] && [ ! -e "$WORK/home/.vim" ] && n=$((n + 1)) || { echo "NG: ふだんの Vim の設定に触れた" >&2; ng=1; }
 [ "$ng" = 0 ] || { echo "NG: termfont" >&2; exit 1; }

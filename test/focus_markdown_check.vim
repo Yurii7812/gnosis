@@ -19,6 +19,8 @@ try
   call s:ok('focus reporting explicitly enabled', &t_fe =~# '1004h' && &t_fd =~# '1004l')
   call s:ok('FocusLost escape recognized', execute('silent set <FocusLost>?') =~# 'O')
   call s:ok('FocusGained escape recognized', execute('silent set <FocusGained>?') =~# 'I')
+  call s:ok('SS3 down ESC O B recognized', execute('silent set <F14>?') =~# 'OB' && !empty(maparg('<F14>', 'i')))
+  call s:ok('SS3 up ESC O A recognized', execute('silent set <F13>?') =~# 'OA' && !empty(maparg('<F13>', 'n')))
   call s:ok('plain prose after lone backtick remains plain', !s:has(7, 'Ordinary prose', 'markdownCode') && !s:has(7, 'Ordinary prose', 'markdownItalic'))
   call s:ok('screenshot filename underscore is not italic', !s:has(8, '20261014', 'markdownItalic'))
   call s:ok('stray backtick does not highlight adjacent prose', !s:has(6, 'bash', 'markdownCode'))

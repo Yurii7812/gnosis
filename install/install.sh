@@ -363,6 +363,37 @@ if [ "$NO_APP" = 0 ]; then
   fi
 fi
 
+# ---- WezTerm is the standard display backend (separate from ~/.wezterm.lua).
+# macOS uses Homebrew Cask. Linux uses the configured package manager only when
+# a package is actually offered; missing repositories must not break the Vim setup.
+# On WSL, the Windows installer manages host-side WezTerm instead.
+step "Gnosis 用ターミナル WezTerm を確認" "Checking dedicated WezTerm terminal"
+if ! have wezterm && [ "$NO_SYSTEM" = 0 ]; then
+  if [ "$OS" = Darwin ]; then
+    if have brew && ask "WezTermをHomebrewからインストールしますか？" "Install WezTerm via Homebrew Cask?"; then
+      if ! brew install --cask wezterm; then
+        say "  WezTerm導入失敗。Terminal.appを代替として使います。" "  WezTerm failed; Terminal.app remains available."
+      fi
+    elif ! have brew; then
+      say "  Homebrewがありません。wezterm.org/install/macos.html からインストールできます。" \
+          "  Homebrew missing. Install it first, or install WezTerm from wezterm.org/install/macos.html"
+    fi
+  elif grep -qi microsoft /proc/version 2>/dev/null; then
+    say "  WSL内です。Windows側のWezTermを使用します。" "  WSL detected: use host-side WezTerm."
+  elif [ "$PM" = apt ] && have apt-cache && apt-cache show wezterm >/dev/null 2>&1; then
+    if ask "WezTerm を追加しますか？" "Install WezTerm?"; then
+      pm_install wezterm || say "  WezTermは導入できませんでした（既存端末を使用）。" "  WezTerm unavailable; using existing terminal."
+    fi
+  elif [ "$PM" = pacman ] || [ "$PM" = dnf ] || [ "$PM" = zypper ]; then
+    if ask "WezTerm を追加しますか？" "Install WezTerm?"; then
+      pm_install wezterm || say "  WezTermは導入できませんでした（既存端末を使用）。" "  WezTerm unavailable; using existing terminal."
+    fi
+  else
+    say "  WezTermのパッケージがありません。既存端末を使えます。" \
+        "  WezTerm package unavailable; Gnosis can still use installed terminals."
+  fi
+fi
+
 # ---------------------------------------------------------------- 4. ランチャーとアイコン
 step "ランチャーとアイコンを作ります" "Creating the launcher and icons"
 # Git 管理下の PNG を更新するのではなく、Gnosis 専用ホームに毎回再生成する。

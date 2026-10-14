@@ -437,8 +437,8 @@ endfunction
 function! s:outline_editor_lines(items) abort
   let l:lines = []
   call add(l:lines, gnosis#i18n#tr('# OutlineEdit: 見出しを編集して :write で反映'))
-  call add(l:lines, gnosis#i18n#tr('# <- / -> : 見出しレベル変更（# の数を減増）'))
-  call add(l:lines, gnosis#i18n#tr('# Visual選択して <- / -> : 選択範囲を一括変更'))
+  call add(l:lines, gnosis#i18n#tr('# Normal: h/左 = 浅く・l/右 = 深く'))
+  call add(l:lines, gnosis#i18n#tr('# Visual: 複数行を選択して h/l/左右キーで一括変更'))
   call add(l:lines, gnosis#i18n#tr('# q / ZZ / :OutlineApply で反映（Q は保存せず閉じる）'))
   call add(l:lines, '')
 
@@ -563,10 +563,17 @@ function! gnosis#outline_edit() abort
   nnoremap <silent><buffer> Q  <Cmd>bd!<CR>
   nnoremap <silent><buffer> ZZ <Cmd>call gnosis#outline_editor_apply()<CR><Cmd>bd!<CR>
 
+  " Normal: h/Left = outdent, l/Right = indent.
+  " Visual: '<,'> を必ず指定して、選択範囲すべてを一度に変更する。
+  " Insert: 文字入力・カーソル移動はVimの標準挙動のまま。
+  nnoremap <silent><buffer> h       <Cmd>call gnosis#outline_shift_current(-1)<CR>
+  nnoremap <silent><buffer> l       <Cmd>call gnosis#outline_shift_current(1)<CR>
   nnoremap <silent><buffer> <Left>  <Cmd>call gnosis#outline_shift_current(-1)<CR>
   nnoremap <silent><buffer> <Right> <Cmd>call gnosis#outline_shift_current(1)<CR>
-  xnoremap <silent><buffer> <Left>  :<C-u>call gnosis#outline_shift_visual(-1)<CR>
-  xnoremap <silent><buffer> <Right> :<C-u>call gnosis#outline_shift_visual(1)<CR>
+  xnoremap <silent><buffer> h       :<C-u>'<,'>call gnosis#outline_shift_visual(-1)<CR>
+  xnoremap <silent><buffer> l       :<C-u>'<,'>call gnosis#outline_shift_visual(1)<CR>
+  xnoremap <silent><buffer> <Left>  :<C-u>'<,'>call gnosis#outline_shift_visual(-1)<CR>
+  xnoremap <silent><buffer> <Right> :<C-u>'<,'>call gnosis#outline_shift_visual(1)<CR>
 
   call cursor(b:gnosis_outline_base, 1)
 endfunction

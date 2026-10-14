@@ -175,6 +175,8 @@ endif
 " ---------------------------------------------------------------------------
 
 command!          GnosisToday call gnosis#diary_today()
+command!          GnosisTabs call gnosis#tabs#popup()
+command!          GnosisOpenLinkTab call gnosis#tabs#open_link()
 command!          GnosisRefreshColors call gnosis#color#refresh()
 command!          GnosisColorDoctor call gnosis#color#doctor()
 command!          GnosisDiaryAdopt call gnosis#diary_adopt()
@@ -456,15 +458,18 @@ nnoremap <silent> <S-BS>   <Cmd>call gnosis#go_forward()<CR>
 nnoremap <silent> \.       <Cmd>call gnosis#go_forward()<CR>
 " 直前ノートとの1キー往復（A⇄B）。読むもの・選ぶものゼロの最速移動。
 nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
-" ハブ … \1〜\9 で直行、\H で今のノートを登録、\H0 で一覧
-for s:h in range(1, 9)
-  execute printf('nnoremap <silent> \%d <Cmd>call gnosis#hub_jump(%d)<CR>', s:h, s:h)
-endfor
-unlet s:h
-" \h … ハブ画面（リンク一覧の編集可能な Markdown）を開く。1-9/0 でそのまま移動できる。
+" \h は永続的な保管リスト。\H で現在のノートを追加する。
+" 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
 nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
-nnoremap <silent> \0       <Cmd>call gnosis#hub_list()<CR>
+" \q は作業タブ管理。\o はリンクを別の論理タブとして開く。
+nnoremap <silent> \q       <Cmd>call gnosis#tabs#popup()<CR>
+nnoremap <silent> \o       <Cmd>call gnosis#tabs#open_link()<CR>
+" ノート移動では現作業タブの内容だけ更新（新タブは増やさない）。
+augroup gnosis_work_tabs
+  autocmd!
+  autocmd BufEnter *.md call gnosis#tabs#on_enter()
+augroup END
 " ゴミ箱（ソフト削除）: \tr=一覧（⏎=開く / ^r=復元 / ^e=空） / \tD=今のノートをゴミ箱へ / \tE=空にする
 "   （\td は \tdr/\tdc（表の行・列削除）と待ちが被るので \tD にする）
 nnoremap <silent> \tr       <Cmd>call gnosis#trash_list()<CR>
@@ -635,7 +640,8 @@ xnoremap <silent> \p        :<C-u>call gnosis#linkify_selection_from_clipboard()
 " \P … カーソル下の .md リンク先の Parent に、今のノートを確認なしで足す。
 " （\p とは別キー。\p の確認プロンプトは廃止したので、必要なときはこれ）
 nnoremap <nowait> <silent> \P <Cmd>call gnosis#add_current_as_parent_here()<CR>
-nnoremap <silent> \oe       <Cmd>OutlineEdit<CR>
+" \o を2打で確定させるため、従来の \oe は \O へ移動。
+nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " zo … カーソル下の .md リンク先ノートの見出し（アウトライン）を選び、
 " リンク先に #スラッグ（GitHub 互換）を付ける。先頭の「（見出しなし）」で解除。
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>
