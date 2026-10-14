@@ -44,9 +44,10 @@ try
   let s:r = gnosis#termfont#set_size(17)
   call s:ok('XFCE: 次の Gnosis の窓で反映と説明', !s:r.applied && gnosis#termfont#describe(s:r) =~# '次に Gnosis のアイコン')
   let $GNOSIS_TERMINAL_KIND = ''
-  " GNOME Terminal: Gnosis からは変えられない
+  " GNOME Terminal: 専用プロファイルがあればその場、無ければ次の窓で反映
   let $GNOSIS_TERMINAL_KIND = 'gnome-terminal'
-  call s:ok('GNOME: 変えられないと説明', gnosis#termfont#status() =~# 'Gnosis からは変えられません')
+  call s:ok('GNOME: 保存済みサイズが次の Gnosis 専用窓で反映と説明',
+        \ gnosis#termfont#status() =~# '次に Gnosis のアイコン')
   let $GNOSIS_TERMINAL_KIND = ''
   call gnosis#termfont#set('fontFamily', 'DejaVu Sans Mono')
   call gnosis#termfont#set('lineSpacing', 4)
