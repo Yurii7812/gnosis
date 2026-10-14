@@ -13570,12 +13570,13 @@ function! s:diary_new_lines(title, is_group, parent_link, ...) abort
     call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
   endif
   if !empty(a:parent_link)
-    " テンプレートは関係の節を持たない。親リンクがあるときだけ Context を作る
-    let l:p = index(l:lines, s:v2_up_mark)
+    " 親はすべてグループ（日記 / YYYY / YYYY-MM / Index）。
+    " 「親に属する」関係を Context ではなく ### Group に記録する。
+    let l:p = index(l:lines, s:v2_group_mark)
     if l:p >= 0
       call insert(l:lines, a:parent_link, l:p + 1)
     else
-      call extend(l:lines, [s:v2_up_mark, a:parent_link])
+      call extend(l:lines, [s:v2_group_mark, a:parent_link])
     endif
   endif
   return l:lines
@@ -13810,6 +13811,27 @@ function! s:diary_new_group(root, notes, title, parent_file, parent_title, ...) 
   return l:file
 endfunction
 
+" 「日記」は Index に載る最上位グループ。初回の \\d で作成し、
+" 以前の版で孤立していた日記グループも Index に再接続する。
+" index.md 自体はグループ階層のルートであり、日記の本文に手動の変更がある
+" 場合はバッファ優先で読み書きして、未保存の編集を壊さない。
+function! s:diary_ensure_top(root, notes, ...) abort
+  let l:top = s:diary_find_group(a:notes, '日記')
+  if empty(l:top)
+    return call('s:diary_new_group',
+          \ [a:root, a:notes, '日記', 'index.md', 'Index'] + a:000)
+  endif
+  let l:dir = fnamemodify(a:root, ':p')
+  call s:diary_edit_file(l:dir . 'index.md',
+        \ function('s:diary_op_add', [s:diary_link(l:top, '日記'), '']))
+  " Index に所属する親リンクを持たない既存トップグループも修復する。
+  if !s:diary_parent_has(a:root, l:top, 'index.md')
+    call s:diary_edit_file(l:dir . l:top,
+          \ function('s:diary_op_parent_swap', ['', s:diary_link('index.md', 'Index')]))
+  endif
+  return l:top
+endfunction
+
 " 年越し: 年グループ a:year が無く、それ以前の月グループ（親が「日記」のもの）があるとき、
 " それらを年ごとの年グループ（YYYY）に入れ、新しい年の年グループも作る。
 " 戻り値は新しい年の年グループのファイル名（作らなかったときは ''）。
@@ -13823,7 +13845,18 @@ function! s:diary_rollover(root, notes, year, top, ...) abort
     endif
   endfor
   if empty(l:old)
-    return ''
+    " 3 年目以降は直下の旧月がもう無い。それでも年グループを追加する。
+    let l:has_years = 0
+    for l:n in a:notes
+      if l:n.group && l:n.title =~# '^\d\{4}$'
+            \ && s:diary_parent_has(a:root, l:n.file, a:top)
+        let l:has_years = 1
+        break
+      endif
+    endfor
+    if !l:has_years
+      return ''
+    endif
   endif
   for [l:yr, l:mgs] in items(l:old)
     let l:yg = s:diary_find_group(a:notes, l:yr)
@@ -13850,9 +13883,9 @@ function! s:diary_create(root, date, notes, ...) abort
   let l:title = a:date . '-' . s:diary_weekday(a:date)
   let l:month = a:date[0 : 6]
   let l:year = a:date[0 : 3]
+  let l:top = call('s:diary_ensure_top', [a:root, a:notes] + a:000)
   let l:mg = s:diary_find_group(a:notes, l:month)
   if empty(l:mg)
-    let l:top = s:diary_find_group(a:notes, '日記')
     let l:yg = s:diary_find_group(a:notes, l:year)
     if empty(l:yg) && !empty(l:top)
       let l:yg = call('s:diary_rollover', [a:root, a:notes, l:year, l:top] + a:000)
