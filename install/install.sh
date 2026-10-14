@@ -217,7 +217,7 @@ else
 fi
 have git || required="$required git"
 have python3 || required="$required python3"
-if [ "$NO_VENV" = 0 ] && have python3 && ! python3 -c 'import venv, ensurepip' >/dev/null 2>&1; then required="$required venv"; fi
+if [ "$NO_VENV" = 0 ] && have python3 && ! python3 -c 'import venv, ensurepip' >/dev/null 2>&1; then recommended="$recommended venv"; fi
 have fzf || [ -x "$GNOSIS_HOME/plugins/fzf/bin/fzf" ] || recommended="$recommended fzf"
 have rg || recommended="$recommended rg"
 if [ "$OS" != Darwin ]; then

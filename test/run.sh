@@ -77,3 +77,6 @@ sh "$REPO/test/start_screen_net.sh"
 
 # インストーラー（一時 HOME・空白/日本語/' を含むパス・ふだんの Vim は不変）
 sh "$REPO/test/install_net.sh"
+
+# インストーラーの更新（古い版の取り込み・未コミットの変更は残す・別の clone への切り替え）
+sh "$REPO/test/install_update_net.sh"
