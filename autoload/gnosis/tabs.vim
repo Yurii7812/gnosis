@@ -179,10 +179,33 @@ function! gnosis#tabs#open_link() abort
   endtry
 endfunction
 
-function! s:indices() abort
+" 作業タブの表示名はノートのタイトル（YAML の title → 最初の H1 → ファイル名）。ファイル名・リンク先は変えない。
+function! s:title(i) abort
+  return gnosis#note_title(s:tabs[a:i].file)
+endfunction
+
+" タイトルが他のタブと重なるときは、見分けられるようにファイル名も添える
+function! s:labels() abort
+  let l:titles = map(range(len(s:tabs)), {_, i -> s:title(i)})
+  let l:seen = {}
+  for l:t in l:titles
+    let l:seen[l:t] = get(l:seen, l:t, 0) + 1
+  endfor
   let l:out = []
   for l:i in range(len(s:tabs))
-    if empty(s:query) || stridx(tolower(fnamemodify(s:tabs[l:i].file, ':t:r')), tolower(s:query)) >= 0
+    let l:name = fnamemodify(s:tabs[l:i].file, ':t')
+    call add(l:out, l:seen[l:titles[l:i]] > 1 ? l:titles[l:i] . '  (' . l:name . ')' : l:titles[l:i])
+  endfor
+  return l:out
+endfunction
+
+" 絞り込み: タイトル（とファイル名）に検索語が含まれるタブ。大文字小文字は区別しない。
+function! s:indices() abort
+  let l:out = []
+  let l:q = tolower(s:query)
+  for l:i in range(len(s:tabs))
+    if empty(l:q) || stridx(tolower(s:title(l:i)), l:q) >= 0
+          \ || stridx(tolower(fnamemodify(s:tabs[l:i].file, ':t:r')), l:q) >= 0
       call add(l:out, l:i)
     endif
   endfor
@@ -191,6 +214,7 @@ endfunction
 
 function! s:render() abort
   let l:idx = s:indices()
+  let l:labels = s:labels()
   let l:lines = [' Gnosis | Work Tabs      / search: ' . (empty(s:query) ? '(all)' : s:query), '']
   if empty(l:idx)
     call add(l:lines, '  (no matching tabs)  a: add current note')
@@ -200,10 +224,10 @@ function! s:render() abort
       let l:i = l:idx[l:j]
       let l:cur = l:i == s:active ? '  *' : '   '
       let l:point = l:j == s:selection ? '>' : ' '
-      call add(l:lines, printf('%s%s %2d  %s', l:point, l:cur, l:i + 1, fnamemodify(s:tabs[l:i].file, ':t:r')))
+      call add(l:lines, printf('%s%s %2d  %s', l:point, l:cur, l:i + 1, l:labels[l:i]))
     endfor
   endif
-  call extend(l:lines, ['', ' j/k move   Enter switch   a add   x close', ' X close others   C close all   / filter   q quit'])
+  call extend(l:lines, ['', ' ↑/↓ (j/k) move   Enter switch   a add   x close', ' X close others   C close all   / filter   Esc/q quit'])
   if s:popup > 0
     call popup_settext(s:popup, l:lines)
   endif
@@ -271,9 +295,9 @@ function! gnosis#tabs#filter(winid, key) abort
     return 1
   endif
   let l:idx = s:indices()
-  if a:key ==# 'j' || a:key ==# "\<Down>"
+  if a:key ==# 'j' || a:key ==# "\<Down>" || a:key ==# "\<C-n>"
     let s:selection = min([max([0, len(l:idx)-1]), s:selection+1])
-  elseif a:key ==# 'k' || a:key ==# "\<Up>"
+  elseif a:key ==# 'k' || a:key ==# "\<Up>" || a:key ==# "\<C-p>"
     let s:selection = max([0, s:selection-1])
   elseif a:key ==# "\<CR>" || a:key ==# "\<NL>"
     if !empty(l:idx)

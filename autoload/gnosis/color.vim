@@ -64,3 +64,53 @@ function! gnosis#color#doctor() abort
   call writefile(l:details, l:path)
   echom 'Gnosis: highlight diagnostics -> ' . l:path
 endfunction
+
+" ---------------------------------------------------------------------------
+" 色の計算（カスタムテーマの編集・コントラストの確認で使う。#rrggbb の文字列を扱う）
+" ---------------------------------------------------------------------------
+
+" 入力を #rrggbb（小文字）にそろえる。'abc' '#ABC' 'aabbcc' '#AABBCC' を受ける。だめなら ''。
+function! gnosis#color#normalize(text) abort
+  let l:t = substitute(trim(a:text), '^#', '', '')
+  if l:t =~# '^\x\{3}$'
+    let l:t = substitute(l:t, '\(\x\)\(\x\)\(\x\)', '\1\1\2\2\3\3', '')
+  endif
+  return l:t =~# '^\x\{6}$' ? '#' . tolower(l:t) : ''
+endfunction
+
+function! s:rgb(hex) abort
+  return [str2nr(a:hex[1:2], 16), str2nr(a:hex[3:4], 16), str2nr(a:hex[5:6], 16)]
+endfunction
+
+" a と b を t（0〜1）の割合で混ぜる
+function! gnosis#color#mix(a, b, t) abort
+  let l:x = s:rgb(a:a)
+  let l:y = s:rgb(a:b)
+  let l:out = '#'
+  for l:i in range(3)
+    let l:out .= printf('%02x', float2nr(l:x[l:i] + (l:y[l:i] - l:x[l:i]) * a:t + 0.5))
+  endfor
+  return l:out
+endfunction
+
+" 相対輝度（WCAG）。0（黒）〜1（白）
+function! gnosis#color#luminance(hex) abort
+  let l:c = []
+  for l:v in s:rgb(a:hex)
+    let l:s = l:v / 255.0
+    call add(l:c, l:s <= 0.03928 ? l:s / 12.92 : pow((l:s + 0.055) / 1.055, 2.4))
+  endfor
+  return 0.2126 * l:c[0] + 0.7152 * l:c[1] + 0.0722 * l:c[2]
+endfunction
+
+" コントラスト比（1〜21）。本文と背景は 4.5 以上が読みやすい目安
+function! gnosis#color#contrast(a, b) abort
+  let l:la = gnosis#color#luminance(a:a)
+  let l:lb = gnosis#color#luminance(a:b)
+  return l:la > l:lb ? (l:la + 0.05) / (l:lb + 0.05) : (l:lb + 0.05) / (l:la + 0.05)
+endfunction
+
+" 背景の明るさから 'light' / 'dark' を決める（カスタム配色の base）
+function! gnosis#color#base_of(bg) abort
+  return gnosis#color#luminance(a:bg) < 0.4 ? 'dark' : 'light'
+endfunction

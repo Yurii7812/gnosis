@@ -196,6 +196,43 @@ function! s:get_title(filepath) abort
   return l:stem
 endfunction
 
+" ノートのタイトル（一覧・作業タブ \q の表示用）。優先順位:
+"   1. YAML front matter の title   2. 最初の H1 見出し（コードブロックの外）   3. ファイル名（拡張子なし）
+" ファイル名やリンク先は変えない（表示だけ）。読むのは先頭 200 行まで。キャッシュは使わない
+" （タイトルを変えた直後でも古い表示にならない）。ファイルが無いときもファイル名を返す。
+function! gnosis#note_title(path) abort
+  let l:fp = fnamemodify(a:path, ':p')
+  let l:stem = fnamemodify(l:fp, ':t:r')
+  if !filereadable(l:fp)
+    return l:stem
+  endif
+  let l:lines = readfile(l:fp, '', 200)
+  let l:start = 0
+  if get(l:lines, 0, '') =~# '^---\s*$'
+    for l:i in range(1, len(l:lines) - 1)
+      if l:lines[l:i] =~# '^\%(---\|\.\.\.\)\s*$'
+        let l:start = l:i + 1
+        break
+      endif
+      let l:m = matchlist(l:lines[l:i], '^title\s*:\s*\(.\{-}\)\s*$')
+      if !empty(l:m)
+        let l:t = substitute(l:m[1], '^\([''"]\)\(.*\)\1$', '\2', '')
+        if !empty(l:t)
+          return l:t
+        endif
+      endif
+    endfor
+  endif
+  let l:body = l:lines[l:start :]
+  let l:fl = s:fence_flags(l:body)
+  for l:i in range(len(l:body))
+    if !l:fl[l:i] && l:body[l:i] =~# '^#\s\+\S'
+      return trim(substitute(l:body[l:i], '^#\s\+', '', ''))
+    endif
+  endfor
+  return l:stem
+endfunction
+
 " ---------------------------------------------------------------------------
 " Current file helpers
 " ---------------------------------------------------------------------------
@@ -6520,7 +6557,7 @@ function! s:v2_expand_choose_preset(label, presets) abort
     call add(l:lines, l:i . '. ' . l:p.name . '    [' . s:v2_expand_fmt(l:p.st) . ']')
     let l:i += 1
   endfor
-  let l:n = inputlist(l:lines)
+  let l:n = gnosis#ui#inputlist(l:lines)
   redraw
   if l:n < 1 || l:n > len(a:presets) | return {} | endif
   return a:presets[l:n - 1]
@@ -7103,7 +7140,7 @@ function! s:outline_pick_here(Cb) abort
       call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
       let l:i += 1
     endfor
-    let l:sel = inputlist(l:choices)
+    let l:sel = gnosis#ui#inputlist(l:choices)
     if l:sel > 0 && l:sel <= len(l:items)
       call s:outline_pick_done(l:items[l:sel - 1].lnum)
     endif
@@ -7291,7 +7328,7 @@ function! s:outline_pick_lines(path, lines, Cb) abort
       call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
       let l:i += 1
     endfor
-    let l:sel = inputlist(l:choices)
+    let l:sel = gnosis#ui#inputlist(l:choices)
     if l:sel > 0 && l:sel <= len(l:items)
       call s:outline_pick_done(l:items[l:sel - 1].lnum)
     endif
@@ -8186,7 +8223,7 @@ function! s:link_to_outline_fallback(items) abort
     call add(l:choices, l:i . ': ' . repeat('#', l:it.level) . ' ' . l:it.text)
     let l:i += 1
   endfor
-  let l:sel = inputlist(l:choices)
+  let l:sel = gnosis#ui#inputlist(l:choices)
   if l:sel <= 0
     let s:link_to_outline_ctx = {}
     return

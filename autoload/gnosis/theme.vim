@@ -115,6 +115,34 @@ function! gnosis#theme#palette(s) abort
   return l:p
 endfunction
 
+" \A のアプリ（Electron）の配色。通常の Vim の配色（palette）とは別の設定（appTheme / appCustomThemes）。
+"   既定は白い背景。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
+"   背景か本文を変えた配色では、補助の色（muted / accent）を組み込みのものから引き継がず作り直す。
+function! gnosis#theme#app_palette(s) abort
+  let l:pals = gnosis#settings#builtin_palettes()
+  let l:p = copy(get(l:pals, 'app', l:pals.light))
+  let l:th = get(a:s, 'appTheme', {})
+  if get(l:th, 'kind', 'builtin') ==# 'custom'
+    let l:c = get(get(a:s, 'appCustomThemes', {}), get(l:th, 'name', ''), {})
+    if !empty(l:c)
+      if has_key(l:c, 'bg') || has_key(l:c, 'fg')
+        call remove(l:p, 'muted')
+        call remove(l:p, 'accent')
+      endif
+      call extend(l:p, filter(copy(l:c), 'v:val =~# "^#\\x\\{6}$"'))
+      let l:p.base = get(l:c, 'base', '') =~# '^\(light\|dark\)$' ? l:c.base : gnosis#color#base_of(l:p.bg)
+      return l:p
+    endif
+  endif
+  let l:p.base = get(l:p, 'base', 'light')
+  return l:p
+endfunction
+
+" いまの Vim が \A のアプリ（Electron）の中で動いているか
+function! gnosis#theme#in_app() abort
+  return !empty($GNOSIS_GUI_PORT)
+endfunction
+
 " 起動画面は chnoubis3.sh の10番（夜空×水色）。色は builtin.json の start から読む。
 function! gnosis#theme#apply_start() abort
   " 起動画面の前の配色（旧 vimrc の kalisi など）を覚えておく（vault に設定が無いときに戻す）
@@ -166,6 +194,15 @@ endfunction
 function! gnosis#theme#apply(s) abort
   let l:kind = get(a:s.theme, 'kind', 'builtin')
   let &background = a:s.appearance
+  " \A のアプリの中の Vim は、アプリ用の配色（appTheme。既定は白）を使う。
+  " 通常の Vim 用のテーマ（theme / customThemes / 追加テーマ）はアプリには効かない。
+  if gnosis#theme#in_app()
+    let g:gnosis_palette = gnosis#theme#app_palette(a:s)
+    let &background = g:gnosis_palette.base
+    call s:load_gnosis_colors()
+    let g:gnosis_theme_state = {'kind': 'app', 'palette': g:gnosis_palette}
+    return 1
+  endif
   if l:kind ==# 'plugin'
     let l:name = get(a:s.theme, 'colorscheme', '')
     let l:repo = get(a:s.theme, 'repo', '')

@@ -329,6 +329,7 @@ ipcMain.handle("settings:save", (_e, vault, s) => {
 });
 ipcMain.handle("theme:install", (_e, spec) => cfg.installTheme(spec));
 ipcMain.handle("theme:palette", (_e, s) => cfg.paletteFor(cfg.validateSettings(s)));
+ipcMain.handle("theme:appPalette", (_e, s) => cfg.appPaletteFor(cfg.validateSettings(s)));
 
 ipcMain.on("vim:start", (_e, cols, rows, vault) => startVim(cols, rows, vault));
 ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* ignore */ } });

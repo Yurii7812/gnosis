@@ -136,3 +136,34 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .l-colors { border: 1px solid #000; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
 .l-colors input[type=color] { width: 56px; height: 32px; padding: 0 4px; }
 @media (max-width: 520px) { .l-field > span:first-child { min-width: 0; width: 100%; } .l-title { font-size: 26px; } }
+
+/* ---- 配色の編集（カラーパレット・プレビュー） ---- */
+.l-editor { max-width: 980px; }
+.e-cols { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.e-left { flex: 1 1 360px; display: flex; flex-direction: column; gap: 10px; min-width: 300px; }
+.e-right { flex: 1 1 320px; display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
+.e-sub { font-weight: 700; margin-top: 4px; }
+.e-rows { display: flex; flex-direction: column; gap: 6px; }
+.e-row { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; }
+.e-row.sel { border-color: #000; background: #f1f1f1; }
+.e-label { min-width: 6em; font-weight: 700; }
+.launcher .e-hex { width: 8em; font-family: var(--font-mono); text-transform: uppercase; }
+.e-row input[type=color] { width: 56px; height: 32px; padding: 0 4px; }
+.e-swatch { display: inline-block; width: 44px; height: 24px; border: 1px solid #000; border-radius: 4px; }
+.e-grid { display: flex; flex-direction: column; gap: 3px; }
+.e-grid-row { display: flex; gap: 3px; }
+.launcher .e-sw { width: 30px; height: 22px; padding: 0; border: 1px solid #777; border-radius: 3px; cursor: pointer; }
+.launcher .e-sw:focus-visible { outline: 3px solid #000; outline-offset: 1px; }
+/* プレビュー: Gnosis が実際に表示するときと同じ組み合わせ（リンクは表示名と下線・見出しは太字・# は控えめな色） */
+.e-preview { background: var(--pv-bg, #fff); color: var(--pv-fg, #000); border: 1px solid #000; border-radius: 6px; padding: 12px 16px; line-height: 1.75; font-size: 16px; text-align: left;
+  font-family: var(--font-body); }
+.e-preview p { margin: 0; }
+.e-preview a { color: var(--pv-link, #00f); text-decoration: underline; cursor: default; }
+.e-preview .pv-h { color: var(--pv-heading, #000); font-weight: 700; }
+.e-preview .pv-h1 { font-size: 1.35em; }
+.e-preview .pv-dim { color: var(--pv-dim, #666); font-weight: 400; }
+.e-preview .pv-sel { background: var(--pv-sel, #cde); color: var(--pv-strong, #000); }
+.e-preview .pv-cur { background: var(--pv-cur, #eee); margin: 0 -16px; padding: 0 16px; }
+.e-contrast { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.e-ok { color: #0a5c1f; }
+.e-warn { color: #8a1c00; font-weight: 700; }

@@ -168,6 +168,9 @@ function defaultSettings() {
     appearance: "light",
     theme: { kind: "builtin" },
     customThemes: {},
+    // \A のアプリ（Electron）の配色。通常の Vim の配色（theme / customThemes）とは別の設定
+    appTheme: { kind: "builtin" },
+    appCustomThemes: {},
   };
 }
 
@@ -184,15 +187,25 @@ function validateSettings(s) {
   out.window = { maximized: !!w.maximized, width: clamp(w.width, 480, 10000, 1200), height: clamp(w.height, 360, 10000, 860) };
   const th = out.theme && typeof out.theme === "object" ? out.theme : {};
   out.theme = ["builtin", "custom", "plugin"].includes(th.kind) ? th : { kind: "builtin" };
+  out.customThemes = cleanCustomThemes(out.customThemes);
+  const at = out.appTheme && typeof out.appTheme === "object" ? out.appTheme : {};
+  out.appTheme = at.kind === "custom" && typeof at.name === "string" ? { kind: "custom", name: at.name } : { kind: "builtin" };
+  out.appCustomThemes = cleanCustomThemes(out.appCustomThemes);
+  return out;
+}
+
+const COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+
+function cleanCustomThemes(raw) {
   const ct = {};
-  for (const [name, c] of Object.entries(out.customThemes && typeof out.customThemes === "object" ? out.customThemes : {})) {
+  for (const [name, c] of Object.entries(raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {})) {
     if (!c || typeof c !== "object") continue;
-    const e = { base: c.base === "dark" ? "dark" : "light" };
-    for (const k of ["bg", "fg", "link", "heading", "selection", "cursorline"]) if (HEX.test(c[k] || "")) e[k] = c[k].toLowerCase();
+    const base = c.base === "dark" || c.base === "light" ? c.base : HEX.test(c.bg || "") && luminance(c.bg) < 0.4 ? "dark" : "light";
+    const e = { base };
+    for (const k of COLOR_KEYS) if (HEX.test(c[k] || "")) e[k] = c[k].toLowerCase();
     ct[name] = e;
   }
-  out.customThemes = ct;
-  return out;
+  return ct;
 }
 
 function settingsFile(vault) { return path.join(normalize(vault), ".gnosis", "settings.json"); }
@@ -215,6 +228,7 @@ function builtinPalettes() {
     start: { base: "light", bg: "#ffffff", fg: "#000000", link: "#000000", heading: "#000000", selection: "#d0d0d0", cursorline: "#f2f2f2" },
     light: { base: "light", bg: "#ffffff", fg: "#1f2328", link: "#0969da", heading: "#0b3d91", selection: "#b6d6ff", cursorline: "#f2f5f8" },
     dark: { base: "dark", bg: "#0d1117", fg: "#e6edf3", link: "#4493f8", heading: "#ffa657", selection: "#264f78", cursorline: "#161b22" },
+    app: { base: "light", bg: "#ffffff", fg: "#1f2328", link: "#0b57d0", heading: "#7c2d12", muted: "#57606a", accent: "#0969da", selection: "#b6d6ff", cursorline: "#f2f5f8" },
   });
 }
 
@@ -226,6 +240,29 @@ function paletteFor(s) {
     return { ...(pals[c.base] || pals.light), ...c };
   }
   return { ...(pals[s.appearance] || pals.light), base: s.appearance };
+}
+
+// \A のアプリの配色。既定は白（palettes.app）。自分で作ったものは、背景か本文を変えたら補助の色（muted / accent）を作り直す。
+// 通常の Vim の配色（paletteFor）とは別。Vim 側の変更はここに影響しない（逆も同じ）。
+function appPaletteFor(s) {
+  const pals = builtinPalettes();
+  const base = { ...(pals.app || pals.light) };
+  const th = s.appTheme || { kind: "builtin" };
+  const c = th.kind === "custom" && s.appCustomThemes ? s.appCustomThemes[th.name] : null;
+  if (!c) return base;
+  const p = { ...base };
+  if (c.bg || c.fg) { delete p.muted; delete p.accent; }
+  for (const k of COLOR_KEYS) if (HEX.test(c[k] || "")) p[k] = c[k];
+  p.base = c.base === "dark" || c.base === "light" ? c.base : luminance(p.bg) < 0.4 ? "dark" : "light";
+  return p;
+}
+
+function luminance(hex) {
+  const ch = [1, 3, 5].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
 }
 
 // `Plug 'owner/repo'` などから owner/repo を取り出す（Vim script としては実行しない）
@@ -292,6 +329,6 @@ function art() {
 
 module.exports = {
   REPO, gnosisHome, normalize, same, loadRegistry, listVaults, lastVault, addVault, createVault, removeVault, selectVault,
-  noteRoot, defaultSettings, validateSettings, loadSettings, saveSettings, builtinPalettes, paletteFor, parseThemeSpec,
+  noteRoot, defaultSettings, validateSettings, loadSettings, saveSettings, builtinPalettes, paletteFor, appPaletteFor, luminance, parseThemeSpec,
   installedThemes, installTheme, catalog, art, legacyRootFile, isDir,
 };

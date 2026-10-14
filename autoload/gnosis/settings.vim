@@ -12,8 +12,12 @@
 "            | {"kind": "custom", "name": "名前"}
 "            | {"kind": "plugin", "repo": "作者/リポジトリ", "colorscheme": "名前"},
 "     "customThemes": {"名前": {"base": "light|dark", "bg": "#rrggbb", "fg": …,
-"                               "link": …, "heading": …, "selection": …, "cursorline": …}}
+"                               "link": …, "heading": …, "selection": …, "cursorline": …}},
+"     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \A のアプリ（Electron）の配色
+"     "appCustomThemes": {"名前": {… customThemes と同じ形 …}}
 "   }
+"   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
+"   \A のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
 "
 " 設定の優先順位（上ほど強い）:
 "   1. その vault の .gnosis/settings.json（設定画面で変えるもの: 言語・見た目・
@@ -44,6 +48,8 @@ function! gnosis#settings#defaults() abort
         \ 'appearance': 'dark',
         \ 'theme': {'kind': 'builtin'},
         \ 'customThemes': {},
+        \ 'appTheme': {'kind': 'builtin'},
+        \ 'appCustomThemes': {},
         \ }
 endfunction
 
@@ -62,7 +68,7 @@ function! s:merge(base, over) abort
   for [l:k, l:v] in items(a:over)
     if !has_key(l:out, l:k)
       let l:out[l:k] = l:v
-    elseif type(l:out[l:k]) == v:t_dict && type(l:v) == v:t_dict && l:k !=# 'theme' && l:k !=# 'customThemes'
+    elseif type(l:out[l:k]) == v:t_dict && type(l:v) == v:t_dict && index(['theme', 'customThemes', 'appTheme', 'appCustomThemes'], l:k) < 0
       let l:out[l:k] = s:merge(l:out[l:k], l:v)
     elseif type(l:out[l:k]) == type(l:v)
           \ || (index([v:t_number, v:t_bool, v:t_float], type(l:out[l:k])) >= 0 && index([v:t_number, v:t_bool, v:t_float], type(l:v)) >= 0)
@@ -88,6 +94,16 @@ function! gnosis#settings#validate(s) abort
   let l:w.maximized = l:w.maximized ? v:true : v:false
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0
     let l:s.theme = {'kind': 'builtin'}
+  endif
+  " \A のアプリの配色（組み込み か 自分で作ったものだけ。追加テーマは Vim の colorscheme なのでアプリには使わない）
+  if type(get(l:s, 'appTheme', 0)) != v:t_dict || index(['builtin', 'custom'], get(l:s.appTheme, 'kind', '')) < 0
+    let l:s.appTheme = {'kind': 'builtin'}
+  endif
+  if type(get(l:s, 'appCustomThemes', 0)) != v:t_dict
+    let l:s.appCustomThemes = {}
+  endif
+  if type(get(l:s, 'customThemes', 0)) != v:t_dict
+    let l:s.customThemes = {}
   endif
   return l:s
 endfunction
@@ -228,6 +244,7 @@ function! gnosis#settings#builtin_palettes() abort
             \ 'start': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#E6F5EA', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
             \ 'light': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#E6F5EA', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
             \ 'dark': {'base': 'dark', 'bg': '#14283D', 'fg': '#E6EEF5', 'link': '#E6F5EA', 'heading': '#F6D88A', 'muted': '#9FB4C8', 'accent': '#79CFFF', 'selection': '#2A4F72', 'cursorline': '#1C354E'},
+            \ 'app': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1F2328', 'link': '#0B57D0', 'heading': '#7C2D12', 'muted': '#57606A', 'accent': '#0969DA', 'selection': '#B6D6FF', 'cursorline': '#F2F5F8'},
             \ }
     endif
   endif

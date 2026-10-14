@@ -1,5 +1,5 @@
 (() => {
-  // node_modules/@xterm/xterm/lib/xterm.mjs
+  // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
   var Ll = (s15, t3) => {
@@ -9114,7 +9114,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+  // ../../../gnosis/web/node_modules/@xterm/addon-fit/lib/addon-fit.mjs
   var h = 2;
   var _ = 1;
   var o = class {
@@ -9138,7 +9138,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@marijn/find-cluster-break/src/index.js
+  // ../../../gnosis/web/node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
   var rangeTo = [];
   (() => {
@@ -9212,7 +9212,7 @@ ${h3.join(`
     return code < 65536 ? 1 : 2;
   }
 
-  // node_modules/@codemirror/state/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/state/dist/index.js
   var Text2 = class _Text {
     /**
     Get the line description around the given position.
@@ -12600,7 +12600,7 @@ ${h3.join(`
     return strict === true ? -1 : string2.length;
   }
 
-  // node_modules/style-mod/src/style-mod.js
+  // ../../../gnosis/web/node_modules/style-mod/src/style-mod.js
   var C2 = "\u037C";
   var COUNT = typeof Symbol == "undefined" ? "__" + C2 : Symbol.for(C2);
   var SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : Symbol("styleSet");
@@ -12736,7 +12736,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/w3c-keyname/index.js
+  // ../../../gnosis/web/node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -12842,7 +12842,7 @@ ${h3.join(`
     return name2;
   }
 
-  // node_modules/@codemirror/view/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/view/dist/index.js
   var nav = typeof navigator != "undefined" ? navigator : { userAgent: "", vendor: "", platform: "" };
   var doc = typeof document != "undefined" ? document : { documentElement: { style: {} } };
   var ie_edge = /* @__PURE__ */ /Edge\/(\d+)/.exec(nav.userAgent);
@@ -21349,7 +21349,7 @@ ${h3.join(`
   GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
   GutterMarker.prototype.point = true;
 
-  // node_modules/@lezer/common/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/common/dist/index.js
   var DefaultBufferLength = 1024;
   var nextPropID = 0;
   var Range2 = class {
@@ -23400,7 +23400,7 @@ ${h3.join(`
     return result;
   }
 
-  // node_modules/@lezer/highlight/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/highlight/dist/index.js
   var nextTagID = 0;
   var Tag = class _Tag {
     /**
@@ -24124,7 +24124,7 @@ ${h3.join(`
     { tag: tags.punctuation, class: "tok-punctuation" }
   ]);
 
-  // node_modules/@codemirror/language/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/language/dist/index.js
   var _a2;
   var languageDataProp = /* @__PURE__ */ new NodeProp();
   function defineLanguageFacet(baseData) {
@@ -25038,7 +25038,7 @@ ${h3.join(`
     auto: /* @__PURE__ */ Decoration.mark({ class: "cm-iso", inclusive: true, attributes: { dir: "auto" }, bidiIsolate: null })
   };
 
-  // node_modules/@codemirror/autocomplete/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
     /**
     Create a new completion context. (Mostly useful for testing
@@ -25503,7 +25503,7 @@ ${h3.join(`
   closedBracket.endSide = -1;
   var android = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
 
-  // node_modules/@lezer/markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/markdown/dist/index.js
   var CompositeBlock = class _CompositeBlock {
     static create(type, value, from, parentHash, end) {
       let hash2 = parentHash + (parentHash << 8) + type + (value << 4) | 0;
@@ -27567,7 +27567,7 @@ ${h3.join(`
     }]
   };
 
-  // node_modules/@lezer/lr/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/lr/dist/index.js
   var Stack = class _Stack {
     /**
     @internal
@@ -29329,7 +29329,7 @@ ${h3.join(`
     return spec.get;
   }
 
-  // node_modules/@lezer/html/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/html/dist/index.js
   var scriptText = 55;
   var StartCloseScriptTag = 1;
   var styleText = 56;
@@ -29673,7 +29673,7 @@ ${h3.join(`
     });
   }
 
-  // node_modules/@lezer/css/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/css/dist/index.js
   var descendantOp = 148;
   var Unit = 1;
   var identifier = 149;
@@ -29852,7 +29852,7 @@ ${h3.join(`
     tokenPrec: 2433
   });
 
-  // node_modules/@codemirror/lang-css/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-css/dist/index.js
   var _properties = null;
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
@@ -30713,7 +30713,7 @@ ${h3.join(`
     return new LanguageSupport(cssLanguage, cssLanguage.data.of({ autocomplete: cssCompletionSource }));
   }
 
-  // node_modules/@lezer/javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/javascript/dist/index.js
   var noSemi = 317;
   var noSemiType = 318;
   var incdec = 1;
@@ -30925,7 +30925,7 @@ ${h3.join(`
     tokenPrec: 15178
   });
 
-  // node_modules/@codemirror/lang-javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-javascript/dist/index.js
   var snippets = [
     /* @__PURE__ */ snippetCompletion("function ${name}(${params}) {\n	${}\n}", {
       label: "function",
@@ -31237,7 +31237,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-html/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-html/dist/index.js
   var Targets = ["_blank", "_self", "_top", "_parent"];
   var Charsets = ["ascii", "utf-8", "utf-16", "latin1", "latin1"];
   var Methods = ["get", "post", "put", "delete"];
@@ -31977,7 +31977,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-markdown/dist/index.js
   var data = /* @__PURE__ */ defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
   var headingProp = /* @__PURE__ */ new NodeProp();
   var commonmark = /* @__PURE__ */ parser.configure({
@@ -32831,12 +32831,12 @@ ${h3.join(`
     const build = (state) => {
       const doc2 = state.doc;
       const vmode = state.field(vimField, false)?.mode || "n";
-      const editing = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
+      const editing2 = !cfg.viewOnly && (vmode[0] === "i" || vmode[0] === "R");
       const sel2 = state.selection.main;
       const a = doc2.lineAt(sel2.from).number, b2 = doc2.lineAt(sel2.to).number;
       const decos = [];
       for (const t3 of findTables(doc2)) {
-        if (!cfg.viewOnly && (editing || a <= t3.endLine && b2 >= t3.startLine)) continue;
+        if (!cfg.viewOnly && (editing2 || a <= t3.endLine && b2 >= t3.startLine)) continue;
         decos.push(Decoration.replace({ widget: new TableWidget(t3), block: true }).range(t3.from, t3.to));
       }
       return Decoration.set(decos, true);
@@ -33102,6 +33102,7 @@ ${h3.join(`
   var message = "";
   var onStart = null;
   var draft = null;
+  var editing = null;
   function t2(key, ...args) {
     let s15 = st2 && st2.msg && st2.msg[key] || key;
     for (const a of args) s15 = s15.replace("%s", a);
@@ -33214,6 +33215,7 @@ ${h3.join(`
     return h2("label", { class: "l-field" }, h2("span", { text: label }), control);
   }
   function renderSettings() {
+    if (editing) return renderEditor();
     const s15 = draft;
     const themeOptions = [h2("option", { value: "builtin", selected: s15.theme.kind === "builtin" }, t2("settings.theme_builtin"))];
     for (const name2 of Object.keys(s15.customThemes).sort()) {
@@ -33223,9 +33225,10 @@ ${h3.join(`
       const val = "plugin:" + th.repo + ":" + cs2;
       themeOptions.push(h2("option", { value: val, selected: s15.theme.kind === "plugin" && s15.theme.repo === th.repo && s15.theme.colorscheme === cs2 }, cs2 + "  (" + th.repo + ")"));
     }
-    const custom = s15.theme.kind === "custom" ? s15.customThemes[s15.theme.name] : null;
-    const base2 = st2.palettes[custom && custom.base || s15.appearance] || st2.palettes.light;
-    const colors = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+    const appOptions = [h2("option", { value: "builtin", selected: s15.appTheme.kind !== "custom" }, t2("settings.theme_app_builtin"))];
+    for (const name2 of Object.keys(s15.appCustomThemes).sort()) {
+      appOptions.push(h2("option", { value: "custom:" + name2, selected: s15.appTheme.kind === "custom" && s15.appTheme.name === name2 }, t2("settings.theme_custom", name2)));
+    }
     return h2(
       "div",
       { class: "l-panel l-settings" },
@@ -33284,24 +33287,311 @@ ${h3.join(`
         )),
         h2(
           "fieldset",
-          { class: "l-colors" },
+          { class: "l-colors", id: "s-vim-colors" },
           h2("legend", { text: t2("settings.item.custom") }),
-          field(t2("settings.prompt_custom_name").replace(/[:：]\s*$/, ""), h2("input", { type: "text", id: "s-cname", value: s15.theme.kind === "custom" ? s15.theme.name : "my-theme" })),
-          colors.map((k) => field(t2("settings.color." + k), h2("input", { type: "color", id: "s-c-" + k, value: custom && custom[k] || base2[k] }))),
-          h2("button", { type: "button", id: "s-custom-save", onclick: saveCustom }, t2("web.use_custom"))
+          h2(
+            "div",
+            { class: "l-row" },
+            h2("button", { type: "button", id: "s-vim-custom", onclick: () => startEdit("vim") }, t2("web.edit_colors")),
+            h2("button", { type: "button", id: "s-vim-reset", onclick: () => {
+              s15.theme = { kind: "builtin" };
+              render();
+            } }, t2("settings.item.theme_reset"))
+          )
+        ),
+        h2(
+          "fieldset",
+          { class: "l-colors", id: "s-app-colors" },
+          h2("legend", { text: t2("settings.item.app_theme") }),
+          h2("div", { class: "l-vpath", text: t2("web.app_theme_note") }),
+          field(t2("settings.item.app_theme"), h2("select", { id: "s-app-theme", onchange: (e) => {
+            setAppTheme(e.target.value);
+            render();
+          } }, appOptions)),
+          h2(
+            "div",
+            { class: "l-row" },
+            h2("button", { type: "button", id: "s-app-custom", onclick: () => startEdit("app") }, t2("web.edit_colors")),
+            h2("button", { type: "button", id: "s-app-reset", onclick: () => {
+              s15.appTheme = { kind: "builtin" };
+              render();
+            } }, t2("settings.item.app_theme_reset"))
+          )
         ),
         h2(
           "div",
           { class: "l-buttons" },
-          h2("button", { type: "submit", class: "l-primary", id: "s-save" }, t2("web.save")),
-          h2("button", { type: "button", onclick: () => {
-            s15.theme = { kind: "builtin" };
-            render();
-          } }, t2("settings.item.theme_reset"))
+          h2("button", { type: "submit", class: "l-primary", id: "s-save" }, t2("web.save"))
         )
       ),
       h2("div", { class: "l-hint", text: t2("web.zoom_note") })
     );
+  }
+  var COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+  var HUES = [[-1, 0], [0, 0.62], [28, 0.72], [50, 0.78], [130, 0.45], [175, 0.5], [212, 0.62], [275, 0.45]];
+  var LIGHTS = [0.12, 0.22, 0.34, 0.46, 0.58, 0.7, 0.82, 0.92, 0.98];
+  function normHex(text) {
+    let v2 = String(text || "").trim().replace(/^#/, "");
+    if (/^[0-9a-f]{3}$/i.test(v2)) v2 = v2.replace(/(.)/g, "$1$1");
+    return /^[0-9a-f]{6}$/i.test(v2) ? "#" + v2.toLowerCase() : "";
+  }
+  var rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  var toHex = (r, g, b2) => "#" + [r, g, b2].map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("");
+  function hslToHex(h3, s15, l) {
+    const f = (n) => {
+      const k = (n + h3 / 30) % 12;
+      return l - s15 * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    };
+    return toHex(f(0) * 255, f(8) * 255, f(4) * 255);
+  }
+  function hexToHsl(hex) {
+    const [r, g, b2] = rgbOf(hex).map((x) => x / 255);
+    const mx = Math.max(r, g, b2), mn2 = Math.min(r, g, b2), l = (mx + mn2) / 2;
+    if (mx === mn2) return [0, 0, l];
+    const d = mx - mn2, s15 = l > 0.5 ? d / (2 - mx - mn2) : d / (mx + mn2);
+    const h3 = mx === r ? (g - b2) / d + (g < b2 ? 6 : 0) : mx === g ? (b2 - r) / d + 2 : (r - g) / d + 4;
+    return [h3 * 60, s15, l];
+  }
+  function luminanceOf(hex) {
+    const c = rgbOf(hex).map((x) => {
+      const v2 = x / 255;
+      return v2 <= 0.03928 ? v2 / 12.92 : Math.pow((v2 + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contrastOf(a, b2) {
+    const x = luminanceOf(a), y = luminanceOf(b2);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+  function mixHex(a, b2, t3) {
+    const x = rgbOf(a), y = rgbOf(b2);
+    return toHex(x[0] + (y[0] - x[0]) * t3, x[1] + (y[1] - x[1]) * t3, x[2] + (y[2] - x[2]) * t3);
+  }
+  var paletteColor = (r, c) => hslToHex(HUES[r][0] < 0 ? 0 : HUES[r][0], HUES[r][1], LIGHTS[c]);
+  async function startEdit(target) {
+    const app = target === "app";
+    const th = app ? draft.appTheme : draft.theme;
+    const store = (app ? draft.appCustomThemes : draft.customThemes) || {};
+    const name2 = th && th.kind === "custom" ? th.name : "";
+    const cur = store[name2] || {};
+    const pal = (app ? await G2.appPalette(draft) : await G2.palette(draft)) || {};
+    const colors = {};
+    for (const k of COLOR_KEYS) colors[k] = normHex(cur[k]) || normHex(pal[k]) || "#808080";
+    editing = { target, name: name2 || (app ? "my-app-theme" : "my-theme"), colors, orig: { ...colors }, key: "bg" };
+    message = "";
+    render();
+  }
+  function cancelEdit() {
+    editing = null;
+    message = "";
+    render();
+  }
+  async function saveEdit() {
+    const name2 = ($2("e-name") && $2("e-name").value || "").trim();
+    if (!name2) {
+      message = t2("theme_edit.need_name");
+      render();
+      return;
+    }
+    const theme2 = { ...editing.colors, base: luminanceOf(editing.colors.bg) < 0.4 ? "dark" : "light" };
+    if (editing.target === "app") {
+      draft.appCustomThemes[name2] = theme2;
+      draft.appTheme = { kind: "custom", name: name2 };
+    } else {
+      draft.customThemes[name2] = theme2;
+      draft.theme = { kind: "custom", name: name2 };
+    }
+    editing = null;
+    await saveSettings();
+  }
+  function setColor(key, hex) {
+    const c = normHex(hex);
+    if (!c || !editing) return;
+    editing.colors[key] = c;
+    syncEditor(key);
+  }
+  function syncEditor(except) {
+    if (!editing) return;
+    for (const k of COLOR_KEYS) {
+      const col = $2("e-c-" + k), hx = $2("e-h-" + k);
+      if (col && col.value !== editing.colors[k]) col.value = editing.colors[k];
+      if (hx && k !== except && hx.value !== editing.colors[k]) hx.value = editing.colors[k];
+      const sw = $2("e-sw-" + k);
+      if (sw) sw.style.background = editing.colors[k];
+    }
+    updatePreview();
+  }
+  function updatePreview() {
+    const pv = $2("e-preview");
+    if (!pv || !editing) return;
+    const c = editing.colors;
+    const dark = luminanceOf(c.bg) < 0.4;
+    const vars = {
+      bg: c.bg,
+      fg: c.fg,
+      link: c.link,
+      heading: c.heading,
+      sel: c.selection,
+      cur: c.cursorline,
+      dim: mixHex(c.fg, c.bg, 0.35),
+      strong: mixHex(c.fg, dark ? "#ffffff" : "#000000", 0.6)
+    };
+    for (const [k, v2] of Object.entries(vars)) pv.style.setProperty("--pv-" + k, v2);
+    const box = $2("e-contrast");
+    if (box) {
+      box.replaceChildren(...[["fg", t2("settings.color.fg")], ["link", t2("settings.color.link")], ["heading", t2("settings.color.heading")]].map(([k, label]) => {
+        const r = contrastOf(c[k], c.bg);
+        return h2("div", { class: r >= 4.5 ? "e-ok" : "e-warn", text: `${label}  ${r.toFixed(1)} : 1  ${r >= 4.5 ? "\u2713" : t2("theme_edit.low_contrast")}` });
+      }));
+    }
+  }
+  function nudge(dim, delta) {
+    const k = editing.key;
+    let [hh, ss2, ll2] = hexToHsl(editing.colors[k]);
+    if (dim === "l") ll2 = Math.max(0, Math.min(1, ll2 + delta));
+    else if (dim === "h") hh = (hh + delta * 360 + 360) % 360;
+    else ss2 = Math.max(0, Math.min(1, ss2 + delta));
+    setColor(k, hslToHex(hh, ss2, ll2));
+  }
+  function renderEditor() {
+    const e = editing;
+    const app = e.target === "app";
+    const rows = COLOR_KEYS.map((k) => {
+      const label = t2("settings.color." + k);
+      const row = h2(
+        "div",
+        { class: "e-row" + (e.key === k ? " sel" : ""), id: "e-row-" + k },
+        h2("label", { class: "e-label", for: "e-c-" + k, text: label }),
+        h2("input", {
+          type: "color",
+          id: "e-c-" + k,
+          value: e.colors[k],
+          "aria-label": label,
+          onfocus: () => selectRow(k),
+          oninput: (ev) => setColor(k, ev.target.value)
+        }),
+        h2("input", {
+          type: "text",
+          id: "e-h-" + k,
+          class: "e-hex",
+          value: e.colors[k],
+          maxlength: 7,
+          spellcheck: false,
+          "aria-label": label + " HEX",
+          onfocus: () => selectRow(k),
+          oninput: (ev) => {
+            const n = normHex(ev.target.value);
+            if (n) setColor(k, n);
+          },
+          onblur: (ev) => {
+            ev.target.value = e.colors[k];
+          }
+        }),
+        h2("span", { class: "e-swatch", id: "e-sw-" + k, style: "background:" + e.colors[k] })
+      );
+      return row;
+    });
+    const grid = h2(
+      "div",
+      { class: "e-grid", id: "e-grid", role: "grid", "aria-label": t2("theme_edit.palette") },
+      HUES.map((_2, r) => h2("div", { class: "e-grid-row", role: "row" }, LIGHTS.map((_l2, c) => {
+        const hex = paletteColor(r, c);
+        return h2("button", {
+          type: "button",
+          class: "e-sw",
+          id: `e-pal-${r}-${c}`,
+          title: hex.toUpperCase(),
+          style: "background:" + hex,
+          tabindex: r === 0 && c === 4 ? 0 : -1,
+          "aria-label": hex.toUpperCase(),
+          onclick: () => setColor(e.key, hex),
+          onfocus: () => setColor(e.key, hex)
+        });
+      })))
+    );
+    grid.addEventListener("keydown", (ev) => {
+      const m = /^e-pal-(\d+)-(\d+)$/.exec(ev.target && ev.target.id || "");
+      if (!m) return;
+      let r = Number(m[1]), c = Number(m[2]);
+      if (ev.key === "ArrowRight") c++;
+      else if (ev.key === "ArrowLeft") c--;
+      else if (ev.key === "ArrowDown") r++;
+      else if (ev.key === "ArrowUp") r--;
+      else return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      r = Math.max(0, Math.min(HUES.length - 1, r));
+      c = Math.max(0, Math.min(LIGHTS.length - 1, c));
+      $2(`e-pal-${r}-${c}`)?.focus();
+    });
+    const sample = h2(
+      "div",
+      { class: "e-preview", id: "e-preview", "aria-label": t2("theme_edit.preview") },
+      h2("div", { class: "pv-h1 pv-h" }, h2("span", { class: "pv-dim", text: "# " }), "\u690D\u7269\u306B\u3064\u3044\u3066"),
+      h2("p", {}, "\u690D\u7269", h2("span", { class: "pv-sel", text: "\u306B\u3064\u3044\u3066\u306E\u60C5\u5831" }), "\u3092\u307E\u3068\u3081\u308B\u3002"),
+      h2("p", { text: "\u95A2\u9023\u3059\u308B\u60C5\u5831\uFF1A" }),
+      h2("div", { class: "pv-cur" }, h2("a", { text: "\u30ED\u30FC\u30BA\u30DE\u30EA\u30FC" }), h2("span", { class: "pv-dim", text: "  \u2190 " + t2("theme_edit.cursor_line") })),
+      h2("div", {}, h2("a", { text: "\u30EC\u30E2\u30F3\u30D0\u30FC\u30E0" })),
+      h2("div", { class: "pv-h" }, h2("span", { class: "pv-dim", text: "### " }), "Context"),
+      h2("div", {}, h2("a", { text: "\u30CF\u30FC\u30D6" })),
+      h2("div", { class: "pv-h" }, h2("span", { class: "pv-dim", text: "### " }), "ChildBranch"),
+      h2("div", {}, h2("a", { text: "\u690D\u7269\u306E\u683D\u57F9" }))
+    );
+    const panel = h2(
+      "div",
+      { class: "l-panel l-editor" },
+      h2("div", { class: "l-head" }, h2("button", { id: "e-cancel-top", onclick: cancelEdit }, "\u2190 " + t2("web.cancel")), h2("h2", { text: t2(app ? "theme_edit.title_app" : "theme_edit.title_vim") })),
+      h2("div", { class: "l-vpath", text: t2("settings.vault") + " " + st2.selected }),
+      message ? h2("div", { class: "l-msg", text: message }) : null,
+      h2(
+        "div",
+        { class: "e-cols" },
+        h2(
+          "div",
+          { class: "e-left" },
+          h2("label", { class: "l-field" }, h2("span", { text: t2("theme_edit.name") }), h2("input", { type: "text", id: "e-name", value: e.name, "data-autofocus": true })),
+          h2("div", { class: "e-rows", id: "e-rows" }, rows),
+          h2("div", { class: "e-sub", text: t2("theme_edit.palette") }),
+          grid,
+          h2("div", { class: "e-sub", text: t2("web.editor_tune") }),
+          h2(
+            "div",
+            { class: "l-row" },
+            h2("button", { type: "button", id: "e-darker", onclick: () => nudge("l", -0.04) }, t2("web.darker")),
+            h2("button", { type: "button", id: "e-lighter", onclick: () => nudge("l", 0.04) }, t2("web.lighter")),
+            h2("button", { type: "button", id: "e-reset", onclick: () => {
+              setColor(e.key, e.orig[e.key]);
+            } }, t2("web.reset_color"))
+          )
+        ),
+        h2(
+          "div",
+          { class: "e-right" },
+          h2("div", { class: "e-sub", text: t2("theme_edit.preview") }),
+          sample,
+          h2("div", { class: "e-contrast", id: "e-contrast" })
+        )
+      ),
+      h2(
+        "div",
+        { class: "l-buttons" },
+        h2("button", { type: "button", class: "l-primary", id: "e-save", onclick: saveEdit }, t2("web.use_custom")),
+        h2("button", { type: "button", id: "e-cancel", onclick: cancelEdit }, t2("web.cancel"))
+      ),
+      h2("div", { class: "l-hint", text: t2("web.editor_keys") })
+    );
+    queueMicrotask(() => {
+      syncEditor();
+    });
+    return panel;
+  }
+  function selectRow(k) {
+    if (!editing || editing.key === k) return;
+    editing.key = k;
+    for (const c of COLOR_KEYS) $2("e-row-" + c)?.classList.toggle("sel", c === k);
+  }
+  function setAppTheme(val) {
+    draft.appTheme = val.startsWith("custom:") ? { kind: "custom", name: val.slice(7) } : { kind: "builtin" };
   }
   function setTheme(val) {
     if (val === "builtin") draft.theme = { kind: "builtin" };
@@ -33314,6 +33604,7 @@ ${h3.join(`
   }
   function go2(v2) {
     message = "";
+    editing = null;
     view = v2;
     if (v2 === "settings") draft = JSON.parse(JSON.stringify(st2.settings));
     render();
@@ -33385,15 +33676,6 @@ ${h3.join(`
     message = t2("theme.installed", r.repo);
     render();
   }
-  function saveCustom() {
-    const name2 = ($2("s-cname").value || "").trim();
-    if (!name2) return;
-    const c = { base: draft.appearance };
-    for (const k of ["bg", "fg", "link", "heading", "selection", "cursorline"]) c[k] = $2("s-c-" + k).value;
-    draft.customThemes[name2] = c;
-    draft.theme = { kind: "custom", name: name2 };
-    saveSettings();
-  }
   function start() {
     const v2 = selected();
     if (!v2 || !v2.exists) {
@@ -33402,6 +33684,15 @@ ${h3.join(`
     }
     hide();
     onStart?.(v2.path, st2.settings);
+  }
+  function moveFocus(dir) {
+    const root = $2("launcher");
+    const items = [...root.querySelectorAll("button, input, select")].filter((el2) => !el2.disabled && el2.tabIndex >= 0 && el2.offsetParent !== null);
+    if (!items.length) return false;
+    const i = items.indexOf(document.activeElement);
+    const next = items[i < 0 ? dir > 0 ? 0 : items.length - 1 : Math.max(0, Math.min(items.length - 1, i + dir))];
+    next.focus();
+    return true;
   }
   function hide() {
     $2("launcher").hidden = true;
@@ -33412,10 +33703,26 @@ ${h3.join(`
     const tag = e.target && e.target.tagName || "";
     const typing = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
     if (e.key === "Escape") {
+      if (editing) {
+        e.preventDefault();
+        cancelEdit();
+        return;
+      }
       if (view !== "start") {
         e.preventDefault();
         go2("start");
       }
+      return;
+    }
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && (view === "settings" || view === "start" || view === "vaults" && tag === "BUTTON")) {
+      const nativeArrow = tag === "SELECT" || tag === "INPUT" && e.target.type === "number";
+      if (!nativeArrow && !(view === "vaults")) {
+        if (moveFocus(e.key === "ArrowDown" ? 1 : -1)) e.preventDefault();
+        return;
+      }
+    }
+    if (view === "start" && (e.key === "ArrowRight" || e.key === "ArrowLeft") && tag === "BUTTON") {
+      if (moveFocus(e.key === "ArrowRight" ? 1 : -1)) e.preventDefault();
       return;
     }
     if (typing) return;

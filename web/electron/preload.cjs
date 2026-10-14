@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld("gnosis", {
   saveSettings: (vault, s) => ipcRenderer.invoke("settings:save", vault, s),
   installTheme: (spec) => ipcRenderer.invoke("theme:install", spec),
   palette: (s) => ipcRenderer.invoke("theme:palette", s),
+  appPalette: (s) => ipcRenderer.invoke("theme:appPalette", s),
 });

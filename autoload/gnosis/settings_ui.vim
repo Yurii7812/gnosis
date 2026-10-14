@@ -10,7 +10,7 @@
 " Electron アプリは同じ設定を HTML の画面で変える（同じファイルを読み書きする）。
 " =============================================================================
 
-let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset']
+let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
 let s:font_items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal']
 
 function! s:t(key, ...) abort
@@ -38,9 +38,9 @@ function! gnosis#settings_ui#open(...) abort
   let s:vault = l:vault
   let s:settings = gnosis#settings#load(l:vault)
   let s:from_start = get(l:opts, 'from_start', 0)
-  let s:sel = 0
+  let s:sel = max([0, min([get(l:opts, 'sel', 0), len(s:items) - 1])])
   let s:message = ''
-  let s:prev_buf = bufnr('%')
+  let s:prev_buf = get(l:opts, 'prev_buf', bufnr('%'))
   enew
   setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nonumber norelativenumber nowrap nolist
   silent! file Gnosis\ Settings
@@ -68,6 +68,14 @@ function! s:theme_label(s) abort
   return s:t('settings.theme_builtin')
 endfunction
 
+function! s:app_theme_label(s) abort
+  let l:th = get(a:s, 'appTheme', {})
+  if get(l:th, 'kind', 'builtin') ==# 'custom'
+    return s:t('settings.theme_custom', get(l:th, 'name', ''))
+  endif
+  return s:t('settings.theme_app_builtin')
+endfunction
+
 function! s:value(item) abort
   let l:s = s:settings
   if index(s:font_items, a:item) >= 0
@@ -91,6 +99,8 @@ function! s:value(item) abort
     return l:s.appearance ==# 'dark' ? s:t('settings.dark') : s:t('settings.light')
   elseif a:item ==# 'theme'
     return s:theme_label(l:s)
+  elseif a:item ==# 'app_theme'
+    return s:app_theme_label(l:s)
   endif
   return ''
 endfunction
@@ -267,7 +277,7 @@ function! s:change(item) abort
     for l:i in range(len(l:choices))
       call add(l:labels, (l:i + 1) . '. ' . (empty(l:choices[l:i]) ? s:t('settings.font_auto') : l:choices[l:i]))
     endfor
-    let l:n = inputlist(l:labels)
+    let l:n = gnosis#ui#inputlist(l:labels)
     if l:n >= 1 && l:n <= len(l:choices)
       call gnosis#termfont#set('terminal', l:choices[l:n - 1])
       let s:message = s:t('settings.font_family_saved')
@@ -287,9 +297,17 @@ function! s:change(item) abort
       let l:s.theme = {'kind': 'plugin', 'repo': l:res.repo, 'colorscheme': l:res.colorschemes[0]}
     endif
   elseif a:item ==# 'custom'
-    call s:edit_custom()
+    call s:open_editor('vim')
+    return
   elseif a:item ==# 'theme_reset'
     let l:s.theme = {'kind': 'builtin'}
+  elseif a:item ==# 'app_theme'
+    call s:choose_app_theme()
+  elseif a:item ==# 'app_custom'
+    call s:open_editor('app')
+    return
+  elseif a:item ==# 'app_theme_reset'
+    let l:s.appTheme = {'kind': 'builtin'}
   endif
   call s:save()
 endfunction
@@ -308,31 +326,63 @@ function! s:choose_theme() abort
   for l:i in range(len(l:choices))
     call add(l:labels, (l:i + 1) . '. ' . s:theme_label({'theme': l:choices[l:i]}))
   endfor
-  let l:n = inputlist(l:labels)
+  let l:n = gnosis#ui#inputlist(l:labels)
   if l:n >= 1 && l:n <= len(l:choices)
     let s:settings.theme = l:choices[l:n - 1]
   endif
 endfunction
 
-function! s:edit_custom() abort
-  let l:name = s:ask(s:t('settings.prompt_custom_name'), get(s:settings.theme, 'kind', '') ==# 'custom' ? s:settings.theme.name : 'my-theme')
-  if l:name ==# "\x01" || empty(trim(l:name)) | return | endif
-  let l:name = trim(l:name)
-  let l:cur = get(s:settings.customThemes, l:name, {})
-  let l:base_pal = get(gnosis#settings#builtin_palettes(), get(l:cur, 'base', s:settings.appearance), gnosis#settings#builtin_palettes().light)
-  let l:new = {'base': get(l:cur, 'base', s:settings.appearance)}
-  for l:key in ['bg', 'fg', 'link', 'heading', 'selection', 'cursorline']
-    let l:r = s:ask(s:t('settings.prompt_color', s:t('settings.color.' . l:key)), get(l:cur, l:key, l:base_pal[l:key]))
-    if l:r ==# "\x01" | return | endif
-    let l:r = trim(l:r)
-    if !s:valid_color(l:r)
-      let s:message = s:t('settings.bad_color', l:r)
-      return
-    endif
-    let l:new[l:key] = tolower(l:r)
+" \A のアプリの配色を選ぶ（組み込み＝白 か、自分で作ったもの）
+function! s:choose_app_theme() abort
+  let l:choices = [{'kind': 'builtin'}]
+  for l:name in sort(keys(get(s:settings, 'appCustomThemes', {})))
+    call add(l:choices, {'kind': 'custom', 'name': l:name})
   endfor
-  let s:settings.customThemes[l:name] = l:new
-  let s:settings.theme = {'kind': 'custom', 'name': l:name}
+  let l:labels = [s:t('settings.choose_app_theme')]
+  for l:i in range(len(l:choices))
+    call add(l:labels, (l:i + 1) . '. ' . s:app_theme_label({'appTheme': l:choices[l:i]}))
+  endfor
+  let l:n = gnosis#ui#inputlist(l:labels)
+  if l:n >= 1 && l:n <= len(l:choices)
+    let s:settings.appTheme = l:choices[l:n - 1]
+  endif
+endfunction
+
+" カスタム配色の編集（カラーパレットとリアルタイムプレビュー。gnosis#theme_edit）。
+" a:target … 'vim'（通常の Vim の配色）か 'app'（\A のアプリの配色）。2 つは別の設定で、互いに影響しない。
+" 保存するまで設定は書き換えない。取り消せば何も変わらない。
+function! s:open_editor(target) abort
+  let l:app = a:target ==# 'app'
+  let l:th = l:app ? get(s:settings, 'appTheme', {}) : s:settings.theme
+  let l:store = l:app ? get(s:settings, 'appCustomThemes', {}) : get(s:settings, 'customThemes', {})
+  let l:name = get(l:th, 'kind', '') ==# 'custom' ? get(l:th, 'name', '') : ''
+  let l:cur = get(l:store, l:name, {})
+  let l:fallback = l:name
+  if empty(l:name)
+    let l:name = l:app ? 'my-app-theme' : 'my-theme'
+  endif
+  " 今の色（選んでいるテーマの色）から始める
+  let l:colors = !empty(l:cur) ? extend(copy(l:app ? gnosis#theme#app_palette(s:settings) : gnosis#theme#palette(s:settings)), l:cur)
+        \ : (l:app ? gnosis#theme#app_palette(s:settings) : gnosis#theme#palette(s:settings))
+  let s:editor_sel = s:sel
+  call gnosis#theme_edit#open({'target': a:target, 'name': l:name, 'colors': l:colors,
+        \ 'on_close': function('s:editor_closed', [a:target])})
+endfunction
+
+function! s:editor_closed(target, result) abort
+  if !empty(a:result)
+    if a:target ==# 'app'
+      let s:settings.appCustomThemes = get(s:settings, 'appCustomThemes', {})
+      let s:settings.appCustomThemes[a:result.name] = a:result.theme
+      let s:settings.appTheme = {'kind': 'custom', 'name': a:result.name}
+    else
+      let s:settings.customThemes[a:result.name] = a:result.theme
+      let s:settings.theme = {'kind': 'custom', 'name': a:result.name}
+    endif
+    call s:save()
+  endif
+  " 設定画面に戻る（保存したテーマを読み直して表示）
+  call gnosis#settings_ui#open({'vault': s:vault, 'from_start': s:from_start, 'sel': s:editor_sel, 'prev_buf': s:prev_buf})
 endfunction
 
 function! gnosis#settings_ui#close() abort
