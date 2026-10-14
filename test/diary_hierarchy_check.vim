@@ -59,6 +59,27 @@ try
   let s:m2028 = s:find(s:notes, '2028-02')
   call s:assert('3年目も月を直下にせず年グループ', !empty(s:y2028) && s:parent_has(s:root, s:y2028, s:top) && s:parent_has(s:root, s:m2028, s:y2028) && s:parent_has(s:root, s:feb, s:m2028))
   call s:assert('Index に 日記 は一件のみ', len(filter(readfile(s:root . '/index.md'), 'v:val =~# "^\\[日記\\]("')) == 1)
+  " 旧バージョンでトップ「日記」が無く、2026-10 のみ孤立した vault。
+  let s:legacy = s:root . '/legacy'
+  call mkdir(s:legacy, 'p')
+  call writefile(['---', 'title: Index', 'attribute: group', '---', '', '# Index', ''], s:legacy . '/index.md')
+  call writefile(['---', 'time: 2026-10-14 09:00:00', 'title: 2026-10-14-WE', '---', '', '# 2026-10-14-WE', ''],
+        \ s:legacy . '/old-diary.md')
+  call writefile(['---', 'time: 2026-10-14 09:00:00', 'title: 2026-10', 'attribute: group', '---', '', '# 2026-10', '', '[2026-10-14-WE](old-diary.md)'],
+        \ s:legacy . '/old-month.md')
+  call writefile(['---', 'title: 2026-09', 'attribute: group', '---', '', '# 2026-09', ''], s:legacy . '/unrelated.md')
+  let s:old_notes = s:scan(s:legacy)
+  let s:ensure_top = function('<SNR>' . s:sid . '_diary_ensure_top')
+  let s:repair = function('<SNR>' . s:sid . '_diary_repair_orphan_months')
+  let s:old_top = s:ensure_top(s:legacy, s:old_notes)
+  call s:repair(s:legacy, s:old_notes, s:old_top)
+  call s:assert('既存の日記月をIndex/日記に接続', s:parent_has(s:legacy, 'old-month.md', s:old_top))
+  call s:assert('既存の日記本文を維持', index(readfile(s:legacy . '/old-diary.md'), '# 2026-10-14-WE') >= 0)
+  call s:assert('無関係な月グループは移動しない', !s:parent_has(s:legacy, 'unrelated.md', s:old_top))
+  call s:repair(s:legacy, s:old_notes, s:old_top)
+  call s:assert('旧月の再接続は重複しない',
+        \ len(filter(readfile(s:legacy . '/' . s:old_top), 'v:val ==# "[2026-10](old-month.md)"')) == 1)
+
 catch
   call add(s:results, 'NG exception: ' . v:exception . ' at ' . v:throwpoint)
 endtry
