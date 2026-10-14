@@ -76,6 +76,16 @@ if (-not $NoShortcut) {
   $link.TargetPath = 'powershell.exe'
   $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $start + '"'
   $link.Description = 'Gnosis in WezTerm + WSL Ubuntu'
+  # Preserve the generated high-contrast Gnosis icon if WSL files are accessible.
+  try {
+    $wslUser = ((& wsl.exe -d Ubuntu --exec id -un | Select-Object -First 1) -as [string]).Trim()
+    $unc = '\\wsl.localhost\Ubuntu\home\' + $wslUser + '\.local\share\gnosis\generated-icons\icons\gnosis.ico'
+    if (Test-Path $unc) {
+      $localIcon = Join-Path $dest 'gnosis.ico'
+      Copy-Item -LiteralPath $unc -Destination $localIcon -Force
+      $link.IconLocation = $localIcon
+    }
+  } catch { Write-Host 'Custom shortcut icon unavailable; using the default icon.' }
   $link.Save()
 }
 Write-Host "Gnosis launcher created: $start"
