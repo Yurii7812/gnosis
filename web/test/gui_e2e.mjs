@@ -363,8 +363,8 @@ try {
     const z = R.znC || {};
     check(/^\d{12}\.md$/.test(z.now || "") && z.from === "plain.md", "zn c did not create a new note: " + JSON.stringify(z));
     const oldTxt = fs.readFileSync(path.join(vault, "plain.md"), "utf8");
-    const ctx = oldTxt.split("### Context")[1] || "";
-    check(ctx.includes("(" + z.now + ")"), "zn c: the old note (no sections before) should get ### Context with the new note: " + oldTxt.slice(-200));
+    const ctx = (oldTxt.split("\nContext:\n")[1] || "").split("\n\n")[0];
+    check(ctx.includes("(" + z.now + ")") && !oldTxt.includes("### Context"), "zn c: the old note (no Context before) should get a Context: block (not ### Context) with the new note: " + oldTxt.slice(0, 300));
     check(!/\n### Parent\n/.test(oldTxt), "zn c: no ### Parent should remain");
     check((z.body || "").includes("(plain.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
   }
