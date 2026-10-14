@@ -101,6 +101,27 @@
     "font.save_failed": "文字サイズを保存できませんでした: %s",
     "font.current": "文字サイズ: %s",
     "link.source_shown": "リンクの元の Markdown を表示しています（もう一度 :GnosisLinkSource で隠す）",
-    "link.source_hidden": "リンクは表示名だけを見せています"
+    "link.source_hidden": "リンクは表示名だけを見せています",
+    "branch.added": "Branch を追加しました（親の ChildBranch と、子の ParentBranch の両方に記録）",
+    "branch.already": "既に同じ Branch があります（変更なし）",
+    "branch.has_parent": "「%s」には既に親（ParentBranch）があるため追加できません。現在の親: 「%s」（何も変更していません）",
+    "branch.multi_parent": "「%s」には親が複数あります（%s）。整合性エラーのため追加しません。:GnosisBranchCheck で確認して手で直してください（何も変更していません）",
+    "branch.self": "自分自身を親や子にはできません（何も変更していません）",
+    "branch.cycle": "親子が循環するため追加できません（何も変更していません）",
+    "branch.index": "index.md は Branch の親にも子にもできません（何も変更していません）",
+    "branch.missing": "ノートが見つかりません: %s（何も変更していません）",
+    "branch.dirty": "「%s」に未保存の編集があるため追加しません。保存してからやり直してください（何も変更していません）",
+    "branch.conflict": "追加している間に「%s」が他で書き換えられたため中止しました（何も変更していません）",
+    "branch.error": "Branch を追加できませんでした: %s（何も変更していません）",
+    "branch.not_in_vault": "この vault のノートで実行してください",
+    "branch.no_target": "追加できるノートへのリンクがありません",
+    "branch.save_failed": "今のノートを保存できないため中止しました（何も変更していません）",
+    "branch.check_ok": "Gnosis: Branch の整合性に問題はありません",
+    "branch.check_ng": "Gnosis: Branch に問題があります（何も書き換えていません）",
+    "branch.check_failed": "Gnosis: Branch を検査できませんでした",
+    "branch.check_multi": "  親が複数: %s ← %s",
+    "branch.check_one_sided": "  片側だけ: 親 %s / 子 %s（%s が無い）",
+    "branch.check_cycle": "  循環: %s",
+    "branch.check_self": "  自分自身: %s"
   }
 }

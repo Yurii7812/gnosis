@@ -24,7 +24,8 @@ MAPPING_FILES = [
 # ガイドに載せなくてよい（内部用・Vim 標準の再定義）
 EXEMPT_KEYS = {"<C-O>", "."}
 MODIFIERS = {"<nowait>", "<silent>", "<buffer>", "<expr>", "<script>", "<unique>"}
-BANNED = ["yurii_pkm", "Child", "バックリンク", "タイトルだけ検索"]
+# 正規表現。`ChildBranch`（Branch の節の名前）は旧表記ではない
+BANNED = ["yurii_pkm", r"Child(?!Branch)", "バックリンク", "タイトルだけ検索"]
 
 
 GUIDE_JA = REPO / "guide/ja.md"
@@ -139,7 +140,7 @@ def main() -> int:
     # インラインコードのコマンド表記を除いてから旧表記を探す。
     guide_no_cmds = re.sub(r"`:[^`]*`", "", guide)
     for bad in BANNED:
-        if bad in guide_no_cmds:
+        if re.search(bad, guide_no_cmds):
             print(f"NG: 操作ガイドに旧表記 {bad!r} が残っている", file=sys.stderr)
             ng += 1
 

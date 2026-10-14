@@ -15,9 +15,10 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Creating notes
 
 - `zn` … create a note. Choose one position key:
-  `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `o`=no link (orphan)
+  `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch (direct branch) / `o`=no link (orphan)
   With `h`/`Enter`, the new note gets the current note in its Context (in Group if the current note is a group).
 - After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `o`=do not add (the link in the current note's Context is still added)
+- `b` (Branch = direct branch; a position key of `zn` / `zk` / `za` / `\l`) … the current note is the parent, the chosen (new) note is the child. Writes the link into the current note's `### ChildBranch` and the other note's `### ParentBranch`. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
 - `zk` … create a group note (`attribute: group`). Same position keys as `zn`. Also `g`=move the one link under the cursor into a new group (the old place becomes a link to the group; also works after selecting a link with the mouse)
 - `zk` (visual) … create a group whose content is the selection, and replace the selection with a link to the group
 - `zh` … link right below the cursor (as body → BackLink on the other side)
@@ -29,14 +30,14 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\L` (visual) … replace the selection with a link to a new note named by the selection (the new note's title stays the timestamp; no Context = the original note shows up in BackLink; use `\P` to add it)
 - `\p` (normal) … add one link from under the cursor or the clipboard (choose the position with `h`/`Enter`)
 - `\p` (visual) … turn the selection into a link to the clipboard file name / URL (nothing if there is none)
-- `za` … add the copied / yanked links to the current note (all lines, all links) (`h`=below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `r`=Related). After `c`, choose how the target gets the current note (`Enter` / `t` / `o`)
+- `za` … add the copied / yanked links to the current note (all lines, all links) (`h`=below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch / `r`=Related). After `c`, choose how the target gets the current note (`Enter` / `t` / `o`)
 - `zA` … like `za`, but asks for the **display name** first (empty Enter / Esc cancels)
 - `zp` … same as `za`, and also writes the current note into the other note's Context
 - `zap` … add the link under the cursor (or in the clipboard) to the end of the current note's Context (even if the body already has it)
 - Related: pressing `r` in `za` etc. adds to `### Related` **on both notes** (deleting it on one side removes it from both at the next sync; not shown in BackLink)
 - `\P` … add the current note to the Context of the linked note under the cursor, without asking
 - Add from the clipboard with a relation: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc` (`\ca`= reverse of `ca`, `\at`= reverse of `at`)
-- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link (`h`=new line below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `r`=Related / `i`=right at the cursor / `n`=type a display name, end of the body) (`:GnosisLinkPick`)
+- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link (`h`=new line below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=Branch / `r`=Related / `i`=right at the cursor / `n`=type a display name, end of the body) (`:GnosisLinkPick`)
 - `\l` → `n` … the display name field starts empty. Empty `Enter` = the target note's title, typed text + `Enter` = that text, `Esc` = cancel (the note's title and file name are not changed)
 - `\l` (visual) … replace the selection with a link to the note chosen by the same search
 - Auto-generated BackLink entries are different from the links you add here. Added links (also with display names) stay after saving and syncing
@@ -60,6 +61,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub
 - `\1`〜`\9` … jump to the Nth hub entry (inside the hub, normal link numbers)
 - `\i` … open `index.md` ・ `\A` … the note app (Electron / browser)
+- `\q` … list of work tabs (shown by note **title**; duplicate titles also show the file name). Pick with `↑` / `↓` (`j` / `k`), switch with `Enter`, close with `Esc` (`q`). `/` filters by title, `a` add ・ `x` close ・ `X` close others ・ `C` close all (`:GnosisTabs`)
+- `\o` … open the link under the cursor in a new work tab (`<CR>` moves inside the current tab; `:GnosisOpenLinkTab`)
 - `Alt+V` in the app (`\A`) … view-only mode ⇔ normal Vim. View-only (VIEW at the bottom) shows no cursor and does not send editing keys. Scroll with `j`/`k`, arrows, PageUp/Down, `gg`/`G`, `Ctrl-d`/`Ctrl-u`. Search with `/` `?` `n` `N` `*` `#`. Also usable: `gs`, `gm`, Space, Tab, `<CR>`, `<BS>`, `_`, digits, `\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc`
 - `Alt` + click on a link in the app … moves only the cursor onto the link without opening it (for `zk` → `g` and so on)
 - The app also draws tables (`| a | b |`) and `<img src="…" width="50%">`. Inside a table or in insert mode the cursor line stays plain text
@@ -71,7 +74,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\e` … expand the notes around the current one into one md (`expand_v2.py`; choose **simple/detailed**; detailed takes 5 values and can save / load / delete named presets; output `.trash/T_*.md`)
 - `\se` … expand an S note into an A note (`expand_s.py`; output `.trash/T_*.md`)
 - `\gi` … image gallery (the note's images, or all images under the Index, in the browser)
-- `\oe` … edit headings in a separate buffer (`:write` applies them to the note)
+- `\oe` / `\O` … edit headings in a separate buffer (`:write` applies them to the note; `:OutlineEdit`)
 - `\sc` … CopyStack (stack lines / selections with `y`, run `:CopyStack` again to put them in the clipboard)
 - `mx` … toggle the checkbox `[ ]` / `[x]` of the line (visual: the selection)
 
@@ -118,7 +121,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `語:;` … the other side also gets `語:;` (no parentheses)
 - `語;` … nothing is written on the other side
 - `語::` … `語:` in the same section on both sides
-- Links to groups (`attribute: group`) go to `### Group`, links to normal notes to `### Context`, sorted by sync. Empty sections (Context / Group / Related / BackLink) have no heading
+- Links to groups (`attribute: group`) go to `### Group`, links to normal notes to `### Context`, sorted by sync. Empty sections (ParentBranch / Context / Group / ChildBranch / Related / BackLink) have no heading
+- Section order: ParentBranch → Context → Group → ChildBranch → Related → BackLink. `### ParentBranch` / `### ChildBranch` are the relation made explicit with `b`; sync never adds or removes them (it only follows display names and cleans up links to deleted files, and never turns them into Context). Headings inside code blocks are not treated as sections
 
 ## Sync
 
@@ -171,9 +175,10 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 - `:GnosisLinkify` / `:Linkify` link the text under the cursor ・ `:GnosisLinkifySelection` / `:LinkifySelection` selection to a new note ・ `:GnosisPasteLink` / `:PasteLink` add links from the clipboard
 - `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … add from the clipboard with a relation ・ `:GnosisYN` / `:YN` yank the file name
 - `:GnosisLT` / `:LT` / `:GnosisRenameLinkText` / `:RenameLinkText` change a display name ・ `:GnosisNT` / `:NT` change the title ・ `:GnosisRenameChildLinkTitles` / `:RenameChildLinkTitles` / `:GnosisRenameDownLinkTitles` / `:RenameDownLinkTitles` update child link names
-- `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
+- `:GnosisBranchCheck` check Branch consistency (reports several parents, one-sided links, cycles and self references; rewrites nothing) ・ `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
 
 ### Moving
+- `:GnosisTabs` list of work tabs (`\q`) ・ `:GnosisOpenLinkTab` open a link in a new work tab (`\o`)
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` to the parent ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` first child ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` last child
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` last link near Context
 
@@ -181,6 +186,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 - `:GnosisSE` / `:SE` / `:GnosisExpandToT` / `:ExpandToT` / `:GnosisExpandLinks` / `:ExpandLinks` expand an S note ・ `:GnosisOutlineEdit` / `:OutlineEdit` edit headings (apply with `:OutlineApply`)
 
 ### Diary, encryption, trash, paper PKM, images
+- `:GnosisRefreshColors` clear leftover highlights and redraw the colors ・ `:GnosisColorDoctor` write a color diagnostics log to the logs folder of the Gnosis home
 - `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` diary
 - `:GnosisMount` `:GnosisLock` `:GnosisSetPassword` `:GnosisRemovePassword` `:GnosisBackup` `:GnosisExitCleanup` encryption
 - `:GnosisTrash` `:GnosisTrashList` `:GnosisTrashEmpty` trash ・ `:GnosisPaperIndex` paper PKM Index ・ `:GnosisScan` import scans

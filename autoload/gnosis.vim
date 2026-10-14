@@ -1065,7 +1065,7 @@ endfunction
 " （### Group）が消え、別のグループへ移していた場合は、次の同期で相手側の
 " リンクまで「消された」と扱われるおそれがあった。
 " 内容が変わったときだけ書き換える（毎回の無駄な差分を避ける）。
-let s:guide_relation_marks = ['### Context', '### Parent', '### Group', '### Related', '### BackLink']
+let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink']
 
 " 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
 function! s:guide_relation_tail(lines) abort
@@ -1802,7 +1802,7 @@ endfunction
 
 function! s:is_known_section_header_text(text) abort
   let l:sec = s:bare_section_name(a:text)
-  return index(['context', 'group', 'parent', 'up', 'related', 'child', 'down', 'branch', 'back', 'backlink'], l:sec) >= 0
+  return index(['context', 'group', 'parent', 'up', 'related', 'child', 'down', 'branch', 'back', 'backlink', 'parentbranch', 'childbranch'], l:sec) >= 0
 endfunction
 
 function! s:find_section_index_in_lines(lines, name) abort
@@ -3098,7 +3098,9 @@ endfunction
 " s:v2_boundaries() の行配列版（返り値も 1-based 行番号）
 function! s:v2_boundaries_in_lines(lines) abort
   let l:up_m = 0 | let l:dn_m = 0
+  let l:fl = s:fence_flags(a:lines)
   for l:i in range(0, len(a:lines) - 1)
+    if l:fl[l:i] | continue | endif
     let l:s = trim(a:lines[l:i])
     if l:up_m == 0 && index(s:v2_any_marks, l:s) >= 0                        | let l:up_m = l:i + 1 | endif
     if l:s ==# s:v2_down_mark || index(s:v2_down_marks_legacy, l:s) >= 0 | let l:dn_m = l:i + 1 | endif
@@ -5867,15 +5869,22 @@ let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちに�
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['### Context', '### Parent', '### Group', '### Related', '### BackLink',
+let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
+  " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
   let l:save = winsaveview()
   try
     call cursor(1, 1)
-    return search(a:pat, 'cW')
+    let l:flags = s:buf_fence_flags()
+    let l:found = search(a:pat, 'cW')
+    while l:found > 0 && get(l:flags, l:found - 1, 0)
+      call cursor(l:found, 1)
+      let l:found = search(a:pat, 'W')
+    endwhile
+    return l:found
   finally
     call winrestview(l:save)
   endtry
@@ -5888,8 +5897,9 @@ endfunction
 
 " 行配列版。0 始まりの index。節が無ければ -1。
 function! s:first_section_index_in_lines(lines) abort
+  let l:flags = s:fence_flags(a:lines)
   for l:i in range(0, len(a:lines) - 1)
-    if index(s:v2_any_marks, trim(a:lines[l:i])) >= 0
+    if !l:flags[l:i] && index(s:v2_any_marks, trim(a:lines[l:i])) >= 0
       return l:i
     endif
   endfor
@@ -6932,9 +6942,9 @@ function! s:v2_new_interactive(attr) abort
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前付きバッファで実行して') | echohl NONE | return
   endif
   if empty(a:attr)
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立)  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / o=リンク無し(孤立) / g=カーソル下のリンクをグループ化  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子として直接) / o=リンク無し(孤立) / g=カーソル下のリンクをグループ化  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -6959,9 +6969,17 @@ function! s:v2_new_interactive(attr) abort
           \ function('s:v2_new_run_c', [a:attr]))
     return
   endif
+  if l:ch ==? 'b'
+    " b: 新ノートを今のノートの ChildBranch として作る。作る前に、今のノートが親になれるか確かめる
+    if !gnosis#branch#can_parent_here()
+      return
+    endif
+    call s:v2_new_run(a:attr, 'b', 0)
+    return
+  endif
   " 位置キー以外（旧 p を含む）では何も作らない
   if l:ch !~? '^[ho]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / o のどれか）') | return
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -7125,6 +7143,20 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let s:diary_skip_from = ''
   endtry
 
+  " b: 今のノートの ChildBranch と新ノートの ParentBranch に書く（python が検証して 2 ファイルを書く）。
+  " 失敗したら、いま作った新ノートを消して何も残さない（今のノートは変更していない）。
+  let l:branch_ok = 0
+  if l:ch ==? 'b'
+    let l:br = gnosis#branch#add_paths(l:cur, [l:file])
+    if !get(l:br, 'ok', 0)
+      call delete(l:file)
+      redraw
+      call gnosis#branch#warn(gnosis#branch#message(l:br))
+      return
+    endif
+    let l:branch_ok = 1
+  endif
+
   let l:link = '[' . l:ts . '](' . l:ts . '.md)'
   let l:added = 0
   let l:save_ai = &autoindent | let l:save_si = &smartindent
@@ -7151,6 +7183,9 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
   let &autoindent = l:save_ai | let &smartindent = l:save_si
   silent noautocmd write
+  if l:branch_ok
+    call s:run_update_one_for(l:cur)
+  endif
   let l:in_body = 0
   let l:hl = 0
   if l:added
@@ -7319,7 +7354,7 @@ function! s:section_end_in_lines(lines, hl) abort
   while l:i <= len(a:lines)
     let l:t = a:lines[l:i - 1]
     if !l:flags[l:i - 1]
-      if trim(l:t) =~# s:v2_any_pat || trim(l:t) =~# '^###\s\+\%(Context\|Group\|Related\|BackLink\|Parent\)\s*$'
+      if trim(l:t) =~# s:v2_any_pat || trim(l:t) =~# '^###\s\+\%(ParentBranch\|ChildBranch\|Context\|Group\|Related\|BackLink\|Parent\)\s*$'
         break
       endif
       let l:m = matchstr(l:t, '^\s*\zs#\+\ze\s\+')
@@ -9138,7 +9173,7 @@ function! s:insert_links_core(links, ...) abort
   echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / ')
         \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出しの下 / ') : '')
         \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名を入力して本文の最後 / ') : '')
-        \ . gnosis#i18n#tr('c=Context末尾 / r=Related  (Esc で取り止め)')
+        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子として直接) / r=Related  (Esc で取り止め)')
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -9191,6 +9226,11 @@ function! s:insert_links_core(links, ...) abort
     call setline('.', strpart(l:cur, 0, l:col) . l:text . strpart(l:cur, l:col))
     call cursor(line('.'), l:col + strlen(l:text) + 1)
     return 1
+  endif
+  if l:ch ==? 'b'
+    " b: Branch（直接のブランチ）。今のノートが親、選んだノートが子。今のノートの ### ChildBranch と、
+    " 相手の ### ParentBranch の両方に書く。親は 1 つだけ・自己参照・循環は拒否（どちらも変更しない）。
+    return gnosis#branch#add_links(l:links)
   endif
   if l:ch ==? 'c'
     " 今のノートの ### Context 末尾に置く（相手が親になる）。zn / zk の c と同じ。

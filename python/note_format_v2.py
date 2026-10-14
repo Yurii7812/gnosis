@@ -100,6 +100,13 @@ DOWN_MARK = "### BackLink"
 # 旧 `### Parent` は parse だけが読み、sync が `### Context` へ移行する。
 CONTEXT_MARK = "### Context"
 GROUP_MARK = "### Group"
+# Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
+# 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
+PARENT_BRANCH_MARK = "### ParentBranch"
+CHILD_BRANCH_MARK = "### ChildBranch"
+# 関係の節の並び順（sync が書き出す順）
+SECTION_ORDER = (PARENT_BRANCH_MARK, CONTEXT_MARK, GROUP_MARK, CHILD_BRANCH_MARK,
+                 RELATED_MARK, DOWN_MARK)
 # 旧見張り（新しい順）。parse だけが読む。render は新表記（## Parent / ## Child）に統一する。
 LEGACY_UP_MARK3 = "Parent"  # `##` なしの旧 v2 見張り
 LEGACY_DOWN_MARK3 = "Child"
@@ -1342,7 +1349,7 @@ def _used_display_names(notes: dict, incoming: dict | None = None) -> set[str]:
     """
     used: set[str] = set()
     for n in notes.values():
-        for kind in ("body", "parent", "related"):
+        for kind in ("body", "parent", "related", "pbranch", "cbranch"):
             for disp, _tg in _links_from(n.get(kind, [])):
                 if disp:
                     used.add(disp)
@@ -1382,42 +1389,27 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # `### Parent` より前の空行（本文の途中の余白）は残る。
     fm, rest = _split_front_matter(text.rstrip("\n").split("\n"))
     title = _fm_title(fm) or path.stem
-    body: list[str] = []
-    parent: list[str] = []
-    group: list[str] = []
-    related: list[str] = []
-    back: list[str] = []
+    sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
+                                                  "pbranch", "cbranch")}
+    heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
+             GROUP_MARK: "group", RELATED_MARK: "related", DOWN_MARK: "back",
+             PARENT_BRANCH_MARK: "pbranch", CHILD_BRANCH_MARK: "cbranch"}
     cur = "body"
     for ln, fz in zip(rest, _fenced(rest)):
-        s = ln.strip()
         if fz:  # コードブロックの中は見出し・リンクとして扱わない
-            (body if cur == "body" else parent if cur == "parent" else group if cur == "group"
-             else related if cur == "related" else back).append(ln)
+            sec[cur].append(ln)
             continue
-        if s == CONTEXT_MARK or s == UP_MARK:  # UP_MARK = 旧 `### Parent`
-            cur = "parent"
+        s = ln.strip()
+        if s in heads:
+            cur = heads[s]
             continue
-        if s == GROUP_MARK:
-            cur = "group"
-            continue
-        if s == RELATED_MARK:
-            cur = "related"
-            continue
-        if s == DOWN_MARK:
-            cur = "back"
-            continue
-        (
-            body if cur == "body"
-            else parent if cur == "parent"
-            else group if cur == "group"
-            else related if cur == "related"
-            else back
-        ).append(ln)
+        sec[cur].append(ln)
     # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
-    return {"fm": fm, "title": title, "body": body, "parent": parent, "group": group,
-            "related": related, "back": back, "tail_blanks": tail_blanks,
-            "hash": _content_hash(text)}
+    return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
+            "group": sec["group"], "related": sec["related"], "back": sec["back"],
+            "pbranch": sec["pbranch"], "cbranch": sec["cbranch"],
+            "tail_blanks": tail_blanks, "hash": _content_hash(text)}
 
 
 # パース結果の差分キャッシュ。`update` は保存のたびに vault 全体を走査するので、
@@ -1638,10 +1630,15 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     related = [ln for ln in n.get("related", [])]
     back_lines = [f"[{titles[t]}]({_rel(path.parent, t)})" for t in back] if name not in _NO_BACKLINK_NAMES else []
     sections: list[tuple[str, list[str]]] = []
+    # 並びは ParentBranch → Context → Group → ChildBranch → Related → BackLink
+    if _has(n.get("pbranch")):
+        sections.append((PARENT_BRANCH_MARK, n["pbranch"]))
     if _has(parent_lines):
         sections.append((CONTEXT_MARK, parent_lines))
     if _has(group_lines):
         sections.append((GROUP_MARK, group_lines))
+    if _has(n.get("cbranch")):
+        sections.append((CHILD_BRANCH_MARK, n["cbranch"]))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
     if _has(related):
         sections.append((RELATED_MARK, related))
@@ -1723,10 +1720,11 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             continue
         h = _content_hash(text)
         ent = cache.get(key) if key is not None else None
-        if isinstance(ent, list) and len(ent) == 9 and ent[0] == h:
+        if isinstance(ent, list) and len(ent) == 11 and ent[0] == h:
             notes[rp] = {"fm": ent[1], "title": ent[2], "body": ent[3],
                          "parent": ent[4], "group": ent[5], "related": ent[6],
-                         "back": ent[7], "tail_blanks": ent[8], "hash": h}
+                         "back": ent[7], "tail_blanks": ent[8],
+                         "pbranch": ent[9], "cbranch": ent[10], "hash": h}
         else:
             notes[rp] = _simple_parse_text(p, text)
             parsed_any = True
@@ -1805,6 +1803,11 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         n["related"] = _preserve_parent(n["related"], p, res, titles)
         n["related"] = _prune_dangling(n["related"], p, res)
+        # ParentBranch / ChildBranch もユーザーが `b` で明示した関係。同期は追加も削除もしない
+        # （表示名の追従と、消えたファイルへのリンクの掃除だけ）。Context へ変換もしない。
+        for key in ("pbranch", "cbranch"):
+            n[key] = _preserve_parent(n[key], p, res, titles)
+            n[key] = _prune_dangling(n[key], p, res)
     related_t: dict[Path, set[Path]] = {}
     for p, n in notes.items():
         ts: set[Path] = set()
@@ -1830,7 +1833,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         key = keys.get(p)
         ent = cache.get(key) if key is not None else None
-        if not (isinstance(ent, list) and len(ent) == 9):
+        if not (isinstance(ent, list) and len(ent) in (9, 11)):  # 9 = Branch 対応前の旧キャッシュ
             continue
         old_targets = {rp for _d, tg in _links_from(ent[3])
                        for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
@@ -1910,10 +1913,17 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
         # 出さない（同じリンクの繰り返しになる）。Related は相互に書くので、
         # 両側に Related があるペアは BackLink には現れない。
         out_set = set(body_t.get(p, []))
-        for _d, tg in _links_from(n["related"]):
+        for _d, tg in _links_from(n["related"] + n["cbranch"]):
             rp = res(tg, dirs[p])
             if rp is not None and rp != p:
                 out_set.add(rp)
+        # 自分の ParentBranch にいる相手（親）は BackLink に出さない（関係として別に載っている）。
+        # Context / Group の判定（parent_set）には混ぜない（グループの自動所属を止めないため）。
+        pb_set: set[Path] = set()
+        for _d, tg in _links_from(n["pbranch"]):
+            rp = res(tg, dirs[p])
+            if rp is not None and rp != p:
+                pb_set.add(rp)
         for s in incoming.get(p, []):
             if s == p or s in dseen or s in out_set:
                 continue
@@ -1921,7 +1931,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
             if s in group_set:
                 auto_group.append(s)
                 continue
-            if s in parent_set:
+            if s in parent_set or s in pb_set:
                 continue
             desired.append(s)
         for s in auto_group:
@@ -2005,7 +2015,7 @@ def simple_sync(root, old_titles: dict | None = None) -> int:
                 continue
             out_cache[key] = [n["hash"], n["fm"], n["title"], n["body"],
                               n["parent"], n["group"], n["related"], n["back"],
-                              n.get("tail_blanks", 0)]
+                              n.get("tail_blanks", 0), n["pbranch"], n["cbranch"]]
         _save_parse_cache(root, out_cache)
     return changed
 

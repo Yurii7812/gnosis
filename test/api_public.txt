@@ -18,6 +18,14 @@ gnosis#autosync_on_save
 gnosis#backup_vault
 gnosis#backup_vault_with
 gnosis#before_write_viminfo
+gnosis#branch#add_links
+gnosis#branch#add_paths
+gnosis#branch#can_parent_here
+gnosis#branch#check
+gnosis#branch#check_command
+gnosis#branch#message
+gnosis#branch#run
+gnosis#branch#warn
 gnosis#check_missing_prefix_in_current_dir
 gnosis#check_missing_prefix_in_current_dir_once
 gnosis#choose_index_root
@@ -27,6 +35,9 @@ gnosis#clear_search_highlight
 gnosis#clear_title_cache
 gnosis#clipboard_copy
 gnosis#clipboard_paste
+gnosis#color#doctor
+gnosis#color#on_note_enter
+gnosis#color#refresh
 gnosis#create_atomic
 gnosis#create_note
 gnosis#create_vault_files
@@ -217,6 +228,13 @@ gnosis#table_tab
 gnosis#table_tab_action
 gnosis#table_to_csv
 gnosis#table_to_csv_current
+gnosis#tabs#close
+gnosis#tabs#filter
+gnosis#tabs#on_enter
+gnosis#tabs#open_link
+gnosis#tabs#popup
+gnosis#tabs#select
+gnosis#tabs#snapshot
 gnosis#termfont#apply_live
 gnosis#termfont#clamp
 gnosis#termfont#command
@@ -249,6 +267,7 @@ gnosis#toggle_link_source
 gnosis#trash_current
 gnosis#trash_empty
 gnosis#trash_list
+gnosis#ui#statusline
 gnosis#update_all
 gnosis#update_current_buffer
 gnosis#update_md

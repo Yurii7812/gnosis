@@ -15,9 +15,10 @@
 ## ノート作成
 
 - `zn` … ノート作成。位置キーを 1 つ選ぶ:
-  `h`=カーソル直下（本文） / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context の末尾 / `o`=リンク無し（孤立）
+  `h`=カーソル直下（本文） / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context の末尾 / `b`=Branch（直接のブランチ） / `o`=リンク無し（孤立）
   `h`/`Enter` は新ノートの Context に元ノート（元ノートがグループなら Group）。
 - `c` のあと … 新しいノート（リンク先）に、今のノートへのリンクをどう入れるかを選ぶ: `Enter`=本文の最後 / `t`=見出しを選んでその節の最後 / `o`=入れない（今のノートの Context への追加はそのまま）
+- `b`（Branch=直接のブランチ。`zn` / `zk` / `za` / `\l` の位置キー）… 今のノートが親・選んだ（作った）ノートが子。今のノートの `### ChildBranch` と、相手の `### ParentBranch` の両方にリンクを書く。1 つのノートが持てる親（ParentBranch）は最大 1 つ（子は何本でも）。既に親があるノート・自分自身・循環になる組は拒否して、どちらのノートも変更しない（既存の親は付け替えない。現在の親のタイトルを表示）。Context / Related とは別の関係。`:GnosisBranchCheck` で整合性を検査
 - `zk` … グループノート作成（`attribute: group`）。位置キーは `zn` と同じ。さらに `g`=カーソル下のリンク 1 本を新しいグループへ移す（元の位置はグループへのリンクになる。マウスでリンクを選んだときも使える）
 - `zk`（ビジュアル）… 選択範囲を中身にしたグループを作り、選択をそのグループへのリンクに置換
 - `zh` … カーソル直下にリンク（本文扱い → 相手には BackLink）
@@ -29,14 +30,14 @@
 - `\L`（ビジュアル）… 選択範囲を表示名にした新ノートへのリンクで選択を置換（新ノート title はタイムスタンプのまま。Context は付けない＝元ノートは BackLink に出る。付けるなら `\P`）
 - `\p`（ノーマル）… カーソル下 or クリップボードのリンクを 1 本追加（`h`/`Enter` で位置を選ぶ）
 - `\p`（ビジュアル）… クリップボードのファイル名/URL を選択範囲のリンクに（無ければ何もしない）
-- `za` … クリップボード／ヤンクしたリンクを今のノートに追加（複数行・複数リンクも全部）（`h`=カーソル直下 / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context末尾 / `r`=Related）。`c` のあとはリンク先に今のノートをどう入れるか（`Enter` / `t` / `o`）を選ぶ
+- `za` … クリップボード／ヤンクしたリンクを今のノートに追加（複数行・複数リンクも全部）（`h`=カーソル直下 / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context末尾 / `b`=Branch / `r`=Related）。`c` のあとはリンク先に今のノートをどう入れるか（`Enter` / `t` / `o`）を選ぶ
 - `zA` … `za` と同じだが、追加前に**表示名**を入力する（空 Enter / Esc で中止）
 - `zp` … `za` と同じ追加＋今のノートを相手の Context に書く
 - `zap` … カーソル下（無ければクリップボード）のリンクを、今のノートの Context の最後に足す（本文に同じリンクがあっても足す）
 - 関連: `za` 等で `r` を押すと `### Related` に**相互追加**（両ノートに。片側で消すと次回同期で両方から消える。BackLink には出ない）
 - `\P` … カーソル下リンクの Context に今のノートを確認なしで追加
 - クリップボードを関係付きで追加: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc`（`\ca`= `ca`、`\at`= `at` の逆方向）
-- `\l`（ノーマル）… 全ノートを全文検索（タイトル優先）→ 選んだら置き場所を聞かれる（`h`=カーソル直下に新しい行 / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context 末尾 / `r`=Related / `i`=カーソル位置にそのまま / `n`=表示名を入力して本文の最後へ）（`:GnosisLinkPick`）
+- `\l`（ノーマル）… 全ノートを全文検索（タイトル優先）→ 選んだら置き場所を聞かれる（`h`=カーソル直下に新しい行 / `Enter`=本文の最後 / `t`=見出しの下 / `c`=Context 末尾 / `b`=Branch / `r`=Related / `i`=カーソル位置にそのまま / `n`=表示名を入力して本文の最後へ）（`:GnosisLinkPick`）
 - `\l` → `n` … 表示名の入力欄は空から始まる。空 `Enter` = リンク先ノートのタイトル、入力して `Enter` = その文字、`Esc` = 取り消し（ノートのタイトルやファイル名は変えない）
 - `\l`（ビジュアル）… 同じ検索で選んだノートへのリンクで選択範囲を置換
 - 自動生成の BackLink と、ここで入れたリンクは別もの。入れたリンク（表示名つきも）は保存・同期しても残る
@@ -60,6 +61,8 @@
 - `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加
 - `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）
 - `\i` … `index.md` を開く ・ `\A` … ノートアプリ（Electron / ブラウザ）
+- `\q` … 作業タブの一覧（ノートの**タイトル**で表示。同じタイトルは補助にファイル名も出す）。`↑` / `↓`（`j` / `k`）で選び、`Enter` で切り替え、`Esc`（`q`）で閉じる。`/` はタイトルで絞り込み、`a` 追加 ・ `x` 閉じる ・ `X` 他を閉じる ・ `C` 全部閉じる（`:GnosisTabs`）
+- `\o` … カーソル下のリンクを新しい作業タブで開く（`<CR>` は今のタブの中で移動。`:GnosisOpenLinkTab`）
 - アプリ（`\A`）の `Alt+V` … 見るだけモード ⇔ 普通の Vim。見るだけ（下に VIEW）はカーソルを出さず、編集するキーは送らない。`j`/`k`・矢印・PageUp/Down・`gg`/`G`・`Ctrl-d`/`Ctrl-u` でスクロール。`/` `?` `n` `N` `*` `#` で検索。`gs`・`gm`・Space・Tab・`<CR>`・`<BS>`・`_`・数字・`\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc` も使える
 - アプリでリンクを `Alt` + クリック … 開かずにカーソルだけをリンクへ動かす（`zk` → `g` などに使う）
 - アプリは表（`| a | b |`）と `<img src="…" width="50%">` も描く。カーソルが表の中・インサート中は文字のまま
@@ -71,7 +74,7 @@
 - `\e` … 現ノート周辺を 1 つの md に展開（`expand_v2.py`。**シンプル/詳細**を選ぶ。詳細は 5 項目を指定し、名前を付けてプリセット保存・呼び出し・削除できる。出力 `.trash/T_*.md`）
 - `\se` … S ノートを A ノートに展開（`expand_s.py`。出力 `.trash/T_*.md`）
 - `\gi` … 画像ギャラリー（画像リンクがあればそれ、無ければ Index 以下の全画像をブラウザで）
-- `\oe` … 見出しを別バッファで編集（`:write` で元ノートへ反映）
+- `\oe` / `\O` … 見出しを別バッファで編集（`:write` で元ノートへ反映。`:OutlineEdit`）
 - `\sc` … CopyStack（`y` で行 / 選択を積み、もう一度 `:CopyStack` でクリップボードに確定）
 - `mx` … 行（ビジュアルは選択範囲）のチェックボックス `[ ]` / `[x]` を切替
 
@@ -118,7 +121,8 @@
 - `語:;` … 相手側も `語:;`（括弧なし）
 - `語;` … 相手側には書かない
 - `語::` … 両方の同じセクションに `語:`
-- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける。中身が空の節（Context / Group / Related / BackLink）は見出しごと無い
+- グループ（`attribute: group`）へのリンクは `### Group` に、普通のノートへのリンクは `### Context` に、sync が自動で振り分ける。中身が空の節（ParentBranch / Context / Group / ChildBranch / Related / BackLink）は見出しごと無い
+- 節の並びは ParentBranch → Context → Group → ChildBranch → Related → BackLink。`### ParentBranch` / `### ChildBranch` は `b` で明示した関係で、sync は追加も削除もしない（表示名の追従と、消えたファイルの掃除だけ。Context には変換しない）。コードブロックの中の見出しは節として扱わない
 
 ## 同期
 
@@ -171,9 +175,10 @@
 - `:GnosisLinkify` / `:Linkify` カーソル下をリンク化 ・ `:GnosisLinkifySelection` / `:LinkifySelection` 選択を新ノートに ・ `:GnosisPasteLink` / `:PasteLink` クリップボードをリンク追加
 - `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … クリップボードを関係付きで追加 ・ `:GnosisYN` / `:YN` ファイル名ヤンク
 - `:GnosisLT` / `:LT` / `:GnosisRenameLinkText` / `:RenameLinkText` 表示名変更 ・ `:GnosisNT` / `:NT` タイトル変更 ・ `:GnosisRenameChildLinkTitles` / `:RenameChildLinkTitles` / `:GnosisRenameDownLinkTitles` / `:RenameDownLinkTitles` 子リンク表示名を追従
-- `:GnosisLinkPick` / `:LinkPick` 全文検索してリンク挿入 ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` 全文検索 ・ `:GnosisFileContentSearch` / `:FileContentSearch` 全文検索
+- `:GnosisBranchCheck` Branch の整合性を検査（親が複数・片側だけ・循環・自己参照を報告。何も書き換えない） ・ `:GnosisLinkPick` / `:LinkPick` 全文検索してリンク挿入 ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` 全文検索 ・ `:GnosisFileContentSearch` / `:FileContentSearch` 全文検索
 
 ### 移動
+- `:GnosisTabs` 作業タブの一覧（`\q`） ・ `:GnosisOpenLinkTab` リンクを新しい作業タブで開く（`\o`）
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` 親へ ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` 子の先頭 ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` 子の末尾
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` Context 付近の最後のリンクへ
 
@@ -181,6 +186,7 @@
 - `:GnosisSE` / `:SE` / `:GnosisExpandToT` / `:ExpandToT` / `:GnosisExpandLinks` / `:ExpandLinks` S ノートを展開 ・ `:GnosisOutlineEdit` / `:OutlineEdit` 見出し編集（`:OutlineApply` で反映）
 
 ### 日記・暗号・ゴミ箱・紙PKM・画像
+- `:GnosisRefreshColors` 検索ハイライトなどの残りを消して配色を描き直す ・ `:GnosisColorDoctor` 配色の診断ログを Gnosis ホームの logs に書く
 - `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` 日記
 - `:GnosisMount` `:GnosisLock` `:GnosisSetPassword` `:GnosisRemovePassword` `:GnosisBackup` `:GnosisExitCleanup` 暗号化
 - `:GnosisTrash` `:GnosisTrashList` `:GnosisTrashEmpty` ゴミ箱 ・ `:GnosisPaperIndex` 紙PKM Index ・ `:GnosisScan` スキャン取り込み
