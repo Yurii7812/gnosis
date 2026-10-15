@@ -24,6 +24,11 @@
   開くと日記の一覧（グループ `紙の日記`）になり、**年・月別**に辿れる: 「日記」→ 月グループ（題 `YYYY-MM`）→ 日（日付順）。
   **年グループ（題 `YYYY`）は、日記が 2 つ以上の年にまたがってから**作る（それまでは「日記」の直下に月グループが並ぶ）。デジタル日記（`\\d`）とは題の形が違い、
   `\\d` の日記グループ（題 `日記`）とも別のノート。
+- **トピック**（`1-仏教` のようにトピック名を付けて取り込んだ画像）: `1-Index` のグループは作らず、番号のスキャンノート
+  （ID `1`）の `BranchGroup:` にトピックのノートを入れる。階層（親トピック）は `BranchGroup:` の並びとインデント
+  （2 スペース）だけで表し、リンクや関係は増やさない。並びとインデントは手で（デジタルでは `:GnosisBranchNest` /
+  `:GnosisBranchUnnest` で）直せて、regen は直した並びを変えない。旧形式の `1-Index` グループがあれば、
+  その並び（インデント）を `BranchGroup:` に引き継いでから、ごみ箱へ送る（グループを指していたリンクは ID ノートへ向け直す）。
 - 生成物（Index・グループ・Folgezettel-Index・スキャンノート）の本文は regen が
   毎回まるごと作り直す（管理コメントは書かない）。`Index-write.md` だけは
   手書きの本文＝キーワード行をサイ博（並び順のみ整える）。
@@ -1015,6 +1020,130 @@ def create_scan_note(
     return path
 
 
+BRANCH_GROUP_HEAD = "BranchGroup:"
+
+
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _link_norm(base: Path, line: str) -> Optional[str]:
+    m = re.search(r"\]\(([^)#\s]+)", line)
+    return os.path.normpath(str(base / m.group(1))) if m else None
+
+
+def _find_branch_group(body: list[str]) -> Optional[tuple[int, int]]:
+    """BranchGroup:（旧 ThisNoteGroup:）の見出しの行と、続くリンク行（インデントつきも）の終わりの次。"""
+    flags = _fence_flags(body)
+    for i, ln in enumerate(body):
+        if not flags[i] and ln.strip() in (BRANCH_GROUP_HEAD, "ThisNoteGroup:"):
+            j = i + 1
+            while j < len(body) and _IS_LINK_LINE.match(body[j]):
+                j += 1
+            return i, j
+    return None
+
+
+def _fence_flags(lines: list[str]) -> list[bool]:
+    out: list[bool] = []
+    inside = False
+    for ln in lines:
+        if re.match(r"^\s*(```|~~~)", ln):
+            inside = not inside
+            out.append(True)
+        else:
+            out.append(inside)
+    return out
+
+
+def _existing_branch_group(note_path: Path) -> list[str]:
+    _fm, body = read_note(note_path)
+    span = _find_branch_group(body)
+    return body[span[0] + 1:span[1]] if span else []
+
+
+def _legacy_topic_lines(legacy: Path, topic_norm: dict, base: Path) -> list[str]:
+    """旧 `1-Index` グループの本文から、トピックノートへのリンク行（インデントつき）を、そのまま取り出す。
+    リンクの宛先は ID ノート（base）から見た相対パスに直す。"""
+    _fm, body = read_note(legacy)
+    out: list[str] = []
+    for ln in body:
+        if not _IS_LINK_LINE.match(ln):
+            continue
+        key = _link_norm(legacy.parent, ln)
+        if key in topic_norm:
+            disp = topic_norm[key][0]
+            out.append(" " * _indent_of(ln) + markdown_link(disp, Path(key), base))
+    return out
+
+
+def _branch_add_line(lines: list[str], new_line: str, base: Path,
+                     parent_norm: Optional[str] = None) -> list[str]:
+    """new_line を BranchGroup の行の並びに足す（同じ宛先が既にあれば足さない）。
+    parent_norm があり、その行が並びの中にあれば、その子孫の最後へ 1 段下げて入れる。無ければ最後へ。"""
+    key = _link_norm(base, new_line)
+    if key is not None and any(_link_norm(base, ln) == key for ln in lines):
+        return lines
+    out = list(lines)
+    if parent_norm is not None:
+        for p, ln in enumerate(out):
+            if _link_norm(base, ln) == parent_norm:
+                ip = _indent_of(ln)
+                q = p + 1
+                while q < len(out) and _indent_of(out[q]) > ip:
+                    q += 1
+                out.insert(q, " " * (ip + 2) + new_line.lstrip(" "))
+                return out
+    out.append(new_line)
+    return out
+
+
+def _branch_add_topics(lines: list[str], base: Path, tlist: list, disp_path: dict) -> list[str]:
+    """まだ BranchGroup に無いトピックを足す。親トピック（作成時の指定。ノートの Context のリンク）があれば
+    その直下へ 1 段下げて、無ければ最後へ。並びとインデントは、足したあとは利用者が自由に直してよい。"""
+    out = list(lines)
+    pending = [(d, pth, tp) for d, pth, tp in tlist if _link_norm(base, markdown_link(d, pth, base)) not in
+               {_link_norm(base, ln) for ln in out}]
+    # 親が先に入るよう、親の無いものから足す（足せなかった子は次の周回で）
+    for _ in range(len(pending) + 1):
+        rest = []
+        for d, pth, tp in pending:
+            pn = _link_norm(base, markdown_link(tp, disp_path[tp], base)) if tp and tp in disp_path else None
+            if pn is not None and not any(_link_norm(base, ln) == pn for ln in out):
+                rest.append((d, pth, tp))
+                continue
+            out = _branch_add_line(out, markdown_link(d, pth, base), base, pn)
+        if not rest or len(rest) == len(pending):
+            for d, pth, tp in rest:
+                out = _branch_add_line(out, markdown_link(d, pth, base), base)
+            break
+        pending = rest
+    return out
+
+
+def _write_branch_group(note_path: Path, lines: list[str]) -> None:
+    """ID ノートの BranchGroup: ブロックを、lines にする（無ければ H1 の直後に作る）。ほかの本文は変えない。"""
+    fm, body = read_note(note_path)
+    span = _find_branch_group(body)
+    block = [BRANCH_GROUP_HEAD] + lines
+    if span is not None:
+        if body[span[0]:span[1]] == block:
+            return
+        body[span[0]:span[1]] = block
+    else:
+        if not lines:
+            return
+        h1 = next((i for i, ln in enumerate(body) if re.match(r"^#\s", ln)), None)
+        at = h1 + 1 if h1 is not None else 0
+        if at < len(body) and not body[at].strip():
+            at += 1          # H1 の直後の空行を、ブロックの前の空行に使う
+            pre: list[str] = []
+        else:
+            pre = [""] if at else []
+        body[at:at] = pre + block + [""]
+    write_note(note_path, fm, body)
+
+
 def topic_display(fid: str, topic: str) -> str:
     """トピック別Indexの表示名（例: 1-仏教）。"""
     return f"{fid}-{topic}"
@@ -1485,18 +1614,14 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         CONTEXT_HEAD,
         markdown_link(index_display, index_path, folge_index.parent)]))
 
-    # --- トピック別Index（B案: `1-Index` グループにノートと `1-仏教` を入れる） ---
+    # --- トピック別Index（`1-Index` グループは作らない。ID ノート `1` の BranchGroup: に `1-仏教` を入れる） ---
+    # 階層（親トピック）は BranchGroup: の並びとインデントだけで表す（子は親の直下に 2 スペース下げる）。
     notes = load_notes(root)
     topics = scan_topic_notes(root, notes)
     id_index_paths: dict[str, Path] = {}
+    branch_lines: dict[str, list[str]] = {}
 
     def _parent_link_lines(fid: str, base_dir: Path, exclude: Optional[Path] = None) -> list[str]:
-        id_index = id_index_paths.get(fid) or find_id_index(root, fid, notes)
-        if id_index is not None and id_index != exclude:
-            id_index_paths[fid] = id_index
-            fm_g, _b = read_note(id_index)
-            gd = fm_value(fm_g, "title") or id_index.stem
-            return [markdown_link(gd, id_index, base_dir)]
         pid = parent_id(fid)
         if pid is not None and pid in folge:
             return [markdown_link(pid, folge[pid], base_dir)]
@@ -1506,45 +1631,24 @@ def regen(root: Path, do_sync: bool = True) -> bool:
 
     for fid in sorted(topics, key=natural_key):
         tlist = topics[fid]
-        gid = find_id_index(root, fid, notes)
-        if gid is None:
-            gid = unique_note_path(root)
-            fm_g = [_time_line(), f"title: {fid}-Index", "attribute: group"]
-            write_note(gid, fm_g, [f"# {fid}-Index", ""], keep_trailing_blank=True)
-        else:
-            fm_g, _b = read_note(gid)
-            # 旧表記 `1_Index` を `1-Index` に改名（手書きの別名は残す）
-            fm_g = [f"title: {fid}-Index" if ln.strip() == f"title: {fid}_Index" else ln
-                    for ln in fm_g]
-        id_index_paths[fid] = gid
-        # 子トピック順: 親トピック（本文の Context にあるリンクから求めたもの。無い/親が見つからないものは
-        # 最上位）を辿って、子は親の直下に 2スペースずつインデントして並べる。順序は表示名の自然順。
-        # 手書きで Context の親トピックのリンクを変えれば、次回 regen で反映される。
-        tmap = {disp: (path, tp) for disp, path, tp in tlist}
-        used_t: set[str] = set()
-
-        def _topic_lines(disp: str, indent: int, children_out: list[str]) -> None:
-            path, _tp = tmap[disp]
-            used_t.add(disp)
-            children_out.append("  " * indent + markdown_link(disp, path, gid.parent))
-            for disp_c in sorted((d for d, _p, tp in tlist if tp == disp),
-                                 key=natural_key):
-                _topic_lines(disp_c, indent + 1, children_out)
-
-        children = []
-        if fid in folge:
-            children.append(markdown_link(fid, folge[fid], gid.parent))
-        for disp in sorted((d for d, _p, tp in tlist if not tp or tp not in tmap),
-                           key=natural_key):
-            _topic_lines(disp, 0, children)
-        # 親が見つからない子孫は階層で拾えないので最後に列挙する
-        for disp, _path, _tp in tlist:
-            if disp not in used_t:
-                children.append(markdown_link(disp, tmap[disp][0], gid.parent))
-        p_lines = _parent_link_lines(fid, gid.parent, exclude=gid)
-        fm_g = _fm_title_attr(fm_g, f"{fid}-Index")
-        write_note(gid, fm_g, merge_note_body(read_note(gid)[1], [f"# {fid}-Index"] + children + [CONTEXT_HEAD] + p_lines))
-        # トピックノート自身の Context（既存の `### Context` 以降を置き換え）
+        owner = folge.get(fid)
+        if owner is None:
+            continue  # ID ノートが無いときは BranchGroup の置き場が無い（スキャンしたら入る）
+        topic_norm = {os.path.normpath(str(path)): (disp, tp) for disp, path, tp in tlist}
+        disp_path = {disp: path for disp, path, _tp in tlist}
+        lines = _existing_branch_group(owner)
+        # 旧形式の `1-Index` グループ（グループ本文のインデントが階層）があれば、その並びを引き継ぐ
+        legacy = find_id_index(root, fid, notes)
+        if legacy is not None:
+            for ln in _legacy_topic_lines(legacy, topic_norm, owner.parent):
+                lines = _branch_add_line(lines, ln, owner.parent)
+        lines = _branch_add_topics(lines, owner.parent, tlist, disp_path)
+        branch_lines[fid] = lines
+        if legacy is not None:
+            # 旧 `1-Index` を指していたリンクは ID ノートへ向け直し、旧グループはごみ箱へ（内容は BranchGroup に移した）
+            _rewrite_links_to(root, legacy, owner)
+            _trash_note(root, legacy)
+        # トピックノート自身の Context は folgezettel-Index-N だけ（階層は ID ノートの BranchGroup の並びで持つ）
         for disp, tpath, tp in tlist:
             fm_t, body_t = read_note(tpath)
             ci = _first_section(body_t)
@@ -1552,18 +1656,9 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                 body_t = body_t[:ci]
             while body_t and body_t[-1].strip() == "":
                 body_t.pop()
-            # Context は folgezettel-Index-N ＋（親トピックがあればそのリンク、
-            # 無ければトピックIndex 1-Index）を表示する
             folge_link = markdown_link(folge_index_display(fid),
                                        folge_index_path(root, fid), tpath.parent)
-            parent_disp = tp if tp in tmap else None
-            if parent_disp is not None:
-                p_lines = [markdown_link(parent_disp, tmap[parent_disp][0],
-                                         tpath.parent), folge_link]
-            else:
-                head = _parent_link_lines(fid, tpath.parent)
-                p_lines = head + [folge_link] if head else [folge_link]
-            body_t += [CONTEXT_HEAD] + p_lines
+            body_t += [CONTEXT_HEAD, folge_link]
             write_note(tpath, fm_t, body_t)
 
     # --- 番号専用ノート folgezettel-Index-N ----------------------------------
@@ -1601,6 +1696,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         }
         fm = _update_yomi(fm, mapping)
         write_note(note_path, fm, merge_note_body(old_body, inner))
+        if fid in branch_lines:
+            _write_branch_group(note_path, branch_lines[fid])
 
     if do_sync:
         jy.clear_memos()

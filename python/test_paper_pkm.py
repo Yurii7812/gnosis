@@ -199,7 +199,7 @@ def test_create_and_regen() -> None:
 
 
 def test_topic_index() -> None:
-    print("トピック別Index: 1-仏教 + 1-Index グループ")
+    print("トピック別Index: 1-Index グループは作らず、ID ノート 1 の BranchGroup: に 1-仏教 を入れる")
     with tempfile.TemporaryDirectory() as d:
         root = _make_vault(Path(d))
         index_path = pp.create_paper_index(root)
@@ -216,46 +216,29 @@ def test_topic_index() -> None:
         check("paper_topic" not in topic_text and "topic_parent" not in topic_text and "title: 1-仏教" in topic_text,
               "トピックノートの fm は title だけ（paper_topic / topic_parent を持たない）")
         pp.regen(root)
-        gid = pp.find_id_index(root, "1")
-        check(gid is not None, "1-Index グループができる")
-        if gid:
-            gid_text = gid.read_text(encoding="utf-8")
-            check("title: 1-Index" in gid_text, "トピックIndex は 1-Index に改名")
-            check(f"[1]({notes['1'].name})" in gid_text and "[1-仏教]" in gid_text,
-                  "グループに ID ノートと トピック のリンク")
-            check("attribute: group" in gid_text, "グループ属性")
-            check("[Paper-Zettelkasten-Index]" in gid_text, "グループの Parent は Paper index")
+        check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
         n1 = notes["1"].read_text(encoding="utf-8")
+        check("BranchGroup:\n[1-仏教](" in n1, "ID ノートの BranchGroup: にトピック")
         check("[folgezettel-Index-1](folgezettel-Index-1.md#1)" in n1,
               "ID ノートの Parent は folgezettel-Index-1#1")
         d_text = pp.folge_index_path(root, "1").read_text(encoding="utf-8")
-        check("[1-Index]" in d_text, "専用ノートにトピックIndexへのリンク")
+        check("[1-Index]" not in d_text, "専用ノートに 1-Index へのリンクは無い")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        i_folge = topic_text.find("[folgezettel-Index-1]")
-        i_gindex = topic_text.find("[1-Index]")
-        # 並び: Context（普通のノート folgezettel-Index-1）の次に Group（グループ 1-Index）
-        check(i_folge != -1 and i_gindex != -1 and i_folge < i_gindex and "### Group" in topic_text,
-              "トピックノートは Context に folgezettel-Index-1、Group に 1-Index")
+        check("[folgezettel-Index-1]" in topic_text and "1-Index" not in topic_text,
+              "トピックノートの Context は folgezettel-Index-1 だけ")
         folge_text = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
         check("[1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
-        # 階層トピック: 仏教/四念処 → 1-四念処（tm: 1-仏教）
+        # 階層トピック: 仏教/四念処 → 1-四念処（親: 1-仏教）は、BranchGroup の並びで 仏教 の下に 2 スペース下げる
         src_n = root / "scan_1c.jpg"
         src_n.write_bytes(b"x")
         moved2, errors2 = pp.move_images(root, root, [(src_n, "1", "四念処", "1-仏教")])
         check(len(moved2) == 1 and not errors2, "階層トピックの作成")
-
-        topic_child = next(p for p in pp.iter_md(root)
-                           if "title: 1-四念処" in p.read_text(encoding="utf-8"))
         pp.regen(root)
-        gid = pp.find_id_index(root, "1")
-        check(gid is not None, "階層後も 1-Index あり")
-        gid_text = gid.read_text(encoding="utf-8")
-        i_buk = gid_text.find("[1-仏教]")
-        i_sinen = gid_text.find("  [1-四念処]")
-        check(i_buk != -1 and i_sinen > i_buk,
-              "四念処は仏教の下にインデント")
-
+        n1 = notes["1"].read_text(encoding="utf-8")
+        i_buk = n1.find("[1-仏教]")
+        i_sinen = n1.find("  [1-四念処]")
+        check(i_buk != -1 and i_sinen > i_buk, "四念処は仏教の下にインデント")
 
 
     print("move_images: ID 重複の検出")

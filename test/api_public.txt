@@ -15,6 +15,7 @@ gnosis#at_add
 gnosis#at_add_reverse
 gnosis#autosync_log
 gnosis#autosync_on_save
+gnosis#autosync_problem
 gnosis#backup_vault
 gnosis#backup_vault_with
 gnosis#before_write_viminfo
@@ -26,6 +27,7 @@ gnosis#branch#can_parent_here
 gnosis#branch#check
 gnosis#branch#check_command
 gnosis#branch#message
+gnosis#branch#nest
 gnosis#branch#run
 gnosis#branch#warn
 gnosis#check_missing_prefix_in_current_dir
