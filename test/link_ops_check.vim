@@ -269,10 +269,13 @@ call s:mk('jg6.md', 'ノートJG6', ['JG6 の本文。'])
 call s:mk('plain.md', 'ふつうのノート', ['グループではない。'])
 execute 'edit ' . fnameescape(s:v . '/jg4.md')
 sleep 1100m
-let g:gnosis_test_keys = ['g']
+let g:gnosis_test_keys = ["\<CursorHold>", "\<CursorHold>", 'g']
 let g:gnosis_test_display_name = ['']
 call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
 call s:ok('\l g: 選んだグループの本文に今のノートが入る（空 Enter はタイトルが表示名）', s:has('g.md', '^\[ノートJG4\](jg4\.md)$'), string(s:file('g.md')))
+let s:group_lines = s:file('g.md')
+let s:added_at = index(s:group_lines, '[ノートJG4](jg4.md)')
+call s:ok('\l g Enter: 既存リンクとの間に空行を足さない', s:added_at > 0 && s:group_lines[s:added_at - 1] ==# '[ノートA](a.md)', string(s:group_lines))
 call s:ok('\l g: 今のノートの Group: にグループが出る（保存前でもバッファに）', index(getline(1, '$'), 'Group:') >= 0 && index(getline(1, '$'), '[グループG](g.md)') >= 0, string(getline(1, '$')))
 call s:ok('\l g: 今のノートの本文にグループへのリンクは置かない', count(getline(1, '$'), '[グループG](g.md)') == 1)
 call s:ok('\l g: 保存されている', s:has('jg4.md', '^\[グループG\](g\.md)$'))
@@ -409,9 +412,6 @@ call setpos("'>", [0, 10, 1, 0])
 call gnosis#sort_selection()
 call s:ok('\S ビジュアル: 選択の外は変えない', getline(9, 11) ==# ['[い](n2.md)', '[う](n3.md)', '[あ](n1.md)'], string(getline(9, 11)))
 
-" ------------------------------------------------------------------ za → c → Esc（何も変えない）
-call s:mk('k.md', 'ノートK', ['K の本文。'])
-execute 'edit ' . fnameescape(s:v . '/a.md')
 " ------------------------------------------------------------------ グループへ逆リンクを足したら \S と同じ規則でよみ順に並べ直す
 call s:mk('ab1.md', 'あ', [])
 call s:mk('ab2.md', 'い', [])

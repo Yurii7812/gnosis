@@ -6979,11 +6979,12 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
   let l:lines = readfile(a:file)
   let l:hdr = s:first_section_index_in_lines(l:lines)
   if l:hdr < 0
-    " 関係の節が無い新ノート: 末尾の空行を剥がして、リンクの前後に空行を置く
+    " 末尾の空行を剥がす。グループの既存リンクには空行なしで続ける。
     while !empty(l:lines) && trim(l:lines[-1]) ==# ''
       call remove(l:lines, -1)
     endwhile
-    call extend(l:lines, a:is_group ? ['', a:link] : ['', a:link, ''])
+    let l:sep = !empty(l:lines) && trim(l:lines[-1]) =~# '^\[[^]]*\]([^)]\+)\s*$' ? [] : ['']
+    call extend(l:lines, a:is_group ? l:sep + [a:link] : ['', a:link, ''])
   else
     " 最初の節の見出しの直前まで続く空行の連なりを剥がす。
     let l:top = l:hdr
@@ -6994,7 +6995,8 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
       call remove(l:lines, l:top, l:hdr - 1)
       let l:hdr = l:top
     endif
-    call extend(l:lines, a:is_group ? ['', a:link] : ['', a:link, ''], l:hdr)
+    let l:sep = l:hdr > 0 && trim(l:lines[l:hdr - 1]) =~# '^\[[^]]*\]([^)]\+)\s*$' ? [] : ['']
+    call extend(l:lines, a:is_group ? l:sep + [a:link] : ['', a:link, ''], l:hdr)
   endif
   call s:syn_writefile(l:lines, a:file)
 endfunction
@@ -7853,10 +7855,17 @@ endfunction
 
 " 1 文字を読む（g:gnosis_test_keys があればそこから。試験用）
 function! s:getkey() abort
-  if exists('g:gnosis_test_keys') && !empty(g:gnosis_test_keys)
-    return remove(g:gnosis_test_keys, 0)
-  endif
-  return nr2char(getchar())
+  while 1
+    if exists('g:gnosis_test_keys') && !empty(g:gnosis_test_keys)
+      let l:key = remove(g:gnosis_test_keys, 0)
+    else
+      let l:key = getcharstr()
+    endif
+    " 無操作で届く CursorHold は選択キーとして扱わず、入力を待ち続ける。
+    if l:key !=# "\<CursorHold>" && l:key !=# "\<Ignore>"
+      return l:key
+    endif
+  endwhile
 endfunction
 
 " ファイル（または行リスト）の見出しを選ぶ。選ばれた見出しの行番号で a:Cb を呼ぶ。
@@ -8037,6 +8046,11 @@ function! s:apply_back_link(target, a_path, a_title, choice) abort
   let l:title = empty(a:choice.name) ? a:a_title : a:choice.name
   let l:link = s:make_link_from_dir(a:a_path, s:md_link_text(l:title), l:bdir)
   let l:lines = s:insert_link_in_lines(l:lines, l:link, a:choice.mode, a:choice.lnum)
+  " グループの本文の最後に足したときは、\S と同じ規則（最後のブロックをよみ順に）で並べ直す
+  if a:choice.mode ==# 'end' && s:v2_path_attr(a:target) ==# 'group'
+    let l:lines = s:sort_group_lines_by_yomi(l:lines, l:bdir)
+    silent! checktime
+  endif
   call s:syn_writefile(l:lines, a:target)
   if l:nr > 0
     silent! execute 'checktime ' . l:nr
@@ -8044,20 +8058,6 @@ function! s:apply_back_link(target, a_path, a_title, choice) abort
   return 1
 endfunction
 
-" 旧形式（v1 の Parent:/Child: / 旧 `---`）を v2 へ明示変換。
-"   :V2Migrate       … PKM ルート全体
-  " グループの本文の最後に足したときは、\S と同じ規則（最後のブロックをよみ順に）で並べ直す
-  if a:choice.mode ==# 'end' && s:v2_path_attr(a:target) ==# 'group'
-    let l:lines = s:sort_group_lines_by_yomi(l:lines, l:bdir)
-    silent! checktime
-  endif
-"   :V2Migrate %     … 現在のファイルだけ
-function! gnosis#v2_migrate(...) abort
-  if s:pkm_format() !=# 'v2'
-    echo gnosis#i18n#tr('Gnosis: v2 のみ') | return
-  endif
-  let l:root = s:get_pkm_root()
-  if empty(l:root) | echoerr gnosis#i18n#tr('Gnosis: PKM ルート未設定') | return | endif
 " グループの行リストの「本文の最後のブロック」を、\S と同じ sort_yomi.py でよみ順に並べて返す。
 " 失敗・リンクが 1 本以下・並びが変わらないときは元の行をそのまま返す。
 " （s:group_last_block は現在バッファを見るので、一時バッファに載せて使う）
@@ -8098,6 +8098,15 @@ function! s:sort_group_lines_by_yomi(lines, base_dir) abort
   return (l:r[0] > 1 ? a:lines[0 : l:r[0] - 2] : []) + l:new + a:lines[l:r[1] :]
 endfunction
 
+" 旧形式（v1 の Parent:/Child: / 旧 `---`）を v2 へ明示変換。
+"   :V2Migrate       … PKM ルート全体
+"   :V2Migrate %     … 現在のファイルだけ
+function! gnosis#v2_migrate(...) abort
+  if s:pkm_format() !=# 'v2'
+    echo gnosis#i18n#tr('Gnosis: v2 のみ') | return
+  endif
+  let l:root = s:get_pkm_root()
+  if empty(l:root) | echoerr gnosis#i18n#tr('Gnosis: PKM ルート未設定') | return | endif
   let l:args = [s:python_cmd(), g:gnosis_python, 'migrate', l:root]
   if a:0 > 0 && a:1 !=# ''
     call add(l:args, a:1 ==# '%' ? expand('%:p') : a:1)
@@ -8602,6 +8611,7 @@ function! gnosis#autosync_on_save() abort
 
   " index.md は保存しても勝手に並べ替えない（並べ替えは \ua / \S のときだけ）。
 
+  call gnosis#conflict#mark_own_sync()
   if has('job') && has('channel')
     " 非同期実行
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
@@ -8611,7 +8621,6 @@ function! gnosis#autosync_on_save() abort
           \ 'out_io':  'null',
           \ 'err_cb': {ch, msg -> s:sync_problem('stderr: ' . msg)},
           \ })
-  call gnosis#conflict#mark_own_sync()
   else
     " 同期フォールバック
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
@@ -8625,6 +8634,7 @@ endfunction
 function! s:autosync_done(file, job, status) abort
   " job完了後にバッファを外部変更に合わせる
   call gnosis#autosync_log('  job done status=' . a:status)
+  call gnosis#conflict#mark_own_sync(bufnr(a:file))
   if a:status != 0
     call s:sync_problem('sync failed: exit=' . a:status . ' file=' . a:file)
   endif
@@ -8634,7 +8644,6 @@ endfunction
 " 任意のファイルパスに対して update_one を起動するヘルパー
 function! s:update_one_command(target_fp, ...) abort
   let l:force = a:0 > 0 ? a:1 : 0
-  call gnosis#conflict#mark_own_sync(bufnr(a:file))
   if !l:force && !g:gnosis_autosync | return '' | endif
   if !filereadable(g:gnosis_python) | return '' | endif
   let l:root = s:get_pkm_root()
@@ -10021,15 +10030,6 @@ function! s:join_groups(groups) abort
     let l:n += 1
   endfor
   if l:n > 0
-    echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . join(map(copy(l:plan), 's:group_label(v:val.gfp)'), ', ')
-  endif
-  return l:n
-endfunction
-
-" 見出しが選ばれたあと: その見出しの本文の最後にリンクを入れ、Done を呼ぶ。
-function! s:insert_links_under_heading(links, Done, lnum) abort
-  for l:lk in a:links
-    if !s:buffer_has_link(l:lk)
     " \S と同じ規則で、グループの本文の最後のブロックをよみ順に並べ直す。よみ（yomi:）は今のノートの
     " ファイルにも書かれるので、先に今のノートを保存してから並べ、終わったら読み直す。
     if &modified && &buftype ==# ''
@@ -10044,11 +10044,11 @@ function! s:insert_links_under_heading(links, Done, lnum) abort
       call s:reload_by_edit(l:cur_file)
     endif
     silent! checktime
-      call s:insert_link_under_heading(a:lnum, l:lk)
-    endif
-  endfor
-  call a:Done()
+    echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . join(map(copy(l:plan), 's:group_label(v:val.gfp)'), ', ')
+  endif
+  return l:n
 endfunction
+
 " グループのファイルの本文の最後のブロックを、\S と同じ規則でよみ順に並べて書き戻す（変わらなければ書かない）。
 function! s:sort_group_file(path) abort
   let l:lines = readfile(a:path)
@@ -10058,6 +10058,15 @@ function! s:sort_group_file(path) abort
   endif
 endfunction
 
+" 見出しが選ばれたあと: その見出しの本文の最後にリンクを入れ、Done を呼ぶ。
+function! s:insert_links_under_heading(links, Done, lnum) abort
+  for l:lk in a:links
+    if !s:buffer_has_link(l:lk)
+      call s:insert_link_under_heading(a:lnum, l:lk)
+    endif
+  endfor
+  call a:Done()
+endfunction
 
 " キー待ちの案内は 1 行に収める。2 行になると「続けるには ENTER を押してください」の画面が出て、
 " 次に押したキー（g など）がその画面に食われて、コマンドとして動いてしまう。
@@ -15357,6 +15366,8 @@ function! gnosis#diary_today() abort
     execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
   endif
   call s:diary_cursor()
+  " 開いたらすぐ書き始められるように、挿入モードにする
+  startinsert
 endfunction
 
 " 日記を開いたときのカーソル位置と、その周りの形を整える。
@@ -15366,8 +15377,6 @@ endfunction
 function! s:diary_cursor() abort
   let l:sec = '## ' . get(g:, 'gnosis_diary_section', '今日のノート')
   let l:lines = getline(1, '$')
-  " 開いたらすぐ書き始められるように、挿入モードにする
-  startinsert
   let l:n = index(l:lines, l:sec) + 1
   if l:n <= 0
     let l:u = s:first_section_index_in_lines(l:lines) + 1
@@ -15386,7 +15395,15 @@ function! s:diary_cursor() abort
     call append(l:n - 1, repeat([''], 3 - l:cnt))
     let l:n += 3 - l:cnt
   endif
+  " 挿入モードを抜けた・離れたときに、節の見出しの前の空行を 1 行にする
+  call s:pad_register(l:n, 0, '', getline(l:n))
   call cursor(l:n - 2, 1)
+  " カーソルが画面の一番下に張り付かないよう、画面の上から 4 割ほどの高さに置く
+  " （日記の節は末尾にあるので、末尾より下に空白が出てもよい）
+  let l:view = winsaveview()
+  let l:view.topline = max([1, l:n - 2 - winheight(0) * 2 / 5])
+  let l:view.topfill = 0
+  call winrestview(l:view)
 endfunction
 
 " 新ノートの冒頭のブロック（Group: / Context: など。リンク行が続く）の下を整える。
@@ -15394,16 +15411,8 @@ endfunction
 " 戻り値はカーソルを置く行（1 始まり）。ブロックが無い・本文があるときは 0（何もしない）。
 function! s:new_note_gap(file) abort
   let l:lines = readfile(a:file)
-    " 何も書かずに戻る・離れるときに、ここで足した空行を消せるよう覚えておく
-    call s:pad_register(l:n, 3 - l:cnt, 0, l:prev, getline(l:n + 3 - l:cnt))
   let l:h1 = match(l:lines, '^#\s\+')
   if l:h1 < 0 | return 0 | endif
-  " カーソルが画面の一番下に張り付かないよう、画面の上から 4 割ほどの高さに置く
-  " （日記の節は末尾にあるので、末尾より下に空白が出てもよい）
-  let l:view = winsaveview()
-  let l:view.topline = max([1, l:n - 2 - winheight(0) * 2 / 5])
-  let l:view.topfill = 0
-  call winrestview(l:view)
   let l:i = l:h1 + 1
   let l:last = -1
   while 1
@@ -15446,21 +15455,18 @@ function! gnosis#write_at_bottom() abort
     silent execute (l:last + 1) . ',' . l:end . 'delete _'
   endif
   call append(l:last, ['', '', ''])
+  " 何も書かずに戻る・離れるときは、足した空行を消して元の空行の数に戻す
+  call s:pad_register(l:last + 1, 3, getline(l:last), getline(l:last + 4))
   call cursor(l:last + 2, 1)
   startinsert
 endfunction
 
-" 前回の検索ハイライトを消す。関数の中の :nohlsearch / v:hlsearch=0 は関数を抜けると
-" 元に戻される（検索状態が復元される）ので、<Cmd> を typeahead に積んで関数の外で実行する。
-function! gnosis#clear_search_highlight() abort
-  call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
-endfunction
-  " 何も書かずに戻る・離れるときは、足した空行を消して元の空行の数に戻す
-  call s:pad_register(l:last + 1, 3, l:orig, getline(l:last), getline(l:last + 4))
-" \d / zw が書き始めのために足した空行（a:first 行目から a:n 行。前後の行は a:prev / a:next）を覚える。
-" 挿入モードを抜けた・そのページから離れたときに、まだ空行のままなら a:keep 行まで戻す。
-function! s:pad_register(first, n, keep, prev, next) abort
-  let b:gnosis_pad = {'first': a:first, 'n': a:n, 'keep': a:keep, 'prev': a:prev, 'next': a:next}
+" \d / zw が書き始めのために足した空行（a:first 行目から a:n 行。足したあとの前後の行は a:prev / a:next）を覚える。
+" 空行の規則: 文章と文章の間の空行は何行あってもよい。文章の終わりのあと（次の節の見出しの前）の空行は
+" 1 行で十分なので、挿入モードを抜けた・そのページから離れたときに、2 行以上あれば 1 行にする。
+" 挿入モードの間は触らない。
+function! s:pad_register(first, n, prev, next) abort
+  let b:gnosis_pad = {'first': a:first, 'n': a:n, 'prev': a:prev, 'next': a:next, 'total': line('$')}
   augroup gnosis_pad
     autocmd! * <buffer>
     autocmd InsertLeave,BufLeave,BufWinLeave <buffer> call gnosis#pad_cleanup()
@@ -15476,27 +15482,35 @@ function! gnosis#pad_cleanup() abort
   augroup gnosis_pad
     autocmd! * <buffer>
   augroup END
-  let l:f = l:pad.first
-  let l:l = l:f + l:pad.n - 1
-  if l:l > line('$') || !&modifiable || getline(l:f - 1) !=# l:pad.prev || getline(l:l + 1) !=# l:pad.next
+  if !&modifiable
     return
   endif
-  for l:i in range(l:f, l:l)
-    if trim(getline(l:i)) !=# ''
-      return
-    endif
-  endfor
-  if l:pad.n > l:pad.keep
-    let l:view = winsaveview()
-    silent! execute 'keepjumps ' . (l:f + l:pad.keep) . ',' . l:l . 'delete _'
-    call winrestview(l:view)
-    if &buftype ==# '' && &modified
-      " InsertLeave の中はまだ挿入モード扱いなので、抜けてから保存する
-      if mode() =~# '^[iR]'
-        call timer_start(0, function('s:pad_save', [bufnr('%')]))
-      else
-        call gnosis#conflict#safe_update()
-      endif
+  " 足した空行の次にあった行（節の見出しなど）の今の行番号。途中で改行を入れた分だけずれる。
+  " ファイルの末尾なら、最後の行の次を仮の位置にする。
+  let l:a = l:pad.first + l:pad.n + line('$') - l:pad.total
+  if l:a > line('$') + 1 || l:a < 2
+    return
+  endif
+  if l:a <= line('$') ? getline(l:a) !=# l:pad.next : l:pad.next !=# ''
+    return
+  endif
+  " 見出しの直前の、続く空行の数
+  let l:r = 0
+  while l:a - 1 - l:r >= 1 && trim(getline(l:a - 1 - l:r)) ==# ''
+    let l:r += 1
+  endwhile
+  if l:r <= 1
+    return
+  endif
+  let l:view = winsaveview()
+  silent! execute 'keepjumps ' . (l:a - l:r) . ',' . (l:a - 2) . 'delete _'
+  call winrestview(l:view)
+  if &buftype ==# '' && &modified
+    " InsertLeave の中はまだ挿入モード扱いなので、抜けてから保存する
+    if mode() =~# '^[iR]'
+      call timer_start(0, function('s:pad_save', [bufnr('%')]))
+    else
+      call gnosis#conflict#safe_update()
     endif
   endif
 endfunction
@@ -15507,3 +15521,8 @@ function! s:pad_save(buf, timer) abort
   endif
 endfunction
 
+" 前回の検索ハイライトを消す。関数の中の :nohlsearch / v:hlsearch=0 は関数を抜けると
+" 元に戻される（検索状態が復元される）ので、<Cmd> を typeahead に積んで関数の外で実行する。
+function! gnosis#clear_search_highlight() abort
+  call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
+endfunction
