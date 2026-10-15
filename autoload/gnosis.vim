@@ -15394,6 +15394,8 @@ endfunction
 " 戻り値はカーソルを置く行（1 始まり）。ブロックが無い・本文があるときは 0（何もしない）。
 function! s:new_note_gap(file) abort
   let l:lines = readfile(a:file)
+    " 何も書かずに戻る・離れるときに、ここで足した空行を消せるよう覚えておく
+    call s:pad_register(l:n, 3 - l:cnt, 0, l:prev, getline(l:n + 3 - l:cnt))
   let l:h1 = match(l:lines, '^#\s\+')
   if l:h1 < 0 | return 0 | endif
   " カーソルが画面の一番下に張り付かないよう、画面の上から 4 割ほどの高さに置く
@@ -15453,3 +15455,55 @@ endfunction
 function! gnosis#clear_search_highlight() abort
   call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
 endfunction
+  " 何も書かずに戻る・離れるときは、足した空行を消して元の空行の数に戻す
+  call s:pad_register(l:last + 1, 3, l:orig, getline(l:last), getline(l:last + 4))
+" \d / zw が書き始めのために足した空行（a:first 行目から a:n 行。前後の行は a:prev / a:next）を覚える。
+" 挿入モードを抜けた・そのページから離れたときに、まだ空行のままなら a:keep 行まで戻す。
+function! s:pad_register(first, n, keep, prev, next) abort
+  let b:gnosis_pad = {'first': a:first, 'n': a:n, 'keep': a:keep, 'prev': a:prev, 'next': a:next}
+  augroup gnosis_pad
+    autocmd! * <buffer>
+    autocmd InsertLeave,BufLeave,BufWinLeave <buffer> call gnosis#pad_cleanup()
+  augroup END
+endfunction
+
+function! gnosis#pad_cleanup() abort
+  let l:pad = get(b:, 'gnosis_pad', {})
+  if empty(l:pad)
+    return
+  endif
+  unlet b:gnosis_pad
+  augroup gnosis_pad
+    autocmd! * <buffer>
+  augroup END
+  let l:f = l:pad.first
+  let l:l = l:f + l:pad.n - 1
+  if l:l > line('$') || !&modifiable || getline(l:f - 1) !=# l:pad.prev || getline(l:l + 1) !=# l:pad.next
+    return
+  endif
+  for l:i in range(l:f, l:l)
+    if trim(getline(l:i)) !=# ''
+      return
+    endif
+  endfor
+  if l:pad.n > l:pad.keep
+    let l:view = winsaveview()
+    silent! execute 'keepjumps ' . (l:f + l:pad.keep) . ',' . l:l . 'delete _'
+    call winrestview(l:view)
+    if &buftype ==# '' && &modified
+      " InsertLeave の中はまだ挿入モード扱いなので、抜けてから保存する
+      if mode() =~# '^[iR]'
+        call timer_start(0, function('s:pad_save', [bufnr('%')]))
+      else
+        call gnosis#conflict#safe_update()
+      endif
+    endif
+  endif
+endfunction
+
+function! s:pad_save(buf, timer) abort
+  if bufnr('%') == a:buf && &modified && &buftype ==# '' && mode() !~# '^[iR]'
+    call gnosis#conflict#safe_update()
+  endif
+endfunction
+

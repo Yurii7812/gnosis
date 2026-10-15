@@ -962,9 +962,12 @@ augroup gnosis_autosave
   autocmd InsertEnter *.md call s:dirty_guard_mark()
   autocmd TextChanged,TextChangedI *.md call s:dirty_guard_mark()
   autocmd TextChanged,TextChangedI *.md,*.csv call s:schedule_autosave()
-  autocmd InsertLeave *.md,*.csv call s:autosave_on_insert_leave() | call s:dirty_guard_after_leave()
-  autocmd BufLeave,WinLeave *.md,*.csv call s:autosave_before_leave() | call s:dirty_guard_after_leave()
-  autocmd FocusLost *.md,*.csv call s:autosave_before_leave()
+  " nested が要る: autocmd の中で :write すると、nested が無いと BufWritePost が発火せず、
+  " 保存の記録（gnosis#conflict#record）も保存後の同期（autosync）も走らない。
+  " 記録が古いままだと、次の保存で「別のウィンドウが書き換えた」と誤検知する。
+  autocmd InsertLeave *.md,*.csv nested call s:autosave_on_insert_leave() | call s:dirty_guard_after_leave()
+  autocmd BufLeave,WinLeave *.md,*.csv nested call s:autosave_before_leave() | call s:dirty_guard_after_leave()
+  autocmd FocusLost *.md,*.csv nested call s:autosave_before_leave()
   autocmd BufWritePost *.md call s:dirty_guard_after_save()
   autocmd BufUnload,BufDelete *.md call s:dirty_guard_clear()
   autocmd VimLeavePre * call s:dirty_guard_clear_all()
