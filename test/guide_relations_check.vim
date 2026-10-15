@@ -118,7 +118,28 @@ try
   let s:g = s:guide()
   call s:ok('英語: 題が英語', index(s:g, 'title: Gnosis Guide') >= 0 && index(s:g, '# Gnosis Guide') >= 0)
   call s:ok('英語: 関係の節が残る', s:tail(s:g) ==# s:t)
-  call s:ok('英語: 同期しても変わらない', s:sync() =~# 'updated 0 file')
+  let s:before_sync = {}
+  for s:fp in glob(s:v . '/*.md', 1, 1)
+    let s:before_sync[s:fp] = readfile(s:fp)
+  endfor
+  let s:english_update = s:sync()
+  call s:ok('英語: 同期しても変わらない', s:english_update =~# 'updated 0 file')
+  if s:english_update !~# 'updated 0 file'
+    call add(s:out, 'INFO English sync: ' . substitute(s:english_update, '\\n', ' ', 'g'))
+    for s:fp in keys(s:before_sync)
+      if readfile(s:fp) !=# s:before_sync[s:fp]
+        call add(s:out, 'INFO changed: ' . fnamemodify(s:fp, ':t'))
+        let s:b = s:before_sync[s:fp]
+        let s:a = readfile(s:fp)
+        for s:k in range(0, max([len(s:b), len(s:a)]) - 1)
+          if get(s:b, s:k, '<EOF>') !=# get(s:a, s:k, '<EOF>')
+            call add(s:out, 'INFO first delta line ' . (s:k + 1) . ' before=' . string(get(s:b, s:k, '<EOF>')) . ' after=' . string(get(s:a, s:k, '<EOF>')))
+            break
+          endif
+        endfor
+      endif
+    endfor
+  endif
   call gnosis#i18n#set_lang('ja')
 
   " ガイド本文の説明（`### Group` などの書き方の説明）を関係の節と取り違えない
