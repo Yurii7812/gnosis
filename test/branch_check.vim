@@ -21,6 +21,15 @@ endfunction
 function! s:file(name) abort
   return readfile(s:v . '/' . a:name)
 endfunction
+" ParentBranch: は本文の上の先頭のブロック。その中のリンク行
+function! s:pb_block(name) abort
+  let l:ls = s:file(a:name)
+  let l:i = index(l:ls, 'ParentBranch:')
+  if l:i < 0 | return [] | endif
+  let l:j = l:i + 1
+  while l:j < len(l:ls) && l:ls[l:j] =~# '^\[' | let l:j += 1 | endwhile
+  return l:ls[l:i + 1 : l:j - 1]
+endfunction
 function! s:count(name, pat) abort
   return len(filter(s:file(a:name), 'v:val =~# a:pat'))
 endfunction
@@ -188,7 +197,7 @@ call s:ok('zn Enter: 本文リンク・Branch・Context が共存', !empty(s:ne)
 
 " ---------------------------------------------------------------- zn h / t は派生関係を付けるが Context は増やさない
 execute 'edit ' . fnameescape(s:v . '/d.md')
-call cursor(8, 1)
+call cursor(search('^D の本文。$', 'nw'), 1)
 let s:before = s:files()
 let g:gnosis_test_keys = ['h']
 sleep 1100m
@@ -265,8 +274,8 @@ call s:ok('p: 現在のノート S1 の ParentBranch に R1', index(s:file('s1.m
 call s:ok('p: 相手 R1 の ChildBranch に S1', index(s:file('r1.md'), 'ChildBranch:') >= 0 && s:count('r1.md', '^\[ノートS1\](s1\.md)$') == 1)
 call s:ok('p: バッファが読み直されている', !&modified && join(getline(1, '$'), "\n") ==# join(s:file('s1.md'), "\n"))
 call s:ok('b と p は同じ形の関係を作る（親に ChildBranch・子に ParentBranch）',
-      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:file('q1.md')[-2 :] ==# ['ParentBranch:', '[ノートP1](p1.md)']
-      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:file('s1.md')[-2 :] ==# ['ParentBranch:', '[ノートR1](r1.md)'])
+      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:pb_block('q1.md') ==# ['[ノートP1](p1.md)']
+      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:pb_block('s1.md') ==# ['[ノートR1](r1.md)'])
 " 同じ関係をもう一度（重複しない）
 let s:s1 = s:file('s1.md')
 let s:r1 = s:file('r1.md')
@@ -430,8 +439,8 @@ call s:ok('p: 現在のノート S1 の ParentBranch に R1', index(s:file('s1.m
 call s:ok('p: 相手 R1 の ChildBranch に S1', index(s:file('r1.md'), 'ChildBranch:') >= 0 && s:count('r1.md', '^\[ノートS1\](s1\.md)$') == 1)
 call s:ok('p: バッファが読み直されている', !&modified && join(getline(1, '$'), "\n") ==# join(s:file('s1.md'), "\n"))
 call s:ok('b と p は同じ形の関係を作る（親に ChildBranch・子に ParentBranch）',
-      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:file('q1.md')[-2 :] ==# ['ParentBranch:', '[ノートP1](p1.md)']
-      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:file('s1.md')[-2 :] ==# ['ParentBranch:', '[ノートR1](r1.md)'])
+      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:pb_block('q1.md') ==# ['[ノートP1](p1.md)']
+      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:pb_block('s1.md') ==# ['[ノートR1](r1.md)'])
 " 同じ関係をもう一度（重複しない）
 let s:s1 = s:file('s1.md')
 let s:r1 = s:file('r1.md')
@@ -520,7 +529,7 @@ qa!
 
 " ---------------------------------------------------------------- zn h / t は派生関係を付けるが Context は増やさない
 execute 'edit ' . fnameescape(s:v . '/d.md')
-call cursor(8, 1)
+call cursor(search('^D の本文。$', 'nw'), 1)
 let s:before = s:files()
 let g:gnosis_test_keys = ['h']
 sleep 1100m
@@ -597,8 +606,8 @@ call s:ok('p: 現在のノート S1 の ParentBranch に R1', index(s:file('s1.m
 call s:ok('p: 相手 R1 の ChildBranch に S1', index(s:file('r1.md'), 'ChildBranch:') >= 0 && s:count('r1.md', '^\[ノートS1\](s1\.md)$') == 1)
 call s:ok('p: バッファが読み直されている', !&modified && join(getline(1, '$'), "\n") ==# join(s:file('s1.md'), "\n"))
 call s:ok('b と p は同じ形の関係を作る（親に ChildBranch・子に ParentBranch）',
-      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:file('q1.md')[-2 :] ==# ['ParentBranch:', '[ノートP1](p1.md)']
-      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:file('s1.md')[-2 :] ==# ['ParentBranch:', '[ノートR1](r1.md)'])
+      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:pb_block('q1.md') ==# ['[ノートP1](p1.md)']
+      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:pb_block('s1.md') ==# ['[ノートR1](r1.md)'])
 " 同じ関係をもう一度（重複しない）
 let s:s1 = s:file('s1.md')
 let s:r1 = s:file('r1.md')
@@ -737,8 +746,8 @@ call s:ok('p: 現在のノート S1 の ParentBranch に R1', index(s:file('s1.m
 call s:ok('p: 相手 R1 の ChildBranch に S1', index(s:file('r1.md'), 'ChildBranch:') >= 0 && s:count('r1.md', '^\[ノートS1\](s1\.md)$') == 1)
 call s:ok('p: バッファが読み直されている', !&modified && join(getline(1, '$'), "\n") ==# join(s:file('s1.md'), "\n"))
 call s:ok('b と p は同じ形の関係を作る（親に ChildBranch・子に ParentBranch）',
-      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:file('q1.md')[-2 :] ==# ['ParentBranch:', '[ノートP1](p1.md)']
-      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:file('s1.md')[-2 :] ==# ['ParentBranch:', '[ノートR1](r1.md)'])
+      \ s:file('p1.md')[-2 :] ==# ['ChildBranch:', '[ノートQ1](q1.md)'] && s:pb_block('q1.md') ==# ['[ノートP1](p1.md)']
+      \ && s:file('r1.md')[-2 :] ==# ['ChildBranch:', '[ノートS1](s1.md)'] && s:pb_block('s1.md') ==# ['[ノートR1](r1.md)'])
 " 同じ関係をもう一度（重複しない）
 let s:s1 = s:file('s1.md')
 let s:r1 = s:file('r1.md')

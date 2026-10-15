@@ -65,7 +65,9 @@ _YOMI_PAIR_RE = re.compile(r'^\s+("(?:[^"\\]|\\.)*")\s*:\s*("(?:[^"\\]|\\.)*")\s
 _LINK_LINE_RE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)]+\)\s*(?:—\s*\S+)?\s*$")
 # ここから後ろ（### ParentBranch / ### ChildBranch / ### Context / ### Related / ### BackLink など）は本文ではない。
 _SECTION_HEAD_RE = re.compile(
-    r"^(?:###\s*(?:ParentBranch|ChildBranch|Parent|Context|Group|Related|BackLink)|(?:ParentBranch|ChildBranch|Related|BackLink):)\s*$")
+    r"^(?:###\s*(?:ParentBranch|ChildBranch|Parent|Context|Group|Related|BackLink)|(?:ChildBranch|Related|BackLink):)\s*$")
+# 本文の上の先頭のブロック。中のリンクは並べ替えない（追加した順のまま）
+_TOP_BLOCK_HEADS = ("ParentBranch:", "BranchGroup:", "ThisNoteGroup:", "Group:", "Context:")
 
 # --- pykakasi（遅延 import） ------------------------------------------------
 
@@ -391,7 +393,7 @@ def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
             continue
         if in_fence:
             continue  # コードブロックの中の文字列は対象にしない
-        if ln.strip() == "Context:":
+        if ln.strip() in _TOP_BLOCK_HEADS:
             in_ctx = True
             continue
         if in_ctx and _LINK_LINE_RE.match(ln):
@@ -434,7 +436,7 @@ def persist_readings(lines: list[str], base_dir) -> int:
             continue
         if in_fence:
             continue
-        if line.strip() == "Context:":
+        if line.strip() in _TOP_BLOCK_HEADS:
             in_ctx = True
             continue
         if in_ctx and _LINK_LINE_RE.match(line):

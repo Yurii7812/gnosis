@@ -105,7 +105,9 @@ LEGACY_THIS_NOTE_GROUP_HEAD = "ThisNoteGroup:"  # 読み込み互換
 LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統一する。
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
-# 関係の節の見出しは、Group: / Context: と同じ「名前:」の形で書く（2026-10-15〜）。
+# 関係の見出しは、Group: / Context: と同じ「名前:」の形で書く（2026-10-15〜）。
+# ノートの並び: ParentBranch: → BranchGroup: → Group: → Context:（ここまで本文の上、H1 の直後のブロック）
+#   → 本文 → ChildBranch: → Related: → BackLink:（本文の下の節）。
 # 旧形式の `### 名前` も読める（出力は「名前:」に統一する）。
 PARENT_BRANCH_MARK = "ParentBranch:"
 CHILD_BRANCH_MARK = "ChildBranch:"
@@ -130,7 +132,7 @@ CONTEXT_HEAD = "Context:"
 SECTION_ORDER = (PARENT_BRANCH_MARK, CONTEXT_MARK, GROUP_MARK, CHILD_BRANCH_MARK,
                  RELATED_MARK, BACKLINK_MARK)
 # 末尾の関係の節の見出し（新旧とも）。本文はこれより前。Group: / Context: は本文冒頭のブロックなので含まない。
-ALL_SECTION_HEADS = (PARENT_BRANCH_MARK, PARENT_BRANCH_MARK_LEGACY, CONTEXT_MARK, UP_MARK, LEGACY_GROUP_MARK,
+ALL_SECTION_HEADS = (PARENT_BRANCH_MARK_LEGACY, CONTEXT_MARK, UP_MARK, LEGACY_GROUP_MARK,
                      CHILD_BRANCH_MARK, CHILD_BRANCH_MARK_LEGACY, RELATED_MARK, RELATED_MARK_LEGACY,
                      BACKLINK_MARK, BACKLINK_MARK_LEGACY)
 # 旧見張り（新しい順）。parse だけが読む。render は新表記（## Parent / ## Child）に統一する。
@@ -456,12 +458,18 @@ _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1|(`+)[^`]*$")
 
 
+# Context: より上に来る、本文の上の先頭のブロックの見出し（並び: ParentBranch → BranchGroup → Group → Context）
+_ABOVE_CONTEXT_HEADS = ("ParentBranch:", "BranchGroup:", "ThisNoteGroup:", "Group:")
+
+
 def find_context_block(lines: list[str], start: int = 0) -> tuple[int, int] | None:
     """新形式の Context ブロックの (`Context:` の行, リンクの最後の行)（0 始まり）。無ければ None。
-    H1 の直後（間は空行だけ。H1 が無ければ先頭）にあるものだけ。リンク行が続く間がブロック。コードブロックの中は見ない。"""
+    H1 の直後にあるものだけ（間は空行と、上に来る先頭のブロック ParentBranch: / BranchGroup: / Group: だけ。
+    H1 が無ければ先頭）。リンク行が続く間がブロック。コードブロックの中は見ない。"""
     fenced = _fenced(lines)
     seen_h1 = False
-    for i in range(start, len(lines)):
+    i = start
+    while i < len(lines):
         if fenced[i]:
             return None
         s = lines[i].strip()
@@ -471,12 +479,47 @@ def find_context_block(lines: list[str], start: int = 0) -> tuple[int, int] | No
                 j += 1
             return (i, j)
         if s == "":
+            i += 1
             continue
         if re.match(r"^#\s+\S", lines[i]) and not seen_h1:
             seen_h1 = True
+            i += 1
+            continue
+        if s in _ABOVE_CONTEXT_HEADS:
+            i += 1
+            while i < len(lines) and not fenced[i] and _SIMPLE_LINK_LINE_RE.match(lines[i]):
+                i += 1
             continue
         return None
     return None
+
+
+def above_context_end(lines: list[str], start: int = 0) -> int | None:
+    """H1 の直後に続く、Context: より上の先頭のブロック（ParentBranch: / BranchGroup: / Group:）の終わりの次の行。
+    そういうブロックが無ければ None。Context: を新しく作るときは、ここに置く。"""
+    fenced = _fenced(lines)
+    seen_h1 = False
+    end = None
+    i = start
+    while i < len(lines):
+        if fenced[i]:
+            break
+        s = lines[i].strip()
+        if s == "":
+            i += 1
+            continue
+        if re.match(r"^#\s+\S", lines[i]) and not seen_h1:
+            seen_h1 = True
+            i += 1
+            continue
+        if s in _ABOVE_CONTEXT_HEADS:
+            i += 1
+            while i < len(lines) and not fenced[i] and _SIMPLE_LINK_LINE_RE.match(lines[i]):
+                i += 1
+            end = i
+            continue
+        break
+    return end
 
 
 def _fenced(lines: list[str]) -> list[bool]:
@@ -1453,6 +1496,23 @@ def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bo
     return [], lines, False
 
 
+def _take_parent_branch_block(lines: list[str]) -> tuple[list[str], list[str]]:
+    """`ParentBranch:`（本文の上の先頭のブロック）を読む。範囲は見出しの直後に続くリンク行だけ。
+    旧形式の `### ParentBranch`（本文の下の節）はここでは読まない（節として読む）。"""
+    flags = _fenced(lines)
+    for i, ln in enumerate(lines):
+        if flags[i] or ln.strip() != PARENT_BRANCH_MARK:
+            continue
+        j = i + 1
+        while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
+            j += 1
+        links = lines[i + 1:j]
+        if j < len(lines) and not lines[j].strip():
+            j += 1  # 区切りの空行は 1 行だけ（それ以上は本文の余白として残す）
+        return links, lines[:i] + lines[j:]
+    return [], lines
+
+
 def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
     """新しい Group: と旧 ### Group を読む。
 
@@ -1490,6 +1550,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     title = _fm_title(fm) or path.stem
     # Group / BranchGroup の後ろに Context がある形式でも、先頭のブロックを
     # 順に取り除いてから Context を読む。旧 ThisNoteGroup も受け付ける。
+    pb_block, rest = _take_parent_branch_block(rest)
     group_block, rest = _take_group_block(rest)
     branch_links, rest, has_branch_group = _take_branch_group_block(rest)
     ctx: list[str] = []
@@ -1507,7 +1568,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
              RELATED_MARK: "related", RELATED_MARK_LEGACY: "related",
              BACKLINK_MARK: "back", BACKLINK_MARK_LEGACY: "back",
-             PARENT_BRANCH_MARK: "pbranch", PARENT_BRANCH_MARK_LEGACY: "pbranch",
+             PARENT_BRANCH_MARK_LEGACY: "pbranch",
              CHILD_BRANCH_MARK: "cbranch", CHILD_BRANCH_MARK_LEGACY: "cbranch"}
     cur = "body"
     for ln, fz in zip(rest, _fenced(rest)):
@@ -1527,7 +1588,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
             "group": group_block + sec["group"], "related": sec["related"], "back": sec["back"],
-            "pbranch": sec["pbranch"], "cbranch": sec["cbranch"], "ctx": ctx, "ctx_at": ctx_at,
+            "pbranch": pb_block + sec["pbranch"], "cbranch": sec["cbranch"], "ctx": ctx, "ctx_at": ctx_at,
             "tail_blanks": tail_blanks, "hash": _content_hash(text)}
 
 
@@ -1761,7 +1822,7 @@ _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
-    """本文冒頭のブロックを BranchGroup: → Group: → Context: の順で出力する。
+    """本文冒頭のブロックを ParentBranch: → BranchGroup: → Group: → Context: の順で出力する。
 
     BranchGroup は直接のブランチで派生したグループ（旧 ThisNoteGroup）。
     Group は所属（手動＋自動）、Context は文脈。
@@ -1774,6 +1835,9 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     branch_links, body, found_branch_group = _take_branch_group_block(body)
 
     blocks: list[str] = []
+    pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
+    if pbranch:
+        blocks += [PARENT_BRANCH_MARK] + pbranch
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
     if groups:
@@ -1820,9 +1884,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     related = [ln for ln in n.get("related", [])]
     back_lines = [f"[{titles[t]}]({_rel(path.parent, t)})" for t in back] if name not in _NO_BACKLINK_NAMES else []
     sections: list[tuple[str, list[str]]] = []
-    # 並びは ParentBranch → Context → Group → ChildBranch → Related → BackLink
-    if _has(n.get("pbranch")):
-        sections.append((PARENT_BRANCH_MARK, n["pbranch"]))
+    # 本文の下の節の並びは ChildBranch → Related → BackLink（ParentBranch は本文の上の先頭のブロック）
     if not use_block and _has(parent_lines):
         sections.append((CONTEXT_MARK, parent_lines))
     elif use_block and _has(n.get("_leftover")):

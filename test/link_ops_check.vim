@@ -254,6 +254,45 @@ call gnosis#insert_links_pick(['[ノートM2](m2.md)'], getpos('.'))
 let s:m2g = filter(map(glob(s:v . '/*.md', 1, 1), 'fnamemodify(v:val, ":t")'), 's:has(v:val, "^attribute: group$") && s:has(v:val, "^\\[ノートM2\\](m2\\.md)$")')
 call s:ok('\l g 候補の先頭（グループ）に入る', len(s:m2g) == 1, string(s:m2g))
 
+" ------------------------------------------------------------------ za → Enter でクリップボードのグループに今のノートを入れる
+call s:mk('jg.md', 'ノートJG', ['JG の本文。'])
+call s:mk('jg2.md', 'ノートJG2', ['JG2 の本文。'])
+call s:mk('jg3.md', 'ノートJG3', ['JG3 の本文。'])
+execute 'edit ' . fnameescape(s:v . '/jg.md')
+sleep 1100m
+let @" = '[グループG](g.md)'
+let @0 = @"
+let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za Enter（グループ）: 空 Enter はタイトルが表示名で、グループの本文に入る', s:has('g.md', '^\[ノートJG\](jg\.md)$'), string(s:file('g.md')))
+call s:ok('za Enter（グループ）: 今のノートの Group: にグループ', index(s:file('jg.md'), 'Group:') >= 0 && s:has('jg.md', '^\[グループG\](g\.md)$'), string(s:file('jg.md')))
+call s:ok('za Enter（グループ）: 今のノートの本文にはグループへのリンクを置かない', len(filter(copy(s:file('jg.md')), 'v:val =~# "(g\\.md)"')) == 1, string(s:file('jg.md')))
+execute 'edit ' . fnameescape(s:v . '/jg2.md')
+let @" = '[グループG](g.md)'
+let @0 = @"
+let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['好きな表示名']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za Enter（グループ）: 入力した表示名でグループに入る', s:has('g.md', '^\[好きな表示名\](jg2\.md)$'), string(s:file('g.md')))
+execute 'edit ' . fnameescape(s:v . '/jg3.md')
+let s:jg3 = getline(1, '$')
+let s:gbefore = s:file('g.md')
+let @" = '[グループG](g.md)'
+let @0 = @"
+let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ["\x1b"]
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za Enter（グループ）: 表示名で Esc なら何も変えない', getline(1, '$') ==# s:jg3 && s:file('g.md') ==# s:gbefore)
+" グループのノートからは、従来どおり本文にリンクを置く（グループをグループに入れる操作ではない）
+execute 'edit ' . fnameescape(s:v . '/g.md')
+let @" = '[ノートJG3](jg3.md)'
+let @0 = @"
+let g:gnosis_test_keys = ["\r"]
+call gnosis#add_clipboard_before_up_note()
+silent! write
+call s:ok('za Enter（普通のノートへのリンク）: 従来どおり本文に入る', s:has('g.md', '^\[ノートJG3\](jg3\.md)$'))
+
 " ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
 call s:mk('j.md', 'ノートJ', ['前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ'])
 execute 'edit ' . fnameescape(s:v . '/j.md')

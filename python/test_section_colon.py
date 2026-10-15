@@ -78,5 +78,36 @@ with tempfile.TemporaryDirectory() as d:
     check(r["ok"] and p.count("### ChildBranch") == 1 and "ChildBranch:" not in p and "[Y](y.md)" in p,
           "旧形式の ### ChildBranch の節に足す（節を 2 つに分けない）")
 
+# 並び: ParentBranch: → BranchGroup: → Group: → Context:（本文の上）→ 本文 → ChildBranch: → Related: → BackLink:
+with tempfile.TemporaryDirectory() as d:
+    root = Path(d)
+    put(root, "index.md", "Index", ["[G](g.md)"], True)
+    put(root, "g.md", "G", ["[N](n.md)"], True)
+    put(root, "p.md", "P", ["本文P。"])
+    put(root, "k.md", "K", ["本文K。"])
+    put(root, "c.md", "C", ["本文C。"])
+    put(root, "r.md", "R", ["Related:", "[N](n.md)"])
+    put(root, "x.md", "X", ["文脈X。"])
+    put(root, "z.md", "Z", ["[N](n.md) に言及。"])
+    # わざとばらばらの位置に置く
+    # 本文の上のブロック同士・本文の下の節同士の順番を、わざと逆にしておく
+    put(root, "n.md", "N", ["Context:", "[X](x.md)", "BranchGroup:", "[K](k.md)", "ParentBranch:", "[P](p.md)", "",
+                            "本文N。", "", "Related:", "[R](r.md)", "ChildBranch:", "[C](c.md)"])
+    put(root, "c.md", "C", ["ParentBranch:", "[N](n.md)", "", "本文C。"])
+    put(root, "p.md", "P", ["本文P。", "", "ChildBranch:", "[N](n.md)"])
+    sync(root)
+    sync(root)
+    nl = lines(root, "n.md")
+    heads = [ln for ln in nl if ln in ("ParentBranch:", "BranchGroup:", "Group:", "Context:", "本文N。",
+                                       "ChildBranch:", "Related:", "BackLink:")]
+    check(heads == ["ParentBranch:", "BranchGroup:", "Group:", "Context:", "本文N。", "ChildBranch:", "Related:", "BackLink:"],
+          f"順番: ParentBranch → BranchGroup → Group → Context → 本文 → ChildBranch → Related → BackLink: {heads}")
+    h1 = nl.index("# N")
+    check(nl[h1 + 1] == "" and nl[h1 + 2] == "ParentBranch:", "ParentBranch: は H1 の直後（空行 1 つ）")
+    check(nl.index("本文N。") > nl.index("[X](x.md)") and nl[nl.index("本文N。") - 1] == "", "本文はブロックの下（空行 1 つ）")
+    before = {q.name: q.read_text(encoding="utf-8") for q in root.glob("*.md")}
+    sync(root)
+    check(before == {q.name: q.read_text(encoding="utf-8") for q in root.glob("*.md")}, "並べ替えのあとも冪等")
+
 print("all passed" if ng == 0 else f"{ng} failed")
 sys.exit(1 if ng else 0)

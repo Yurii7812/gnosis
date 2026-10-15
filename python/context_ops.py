@@ -94,6 +94,11 @@ def _insert_new_block(lines: list[str], links: list[str]) -> list[str]:
     h1 = next((i for i in range(start, len(out)) if not fenced[i] and _H1.match(out[i])), None)
     at = (h1 + 1) if h1 is not None else start
     block = [CONTEXT_HEAD] + links
+    # 上に来るブロック（ParentBranch: / BranchGroup: / Group:）があれば、そのすぐ下に並べる
+    above = nf.above_context_end(out, start)
+    if above is not None:
+        out[above:above] = block + ([""] if above < len(out) and out[above].strip() else [])
+        return out
     if at < len(out) and out[at].strip() == "":
         out[at + 1:at + 1] = block + [""]   # H1 の次の空行を、Context の前の空行として使う
     else:

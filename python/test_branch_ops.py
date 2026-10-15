@@ -69,7 +69,8 @@ class TestAdd(Base):
         self.assertEqual(res["code"], "added")
         # 本文は 1 バイトも変わらない。本文の末尾の空行 1 つはそのまま節との間の空行になる
         self.assertEqual(self.r("a.md"), a + "ChildBranch:\n[ノートB](b.md)\n")
-        self.assertEqual(self.r("b.md"), b + "\nParentBranch:\n[ノートA](a.md)\n")
+        # ParentBranch: は本文の上の先頭のブロック（H1 の直後。本文との間に空行 1 つ）
+        self.assertEqual(self.r("b.md"), b.replace("# ノートB\n\n", "# ノートB\n\nParentBranch:\n[ノートA](a.md)\n\n", 1))
 
     def test_one_parent_many_children(self) -> None:
         for n in "abcd":
@@ -165,8 +166,8 @@ class TestAdd(Base):
         # コードブロック内の偽の ParentBranch は親として数えない
         self.assertTrue(self.add("a.md", "b.md")["ok"])
         out = self.r("b.md")
-        self.assertTrue(out.startswith(b))
-        self.assertTrue(out.endswith("\nParentBranch:\n[A](a.md)\n"))
+        # 本物の ParentBranch: は H1 の直後の先頭のブロックに入り、コードブロックの中は 1 バイトも変わらない
+        self.assertEqual(out, b.replace("# B\n\n", "# B\n\nParentBranch:\n[A](a.md)\n\n", 1))
         self.assertTrue(bo.check(self.root)["ok"])
 
     def test_one_sided_state_is_completed_not_duplicated(self) -> None:

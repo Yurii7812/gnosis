@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -182,6 +183,9 @@ def insert_link(text: str, mark: str, link_line: str) -> str:
     secs = _section_starts(lines)
     # 旧形式の見出し（### ChildBranch など）の節があれば、それに足す（同じ節を新旧 2 つに分けない）
     mine = [i for i, m in secs if nf.LEGACY_TO_NEW_MARK.get(m, m) == mark]
+    if mark == PB and not mine:
+        # ParentBranch: は本文の上の先頭のブロック（H1 の直後。BranchGroup: / Group: / Context: より上）
+        return _insert_top_block_link(lines, PB, link_line) + "\n"
     if mine:
         start = mine[0]
         nxt = [i for i, _m in secs if i > start]
@@ -209,6 +213,36 @@ def insert_link(text: str, mark: str, link_line: str) -> str:
             block = [""] + block
         lines[pos:pos] = block
     return "\n".join(lines) + "\n"
+
+
+_TOP_BLOCK_HEADS = (nf.PARENT_BRANCH_MARK, nf.BRANCH_GROUP_HEAD, nf.LEGACY_THIS_NOTE_GROUP_HEAD,
+                    nf.GROUP_MARK, nf.CONTEXT_HEAD)
+
+
+def _insert_top_block_link(lines: list[str], mark: str, link_line: str) -> str:
+    """本文の上の先頭のブロック `mark`（ParentBranch: など）にリンク行を足す。無ければ H1 の直後に作る。
+    ほかの行（本文・余白の空行・ほかのブロック）は変えない。"""
+    flags = nf._fenced(lines)
+    for i, ln in enumerate(lines):
+        if not flags[i] and ln.strip() == mark:
+            j = i + 1
+            while j < len(lines) and nf._SIMPLE_LINK_LINE_RE.match(lines[j]):
+                j += 1
+            lines.insert(j, link_line)
+            return "\n".join(lines)
+    fm, _rest = nf._split_front_matter(lines)
+    h1 = next((i for i in range(len(fm), len(lines)) if not flags[i] and re.match(r"^#\s", lines[i])), None)
+    at = h1 + 1 if h1 is not None else len(fm)
+    if at < len(lines) and not lines[at].strip():
+        at += 1           # H1 の直後の空行を、ブロックの前の空行に使う
+        pre: list[str] = []
+    else:
+        pre = [""] if h1 is not None else []
+    nxt = lines[at] if at < len(lines) else None
+    # 次がほかの先頭のブロックならくっつけて並べる。本文ならあいだに空行を 1 つ
+    post = [""] if nxt is not None and nxt.strip() and nxt.strip() not in _TOP_BLOCK_HEADS else []
+    lines[at:at] = pre + [mark, link_line] + post
+    return "\n".join(lines)
 
 
 def _link(from_dir: Path, target: Path, title: str) -> str:

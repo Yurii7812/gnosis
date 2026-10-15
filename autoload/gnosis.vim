@@ -1103,7 +1103,7 @@ endfunction
 " リンクまで「消された」と扱われるおそれがあった。
 " 内容が変わったときだけ書き換える（毎回の無駄な差分を避ける）。
 let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink',
-      \ 'ParentBranch:', 'ChildBranch:', 'Related:', 'BackLink:']
+      \ 'ChildBranch:', 'Related:', 'BackLink:']
 
 " 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
 function! s:guide_relation_tail(lines) abort
@@ -6016,10 +6016,11 @@ let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちに�
 let s:v2_down_pat = '\C^\s*\%(BackLink:\|### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['ParentBranch:', 'ChildBranch:', 'Related:', 'BackLink:',
+" ParentBranch: / BranchGroup: / Group: / Context: は本文の上の先頭のブロックなので、本文の終わりの印には入れない
+let s:v2_any_marks = ['ChildBranch:', 'Related:', 'BackLink:',
       \ '### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(ParentBranch:\|ChildBranch:\|Related:\|BackLink:\|### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(ChildBranch:\|Related:\|BackLink:\|### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
   " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
@@ -6065,7 +6066,7 @@ function! s:context_insert_index(lines) abort
     if l:mark ==# s:v2_up_mark || index(s:v2_up_marks_legacy, l:mark) >= 0
       return -1
     endif
-    if (l:mark ==# '### ParentBranch' || l:mark ==# 'ParentBranch:') && l:pb < 0
+    if l:mark ==# '### ParentBranch' && l:pb < 0
       let l:pb = l:i
     endif
   endfor
@@ -6872,7 +6873,7 @@ function! s:top_block_last_index(lines) abort
   let l:last = -1
   while 1
     while l:i < len(a:lines) && trim(a:lines[l:i]) ==# '' | let l:i += 1 | endwhile
-    if l:i < len(a:lines) && trim(a:lines[l:i]) =~# '^\%(Group\|Context\|BranchGroup\|ThisNoteGroup\):$'
+    if l:i < len(a:lines) && trim(a:lines[l:i]) =~# '^\%(ParentBranch\|Group\|Context\|BranchGroup\|ThisNoteGroup\):$'
       let l:i += 1
       while l:i < len(a:lines) && a:lines[l:i] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
         let l:last = l:i
@@ -6883,6 +6884,35 @@ function! s:top_block_last_index(lines) abort
     endif
   endwhile
   return l:last
+endfunction
+
+" `h`（カーソル直下）でリンクを置く行。リンクは本文に置くものなので、カーソルが本文の外
+" （上の先頭のブロック ParentBranch: / BranchGroup: / Group: / Context: や、下の節 ChildBranch: / Related: / BackLink:）
+" にあるときは、そのブロックに入れない（入れると、知らないうちに親・所属・子などの関係ができてしまう）。
+"   上のブロックの中 → 本文の先頭（ブロックとの区切りの空行の下）、下の節の中 → 本文の最後。
+" 戻り値 [append する行番号, 先に空行を入れるか]。
+function! s:h_insert_at() abort
+  let l:cur = line('.')
+  let l:blk = s:top_block_last_index(getline(1, '$'))   " 0 始まり。無ければ -1
+  let l:h1 = search('^#\s', 'nw')
+  if l:blk >= 0 && l:h1 > 0 && l:cur > l:h1 && l:cur <= l:blk + 1
+    " 上のブロックの中: ブロックの最後のリンクの下。区切りの空行があればその下、無ければ空行を入れる
+    let l:last = l:blk + 1
+    if l:last < line('$') && trim(getline(l:last + 1)) ==# ''
+      return [l:last + 1, 0]
+    endif
+    return [l:last, 1]
+  endif
+  let l:up = s:first_section_line()
+  if l:up > 0 && l:cur >= l:up
+    " 下の節の中: 本文の最後（最初の節の手前の空行の上）
+    let l:end = l:up - 1
+    while l:end > 1 && trim(getline(l:end)) ==# ''
+      let l:end -= 1
+    endwhile
+    return [l:end, 0]
+  endif
+  return [l:cur, 0]
 endfunction
 
 " simple: 本文の最後（### Context の手前）へ link を、空行 1 つを挟んで置く
@@ -6947,6 +6977,28 @@ function! s:simple_add_parent(file, parent_path, parent_title) abort
   endif
 endfunction
 
+" H1 の直後に続く先頭のブロックのうち、a:heads のどれかのブロックが最後に終わる位置（0 始まり。そのブロックの
+" 最後のリンク行の次）。該当するブロックが無ければ 0。
+function! s:top_blocks_end(lines, h1, heads) abort
+  let l:i = a:h1 + 1
+  let l:end = 0
+  while 1
+    while l:i < len(a:lines) && trim(a:lines[l:i]) ==# '' | let l:i += 1 | endwhile
+    if l:i >= len(a:lines) || trim(a:lines[l:i]) !~# '^\%(ParentBranch\|BranchGroup\|ThisNoteGroup\|Group\|Context\):$'
+      break
+    endif
+    let l:head = trim(a:lines[l:i])
+    let l:i += 1
+    while l:i < len(a:lines) && a:lines[l:i] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:i += 1
+    endwhile
+    if index(a:heads, l:head) >= 0
+      let l:end = l:i
+    endif
+  endwhile
+  return l:end
+endfunction
+
 " lines の本文冒頭の Group: ブロックに link を 1 本足す（無ければ H1 の直後にブロックを作る）。同じリンクは足さない。
 " 返すのは新しい lines。Group: は H1 の直後のブロックで、本文の末尾には作らない。
 function! s:lines_add_group_link(lines, link) abort
@@ -6966,6 +7018,13 @@ function! s:lines_add_group_link(lines, link) abort
   let l:h1 = match(l:lines, '^#\s\+')
   if l:h1 < 0
     return extend(l:lines, ['Group:', a:link])
+  endif
+  " 並びは ParentBranch: → BranchGroup: → Group: → Context:。上の 2 つがあれば、その下に作る
+  let l:above = s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:'])
+  if l:above > 0
+    call insert(l:lines, a:link, l:above)
+    call insert(l:lines, 'Group:', l:above)
+    return l:lines
   endif
   let l:at = l:h1 + 1
   while l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
@@ -7186,7 +7245,13 @@ function! s:append_link_to_branch_group(link) abort
       endif
     endfor
     if l:h1 < 0 | return 0 | endif
-    call extend(l:lines, ['', 'BranchGroup:', a:link, ''], l:h1 + 1)
+    " 並びは ParentBranch: → BranchGroup:。ParentBranch: があれば、その下に作る
+    let l:above = s:top_blocks_end(l:lines, l:h1, ['ParentBranch:'])
+    if l:above > 0
+      call extend(l:lines, ['BranchGroup:', a:link], l:above)
+    else
+      call extend(l:lines, ['', 'BranchGroup:', a:link, ''], l:h1 + 1)
+    endif
   endif
   call s:replace_buffer_lines(l:lines)
   return 1
@@ -7404,7 +7469,9 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:save_ai = &autoindent | let l:save_si = &smartindent
   setlocal noautoindent nosmartindent
   if l:ch ==? 'h'
-    call append(line('.'), l:link)      " カーソル直下（本文）
+    " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
+    let [l:at, l:blank] = s:h_insert_at()
+    call append(l:at, l:blank ? ['', l:link] : [l:link])
     let l:added = 1
   elseif l:ch ==? 't'
     call s:insert_link_under_heading(a:head_lnum, l:link)  " 見出しの本文の最後
@@ -9573,7 +9640,12 @@ function! s:insert_links_core(links, ...) abort
     return -1
   endif
   if l:ch ==? 'h'
-    let l:ins = line('.')
+    " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
+    let [l:ins, l:blank] = s:h_insert_at()
+    if l:blank
+      call append(l:ins, '')
+      let l:ins += 1
+    endif
     for l:lk in reverse(copy(l:links))
       if s:buffer_has_link(l:lk)
         continue
@@ -9585,6 +9657,20 @@ function! s:insert_links_core(links, ...) abort
   endif
   " 既定（Enter）: 本文の最後 = ### Context の直前
   let l:added = 0
+  " za で、クリップボードのリンク先がグループで、今のノートがグループでないとき:
+  " Enter は「今のノートをそのグループに入れる」（グループの本文に、今のノートへのリンクを表示名つきで入れる）。
+  " グループへのリンクを今のノートの本文には置かない（所属は Group: に出る）。
+  if get(s:, 'za_join_group', 0) && !s:buf_is_group()
+    let l:groups = filter(copy(l:links), 's:link_is_group(v:val)')
+    if !empty(l:groups)
+      let l:joined = s:join_groups(l:groups)
+      if l:joined < 0
+        return 0
+      endif
+      let l:added += l:joined
+      call filter(l:links, '!s:link_is_group(v:val)')
+    endif
+  endif
   for l:lk in l:links
     if s:insert_link_before_up_note(l:lk)
       let l:added += 1
@@ -9594,6 +9680,64 @@ function! s:insert_links_core(links, ...) abort
     call s:ensure_blank_before_up()
   endif
   return l:added > 0
+endfunction
+
+" リンク行の宛先がグループ（attribute: group / index.md）のノートか
+function! s:link_is_group(link) abort
+  let l:tg = substitute(s:extract_target(a:link), '#.*$', '', '')
+  if empty(l:tg) | return 0 | endif
+  let l:fp = gnosis#resolve_link(l:tg)
+  return filereadable(l:fp) && (fnamemodify(l:fp, ':t') ==# 'index.md' || s:v2_path_attr(l:fp) ==# 'group')
+endfunction
+
+" 今のノートを、a:groups（グループへのリンク行）のグループに入れる。グループの本文に今のノートへのリンクを、
+" 表示名つきで入れる（表示名は空欄から聞く。空 Enter = 今のノートのタイトル、Esc = 全部取り消し）。
+" 今のノートの Group: にもすぐ出す。戻り値は入れたグループの数、取り消しなら -1。
+function! s:join_groups(groups) abort
+  let l:cur = expand('%:p')
+  let l:cur_title = gnosis#current_title()
+  let l:plan = []
+  for l:lk in a:groups
+    let l:gfp = fnamemodify(gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', '')), ':p')
+    if l:gfp ==# l:cur
+      continue
+    endif
+    let l:gb = bufnr(l:gfp)
+    if l:gb > 0 && getbufvar(l:gb, '&modified')
+      echo 'Gnosis: ' . gnosis#i18n#tr('開いているグループに未保存の変更があります。先に保存してください')
+      return -1
+    endif
+    let l:r = s:ask_display_name(l:cur_title)
+    if !l:r.ok
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+      return -1
+    endif
+    call add(l:plan, {'gfp': l:gfp, 'name': l:r.name, 'link': l:lk})
+  endfor
+  let l:n = 0
+  for l:p in l:plan
+    let l:gdir = fnamemodify(l:p.gfp, ':h')
+    " グループの本文に、既に今のノートへのリンクがあれば足さない
+    let l:dup = 0
+    for l:line in readfile(l:p.gfp)
+      let l:old = matchstr(l:line, '\](\zs[^)]\+\ze)')
+      if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, l:gdir), ':p') ==# l:cur
+        let l:dup = 1
+        break
+      endif
+    endfor
+    if !l:dup
+      call s:simple_body_append_to_file(l:p.gfp, s:make_link_from_dir(l:cur, s:md_link_text(l:p.name), l:gdir), 1)
+    endif
+    " 今のノートの Group: にすぐ出す（同期を待たない）
+    let l:title = s:group_label(l:p.gfp)
+    call s:replace_buffer_lines(s:lines_add_group_link(getline(1, '$'), s:make_link_from_dir(l:p.gfp, l:title, expand('%:p:h'))))
+    let l:n += 1
+  endfor
+  if l:n > 0
+    echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . join(map(copy(l:plan), 's:group_label(v:val.gfp)'), ', ')
+  endif
+  return l:n
 endfunction
 
 " 見出しが選ばれたあと: その見出しの本文の最後にリンクを入れ、Done を呼ぶ。
@@ -9907,7 +10051,13 @@ function! gnosis#add_clipboard_before_up_note(...) abort
     echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
-  call s:insert_links_at_position(l:links, function('s:links_added_done'))
+  " クリップボードのリンク先がグループなら、Enter は今のノートをそのグループに入れる（s:join_groups）
+  let s:za_join_group = 1
+  try
+    call s:insert_links_at_position(l:links, function('s:links_added_done'))
+  finally
+    let s:za_join_group = 0
+  endtry
 endfunction
 
 " \l などのピッカーから: 選んだリンク（Markdown リンクの文字列のリスト）を、za と同じ置き場所キー
@@ -15020,7 +15170,7 @@ function! s:new_note_gap(file) abort
   let l:last = -1
   while 1
     while l:i < len(l:lines) && trim(l:lines[l:i]) ==# '' | let l:i += 1 | endwhile
-    if l:i < len(l:lines) && l:lines[l:i] =~# '^\%(Group\|Context\|BranchGroup\|ThisNoteGroup\):\s*$'
+    if l:i < len(l:lines) && l:lines[l:i] =~# '^\%(ParentBranch\|Group\|Context\|BranchGroup\|ThisNoteGroup\):\s*$'
       let l:i += 1
       while l:i < len(l:lines) && l:lines[l:i] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
         let l:last = l:i
@@ -15035,7 +15185,7 @@ function! s:new_note_gap(file) abort
   let l:j = 0
   while l:j < len(l:rest) && trim(l:rest[l:j]) ==# '' | let l:j += 1 | endwhile
   " 本文がある（次が関係の節の見出しでない）ときは何もしない。見出しは `名前:` の形と旧 `### 名前` の両方
-  if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s' && l:rest[l:j] !~# '^\s*\%(ParentBranch\|ChildBranch\|Related\|BackLink\):\s*$'
+  if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s' && l:rest[l:j] !~# '^\s*\%(ChildBranch\|Related\|BackLink\):\s*$'
     return 0
   endif
   call s:syn_writefile(l:lines[: l:last] + ['', '', ''] + l:rest[l:j :], a:file)
