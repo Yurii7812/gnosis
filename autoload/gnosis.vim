@@ -7051,14 +7051,21 @@ function! s:simple_add_group(file, group_path, group_title) abort
   endif
 endfunction
 
-" simple: file の ### Related に other_path へのリンクを 1 本足す（zr の相手側）。
+" simple: file の Related に other_path へのリンクを 1 本足す。
 "   見出しが無ければ ### Context と ### BackLink の間に作る。Related 内に同じ
 "   リンク先が既にあれば何もしない。追加したら 1 を返す。
 function! s:simple_add_related(file, other_path, other_title) abort
-  if !filereadable(a:file)
-    return 0
-  endif
-  let l:lines = readfile(a:file)
+  if !filereadable(a:file) | return 0 | endif
+  let l:old = readfile(a:file)
+  let l:new = s:lines_add_related(l:old, a:file, a:other_path, a:other_title)
+  if l:new ==# l:old | return 0 | endif
+  call s:syn_writefile(l:new, a:file)
+  return 1
+endfunction
+
+" 既存の Related の挿入・重複判定を、書き込む前の計画にも使う。
+function! s:lines_add_related(lines, file, other_path, other_title) abort
+  let l:lines = copy(a:lines)
   let l:dir = fnamemodify(a:file, ':h')
   let l:link = s:make_link_from_dir(a:other_path, a:other_title, l:dir)
   let l:up = -1
@@ -7073,7 +7080,7 @@ function! s:simple_add_related(file, other_path, other_title) abort
     endif
   endfor
   if fnamemodify(a:file, ':t') ==# 'index.md'
-    return 0
+    return l:lines
   endif
   let l:rel = -1
   for l:i in range(0, (l:back >= 0 ? l:back : len(l:lines)) - 1)
@@ -7104,13 +7111,68 @@ function! s:simple_add_related(file, other_path, other_title) abort
       endif
       let l:fp = fnamemodify(gnosis#resolve_link(l:tg, l:dir), ':p')
       if l:fp ==# l:new_fp
-        return 0
+        return l:lines
       endif
     endfor
     call insert(l:lines, l:link, l:end)
   endif
-  call s:syn_writefile(l:lines, a:file)
-  return 1
+  return l:lines
+endfunction
+
+" r: 全対象を検証・計画してから双方向に保存する。失敗時は書き込み済みのファイルも戻す。
+function! s:related_links(links) abort
+  let l:cur = expand('%:p')
+  if !filereadable(l:cur) || &readonly || !&modifiable || fnamemodify(l:cur, ':t') ==# 'index.md'
+    return 0
+  endif
+  let l:before = {l:cur: readfile(l:cur, 'b')}
+  let l:plan = {l:cur: getline(1, '$')}
+  try
+    for l:lk in a:links
+      let l:tg = substitute(s:extract_target(l:lk), '#.*$', '', '')
+      let l:fp = empty(l:tg) ? '' : fnamemodify(gnosis#resolve_link(l:tg), ':p')
+      if empty(l:fp) || !filereadable(l:fp) || l:fp ==# l:cur || fnamemodify(l:fp, ':t') ==# 'index.md'
+        continue
+      endif
+      let l:bn = bufnr(l:fp)
+      if l:bn > 0 && (getbufvar(l:bn, '&modified') || getbufvar(l:bn, '&readonly'))
+        throw 'Gnosis: リンク先に未保存の変更があるか、読み取り専用です'
+      endif
+      if !has_key(l:plan, l:fp)
+        let l:before[l:fp] = readfile(l:fp, 'b')
+        let l:plan[l:fp] = readfile(l:fp)
+      endif
+      let l:plan[l:cur] = s:lines_add_related(l:plan[l:cur], l:cur, l:fp, s:get_title(l:fp))
+      let l:plan[l:fp] = s:lines_add_related(l:plan[l:fp], l:fp, l:cur, gnosis#current_title())
+    endfor
+    if len(l:plan) == 1 | return 0 | endif
+    for l:fp in keys(l:plan)
+      call gnosis#guard_vault_write(l:fp)
+      if filewritable(l:fp) != 1
+        throw 'Gnosis: Related を書き込めません: ' . l:fp
+      endif
+    endfor
+    let l:written = []
+    try
+      for l:fp in keys(l:plan)
+        call add(l:written, l:fp)
+        call s:syn_writefile(l:plan[l:fp], l:fp)
+      endfor
+    catch
+      for l:fp in l:written
+        call s:syn_writefile(l:before[l:fp], l:fp, 'b')
+      endfor
+      throw 'Gnosis: ' . v:exception
+    endtry
+    let l:view = winsaveview()
+    silent noautocmd edit!
+    call winrestview(l:view)
+    checktime
+    return 1
+  catch
+    echohl WarningMsg | echom v:exception | echohl NONE
+    return 0
+  endtry
 endfunction
 
 " simple: yes/no を聞く（既定 yes）
@@ -7372,8 +7434,8 @@ function! s:v2_new_interactive(attr) abort
     endif
     return
   endif
-  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / c=Context(新ノートに今のノート) / b=Branch(子) / p=Parent(親) / o=孤立  (Esc/q キャンセル)'),
-        \ gnosis#i18n#tr('Enter=末 t=見出し h=直下 c=Context b=子 p=親 o=孤立 (Esc)'))
+  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
+        \ gnosis#i18n#tr('Enter=末 o=孤立 b=子 p=親 t=節 h=下 c=Context r=Related (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
@@ -7409,8 +7471,8 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, 'p', 0)
     return
   endif
-  if l:ch !=# 'h' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / c / b / p / o のどれか）') | return
+  if l:ch !=# 'r' && l:ch !=# 'h' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / c / b / p / o / r のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -7528,6 +7590,7 @@ endfunction
 " a:1（任意）: {'ts': 新ノートのファイル名, 'name': グループに登録する表示名, 'place': c の置き場所（s:c_ask_place の答え）}
 "   通常のノート: Enter / t / h は今のノートにリンクを置き、b / p は Branch だけ、o は孤立、c は新ノートの Context に
 "   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
+"   r は Related だけを相互に追加し、本文リンクや自動 Branch は付けない。
 "   h / t / c / Enter は、元ノートを親・新ノートを子とする Branch を自動で記録する（index.md・グループからは記録しない）。
 "   グループの上: Enter は表示名つきのリンクでグループに登録（新ノートの Group: に出る）、o は登録しない。
 "   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
@@ -7557,7 +7620,24 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " t は見出しの下に直接リンクを置くので、元のノートが日記なら「今日のノート」には重ねない
   let s:diary_skip_from = (l:ch ==# 't' || get(l:place, 'mode', '') ==# 'head') ? l:cur : ''
   try
-    call s:write_new_note(gnosis#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
+    if l:ch ==# 'r'
+      " 日記への通常登録は相互リンクの保存に成功したあとで行う。
+      if filereadable(l:file) || isdirectory(l:file) | return | endif
+      try
+        call s:syn_writefile(gnosis#note_template(l:ts, 0), l:file)
+        if !s:related_links(['[' . l:ts . '](' . l:ts . '.md)'])
+          call delete(l:file)
+          return
+        endif
+      catch
+        call delete(l:file)
+        echohl WarningMsg | echom v:exception | echohl NONE
+        return
+      endtry
+      call s:diary_place_safe(l:file, readfile(l:file))
+    else
+      call s:write_new_note(gnosis#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
+    endif
   finally
     let s:diary_skip_from = ''
   endtry
@@ -9705,6 +9785,11 @@ function! s:insert_links_core(links, ...) abort
     call s:outline_pick_here(function('s:insert_links_under_heading', [l:links, a:1]))
     return -1
   endif
+  if l:ch ==# 'r'
+    call s:related_links(l:links)
+    " 保存済み（失敗時も Done による保存・同期をしない）。
+    return -1
+  endif
   if l:ch ==# 'p'
     " p: ParentBranch（直接の親）。選んだノートが親、今のノートが子。b の逆向きで、同じ検証・更新を通る。
     return gnosis#branch#add_parent_links(l:links)
@@ -9894,14 +9979,12 @@ endfunction
 
 " \l / za の位置キーの案内（1 行）。a:has_t は t（見出し）が使えるか、a:has_g は g（選択先がグループのとき）が使えるか。
 function! gnosis#insert_prompt_text(has_t, has_g) abort
-  let l:full = gnosis#i18n#tr('Enter=本文の最後 / ')
-        \ . (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
-        \ . gnosis#i18n#tr('h=カーソル直下 / c=Context(リンク先に今のノート) / b=Branch(子) / p=Parent(親)')
-        \ . (a:has_g ? gnosis#i18n#tr(' / g=このグループに入る') : '') . '  (Esc)'
-  let l:compact = gnosis#i18n#tr('Enter=末 ')
-        \ . (a:has_t ? gnosis#i18n#tr('t=見出し ') : '')
-        \ . gnosis#i18n#tr('h=直下 c=Context b=子 p=親')
-        \ . (a:has_g ? gnosis#i18n#tr(' g=グループに入る') : '') . ' (Esc)'
+  let l:full = (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
+        \ . (a:has_g ? gnosis#i18n#tr('g=このグループに入る / ') : '')
+        \ . gnosis#i18n#tr('Enter=本文の最後 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / r=Related(相互)') . '  (Esc)'
+  let l:compact = (a:has_t ? gnosis#i18n#tr('t=節 ') : '')
+        \ . (a:has_g ? gnosis#i18n#tr('g=所属 ') : '')
+        \ . gnosis#i18n#tr('Enter=末 p=親 b=子 h=下 c=Context r=Related') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
 

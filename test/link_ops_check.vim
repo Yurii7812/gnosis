@@ -3,6 +3,7 @@
 "   \l → n（表示名を入力）、zk → g（現ノートを新グループに登録）・zk → n（BranchGroup と ChildBranch に登録）、グループの \S。
 " 結果は $LINKOPS_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
 set nomore
+call gnosis#i18n#set_lang('ja')
 let s:work = $LINKOPS_WORK
 let s:v = s:work . '/vault'
 let s:res = []
@@ -246,9 +247,9 @@ call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
 call s:ok('\l c h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
 call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
 
-" ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 i / n / r）は何もしない
+" ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 i / n）は何もしない
 call s:mk('h.md', 'ノートH', ['H の本文。'])
-for s:k in ['i', 'n', 'r', 'x']
+for s:k in ['i', 'n', 'x']
   execute 'edit ' . fnameescape(s:v . '/c.md')
   let s:c_before = getline(1, '$')
   let g:gnosis_test_keys = [s:k]
@@ -313,9 +314,9 @@ let s:cols_save = &columns
 for s:cols in [80, 100, 120]
   let &columns = s:cols
   let s:worst = gnosis#insert_prompt_text(1, 1)
-  call s:ok('案内は 1 行に収まり g も見える（幅 ' . s:cols . '）', strdisplaywidth(s:worst) <= s:cols - 2 && s:worst =~# 'g=', s:worst . ' / ' . strdisplaywidth(s:worst))
+  call s:ok('案内は 1 行に収まり g も見える（幅 ' . s:cols . '）', strdisplaywidth(s:worst) <= s:cols - 2 && s:worst =~# 'g=' && s:worst =~# 'r=Related', s:worst . ' / ' . strdisplaywidth(s:worst))
 endfor
-let &columns = 200
+let &columns = 240
 call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=このグループに入る' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
 let &columns = s:cols_save
 
