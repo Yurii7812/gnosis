@@ -412,6 +412,17 @@ call s:ok('\S ビジュアル: 選択の外は変えない', getline(9, 11) ==# 
 " ------------------------------------------------------------------ za → c → Esc（何も変えない）
 call s:mk('k.md', 'ノートK', ['K の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
+" ------------------------------------------------------------------ グループへ逆リンクを足したら \S と同じ規則でよみ順に並べ直す
+call s:mk('ab1.md', 'あ', [])
+call s:mk('ab2.md', 'い', [])
+call s:mk('ab3.md', 'う', [])
+call s:mk('abg.md', '逆グループ', ['文', '', '[あ](ab1.md)', '[う](ab3.md)'], 1)
+let s:sid = matchstr(execute('scriptnames'), '\d\+\ze: [^\n]*autoload/gnosis\.vim')
+let s:Apply = function('<SNR>' . s:sid . '_apply_back_link')
+call s:Apply(s:v . '/abg.md', s:v . '/ab2.md', 'い', {'mode': 'end', 'lnum': 0, 'name': 'い'})
+let s:abg = s:file('abg.md')
+call s:ok('グループへ足したら末尾ブロックをよみ順に並べる', index(s:abg, '[あ](ab1.md)') < index(s:abg, '[い](ab2.md)') && index(s:abg, '[い](ab2.md)') < index(s:abg, '[う](ab3.md)') && s:abg[-5:] ==# ['文', '', '[あ](ab1.md)', '[い](ab2.md)', '[う](ab3.md)'], string(s:abg))
+
 let s:a_before = s:file('a.md')
 let s:k_before = s:file('k.md')
 let @" = '[ノートK](k.md)'

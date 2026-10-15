@@ -8019,6 +8019,11 @@ endfunction
 
 " 旧形式（v1 の Parent:/Child: / 旧 `---`）を v2 へ明示変換。
 "   :V2Migrate       … PKM ルート全体
+  " グループの本文の最後に足したときは、\S と同じ規則（最後のブロックをよみ順に）で並べ直す
+  if a:choice.mode ==# 'end' && s:v2_path_attr(a:target) ==# 'group'
+    let l:lines = s:sort_group_lines_by_yomi(l:lines, l:bdir)
+    silent! checktime
+  endif
 "   :V2Migrate %     … 現在のファイルだけ
 function! gnosis#v2_migrate(...) abort
   if s:pkm_format() !=# 'v2'
@@ -8026,6 +8031,46 @@ function! gnosis#v2_migrate(...) abort
   endif
   let l:root = s:get_pkm_root()
   if empty(l:root) | echoerr gnosis#i18n#tr('Gnosis: PKM ルート未設定') | return | endif
+" グループの行リストの「本文の最後のブロック」を、\S と同じ sort_yomi.py でよみ順に並べて返す。
+" 失敗・リンクが 1 本以下・並びが変わらないときは元の行をそのまま返す。
+" （s:group_last_block は現在バッファを見るので、一時バッファに載せて使う）
+function! s:sort_group_lines_by_yomi(lines, base_dir) abort
+  let l:script = s:sort_yomi_script()
+  if !filereadable(l:script)
+    return a:lines
+  endif
+  let l:cur = bufnr('%')
+  noautocmd silent keepalt new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, a:lines)
+  let l:r = s:group_last_block()
+  let l:cnt = empty(l:r) ? 0 : s:count_link_lines(l:r[0], l:r[1])
+  noautocmd silent! bwipeout!
+  if bufexists(l:cur) && bufnr('%') != l:cur
+    silent! execute 'noautocmd buffer ' . l:cur
+  endif
+  if empty(l:r) || l:cnt <= 1
+    return a:lines
+  endif
+  let l:block = a:lines[l:r[0] - 1 : l:r[1] - 1]
+  let l:report = tempname()
+  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(a:base_dir)
+        \ . ' --report-file ' . shellescape(l:report)
+  let l:out = system(l:cmd, join(l:block, "\n") . "\n")
+  call delete(l:report)
+  if v:shell_error != 0
+    return a:lines
+  endif
+  let l:new = split(l:out, "\n", 1)
+  if !empty(l:new) && l:new[-1] ==# ''
+    call remove(l:new, -1)
+  endif
+  if len(l:new) != len(l:block)
+    return a:lines
+  endif
+  return (l:r[0] > 1 ? a:lines[0 : l:r[0] - 2] : []) + l:new + a:lines[l:r[1] :]
+endfunction
+
   let l:args = [s:python_cmd(), g:gnosis_python, 'migrate', l:root]
   if a:0 > 0 && a:1 !=# ''
     call add(l:args, a:1 ==# '%' ? expand('%:p') : a:1)
