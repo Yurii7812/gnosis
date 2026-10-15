@@ -96,6 +96,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `gs` … full-text search of the vault (titles first; titles on the left, hits highlighted on the right) → `⏎` opens the hit line (`:GnosisSearch`)
 - `<Space>` … search the notes linked from the current note (titles first; their bodies too) → `⏎` opens
 - `\l` … choose a note with the same search and put a link with a position key (`:GnosisLinkPick`)
+- Search modes (shared by `gs` and normal / visual `\l`) … `Ctrl+→` / `Ctrl+↓` cycle forward, `Ctrl+←` / `Ctrl+↑` backward: All → Groups → Groups + index names → Notes. The screen shows the current mode. Switching preserves the query and works with zero results. Plain arrows keep their existing behavior
+- Index names … body links in groups (`index.md`, topic indexes, etc.) supply independent candidates pointing to their destination. Relation fields, code, and ordinary notes' body links are excluded. Different names for one destination stay separate; identical destination/name pairs are deduplicated. Normal `\l` inserts that display name, visual `\l` keeps the selected text. `gs` opens the destination (a name-only hit does not jump to a made-up body hit line)
 - `rg` … ripgrep line search (`:Rg`)
 
 ## Pasting (clipboard)

@@ -306,34 +306,67 @@ function! s:link_pick_deferred(links, buf, pos, timer) abort
   call gnosis#insert_links_pick(a:links, getpos('.'))
 endfunction
 
-" note_search.py + fzf。表示はタイトル（with_nth で抜粋も出せる）。
-" 検索・並び（タイトル優先）・強調は python 側。fzf は --disabled で表示に徹する。
+" fzf 終了時（キャンセルを含む）に検索セッションのモードだけを破棄する。
+function! s:search_mode_exit(file, code) abort
+  call delete(a:file)
+endfunction
+
+" 検索・並び・強調は note_search.py。fzf は --disabled で表示とモード切替を受け持つ。
 function! s:note_search_run(prompt, with_nth, Sink, ...) abort
-  let l:cmd = s:note_search_cmd(a:0 > 0 ? a:1 : '')
-  if empty(l:cmd) | return 0 | endif
+  " <Space> の --only は従来どおり。gs / 通常・ビジュアル \l は共通の四モード。
+  let l:extra = a:0 > 0 ? a:1 : ''
+  let l:modefile = ''
+  if a:0 == 0
+    let l:modefile = tempname()
+    call writefile(['all'], l:modefile)
+    let l:extra = '--mode-file ' . shellescape(l:modefile) . ' --lang ' . shellescape(gnosis#i18n#lang())
+  endif
+  let l:cmd = s:note_search_cmd(l:extra)
+  if empty(l:cmd)
+    if !empty(l:modefile) | call delete(l:modefile) | endif
+    return 0
+  endif
   let l:preview = s:preview_script()
   let l:options = [
         \ '--ansi', '--multi', '--disabled',
-        \ '--delimiter=\t', '--with-nth=' . a:with_nth,
+        \ '--delimiter=\t', '--with-nth=' . (empty(l:modefile) ? a:with_nth : '2,4'),
         \ '--prompt=' . a:prompt,
         \ '--bind', 'change:reload:' . l:cmd . ' {q}',
         \ '--wrap-sign', '',
         \ ]
+  if !empty(l:modefile)
+    let l:labels = gnosis#i18n#lang() ==# 'ja'
+          \ ? ['全部', 'Ctrl+→/↓ 次・Ctrl+←/↑ 前']
+          \ : ['All', 'Ctrl+Right/Down next; Ctrl+Left/Up previous']
+    call extend(l:options, ['--header', join(l:labels, ' | ')])
+    for [l:key, l:direction] in [['ctrl-right', 'next'], ['ctrl-down', 'next'], ['ctrl-left', 'previous'], ['ctrl-up', 'previous']]
+      let l:switch = s:note_search_cmd(l:extra . ' --cycle ' . l:direction)
+      " transform-header は同期実行。モード保存後に同じクエリで再検索する。
+      call extend(l:options, ['--bind', l:key . ':clear-selection+transform-header(' . l:switch . ')+reload(' . l:cmd . ' {q})'])
+    endfor
+  endif
   if !empty(l:preview)
-    " スクロールは fzf に任せない（+{3}/2 は wrap の折返しを考慮せず、長い行の
-    " ヒットが下端で切れる）。preview_highlight.py が --line {3} でヒット行の
-    " 少し上から出し、先頭付近に見せる。
+    " wrap の折り返しを考慮し、preview_highlight.py がヒット行の少し上から出す。
     call extend(l:options, [
           \ '--preview', gnosis#python_cmd() . ' ' . shellescape(l:preview) . ' {1} {q} --line {3}',
           \ '--preview-window', 'right:50%:wrap',
           \ ])
   endif
-  call fzf#run(fzf#wrap({
+  let l:spec = {
         \ 'source': l:cmd . " ''",
         \ 'sink*': a:Sink,
         \ 'options': l:options,
         \ 'dir': s:root(),
-        \ }))
+        \ }
+  if !empty(l:modefile)
+    let l:spec.exit = function('s:search_mode_exit', [l:modefile])
+  endif
+  try
+    call fzf#run(fzf#wrap(l:spec))
+  catch
+    if !empty(l:modefile) | call delete(l:modefile) | endif
+    throw 'gnosis_search: ' . v:exception
+  endtry
   return 1
 endfunction
 
