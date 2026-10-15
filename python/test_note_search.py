@@ -14,7 +14,8 @@ class SearchModes(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.note('a', 'ハーブガーデンを作ってみたい', 'First line\nNeedle in body')
+        self.note('a', 'ハーブガーデンを作ってみたい',
+                  'Group:\n[Index](index.md)\n[G](g.md)\n[Topic](topic.md)\n\nFirst line\nNeedle in body')
         self.note('b', 'Ordinary B', '[incidental](a.md)')
         self.note('g', 'Group G', '[別の呼び名](a.md)', 'attribute: group')
         self.note('index', 'Global Index', '[ハーブ](a.md)\n[missing](missing.md)\n![image](b.md)\n'
@@ -49,11 +50,32 @@ class SearchModes(unittest.TestCase):
 
     def test_distinct_aliases_same_target_and_duplicate_pair(self):
         self.note('second', 'Second index', '[ハーブ](a.md)\n[園芸](a.md)', 'attribute: group')
+        a = self.root / 'a.md'
+        a.write_text(a.read_text().replace('Group:\n', 'Group:\n[Second](second.md)\n', 1))
         rows = [r for r in ns.search_rows(str(self.root), '', 'index') if Path(r[3]).name == 'a.md']
         names = [r[4] for r in rows]
         self.assertEqual(names.count('ハーブ'), 1)
         self.assertIn('園芸', names)
         self.assertIn('別の呼び名', names)
+
+    def test_index_names_require_membership_of_the_source_group(self):
+        self.note('loose', 'Loose group', '[unregistered](a.md)', 'attribute: group')
+        self.note('registered', 'Registered group', '[registered alias](b.md)', 'attribute: group')
+        self.note('b', 'Ordinary B', 'Group:\n[Registered](registered.md)\n\nBody')
+        entries = list(ns.index_entries(dict(ns.load_notes(str(self.root)))))
+        self.assertNotIn('unregistered', {name for _, name, _ in entries})
+        self.assertIn('registered alias', {name for _, name, _ in entries})
+        self.assertIn('loose', self.paths('index'), 'group candidates remain available')
+
+    def test_context_branch_and_code_do_not_count_as_membership(self):
+        self.note('a', 'A', 'Context:\n[Index](index.md)\n\n'
+                  'BranchGroup:\n[G](g.md)\n\n```\nGroup:\n[Topic](topic.md)\n```')
+        self.assertEqual(list(ns.index_entries(dict(ns.load_notes(str(self.root))))), [])
+
+    def test_legacy_group_membership(self):
+        self.note('a', 'A', 'Body\n\n### Group\n[Index](index.md)')
+        entries = list(ns.index_entries(dict(ns.load_notes(str(self.root)))))
+        self.assertEqual({name for _, name, _ in entries}, {'ハーブ'})
 
     def test_regular_body_hit_and_and_search(self):
         rows = ns.search_rows(str(self.root), 'Needle body', 'all')

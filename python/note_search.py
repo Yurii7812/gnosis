@@ -12,7 +12,7 @@
 
 使い方: note_search.py [--mode all|groups|index|notes] [--mode-file FILE] [--only <paths-file>] <root> [query...]
   --cycle next|previous … mode-file のモードを切り替えて画面の見出しを出す。
-  index はグループとグループ本文のリンク表示名。宛先＋表示名で重複を除く。
+  index はグループと、リンク先の Group: に登録元があるグループ本文のリンク表示名。宛先＋表示名で重複を除く。
   --only <paths-file> … そのファイルに列挙した絶対パスだけを検索対象にする
                         （<Space>=今のノートのリンク先に絞る用）。各行は
                         `絶対パス` か `絶対パス<TAB>リンクの表示名`。表示名があれば、
@@ -101,7 +101,7 @@ def first_hit_line(lines: list[str], tokens: list[str]) -> int:
 
 
 # Reuse the note-format parser for group attributes and body/relationship boundaries.
-# Only group bodies define index entries; a normal note's incidental links do not.
+# Only registered group body links define index entries; a normal note's incidental links do not.
 INDEX_LINK_RE = re.compile(r"(?<!!)\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 MODES = ("all", "groups", "index", "notes")
 
@@ -118,10 +118,19 @@ def index_entries(notes: dict[str, str]):
     for path in known:
         by_name.setdefault(path.name, []).append(path)
         by_name.setdefault(path.stem, []).append(path)
+    # Require the destination's explicit Group relation as well as the group's
+    # body entry. Incidental links inside a group are not registered entries.
+    parsed = {p: nf._simple_parse_text(Path(p), text) for p, text in notes.items()}
+    memberships = {}
+    for path, note in parsed.items():
+        memberships[Path(path).resolve()] = {
+            nf._resolve(unquote(target), Path(path).parent, Path(path).parent, by_name)
+            for _label, target in nf._links_from(note["group"])
+        }
     for source, text in notes.items():
         if not is_group(source, text):
             continue
-        body = nf._simple_parse_text(Path(source), text)["body"]
+        body = parsed[source]["body"]
         # The parser appends BranchGroup to body for rendering; it is a relation,
         # not an index entry, so do not collect it.
         if nf.BRANCH_GROUP_HEAD in body:
@@ -136,7 +145,7 @@ def index_entries(notes: dict[str, str]):
                 if not label or not target.lower().endswith(".md"):
                     continue
                 resolved = nf._resolve(target, Path(source).parent, Path(source).parent, by_name)
-                if resolved in known:
+                if resolved in known and Path(source).resolve() in memberships[resolved]:
                     yield known[resolved], label, source
 
 

@@ -31,9 +31,10 @@ class SearchScreen(unittest.TestCase):
             p.mkdir(parents=True)
         for name in ('fzf', 'fzf.vim'):
             (self.gh / 'plugins' / name).symlink_to(PLUGINS / name)
-        self.note('a', 'ハーブガーデンを作ってみたい', 'Target body\nNeedle hit here')
+        self.note('a', 'ハーブガーデンを作ってみたい',
+                  'Group:\n[Index](index.md)\n[G](g.md)\n\nTarget body\nNeedle hit here')
         self.note('b', 'Ordinary B', 'SELECT ME')
-        self.note('g', 'Group G', '[別名](a.md)', True)
+        self.note('g', 'Group G', '[別名](a.md)\n[unregistered](b.md)', True)
         self.note('index', 'Index', '[ハーブ](a.md)\n[ハーブ](a.md)', True)
         self.out = self.work / 'state.json'
         self.rc = self.work / 'vimrc'
@@ -75,6 +76,7 @@ class SearchScreen(unittest.TestCase):
                 s.send(DOWN, .5)
                 self.assertIn('Groups + index names |', s.text())
                 self.assertIn('ハーブ', s.text())
+                self.assertNotIn('unregistered', self.picker_text(s))
                 s.send(NEXT, .5)
                 self.assertIn('Notes |', s.text())
                 self.assertNotIn('Group G', self.picker_text(s))
