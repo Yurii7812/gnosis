@@ -100,7 +100,8 @@ DOWN_MARK = "### BackLink"
 # 現行（simple_sync）の見張り。上側は `### Context`（旧 `### Parent`）と `### Group`。
 # 旧 `### Parent` は parse だけが読み、sync が `### Context` へ移行する。
 CONTEXT_MARK = "### Context"
-GROUP_MARK = "### Group"
+GROUP_MARK = "Group:"
+LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統一する。
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
 PARENT_BRANCH_MARK = "### ParentBranch"
@@ -1428,7 +1429,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
-             GROUP_MARK: "group", RELATED_MARK: "related", DOWN_MARK: "back",
+             GROUP_MARK: "group", LEGACY_GROUP_MARK: "group", RELATED_MARK: "related", DOWN_MARK: "back",
              PARENT_BRANCH_MARK: "pbranch", CHILD_BRANCH_MARK: "cbranch"}
     cur = "body"
     for ln, fz in zip(rest, _fenced(rest)):
@@ -1649,29 +1650,52 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
 _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 
-def _body_with_context(n: dict, links: list[str], enabled: bool) -> list[str]:
-    """本文に Context ブロックを戻す。ブロックがあった場所（ctx_at）へ、無ければ H1 の直後へ。
-    リンクが無ければブロックごと出さない（取り出した跡の余計な空行は 1 つ詰める）。"""
+def _body_with_context(n: dict, links: list[str], enabled: bool,
+                       group_lines: list[str] | None = None) -> list[str]:
+    """本文冒頭のブロックを ThisNoteGroup: → Group: → Context: の順で出力する。
+
+    ThisNoteGroup はユーザー管理のリンク。Group は所属（手動＋
+    attribute: group のノート本文からの自動判定）、Context は文脈。
+    旧 ### Group は parse で読み取り、必ず Group: に移行する。
+    """
     body = list(n["body"])
     links = [ln for ln in links if ln.strip()]
-    at = n.get("ctx_at", -1)
-    if not links:
-        if 0 <= at < len(body) and at > 0 and body[at].strip() == "" and body[at - 1].strip() == "":
-            del body[at]
-        return body
-    block = [CONTEXT_HEAD] + links
-    if at >= 0:
-        body[at:at] = block
-        return body
-    fenced = _fenced(body)
-    h1 = next((i for i in range(len(body)) if not fenced[i] and re.match(r"^#\s+\S", body[i])), None)
-    pos = (h1 + 1) if h1 is not None else 0
-    if pos < len(body) and body[pos].strip() == "":
-        body[pos + 1:pos + 1] = block + [""]
-    else:
-        body[pos:pos] = [""] + block + [""]
-    return body
+    groups = [ln for ln in (group_lines or []) if ln.strip()]
 
+    # ThisNoteGroup: を本文中から回収し、ほかのブロックと順序を統一する。
+    this_group = []
+    found_this_group = False
+    flags = _fenced(body)
+    for i, ln in enumerate(body):
+        if flags[i] or ln.strip() != "ThisNoteGroup:":
+            continue
+        found_this_group = True
+        j = i + 1
+        while j < len(body) and _SIMPLE_LINK_LINE_RE.match(body[j]):
+            this_group.append(body[j])
+            j += 1
+        del body[i:j]
+        break
+
+    blocks: list[str] = []
+    if found_this_group:
+        blocks += ["ThisNoteGroup:"] + this_group
+    if groups:
+        blocks += [GROUP_MARK] + groups
+    if links:
+        blocks += [CONTEXT_HEAD] + links
+    if not blocks:
+        return body
+
+    flags = _fenced(body)
+    h1 = next((i for i, ln in enumerate(body)
+               if not flags[i] and re.match(r"^#\s+\S", ln)), None)
+    pos = h1 + 1 if h1 is not None else 0
+    # 直後の空白のみ整え、本文自体やリンクを移動・削除しない。
+    while pos < len(body) and not body[pos].strip():
+        del body[pos]
+    body[pos:pos] = ([""] if pos else []) + blocks + [""]
+    return body
 
 def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
                    group_lines: list[str] | None = None) -> str:
@@ -1686,7 +1710,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         while lines and lines[-1].strip() == "":
             lines.pop()
         return "\n".join(lines) + "\n"
-    lines += _body_with_context(n, parent_lines, True) if use_block else list(n["body"])
+    lines += _body_with_context(n, parent_lines if use_block else [], True, group_lines)
 
     def _has(ls) -> bool:
         return bool(ls) and any(ln.strip() for ln in ls)
@@ -1701,8 +1725,6 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         sections.append((CONTEXT_MARK, parent_lines))
     elif use_block and _has(n.get("_leftover")):
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
-    if _has(group_lines):
-        sections.append((GROUP_MARK, group_lines))
     if _has(n.get("cbranch")):
         sections.append((CHILD_BRANCH_MARK, n["cbranch"]))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
