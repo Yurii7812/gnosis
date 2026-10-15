@@ -3031,43 +3031,50 @@ endfunction
 
 " \k 用: Parent セクションへカーソルを移すだけで、リンク先は開かない
 " （:JumpParent は従来どおり、リンクが1つならそのノートを開く）。
-function! gnosis#jump_up_cursor() abort
-  " 一番上の関係の節（Context: / ChildBranch: / Related: / BackLink: など、最初に出てくるもの）の見出しへ
-  let l:up = s:first_section_line()
-  if l:up <= 0
-    echo 'Context: section not found'
-    return
-  endif
-  " 見出しは、下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
-  " 来るところまでで止める（末尾より下の空白は出さない）。
-  call s:jump_to_line(l:up)
+" 「名前:」だけの行（ParentBranch: / BranchGroup: / Group: / Context: / ChildBranch: / Related: / BackLink:）と
+" 旧形式の見出し。ノートの上にも下にも出る。コードブロックの中は数えない。
+let s:colon_head_pat = '\C^\s*\%(ParentBranch:\|BranchGroup:\|ThisNoteGroup:\|Group:\|Context:\|ChildBranch:\|Related:\|BackLink:\|### \%(ParentBranch\|ChildBranch\|Context\|Parent\|Group\|Related\|BackLink\)\)\s*$'
+
+" 全部の「名前:」行の行番号（上から順）
+function! s:colon_head_lines() abort
+  let l:flags = s:buf_fence_flags()
+  let l:res = []
+  for l:i in range(1, line('$'))
+    if getline(l:i) =~# s:colon_head_pat && !get(l:flags, l:i - 1, 0)
+      call add(l:res, l:i)
+    endif
+  endfor
+  return l:res
+endfunction
+
+" 見出しの行へ移る。下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
+" 来るところまでで止める（末尾より下の空白は出さない）。
+function! s:jump_head_centered(lnum) abort
+  call s:jump_to_line(a:lnum)
   let l:view = winsaveview()
-  let l:view.topline = s:view_top_centered(l:up)
+  let l:view.topline = s:view_top_centered(a:lnum)
   let l:view.topfill = 0
   call winrestview(l:view)
 endfunction
 
-" 一番下の関係の節（最後に出てくる Context: / ChildBranch: / Related: / BackLink: など）の見出しへ。
-function! gnosis#jump_last_section() abort
-  let l:save = winsaveview()
-  call cursor(line('$'), 1)
-  call cursor(line('$'), col([line('$'), '$']))
-  let l:flags = s:buf_fence_flags()
-  let l:found = search(s:v2_any_pat, 'bcW')
-  while l:found > 0 && get(l:flags, l:found - 1, 0)
-    call cursor(l:found, 1)
-    let l:found = search(s:v2_any_pat, 'bW')
-  endwhile
-  call winrestview(l:save)
-  if l:found <= 0
+" \k … このノートで一番上の「名前:」行（ParentBranch: / Group: / Context: など）へ
+function! gnosis#jump_up_cursor() abort
+  let l:h = s:colon_head_lines()
+  if empty(l:h)
     echo 'Context: section not found'
     return
   endif
-  call s:jump_to_line(l:found)
-  let l:view = winsaveview()
-  let l:view.topline = s:view_top_centered(l:found)
-  let l:view.topfill = 0
-  call winrestview(l:view)
+  call s:jump_head_centered(l:h[0])
+endfunction
+
+" \m … このノートで一番下の「名前:」行へ
+function! gnosis#jump_last_section() abort
+  let l:h = s:colon_head_lines()
+  if empty(l:h)
+    echo 'Context: section not found'
+    return
+  endif
+  call s:jump_head_centered(l:h[-1])
 endfunction
 
 function! gnosis#jump_down_top() abort
