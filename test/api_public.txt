@@ -68,6 +68,7 @@ gnosis#current_file
 gnosis#current_title
 gnosis#diary_adopt
 gnosis#diary_on_save
+gnosis#diary_test_add
 gnosis#diary_today
 gnosis#diary_update
 gnosis#digit_key

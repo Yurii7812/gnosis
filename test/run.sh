@@ -49,6 +49,9 @@ fi
 # 保存タイミング（Esc 即保存・gm 前保存・\tD 前保存など）の回帰網
 sh "$REPO/test/autosave_net.sh"
 
+# 日記と Group:（節が増えない・Group: は先頭・二重の節は 1 つにまとまる）
+sh "$REPO/test/diary_group_net.sh"
+
 # 保存後の非同期 Python sync と、編集中ノートの上書き競合
 sh "$REPO/test/autosync_dirty_guard_net.sh"
 

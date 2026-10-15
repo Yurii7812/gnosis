@@ -5994,6 +5994,8 @@ endfunction
 " front matter 終端行と、本文側で末尾寄りの --- 2 本（上側開始 / 下側開始）を返す。
 " 2 本無ければ EOF に補って返す。本文中の --- は末尾 2 本にならないので無視される。
 let s:v2_up_mark   = '### Context'
+" Group: は本文冒頭のブロック（H1 の直後）。本文の終わりを示す節の印（s:v2_any_marks）には入れない
+" （入れると、Group: のあるノートで「本文の終わり」が冒頭になり、日記の節が増え続ける）。
 let s:v2_group_mark = 'Group:'
 let s:v2_related_mark = '### Related'
 let s:v2_down_mark = '### BackLink'
@@ -6011,9 +6013,9 @@ let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちに�
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', 'Group:', '### Related', '### BackLink',
+let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|Group:\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
   " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
@@ -6909,31 +6911,42 @@ function! s:simple_add_parent(file, parent_path, parent_title) abort
   endif
 endfunction
 
-" simple: file の本文冒頭の Group: ブロックに group_path へのリンクを 1 本足す（無ければ H1 の直後に作る）。
-function! s:simple_add_group(file, group_path, group_title) abort
-  let l:lines = readfile(a:file)
-  let l:link = s:make_link_from_dir(a:group_path, a:group_title, fnamemodify(a:file, ':h'))
+" lines の本文冒頭の Group: ブロックに link を 1 本足す（無ければ H1 の直後にブロックを作る）。同じリンクは足さない。
+" 返すのは新しい lines。Group: は H1 の直後のブロックで、本文の末尾には作らない。
+function! s:lines_add_group_link(lines, link) abort
+  let l:lines = copy(a:lines)
   let l:flags = s:fence_flags(l:lines)
   for l:i in range(0, len(l:lines) - 1)
     if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'Group:'
       let l:at = l:i + 1
       while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
-        if l:lines[l:at] ==# l:link | return | endif
+        if l:lines[l:at] ==# a:link | return l:lines | endif
         let l:at += 1
       endwhile
-      call insert(l:lines, l:link, l:at)
-      call s:syn_writefile(l:lines, a:file)
-      return
+      call insert(l:lines, a:link, l:at)
+      return l:lines
     endif
   endfor
   let l:h1 = match(l:lines, '^#\s\+')
-  if l:h1 < 0 | return | endif
+  if l:h1 < 0
+    return extend(l:lines, ['Group:', a:link])
+  endif
   let l:at = l:h1 + 1
   while l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
     call remove(l:lines, l:at)
   endwhile
-  call extend(l:lines, ['', 'Group:', l:link, ''], l:at)
-  call s:syn_writefile(l:lines, a:file)
+  call extend(l:lines, ['', 'Group:', a:link, ''], l:at)
+  return l:lines
+endfunction
+
+" simple: file の本文冒頭の Group: ブロックに group_path へのリンクを 1 本足す（無ければ H1 の直後に作る）。
+function! s:simple_add_group(file, group_path, group_title) abort
+  let l:old = readfile(a:file)
+  let l:link = s:make_link_from_dir(a:group_path, a:group_title, fnamemodify(a:file, ':h'))
+  let l:new = s:lines_add_group_link(l:old, l:link)
+  if l:new !=# l:old
+    call s:syn_writefile(l:new, a:file)
+  endif
 endfunction
 
 " simple: file の ### Related に other_path へのリンクを 1 本足す（zr の相手側）。
@@ -14153,20 +14166,64 @@ function! s:diary_new_lines(title, is_group, parent_link, ...) abort
   if !empty(a:parent_link)
     " 親はすべてグループ（日記 / YYYY / YYYY-MM / Index）。
     " 「親に属する」関係を Context ではなく ### Group に記録する。
-    let l:p = index(l:lines, s:v2_group_mark)
-    if l:p >= 0
-      call insert(l:lines, a:parent_link, l:p + 1)
-    else
-      call extend(l:lines, [s:v2_group_mark, a:parent_link])
-    endif
+    let l:lines = s:lines_add_group_link(l:lines, a:parent_link)
   endif
   return l:lines
 endfunction
 
 " a:section が空なら本文の最後（### Context の直前）に足す。あれば `## 節` に足す。
 " 重複判定は同じ節の中だけ（文中にあっても節に足す）。
+" 試験用: ファイル a:file の日記の節 a:section に a:link を足す（日記へのメモの追加と同じ処理）。
+function! gnosis#diary_test_add(file, link, section) abort
+  call s:diary_edit_file(a:file, function('s:diary_op_add', [a:link, a:section]))
+endfunction
+
+" 同じ見出しの節（## 今日のノート など）が複数あるとき、リンクを最初の節に集めて 1 つにする。
+" 節の中がリンク行と空行だけのときだけ（文章が入っている節は触らない）。リンクは重複を除き順序を保つ。
+function! s:diary_merge_dup_sections(lines, section) abort
+  let l:head = '## ' . a:section
+  let l:flags = s:fence_flags(a:lines)
+  let l:heads = []
+  for l:i in range(0, len(a:lines) - 1)
+    if !l:flags[l:i] && a:lines[l:i] ==# l:head
+      call add(l:heads, l:i)
+    endif
+  endfor
+  if len(l:heads) < 2
+    return a:lines
+  endif
+  let l:ends = []
+  for l:h in l:heads
+    let l:e = len(a:lines)
+    for l:j in range(l:h + 1, len(a:lines) - 1)
+      if !l:flags[l:j] && (a:lines[l:j] =~# '^#' || index(s:v2_any_marks, trim(a:lines[l:j])) >= 0)
+        let l:e = l:j
+        break
+      endif
+    endfor
+    call add(l:ends, l:e)
+  endfor
+  let l:links = []
+  for l:k in range(len(l:heads))
+    for l:ln in a:lines[l:heads[l:k] + 1 : l:ends[l:k] - 1]
+      if trim(l:ln) ==# '' | continue | endif
+      if l:ln !~# '^\s*\[[^]]*\]([^)]\+)\s*$' | return a:lines | endif
+      if index(l:links, l:ln) < 0 | call add(l:links, l:ln) | endif
+    endfor
+  endfor
+  let l:out = copy(a:lines)
+  for l:k in reverse(range(1, len(l:heads) - 1))
+    call remove(l:out, l:heads[l:k], l:ends[l:k] - 1)
+  endfor
+  let l:first = l:heads[0]
+  call remove(l:out, l:first + 1, l:ends[0] - 1)
+  call extend(l:out, [''] + l:links + [''], l:first + 1)
+  return l:out
+endfunction
+
 function! s:diary_op_add(link, section, lines) abort
-  let l:lines = s:diary_op_add_raw(a:link, a:section, a:lines)
+  let l:lines = empty(a:section) ? a:lines : s:diary_merge_dup_sections(a:lines, a:section)
+  let l:lines = s:diary_op_add_raw(a:link, a:section, l:lines)
   return empty(a:section) ? l:lines : s:diary_section_blank(l:lines, a:section)
 endfunction
 
@@ -14320,7 +14377,7 @@ endfunction
 " 上側（### Context と ### Group）の範囲 [始まり, 終わり) を返す（0 始まりの行 index）。
 " 上側の節が無ければ [-1, -1]。
 function! s:diary_up_range(lines) abort
-  let l:up_marks = [s:v2_up_mark, s:v2_group_mark] + s:v2_up_marks_legacy
+  let l:up_marks = [s:v2_up_mark, s:v2_group_mark, 'Context:'] + s:v2_up_marks_legacy
   let l:p = -1
   for l:i in range(0, len(a:lines) - 1)
     if index(l:up_marks, trim(a:lines[l:i])) >= 0
@@ -14331,8 +14388,15 @@ function! s:diary_up_range(lines) abort
     return [-1, -1]
   endif
   let l:end = len(a:lines)
+  let l:block = index([s:v2_group_mark, 'Context:'], trim(a:lines[l:p])) >= 0
   for l:j in range(l:p + 1, len(a:lines) - 1)
-    if a:lines[l:j] =~# '^#' && index(l:up_marks, trim(a:lines[l:j])) < 0
+    if l:block
+      " 先頭のブロックは、リンク行（と空行）が続く間だけ。本文や次の見出しには広げない
+      if trim(a:lines[l:j]) !=# '' && a:lines[l:j] !~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        let l:end = l:j
+        break
+      endif
+    elseif a:lines[l:j] =~# '^#' && index(l:up_marks, trim(a:lines[l:j])) < 0
       let l:end = l:j
       break
     endif
@@ -14353,14 +14417,7 @@ function! s:diary_op_parent_swap(old, newlink, lines) abort
       endif
     endfor
   endif
-  let l:c = index(l:lines, s:v2_group_mark)
-  if l:c >= 0
-    call insert(l:lines, a:newlink, l:c + 1)
-  else
-    let l:at = s:context_insert_index(l:lines)
-    call extend(l:lines, [s:v2_group_mark, a:newlink], l:at < 0 ? len(l:lines) : l:at)
-  endif
-  return l:lines
+  return s:lines_add_group_link(l:lines, a:newlink)
 endfunction
 
 " グループ a:file の上側（### Context / ### Group）に a:tgt へのリンクがあるか
