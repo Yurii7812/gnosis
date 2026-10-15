@@ -7266,9 +7266,11 @@ function! s:v2_new_interactive(attr) abort
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前付きバッファで実行して') | echohl NONE | return
   endif
   if empty(a:attr)
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
+    echo s:fit_prompt(gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('h=直下 Enter=末 t=見出し c=Context b=子 p=親 o=孤立 (Esc)'))
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch)  (Esc/q キャンセル)')
+    echo s:fit_prompt(gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch)  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('h=直下 Enter=末 t=見出し c=Context b=子 p=親 o=孤立 n=BranchGroup (Esc)'))
   endif
   let l:ch = s:getkey()
   redraw
@@ -7632,7 +7634,8 @@ endfunction
 " B 側への入れ方を聞く。a:target … B のパス（まだ無い新ノートなら ''）、a:lines … B の行、
 " a:is_group … B がグループか、a:a_title … A のタイトル（表示名の既定）。
 function! s:ask_back_link(target, lines, is_group, a_title, Cont) abort
-  echo gnosis#i18n#tr('リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / w=リンク先を開いて編集 / o=入れない  (Esc で取り消し)')
+  echo s:fit_prompt(gnosis#i18n#tr('リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / w=リンク先を開いて編集 / o=入れない  (Esc で取り消し)'),
+        \ gnosis#i18n#tr('逆リンク: Enter=末 t=見出し w=編集 o=なし (Esc)'))
   let l:ch = s:getkey()
   redraw
   let l:n = char2nr(l:ch)
@@ -9533,10 +9536,7 @@ function! s:insert_links_core(links, ...) abort
     return 0
   endif
   let l:inline = !empty(get(s:, 'inline_pos', []))
-  echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文末 / ')
-        \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出し / ') : '')
-        \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名 / ') : '')
-        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related / g=グループ  (Esc)')
+  echo gnosis#insert_prompt_text(a:0 > 0, l:inline)
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -9748,6 +9748,34 @@ function! s:insert_links_under_heading(links, Done, lnum) abort
     endif
   endfor
   call a:Done()
+endfunction
+
+" キー待ちの案内は 1 行に収める。2 行になると「続けるには ENTER を押してください」の画面が出て、
+" 次に押したキー（g など）がその画面に食われて、コマンドとして動いてしまう。
+" 画面の幅（&columns）に収まらなければ短い案内（a:compact）にし、それでも収まらなければ切り詰める。
+function! s:fit_prompt(full, compact) abort
+  let l:w = max([&columns - 2, 20])
+  if strdisplaywidth(a:full) <= l:w
+    return a:full
+  endif
+  let l:t = a:compact
+  while strdisplaywidth(l:t) > l:w && strchars(l:t) > 1
+    let l:t = strcharpart(l:t, 0, strchars(l:t) - 1)
+  endwhile
+  return l:t
+endfunction
+
+" \l / za の位置キーの案内（1 行）。a:has_t は t（見出し）が使えるか、a:inline は i / n が使えるか（\l のとき）。
+function! gnosis#insert_prompt_text(has_t, inline) abort
+  let l:full = gnosis#i18n#tr('h=カーソル直下 / Enter=本文末 / ')
+        \ . (a:has_t ? gnosis#i18n#tr('t=見出し / ') : '')
+        \ . (a:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名 / ') : '')
+        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related / g=グループ  (Esc)')
+  let l:compact = gnosis#i18n#tr('h=直下 Enter=末 ')
+        \ . (a:has_t ? gnosis#i18n#tr('t=見出し ') : '')
+        \ . (a:inline ? gnosis#i18n#tr('i=位置 n=表示名 ') : '')
+        \ . gnosis#i18n#tr('c=Context b=子 p=親 r=Related g=グループ (Esc)')
+  return s:fit_prompt(l:full, l:compact)
 endfunction
 
 " g の追加先に選べるグループ（attribute: group）のノートの絶対パス。隠しフォルダ（.gnosis など）は見ない。

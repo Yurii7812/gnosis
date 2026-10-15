@@ -107,6 +107,7 @@ gnosis#i18n#tr
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
+gnosis#insert_prompt_text
 gnosis#is_autosave_target
 gnosis#is_vault_note
 gnosis#is_vault_path

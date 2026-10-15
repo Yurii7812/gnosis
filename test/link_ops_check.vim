@@ -293,6 +293,17 @@ call gnosis#add_clipboard_before_up_note()
 silent! write
 call s:ok('za Enter（普通のノートへのリンク）: 従来どおり本文に入る', s:has('g.md', '^\[ノートJG3\](jg3\.md)$'))
 
+" ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
+let s:cols_save = &columns
+for s:cols in [80, 100, 120]
+  let &columns = s:cols
+  let s:worst = gnosis#insert_prompt_text(1, 1)
+  call s:ok('案内は 1 行に収まり g も見える（幅 ' . s:cols . '）', strdisplaywidth(s:worst) <= s:cols - 2 && s:worst =~# 'g=', s:worst . ' / ' . strdisplaywidth(s:worst))
+endfor
+let &columns = 200
+call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=グループ' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
+let &columns = s:cols_save
+
 " ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
 call s:mk('j.md', 'ノートJ', ['前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ'])
 execute 'edit ' . fnameescape(s:v . '/j.md')
