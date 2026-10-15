@@ -7352,7 +7352,12 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
     endif
-    call s:run_update_one_for(l:cur)
+    if l:ch ==# 'g' && !empty(a:attr)
+      " 新グループの本文から元ノートの Group: へ所属を確定してから開く。
+      call s:run_update_one_for_sync(l:cur, 1)
+    else
+      call s:run_update_one_for(l:cur)
+    endif
   endif
   call gnosis#push_history()
   execute 'edit ' . fnameescape(l:file)
