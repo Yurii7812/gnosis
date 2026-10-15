@@ -10029,11 +10029,34 @@ endfunction
 function! s:insert_links_under_heading(links, Done, lnum) abort
   for l:lk in a:links
     if !s:buffer_has_link(l:lk)
+    " \S と同じ規則で、グループの本文の最後のブロックをよみ順に並べ直す。よみ（yomi:）は今のノートの
+    " ファイルにも書かれるので、先に今のノートを保存してから並べ、終わったら読み直す。
+    if &modified && &buftype ==# ''
+      silent! write
+    endif
+    for l:p in l:plan
+      call s:sort_group_file(l:p.gfp)
+    endfor
+    " よみが今のノートに書かれていたら読み直す（checktime は更新時刻が同じ秒だと気づかない）
+    let l:cur_file = expand('%:p')
+    if !&modified && !empty(l:cur_file) && filereadable(l:cur_file) && s:disk_differs_from_buffer(l:cur_file)
+      call s:reload_by_edit(l:cur_file)
+    endif
+    silent! checktime
       call s:insert_link_under_heading(a:lnum, l:lk)
     endif
   endfor
   call a:Done()
 endfunction
+" グループのファイルの本文の最後のブロックを、\S と同じ規則でよみ順に並べて書き戻す（変わらなければ書かない）。
+function! s:sort_group_file(path) abort
+  let l:lines = readfile(a:path)
+  let l:new = s:sort_group_lines_by_yomi(l:lines, fnamemodify(a:path, ':h'))
+  if l:new !=# l:lines
+    call s:syn_writefile(l:new, a:path)
+  endif
+endfunction
+
 
 " キー待ちの案内は 1 行に収める。2 行になると「続けるには ENTER を押してください」の画面が出て、
 " 次に押したキー（g など）がその画面に食われて、コマンドとして動いてしまう。

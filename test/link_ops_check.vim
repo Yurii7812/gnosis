@@ -432,6 +432,19 @@ call s:ok('\k: 一番上の「名前:」行（Group:）へ', getline('.') ==# 'G
 call gnosis#jump_last_section()
 call s:ok('\m: 一番下の「名前:」行（コードブロックの外の BackLink:）へ', getline('.') ==# 'BackLink:' && getline(line('.') + 1) ==# '[c](c.md)', getline('.') . ' @' . line('.'))
 
+" ------------------------------------------------------------------ \l → g → Enter / za → g: 入れたグループを \S と同じ規則でよみ順に並べる
+call s:mk('gj1.md', 'あ', [])
+call s:mk('gj3.md', 'う', [])
+call s:mk('gj2.md', 'い', [])
+call s:mk('gjg.md', '所属グループ', ['文', '', '[あ](gj1.md)', '[う](gj3.md)'], 1)
+execute 'edit! ' . fnameescape(s:v . '/gj2.md')
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_display_name = ['い']
+call gnosis#insert_links_pick(['[所属グループ](gjg.md)'], getpos('.'))
+let s:gjg = s:file('gjg.md')
+call s:ok('g Enter: 入れたグループがよみ順に並ぶ', s:gjg[-3:] ==# ['[あ](gj1.md)', '[い](gj2.md)', '[う](gj3.md)'], string(s:gjg))
+call s:ok('g: 今のノートの Group: にグループが出る・保存済み', index(getline(1, '$'), '[所属グループ](gjg.md)') >= 0 && !&modified, string(getline(1, '$')))
+
 " ------------------------------------------------------------------ za → c → Esc（何も変えない）
 call s:mk('k.md', 'ノートK', ['K の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
