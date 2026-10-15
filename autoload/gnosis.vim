@@ -1106,30 +1106,32 @@ let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '
 
 " 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
 function! s:guide_relation_tail(lines) abort
-  let l:fence = ''
+  " Group: は本文冒頭のブロックなので、従来の「見出しから EOF」扱いにしない。
+  " ガイドのテンプレート更新時は Group のリンクと旧末尾の関係節を別々に保存する。
+  let l:group = []
+  let l:other = []
+  let l:flags = s:fence_flags(a:lines)
   let l:in_fm = get(a:lines, 0, '') ==# '---'
-  for l:i in range(len(a:lines))
-    let l:ln = a:lines[l:i]
+  for l:i in range(0, len(a:lines) - 1)
+    let l:ln = trim(a:lines[l:i])
     if l:in_fm
-      if l:i > 0 && l:ln =~# '^---\s*$'
-        let l:in_fm = 0
-      endif
+      if l:i > 0 && l:ln ==# '---' | let l:in_fm = 0 | endif
       continue
     endif
-    let l:m = matchstr(l:ln, '^\s\{0,3}\zs\(`\{3,}\|\~\{3,}\)')
-    if !empty(l:m)
-      if empty(l:fence)
-        let l:fence = l:m[0]
-      elseif l:m[0] ==# l:fence
-        let l:fence = ''
-      endif
-      continue
-    endif
-    if empty(l:fence) && index(s:guide_relation_marks, trim(l:ln)) >= 0
-      return a:lines[l:i :]
+    if l:flags[l:i] | continue | endif
+    if l:ln ==# 'Group:' || l:ln ==# '### Group'
+      let l:j = l:i + 1
+      let l:group = ['Group:']
+      while l:j < len(a:lines) && a:lines[l:j] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        call add(l:group, a:lines[l:j])
+        let l:j += 1
+      endwhile
+    elseif index(s:guide_relation_marks, l:ln) >= 0
+      let l:other = a:lines[l:i :]
+      break
     endif
   endfor
-  return []
+  return l:group + l:other
 endfunction
 
 " 古いガイドの front matter を引き継いだ、新しいガイドの行
@@ -1147,62 +1149,70 @@ function! s:guide_merge(old, new) abort
       let l:out = l:fm + a:new[index(a:new, '---', 1) + 1 :]
     endif
   endif
-  return l:out + s:guide_relation_tail(a:old)
+  let l:tail = s:guide_relation_tail(a:old)
+  if !empty(l:tail) && l:tail[0] ==# 'Group:'
+    let l:end = 1
+    while l:end < len(l:tail) && l:tail[l:end] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:end += 1
+    endwhile
+    let l:group = l:tail[0 : l:end - 1]
+    let l:tail = l:tail[l:end :]
+    let l:h1 = match(l:out, '^#\s\+')
+    if l:h1 >= 0
+      let l:at = l:h1 + 1
+      while l:at < len(l:out) && trim(l:out[l:at]) ==# ''
+        call remove(l:out, l:at)
+      endwhile
+      call extend(l:out, [''] + l:group + [''], l:at)
+    else
+      call extend(l:tail, l:group, 0)
+    endif
+  endif
+  return l:out + l:tail
 endfunction
 
 " Index の本文が操作ガイドを含むなら、ガイドの ### Group に Index を保証する。
 " 初回作成直後は Python sync に依存しない。既存 vault でも不足している関係だけ修復する。
 " Index からリンクが消されている場合は何もしない（別グループへ移した場合を尊重）。
 function! s:ensure_guide_index_group(root) abort
-  if s:pkm_format() !=# 'v2'
-    return
-  endif
+  if s:pkm_format() !=# 'v2' | return | endif
   let l:index = s:index_path(a:root)
   let l:name = s:guide_file_name(a:root)
   let l:guide = fnamemodify(a:root, ':p') . l:name
-  if !filereadable(l:index) || !filereadable(l:guide)
-    return
-  endif
+  if !filereadable(l:index) || !filereadable(l:guide) | return | endif
   if empty(filter(readfile(l:index), 'stridx(v:val, "](" . l:name . ")") >= 0'))
     return
   endif
-
   let l:lines = readfile(l:guide)
-  let l:old_tail = s:guide_relation_tail(l:lines)
-  let l:tail = copy(l:old_tail)
-  let l:pos = index(l:tail, '### Group')
-  if l:pos >= 0
-    let l:end = len(l:tail)
-    if l:pos + 1 < len(l:tail)
-      for l:i in range(l:pos + 1, len(l:tail) - 1)
-        if index(s:guide_relation_marks, trim(l:tail[l:i])) >= 0
-          let l:end = l:i
-          break
-        endif
-      endfor
+  let l:flags = s:fence_flags(l:lines)
+  let l:head = -1
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && index(['Group:', '### Group'], trim(l:lines[l:i])) >= 0
+      let l:head = l:i
+      break
     endif
-    for l:line in l:tail[l:pos + 1 : l:end - 1]
-      if stridx(l:line, '](index.md)') >= 0
-        return
-      endif
-    endfor
-    call insert(l:tail, '[Index](index.md)', l:pos + 1)
+  endfor
+  if l:head >= 0
+    let l:lines[l:head] = 'Group:'
+    let l:at = l:head + 1
+    while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      if l:lines[l:at] =~# '](index\.md)' | return | endif
+      let l:at += 1
+    endwhile
+    call insert(l:lines, '[Index](index.md)', l:at)
   else
-    let l:at = len(l:tail)
-    for l:section in ['### Related', '### BackLink']
-      let l:p = index(l:tail, l:section)
-      if l:p >= 0
-        let l:at = min([l:at, l:p])
-      endif
-    endfor
-    call extend(l:tail, ['### Group', '[Index](index.md)'], l:at)
+    let l:h1 = index(l:lines, '# ' . s:guide_title(gnosis#i18n#lang()))
+    if l:h1 < 0
+      call extend(l:lines, ['Group:', '[Index](index.md)'])
+    else
+      let l:at = l:h1 + 1
+      while l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
+        call remove(l:lines, l:at)
+      endwhile
+      call extend(l:lines, ['', 'Group:', '[Index](index.md)', ''], l:at)
+    endif
   endif
-
-  let l:prefix = empty(l:old_tail) ? l:lines : l:lines[0 : len(l:lines) - len(l:old_tail) - 1]
-  if get(l:prefix, -1, 'nonempty') !=# ''
-    call add(l:prefix, '')
-  endif
-  call s:syn_writefile(l:prefix + l:tail, l:guide)
+  call s:syn_writefile(l:lines, l:guide)
 endfunction
 
 function! s:refresh_guide(root) abort
@@ -5984,7 +5994,7 @@ endfunction
 " front matter 終端行と、本文側で末尾寄りの --- 2 本（上側開始 / 下側開始）を返す。
 " 2 本無ければ EOF に補って返す。本文中の --- は末尾 2 本にならないので無視される。
 let s:v2_up_mark   = '### Context'
-let s:v2_group_mark = '### Group'
+let s:v2_group_mark = 'Group:'
 let s:v2_related_mark = '### Related'
 let s:v2_down_mark = '### BackLink'
 " 旧見張り（新しい順: `##` なしの Parent/Child -> こっちにとって/そっちにとって
@@ -6001,9 +6011,9 @@ let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちに�
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
+let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', 'Group:', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|Group:\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
   " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
@@ -7064,6 +7074,48 @@ function! gnosis#add_to_parent() abort
   echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
+" zk n は開いているノートの BranchGroup: へ追加。
+function! s:append_link_to_branch_group(link) abort
+  let l:lines = getline(1, '$')
+  let l:flags = s:fence_flags(l:lines)
+  let l:head = -1
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && index(['BranchGroup:', 'ThisNoteGroup:'], trim(l:lines[l:i])) >= 0
+      let l:head = l:i
+      " 旧ノートの見出しをその場で移行して、新旧 2 つのブロックを作らない。
+      let l:lines[l:i] = 'BranchGroup:'
+      break
+    endif
+  endfor
+  if l:head >= 0
+    let l:at = l:head + 1
+    while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:at += 1
+    endwhile
+    let l:target = s:extract_target(a:link)
+    let l:path = fnamemodify(gnosis#resolve_link(l:target, expand('%:p:h')), ':p')
+    for l:line in l:lines[l:head + 1 : l:at - 1]
+      let l:old = s:extract_target(l:line)
+      if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, expand('%:p:h')), ':p') ==# l:path
+        return 0
+      endif
+    endfor
+    call insert(l:lines, a:link, l:at)
+  else
+    let l:h1 = -1
+    for l:i in range(0, len(l:lines) - 1)
+      if !l:flags[l:i] && l:lines[l:i] =~# '^#\s\+'
+        let l:h1 = l:i
+        break
+      endif
+    endfor
+    if l:h1 < 0 | return 0 | endif
+    call extend(l:lines, ['', 'BranchGroup:', a:link, ''], l:h1 + 1)
+  endif
+  call s:replace_buffer_lines(l:lines)
+  return 1
+endfunction
+
 function! s:v2_new_interactive(attr) abort
   if s:pkm_format() !=# 'v2'
     echo 'Gnosis: ' . gnosis#i18n#tr('v2 専用') | return
@@ -7075,7 +7127,7 @@ function! s:v2_new_interactive(attr) abort
   if empty(a:attr)
     echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / g=グループ化  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch) / g=Group(現ノート)  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -7086,11 +7138,6 @@ function! s:v2_new_interactive(attr) abort
     " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
     " 続きは s:v2_new_run をコールバックで呼ぶ。
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
-    return
-  endif
-  if l:ch ==# 'g' && !empty(a:attr)
-    " zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す
-    call s:group_link_under_cursor()
     return
   endif
   if l:ch ==? 'c'
@@ -7117,48 +7164,10 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   " 位置キー以外（旧 p を含む）では何も作らない
-  if l:ch !~? '^[ho]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+  if l:ch !~? (empty(a:attr) ? '^[ho]$' : '^[hong]$') && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / p / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
-endfunction
-
-" zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す。
-"   新しいグループの本文はそのリンク 1 行、### Context は今のノート（ビジュアルの zk と同じ）。
-"   元のリンクの位置は、新しいグループへのリンクに置き換える。同じ行の前後の文章・
-"   他のリンクはそのまま。リンク先のノート（ファイル）は動かさない。
-"   カーソル下にリンクが無ければ何も変えず、案内だけ出す。
-function! s:group_link_under_cursor() abort
-  let l:span = s:link_span_under_cursor()
-  if empty(l:span)
-    echohl WarningMsg
-    echo 'Gnosis: ' . gnosis#i18n#tr('カーソル下にリンクがありません（リンクの上で zk → g。アプリでは Alt+クリックでリンクにカーソルを置けます）')
-    echohl NONE
-    return
-  endif
-  let l:cur = expand('%:p')
-  let l:cur_title = gnosis#current_title()
-  let l:dir = expand('%:p:h')
-  let l:ts = gnosis#timestamp_filename()
-  let l:file = s:join_path(l:dir, l:ts . '.md')
-  let l:content = [
-        \ '---',
-        \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: ' . l:ts,
-        \ 'attribute: group',
-        \ '---',
-        \ '',
-        \ '# ' . l:ts,
-        \ '',
-        \ ] + gnosis#context#block_lines([s:make_link_from_dir(l:cur, l:cur_title, l:dir)]) + ['', l:span.text]
-  call s:write_new_note(l:content, l:file)
-  let l:line = getline(l:span.lnum)
-  call setline(l:span.lnum, strpart(l:line, 0, l:span.start) . '[' . l:ts . '](' . l:ts . '.md)' . strpart(l:line, l:span.end))
-  silent noautocmd write
-  call s:run_update_one_for(l:cur)
-  call gnosis#push_history()
-  silent execute 'edit ' . fnameescape(l:file)
-  call cursor(len(l:content), 1)
 endfunction
 
 " カーソル下の Markdown リンク（画像・コードの中は除く）の {lnum, start, end, text}（0 始まりのバイト位置）
@@ -7284,7 +7293,8 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " zk / o / p / index.md を起点とする通常作成は自動 Branch の対象外。
   let l:auto_branch = empty(a:attr) && fnamemodify(l:cur, ':t') !=# 'index.md'
         \ && (index(['h', 't', 'c'], tolower(l:ch)) >= 0 || l:ch ==# "\<CR>" || l:ch ==# "\<NL>")
-  if l:auto_branch && !gnosis#branch#can_parent_here()
+  let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
+  if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
     return
   endif
 
@@ -7300,7 +7310,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
   " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
-  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch
+  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch || l:zk_branch_group
     " p のみ逆向き。b と zn の自動関係は今のノートが親。
     let l:br = l:ch ==? 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
     if !get(l:br, 'ok', 0)
@@ -7328,6 +7338,13 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     if s:append_link_to_buffer_section('up', l:link)
       let l:added = 1
     endif
+  elseif l:ch ==# 'n' && !empty(a:attr)
+    let l:added = s:append_link_to_branch_group(l:link)
+  elseif l:ch ==# 'g' && !empty(a:attr)
+    " カーソル位置は参照せず、現在開いているノートへのリンクを新グループ本文に置く。
+    let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
+    call s:simple_body_append_to_file(l:file, l:back, 1)
+    let l:added = 1
   elseif l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
     call s:simple_body_append(l:link)  " 本文の最後（### Context の手前に空行1つ）
     let l:added = 1
@@ -7356,12 +7373,17 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       elseif l:choice.mode ==# 'write'
         call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
       endif
-    elseif !empty(a:attr) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    elseif (!empty(a:attr) && index(['g', 'n'], l:ch) < 0) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
     endif
-    call s:run_update_one_for(l:cur)
+    if l:ch ==# 'g' && !empty(a:attr)
+      " 新グループの本文から元ノートの Group: へ所属を確定してから開く。
+      call s:run_update_one_for_sync(l:cur, 1)
+    else
+      call s:run_update_one_for(l:cur)
+    endif
   endif
   call gnosis#push_history()
   execute 'edit ' . fnameescape(l:file)

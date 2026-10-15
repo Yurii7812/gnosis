@@ -17,8 +17,21 @@ function! s:count(lines, pat) abort
 endfunction
 " 関係の節（最初の見張り行から最後まで）
 function! s:tail(lines) abort
-  let l:i = match(a:lines, '^### \(Context\|Group\|Related\|BackLink\)$')
-  return l:i < 0 ? [] : a:lines[l:i :]
+  " Group: は本文冒頭へ移動した。BackLink と離れていても関係だけを返す。
+  let l:out = []
+  let l:i = match(a:lines, '^Group:$')
+  if l:i < 0 | let l:i = match(a:lines, '^### Group$') | endif
+  if l:i >= 0
+    call add(l:out, 'Group:')
+    let l:j = l:i + 1
+    while l:j < len(a:lines) && a:lines[l:j] =~# '^\[[^]]*\]([^)]\+)$'
+      call add(l:out, a:lines[l:j])
+      let l:j += 1
+    endwhile
+  endif
+  let l:k = match(a:lines, '^### BackLink$')
+  if l:k >= 0 | call extend(l:out, a:lines[l:k :]) | endif
+  return l:out
 endfunction
 
 try
@@ -36,17 +49,21 @@ try
   call gnosis#refresh_guide()
   call s:ok('既存 Index の # Index 直後の空行を復元',
         \ get(readfile(s:v . '/index.md'), s:header + 1, 'missing') ==# '')
-  call s:ok('作成直後: ### Group に Index', s:tail(s:g) ==# ['### Group', '[Index](index.md)'])
+  call s:ok('作成直後: ### Group に Index', s:tail(s:g) ==# ['Group:', '[Index](index.md)'])
 
   " 既存の操作ガイドで Group が欠落していても、起動時更新で Index の所属を修復する
   let s:broken = s:guide()
-  if s:tail(s:broken) ==# ['### Group', '[Index](index.md)']
-    call remove(s:broken, -1)
-    call remove(s:broken, -1)
+  if s:tail(s:broken) ==# ['Group:', '[Index](index.md)']
+    let s:at = index(s:broken, 'Group:')
+    if s:at < 0 | let s:at = index(s:broken, '### Group') | endif
+    if s:at >= 0
+      call remove(s:broken, s:at + 1)
+      call remove(s:broken, s:at)
+    endif
   endif
   call writefile(s:broken, s:v . '/gnosis-guide.md')
   call gnosis#refresh_guide()
-  call s:ok('欠落した ### Group / Index を修復', s:tail(s:guide()) ==# ['### Group', '[Index](index.md)'])
+  call s:ok('欠落した Group / Index を修復', s:tail(s:guide()) ==# ['Group:', '[Index](index.md)'])
   call s:ok('作成直後: 同期しても変わらない', s:sync() =~# 'updated 0 file')
 
   " 起動時の更新（プラグインの更新でテンプレートが変わった場合も含む）
@@ -54,8 +71,8 @@ try
   call gnosis#refresh_guide()
   let s:g = s:guide()
   call s:ok('更新: 本文はテンプレートに戻る', index(s:g, '古い本文の行') < 0 && index(s:g, '## リンク') >= 0)
-  call s:ok('更新: ### Group の Index が残る', s:tail(s:g) ==# ['### Group', '[Index](index.md)'])
-  call s:ok('更新: 見出しが重複しない', s:count(s:g, '^### Group$') == 1 && s:count(s:g, '^---$') == 2)
+  call s:ok('更新: Group の Index が残る', s:tail(s:g) ==# ['Group:', '[Index](index.md)'])
+  call s:ok('更新: 見出しが重複しない', s:count(s:g, '^Group:$') == 1 && s:count(s:g, '^---$') == 2)
   call s:ok('更新: 同期しても変わらない', s:sync() =~# 'updated 0 file')
   let s:before = s:guide()
   call gnosis#refresh_guide()
@@ -67,10 +84,10 @@ try
   call writefile(s:idx, s:v . '/index.md')
   call s:sync()
   let s:g = s:guide()
-  call s:ok('移動: ### Group がハーブになる', s:tail(s:g) ==# ['### Group', '[ハーブ](261013140400.md)'])
+  call s:ok('移動: Group がハーブになる', s:tail(s:g) ==# ['Group:', '[ハーブ](261013140400.md)'])
   call s:ok('移動: 古い所属（Index）が残らない', s:count(s:tail(s:g), 'index\.md') == 0)
   call gnosis#refresh_guide()
-  call s:ok('移動後の更新: ハーブが残る', s:tail(s:guide()) ==# ['### Group', '[ハーブ](261013140400.md)'])
+  call s:ok('移動後の更新: ハーブが残る', s:tail(s:guide()) ==# ['Group:', '[ハーブ](261013140400.md)'])
   call s:ok('移動後の更新: 同期しても変わらない（相手側のリンクも消えない）',
         \ s:sync() =~# 'updated 0 file' && !empty(filter(readfile(s:v . '/261013140400.md'), 'v:val =~# "gnosis-guide.md"')))
 
@@ -101,7 +118,28 @@ try
   let s:g = s:guide()
   call s:ok('英語: 題が英語', index(s:g, 'title: Gnosis Guide') >= 0 && index(s:g, '# Gnosis Guide') >= 0)
   call s:ok('英語: 関係の節が残る', s:tail(s:g) ==# s:t)
-  call s:ok('英語: 同期しても変わらない', s:sync() =~# 'updated 0 file')
+  let s:before_sync = {}
+  for s:fp in glob(s:v . '/*.md', 1, 1)
+    let s:before_sync[s:fp] = readfile(s:fp)
+  endfor
+  let s:english_update = s:sync()
+  call s:ok('英語: 同期しても変わらない', s:english_update =~# 'updated 0 file')
+  if s:english_update !~# 'updated 0 file'
+    call add(s:out, 'INFO English sync: ' . substitute(s:english_update, '\\n', ' ', 'g'))
+    for s:fp in keys(s:before_sync)
+      if readfile(s:fp) !=# s:before_sync[s:fp]
+        call add(s:out, 'INFO changed: ' . fnamemodify(s:fp, ':t'))
+        let s:b = s:before_sync[s:fp]
+        let s:a = readfile(s:fp)
+        for s:k in range(0, max([len(s:b), len(s:a)]) - 1)
+          if get(s:b, s:k, '<EOF>') !=# get(s:a, s:k, '<EOF>')
+            call add(s:out, 'INFO first delta line ' . (s:k + 1) . ' before=' . string(get(s:b, s:k, '<EOF>')) . ' after=' . string(get(s:a, s:k, '<EOF>')))
+            break
+          endif
+        endfor
+      endif
+    endfor
+  endif
   call gnosis#i18n#set_lang('ja')
 
   " ガイド本文の説明（`### Group` などの書き方の説明）を関係の節と取り違えない

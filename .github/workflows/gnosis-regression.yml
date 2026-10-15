@@ -27,6 +27,17 @@ jobs:
           sh -n bin/gnosis
           sh -n install/install.sh
           node --check bin/gnosis-kwin-maximize.js
+      - name: Test Python note relationship synchronization
+        run: |
+          python3 python/test_note_format_v2.py
+          python3 python/test_context_ops.py
+      - name: Test zk n/g and guide relationships
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
+          "$RUNNER_TEMP/gnosis-test-venv/bin/python" -m pip install --quiet pykakasi
+          export PATH="$RUNNER_TEMP/gnosis-test-venv/bin:$PATH"
+          sh test/link_ops_net.sh
+          sh test/guide_relations_net.sh
       - name: Test full Vim feature detection beyond line 40
         run: sh test/vim_version_detection_net.sh
       - name: Test GNOME Terminal's isolated font profile
