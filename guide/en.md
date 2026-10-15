@@ -68,7 +68,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `<Tab>` / `<S-Tab>` … next / previous link ・ `<CR>` … open the link under the cursor
 - `<BS>` … back ・ `<S-BS>` / `\.` … forward ・ `_` … toggle with the previous note
 - `1`〜`9` / `0` … open links by their running number (top to bottom of the document, including the Context at the top)
-- `\k` / `\j` / `\J` … to Context / to the first BackLink / to the last BackLink
+- `\k` / `\m` / `\j` / `\J` … to the topmost relation section (Context: etc.) / to the bottommost relation section / to the first BackLink / to the last BackLink
 - `\bu` … last link near Context ・ `<S-Space>` … pick from the link list and move
 - `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub
 - `\1`〜`\9` … jump to the Nth hub entry (inside the hub, normal link numbers)

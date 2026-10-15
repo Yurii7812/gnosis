@@ -423,6 +423,18 @@ call s:Apply(s:v . '/abg.md', s:v . '/ab2.md', 'い', {'mode': 'end', 'lnum': 0,
 let s:abg = s:file('abg.md')
 call s:ok('グループへ足したら末尾ブロックをよみ順に並べる', index(s:abg, '[あ](ab1.md)') < index(s:abg, '[い](ab2.md)') && index(s:abg, '[い](ab2.md)') < index(s:abg, '[う](ab3.md)') && s:abg[-5:] ==# ['文', '', '[あ](ab1.md)', '[い](ab2.md)', '[う](ab3.md)'], string(s:abg))
 
+" ------------------------------------------------------------------ \k（一番上の関係の節）/ \m（一番下の関係の節）
+call s:mk('jk.md', 'ジャンプ', ['本文', '', 'ChildBranch:', '[a](a.md)', '', '### Context', '[b](b.md)', '', 'BackLink:', '[c](c.md)', '', '```', 'BackLink:', '```'])
+execute 'edit! ' . fnameescape(s:v . '/jk.md')
+call cursor(1, 1)
+call gnosis#jump_up_cursor()
+call s:ok('\k: 一番上の関係の節（ChildBranch:）へ', getline('.') ==# 'ChildBranch:', getline('.'))
+call gnosis#jump_last_section()
+call s:ok('\m: 一番下の関係の節（コードブロックの外の BackLink:）へ', getline('.') ==# 'BackLink:' && line('.') == search('^BackLink:$', 'nw') - 0 || getline('.') ==# 'BackLink:' && getline(line('.') + 1) ==# '[c](c.md)', getline('.') . ' @' . line('.'))
+
+" ------------------------------------------------------------------ za → c → Esc（何も変えない）
+call s:mk('k.md', 'ノートK', ['K の本文。'])
+execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:a_before = s:file('a.md')
 let s:k_before = s:file('k.md')
 let @" = '[ノートK](k.md)'

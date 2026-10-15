@@ -3032,20 +3032,40 @@ endfunction
 " \k 用: Parent セクションへカーソルを移すだけで、リンク先は開かない
 " （:JumpParent は従来どおり、リンクが1つならそのノートを開く）。
 function! gnosis#jump_up_cursor() abort
-  let l:up = s:find_section_line('up')
-  if l:up <= 0
-    let l:up = s:find_section_line('group')
-  endif
+  " 一番上の関係の節（Context: / ChildBranch: / Related: / BackLink: など、最初に出てくるもの）の見出しへ
+  let l:up = s:first_section_line()
   if l:up <= 0
     echo 'Context: section not found'
     return
   endif
-  " 「### Context」の見出しの行へ移る（リンクの上ではなく、見出しに置く）。
   " 見出しは、下に十分な行があれば画面の中央、無ければファイルの末尾が窓の下端に
   " 来るところまでで止める（末尾より下の空白は出さない）。
   call s:jump_to_line(l:up)
   let l:view = winsaveview()
   let l:view.topline = s:view_top_centered(l:up)
+  let l:view.topfill = 0
+  call winrestview(l:view)
+endfunction
+
+" 一番下の関係の節（最後に出てくる Context: / ChildBranch: / Related: / BackLink: など）の見出しへ。
+function! gnosis#jump_last_section() abort
+  let l:save = winsaveview()
+  call cursor(line('$'), 1)
+  call cursor(line('$'), col([line('$'), '$']))
+  let l:flags = s:buf_fence_flags()
+  let l:found = search(s:v2_any_pat, 'bcW')
+  while l:found > 0 && get(l:flags, l:found - 1, 0)
+    call cursor(l:found, 1)
+    let l:found = search(s:v2_any_pat, 'bW')
+  endwhile
+  call winrestview(l:save)
+  if l:found <= 0
+    echo 'Context: section not found'
+    return
+  endif
+  call s:jump_to_line(l:found)
+  let l:view = winsaveview()
+  let l:view.topline = s:view_top_centered(l:found)
   let l:view.topfill = 0
   call winrestview(l:view)
 endfunction

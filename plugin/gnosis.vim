@@ -574,6 +574,8 @@ nnoremap <nowait> <silent> \bu <Cmd>call gnosis#jump_last_link_before_up()<CR>
 " timeoutlen 待ちになるため \ 側へ移した。k=上 / j=下 の連想。
 nnoremap <nowait> <silent> \k  <Cmd>call gnosis#jump_up_cursor()<CR>
 nnoremap <nowait> <silent> \j  <Cmd>call gnosis#jump_down_top()<CR>
+" \m … 一番下の関係の節（最後の Context: / Related: / BackLink: など）の見出しへ（\k の反対）
+nnoremap <nowait> <silent> \m  <Cmd>call gnosis#jump_last_section()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call gnosis#jump_down_bottom()<CR>
 
 " ノート作成（リレーションは書かず、位置だけを選ぶ）
