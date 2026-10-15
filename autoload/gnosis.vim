@@ -7064,6 +7064,46 @@ function! gnosis#add_to_parent() abort
   echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
+" zk n は開いているノートの ThisNoteGroup: へ追加。
+function! s:append_link_to_thisnote_group(link) abort
+  let l:lines = getline(1, '$')
+  let l:flags = s:fence_flags(l:lines)
+  let l:head = -1
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'ThisNoteGroup:'
+      let l:head = l:i
+      break
+    endif
+  endfor
+  if l:head >= 0
+    let l:at = l:head + 1
+    while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:at += 1
+    endwhile
+    let l:target = s:extract_target(a:link)
+    let l:path = fnamemodify(gnosis#resolve_link(l:target, expand('%:p:h')), ':p')
+    for l:line in l:lines[l:head + 1 : l:at - 1]
+      let l:old = s:extract_target(l:line)
+      if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, expand('%:p:h')), ':p') ==# l:path
+        return 0
+      endif
+    endfor
+    call insert(l:lines, a:link, l:at)
+  else
+    let l:h1 = -1
+    for l:i in range(0, len(l:lines) - 1)
+      if !l:flags[l:i] && l:lines[l:i] =~# '^#\s\+'
+        let l:h1 = l:i
+        break
+      endif
+    endfor
+    if l:h1 < 0 | return 0 | endif
+    call extend(l:lines, ['', 'ThisNoteGroup:', a:link, ''], l:h1 + 1)
+  endif
+  call s:replace_buffer_lines(l:lines)
+  return 1
+endfunction
+
 function! s:v2_new_interactive(attr) abort
   if s:pkm_format() !=# 'v2'
     echo 'Gnosis: ' . gnosis#i18n#tr('v2 専用') | return
@@ -7075,7 +7115,7 @@ function! s:v2_new_interactive(attr) abort
   if empty(a:attr)
     echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / g=グループ化  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=ThisNoteGroup / g=Group(現ノート)  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -7086,11 +7126,6 @@ function! s:v2_new_interactive(attr) abort
     " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
     " 続きは s:v2_new_run をコールバックで呼ぶ。
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
-    return
-  endif
-  if l:ch ==# 'g' && !empty(a:attr)
-    " zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す
-    call s:group_link_under_cursor()
     return
   endif
   if l:ch ==? 'c'
@@ -7117,48 +7152,10 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   " 位置キー以外（旧 p を含む）では何も作らない
-  if l:ch !~? '^[ho]$' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+  if l:ch !~? (empty(a:attr) ? '^[ho]$' : '^[hong]$') && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / p / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
-endfunction
-
-" zk → g: カーソル下のリンク 1 本を、新しいグループの中へ移す。
-"   新しいグループの本文はそのリンク 1 行、### Context は今のノート（ビジュアルの zk と同じ）。
-"   元のリンクの位置は、新しいグループへのリンクに置き換える。同じ行の前後の文章・
-"   他のリンクはそのまま。リンク先のノート（ファイル）は動かさない。
-"   カーソル下にリンクが無ければ何も変えず、案内だけ出す。
-function! s:group_link_under_cursor() abort
-  let l:span = s:link_span_under_cursor()
-  if empty(l:span)
-    echohl WarningMsg
-    echo 'Gnosis: ' . gnosis#i18n#tr('カーソル下にリンクがありません（リンクの上で zk → g。アプリでは Alt+クリックでリンクにカーソルを置けます）')
-    echohl NONE
-    return
-  endif
-  let l:cur = expand('%:p')
-  let l:cur_title = gnosis#current_title()
-  let l:dir = expand('%:p:h')
-  let l:ts = gnosis#timestamp_filename()
-  let l:file = s:join_path(l:dir, l:ts . '.md')
-  let l:content = [
-        \ '---',
-        \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: ' . l:ts,
-        \ 'attribute: group',
-        \ '---',
-        \ '',
-        \ '# ' . l:ts,
-        \ '',
-        \ ] + gnosis#context#block_lines([s:make_link_from_dir(l:cur, l:cur_title, l:dir)]) + ['', l:span.text]
-  call s:write_new_note(l:content, l:file)
-  let l:line = getline(l:span.lnum)
-  call setline(l:span.lnum, strpart(l:line, 0, l:span.start) . '[' . l:ts . '](' . l:ts . '.md)' . strpart(l:line, l:span.end))
-  silent noautocmd write
-  call s:run_update_one_for(l:cur)
-  call gnosis#push_history()
-  silent execute 'edit ' . fnameescape(l:file)
-  call cursor(len(l:content), 1)
 endfunction
 
 " カーソル下の Markdown リンク（画像・コードの中は除く）の {lnum, start, end, text}（0 始まりのバイト位置）
@@ -7328,6 +7325,13 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     if s:append_link_to_buffer_section('up', l:link)
       let l:added = 1
     endif
+  elseif l:ch ==# 'n' && !empty(a:attr)
+    let l:added = s:append_link_to_thisnote_group(l:link)
+  elseif l:ch ==# 'g' && !empty(a:attr)
+    " カーソル位置は参照せず、現在開いているノートへのリンクを新グループ本文に置く。
+    let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
+    call s:simple_body_append_to_file(l:file, l:back, 1)
+    let l:added = 1
   elseif l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
     call s:simple_body_append(l:link)  " 本文の最後（### Context の手前に空行1つ）
     let l:added = 1
@@ -7356,7 +7360,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       elseif l:choice.mode ==# 'write'
         call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
       endif
-    elseif !empty(a:attr) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    elseif (!empty(a:attr) && l:ch !=# 'g') || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
