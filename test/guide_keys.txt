@@ -5,9 +5,9 @@ h
 Enter
 o
 `g`=選んだグループに今のノートを入れる
-`n`=表示名を入力して本文の最後へ
-`Enter`=本文の最後 / `t`=見出しを選んでその節の最後 / `w`=リンク先を開いて自分で編集
-空 `Enter` = リンク先ノートのタイトル
+## ふだんの流れ
+`w`=置かずに B を `yn` と同じ方法でヤンク
+`Enter`=表示名を入力して、このグループに登録して作る
 :GnosisLinkPick
 :Rg
 :UpdateMD
@@ -24,3 +24,5 @@ BackLink
 :GnosisVaults
 `.gnosis/settings.json`
 最後の「空行で区切られたブロック」だけ
+廃止したキー: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc` / `zp` / `zap`
+`zk` … 通常のノートで `n` だけ

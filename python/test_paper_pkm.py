@@ -237,8 +237,8 @@ def test_topic_index() -> None:
         pp.regen(root)
         n1 = notes["1"].read_text(encoding="utf-8")
         i_buk = n1.find("[1-仏教]")
-        i_sinen = n1.find("  [1-四念処]")
-        check(i_buk != -1 and i_sinen > i_buk, "四念処は仏教の下にインデント")
+        i_sinen = n1.find("\n[1-四念処]")
+        check(i_buk != -1 and i_sinen > i_buk and "  [1-" not in n1, "四念処は仏教より後（インデントはしない）")
 
 
     print("move_images: ID 重複の検出")
@@ -791,23 +791,26 @@ def test_digital_diary_not_confused() -> None:
 
 
 def test_topic_parent_by_link() -> None:
-    print("トピックの親子: topic_parent なしでも Context のリンクで保つ・Index に階層で出る")
+    print("トピックの親子: front matter の topic_parent に残し、BranchGroup では親を子より先に（インデントなし）")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
-        for n in ("1-仏教", "1-仏教-禅"):
+        moved, _ = pp.move_images(root, root, _add_images(root, ["1"]))
+        n1 = dict(moved)["1"]
+        for n in ("1-仏教", "1-禅"):
             (root / f"{n}.jpg").write_bytes(b"x")
         pa = pp.create_topic_note(root, "1", "仏教", "1-仏教.jpg")
         pp.regen(root, do_sync=False)
         pb = pp.create_topic_note(root, "1", "禅", "1-禅.jpg", parent_topic="1-仏教", root=root)
         (root / "1-禅.jpg").write_bytes(b"x")
         tb = pb.read_text(encoding="utf-8")
-        check("topic_parent" not in tb and f"[1-仏教]({pa.name})" in tb, "子トピックは front matter ではなく Context のリンクで親を持つ")
+        check("topic_parent: 1-仏教" in tb and f"[1-仏教]({pa.name})" not in tb, "子トピックは front matter の topic_parent で親を持つ（Context では代用しない）")
         pp.regen(root, do_sync=False)
-        gid = pp.find_id_index(root, "1").read_text(encoding="utf-8")
-        check(f"[1-仏教]({pa.name})\n  [1-禅]({pb.name})" in gid, f"Index で子トピックが親の下にインデントされる: {gid}")
+        t1 = n1.read_text(encoding="utf-8")
+        check(f"BranchGroup:\n[1-仏教]({pa.name})\n[1-禅]({pb.name})" in t1, f"ID ノートの BranchGroup: で親が先・インデントなし: {t1}")
         pp.regen(root, do_sync=False)
-        check(gid == pp.find_id_index(root, "1").read_text(encoding="utf-8"), "冪等")
-        check(sum(t.count("topic_parent") for t in (pa.read_text(encoding="utf-8"), pb.read_text(encoding="utf-8"))) == 0, "topic_parent: は重複どころか生成されない")
+        check(t1 == n1.read_text(encoding="utf-8"), "冪等")
+        check(pb.read_text(encoding="utf-8").count("topic_parent") == 1 and "topic_parent" not in pa.read_text(encoding="utf-8"),
+              "topic_parent: は重複しない・親の無いトピックには書かない")
 
 
 def test_simple_sync_keeps_format_and_trash_images() -> None:

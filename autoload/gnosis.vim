@@ -14277,7 +14277,8 @@ function! s:diary_head(lines) abort
   " デジタル日記（\d）の機能からは見えないようにする）
   " 紙の日記かどうかは front matter の目印ではなく、本文の画像 `![](paper-diary-…)` で判定する
   " （月・年・一番上のグループは s:diary_scan がリンク先から判定する）。links は本文の .md リンク先。
-  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'links': []}
+  " scan: スキャン由来のノート（front matter の source: scan。紙の日記・スキャンノート・トピック）。「今日のノート」に載せない
+  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': []}
   let l:fence = 0
   for l:ln in a:lines
     if l:ln ==# '---'
@@ -14308,6 +14309,8 @@ function! s:diary_head(lines) abort
     elseif l:ln =~# '^paper_diary\w*:'
       " 旧い目印（移行前のノート。paper_pkm.py の regen が外す）
       let l:r.paper = 1
+    elseif l:ln =~# '^source:\s*scan\s*$'
+      let l:r.scan = 1
     endif
   endfor
   return l:r
@@ -14370,7 +14373,7 @@ function! s:diary_scan(root) abort
   endwhile
   let l:out = []
   for l:h in l:all
-    if has_key(l:paper, l:h.file) | continue | endif
+    if has_key(l:paper, l:h.file) || l:h.scan | continue | endif
     call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group, 'time': l:h.time})
   endfor
   return l:out
@@ -14880,7 +14883,7 @@ function! s:diary_place(path, ...) abort
   endif
   let l:lines = a:0 > 0 ? a:1 : readfile(a:path, '', 30)
   let l:head = s:diary_head(l:lines)
-  if l:head.group || l:head.paper
+  if l:head.group || l:head.paper || l:head.scan
     return
   endif
   let l:st = s:diary_state_read()
@@ -14948,7 +14951,7 @@ function! gnosis#diary_on_save() abort
     return
   endif
   let l:head = s:diary_head(getline(1, 30))
-  if l:head.paper
+  if l:head.paper || l:head.scan
     return
   endif
   let l:tdate = s:diary_title_date(l:head.title)
@@ -14965,7 +14968,7 @@ endfunction
 " :GnosisDiaryAdopt … 今のノート（題が日付で始まる）を、その日付の日記として登録する
 function! gnosis#diary_adopt() abort
   let l:head = s:diary_head(getline(1, 30))
-  if l:head.paper
+  if l:head.paper || l:head.scan
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 紙の日記はデジタル日記には登録しません') | echohl NONE
     return
   endif

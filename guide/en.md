@@ -1,6 +1,15 @@
 This note is the Gnosis guide. **Every key is collected here.**
 When you change the language in the settings (`:GnosisSettings`), this guide is rebuilt in that language. **Vim basics are at the end.**
 
+## Everyday flow
+
+- Write … in the current note, `zn` → `Enter` (link at the end of the body) or `h` (below the cursor). A Branch is added automatically: the original note is the parent and the new note the child (`ParentBranch:` / `ChildBranch:`)
+- Keep what led to it … `c` after `zn` / `\l` / `za`. The current note (A) goes into the other note's (B) `Context:`. Then choose where in A to put B (`Enter` / `t` / `h` / `w`)
+- Collect … on a group such as the Index, `zn` → `Enter`. Add the new note to the group with a display name; the index is re-sorted by the same rule as `\S`
+- Branch off … on the starting note, `zk` → `n`. Makes a group that branches from that note (BranchGroup; e.g. a topic index. Not made on a group)
+- Connect … find and place with `\l`. To join a group, choose the group with `\l` and press `g`. To add only context, `\P`
+- End of the day … the notes you made that day appear under "today's notes" of the `\d` diary. Paper diaries imported with `\F` are linked from that day's diary
+
 ## Start, vaults and settings
 
 - Start screen … the Chnoubis symbol, the selected vault, and `Enter` to start. `v` chooses / manages vaults, `s` opens the settings, `q` quits
@@ -15,18 +24,19 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 ## Creating notes
 
-- `zn` … create a note. Choose one position key:
-  `h`=below the cursor (body) / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch (direct child) / `p`=ParentBranch (direct parent) / `o`=no link (orphan)
-  For ordinary `zn` notes, `h`/`Enter`/`t`/`c` automatically record the current note as the parent and the new note as its child, independently of the link's placement (current note's `ChildBranch:` and new note's `ParentBranch:`). `Enter` additionally puts the current note in the new note's `Context:`; `c` retains its existing contextual link behavior. `b` records only the Branch, `p` reverses its direction, and `o` remains orphaned. Ordinary notes created from `index.md` and groups created with `zk` do not get automatic Branch links (explicit `b`/`p` still work).
-- After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `w`=open the target and edit it yourself (nothing is written automatically; only the **file name** of the original note is yanked and the target is opened, so you can paste it with `p` or turn it into a Markdown link; several links are handled one by one, the rest with `:GnosisWNext`) / `o`=do not add (the link in the current note's Context is still added)
-- `b` (ChildBranch = direct child) / `p` (ParentBranch = direct parent) (position keys of `zn` / `zk` / `za` / `\l`) … with `b` the current note is the parent and the chosen (new) note the child; with `p` the chosen (new) note is the parent and the current note the child. Both use the same code and write the link into **the parent's `ChildBranch:` and the child's `ParentBranch:`**. With `p` only one note can be chosen as the parent. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
-- `zk` … create a group note (`attribute: group`). Same position keys as `zn`.
+- `zn` … create a note. Choose one position key (other keys do nothing):
+  `Enter`=end of the body / `t`=under a heading / `h`=below the cursor / `c`=Context (the current note into the new note's `Context:`) / `b`=ChildBranch (direct child) / `p`=ParentBranch (direct parent) / `o`=no link (orphan)
+  `Enter` / `t` / `h` / `c` also add a Branch, separately from where the link goes: the original note is the parent and the new note the child (the original note's `ChildBranch:`, the new note's `ParentBranch:`). Only `c` adds Context. `b` records only the Branch, `p` reverses its direction, `o` is an orphan. Automatic Branch and duplicate handling for notes made from the diary are unchanged
+- After `c` (same in `zn` / `\l` / `za`) … the current note (A) goes into the other note's (B) `Context:`. Then choose where in A to put the link to B: `Enter`=end of the body / `t`=choose a heading, end of that section / `h`=below the cursor / `w`=do not place it; yank B the same way as `yn` (A stays open; paste it yourself). `Esc` cancels and nothing changes (all questions come before any change)
+- `b` (ChildBranch = direct child) / `p` (ParentBranch = direct parent) (position keys of `zn` / `za` / `\l`) … with `b` the current note is the parent and the chosen (new) note the child; with `p` the chosen (new) note is the parent and the current note the child. Both use the same code and write the link into **the parent's `ChildBranch:` and the child's `ParentBranch:`**. With `p` only one note can be chosen as the parent. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
+- `zn` on a group … `Enter`=type a display name, then create the note and add it to this group (a link with the display name in the group's body, the group in the new note's `Group:`; the new note opens and the index is re-sorted by the same rule as `\S`) / `o`=create without adding. Other keys do nothing. No Context and no Branch (same for `index.md`)
+- `zk` … on an ordinary note, only `n`: make a group (G) that branches from the current note (A). G goes into A's `BranchGroup:` and `ChildBranch:`, A into G's `ParentBranch:`. No Context. A group in `BranchGroup:` is not shown again in A's `Group:` (the link to A in G's body stays). `zk` cannot be used on a group (visual too)
 - Relation headings use the same "Name:" form as `Group:` / `Context:` (`ParentBranch:` / `ChildBranch:` / `Related:` / `BackLink:`; empty ones are not written). The old `### Name` headings are still read and are rewritten to "Name:" at the next sync (`:UpdateAll`; no link is lost). Only the old `### Context` is moved with `:GnosisContextMigrate! all`
-- The hierarchy inside `BranchGroup:` is expressed only by order and indentation (2 spaces); no link or relation is added (indent the line after `[A]` by 2 spaces to mean "A is above it"). `:GnosisBranchNest` (one level down) / `:GnosisBranchUnnest` (one level up) work on the selected lines (`:'<,'>`) or, with no range, the current line, if it is a link line in `BranchGroup:`. Unselected children move with it. There is no shortcut (use the commands). When you add a topic with the paper PKM (`\F`), no `N-Index` group is made; it goes into the `BranchGroup:` of that number's scan note (under its parent topic if one is given)
+- Inside `BranchGroup:` the entries are simply listed from top to bottom (no link or relation is added). Nothing is indented automatically. To indent by hand, `:GnosisBranchNest` (one level down) / `:GnosisBranchUnnest` (one level up) … on the selected lines (`:'<,'>`) or, with no range, the current line, if it is a link line in `BranchGroup:`. Topics of the paper PKM (`\F`) go into the `BranchGroup:` of that number's scan note (after the parent topic and its children, if there is a parent)
 - Deleting a group link from a note's `Group:` removes that note's link from the group's body at the next sync, so it leaves the group (it does not come back; deleting it from the group's body still removes it from `Group:` as before)
-- `zk` (visual) … create a group whose content is the selection, and replace the selection with a link to the group
+- `zk` (visual) … on an ordinary note, create a group whose content is the selection, and replace the selection with a link to the group (not on a group)
 - `zh` … link right below the cursor (as body → BackLink on the other side)
-- When the target is a group (after `c`, `Enter` / `t`) … enter the **display name** of the link (starts empty; empty `Enter` = the current note's title, `Esc` = cancel)
+- Groups (BranchGroup style) … the entry point (Index) is never replaced. For a topic index, use `zk` → `n` on the starting note. Add a note to a group with `zn` → `Enter` on the group, or `\l` → `g`
 
 ## Links
 
@@ -34,17 +44,14 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\L` (visual) … replace the selection with a link to a new note named by the selection (the new note's title stays the timestamp; no Context = the original note shows up in BackLink; use `\P` to add it)
 - `\p` (normal) … add one link from under the cursor or the clipboard (choose the position with `h`/`Enter`)
 - `\p` (visual) … turn the selection into a link to the clipboard file name / URL (nothing if there is none)
-- `za` … add the copied / yanked links to the current note (all lines, all links) (`h`=below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch / `p`=ParentBranch / `r`=Related). After `c`, choose how the target gets the current note (`Enter` / `t` / `o`). When the copied link points to a **group** and the current note is not a group, `Enter` **adds the current note to that group** (a link to the current note goes into the group's body and the group shows in the current note's `Group:`; you are asked for the display name, starting empty: empty `Enter` = the current note's title, typed text + `Enter` = that text, `Esc` = cancel; no link is put in the current note's body)
+- `za` … add the copied / yanked links to the current note (all lines, all links). Same position keys as `\l` (`Enter` / `t` / `h` / `c` / `b` / `p`, and `g` if the target is a group). `Enter` only puts the link at the end of the body; it never adds the note to a group, even if the target is a group
 - `zA` … like `za`, but asks for the **display name** first (empty Enter / Esc cancels)
-- `zp` … same as `za`, and also writes the current note into the other note's Context
-- `zap` … add the link under the cursor (or in the clipboard) to the end of the current note's Context (even if the body already has it)
-- Related: pressing `r` in `za` etc. adds to `Related:` **on both notes** (deleting it on one side removes it from both at the next sync; not shown in BackLink)
-- `\P` … add the current note to the Context of the linked note under the cursor, without asking
-- Add from the clipboard with a relation: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc` (`\ca`= reverse of `ca`, `\at`= reverse of `at`)
-- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link (`h`=new line below the cursor / `Enter`=end of the body / `t`=under a heading / `c`=end of Context / `b`=ChildBranch / `p`=ParentBranch / `r`=Related / `i`=right at the cursor / `n`=type a display name, end of the body / `g`=add the current note to the chosen group) (`:GnosisLinkPick`)
+- `Related:` … a paired relation on both notes (deleting it on one side removes it from both at the next sync; not shown in BackLink). It is no longer a position key of `\l` / `za`
+- `\P` … put the current note (A) into the `Context:` of the linked note under the cursor (B), without asking. In visual mode, every linked note in the selection. Nothing changes for A itself, missing notes, or a B with unsaved changes
+- Retired keys: `ca` / `cu` / `\ca` / `tt` / `ta` / `\at` / `\bc` / `zp` / `zap` (the functions and commands such as `:CA` remain; use the `c` flow and `\P` instead)
+- `\l` (normal) … full-text search of all notes (titles first) → after choosing, pick where to put the link: `Enter`=end of the body / `t`=under a heading / `h`=below the cursor / `c`=Context (the current note into the target's `Context:`) / `b`=ChildBranch / `p`=ParentBranch / `g`=add the current note to the chosen group (only when the chosen note is a group). Other keys do nothing (`:GnosisLinkPick`)
 - `\l` → `g` … **add the current note to the chosen note, which must be a group** (`attribute: group`). Search with `\l`, choose the group, press `g`: a link to the current note goes into the group's body and the group shows in the current note's `Group:`. You are asked for the display name (starting empty: empty `Enter` = the current note's title, typed text + `Enter` = that text, `Esc` = cancel). If the chosen note is not a group nothing happens. No link is put in the current note's body. The same with `za` (the copied link). It also works when the current note is a group (puts a group into another group)
-- `\l` → `n` … the display name field starts empty. Empty `Enter` = the target note's title, typed text + `Enter` = that text, `Esc` = cancel (the note's title and file name are not changed)
-- `\l` (visual) … replace the selection with a link to the note chosen by the same search
+- `\l` (visual) … replace the selection with a link to the note chosen by the same search (the display name is the selected text; no position is asked)
 - Auto-generated BackLink entries are different from the links you add here. Added links (also with display names) stay after saving and syncing
 
 ## Titles and display names
@@ -167,6 +174,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `Index-write` … write `keyword(reading): 1,1a10b,3` by hand. Keywords with several IDs become group notes, single IDs become direct links in the paper PKM Index (regenerated on save)
 - `\S` … in Index-write, keyword lines are sorted by reading too
 - Folgezettel-Index lists all existing IDs (natural order). It is generated, so no `\S`
+- Paper notes `1` and `1a` … `1` goes into `1a`'s `ParentBranch:` and `1a` into `1`'s `ChildBranch:` (Context is not used for this). A topic (`1-title`) has `1` as its `ParentBranch:`. Topics are also listed in the `## 1` section of `folgezettel-Index-1` (parent topic first, no indentation; the parent is the front matter `topic_parent:`; an unknown parent is never guessed)
+- Paper diary … a `[紙の日記]` link is put under the title of that day's digital diary (one blank line, above the body; never duplicated on regeneration. If there is no digital diary that day, none is created; the link is added by `\ua` after the diary exists). Notes from scans carry `source: scan` in the front matter and are not listed in "today's notes"
 
 ## Ex commands
 
@@ -181,7 +190,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 
 ### Links and relations
 - `:GnosisLinkify` / `:Linkify` link the text under the cursor ・ `:GnosisLinkifySelection` / `:LinkifySelection` selection to a new note ・ `:GnosisPasteLink` / `:PasteLink` add links from the clipboard
-- `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … add from the clipboard with a relation ・ `:GnosisYN` / `:YN` yank the file name
+- `:GnosisAT` `:GnosisBC` `:GnosisCA` `:GnosisCU` `:GnosisTT` / `:AT` `:BC` `:CA` `:CU` `:TT` … add from the clipboard with a relation (keys retired; commands remain) ・ `:GnosisYN` / `:YN` yank the file name
 - `:GnosisLT` / `:LT` / `:GnosisRenameLinkText` / `:RenameLinkText` change a display name ・ `:GnosisNT` / `:NT` change the title ・ `:GnosisRenameChildLinkTitles` / `:RenameChildLinkTitles` / `:GnosisRenameDownLinkTitles` / `:RenameDownLinkTitles` update child link names
 - `:GnosisWNext` open the next link target left by w ・ `:GnosisContextMigrate` migrate an old-style Context to the new format explicitly ・ `:GnosisBranchCheck` check Branch consistency (reports several parents, one-sided links, cycles and self references; rewrites nothing) ・ `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
 
