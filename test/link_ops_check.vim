@@ -68,7 +68,7 @@ let s:new = s:newest_except(s:before)
 call s:ok('zn c o: 新ノートができる', !empty(s:new))
 call s:ok('zn c o: A の Context に新ノート（c の追加は維持）', s:has('a.md', '(' . s:new . ')'))
 let s:b_lines = s:file(s:new)
-let s:pb = index(s:b_lines, '### ParentBranch')
+let s:pb = index(s:b_lines, 'ParentBranch:')
 call s:ok('zn c o: 本文には A を置かず ParentBranch のみ記録',
       \ s:pb > 0 && get(s:b_lines, s:pb + 1, '') ==# '[ノートA](a.md)'
       \ && index(s:b_lines, '### Context') < 0
@@ -279,9 +279,9 @@ let s:grp2 = s:newest_except(s:before)
 call s:ok('zk n: グループができる', !empty(s:grp2) && s:has(s:grp2, '^attribute: group$'))
 call s:ok('zk n: 元ノートの BranchGroup: に登録', index(s:file('j.md'), 'BranchGroup:') >= 0 && s:has('j.md', '(' . s:grp2 . ')'))
 call s:ok('zk n: 新しいグループの ParentBranch に J', !empty(s:grp2)
-      \ && index(s:file(s:grp2), '### ParentBranch') >= 0
+      \ && index(s:file(s:grp2), 'ParentBranch:') >= 0
       \ && s:has(s:grp2, '^\[ノートJ\](j\.md)$'))
-call s:ok('zk n: 元ノート J の ChildBranch にグループ', index(s:file('j.md'), '### ChildBranch') >= 0
+call s:ok('zk n: 元ノート J の ChildBranch にグループ', index(s:file('j.md'), 'ChildBranch:') >= 0
       \ && s:has('j.md', '(' . s:grp2 . ')'))
 call s:ok('zk n: Context への余分な逆リンクを作らない',
       \ index(s:file(s:grp2), 'Context:') < 0 && index(s:file(s:grp2), '### Context') < 0)
@@ -309,8 +309,8 @@ call s:ok('旧 ThisNoteGroup: zk n で BranchGroup に移行する',
       \ && s:has('legacy.md', '(g\.md)')
       \ && s:has('legacy.md', '(' . s:legacy_group . ')'))
 call s:ok('旧 ThisNoteGroup: 新グループへの Branch を構築',
-      \ !empty(s:legacy_group) && index(s:file('legacy.md'), '### ChildBranch') >= 0
-      \ && index(s:file(s:legacy_group), '### ParentBranch') >= 0
+      \ !empty(s:legacy_group) && index(s:file('legacy.md'), 'ChildBranch:') >= 0
+      \ && index(s:file(s:legacy_group), 'ParentBranch:') >= 0
       \ && s:has(s:legacy_group, '^\[旧ノート\](legacy\.md)$'))
 
 " ------------------------------------------------------------------ グループの \S（最後のブロックだけ）
@@ -392,13 +392,13 @@ call s:ok('新ノート: ブロックの下は 空行 / カーソル行 / 空行
 call s:ok('新ノート: カーソルは真ん中の空行', line('.') == s:lk + 3, line('.') . ' vs ' . (s:lk + 3))
 
 " ------------------------------------------------------------------ zw（日記でなくても本文の一番下から書き始める）
-call s:mk('wb.md', 'ノートWB', ['最初の文。', '最後の文。', '', '', '', '### Related', '[ノートA](a.md)'])
+call s:mk('wb.md', 'ノートWB', ['最初の文。', '最後の文。', '', '', '', 'Related:', '[ノートA](a.md)'])
 execute 'edit ' . fnameescape(s:v . '/wb.md')
 call gnosis#write_at_bottom()
 stopinsert
 let s:wl = getline(1, '$')
 let s:li = index(s:wl, '最後の文。')
-call s:ok('zw: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', '### Related'], string(s:wl))
+call s:ok('zw: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', 'Related:'], string(s:wl))
 call s:ok('zw: カーソルは最後の文の 2 行下', line('.') == s:li + 3, line('.') . ' vs ' . (s:li + 3))
 
 " ------------------------------------------------------------------ リンクの番号（読み直し・外からの書き換えのあとも出る）

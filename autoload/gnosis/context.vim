@@ -19,7 +19,8 @@
 let s:head = 'Context:'
 let s:script = fnamemodify(expand('<sfile>:p:h:h:h') . '/python/context_ops.py', ':p')
 let s:legacy_marks = ['### Context', '### Parent']
-let s:section_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink']
+let s:section_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink',
+      \ 'ParentBranch:', 'ChildBranch:', 'Related:', 'BackLink:']
 let s:link_line = '^\s*\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\s*\%(—\s*\S\+\)\?\s*$'
 
 function! gnosis#context#head() abort

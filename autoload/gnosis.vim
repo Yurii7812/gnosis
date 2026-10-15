@@ -1102,7 +1102,8 @@ endfunction
 " （### Group）が消え、別のグループへ移していた場合は、次の同期で相手側の
 " リンクまで「消された」と扱われるおそれがあった。
 " 内容が変わったときだけ書き換える（毎回の無駄な差分を避ける）。
-let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink']
+let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '### Group', '### ChildBranch', '### Related', '### BackLink',
+      \ 'ParentBranch:', 'ChildBranch:', 'Related:', 'BackLink:']
 
 " 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
 function! s:guide_relation_tail(lines) abort
@@ -5997,25 +5998,28 @@ let s:v2_up_mark   = '### Context'
 " Group: は本文冒頭のブロック（H1 の直後）。本文の終わりを示す節の印（s:v2_any_marks）には入れない
 " （入れると、Group: のあるノートで「本文の終わり」が冒頭になり、日記の節が増え続ける）。
 let s:v2_group_mark = 'Group:'
-let s:v2_related_mark = '### Related'
-let s:v2_down_mark = '### BackLink'
+" 関係の節の見出しは「名前:」の形で書く（Group: / Context: と同じ）。旧形式の `### 名前` も読める。
+let s:v2_related_mark = 'Related:'
+let s:v2_related_marks_legacy = ['### Related']
+let s:v2_down_mark = 'BackLink:'
 " 旧見張り（新しい順: `##` なしの Parent/Child -> こっちにとって/そっちにとって
 " -> している/されている）。まだ移行していないノートも読めるように残す。
 " sync（note_format_v2.py）が保存時に新表記（## Parent / ## Child）へ書き換える。
 let s:v2_up_marks_legacy   = ['### Parent', 'Parent', '<!-- こっちにとって -->', '<!-- している -->']
-let s:v2_down_marks_legacy = ['Child', '<!-- そっちにとって -->', '<!-- されている -->']
+let s:v2_down_marks_legacy = ['### BackLink', 'Child', '<!-- そっちにとって -->', '<!-- されている -->']
 
 " v2_boundaries_in_lines と同じ判定を、バッファ上では search()（C 実装）で行う。
 " 旧: 全行を Vimscript ループで trim 比較しており、1 万行の index.md では
 " ヒント更新・数字ジャンプのたびに 200ms 超かかっていた。後方検索 1 回ずつで
 " 「最後に一致した行」という同じ意味になる（複数あれば最後が返る）。
 let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちにとって -->\|<!-- している -->\)\s*$'
-let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_down_pat = '\C^\s*\%(BackLink:\|### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
+let s:v2_any_marks = ['ParentBranch:', 'ChildBranch:', 'Related:', 'BackLink:',
+      \ '### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(ParentBranch:\|ChildBranch:\|Related:\|BackLink:\|### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
   " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
@@ -6061,7 +6065,7 @@ function! s:context_insert_index(lines) abort
     if l:mark ==# s:v2_up_mark || index(s:v2_up_marks_legacy, l:mark) >= 0
       return -1
     endif
-    if l:mark ==# '### ParentBranch' && l:pb < 0
+    if (l:mark ==# '### ParentBranch' || l:mark ==# 'ParentBranch:') && l:pb < 0
       let l:pb = l:i
     endif
   endfor
@@ -7007,7 +7011,7 @@ function! s:simple_add_related(file, other_path, other_title) abort
   endif
   let l:rel = -1
   for l:i in range(0, (l:back >= 0 ? l:back : len(l:lines)) - 1)
-    if trim(l:lines[l:i]) ==# s:v2_related_mark
+    if trim(l:lines[l:i]) ==# s:v2_related_mark || index(s:v2_related_marks_legacy, trim(l:lines[l:i])) >= 0
       let l:rel = l:i
       break
     endif
@@ -7021,7 +7025,7 @@ function! s:simple_add_related(file, other_path, other_title) abort
     " Related セクション末尾（次の ### 見出し or 末尾）へ。重複は解決先で見る。
     let l:end = len(l:lines)
     for l:i in range(l:rel + 1, len(l:lines) - 1)
-      if trim(l:lines[l:i]) =~# '^###\s'
+      if trim(l:lines[l:i]) =~# '^###\s' || index(s:v2_any_marks, trim(l:lines[l:i])) >= 0
         let l:end = l:i
         break
       endif
@@ -7617,7 +7621,7 @@ function! s:section_end_in_lines(lines, hl) abort
   while l:i <= len(a:lines)
     let l:t = a:lines[l:i - 1]
     if !l:flags[l:i - 1]
-      if trim(l:t) =~# s:v2_any_pat || trim(l:t) =~# '^###\s\+\%(ParentBranch\|ChildBranch\|Context\|Group\|Related\|BackLink\|Parent\)\s*$'
+      if trim(l:t) =~# s:v2_any_pat || trim(l:t) =~# '^###\s\+\%(ParentBranch\|ChildBranch\|Context\|Group\|Related\|BackLink\|Parent\)\s*$' || trim(l:t) =~# '^\%(ParentBranch\|ChildBranch\|Related\|BackLink\):\s*$'
         break
       endif
       let l:m = matchstr(l:t, '^\s*\zs#\+\ze\s\+')

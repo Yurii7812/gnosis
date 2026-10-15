@@ -39,8 +39,7 @@ except ImportError:  # 実行ディレクトリ以外から import されたと�
 
 CONTEXT_HEAD = "Context:"
 LEGACY_MARKS = (nf.CONTEXT_MARK, nf.UP_MARK)
-SECTION_MARKS = {nf.PARENT_BRANCH_MARK, nf.CONTEXT_MARK, nf.UP_MARK, nf.GROUP_MARK,
-                 nf.CHILD_BRANCH_MARK, nf.RELATED_MARK, nf.DOWN_MARK}
+SECTION_MARKS = set(nf.ALL_SECTION_HEADS) | {nf.GROUP_MARK}
 _LINK_LINE = nf._SIMPLE_LINK_LINE_RE
 _H1 = re.compile(r"^#\s+\S")
 

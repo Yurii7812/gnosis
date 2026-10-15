@@ -32619,7 +32619,7 @@ ${h3.join(`
       decos.push(Decoration.replace({}).range(s15 + inner.length, base2 + b3));
     });
   }
-  var SECTION_HEAD_RE = /^###\s+(ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)\s*$/;
+  var SECTION_HEAD_RE = /^(?:###\s+(?:ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)|(?:ParentBranch|ChildBranch|Context|Group|Related|BackLink):)\s*$/;
   function emptySectionLines(doc2, fmEnd) {
     const out = /* @__PURE__ */ new Set();
     let inFence = false;

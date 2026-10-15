@@ -28,7 +28,7 @@ chk() { if grep -qF -- "$2" "$V/$1"; then echo "OK 同期後: $3"; else echo "NG
   grep -q '^### Context' "$V/b.md" && echo "NG 同期後: 新形式が ### Context に戻った" || echo "OK 同期後: 新形式が維持される（### Context を再生成しない）"
   if cmp -s "$V/legacy-untouched.md" "$WORK/legacy.before"; then echo "OK 同期後: 旧形式のノートを勝手に移行・書き換えない"; else echo "NG 同期後: 旧形式のノートが書き換わった"; fi
   python3 "$REPO/python/branch_ops.py" check "$V" >/dev/null && echo "OK 同期後: Branch の整合性に問題なし" || echo "NG 同期後: 整合性エラー"
-  if [ "$(grep -c '^### ParentBranch$' "$V/x.md")" = 1 ] && grep -q '^Context:$' "$V/x.md"; then echo "OK 同期後: Context と ParentBranch が共存"; else echo "NG 同期後: x.md"; fi
+  if [ "$(grep -c '^ParentBranch:$' "$V/x.md")" = 1 ] && grep -q '^Context:$' "$V/x.md"; then echo "OK 同期後: Context と ParentBranch が共存"; else echo "NG 同期後: x.md"; fi
 } > "$WORK/all.txt"
 if grep -q '^NG' "$WORK/all.txt"; then
   grep -v '^OK' "$WORK/all.txt" >&2

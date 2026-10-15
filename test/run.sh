@@ -24,6 +24,7 @@ python3 "$REPO/python/test_branch_ops.py"
 python3 "$REPO/python/test_context_ops.py"
 python3 "$REPO/python/test_group_removal.py"
 python3 "$REPO/python/test_group_semantics.py"
+python3 "$REPO/python/test_section_colon.py"
 python3 "$REPO/python/test_theme_palette.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \

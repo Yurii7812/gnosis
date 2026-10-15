@@ -199,7 +199,8 @@ def _is_context_head(ln: str) -> bool:
 
 
 # 関係の節の見出し（本文はこれより前）。中身が空の節は見出しごと無いので、どれが最初に来るかは決まっていない。
-SECTION_HEADS = ("### ParentBranch", "### Context", "### Parent", "### Group", "### ChildBranch", "### Related", "### BackLink")
+SECTION_HEADS = ("### ParentBranch", "### Context", "### Parent", "### Group", "### ChildBranch", "### Related", "### BackLink",
+                 "ParentBranch:", "ChildBranch:", "Related:", "BackLink:")
 
 
 def _is_section_head(ln: str) -> bool:

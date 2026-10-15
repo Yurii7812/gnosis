@@ -26,7 +26,8 @@ def check(cond: bool, msg: str) -> None:
 UP_MARK = v2.UP_MARK
 CTX_MARK = v2.CONTEXT_MARK  # 現行（simple_sync）の上側見出し。旧 ### Parent は読み込みだけ
 RELATED_MARK = v2.RELATED_MARK
-DOWN_MARK = v2.DOWN_MARK
+DOWN_MARK = v2.DOWN_MARK  # 旧 v2 の見張り（### BackLink）。simple_sync の出力は BACKLINK_MARK
+BACKLINK_MARK = v2.BACKLINK_MARK  # BackLink:（現行の出力）
 
 
 def regions(text: str) -> tuple[str, str]:
@@ -34,9 +35,10 @@ def regions(text: str) -> tuple[str, str]:
     旧 Parent）から BackLink まで、下側 = BackLink 以降。節が無ければ ("", "")。"""
     lines = text.rstrip("\n").split("\n")
     sl = [l.strip() for l in lines]
-    heads = (CTX_MARK, UP_MARK, v2.GROUP_MARK, RELATED_MARK)
+    heads = (CTX_MARK, UP_MARK, v2.GROUP_MARK, RELATED_MARK, v2.RELATED_MARK_LEGACY)
     ups = [i for i, l in enumerate(sl) if l in heads]
-    d = sl.index(DOWN_MARK) if DOWN_MARK in sl else None
+    dm = [i for i, l in enumerate(sl) if l in (BACKLINK_MARK, DOWN_MARK)]
+    d = dm[0] if dm else None
     if not ups and d is None:
         return "", ""
     u = ups[0] if ups else d
@@ -1252,7 +1254,7 @@ def test_simple_sync_group_with_my_link_is_added_to_group() -> None:
         text = (root / "x.md").read_text(encoding="utf-8")
         check(_group_region(text) == ["[G](g.md)"], f"G が Group に自動で入る: {_group_region(text)}")
         check(_parent_region(text) == ["[N1](n1.md)"], f"Context はそのまま: {_parent_region(text)}")
-        check(DOWN_MARK not in text, "BackLink には出ない（空なので見出しも無い）")
+        check(BACKLINK_MARK not in text, "BackLink には出ない（空なので見出しも無い）")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
         # グループの本文からリンクを消すと、Group からも外れる
         (root / "g.md").write_text(
@@ -1294,9 +1296,9 @@ def test_simple_sync_empty_sections_are_not_written() -> None:
         (root / "a.md").write_text(raw.rstrip("\n") + "\n[B](b.md)\n", encoding="utf-8")
         v2.simple_sync(root)
         b = (root / "b.md").read_text(encoding="utf-8")
-        check(DOWN_MARK in b and CTX_MARK not in b and v2.GROUP_MARK not in b, f"BackLink だけ: {b[-60:]!r}")
+        check(BACKLINK_MARK in b and CTX_MARK not in b and v2.GROUP_MARK not in b, f"BackLink だけ: {b[-60:]!r}")
         a = (root / "a.md").read_text(encoding="utf-8")
-        check(DOWN_MARK not in a and CTX_MARK not in a, "A には節が無い")
+        check(BACKLINK_MARK not in a and CTX_MARK not in a, "A には節が無い")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
         # リンクを消すと BackLink の見出しも消える
         (root / "a.md").write_text(raw, encoding="utf-8")
@@ -1315,8 +1317,8 @@ def test_links_in_code_are_not_links() -> None:
         (root / "b.md").write_text(head % ("B", "B"), encoding="utf-8")
         (root / "c.md").write_text(head % ("C", "C"), encoding="utf-8")
         v2.simple_sync(root)
-        check(DOWN_MARK not in (root / "b.md").read_text(encoding="utf-8"), "コード内のリンク先に BackLink は付かない")
-        check(DOWN_MARK in (root / "c.md").read_text(encoding="utf-8"), "コードの外の本物のリンクは今までどおり")
+        check(BACKLINK_MARK not in (root / "b.md").read_text(encoding="utf-8"), "コード内のリンク先に BackLink は付かない")
+        check(BACKLINK_MARK in (root / "c.md").read_text(encoding="utf-8"), "コードの外の本物のリンクは今までどおり")
         check("[表示名](b.md#アウトライン)" in (root / "a.md").read_text(encoding="utf-8"), "コードの中身は書き換えない")
 
 
@@ -1335,9 +1337,9 @@ def test_branch_group_and_group_auto_membership() -> None:
             "ThisNoteGroup:\n[G2](g2.md)\n"
             "\nGroup:\n[G2](g2.md)\n[G1](g1.md)\n"
             "Context:\n[Root](root.md)\n\n本文を残す。\n"
-            "### ChildBranch\n[G2](g2.md)")
+            "ChildBranch:\n[G2](g2.md)")
         put("g1.md", "G1", "[A](a.md)", True)
-        put("g2.md", "G2", "[A](a.md)\n\n### ParentBranch\n[A](a.md)", True)
+        put("g2.md", "G2", "[A](a.md)\n\nParentBranch:\n[A](a.md)", True)
         put("root.md", "Root", "文脈ノート")
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")
@@ -1351,7 +1353,7 @@ def test_branch_group_and_group_auto_membership() -> None:
               "BranchGroup → Group → Context の順番")
         check("本文を残す。" in a and "Context:\n[Root](root.md)" in a,
               "文脈と本文は失わない")
-        check("### ChildBranch\n[G2](g2.md)" in a and "### ParentBranch\n[A](a.md)" in g2,
+        check("ChildBranch:\n[G2](g2.md)" in a and "ParentBranch:\n[A](a.md)" in g2,
               "ChildBranch と ParentBranch は双方向で保持")
         check(v2.simple_sync(root) == 0, "再同期は冪等")
         put("g3.md", "G3", "[A](a.md)", True)
@@ -1376,8 +1378,8 @@ def test_branch_group_canonical_and_fenced_literals() -> None:
             "BranchGroup:\n[K](k.md)\nGroup:\n[K](k.md)\n"
             "Context:\n[C](c.md)\n\n本文\n\n"
             "```md\nBranchGroup:\n[偽物](k.md)\n```\n"
-            "### ChildBranch\n[K](k.md)")
-        put("k.md", "K", "### ParentBranch\n[A](a.md)", "attribute: group\n")
+            "ChildBranch:\n[K](k.md)")
+        put("k.md", "K", "ParentBranch:\n[A](a.md)", "attribute: group\n")
         put("c.md", "C", "普通のノート")
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")

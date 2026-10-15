@@ -239,9 +239,9 @@ function decorateLine(line, active, inFence, decos, cfg) {
 }
 
 
-// ノートの関係の節（### ParentBranch / ChildBranch / Context / Group / Related / BackLink。旧 Parent も）のうち、
+// ノートの関係の節（ParentBranch: / ChildBranch: / Context: / Group: / Related: / BackLink:。旧 `### 名前` も）のうち、
 // 中身（空行でない行）が無いものの見出しの行番号。コードブロックの中は見ない。
-const SECTION_HEAD_RE = /^###\s+(ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)\s*$/;
+const SECTION_HEAD_RE = /^(?:###\s+(?:ParentBranch|ChildBranch|Context|Group|Related|BackLink|Parent)|(?:ParentBranch|ChildBranch|Context|Group|Related|BackLink):)\s*$/;
 function emptySectionLines(doc, fmEnd) {
   const out = new Set();
   let inFence = false;

@@ -29,7 +29,7 @@ function! s:tail(lines) abort
       let l:j += 1
     endwhile
   endif
-  let l:k = match(a:lines, '^### BackLink$')
+  let l:k = match(a:lines, '^BackLink:$')
   if l:k >= 0 | call extend(l:out, a:lines[l:k :]) | endif
   return l:out
 endfunction
@@ -100,12 +100,12 @@ try
   call s:ok('複数所属: Index とハーブの両方', s:count(s:t, '^\[Index\](index\.md)$') == 1 && s:count(s:t, '^\[ハーブ\](261013140400\.md)$') == 1)
   call s:ok('複数所属: 同期しても変わらない', s:sync() =~# 'updated 0 file')
 
-  " 普通のノートの本文からガイドへリンク → ガイドに ### BackLink（通常のノートと同じ）
+  " 普通のノートの本文からガイドへリンク → ガイドに BackLink:（通常のノートと同じ）
   call writefile(['---', 'time: 2026-10-13 14:05:00', 'title: メモ', '---', '', '# メモ', '使い方は[Gnosis 操作ガイド](gnosis-guide.md)を見る'], s:v . '/261013140500.md')
   call s:sync()
   call gnosis#refresh_guide()
   let s:t = s:tail(s:guide())
-  call s:ok('BackLink: 本文からのリンクが ### BackLink に出る', index(s:t, '### BackLink') >= 0 && s:count(s:t, '261013140500\.md') == 1)
+  call s:ok('BackLink: 本文からのリンクが BackLink: に出る', index(s:t, 'BackLink:') >= 0 && s:count(s:t, '261013140500\.md') == 1)
   call s:ok('BackLink: 更新しても残り、同期しても変わらない', s:sync() =~# 'updated 0 file')
   call delete(s:v . '/261013140500.md')
   call s:sync()

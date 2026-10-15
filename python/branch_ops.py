@@ -36,8 +36,9 @@ except ImportError:  # 実行ディレクトリ以外から import されたと�
 PB = nf.PARENT_BRANCH_MARK
 CB = nf.CHILD_BRANCH_MARK
 # 節の並び（小さいほど上）。旧 `### Parent` は Context と同じ位置。
-_RANK = {PB: 0, nf.CONTEXT_MARK: 1, nf.UP_MARK: 1, nf.GROUP_MARK: 2, CB: 3,
-         nf.RELATED_MARK: 4, nf.DOWN_MARK: 5}
+_RANK = {PB: 0, nf.PARENT_BRANCH_MARK_LEGACY: 0, nf.CONTEXT_MARK: 1, nf.UP_MARK: 1, nf.GROUP_MARK: 2,
+         nf.LEGACY_GROUP_MARK: 2, CB: 3, nf.CHILD_BRANCH_MARK_LEGACY: 3,
+         nf.RELATED_MARK: 4, nf.RELATED_MARK_LEGACY: 4, nf.BACKLINK_MARK: 5, nf.DOWN_MARK: 5}
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +180,8 @@ def insert_link(text: str, mark: str, link_line: str) -> str:
     if had_nl:
         lines.pop()
     secs = _section_starts(lines)
-    mine = [i for i, m in secs if m == mark]
+    # 旧形式の見出し（### ChildBranch など）の節があれば、それに足す（同じ節を新旧 2 つに分けない）
+    mine = [i for i, m in secs if nf.LEGACY_TO_NEW_MARK.get(m, m) == mark]
     if mine:
         start = mine[0]
         nxt = [i for i, _m in secs if i > start]

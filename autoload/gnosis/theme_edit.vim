@@ -459,9 +459,9 @@ function! s:sample(width) abort
   call add(l:out, s:preview_line([['1', 'GnosisTeHint'], ['ローズマリー', 'GnosisTeCurLink'], ['  ← カーソル行', 'GnosisTeCurDim']], a:width, 'GnosisTeCurText'))
   call add(l:out, s:preview_line([['2', 'GnosisTeHint'], ['レモンバーム', 'GnosisTeLink']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([], a:width, 'GnosisTeText'))
-  call add(l:out, s:preview_line([['### ', 'GnosisTeDim'], ['Context', 'GnosisTeHead']], a:width, 'GnosisTeText'))
+  call add(l:out, s:preview_line([['Context', 'GnosisTeHead'], [':', 'GnosisTeDim']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([['3', 'GnosisTeHint'], ['ハーブ', 'GnosisTeLink']], a:width, 'GnosisTeText'))
-  call add(l:out, s:preview_line([['### ', 'GnosisTeDim'], ['ChildBranch', 'GnosisTeHead']], a:width, 'GnosisTeText'))
+  call add(l:out, s:preview_line([['ChildBranch', 'GnosisTeHead'], [':', 'GnosisTeDim']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([['4', 'GnosisTeHint'], ['植物の栽培', 'GnosisTeLink']], a:width, 'GnosisTeText'))
   return l:out
 endfunction

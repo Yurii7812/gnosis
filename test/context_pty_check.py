@@ -58,10 +58,10 @@ class TestNewNoteCursor(unittest.TestCase):
         self.assertEqual(lines[i + 2:i + 5], ["", "ここに書く", ""], lines)  # 空行・カーソル行・空行
         self.assertEqual(lines[i - 2], "# " + new[0].stem)
         self.assertEqual(lines[i - 1], "")
-        self.assertEqual(lines[i + 5], "### ParentBranch")
+        self.assertEqual(lines[i + 5], "ParentBranch:")
         self.assertNotIn("### Context", lines)
         a = (self.v / "a.md").read_text(encoding="utf-8")
-        self.assertIn("### ChildBranch", a)
+        self.assertIn("ChildBranch:", a)
         self.assertIn(f"[{new[0].stem}]({new[0].name})", a)
         self.assertNotIn("Context:", a)
 

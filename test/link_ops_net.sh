@@ -27,7 +27,7 @@ chk() { if grep -qF -- "$2" "$V/$1"; then echo "OK 同期後: $3"; else echo "NG
   chk c.md '[好きな*名前_](i.md)' "\\l n の表示名が残る"
   chk e.md '[ノートA](a.md)' "\\l c Enter で E に入れたリンクが残る"
   chk a.md '[ノートD](d.md)' "za c o の A 側の Context が残る"
-  if grep -qF '(a.md)' "$V/d.md" && ! grep -q '^### BackLink' "$V/d.md"; then echo "NG 同期後: D の本文に A が入った"; else echo "OK 同期後: za c o で D の本文には A を入れない（BackLink は自動生成で別もの）"; fi
+  if grep -qF '(a.md)' "$V/d.md" && ! grep -q '^BackLink:' "$V/d.md"; then echo "NG 同期後: D の本文に A が入った"; else echo "OK 同期後: za c o で D の本文には A を入れない（BackLink は自動生成で別もの）"; fi
 } > "$WORK/all.txt"
 if grep -q '^NG' "$WORK/all.txt"; then
   grep -v '^OK' "$WORK/all.txt" >&2

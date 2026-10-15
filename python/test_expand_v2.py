@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """expand_v2 の自己完結テスト（pytest 非依存）。
 
-現行のノート形式（`### Parent` / `### Related` / `### BackLink`。子 = 本文リンク）と
+現行のノート形式（`### Parent` / `Related:` / `### BackLink`。子 = 本文リンク）と
 現役エンジン `simple_sync` で動かす。
 
     python3 test_expand_v2.py
@@ -81,7 +81,7 @@ def test_directions_parent_child_backlink_related() -> None:
         check(d_a["backlink"] == {ids[(root / "D.md").resolve()]},
               "A の文中（### BackLink）は D だけ（Related を混ぜない）")
         check(d_a["related"] == {ids[(root / "R.md").resolve()]},
-              "A の関連（### Related）は R（独立した方向）")
+              "A の関連（Related:）は R（独立した方向）")
 
 
 def test_simple_mode_depth1() -> None:
@@ -317,7 +317,7 @@ def test_render_strips_own_h1_and_frontmatter() -> None:
         text = out_path.read_text(encoding="utf-8")
         check("attribute:" not in text, "front matter は含まれない")
         check(UP_MARK not in text and DOWN_MARK not in text and RELATED_MARK not in text,
-              "見張り（### Parent / ### Related / ### BackLink）は含まれない")
+              "見張り（### Parent / Related: / ### BackLink）は含まれない")
         lines = text.split("\n")
         check("# A" not in lines, "本文側の重複 H1 (# A) は除去される（## A だけが残る）")
         check("## A" in text and "## G" in text and "## B" in text and "## D" in text,

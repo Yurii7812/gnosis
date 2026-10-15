@@ -10,7 +10,7 @@ The UI and the generated guide are available in Japanese and English (see [Engli
 
 <p align="center"><img src="docs/images/start-screen.png" alt="Gnosis の起動画面" width="720"><br><sub>起動画面（ターミナルの Vim。<code>tools/make_start_screenshot.py</code> で作り直せます）</sub></p>
 
-- 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、冒頭の `Context:` と `### Group` / `### Related` / `### BackLink` などを保存時に自動で同期
+- 1 ファイル = 1 ノート（Markdown）。関係はリンクで表し、冒頭の `Context:` と `### Group` / `Related:` / `BackLink:` などを保存時に自動で同期
 - 中身は本物の Vim。Vim を知らなくても、インストーラーが Gnosis 専用の Vim 環境を作り、アイコンから起動できる
 - 標準の画面は Bash などのターミナルで起動する本物の Vim。独自 GUI ではない（Electron は明示的な `--app` のときだけ使用できるオプション）
 - 起動画面で vault（ノートのフォルダ）を選び・作り・登録できる。設定は vault ごと（言語・見た目・起動サイズ・テーマ）。文字サイズは Gnosis 全体で 1 つ
@@ -248,7 +248,7 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 | `\d` | 今日の日記 |
 | `zw` | 今のノートの本文の一番下（空行を 1 つ空けた所）から書き始める |
 
-**`b` / `p`（Branch。`zn` / `zk` / `za` / `\l`）**: Folgezettel のような「直接のブランチ」を**明示**します（識別子から親子は推測しません）。`b` は今のノート A が親・B が子、`p` は B が親・A が子（どちらも同じ処理）。親のノートの `### ChildBranch` と子のノートの `### ParentBranch` の両方に書きます。**親は 1 ノートに最大 1 つ**（子は何本でも）。B に既に親があれば、現在の親のタイトルを示して**拒否**し、どちらのノートも変更しません（親の付け替えはしません）。自分自身・循環・`index.md` も拒否。保存や同期のあとも維持され、`### Context` には変換されません。`:GnosisBranchCheck` で整合性（親が複数・片側だけ・循環）を検査できます。
+**`b` / `p`（Branch。`zn` / `zk` / `za` / `\l`）**: Folgezettel のような「直接のブランチ」を**明示**します（識別子から親子は推測しません）。`b` は今のノート A が親・B が子、`p` は B が親・A が子（どちらも同じ処理）。親のノートの `ChildBranch:` と子のノートの `ParentBranch:` の両方に書きます。**親は 1 ノートに最大 1 つ**（子は何本でも）。B に既に親があれば、現在の親のタイトルを示して**拒否**し、どちらのノートも変更しません（親の付け替えはしません）。自分自身・循環・`index.md` も拒否。保存や同期のあとも維持され、`### Context` には変換されません。`:GnosisBranchCheck` で整合性（親が複数・片側だけ・循環）を検査できます。
 
 **`c` のあと（`zn` / `zk` / `za` / `\l`）**: 今のノート A の Context にリンク先 B を入れたあと、B に A へのリンクをどう入れるかを選びます。
 
@@ -286,7 +286,7 @@ B がグループなら、表示名を入力します。入力欄は空から始
 
 ### 操作ガイドの所属関係
 
-操作ガイド（`gnosis-guide.md`）も vault の普通のノートです。Index の本文からリンクされていれば `### Group` に Index、別のグループの本文に移せばそのグループ、複数なら全部が、他のノートと同じ同期の規則で入ります（`### Context` / `### Related` / `### BackLink` も同じ）。
+操作ガイド（`gnosis-guide.md`）も vault の普通のノートです。Index の本文からリンクされていれば `### Group` に Index、別のグループの本文に移せばそのグループ、複数なら全部が、他のノートと同じ同期の規則で入ります（`### Context` / `Related:` / `BackLink:` も同じ）。
 起動のたびにガイドの**本文**は Gnosis の版と言語に合わせて更新しますが、関係の節（`### Context` 以下）と front matter はそのまま残します。ガイド本文の中の `### Group` などは説明の文で、関係の節とは扱いません。
 
 ### デスクトップアイコンの配色

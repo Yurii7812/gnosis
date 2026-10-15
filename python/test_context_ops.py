@@ -67,10 +67,10 @@ class TestBlock(Base):
         self.assertFalse(self.add("b.md", "[A](./a.md)")[1])
 
     def test_created_after_h1_when_missing(self) -> None:
-        self.w("b.md", fm("B") + "\n# B\n\n本文。\n\n### BackLink\n[Z](z.md)\n")
+        self.w("b.md", fm("B") + "\n# B\n\n本文。\n\nBackLink:\n[Z](z.md)\n")
         out, added = self.add("b.md", "[A](a.md)")
         self.assertTrue(added)
-        self.assertEqual(out, fm("B") + "\n# B\n\nContext:\n[A](a.md)\n\n本文。\n\n### BackLink\n[Z](z.md)\n")
+        self.assertEqual(out, fm("B") + "\n# B\n\nContext:\n[A](a.md)\n\n本文。\n\nBackLink:\n[Z](z.md)\n")
 
     def test_no_context_is_not_invented(self) -> None:
         t = fm("B") + "\n# B\n\n本文。\n"
@@ -93,7 +93,7 @@ class TestBlock(Base):
 
 
 class TestLegacy(Base):
-    OLD = fm("A") + "\n# A\n\n本文。\n\n### Context\n[B](b.md)\n[C](c.md)\n\n### BackLink\n[Z](z.md)\n"
+    OLD = fm("A") + "\n# A\n\n本文。\n\n### Context\n[B](b.md)\n[C](c.md)\n\nBackLink:\n[Z](z.md)\n"
 
     def test_old_form_is_read(self) -> None:
         self.assertEqual(co.context_links(self.OLD.split("\n")), ["[B](b.md)", "[C](c.md)"])
@@ -105,11 +105,11 @@ class TestLegacy(Base):
         self.assertIn("Context:\n[B](b.md)\n[C](c.md)\n[D](d.md)\n", out)
         self.assertNotIn("### Context", out)
         self.assertIn("本文。", out)
-        self.assertIn("### BackLink\n[Z](z.md)", out)
+        self.assertIn("BackLink:\n[Z](z.md)", out)
 
     def test_migrate_lines_is_idempotent_and_verified(self) -> None:
         new = co.migrate_text(self.OLD)
-        self.assertEqual(new, fm("A") + "\n# A\n\nContext:\n[B](b.md)\n[C](c.md)\n\n本文。\n\n### BackLink\n[Z](z.md)\n")
+        self.assertEqual(new, fm("A") + "\n# A\n\nContext:\n[B](b.md)\n[C](c.md)\n\n本文。\n\nBackLink:\n[Z](z.md)\n")
         self.assertTrue(co.verify_migration(self.OLD, new))
         self.assertEqual(co.migrate_text(new), new)
 
@@ -173,7 +173,7 @@ class TestSyncNewForm(Base):
         self.assertEqual(self.r("b.md"), first)
         self.assertIn("\nContext:\n[A](a.md)\n[C](c.md)\n\n本文B。", first)
         self.assertNotIn("### Context", first)
-        self.assertNotIn("### BackLink", first)  # Context にいる相手は BackLink に出ない
+        self.assertNotIn("BackLink:", first)  # Context にいる相手は BackLink に出ない
 
     def test_context_links_follow_titles_and_dangling_are_pruned(self) -> None:
         self.w("a.md", fm("A") + "\n# A\n")
@@ -205,7 +205,7 @@ class TestSyncNewForm(Base):
         self.sync()
         b = self.r("b.md")
         self.assertIn("Context:\n[A](a.md)", b)
-        self.assertIn("### ParentBranch\n[A](a.md)", b)
+        self.assertIn("ParentBranch:\n[A](a.md)", b)
         self.assertEqual(b.count("[A](a.md)"), 2)
         self.assertTrue(bo.check(self.root)["ok"])
 
@@ -217,7 +217,7 @@ class TestSyncNewForm(Base):
         res = bo.add_branches(self.root, self.root / "c.md", [self.root / "b.md"])
         self.assertEqual(res["code"], "has_parent")
         self.sync()
-        self.assertEqual(self.r("b.md").count("### ParentBranch"), 1)
+        self.assertEqual(self.r("b.md").count("ParentBranch:"), 1)
 
     def test_old_cache_is_reparsed(self) -> None:
         self.w("b.md", fm("B") + "\n# B\n\nContext:\n[A](a.md)\n\n本文。\n")

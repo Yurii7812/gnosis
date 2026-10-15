@@ -95,8 +95,7 @@ SYMMETRIC: frozenset[str] = frozenset({"関連"})
 BACKLINK = "バックリンク"
 
 UP_MARK = "### Parent"
-RELATED_MARK = "### Related"
-DOWN_MARK = "### BackLink"
+DOWN_MARK = "### BackLink"   # 旧 v2 の見張り（読み込みの判定用）。simple_sync の出力は BACKLINK_MARK
 # 現行（simple_sync）の見張り。上側は `### Context`（旧 `### Parent`）と `### Group`。
 # 旧 `### Parent` は parse だけが読み、sync が `### Context` へ移行する。
 CONTEXT_MARK = "### Context"
@@ -106,15 +105,34 @@ LEGACY_THIS_NOTE_GROUP_HEAD = "ThisNoteGroup:"  # 読み込み互換
 LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統一する。
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
-PARENT_BRANCH_MARK = "### ParentBranch"
-CHILD_BRANCH_MARK = "### ChildBranch"
+# 関係の節の見出しは、Group: / Context: と同じ「名前:」の形で書く（2026-10-15〜）。
+# 旧形式の `### 名前` も読める（出力は「名前:」に統一する）。
+PARENT_BRANCH_MARK = "ParentBranch:"
+CHILD_BRANCH_MARK = "ChildBranch:"
+RELATED_MARK = "Related:"
+BACKLINK_MARK = "BackLink:"
+PARENT_BRANCH_MARK_LEGACY = "### ParentBranch"
+CHILD_BRANCH_MARK_LEGACY = "### ChildBranch"
+RELATED_MARK_LEGACY = "### Related"
+BACKLINK_MARK_LEGACY = "### BackLink"
+# 旧見出し → 新しい見出し
+LEGACY_TO_NEW_MARK = {
+    PARENT_BRANCH_MARK_LEGACY: PARENT_BRANCH_MARK,
+    CHILD_BRANCH_MARK_LEGACY: CHILD_BRANCH_MARK,
+    RELATED_MARK_LEGACY: RELATED_MARK,
+    BACKLINK_MARK_LEGACY: BACKLINK_MARK,
+}
 # Context は本文の冒頭（H1 の直後）の `Context:` ブロック（見出しではなく、ふつうのテキスト行 + 直下のリンク群）。
 # 旧形式の `### Context` 節（旧 `### Parent`）も読める。
 CONTEXT_HEAD = "Context:"
 
 # 関係の節の並び順（sync が書き出す順。Context は本文の冒頭のブロックなので含まない。旧形式の節は互換のため読む）
 SECTION_ORDER = (PARENT_BRANCH_MARK, CONTEXT_MARK, GROUP_MARK, CHILD_BRANCH_MARK,
-                 RELATED_MARK, DOWN_MARK)
+                 RELATED_MARK, BACKLINK_MARK)
+# 末尾の関係の節の見出し（新旧とも）。本文はこれより前。Group: / Context: は本文冒頭のブロックなので含まない。
+ALL_SECTION_HEADS = (PARENT_BRANCH_MARK, PARENT_BRANCH_MARK_LEGACY, CONTEXT_MARK, UP_MARK, LEGACY_GROUP_MARK,
+                     CHILD_BRANCH_MARK, CHILD_BRANCH_MARK_LEGACY, RELATED_MARK, RELATED_MARK_LEGACY,
+                     BACKLINK_MARK, BACKLINK_MARK_LEGACY)
 # 旧見張り（新しい順）。parse だけが読む。render は新表記（## Parent / ## Child）に統一する。
 LEGACY_UP_MARK3 = "Parent"  # `##` なしの旧 v2 見張り
 LEGACY_DOWN_MARK3 = "Child"
@@ -1483,8 +1501,10 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
-             RELATED_MARK: "related", DOWN_MARK: "back",
-             PARENT_BRANCH_MARK: "pbranch", CHILD_BRANCH_MARK: "cbranch"}
+             RELATED_MARK: "related", RELATED_MARK_LEGACY: "related",
+             BACKLINK_MARK: "back", BACKLINK_MARK_LEGACY: "back",
+             PARENT_BRANCH_MARK: "pbranch", PARENT_BRANCH_MARK_LEGACY: "pbranch",
+             CHILD_BRANCH_MARK: "cbranch", CHILD_BRANCH_MARK_LEGACY: "cbranch"}
     cur = "body"
     for ln, fz in zip(rest, _fenced(rest)):
         if fz:  # コードブロックの中は見出し・リンクとして扱わない
@@ -1808,7 +1828,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     if _has(related):
         sections.append((RELATED_MARK, related))
     if back_lines:
-        sections.append((DOWN_MARK, back_lines))
+        sections.append((BACKLINK_MARK, back_lines))
     if not sections:
         # 節が無いノートは、末尾の空行（書き出しの余白）をそのまま残す
         lines += [""] * int(n.get("tail_blanks", 0))

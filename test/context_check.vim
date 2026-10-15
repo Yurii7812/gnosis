@@ -49,7 +49,7 @@ call writefile(['---', 'title: Index', 'attribute: group', '---', '', '# Index']
 call s:mk('a.md', 'ノートA', ['# ノートA', '', '本文A。'])
 call s:mk('b.md', 'ノートB', ['# ノートB', '', 'Context:', '[ノートA](a.md)', '', '本文B。'])
 call s:mk('c.md', 'ノートC', ['# ノートC', '', '本文C。'])
-call s:mk('d.md', 'ノートD（旧形式）', ['# ノートD（旧形式）', '', '本文D。', '', '### Context', '[ノートX](x.md)', '[ノートY](y.md)', '', '### BackLink', '[ノートZ](z.md)'])
+call s:mk('d.md', 'ノートD（旧形式）', ['# ノートD（旧形式）', '', '本文D。', '', '### Context', '[ノートX](x.md)', '[ノートY](y.md)', '', 'BackLink:', '[ノートZ](z.md)'])
 call s:mk('e.md', 'ノートE', ['# ノートE', '', '```', 'Context:', '[偽](fake.md)', '```', '', '本文E。'])
 call s:mk('x.md', 'ノートX', ['# ノートX', '', 'Context:', '[ノートA](a.md)', '', '本文X。'])
 call s:mk('y.md', 'ノートY', ['# ノートY'])
@@ -73,9 +73,9 @@ call s:ok('新規ノート: H1 の次は空行 1 行 → Context:', s:nl[s:h1 + 
 call s:ok('新規ノート: Context: は Markdown 見出しではなく通常のテキスト行', s:nl[s:h1 + 2] !~# '^#' && s:nl[s:h1 + 2] ==# 'Context:')
 call s:ok('新規ノート: Context の直下に元ノートへのリンク', s:nl[s:h1 + 3] ==# '[ノートA](a.md)')
 call s:ok('新規ノート: リンクの後ろに空行 3 行（真ん中がカーソル）', s:nl[s:h1 + 4 : s:h1 + 6] ==# ['', '', ''], string(s:nl))
-call s:ok('新規ノート: ### Context は無い・ParentBranch は Context と別に残る', index(s:nl, '### Context') < 0 && index(s:nl, '### ParentBranch') == s:h1 + 7 && s:nl[s:h1 + 8] ==# '[ノートA](a.md)')
+call s:ok('新規ノート: ### Context は無い・ParentBranch は Context と別に残る', index(s:nl, '### Context') < 0 && index(s:nl, 'ParentBranch:') == s:h1 + 7 && s:nl[s:h1 + 8] ==# '[ノートA](a.md)')
 call s:ok('新規ノート: カーソルは Context リンクの 2 行下（空行の真ん中）', s:cur_line == s:h1 + 1 + 4 + 2 - 0 + 0 || s:cur_line == s:h1 + 7 - 1, 'cursor=' . s:cur_line . ' h1=' . s:h1)
-call s:ok('新規ノート: A 側は本文リンク + ChildBranch', index(s:file('a.md'), '[' . fnamemodify(s:n, ':r') . '](' . s:n . ')') >= 0 && index(s:file('a.md'), '### ChildBranch') >= 0)
+call s:ok('新規ノート: A 側は本文リンク + ChildBranch', index(s:file('a.md'), '[' . fnamemodify(s:n, ':r') . '](' . s:n . ')') >= 0 && index(s:file('a.md'), 'ChildBranch:') >= 0)
 call s:ok('新規ノート: Context が無い元ノートに Context を作らない', empty(gnosis#context#find_block(s:file('a.md'))))
 
 " ============================================================ c: 既存リンク群の最後へ
@@ -104,7 +104,7 @@ execute 'edit ' . fnameescape(s:v . '/d.md')
 call s:za('[ノートF](f.md)', ['c', 'o'])
 let s:dl = s:file('d.md')
 call s:ok('旧形式: リンクを失わず新形式へ（X, Y, F の順）', gnosis#context#links(s:dl) ==# ['[ノートX](x.md)', '[ノートY](y.md)', '[ノートF](f.md)'] && index(s:dl, '### Context') < 0, string(s:dl))
-call s:ok('旧形式: 本文と BackLink は変わらない', index(s:dl, '本文D。') >= 0 && index(s:dl, '### BackLink') >= 0 && s:dl[-1] ==# '[ノートZ](z.md)')
+call s:ok('旧形式: 本文と BackLink は変わらない', index(s:dl, '本文D。') >= 0 && index(s:dl, 'BackLink:') >= 0 && s:dl[-1] ==# '[ノートZ](z.md)')
 " 明示的な移行コマンド（今のノート）
 call s:mk('g.md', 'ノートG（旧）', ['# ノートG（旧）', '', '本文G。', '', '### Context', '[ノートF](f.md)'])
 execute 'edit ' . fnameescape(s:v . '/g.md')
@@ -120,7 +120,7 @@ call s:ok('旧形式のノートは開いただけでは書き換えない', s:f
 " ============================================================ ParentBranch と Context に同じノート
 execute 'edit ' . fnameescape(s:v . '/a.md')
 call s:za('[ノートX](x.md)', ['b'])
-call s:ok('ParentBranch と Context に同じノート A を登録できる', gnosis#context#links(s:file('x.md')) ==# ['[ノートA](a.md)'] && index(s:file('x.md'), '### ParentBranch') >= 0 && count(s:file('x.md'), '[ノートA](a.md)') == 2, string(s:file('x.md')))
+call s:ok('ParentBranch と Context に同じノート A を登録できる', gnosis#context#links(s:file('x.md')) ==# ['[ノートA](a.md)'] && index(s:file('x.md'), 'ParentBranch:') >= 0 && count(s:file('x.md'), '[ノートA](a.md)') == 2, string(s:file('x.md')))
 
 " ============================================================ w モード
 call s:mk('w1.md', 'ローズマリー', ['# ローズマリー', '', '本文。'])
