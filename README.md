@@ -242,7 +242,7 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 | `zk` | グループ作成（位置キーは `zn` と同じ） |
 | `zk`（ビジュアル） | 選択範囲を中身にしたグループ |
 | `za` / `zA` / `zp` | クリップボード・ヤンクのリンクを追加（`zA` は表示名つき） |
-| `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ** / **`g` = グループを選んで所属にする（表示名も聞く）**） |
+| `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ** / **`g` = 選んだグループに今のノートを入れる（表示名も聞く）**） |
 | `\L` | ファイル名のリンク化 / 選択範囲から新ノート |
 | `\S` | リンク行をよみ順に並べる（**グループでは本文の最後のブロックだけ**） |
 | `\d` | 今日の日記 |
@@ -391,7 +391,7 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
   XFCE Terminal, xterm and WezTerm get the size when a Gnosis window opens. The terminal's own Ctrl + / − / 0 cannot be saved.
 - **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, light / dark,
   themes (standard, custom colors, or `Plug 'author/repo'` themes from GitHub, safely parsed).
-- **New keys**: `\l` → `g` (or `za` → `g`) puts the note into a group you choose, with a display name; `\l` → `n` adds a link with a typed display name;
+- **New keys**: `\l` → `g` (or `za` → `g`) adds the current note to the group you chose, with a display name; `\l` → `n` adds a link with a typed display name;
   after `c` in `zn` / `zk` / `za` / `\l`, choose how the target links back: `Enter` end of body, `t` end of a chosen section, `o` none.
   `\S` in a group sorts only the last blank-line-separated block.
 - **Migration**: the old vault is imported automatically on first start; old `g:simple_yurii_note_*` settings and `:Yurii*` commands keep working.
