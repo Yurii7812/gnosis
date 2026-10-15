@@ -1413,6 +1413,23 @@ def _simple_parse(path: Path) -> dict:
     return _simple_parse_text(path, path.read_text(encoding="utf-8"))
 
 
+def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
+    """新しい Group: と旧 ### Group をリンクの連続ブロックとして読む。
+
+    後ろに本文が続いても Group の内容には取り込まない。
+    単独リンク・区切り空行以外の本文は残す（移行時に失わない）。
+    """
+    flags = _fenced(lines)
+    for i, ln in enumerate(lines):
+        if flags[i] or ln.strip() not in (GROUP_MARK, LEGACY_GROUP_MARK):
+            continue
+        j = i + 1
+        while j < len(lines) and (not lines[j].strip() or _SIMPLE_LINK_LINE_RE.match(lines[j])):
+            j += 1
+        return lines[i + 1:j], lines[:i] + lines[j:]
+    return [], lines
+
+
 def _simple_parse_text(path: Path, text: str) -> dict:
     # 末尾の改行で生じる空要素は本文に入れない（残すと `### Parent` の上に空行が増える）。
     # `### Parent` より前の空行（本文の途中の余白）は残る。
@@ -1426,10 +1443,11 @@ def _simple_parse_text(path: Path, text: str) -> dict:
         ctx = rest[blk[0] + 1:blk[1] + 1]
         ctx_at = blk[0]
         rest = rest[:blk[0]] + rest[blk[1] + 1:]
+    group_block, rest = _take_group_block(rest)
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
-             GROUP_MARK: "group", LEGACY_GROUP_MARK: "group", RELATED_MARK: "related", DOWN_MARK: "back",
+             RELATED_MARK: "related", DOWN_MARK: "back",
              PARENT_BRANCH_MARK: "pbranch", CHILD_BRANCH_MARK: "cbranch"}
     cur = "body"
     for ln, fz in zip(rest, _fenced(rest)):
@@ -1444,7 +1462,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
-            "group": sec["group"], "related": sec["related"], "back": sec["back"],
+            "group": group_block + sec["group"], "related": sec["related"], "back": sec["back"],
             "pbranch": sec["pbranch"], "cbranch": sec["cbranch"], "ctx": ctx, "ctx_at": ctx_at,
             "tail_blanks": tail_blanks, "hash": _content_hash(text)}
 
