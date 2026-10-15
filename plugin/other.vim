@@ -306,14 +306,14 @@ nnoremap rg :Rg<CR>
 
 " 配色: Gnosis のランチャー（vimrc_gnosis）で起動したときは、vault の設定のテーマ
 " （gnosis#theme#apply）が決める。旧 simple-yurii-note の vimrc で起動したときだけ、
-" 従来どおり kalisi を使う（無ければ Vim の既定のまま）。
+" Gnosis 組み込みの配色（colors/gnosis.vim）を使う。外部の配色プラグインは要らない。
 if !get(g:, 'gnosis_managed', 0)
   if !exists('g:gnosis_link_color_gui')
     let g:gnosis_link_color_gui = '#2F6690'
     let g:gnosis_link_color_cterm = '24'
   endif
   set background=light
-  silent! colorscheme kalisi
+  silent! colorscheme gnosis
 endif
 
 " !系コマンドを常にsilentで実行

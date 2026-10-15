@@ -339,7 +339,7 @@ ESC O B（application cursor Down）のような端末制御コードはGnosis�
 2. 初めて Gnosis を起動すると、旧環境の vault（`~/.vim/simple_yurii_note/root.txt`）が自動で vault の一覧に入り、選択済みになります（root.txt は消しません）
 3. 旧 vault の操作ガイド `simple-yurii-note-guide.md` は同じファイル名のまま最新の内容に更新されます（Index のリンクは壊れません）
 4. 旧 vimrc の `g:simple_yurii_note_*` は `g:gnosis_*` にそのまま引き継がれます。旧コマンド `:Yurii*` は `:Gnosis*` の別名として使えます（`let g:gnosis_legacy_commands = 0` で定義しない）
-5. 旧テーマ（kalisi）を使い続けるなら、設定画面のテーマの追加に `Plug 'freeo/vim-kalisi'`
+5. 配色は Gnosis 組み込みのものを使います（外部の配色プラグイン kalisi は要りません。旧 vimrc の `Plug 'freeo/vim-kalisi'` は消して構いません）
 6. 旧 vimrc（`~/.vimrc-simple-yurii-note`）で起動しても動きます（その場合だけ、従来どおり root.txt も更新します）
 
 キーの変更点: 短いキー（`zn`・`zk`・`\l` など）は変わりません。追加は `\l` → `n` / `g`（表示名・グループ所属）・`c` のあとの `Enter` / `t` / `o`。`\S` はグループでは最後のブロックだけを並べます。

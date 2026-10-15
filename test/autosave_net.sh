@@ -56,11 +56,7 @@ TRASHED=$(ls "$VAULT/.trash" 2>/dev/null | head -1 || true)
 # 8) 挿入モードのまま止まっても保存される（pty が必要なので script+fifo で）
 if command -v script >/dev/null 2>&1 && command -v mkfifo >/dev/null 2>&1; then
   # 通常の vimrc は pty 起動時にメッセージ待ち（mode=c）になり得るため、
-  # プラグインだけを読む最小 vimrc を使う。other.vim が `colorscheme kalisi`
-  # を呼ぶので、ダミーの colors/kalisi.vim を runtimepath に足して ENTER 待ち
-  # （E185）を避ける。
-  mkdir -p "$WORK/colors"
-  printf 'let g:colors_name = "kalisi"\n' > "$WORK/colors/kalisi.vim"
+  # プラグインだけを読む最小 vimrc を使う（配色は Gnosis 組み込みなので外部の配色は要らない）。
   cat > "$WORK/pty_vimrc" <<EOF
 set nocompatible
 set noswapfile
