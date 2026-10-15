@@ -26,6 +26,7 @@ function! gnosis#conflict#record(...) abort
   endif
   call setbufvar(l:buf, 'gnosis_disk', s:disk_state(l:p))
   call setbufvar(l:buf, 'gnosis_conflict', [])
+  call setbufvar(l:buf, 'gnosis_own_sync', 0)
 endfunction
 
 " 覚えた状態から、ファイルが他のプロセスに書き換えられていたら 1
@@ -69,12 +70,37 @@ function! gnosis#conflict#handle(...) abort
   echohl NONE
 endfunction
 
+" 保存のたびに起動する自分の自動同期（update_one）が、このバッファのファイルを書き直す。
+" それを「別のウィンドウの書き換え」と見なして警告しないよう、同期を起動したバッファに印を付ける。
+function! gnosis#conflict#mark_own_sync(...) abort
+  let l:buf = a:0 && !empty(a:1) ? str2nr(a:1) : bufnr('%')
+  call setbufvar(l:buf, 'gnosis_own_sync', 1)
+endfunction
+
 " 自動保存・各操作の保存に使う update。他で書き換えられていたら書かない。書けたら 1
 function! gnosis#conflict#safe_update() abort
   if !&modified
     return 0
   endif
   if gnosis#conflict#disk_changed()
+    if get(b:, 'gnosis_own_sync', 0)
+      " 自分の同期が整えた内容。次の保存でまた同期が走って整え直すので、バッファ側を優先して書く。
+      " 挿入中は :edit できない。Esc で抜けたときの保存で改めて試す（黙って待つ）。
+      if mode() =~# '^[iR]'
+        return 0
+      endif
+      " Vim は :w! でも「読込んだ後に変更がありました」と確認するので、いったんディスクの
+      " 状態を読み直して（Vim の覚えている更新時刻を合わせて）から、バッファの内容を戻して保存する。
+      let l:lines = getline(1, '$')
+      let l:view = winsaveview()
+      let b:gnosis_own_sync = 0
+      silent! edit!
+      silent! keepjumps %delete _
+      call setline(1, l:lines)
+      call winrestview(l:view)
+      silent! update
+      return !&modified
+    endif
     call gnosis#conflict#handle()
     return 0
   endif
@@ -86,6 +112,10 @@ endfunction
 " 未保存の変更があるとき（reason が conflict）は読み直さず、退避して警告する（変更を失わない）。
 function! gnosis#conflict#on_changed_shell() abort
   let l:buf = str2nr(expand('<abuf>'))
+  if getbufvar(l:buf, 'gnosis_own_sync', 0) && (v:fcs_reason ==# 'conflict' || getbufvar(l:buf, '&modified'))
+    let v:fcs_choice = ''
+    return
+  endif
   if v:fcs_reason ==# 'conflict' || (v:fcs_reason ==# 'changed' && getbufvar(l:buf, '&modified'))
     let v:fcs_choice = ''
     call gnosis#conflict#handle(l:buf)

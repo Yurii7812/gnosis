@@ -169,5 +169,15 @@ edit!
 call setline(line('$'), '外の更新のあとに編集')
 call s:ok('同時編集: 外の更新を読み込んでから編集すれば保存できる', gnosis#conflict#safe_update() && readfile(s:A . '/n.md')[-1] ==# '外の更新のあとに編集')
 
+" 自分の自動同期が書き直したファイルは、警告せずバッファ側を優先して保存する
+sleep 1100m
+call gnosis#conflict#record()
+call gnosis#conflict#mark_own_sync()
+sleep 1100m
+call writefile(['---', 'title: N', '---', '', '# N', '', '同期が整えた'], s:A . '/n.md')
+call setline(line('$'), '同期中に打った文字')
+let s:msgs_before = s:msgs()
+call s:ok('自分の同期: 警告せずに保存できる', gnosis#conflict#safe_update() && readfile(s:A . '/n.md')[-1] ==# '同期中に打った文字' && s:msgs() ==# s:msgs_before)
+
 call writefile(s:res, s:w . '/result.txt')
 qa!

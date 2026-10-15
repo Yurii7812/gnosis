@@ -8539,6 +8539,7 @@ function! gnosis#autosync_on_save() abort
           \ 'out_io':  'null',
           \ 'err_cb': {ch, msg -> s:sync_problem('stderr: ' . msg)},
           \ })
+  call gnosis#conflict#mark_own_sync()
   else
     " 同期フォールバック
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
