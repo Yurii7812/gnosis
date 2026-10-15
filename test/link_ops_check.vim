@@ -241,6 +241,25 @@ call s:ok('ノートの見出し順: BranchGroup → Group → Context',
       \ index(s:blocks, 'BranchGroup:') < index(s:blocks, 'Group:')
       \ && (index(s:blocks, 'Context:') < 0 || index(s:blocks, 'Group:') < index(s:blocks, 'Context:')))
 
+" ------------------------------------------------------------------ 旧 ThisNoteGroup から zk n
+call s:mk('legacy.md', '旧ノート', ['ThisNoteGroup:', '[グループG](g.md)', ''])
+execute 'edit ' . fnameescape(s:v . '/legacy.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ['n']
+sleep 1100m
+call gnosis#v2_new_group()
+stopinsert
+let s:legacy_group = s:newest_except(s:before)
+call s:ok('旧 ThisNoteGroup: zk n で BranchGroup に移行する',
+      \ index(s:file('legacy.md'), 'ThisNoteGroup:') < 0
+      \ && index(s:file('legacy.md'), 'BranchGroup:') >= 0
+      \ && s:has('legacy.md', '(g\.md)')
+      \ && s:has('legacy.md', '(' . s:legacy_group . ')'))
+call s:ok('旧 ThisNoteGroup: 新グループへの Branch を構築',
+      \ !empty(s:legacy_group) && index(s:file('legacy.md'), '### ChildBranch') >= 0
+      \ && index(s:file(s:legacy_group), '### ParentBranch') >= 0
+      \ && s:has(s:legacy_group, '^\[旧ノート\](legacy\.md)$'))
+
 " ------------------------------------------------------------------ グループの \S（最後のブロックだけ）
 call s:mk('n1.md', 'あ', [])
 call s:mk('n2.md', 'い', [])
