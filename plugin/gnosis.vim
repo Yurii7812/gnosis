@@ -1060,6 +1060,7 @@ function! s:on_write_post() abort
   catch
     " silent! update の中で起きた例外は握りつぶされるので、ログに残してから再送出する
     call gnosis#autosync_log('  EXCEPTION: ' . v:exception . ' @ ' . v:throwpoint)
+    call gnosis#autosync_problem('exception: ' . v:exception . ' @ ' . v:throwpoint)
     throw v:exception
   endtry
 endfunction

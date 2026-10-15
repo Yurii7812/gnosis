@@ -8126,6 +8126,25 @@ function! gnosis#autosync_log(msg) abort
   call writefile([strftime('%H:%M:%S') . ' ' . a:msg], '/tmp/syn-autosync.log', 'a')
 endfunction
 
+" 保存後の同期がうまくいかなかったとき（飛ばした・例外・Python の失敗）の記録。Gnosis ホームの
+" logs/autosync.log に常に残す（BackLink などが更新されないとき、何が起きたか後から分かるように）。
+" 100KB を超えたら、新しい側の 300 行だけ残す。
+function! gnosis#autosync_problem(msg) abort
+  call s:sync_problem(a:msg)
+endfunction
+
+function! s:sync_problem(msg) abort
+  try
+    let l:f = gnosis#home#path('logs', 'autosync.log')
+    call mkdir(fnamemodify(l:f, ':h'), 'p')
+    if getfsize(l:f) > 102400
+      call writefile(readfile(l:f)[-300 :], l:f)
+    endif
+    call writefile([strftime('%Y-%m-%d %H:%M:%S') . ' ' . a:msg], l:f, 'a')
+  catch
+  endtry
+endfunction
+
 " バッファのタイトル（Python の _simple_parse_text と同じ規則: frontmatter の title、
 " 無ければファイル名）。タイトル変更前後の比較用。
 function! s:fm_title() abort
@@ -8154,6 +8173,7 @@ function! gnosis#autosync_on_save() abort
   call gnosis#autosync_log('autosync_on_save file=' . expand('%:p'))
   if !filereadable(g:gnosis_python)
     call gnosis#autosync_log('  skip: python script not readable: ' . g:gnosis_python)
+    call s:sync_problem('skip: python script not readable: ' . g:gnosis_python)
     return
   endif
 
@@ -8162,10 +8182,12 @@ function! gnosis#autosync_on_save() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !filereadable(s:index_path(l:root))
     call gnosis#autosync_log('  skip: root=' . l:root . ' index readable=' . (empty(l:root) ? 0 : filereadable(s:index_path(l:root))))
+    call s:sync_problem('skip: no vault root / index (root=' . l:root . ') file=' . l:file)
     return
   endif
   if !s:is_root_note_path(l:file)
     call gnosis#autosync_log('  skip: not a root note path (root=' . l:root . ')')
+    call s:sync_problem('skip: not under the vault root (root=' . l:root . ') file=' . l:file)
     return
   endif
 
@@ -8178,7 +8200,7 @@ function! gnosis#autosync_on_save() abort
             \ . ' regen ' . shellescape(l:root)
       if has('job') && has('channel')
         call job_start(gnosis#shell_job(l:pcmd), {
-              \ 'exit_cb': function('s:autosync_done'),
+              \ 'exit_cb': function('s:autosync_done', [l:file]),
               \ 'out_io':  'null',
               \ 'err_io':  'null',
               \ })
@@ -8208,9 +8230,9 @@ function! gnosis#autosync_on_save() abort
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
     call gnosis#autosync_log('  start job: ' . l:cmd)
     call job_start(gnosis#shell_job(l:cmd), {
-          \ 'exit_cb': function('s:autosync_done'),
+          \ 'exit_cb': function('s:autosync_done', [l:file]),
           \ 'out_io':  'null',
-          \ 'err_io':  'null',
+          \ 'err_cb': {ch, msg -> s:sync_problem('stderr: ' . msg)},
           \ })
   else
     " 同期フォールバック
@@ -8222,9 +8244,12 @@ function! gnosis#autosync_on_save() abort
   endif
 endfunction
 
-function! s:autosync_done(job, status) abort
+function! s:autosync_done(file, job, status) abort
   " job完了後にバッファを外部変更に合わせる
   call gnosis#autosync_log('  job done status=' . a:status)
+  if a:status != 0
+    call s:sync_problem('sync failed: exit=' . a:status . ' file=' . a:file)
+  endif
   call s:reload_current()
 endfunction
 
