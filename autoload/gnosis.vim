@@ -8634,6 +8634,7 @@ endfunction
 " 任意のファイルパスに対して update_one を起動するヘルパー
 function! s:update_one_command(target_fp, ...) abort
   let l:force = a:0 > 0 ? a:1 : 0
+  call gnosis#conflict#mark_own_sync(bufnr(a:file))
   if !l:force && !g:gnosis_autosync | return '' | endif
   if !filereadable(g:gnosis_python) | return '' | endif
   let l:root = s:get_pkm_root()
@@ -15365,6 +15366,8 @@ endfunction
 function! s:diary_cursor() abort
   let l:sec = '## ' . get(g:, 'gnosis_diary_section', '今日のノート')
   let l:lines = getline(1, '$')
+  " 開いたらすぐ書き始められるように、挿入モードにする
+  startinsert
   let l:n = index(l:lines, l:sec) + 1
   if l:n <= 0
     let l:u = s:first_section_index_in_lines(l:lines) + 1
