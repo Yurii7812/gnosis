@@ -1,6 +1,6 @@
 " テーマ（配色）の回帰網（test/theme_net.sh から呼ぶ）。HOME と GNOSIS_HOME は一時フォルダ。
-"   - 通常の Vim の標準配色が変わらない（背景 #14283D・本文 #E6EEF5・リンク #E6F5EA・見出し #F6D88A）
-"   - \A のアプリの既定は白（背景 #FFFFFF・本文 #1F2328。リンクと見出しも読める）
+"   - 通常の Vim の標準配色が変わらない（背景 #0C1D32・本文 #EBEBEB・リンク #E1F4E4・見出し #EEDA77）
+"   - \A のアプリの既定は白（背景 #FAFAFA・本文 #1F1F1F。リンクと見出しも読める）
 "   - 通常の Vim のテーマと \A のテーマは独立（一方を変えても他方は変わらない）
 "   - カスタムテーマの編集: 色の変更がプレビューへ即時に反映される・取り消しでは保存されない・保存後に読み直しても残る
 "   - 保存した設定で再起動（読み直し）しても配色が維持される・古い設定ファイルとの互換
@@ -22,18 +22,18 @@ call writefile(['---', 'title: Index', 'attribute: group', '---', '', '# Index']
 " ------------------------------------------------------------ 標準配色（通常の Vim）
 let s:def = gnosis#settings#defaults()
 let s:vp = gnosis#theme#palette(s:def)
-call s:ok('通常の Vim の標準配色: 背景', toupper(s:vp.bg) ==# '#14283D', s:vp.bg)
-call s:ok('通常の Vim の標準配色: 本文', toupper(s:vp.fg) ==# '#E6EEF5')
-call s:ok('通常の Vim の標準配色: リンク', toupper(s:vp.link) ==# '#E6F5EA')
-call s:ok('通常の Vim の標準配色: 見出し', toupper(s:vp.heading) ==# '#F6D88A')
+call s:ok('通常の Vim の標準配色: 背景', toupper(s:vp.bg) ==# '#0C1D32', s:vp.bg)
+call s:ok('通常の Vim の標準配色: 本文', toupper(s:vp.fg) ==# '#EBEBEB')
+call s:ok('通常の Vim の標準配色: リンク', toupper(s:vp.link) ==# '#E1F4E4')
+call s:ok('通常の Vim の標準配色: 見出し', toupper(s:vp.heading) ==# '#EEDA77')
 call gnosis#settings#apply(s:def)
-call s:ok('通常の Vim: 適用した Normal の背景・本文', s:gui('Normal', 'bg') ==# '#14283d' && s:gui('Normal', 'fg') ==# '#e6eef5', s:gui('Normal', 'bg') . ' ' . s:gui('Normal', 'fg'))
-call s:ok('通常の Vim: 見出しの色・リンクの色', s:gui('markdownH1', 'fg') ==# '#f6d88a' && s:gui('markdownLinkText', 'fg') ==# '#e6f5ea')
+call s:ok('通常の Vim: 適用した Normal の背景・本文', s:gui('Normal', 'bg') ==# '#0c1d32' && s:gui('Normal', 'fg') ==# '#ebebeb', s:gui('Normal', 'bg') . ' ' . s:gui('Normal', 'fg'))
+call s:ok('通常の Vim: 見出しの色・リンクの色', s:gui('markdownH1', 'fg') ==# '#eeda77' && s:gui('markdownLinkText', 'fg') ==# '#e1f4e4')
 
 " ------------------------------------------------------------ \A のアプリの既定（白）
 let s:ap = gnosis#theme#app_palette(s:def)
-call s:ok('\A の既定: 背景は白 #FFFFFF', toupper(s:ap.bg) ==# '#FFFFFF', s:ap.bg)
-call s:ok('\A の既定: 本文は濃い色 #1F2328', toupper(s:ap.fg) ==# '#1F2328')
+call s:ok('\A の既定: 背景は白 #FAFAFA', toupper(s:ap.bg) ==# '#FAFAFA', s:ap.bg)
+call s:ok('\A の既定: 本文は濃い色 #1F1F1F', toupper(s:ap.fg) ==# '#1F1F1F')
 call s:ok('\A の既定: ライトの配色', s:ap.base ==# 'light')
 call s:ok('\A の既定: 本文と背景のコントラスト 7 以上', gnosis#color#contrast(s:ap.fg, s:ap.bg) >= 7, string(gnosis#color#contrast(s:ap.fg, s:ap.bg)))
 call s:ok('\A の既定: リンクは読める（4.5 以上）', gnosis#color#contrast(s:ap.link, s:ap.bg) >= 4.5, string(gnosis#color#contrast(s:ap.link, s:ap.bg)))
@@ -42,27 +42,27 @@ call s:ok('\A の既定: リンクと本文は別の色', tolower(s:ap.link) !=#
 " アプリの中の Vim（$GNOSIS_GUI_PORT がある）は、アプリ用の配色を使う
 let $GNOSIS_GUI_PORT = '1'
 call gnosis#settings#apply(s:def)
-call s:ok('\A の中の Vim: Normal は白背景・濃い本文', s:gui('Normal', 'bg') ==# '#ffffff' && s:gui('Normal', 'fg') ==# '#1f2328', s:gui('Normal', 'bg') . ' ' . s:gui('Normal', 'fg'))
+call s:ok('\A の中の Vim: Normal は白背景・濃い本文', s:gui('Normal', 'bg') ==# '#fafafa' && s:gui('Normal', 'fg') ==# '#1f1f1f', s:gui('Normal', 'bg') . ' ' . s:gui('Normal', 'fg'))
 call s:ok('\A の中の Vim: リンクは下線つき（本文と区別できる）', synIDattr(synIDtrans(hlID('markdownLinkText')), 'underline', 'gui') ==# '1' && s:gui('markdownLinkText', 'fg') !=# s:gui('Normal', 'fg'))
-call s:ok('\A の中の Vim: 渡す配色は白', toupper(g:gnosis_palette.bg) ==# '#FFFFFF' && g:gnosis_palette.base ==# 'light')
+call s:ok('\A の中の Vim: 渡す配色は白', toupper(g:gnosis_palette.bg) ==# '#FAFAFA' && g:gnosis_palette.base ==# 'light')
 let $GNOSIS_GUI_PORT = ''
 call gnosis#settings#apply(s:def)
-call s:ok('アプリの外に戻れば通常の Vim の配色', s:gui('Normal', 'bg') ==# '#14283d')
+call s:ok('アプリの外に戻れば通常の Vim の配色', s:gui('Normal', 'bg') ==# '#0c1d32')
 
 " ------------------------------------------------------------ 独立性
 let s:both = deepcopy(s:def)
 let s:both.theme = {'kind': 'custom', 'name': 'v'}
 let s:both.customThemes = {'v': {'base': 'dark', 'bg': '#220000', 'fg': '#ffeeee', 'link': '#ffaaaa', 'heading': '#ffdd00', 'selection': '#440000', 'cursorline': '#330000'}}
-call s:ok('独立: Vim のテーマを変えても \A は白のまま', toupper(gnosis#theme#app_palette(s:both).bg) ==# '#FFFFFF' && gnosis#theme#palette(s:both).bg ==# '#220000')
+call s:ok('独立: Vim のテーマを変えても \A は白のまま', toupper(gnosis#theme#app_palette(s:both).bg) ==# '#FAFAFA' && gnosis#theme#palette(s:both).bg ==# '#220000')
 let s:both2 = deepcopy(s:def)
 let s:both2.appTheme = {'kind': 'custom', 'name': 'a'}
 let s:both2.appCustomThemes = {'a': {'base': 'dark', 'bg': '#001122', 'fg': '#eeeeff', 'link': '#aaccff', 'heading': '#ffcc00', 'selection': '#113355', 'cursorline': '#0a1a2a'}}
-call s:ok('独立: \A のテーマを変えても Vim は標準のまま', toupper(gnosis#theme#palette(s:both2).bg) ==# '#14283D' && gnosis#theme#app_palette(s:both2).bg ==# '#001122')
+call s:ok('独立: \A のテーマを変えても Vim は標準のまま', toupper(gnosis#theme#palette(s:both2).bg) ==# '#0C1D32' && gnosis#theme#app_palette(s:both2).bg ==# '#001122')
 call s:ok('\A のカスタム: 補助の色は作り直す（muted / accent が組み込みのまま残らない）', !has_key(gnosis#theme#app_palette(s:both2), 'muted') || gnosis#theme#app_palette(s:both2).muted !=# '#57606A')
 " 存在しない appTheme の名前は組み込み（白）に戻る
 let s:miss = deepcopy(s:def)
 let s:miss.appTheme = {'kind': 'custom', 'name': 'nothing'}
-call s:ok('存在しない \A のテーマ名は白に戻る', toupper(gnosis#theme#app_palette(s:miss).bg) ==# '#FFFFFF')
+call s:ok('存在しない \A のテーマ名は白に戻る', toupper(gnosis#theme#app_palette(s:miss).bg) ==# '#FAFAFA')
 " 壊れた設定は直る
 let s:bad = gnosis#settings#merge(s:def, {'appTheme': {'kind': 'plugin'}, 'appCustomThemes': 5})
 call s:ok('検証: 壊れた appTheme / appCustomThemes は既定に戻る', s:bad.appTheme.kind ==# 'builtin' && type(s:bad.appCustomThemes) == v:t_dict)
@@ -77,7 +77,7 @@ call s:ok('保存: Vim のテーマを保存しても、読み直した \A の�
 call writefile([json_encode({'version': 1, 'language': 'ja', 'appearance': 'dark', 'theme': {'kind': 'custom', 'name': 'old'}, 'customThemes': {'old': {'base': 'dark', 'bg': '#101010', 'fg': '#eeeeee', 'link': '#99ccff', 'heading': '#ffcc66', 'selection': '#333333', 'cursorline': '#1a1a1a'}}})], s:v . '/.gnosis/settings.json')
 let s:old = gnosis#settings#load(s:v)
 call s:ok('互換: 古い設定ファイルのカスタムテーマはそのまま', s:old.theme.name ==# 'old' && gnosis#theme#palette(s:old).bg ==# '#101010')
-call s:ok('互換: 古い設定ファイルでも \A は白', toupper(gnosis#theme#app_palette(s:old).bg) ==# '#FFFFFF')
+call s:ok('互換: 古い設定ファイルでも \A は白', toupper(gnosis#theme#app_palette(s:old).bg) ==# '#FAFAFA')
 " 設定を読んだだけでは、ファイルは書き換えない（既存の vault を開いただけで書き換えない）
 let s:before = readfile(s:v . '/.gnosis/settings.json')
 call gnosis#settings#load(s:v)
@@ -91,9 +91,9 @@ let g:te_result = {'untouched': 1}
 function! s:closed(r) abort
   let g:te_result = a:r
 endfunction
-let s:colors = {'bg': '#14283d', 'fg': '#e6eef5', 'link': '#e6f5ea', 'heading': '#f6d88a', 'selection': '#2a4f72', 'cursorline': '#1c354e'}
+let s:colors = {'bg': '#0c1d32', 'fg': '#ebebeb', 'link': '#e1f4e4', 'heading': '#eeda77', 'selection': '#21538c', 'cursorline': '#15365b'}
 call gnosis#theme_edit#open({'target': 'vim', 'name': 'my-theme', 'colors': s:colors, 'on_close': function('s:closed')})
-call s:ok('編集: プレビューの背景（最初は今の色）', s:gui('GnosisTeText', 'bg') ==# '#14283d' && s:gui('GnosisTeText', 'fg') ==# '#e6eef5')
+call s:ok('編集: プレビューの背景（最初は今の色）', s:gui('GnosisTeText', 'bg') ==# '#0c1d32' && s:gui('GnosisTeText', 'fg') ==# '#ebebeb')
 call s:ok('編集: プレビューのリンクは下線・見出しは太字', synIDattr(hlID('GnosisTeLink'), 'underline', 'gui') ==# '1' && synIDattr(hlID('GnosisTeHead'), 'bold', 'gui') ==# '1')
 " 背景を変えると、保存する前でもすぐプレビューに反映される
 call gnosis#theme_edit#set_color('bg', '#ffffff')
@@ -105,7 +105,7 @@ call s:ok('編集: 本文・リンク・見出しも個別にすぐ反映', s:gu
 call gnosis#theme_edit#set_color('selection', '#b6d6ff')
 call gnosis#theme_edit#set_color('cursorline', '#f2f5f8')
 call s:ok('編集: 選択状態とカーソル行も反映', s:gui('GnosisTeSel', 'bg') ==# '#b6d6ff' && s:gui('GnosisTeCurText', 'bg') ==# '#f2f5f8')
-call s:ok('編集: 実際のテーマ（Normal）は保存するまで変わらない', s:gui('Normal', 'bg') ==# '#14283d')
+call s:ok('編集: 実際のテーマ（Normal）は保存するまで変わらない', s:gui('Normal', 'bg') ==# '#0c1d32')
 call s:ok('編集: 保存するまで設定ファイルもノートも変わらない', readfile(s:v . '/.gnosis/settings.json') ==# s:settings_before && readfile(s:v . '/index.md') ==# s:note_before)
 call s:ok('編集: 画面に HEX・日本語のプレビュー・リンクの表示名が出る', join(getline(1, '$'), "\n") =~# '#FFFFFF' && join(getline(1, '$'), "\n") =~# '植物について' && join(getline(1, '$'), "\n") =~# 'ローズマリー' && join(getline(1, '$'), "\n") !~# 'example\.md')
 call s:ok('編集: 見出し・Context・ChildBranch・リンクの例が出る', join(getline(1, '$'), "\n") =~# 'ChildBranch' && join(getline(1, '$'), "\n") =~# 'レモンバーム' && join(getline(1, '$'), "\n") =~# '植物の栽培')
@@ -142,11 +142,11 @@ let g:gnosis_test_confirm = 1
 call gnosis#theme_edit#key('<Esc>')
 unlet g:gnosis_test_confirm
 call s:ok('編集: 取り消すと何も保存せず、設定ファイルも元のまま', g:te_result ==# {} && readfile(s:v . '/.gnosis/settings.json') ==# s:settings_before)
-call s:ok('編集: 取り消したあとも実際のテーマは変わらない', s:gui('Normal', 'bg') ==# '#14283d')
+call s:ok('編集: 取り消したあとも実際のテーマは変わらない', s:gui('Normal', 'bg') ==# '#0c1d32')
 " もう一度開いて、保存する
 let g:te_result = {'untouched': 1}
 call gnosis#theme_edit#open({'target': 'app', 'name': 'my-app-theme', 'colors': s:ap, 'on_close': function('s:closed')})
-call s:ok('編集（アプリ用）: 白い背景から始まる', gnosis#theme_edit#state().colors.bg ==# '#ffffff')
+call s:ok('編集（アプリ用）: 白い背景から始まる', gnosis#theme_edit#state().colors.bg ==# '#fafafa')
 call gnosis#theme_edit#set_color('link', '#006400')
 call gnosis#theme_edit#key('s')
 call s:ok('編集（アプリ用）: 保存すると結果が返る（base は背景から決まる）', get(g:te_result, 'name', '') ==# 'my-app-theme' && g:te_result.theme.link ==# '#006400' && g:te_result.theme.base ==# 'light', string(g:te_result))

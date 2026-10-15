@@ -225,10 +225,10 @@ function saveSettings(vault, s) {
 
 function builtinPalettes() {
   return readJson(path.join(REPO, "assets", "themes", "builtin.json"), {
-    start: { base: "light", bg: "#ffffff", fg: "#000000", link: "#000000", heading: "#000000", selection: "#d0d0d0", cursorline: "#f2f2f2" },
-    light: { base: "light", bg: "#ffffff", fg: "#1f2328", link: "#0969da", heading: "#0b3d91", selection: "#b6d6ff", cursorline: "#f2f5f8" },
-    dark: { base: "dark", bg: "#0d1117", fg: "#e6edf3", link: "#4493f8", heading: "#ffa657", selection: "#264f78", cursorline: "#161b22" },
-    app: { base: "light", bg: "#ffffff", fg: "#1f2328", link: "#0b57d0", heading: "#7c2d12", muted: "#57606a", accent: "#0969da", selection: "#b6d6ff", cursorline: "#f2f5f8" },
+    start: { base: "dark", bg: "#0c1d32", fg: "#ebebeb", link: "#e1f4e4", heading: "#eeda77", muted: "#b3b3b3", accent: "#83afe2", selection: "#21538c", cursorline: "#15365b" },
+    light: { base: "dark", bg: "#0c1d32", fg: "#ebebeb", link: "#e1f4e4", heading: "#eeda77", muted: "#b3b3b3", accent: "#83afe2", selection: "#21538c", cursorline: "#15365b" },
+    dark: { base: "dark", bg: "#0c1d32", fg: "#ebebeb", link: "#e1f4e4", heading: "#eeda77", muted: "#b3b3b3", accent: "#83afe2", selection: "#21538c", cursorline: "#15365b" },
+    app: { base: "light", bg: "#fafafa", fg: "#1f1f1f", link: "#21538c", heading: "#603510", muted: "#575757", accent: "#2d70be", selection: "#b5cfee", cursorline: "#ebebeb" },
   });
 }
 

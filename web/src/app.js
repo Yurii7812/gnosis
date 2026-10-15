@@ -391,7 +391,7 @@ async function boot() {
     cursorBlink: false,
     allowProposedApi: true,
     scrollback: 0,
-    theme: { background: "#ffffff", foreground: "#1f2328", cursor: "#1f2328", cursorAccent: "#ffffff", selectionBackground: "#b6d6ff" },
+    theme: { background: "#fafafa", foreground: "#1f1f1f", cursor: "#1f1f1f", cursorAccent: "#fafafa", selectionBackground: "#b5cfee" },
   });
   fit = new FitAddon();
   term.loadAddon(fit);

@@ -1,5 +1,5 @@
 // 配色（テーマ）の E2E: 実際の Electron + 本物の Vim を xvfb と一時フォルダで動かす。本物の vault・Gnosis ホーム・HOME には触らない。
-//   - \A のアプリの既定は白い背景（#FFFFFF）・濃い本文（#1F2328）。通常の Vim の標準配色（#14283D）とは別
+//   - \A のアプリの既定は白に近い背景（#FAFAFA）・濃い本文（#1F1F1F）。通常の Vim の標準配色（#0C1D32）とは別
 //   - 設定画面の配色エディタ: 色を変えると保存前でもプレビューに即時反映（HEX 入力・カラーピッカー・パレット）
 //   - キャンセルすると設定ファイルは書き換わらない・保存すると残る・保存後に開き直しても保たれる
 //   - アプリ用と通常の Vim 用のテーマは独立（一方を保存してももう一方は変わらない）
@@ -155,7 +155,7 @@ try {
   check(e.open && e.rows === 6 && e.pickers === 6 && e.hexes.length === 6 && e.palette === 72, "editor: 6 colors with picker + HEX, 8x9 palette: " + JSON.stringify(e));
   check(/アプリ/.test(e.title || ""), "editor title says app: " + e.title);
   check(e.previewBg === "rgb(255, 255, 255)" && e.previewFg === "rgb(31, 35, 40)", "app editor starts from the white default: " + JSON.stringify({ bg: e.previewBg, fg: e.previewFg }));
-  check(e.hexes[0].toLowerCase() === "#ffffff" && e.hexes[1].toLowerCase() === "#1f2328", "HEX codes are shown: " + JSON.stringify(e.hexes));
+  check(e.hexes[0].toLowerCase() === "#fafafa" && e.hexes[1].toLowerCase() === "#1f1f1f", "HEX codes are shown: " + JSON.stringify(e.hexes));
   check(e.link?.underline === "underline" && e.link.color !== e.previewFg, "preview: link is underlined and differs from the text: " + JSON.stringify(e.link));
   check(e.heading?.weight >= 700 && e.heading.color !== e.previewFg, "preview: heading is bold and differs from the text: " + JSON.stringify(e.heading));
   check(/植物について/.test(e.text) && /ローズマリー/.test(e.text) && /レモンバーム/.test(e.text) && /ChildBranch/.test(e.text) && !/example\.md/.test(e.text), "preview: Japanese sample with link names only: " + e.text);

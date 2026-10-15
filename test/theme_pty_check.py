@@ -84,13 +84,13 @@ class TestThemeEditor(unittest.TestCase):
             self.assertIn("プレビュー", s.text())
             self.assertIn("植物について", s.text())
             self.assertIn("ローズマリー", s.text())
-            self.assertIn("#14283D", s.text())  # HEX が出る
+            self.assertIn("#0C1D32", s.text())  # HEX が出る
             self.assertNotIn("example.md", s.text())  # リンクは表示名だけ（URL は出さない）
-            self.assertEqual(self.cell_bg(s, "植物について"), "14283d")  # 最初は今の背景
+            self.assertEqual(self.cell_bg(s, "植物について"), "0c1d32")  # 最初は今の背景
             link = self.cell(s, "ローズマリー")
             self.assertTrue(link.underscore, "リンクは下線")
-            self.assertEqual(link.fg, "e6f5ea")
-            self.assertEqual(self.cell(s, "植物について").fg, "f6d88a")  # 見出しの色
+            self.assertEqual(link.fg, "e1f4e4")
+            self.assertEqual(self.cell(s, "植物について").fg, "eeda77")  # 見出しの色
             # 背景を HEX で打つ。打つたびに反映され、確定前でもプレビューの背景が変わる
             s.send("\r", 0.4)  # 背景の行で Enter
             for ch in "ffffff":
@@ -117,7 +117,7 @@ class TestThemeEditor(unittest.TestCase):
             self.assertEqual(self.settings.read_text(encoding="utf-8"), before, "取り消しでは保存されない")
             # もう一度開いて、保存する
             s.send("\r", 0.8)  # 設定画面に戻った直後の選択位置は、編集を始めた項目（custom）のまま
-            self.assertEqual(self.cell_bg(s, "植物について"), "14283d", "取り消したあと、編集画面は元の色から始まる")
+            self.assertEqual(self.cell_bg(s, "植物について"), "0c1d32", "取り消したあと、編集画面は元の色から始まる")
             s.send("\r", 0.4)
             for ch in "ffffff":
                 s.send(ch, 0.15)
@@ -179,8 +179,8 @@ class TestThemeEditor(unittest.TestCase):
             self.goto_item(s, "app_custom")
             s.send("\r", 0.8)
             self.assertIn("アプリ", s.text())
-            self.assertEqual(self.cell_bg(s, "植物について"), "ffffff", "アプリ用は白い背景から始まる")
-            self.assertEqual(self.cell(s, "ローズマリー").fg, "0b57d0")
+            self.assertEqual(self.cell_bg(s, "植物について"), "fafafa", "アプリ用は白い背景から始まる")
+            self.assertEqual(self.cell(s, "ローズマリー").fg, "21538c")
             s.send("\r", 0.4)  # 背景の行
             for ch in "f8f4e8":
                 s.send(ch, 0.15)

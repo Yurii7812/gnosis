@@ -168,9 +168,9 @@ return {
   font_size = tonumber(os.getenv('GNOSIS_FONT_SIZE')) or 16,
   line_height = tonumber(os.getenv('GNOSIS_LINE_HEIGHT')) or 1.10,
   colors = {
-    background = '#14283D', foreground = '#E6EEF5',
-    cursor_bg = '#79CFFF', cursor_fg = '#14283D',
-    selection_bg = '#34546E', selection_fg = '#FFFFFF',
+    background = '#0C1D32', foreground = '#EBEBEB',
+    cursor_bg = '#83AFE2', cursor_fg = '#0C1D32',
+    selection_bg = '#21538C', selection_fg = '#EBEBEB',
   },
   enable_tab_bar = false,
   use_fancy_tab_bar = false,
@@ -436,9 +436,9 @@ run_new_terminal() {
       run_term wezterm --config-file "$conf" start -- "$SELF" --tui "$@" ;;
     xterm)
       if [ "$max" = 1 ]; then
-        run_term xterm -maximized -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
+        run_term xterm -maximized -T Gnosis -bg '#0C1D32' -fg '#EBEBEB' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
       fi
-      run_term xterm -T Gnosis -bg '#14283D' -fg '#E6EEF5' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
+      run_term xterm -T Gnosis -bg '#0C1D32' -fg '#EBEBEB' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
     gnome-terminal)
       # GNOME Terminal は CLI でフォント指定できないため、Gnosis 専用の
       # GSettings profile を作って適用する。既定/他のプロファイルは変更しない。
