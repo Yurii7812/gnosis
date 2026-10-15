@@ -1525,6 +1525,33 @@ def _save_parse_cache(root: Path, cache: dict) -> None:
         pass
 
 
+_GROUP_STATE_FILE = ".pkm_group_state_v1.json"
+
+
+def _load_group_state(root: Path) -> dict:
+    """前回の sync が書き終えた（ファイルの内容が最終形と一致した）時点の Group のリンク行。
+
+    parse キャッシュの group は書く前の解析結果で、sync が自動で足した所属を含まない。
+    利用者が Group: からリンクを消したことを見分けるには、「ファイルに実際にあった最終形」が要る。
+    """
+    fp = root / _GROUP_STATE_FILE
+    try:
+        data = json.loads(fp.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _save_group_state(root: Path, state: dict) -> None:
+    fp = root / _GROUP_STATE_FILE
+    try:
+        tmp = fp.with_name(fp.name + ".tmp")
+        tmp.write_text(json.dumps(state, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, fp)
+    except OSError:
+        pass
+
+
 def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
                             prev_titles: dict | None = None) -> list[str]:
     """本文リンクの表示名を、リンク先の現在のタイトルに追従させる。
@@ -1834,6 +1861,9 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 内容が前回と同じファイルは、読み込んだテキストのハッシュ照合でパースを省く。
     # 読み込み自体は全ファイル分行う（mtime は信用しない。上記コメント参照）。
     cache = _load_parse_cache(root)
+    group_state = _load_group_state(root)
+    group_state_new: dict[str, list] = dict(group_state)
+    fresh_text: dict[Path, str] = {}
     notes: dict[Path, dict] = {}
     keys: dict[Path, str] = {}
     parsed_any = False
@@ -1846,6 +1876,10 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             continue
         h = _content_hash(text)
         ent = cache.get(key) if key is not None else None
+        if key is not None and group_state.get(key):
+            # Group を記録済みのノートだけ、実ファイルの内容を取っておく（キャッシュの解析結果は
+            # sync が自動で足した所属を含まないことがあるので、「今ファイルにある Group」はこちらで見る）。
+            fresh_text[rp] = text
         if isinstance(ent, list) and len(ent) == 13 and ent[0] == h:
             notes[rp] = {"fm": ent[1], "title": ent[2], "body": ent[3],
                          "parent": ent[4], "group": ent[5], "related": ent[6],
@@ -1978,6 +2012,33 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             if child in notes:
                 removed_parent_of.setdefault(child, set()).add(p)
 
+    # 子の Group: からグループへのリンクを消した → そのグループの本文からも、この子へのリンクを外す
+    # （消さないと、次の sync が Group: へ自動で戻してしまう）。前回 sync 時点の Group と比べる。
+    # Context / ParentBranch など別の関係として残っているリンクは「消した」とみなさない。
+    removed_group_of: dict[Path, set[Path]] = {}
+    for p, n in notes.items():
+        key = keys.get(p)
+        recorded = group_state.get(key) if key is not None else None
+        if not isinstance(recorded, list):
+            continue
+        old_groups = {rp for _d, tg in _links_from(recorded)
+                      for rp in [res(tg, dirs[p])] if rp is not None and rp != p}
+        cur = _simple_parse_text(p, fresh_text[p]) if p in fresh_text else n
+        still = {rp for _d, tg in _links_from(cur["group"] + cur["ctx"] + cur["parent"] + cur["pbranch"] + cur["cbranch"])
+                 for rp in [res(tg, dirs[p])] if rp is not None}
+        for g in old_groups - still:
+            if g in notes and g in group_set:
+                removed_group_of.setdefault(p, set()).add(g)
+    for p, gs in removed_group_of.items():
+        for g in gs:
+            kept: list[str] = []
+            for ln in notes[g]["body"]:
+                tgt = _link_target(ln) if _SIMPLE_LINK_LINE_RE.match(ln) else None
+                if tgt and res(tgt, dirs[g]) == p:
+                    continue
+                kept.append(ln)
+            notes[g]["body"] = kept
+
     changed = 0
     for p, n in notes.items():
         # 本文リンクの表示名をリンク先タイトルに追従させ、消えたファイルへの
@@ -2031,8 +2092,9 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         #   - Index の本文にこのノートがある  → Group 先頭に [Index] を置く
         #   - 無いのに [Index] が残っている → 外す（放置させない）
         # Index との対応は sync が管理する（残骸を掃除する）。
+        gone_groups = removed_group_of.get(p, set())
         idx = index_of.get(p)
-        if idx is not None and idx not in parent_set:
+        if idx is not None and idx not in parent_set and idx not in gone_groups:
             parent_set.add(idx)
             rel = _rel(p.parent, idx)
             group_lines.insert(0, f"[{titles[idx]}]({rel})")
@@ -2081,7 +2143,8 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 continue
             dseen.add(s)
             if s in group_set:
-                auto_group.append(s)
+                if s not in gone_groups:
+                    auto_group.append(s)
                 continue
             if s in parent_set or s in pb_set:
                 continue
@@ -2142,6 +2205,9 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         back += [t for t in desired if t not in set(back)]
         new_text = _simple_render(p.name, n, p, parent_lines, back, titles, group_lines)
         new_hash = _content_hash(new_text)
+        gkey = keys.get(p)
+        if new_hash == n["hash"] and gkey is not None:
+            group_state_new[gkey] = [ln for ln in group_lines if ln.strip()]
         if new_hash != n["hash"]:
             # 保存済みの入力を同期のスナップショットで上書きしない。
             # 1. Vim の未保存編集（InsertEnter/TextChanged）中は書かない
@@ -2157,9 +2223,13 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             p.write_text(new_text, encoding="utf-8")
             changed += 1
             n["hash"] = new_hash
+            if gkey is not None:
+                group_state_new[gkey] = [ln for ln in group_lines if ln.strip()]
     # 次回の判定のため、今回のパース結果と最終ハッシュを保存する。全件が
     # キャッシュヒットで何も書き換えていないなら、内容は前回と同一なので
     # 数 MB の JSON を書き直さない（保存のたびに走るため無駄が大きい）。
+    if group_state_new != group_state:
+        _save_group_state(root, group_state_new)
     if parsed_any or changed:
         out_cache: dict[str, list] = {}
         for p, n in notes.items():

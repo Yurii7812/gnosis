@@ -20,6 +20,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - After `c` … choose how the new note (the link target) gets a link back to the current note: `Enter`=end of its body / `t`=choose a heading, end of that section / `w`=open the target and edit it yourself (nothing is written automatically; only the **file name** of the original note is yanked and the target is opened, so you can paste it with `p` or turn it into a Markdown link; several links are handled one by one, the rest with `:GnosisWNext`) / `o`=do not add (the link in the current note's Context is still added)
 - `b` (ChildBranch = direct child) / `p` (ParentBranch = direct parent) (position keys of `zn` / `zk` / `za` / `\l`) … with `b` the current note is the parent and the chosen (new) note the child; with `p` the chosen (new) note is the parent and the current note the child. Both use the same code and write the link into **the parent's `### ChildBranch` and the child's `### ParentBranch`**. With `p` only one note can be chosen as the parent. A note can have at most one parent (ParentBranch); children are unlimited. A note that already has a parent, a self reference, or a pair that would form a cycle is rejected and neither note is changed (the existing parent is never replaced; the current parent's title is shown). It is a separate relation from Context / Related. Check consistency with `:GnosisBranchCheck`
 - `zk` … create a group note (`attribute: group`). Same position keys as `zn`.
+- Deleting a group link from a note's `Group:` removes that note's link from the group's body at the next sync, so it leaves the group (it does not come back; deleting it from the group's body still removes it from `Group:` as before)
 - `zk` (visual) … create a group whose content is the selection, and replace the selection with a link to the group
 - `zh` … link right below the cursor (as body → BackLink on the other side)
 - When the target is a group (after `c`, `Enter` / `t`) … enter the **display name** of the link (starts empty; empty `Enter` = the current note's title, `Esc` = cancel)
@@ -68,6 +69,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `Alt` + click on a link in the app … moves only the cursor onto the link without opening it (to move only the cursor onto a link)
 - The app also draws tables (`| a | b |`) and `<img src="…" width="50%">`. Inside a table or in insert mode the cursor line stays plain text
 - `\d` … open today's diary (created if missing; `:GnosisToday`). Notes you create are added to the diary's "today's notes" automatically (`:GnosisDiaryUpdate` updates all diaries; `:GnosisDiaryAdopt` registers the current note as the diary of its date)
+- `\D` … start writing at the bottom of the body of the open note (any note, not only a diary): the cursor goes on the line after one blank line below the last sentence (with one more blank line below it)
 - `\I` … change the size of image markup (visual: the selection)
 
 ## Expanding, images and more

@@ -243,6 +243,17 @@ call gnosis#add_clipboard_before_up_note()
 call s:ok('za g: グループ本文に K のリンク', s:has('g.md', '^\[ノートK\](k\.md)$'), string(s:file('g.md')))
 call s:ok('za g: K の Group: がそのグループ', index(s:file('k.md'), 'Group:') >= 0 && s:has('k.md', '(g\.md)'), string(s:file('k.md')))
 
+" ------------------------------------------------------------------ \l → g の候補一覧（先頭を選ぶ。現ノート自身は出ない・隠しフォルダの外にある vault でも出る）
+call s:mk('m2.md', 'ノートM2', ['M2 の本文。'])
+execute 'edit ' . fnameescape(s:v . '/c.md')
+sleep 1100m
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = ['#first']
+let g:gnosis_test_display_name = ['']
+call gnosis#insert_links_pick(['[ノートM2](m2.md)'], getpos('.'))
+let s:m2g = filter(map(glob(s:v . '/*.md', 1, 1), 'fnamemodify(v:val, ":t")'), 's:has(v:val, "^attribute: group$") && s:has(v:val, "^\\[ノートM2\\](m2\\.md)$")')
+call s:ok('\l g 候補の先頭（グループ）に入る', len(s:m2g) == 1, string(s:m2g))
+
 " ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
 call s:mk('j.md', 'ノートJ', ['前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ'])
 execute 'edit ' . fnameescape(s:v . '/j.md')
@@ -375,6 +386,20 @@ stopinsert
 let s:ni = s:newest_except(s:before)
 call s:ok('index から zn Enter: 新ノートの Group: に Index', !empty(s:ni) && index(s:file(s:ni), 'Group:') >= 0 && s:has(s:ni, '^\[Index\](index\.md)$'))
 call s:ok('index から zn Enter: Context: を作らない', !empty(s:ni) && index(s:file(s:ni), 'Context:') < 0)
+let s:nl = s:file(s:ni)
+let s:lk = index(s:nl, '[Index](index.md)')
+call s:ok('新ノート: ブロックの下は 空行 / カーソル行 / 空行', s:lk >= 0 && s:nl[s:lk + 1 :] ==# ['', '', ''], string(s:nl))
+call s:ok('新ノート: カーソルは真ん中の空行', line('.') == s:lk + 3, line('.') . ' vs ' . (s:lk + 3))
+
+" ------------------------------------------------------------------ \D（日記でなくても本文の一番下から書き始める）
+call s:mk('wb.md', 'ノートWB', ['最初の文。', '最後の文。', '', '', '', '### Related', '[ノートA](a.md)'])
+execute 'edit ' . fnameescape(s:v . '/wb.md')
+call gnosis#write_at_bottom()
+stopinsert
+let s:wl = getline(1, '$')
+let s:li = index(s:wl, '最後の文。')
+call s:ok('\D: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', '### Related'], string(s:wl))
+call s:ok('\D: カーソルは最後の文の 2 行下', line('.') == s:li + 3, line('.') . ' vs ' . (s:li + 3))
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

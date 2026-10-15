@@ -339,6 +339,7 @@ gnosis#vault_locked_flag
 gnosis#vault_mounted
 gnosis#visual_new_prefix_note
 gnosis#visual_new_quick_no_title
+gnosis#write_at_bottom
 gnosis#write_guide
 gnosis#write_next
 gnosis#yank_name

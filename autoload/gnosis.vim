@@ -6750,7 +6750,7 @@ function! gnosis#v2_new_here() abort
   call append(line('.'), '[' . l:ts . '](' . l:ts . '.md)')
   let &autoindent = l:save_ai | let &smartindent = l:save_si
   silent noautocmd write
-  call s:run_update_one_for(l:cur)
+  call s:run_update_one_for_sync(l:cur)
   execute 'edit ' . fnameescape(l:file)
 endfunction
 
@@ -6834,7 +6834,7 @@ function! gnosis#v2_new_group_visual() abort range
   let l:link = '[' . l:ts . '](' . l:ts . '.md)'
   call s:replace_visual_selection_with_link(l:link, l:is_linewise, l:sline, l:eline, l:scol, l:ecol, l:lines)
   silent noautocmd write
-  call s:run_update_one_for(l:cur)
+  call s:run_update_one_for_sync(l:cur)
 
   call gnosis#push_history()
   silent execute 'edit ' . fnameescape(l:file)
@@ -7380,7 +7380,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   silent noautocmd write
   " b/p は本文リンクが無いのでここで同期。通常の zn は本文への配置後に同期する。
   if l:branch_ok && !l:added
-    call s:run_update_one_for(l:cur)
+    call s:run_update_one_for_sync(l:cur)
   endif
   let l:in_body = 0
   let l:hl = 0
@@ -7407,9 +7407,12 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
         call s:simple_add_parent(l:file, l:cur, l:cur_title)
       endif
     endif
-    call s:run_update_one_for(l:cur)
+    call s:run_update_one_for_sync(l:cur)
   endif
   call gnosis#push_history()
+  " 新ノートの冒頭（Group: / Context: などのブロック）の下を、
+  " 空行 / カーソル行 / 空行 の形に整えてから開く（開いたあとに書き換えない）。
+  let l:gap_ln = l:in_body ? 0 : s:new_note_gap(l:file)
   execute 'edit ' . fnameescape(l:file)
   " 本文入力位置へ。zn は余白 2 行なので 2 行下、zk（グループ）は 1 行下。
   " p は本文リンクを置いた行（リンクの直後に続けて書ける位置）。
@@ -7417,6 +7420,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   if l:in_body
     let l:hl = search('(' . escape(fnamemodify(l:cur, ':t'), '.*[]~\') . ')$', 'nw')
   endif
+  if l:gap_ln > 0 | let l:hl = l:gap_ln | endif
   if l:h1 > 0 && l:hl == 0
     " Context が H1 の直後にあるノートは、Context のリンクの次の空行のさらに次（zn）／次（zk）。
     let l:cb = gnosis#context#find_block(getline(1, '$'))
@@ -9533,8 +9537,10 @@ function! s:group_note_paths() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) | return [] | endif
   let l:out = []
+  let l:base = fnamemodify(l:root, ':p')
   for l:p in globpath(l:root, '**/*.md', 0, 1)
-    if l:p =~# '/\.' | continue | endif
+    " 隠しフォルダは vault の中の相対パスだけで判定する（vault 自体が隠しフォルダの下にあってもよい）
+    if strpart(fnamemodify(l:p, ':p'), len(l:base)) =~# '\%(^\|/\)\.' | continue | endif
     if s:v2_path_attr(l:p) ==# 'group' | call add(l:out, fnamemodify(l:p, ':p')) | endif
   endfor
   return sort(l:out)
@@ -9547,6 +9553,8 @@ function! s:group_pick(Cb) abort
   let l:paths = filter(s:group_note_paths(), 'v:val !=# l:cur')
   if exists('g:gnosis_test_group_pick')
     let l:pick = remove(g:gnosis_test_group_pick, 0)
+    " '#first' … 候補の先頭を選ぶ（候補の一覧そのものを試験する）
+    if l:pick ==# '#first' | let l:pick = get(l:paths, 0, '') | endif
     if !empty(l:pick) | call a:Cb(l:pick) | endif
     return
   endif
@@ -9574,7 +9582,9 @@ function! s:group_pick(Cb) abort
 endfunction
 
 function! s:group_pick_sink(Cb, path) abort
-  if !empty(a:path) | call a:Cb(a:path) | endif
+  " 古い fzf（--accept-nth が無い）でも「パス<TAB>タイトル」の行から先頭のパスだけ取る
+  let l:p = get(split(a:path, "\t"), 0, '')
+  if !empty(l:p) | call a:Cb(l:p) | endif
 endfunction
 
 " グループの表示名（タイトル。空ならファイル名）
@@ -14821,6 +14831,58 @@ function! s:diary_cursor() abort
     let l:n += 3 - l:cnt
   endif
   call cursor(l:n - 2, 1)
+endfunction
+
+" 新ノートの冒頭のブロック（Group: / Context: など。リンク行が続く）の下を整える。
+" 本文がまだ無いときだけ、ブロックの最後のリンクの下を「空行 / カーソル行 / 空行」にする。
+" 戻り値はカーソルを置く行（1 始まり）。ブロックが無い・本文があるときは 0（何もしない）。
+function! s:new_note_gap(file) abort
+  let l:lines = readfile(a:file)
+  let l:h1 = match(l:lines, '^#\s\+')
+  if l:h1 < 0 | return 0 | endif
+  let l:i = l:h1 + 1
+  let l:last = -1
+  while 1
+    while l:i < len(l:lines) && trim(l:lines[l:i]) ==# '' | let l:i += 1 | endwhile
+    if l:i < len(l:lines) && l:lines[l:i] =~# '^\%(Group\|Context\|BranchGroup\|ThisNoteGroup\):\s*$'
+      let l:i += 1
+      while l:i < len(l:lines) && l:lines[l:i] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        let l:last = l:i
+        let l:i += 1
+      endwhile
+    else
+      break
+    endif
+  endwhile
+  if l:last < 0 | return 0 | endif
+  let l:rest = l:lines[l:last + 1 :]
+  let l:j = 0
+  while l:j < len(l:rest) && trim(l:rest[l:j]) ==# '' | let l:j += 1 | endwhile
+  if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s'
+    return 0
+  endif
+  call s:syn_writefile(l:lines[: l:last] + ['', '', ''] + l:rest[l:j :], a:file)
+  return l:last + 3
+endfunction
+
+" \D … 今開いているノート（日記でなくてもよい）の本文の一番下から書き始める。
+" 本文の最後の文のあとに空行を 1 つ空けて、その次の行にカーソルを置く（その下にも空行を 1 つ）。
+function! gnosis#write_at_bottom() abort
+  if &buftype !=# '' || !&modifiable
+    return
+  endif
+  let l:u = s:first_section_line()
+  let l:end = l:u > 0 ? l:u - 1 : line('$')
+  let l:last = l:end
+  while l:last >= 1 && trim(getline(l:last)) ==# ''
+    let l:last -= 1
+  endwhile
+  if l:last < l:end
+    silent execute (l:last + 1) . ',' . l:end . 'delete _'
+  endif
+  call append(l:last, ['', '', ''])
+  call cursor(l:last + 2, 1)
+  startinsert
 endfunction
 
 " 前回の検索ハイライトを消す。関数の中の :nohlsearch / v:hlsearch=0 は関数を抜けると
