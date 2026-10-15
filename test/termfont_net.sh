@@ -55,6 +55,9 @@ env.update({
     "GNOSIS_DRY_RUN": "1",
     "GNOSIS_TERMINAL": "konsole",
     "XDG_CURRENT_DESKTOP": "KDE",
+    # Headless CI has no DISPLAY, so the launcher correctly falls back to TUI.
+    # Simulate a graphical desktop here: GNOSIS_DRY_RUN prevents any real window.
+    "DISPLAY": ":99",
     "PATH": work + "/bin:" + env.get("PATH", ""),
 })
 master, slave = pty.openpty()
