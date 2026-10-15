@@ -6909,6 +6909,33 @@ function! s:simple_add_parent(file, parent_path, parent_title) abort
   endif
 endfunction
 
+" simple: file の本文冒頭の Group: ブロックに group_path へのリンクを 1 本足す（無ければ H1 の直後に作る）。
+function! s:simple_add_group(file, group_path, group_title) abort
+  let l:lines = readfile(a:file)
+  let l:link = s:make_link_from_dir(a:group_path, a:group_title, fnamemodify(a:file, ':h'))
+  let l:flags = s:fence_flags(l:lines)
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'Group:'
+      let l:at = l:i + 1
+      while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        if l:lines[l:at] ==# l:link | return | endif
+        let l:at += 1
+      endwhile
+      call insert(l:lines, l:link, l:at)
+      call s:syn_writefile(l:lines, a:file)
+      return
+    endif
+  endfor
+  let l:h1 = match(l:lines, '^#\s\+')
+  if l:h1 < 0 | return | endif
+  let l:at = l:h1 + 1
+  while l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
+    call remove(l:lines, l:at)
+  endwhile
+  call extend(l:lines, ['', 'Group:', l:link, ''], l:at)
+  call s:syn_writefile(l:lines, a:file)
+endfunction
+
 " simple: file の ### Related に other_path へのリンクを 1 本足す（zr の相手側）。
 "   見出しが無ければ ### Context と ### BackLink の間に作る。Related 内に同じ
 "   リンク先が既にあれば何もしない。追加したら 1 を返す。
@@ -7285,6 +7312,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:choice = a:0 ? a:1 : {'mode': 'end', 'lnum': 0, 'name': ''}
   let l:cur = expand('%:p')
   let l:cur_title = gnosis#current_title()
+  let l:grp_src = s:buf_is_group()
   let l:dir = expand('%:p:h')
   let l:ts  = gnosis#timestamp_filename()
   let l:file = s:join_path(l:dir, l:ts . '.md')
@@ -7371,7 +7399,13 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     elseif (!empty(a:attr) && l:ch !=# 'n') || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
-      call s:simple_add_parent(l:file, l:cur, l:cur_title)
+      " 派生元がグループ（index.md を含む）なら、Context ではなく最初から Group: に所属を書く
+      " （Context に書くと、次の同期まで間違った関係が残る）。
+      if l:grp_src
+        call s:simple_add_group(l:file, l:cur, l:cur_title)
+      else
+        call s:simple_add_parent(l:file, l:cur, l:cur_title)
+      endif
     endif
     call s:run_update_one_for(l:cur)
   endif

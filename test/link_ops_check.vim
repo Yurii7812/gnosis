@@ -365,5 +365,16 @@ stopinsert
 let s:vg = s:newest_except(s:before)
 call s:ok('zk ビジュアル: 選択行がグループの中身になり、元はグループへのリンク', !empty(s:vg) && s:has(s:vg, '^\[ノートB\](b\.md)$') && s:has('vz.md', '^\[' . fnamemodify(s:vg, ':r') . '\](' . s:vg . ')$'))
 
+" ------------------------------------------------------------------ index.md から zn → Enter（親がグループなら最初から Group:）
+execute 'edit ' . fnameescape(s:v . '/index.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ["\r"]
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:ni = s:newest_except(s:before)
+call s:ok('index から zn Enter: 新ノートの Group: に Index', !empty(s:ni) && index(s:file(s:ni), 'Group:') >= 0 && s:has(s:ni, '^\[Index\](index\.md)$'))
+call s:ok('index から zn Enter: Context: を作らない', !empty(s:ni) && index(s:file(s:ni), 'Context:') < 0)
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
