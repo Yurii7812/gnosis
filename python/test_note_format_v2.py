@@ -1312,6 +1312,39 @@ def test_links_in_code_are_not_links() -> None:
         check("[表示名](b.md#アウトライン)" in (root / "a.md").read_text(encoding="utf-8"), "コードの中身は書き換えない")
 
 
+
+def test_this_note_group_and_group_auto_membership() -> None:
+    print("group: ThisNoteGroup / Group / Context and legacy migration")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        def put(name: str, title: str, body: str, group: bool = False) -> None:
+            attr = "attribute: group\n" if group else ""
+            (root / name).write_text(
+                f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n{attr}---\n\n# {title}\n\n{body}\n",
+                encoding="utf-8")
+
+        put("a.md", "A",
+            "ThisNoteGroup:\n[G2](g2.md)\n"
+            "Context:\n[Root](root.md)\n\n本文を残す。\n"
+            "### Group\n[G1](g1.md)")
+        put("g1.md", "G1", "[A](a.md)", True)
+        put("g2.md", "G2", "容器ノート", True)
+        put("root.md", "Root", "文脈ノート")
+        v2.simple_sync(root)
+        a = (root / "a.md").read_text(encoding="utf-8")
+        check("### Group" not in a, "旧 ### Group は再出力しない")
+        check(a.count("Group:") == 2 and "[G1](g1.md)" in a, "Group: の所属と ThisNoteGroup: を保持")
+        check(a.index("ThisNoteGroup:") < a.index("\nGroup:") < a.index("\nContext:"),
+              "ThisNoteGroup → Group → Context の順番")
+        check("本文を残す。" in a, "グループブロックより下にある本文を失わない")
+        check(v2.simple_sync(root) == 0, "再同期は冪等")
+        put("g3.md", "G3", "[A](a.md)", True)
+        v2.simple_sync(root)
+        a = (root / "a.md").read_text(encoding="utf-8")
+        check("[G3](g3.md)" in a and a.count("[G1](g1.md)") == 1,
+              "新しく自分へのリンクが生じたグループも自動登録、重複なし")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
