@@ -1160,8 +1160,16 @@ def _parent_region(text: str) -> list[str]:
 
 
 def _group_region(text: str) -> list[str] | None:
-    """### Group の中身（見出しが無ければ None）。"""
-    return _region(text, v2.GROUP_MARK)
+    """Group: の連続リンクブロックだけを返す（見出しが無ければ None）。"""
+    ls = text.split("\n")
+    if v2.GROUP_MARK not in ls:
+        return None
+    i = ls.index(v2.GROUP_MARK) + 1
+    out: list[str] = []
+    while i < len(ls) and re.match(r"^\[[^]]+\]\([^)]+\)\s*$", ls[i]):
+        out.append(ls[i])
+        i += 1
+    return out
 
 
 def _sep_vault(root: Path, parent_body: str, up_mark: str = CTX_MARK) -> None:
@@ -1191,8 +1199,8 @@ def test_simple_sync_groups_move_to_group_section() -> None:
         check(_parent_region(text) == ["[N1](n1.md)", "[N2](n2.md)"], f"Context はノートだけ: {_parent_region(text)}")
         check(_group_region(text) == ["[G](g.md)", "[G2](g2.md)"], f"Group はグループだけ（元の順）: {_group_region(text)}")
         lines = text.split("\n")
-        check(lines.index(CTX_MARK) < lines.index(v2.GROUP_MARK) and DOWN_MARK not in lines,
-              "並びは上から Context, Group（BackLink は空なので出ない）")
+        check(lines.index(v2.GROUP_MARK) < lines.index(CTX_MARK) and DOWN_MARK not in lines,
+              "並びは上から Group, Context（BackLink は空なので出ない）")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
 
 
