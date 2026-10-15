@@ -1149,7 +1149,26 @@ function! s:guide_merge(old, new) abort
       let l:out = l:fm + a:new[index(a:new, '---', 1) + 1 :]
     endif
   endif
-  return l:out + s:guide_relation_tail(a:old)
+  let l:tail = s:guide_relation_tail(a:old)
+  if !empty(l:tail) && l:tail[0] ==# 'Group:'
+    let l:end = 1
+    while l:end < len(l:tail) && l:tail[l:end] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:end += 1
+    endwhile
+    let l:group = l:tail[0 : l:end - 1]
+    let l:tail = l:tail[l:end :]
+    let l:h1 = match(l:out, '^#\s\+')
+    if l:h1 >= 0
+      let l:at = l:h1 + 1
+      while l:at < len(l:out) && trim(l:out[l:at]) ==# ''
+        call remove(l:out, l:at)
+      endwhile
+      call extend(l:out, [''] + l:group + [''], l:at)
+    else
+      call extend(l:tail, l:group, 0)
+    endif
+  endif
+  return l:out + l:tail
 endfunction
 
 " Index の本文が操作ガイドを含むなら、ガイドの ### Group に Index を保証する。
@@ -1186,7 +1205,11 @@ function! s:ensure_guide_index_group(root) abort
     if l:h1 < 0
       call extend(l:lines, ['Group:', '[Index](index.md)'])
     else
-      call extend(l:lines, ['', 'Group:', '[Index](index.md)', ''], l:h1 + 1)
+      let l:at = l:h1 + 1
+      while l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
+        call remove(l:lines, l:at)
+      endwhile
+      call extend(l:lines, ['', 'Group:', '[Index](index.md)', ''], l:at)
     endif
   endif
   call s:syn_writefile(l:lines, l:guide)
