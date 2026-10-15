@@ -1850,6 +1850,15 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         rp = Path(tp).resolve()
         if rp in notes and ot:
             prev_titles[rp] = ot
+    # 明示的な旧タイトルが無い場合も、直前の parse cache に残る題名を使う。
+    # キャッシュは同期直前の内容ハッシュで照合されるため、再同期時の誤追従は防げる。
+    for p, n in notes.items():
+        if p in prev_titles:
+            continue
+        ent = cache.get(keys.get(p))
+        if isinstance(ent, list) and len(ent) >= 3 and isinstance(ent[2], str):
+            if ent[2] != n["title"]:
+                prev_titles[p] = ent[2]
 
     # リンク先の解決。Path.resolve() は 1 リンクごとに実パス解決（lstat 連鎖）を
     # して重いので、正規化した文字列で辞書を引く（vault 内は symlink 無しが前提。
