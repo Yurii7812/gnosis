@@ -15034,7 +15034,8 @@ function! s:new_note_gap(file) abort
   let l:rest = l:lines[l:last + 1 :]
   let l:j = 0
   while l:j < len(l:rest) && trim(l:rest[l:j]) ==# '' | let l:j += 1 | endwhile
-  if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s'
+  " 本文がある（次が関係の節の見出しでない）ときは何もしない。見出しは `名前:` の形と旧 `### 名前` の両方
+  if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s' && l:rest[l:j] !~# '^\s*\%(ParentBranch\|ChildBranch\|Related\|BackLink\):\s*$'
     return 0
   endif
   call s:syn_writefile(l:lines[: l:last] + ['', '', ''] + l:rest[l:j :], a:file)

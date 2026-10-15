@@ -1447,8 +1447,8 @@ def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bo
         while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
             links.append(lines[j])
             j += 1
-        while j < len(lines) and not lines[j].strip():
-            j += 1
+        if j < len(lines) and not lines[j].strip():
+            j += 1  # 区切りの空行は 1 行だけ（それ以上は本文の余白として残す）
         return links, lines[:i] + lines[j:], True
     return [], lines, False
 
@@ -1475,8 +1475,9 @@ def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
         while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
             j += 1
         links = lines[i + 1:j]
-        # ブロックと本文のあいだの区切りの空行は、書き戻しが作り直すので取り除く
-        while j < len(lines) and not lines[j].strip():
+        # ブロックと本文のあいだの区切りの空行は 1 行だけ取り除く（書き戻しが 1 行作り直す）。
+        # それ以上の空行は利用者が本文のために空けた余白なので、本文として残す。
+        if j < len(lines) and not lines[j].strip():
             j += 1
         return links, lines[:i] + lines[j:]
     return [], lines
@@ -1497,7 +1498,10 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     if blk:
         ctx = rest[blk[0] + 1:blk[1] + 1]
         ctx_at = blk[0]
-        rest = rest[:blk[0]] + rest[blk[1] + 1:]
+        end = blk[1] + 1
+        if end < len(rest) and not rest[end].strip():
+            end += 1  # ブロックと本文のあいだの区切りの空行は 1 行だけ取り除く（余白はそのまま残す）
+        rest = rest[:blk[0]] + rest[end:]
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
@@ -1788,8 +1792,9 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     h1 = next((i for i, ln in enumerate(body)
                if not flags[i] and re.match(r"^#\s+\S", ln)), None)
     pos = h1 + 1 if h1 is not None else 0
-    # 直後の空白のみ整え、本文自体やリンクを移動・削除しない。
-    while pos < len(body) and not body[pos].strip():
+    # H1 とブロックのあいだの空行は 1 行に整える。ブロックの下の余白（利用者が本文のために空けた空行）は、
+    # 区切りの 1 行を除いてそのまま残す。本文自体やリンクを移動・削除しない。
+    if pos < len(body) and not body[pos].strip():
         del body[pos]
     body[pos:pos] = ([""] if pos else []) + blocks + [""]
     return body

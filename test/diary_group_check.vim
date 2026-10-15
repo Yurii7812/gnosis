@@ -31,11 +31,26 @@ call s:ok('日記: 「今日のノート」は 1 つ', s:count(s:dl, '^## 今日
 " 日記を作ると、日記・月・日のノートが連続する秒の名前で作られるので、少し待つ
 sleep 3300m
 execute 'edit ' . fnameescape(s:v . '/index.md')
+" 日記のバッファを閉じておく（開いたままだと日記へ入れた分が保存されず、BackLink が付かない）
+execute 'silent! bwipeout ' . bufnr(s:v . '/' . s:d)
+" 作ったあとの同期（日記に入れた分の BackLink）を動かす。この確認のあとは止める（あとの試験で、開いているバッファが同期で書き換わらないように）
+let g:gnosis_autosync = 1
 let g:gnosis_test_keys = ["\r"]
 call gnosis#v2_new_plain()
 stopinsert
-silent! write
 let s:n1 = expand('%:t')
+let s:cur1 = line('.')
+let s:cur1_text = getline('.')
+" 作ったあとの非同期の同期（日記に入れる → BackLink が付く）と読み直しを待つ
+sleep 3000m
+let s:l1 = readfile(s:v . '/' . s:n1)
+let s:g1 = index(s:l1, 'Group:')
+call s:ok('新ノート: Group: の下は 空行 / カーソル行 / 空行（3 行）で、そのあとに BackLink:（同期のあとも空行が減らない）',
+      \ s:g1 >= 0 && s:l1[s:g1 + 2 : s:g1 + 4] ==# ['', '', ''] && s:l1[s:g1 + 5] ==# 'BackLink:', string(s:l1))
+call s:ok('新ノート: 同期で読み直されても、カーソルは真ん中の空行のまま', line('.') == s:cur1 && s:cur1_text ==# '' && getline('.') ==# '' && line('.') == s:g1 + 4,
+      \ 'line=' . line('.') . ' before=' . s:cur1 . ' group_line=' . (s:g1 + 1) . ' text=' . string(getline('.')))
+silent! write
+let g:gnosis_autosync = 0
 sleep 1100m
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let g:gnosis_test_keys = ["\r"]
