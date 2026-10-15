@@ -33,6 +33,9 @@ jobs:
           python3 python/test_context_ops.py
       - name: Test zk n/g and guide relationships
         run: |
+          python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
+          "$RUNNER_TEMP/gnosis-test-venv/bin/python" -m pip install --quiet pykakasi
+          export PATH="$RUNNER_TEMP/gnosis-test-venv/bin:$PATH"
           sh test/link_ops_net.sh
           sh test/guide_relations_net.sh
       - name: Test full Vim feature detection beyond line 40
