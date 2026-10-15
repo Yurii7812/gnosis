@@ -1106,30 +1106,32 @@ let s:guide_relation_marks = ['### ParentBranch', '### Context', '### Parent', '
 
 " 関係の節（最初の見張り行から最後まで）。コードブロックの中の行は見張りとみなさない。
 function! s:guide_relation_tail(lines) abort
-  let l:fence = ''
+  " Group: は本文冒頭のブロックなので、従来の「見出しから EOF」扱いにしない。
+  " ガイドのテンプレート更新時は Group のリンクと旧末尾の関係節を別々に保存する。
+  let l:group = []
+  let l:other = []
+  let l:flags = s:fence_flags(a:lines)
   let l:in_fm = get(a:lines, 0, '') ==# '---'
-  for l:i in range(len(a:lines))
-    let l:ln = a:lines[l:i]
+  for l:i in range(0, len(a:lines) - 1)
+    let l:ln = trim(a:lines[l:i])
     if l:in_fm
-      if l:i > 0 && l:ln =~# '^---\s*$'
-        let l:in_fm = 0
-      endif
+      if l:i > 0 && l:ln ==# '---' | let l:in_fm = 0 | endif
       continue
     endif
-    let l:m = matchstr(l:ln, '^\s\{0,3}\zs\(`\{3,}\|\~\{3,}\)')
-    if !empty(l:m)
-      if empty(l:fence)
-        let l:fence = l:m[0]
-      elseif l:m[0] ==# l:fence
-        let l:fence = ''
-      endif
-      continue
-    endif
-    if empty(l:fence) && index(s:guide_relation_marks, trim(l:ln)) >= 0
-      return a:lines[l:i :]
+    if l:flags[l:i] | continue | endif
+    if l:ln ==# 'Group:' || l:ln ==# '### Group'
+      let l:j = l:i + 1
+      let l:group = ['Group:']
+      while l:j < len(a:lines) && a:lines[l:j] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        call add(l:group, a:lines[l:j])
+        let l:j += 1
+      endwhile
+    elseif index(s:guide_relation_marks, l:ln) >= 0
+      let l:other = a:lines[l:i :]
+      break
     endif
   endfor
-  return []
+  return l:group + l:other
 endfunction
 
 " 古いガイドの front matter を引き継いだ、新しいガイドの行
@@ -1154,55 +1156,40 @@ endfunction
 " 初回作成直後は Python sync に依存しない。既存 vault でも不足している関係だけ修復する。
 " Index からリンクが消されている場合は何もしない（別グループへ移した場合を尊重）。
 function! s:ensure_guide_index_group(root) abort
-  if s:pkm_format() !=# 'v2'
-    return
-  endif
+  if s:pkm_format() !=# 'v2' | return | endif
   let l:index = s:index_path(a:root)
   let l:name = s:guide_file_name(a:root)
   let l:guide = fnamemodify(a:root, ':p') . l:name
-  if !filereadable(l:index) || !filereadable(l:guide)
-    return
-  endif
+  if !filereadable(l:index) || !filereadable(l:guide) | return | endif
   if empty(filter(readfile(l:index), 'stridx(v:val, "](" . l:name . ")") >= 0'))
     return
   endif
-
   let l:lines = readfile(l:guide)
-  let l:old_tail = s:guide_relation_tail(l:lines)
-  let l:tail = copy(l:old_tail)
-  let l:pos = index(l:tail, '### Group')
-  if l:pos >= 0
-    let l:end = len(l:tail)
-    if l:pos + 1 < len(l:tail)
-      for l:i in range(l:pos + 1, len(l:tail) - 1)
-        if index(s:guide_relation_marks, trim(l:tail[l:i])) >= 0
-          let l:end = l:i
-          break
-        endif
-      endfor
+  let l:flags = s:fence_flags(l:lines)
+  let l:head = -1
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && index(['Group:', '### Group'], trim(l:lines[l:i])) >= 0
+      let l:head = l:i
+      break
     endif
-    for l:line in l:tail[l:pos + 1 : l:end - 1]
-      if stridx(l:line, '](index.md)') >= 0
-        return
-      endif
-    endfor
-    call insert(l:tail, '[Index](index.md)', l:pos + 1)
+  endfor
+  if l:head >= 0
+    let l:lines[l:head] = 'Group:'
+    let l:at = l:head + 1
+    while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      if l:lines[l:at] =~# '](index\.md)' | return | endif
+      let l:at += 1
+    endwhile
+    call insert(l:lines, '[Index](index.md)', l:at)
   else
-    let l:at = len(l:tail)
-    for l:section in ['### Related', '### BackLink']
-      let l:p = index(l:tail, l:section)
-      if l:p >= 0
-        let l:at = min([l:at, l:p])
-      endif
-    endfor
-    call extend(l:tail, ['### Group', '[Index](index.md)'], l:at)
+    let l:h1 = index(l:lines, '# ' . s:guide_title(gnosis#i18n#lang()))
+    if l:h1 < 0
+      call extend(l:lines, ['Group:', '[Index](index.md)'])
+    else
+      call extend(l:lines, ['', 'Group:', '[Index](index.md)', ''], l:h1 + 1)
+    endif
   endif
-
-  let l:prefix = empty(l:old_tail) ? l:lines : l:lines[0 : len(l:lines) - len(l:old_tail) - 1]
-  if get(l:prefix, -1, 'nonempty') !=# ''
-    call add(l:prefix, '')
-  endif
-  call s:syn_writefile(l:prefix + l:tail, l:guide)
+  call s:syn_writefile(l:lines, l:guide)
 endfunction
 
 function! s:refresh_guide(root) abort
@@ -5984,7 +5971,7 @@ endfunction
 " front matter 終端行と、本文側で末尾寄りの --- 2 本（上側開始 / 下側開始）を返す。
 " 2 本無ければ EOF に補って返す。本文中の --- は末尾 2 本にならないので無視される。
 let s:v2_up_mark   = '### Context'
-let s:v2_group_mark = '### Group'
+let s:v2_group_mark = 'Group:'
 let s:v2_related_mark = '### Related'
 let s:v2_down_mark = '### BackLink'
 " 旧見張り（新しい順: `##` なしの Parent/Child -> こっちにとって/そっちにとって
@@ -6001,9 +5988,9 @@ let s:v2_up_pat = '\C^\s*\%(### Context\|### Parent\|Parent\|<!-- こっちに�
 let s:v2_down_pat = '\C^\s*\%(### BackLink\|Child\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 " 関係の節の見出しのどれか。中身が空の節は見出しごと無い（Context / Group / Related / BackLink は
 " あるものだけ書かれる）ので、本文の終わりは「最初に出てくるこれら」で決まる。
-let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', '### Related', '### BackLink',
+let s:v2_any_marks = ['### ParentBranch', '### ChildBranch', '### Context', '### Parent', '### Group', 'Group:', '### Related', '### BackLink',
       \ '<!-- こっちにとって -->', '<!-- している -->', '<!-- そっちにとって -->', '<!-- されている -->']
-let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
+let s:v2_any_pat = '\C^\s*\%(### ParentBranch\|### ChildBranch\|### Context\|### Parent\|### Group\|Group:\|### Related\|### BackLink\|<!-- こっちにとって -->\|<!-- している -->\|<!-- そっちにとって -->\|<!-- されている -->\)\s*$'
 
 function! s:v2_first_mark(pat) abort
   " コードブロック（``` / ~~~）の中の `### ChildBranch` などは節として扱わない
