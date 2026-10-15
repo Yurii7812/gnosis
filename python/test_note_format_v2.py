@@ -1321,37 +1321,72 @@ def test_links_in_code_are_not_links() -> None:
 
 
 
-def test_this_note_group_and_group_auto_membership() -> None:
-    print("group: ThisNoteGroup / Group / Context and legacy migration")
+def test_branch_group_and_group_auto_membership() -> None:
+    print("group: BranchGroup / Group / Context and legacy ThisNoteGroup migration")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         def put(name: str, title: str, body: str, group: bool = False) -> None:
-            attr = "attribute: group\n" if group else ""
+            attr = "attribute: group\\n" if group else ""
             (root / name).write_text(
-                f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n{attr}---\n\n# {title}\n\n{body}\n",
+                f"---\\ntime: 2026-01-01 00:00:00\\ntitle: {title}\\n{attr}---\\n\\n# {title}\\n\\n{body}\\n",
                 encoding="utf-8")
 
         put("a.md", "A",
-            "ThisNoteGroup:\n[G2](g2.md)\n"
-            "Context:\n[Root](root.md)\n\n本文を残す。\n"
-            "### Group\n[G1](g1.md)")
+            "ThisNoteGroup:\\n[G2](g2.md)\\n"
+            "Group:\\n[G2](g2.md)\\n[G1](g1.md)\\n"
+            "Context:\\n[Root](root.md)\\n\\n本文を残す。\\n"
+            "### ChildBranch\\n[G2](g2.md)")
         put("g1.md", "G1", "[A](a.md)", True)
-        put("g2.md", "G2", "容器ノート", True)
+        put("g2.md", "G2", "[A](a.md)\\n\\n### ParentBranch\\n[A](a.md)", True)
         put("root.md", "Root", "文脈ノート")
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")
-        check("### Group" not in a, "旧 ### Group は再出力しない")
-        check(a.count("Group:") == 2 and "[G1](g1.md)" in a, "Group: の所属と ThisNoteGroup: を保持")
-        check(a.index("ThisNoteGroup:") < a.index("\nGroup:") < a.index("\nContext:"),
-              "ThisNoteGroup → Group → Context の順番")
-        check("本文を残す。" in a, "グループブロックより下にある本文を失わない")
+        g2 = (root / "g2.md").read_text(encoding="utf-8")
+        check("ThisNoteGroup:" not in a and "### Group" not in a,
+              "旧 ThisNoteGroup と ### Group は再出力しない")
+        check("BranchGroup:\\n[G2](g2.md)" in a, "旧 BranchGroup リンクを保持して新見出しへ移行")
+        check("Group:\\n[G1](g1.md)" in a and "Group:\\n[G2](g2.md)" not in a,
+              "BranchGroup にある G2 は Group に重複させず G1 は残す")
+        check(a.index("\\nBranchGroup:") < a.index("\\nGroup:") < a.index("\\nContext:"),
+              "BranchGroup → Group → Context の順番")
+        check("本文を残す。" in a and "Context:\\n[Root](root.md)" in a,
+              "文脈と本文は失わない")
+        check("### ChildBranch\\n[G2](g2.md)" in a and "### ParentBranch\\n[A](a.md)" in g2,
+              "ChildBranch と ParentBranch は双方向で保持")
         check(v2.simple_sync(root) == 0, "再同期は冪等")
         put("g3.md", "G3", "[A](a.md)", True)
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")
         check("[G3](g3.md)" in a and a.count("[G1](g1.md)") == 1,
-              "新しく自分へのリンクが生じたグループも自動登録、重複なし")
+              "新しい所属は Group に追加し重複なし")
+        check(a.count("[G2](g2.md)") == 2 and
+              "Group:\\n[G2](g2.md)" not in a,
+              "BranchGroup の G2 は ChildBranch とだけ併記し Group を作らない")
 
+
+def test_branch_group_canonical_and_fenced_literals() -> None:
+    print("group: BranchGroup の先頭順序・コードブロック互換")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        def put(name, title, rest, attr=""):
+            (root / name).write_text(
+                f"---\\ntitle: {title}\\n{attr}---\\n\\n# {title}\\n\\n{rest}\\n",
+                encoding="utf-8")
+        put("a.md", "A",
+            "BranchGroup:\\n[K](k.md)\\nGroup:\\n[K](k.md)\\n"
+            "Context:\\n[C](c.md)\\n\\n本文\\n\\n"
+            "```md\\nBranchGroup:\\n[偽物](k.md)\\n```\\n"
+            "### ChildBranch\\n[K](k.md)")
+        put("k.md", "K", "### ParentBranch\\n[A](a.md)", "attribute: group\\n")
+        put("c.md", "C", "普通のノート")
+        v2.simple_sync(root)
+        a = (root / "a.md").read_text(encoding="utf-8")
+        check("BranchGroup:\\n[K](k.md)" in a and "Group:\\n[K](k.md)" not in a,
+              "Group 側の重複を排除")
+        check("Context:\\n[C](c.md)" in a, "Context は BranchGroup の後でも解析できる")
+        check("```md\\nBranchGroup:\\n[偽物](k.md)\\n```" in a,
+              "コード中の文字列は関係として解釈しない")
+        check(v2.simple_sync(root) == 0, "再同期は冪等")
 
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
