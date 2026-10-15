@@ -114,18 +114,17 @@ let s:bl = getline(1, '$')
 call s:ok('本文なしのノート: Group: の下に空行を挟んで本文のリンク', s:bl[-3 :] ==# ['[Index](index.md)', '', '[相手](other.md)'], string(s:bl))
 silent! write
 
-" zk → Enter（グループを作る）: 元のノートが Group: ブロックだけでも、新しいグループへのリンクは空行を挟んで本文に入る
+" zk → n（グループを作る）: 元のノートに Group: ブロックがあっても、BranchGroup: はその上（並び: BranchGroup → Group）
 call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 元', '---', '', '# 元', '', 'Group:', '[Index](index.md)'], s:v . '/src.md')
 execute 'edit ' . fnameescape(s:v . '/src.md')
 sleep 3300m
-let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_keys = ['n']
 call gnosis#v2_new_group()
 stopinsert
 silent! write
 let s:sl = readfile(s:v . '/src.md')
-call s:ok('zk Enter: Group: だけのノートでも、新しいグループへのリンクは空行を挟んで本文に入る',
-      \ len(s:sl) >= 3 && s:sl[-3] ==# '[Index](index.md)' && s:sl[-2] ==# '' && s:sl[-1] =~# '^\[\d\{12}\](\d\{12}\.md)$', string(s:sl))
-call s:ok('zk Enter: 元のノートに Context: が出来ない', index(s:sl, 'Context:') < 0, string(s:sl))
+call s:ok('zk n: BranchGroup: は Group: より上に入る', index(s:sl, 'BranchGroup:') >= 0 && index(s:sl, 'BranchGroup:') < index(s:sl, 'Group:'), string(s:sl))
+call s:ok('zk n: 元のノートに Context: が出来ない', index(s:sl, 'Context:') < 0, string(s:sl))
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

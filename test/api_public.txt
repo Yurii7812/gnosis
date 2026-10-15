@@ -7,6 +7,7 @@ gnosis#add_clipboard_before_up_reverse
 gnosis#add_clipboard_to_branch
 gnosis#add_clipboard_to_top
 gnosis#add_current_as_parent_here
+gnosis#add_current_as_parent_range
 gnosis#add_from_clipboard
 gnosis#add_link_to_parent
 gnosis#add_to_parent

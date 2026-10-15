@@ -157,17 +157,29 @@ let g:gnosis_test_keys = ['b']
 call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
 call s:ok('\l b: E の ChildBranch に F・F の ParentBranch に E', s:count('e.md', '^\[ノートF\](f\.md)$') == 1 && s:count('f.md', '^\[ノートE\](e\.md)$') == 1)
 
-" ---------------------------------------------------------------- zk → b（グループノートを子に）
+" ---------------------------------------------------------------- zk → n（BranchGroup・双方向の Branch。Context は付けない）
 execute 'edit ' . fnameescape(s:v . '/f.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['b']
+let g:gnosis_test_keys = ['n']
 sleep 1100m
 call gnosis#v2_new_group()
 stopinsert
 let s:g = s:newest_except(s:before)
-call s:ok('zk b: グループノートが F の ChildBranch に入る', !empty(s:g) && s:count('f.md', '(' . s:g . ')') == 1 && s:count(s:g, '^attribute: group$') == 1 && s:count(s:g, '^\[ノートF\](f\.md)$') == 1)
+call s:ok('zk n: グループができ、F の BranchGroup: と ChildBranch: に G、G の ParentBranch: に F', !empty(s:g) && s:count(s:g, '^attribute: group$') == 1
+      \ && index(s:file('f.md'), 'BranchGroup:') >= 0 && s:count('f.md', '(' . s:g . ')') == 2 && s:count('f.md', '^ChildBranch:$') == 1
+      \ && s:count(s:g, '^ParentBranch:$') == 1 && s:count(s:g, '^\[ノートF\](f\.md)$') == 1, string(s:file('f.md')))
+call s:ok('zk n: Context は付けない（F にも G にも）', empty(gnosis#context#find_block(s:file('f.md'))) && empty(gnosis#context#find_block(s:file(s:g))))
+" zk の旧キー（b / p / h / Enter / t / c / o）は受け付けない
+for s:k in ['b', 'p', 'h', "\r", 't', 'c', 'o']
+  execute 'edit ' . fnameescape(s:v . '/f.md')
+  let s:before = s:files()
+  let s:f_before = s:file('f.md')
+  let g:gnosis_test_keys = [s:k]
+  call gnosis#v2_new_group()
+  call s:ok('zk ' . (s:k ==# "\r" ? 'Enter' : s:k) . ': 受け付けない（何も作らない・F は変わらない）', s:files() ==# s:before && s:file('f.md') ==# s:f_before)
+endfor
 
-" ---------------------------------------------------------------- 既存の c / Enter は意味が変わらない
+" ---------------------------------------------------------------- zn c は B の Context に A（自動 Branch は残る）
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ['c', "\r"]
@@ -175,12 +187,11 @@ sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:nc = s:newest_except(s:before)
-call s:ok('zn c Enter: Context と自動 Branch が共存', !empty(s:nc)
-      \ && !empty(gnosis#context#find_block(s:file('d.md')))
-      \ && s:count('d.md', '^ChildBranch:$') == 1
+call s:ok('zn c Enter: B の Context に A・自動 Branch も付く・A に Context は作らない', !empty(s:nc)
+      \ && gnosis#context#links(s:file(s:nc)) ==# ['[ノートD](d.md)']
       \ && s:count(s:nc, '^ParentBranch:$') == 1
-      \ && empty(gnosis#context#find_block(s:file(s:nc)))
-      \ && s:count(s:nc, '^\[ノートD\](d\.md)$') >= 1)
+      \ && s:count('d.md', '^ChildBranch:$') == 1
+      \ && empty(gnosis#context#find_block(s:file('d.md'))), string(s:file(s:nc)))
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
@@ -188,12 +199,11 @@ sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:ne = s:newest_except(s:before)
-call s:ok('zn Enter: 本文リンク・Branch・Context が共存', !empty(s:ne)
+call s:ok('zn Enter: 本文リンクと Branch があり、Context は付けない', !empty(s:ne)
       \ && s:count('d.md', '(' . s:ne . ')') >= 2
-      \ && s:count(s:ne, '^ParentBranch:$') == 1 && !empty(gnosis#context#find_block(s:file(s:ne)))
-      \ && gnosis#context#find_block(s:file(s:ne))[1] < index(s:file(s:ne), 'ParentBranch:')
-      \ && s:count(s:ne, '^\[ノートD\](d\.md)
-
+      \ && s:count(s:ne, '^ParentBranch:$') == 1
+      \ && empty(gnosis#context#find_block(s:file(s:ne)))
+      \ && s:count(s:ne, '^\[ノートD\](d\.md)$') == 1, string(s:file(s:ne)))
 
 " ---------------------------------------------------------------- zn h / t は派生関係を付けるが Context は増やさない
 execute 'edit ' . fnameescape(s:v . '/d.md')
@@ -209,8 +219,10 @@ call s:ok('zn h: 自動 Branch / 新ノートの Context は無し', !empty(s:nh
       \ && empty(gnosis#context#find_block(s:file(s:nh))) && s:count('d.md', '(' . s:nh . ')') >= 2)
 
 execute 'edit ' . fnameescape(s:v . '/d.md')
+call append(search('^D の本文。$', 'nw'), ['', '## 見出しD', '', 'D の節。'])
+silent write
 let s:before = s:files()
-let g:gnosis_test_heading = 'ノートD'
+let g:gnosis_test_heading = '見出しD'
 let g:gnosis_test_keys = ['t']
 sleep 1100m
 call gnosis#v2_new_plain()
@@ -219,9 +231,9 @@ unlet g:gnosis_test_heading
 let s:nt = s:newest_except(s:before)
 call s:ok('zn t: 見出し下に置いても自動 Branch / Context は無し', !empty(s:nt)
       \ && s:count(s:nt, '^ParentBranch:$') == 1
-      \ && s:count(s:nt, '^### Context
+      \ && s:count(s:nt, '^### Context$') == 0 && empty(gnosis#context#find_block(s:file(s:nt))), string([s:nt, !empty(s:nt) ? s:file(s:nt) : []]))
 
-" ---------------------------------------------------------------- o は孤立、zk は明示的な b/p だけ Branch を付ける
+" ---------------------------------------------------------------- o は孤立
 execute 'edit ' . fnameescape(s:v . '/d.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ['o']
@@ -232,25 +244,16 @@ let s:no = s:newest_except(s:before)
 call s:ok('zn o: Branch と本文リンクを作らない', !empty(s:no)
       \ && s:count(s:no, 'Branch') == 0 && s:count('d.md', '(' . s:no . ')') == 0)
 
-execute 'edit ' . fnameescape(s:v . '/d.md')
-let s:before = s:files()
-let g:gnosis_test_keys = ["\r"]
-sleep 1100m
-call gnosis#v2_new_group()
-stopinsert
-let s:ng = s:newest_except(s:before)
-call s:ok('zk Enter: Group は自動 Branch の対象外', !empty(s:ng)
-      \ && s:count(s:ng, 'Branch') == 0 && s:count(s:ng, '^attribute: group$') == 1)
-
 " ---------------------------------------------------------------- index.md からの通常作成は Branch の親にしない
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:ni = s:newest_except(s:before)
-call s:ok('zn Enter: index.md は Branch を作らず通常のリンクだけ', !empty(s:ni)
+call s:ok('zn Enter: index.md（グループ）は Branch を作らず、表示名つきのリンクで登録', !empty(s:ni)
       \ && s:count(s:ni, 'Branch') == 0 && s:count('index.md', '(' . s:ni . ')') == 1)
 
 " ================================================================ p モード（現在のノートの親を追加）
@@ -411,11 +414,12 @@ call s:ok('zk Enter: Group は自動 Branch の対象外', !empty(s:ng)
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:ni = s:newest_except(s:before)
-call s:ok('zn Enter: index.md は Branch を作らず通常のリンクだけ', !empty(s:ni)
+call s:ok('zn Enter: index.md（グループ）は Branch を作らず、表示名つきのリンクで登録', !empty(s:ni)
       \ && s:count(s:ni, 'Branch') == 0 && s:count('index.md', '(' . s:ni . ')') == 1)
 
 " ================================================================ p モード（現在のノートの親を追加）
@@ -578,11 +582,12 @@ call s:ok('zk Enter: Group は自動 Branch の対象外', !empty(s:ng)
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:ni = s:newest_except(s:before)
-call s:ok('zn Enter: index.md は Branch を作らず通常のリンクだけ', !empty(s:ni)
+call s:ok('zn Enter: index.md（グループ）は Branch を作らず、表示名つきのリンクで登録', !empty(s:ni)
       \ && s:count(s:ni, 'Branch') == 0 && s:count('index.md', '(' . s:ni . ')') == 1)
 
 " ================================================================ p モード（現在のノートの親を追加）
@@ -718,11 +723,12 @@ call s:ok('zk Enter: Group は自動 Branch の対象外', !empty(s:ng)
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:ni = s:newest_except(s:before)
-call s:ok('zn Enter: index.md は Branch を作らず通常のリンクだけ', !empty(s:ni)
+call s:ok('zn Enter: index.md（グループ）は Branch を作らず、表示名つきのリンクで登録', !empty(s:ni)
       \ && s:count(s:ni, 'Branch') == 0 && s:count('index.md', '(' . s:ni . ')') == 1)
 
 " ================================================================ p モード（現在のノートの親を追加）

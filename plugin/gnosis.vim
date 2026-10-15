@@ -593,10 +593,9 @@ nnoremap <nowait> <silent> zn  <Cmd>call gnosis#v2_new_plain()<CR>
 nnoremap <nowait> <silent> zk  <Cmd>call gnosis#v2_new_group()<CR>
 " zk（ビジュアル）… 選択範囲を中身にしたグループノートを作る（選択はグループへのリンクに置換）。
 xnoremap <nowait> <silent> zk  :<C-u>call gnosis#v2_new_group_visual()<CR>
-" za: ca（クリップボードのノートを child に追加）と同じだが、関係ピッカーを
-" 出さず既定の「ノート」関係で固定する
+"" za: クリップボード／ヤンクしたリンクを、位置キーで今のノートに入れる（\l と同じ位置キー）
 nnoremap <nowait> <silent> za  <Cmd>call gnosis#add_clipboard_before_up_note()<CR>
-nnoremap <nowait> <silent> zap <Cmd>call gnosis#add_link_to_parent()<CR>
+" （旧操作 ca / cu / \ca / tt / ta / \at / \bc / zp / zap のキー割り当ては廃止。関数と :CA などのコマンドは互換のため残す）
 " zA: za と同じだが、追加前に「表示名」を入力する（既定は za が使う表示名。
 "     空 Enter / Esc で中止）。Vim 標準の折りたたみ zA は上書きされる。
 nnoremap <nowait> <silent> zA  <Cmd>call gnosis#add_clipboard_before_up_note_named()<CR>
@@ -604,19 +603,8 @@ nnoremap <nowait> <silent> zA  <Cmd>call gnosis#add_clipboard_before_up_note_nam
 " シンプル（深さ1つ）/ 詳細（親・子・文中・関連を別々の深さ、前回設定を再利用可）を選ぶ。
 " 「p」は素の貼り付けと1文字目が被り、素の p が timeoutlen 待ちになるため \ 側へ移した。
 nnoremap <nowait> <silent> \e  <Cmd>call gnosis#v2_expand()<CR>
-" cu: クリップボードのリンクを Parent: セクションへ追加
-nnoremap <nowait> <silent> cu  <Cmd>call gnosis#add_clipboard_to_branch()<CR>
-" ca: クリップボードのリンクを Child: に追加し、リンク先の Parent: に現在ノートを追加
-nnoremap <nowait> <silent> ca  <Cmd>call gnosis#add_clipboard_before_up()<CR>
-" \ca: ca と同じ向きだが括弧が逆。今開いているノート側が (ラベル)、相手側に生のラベルを書く
-nnoremap <nowait> <silent> \ca  <Cmd>call gnosis#add_clipboard_before_up_reverse()<CR>
-nnoremap <nowait> <silent> tt  <Cmd>call gnosis#add_clipboard_to_top()<CR>
 " zt: タイトル変更（空欄から開始）
 nnoremap <nowait> <silent> zt  <Cmd>call gnosis#rename_title_with_default('')<CR>
-" zp: 今開いてるノート（のリンク）を、相手（カーソル下のリンク or クリップボード）の
-"     ### Context に追加 ＝ 今のノートが相手の子になる（相手側の子リストに今のノート）
-"     対になる操作: za は「今のノートの子」= 今のノートにリンクを足す（Parent の直前）
-nnoremap <nowait> <silent> zp  <Cmd>call gnosis#add_clipboard_as_child_with_parent()<CR>
 " zT: 現在タイトルを残して編集
 nnoremap <nowait> <silent> zT  <Cmd>call gnosis#rename_title('')<CR>
 " zl: リンク表示名変更（空欄から開始）
@@ -633,15 +621,6 @@ nnoremap <nowait> <silent> zY  <Cmd>call gnosis#rename_yomi('')<CR>
 " zd: Child: のリンク表示名をリンク先 YAML title に更新
 nnoremap <nowait> <silent> zd  <Cmd>RenameChildLinkTitles<CR>
 vnoremap <nowait> <silent> zd  :<C-u>'<,'>RenameChildLinkTitles<CR>
-" ta: クリップボードのファイルのChildに現在ファイルへのリンクを追加
-" （旧 at。素の a と1文字目が被り timeoutlen 待ちが発生していたため改名。
-"   t は本来「次の1文字を待つ」動作なので、この待ちは違和感が出にくい）
-nnoremap <nowait> <silent> ta  <Cmd>call gnosis#at_add()<CR>
-" \at: ta と同じ向きだが括弧が逆。今開いているノート側が (ラベル)、相手側に生のラベルを書く
-nnoremap <nowait> <silent> \at  <Cmd>call gnosis#at_add_reverse()<CR>
-" \bc（旧 bc）: クリップボードのファイル名をChildに追加。
-" 「b」は素の後退移動と1文字目が被り、素の b が timeoutlen 待ちになるため \ 側へ移した。
-nnoremap <nowait> <silent> \bc <Cmd>call gnosis#add_from_clipboard()<CR>
 " yn: 現在のファイル名をヤンク
 nnoremap <nowait> <silent> yn  <Cmd>call gnosis#yank_name()<CR>
 
@@ -659,9 +638,10 @@ nnoremap <nowait> <silent> mx  <Cmd>ToggleCheckbox<CR>
 xnoremap <nowait> <silent> mx  :<C-u>'<,'>ToggleCheckbox<CR>
 nnoremap <silent> \p        <Cmd>call gnosis#paste_clipboard_link_here()<CR>
 xnoremap <silent> \p        :<C-u>call gnosis#linkify_selection_from_clipboard()<CR>
-" \P … カーソル下の .md リンク先の Parent に、今のノートを確認なしで足す。
-" （\p とは別キー。\p の確認プロンプトは廃止したので、必要なときはこれ）
+" \P … カーソル下の .md リンク先 B の Context: に、今のノート A を確認なしで足す。
+" ビジュアルでは、選んだ範囲の中の複数のリンク先それぞれに同じことをする。
 nnoremap <nowait> <silent> \P <Cmd>call gnosis#add_current_as_parent_here()<CR>
+xnoremap <nowait> <silent> \P :<C-u>call gnosis#add_current_as_parent_range(line("'<"), line("'>"))<CR>
 " \o を2打で確定させるため、従来の \oe は \O へ移動。
 nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " zo … カーソル下の .md リンク先ノートの見出し（アウトライン）を選び、

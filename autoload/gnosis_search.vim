@@ -389,7 +389,8 @@ endfunction
 " \l（ビジュアル）… 選択範囲を検索で選んだノートへのリンクで置き換える。
 " リンクの表示テキストは選択していた文字列（空ならノートタイトル）。
 function! gnosis_search#pick_insert_link_visual() abort range
-  if !s:fzf_ok() | return | endif
+  " g:gnosis_test_pick（"パス<TAB>タイトル" の行のリスト）があれば、検索の代わりにそれを選んだことにする（試験用）
+  if !exists('g:gnosis_test_pick') && !s:fzf_ok() | return | endif
   let s:vis = {}
   let s:vis.is_linewise = (visualmode() ==# 'V')
   let s:vis.sline = line("'<")
@@ -426,6 +427,10 @@ function! gnosis_search#pick_insert_link_visual() abort range
   let s:vis.text = trim(substitute(l:selected, '\n\+', ' ', 'g'))
   let s:insert_buf = bufnr('%')
   let s:insert_pos = [s:vis.sline, s:vis.scol]
+  if exists('g:gnosis_test_pick')
+    call s:link_sink_visual(remove(g:, 'gnosis_test_pick'))
+    return
+  endif
   call s:note_search_run('Link> ', '2', function('s:link_sink_visual'))
 endfunction
 

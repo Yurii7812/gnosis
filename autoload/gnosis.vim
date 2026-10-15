@@ -6782,6 +6782,13 @@ function! gnosis#v2_new_group_visual() abort range
   if empty(l:cur)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE | return
   endif
+  " グループの上では zk を使わない（ビジュアルでも同じ。トピックIndex は起点のノートで zk → n）
+  if s:buf_is_group()
+    echohl WarningMsg
+    echo 'Gnosis: ' . gnosis#i18n#tr('グループの上では zk は使えません（トピックIndex は起点のノートで zk → n）')
+    echohl NONE
+    return
+  endif
 
   " 選択範囲を記録
   let l:is_linewise = (visualmode() ==# 'V')
@@ -7163,13 +7170,71 @@ function! gnosis#add_current_as_parent_here() abort
     return
   endif
   let l:tgt = gnosis#resolve_link(l:lk.target)
-  if !filereadable(l:tgt)
-    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:tgt | echohl None
+  if !s:add_a_to_b_context(l:tgt, l:cur, gnosis#current_title())
     return
   endif
-  call s:simple_add_parent(l:tgt, l:cur, gnosis#current_title())
   call s:write_current_and_sync_now()
   echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
+endfunction
+
+" リンク先 B（a:b）の Context: に、今のノート A（a:a）を入れる（\P / ビジュアル \P）。
+" B が無い・自分自身・B が開いていて未保存のときは何もしない（0）。重複は gnosis#context#add が足さない。
+function! s:add_a_to_b_context(b, a, a_title) abort
+  if empty(a:b) || !filereadable(a:b)
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . a:b | echohl None
+    return 0
+  endif
+  if fnamemodify(a:b, ':p') ==# fnamemodify(a:a, ':p')
+    echo 'Gnosis: ' . gnosis#i18n#tr('自分自身は Context にできません')
+    return 0
+  endif
+  let l:nr = bufnr(fnamemodify(a:b, ':p'))
+  if l:nr > 0 && getbufvar(l:nr, '&modified')
+    echohl WarningMsg
+    echo 'Gnosis: ' . gnosis#i18n#tr('リンク先に未保存の変更があります。先に保存してください（何も変更していません）')
+    echohl NONE
+    return 0
+  endif
+  call s:simple_add_parent(a:b, a:a, a:a_title)
+  return 1
+endfunction
+
+" \P（ビジュアル）… 選んだ範囲の中の .md リンクのリンク先それぞれの Context: に、今のノートを入れる（\P と同じ向き）。
+" 画像・コードの中のリンクと、同じリンク先の 2 本目は数えない。
+function! gnosis#add_current_as_parent_range(first, last) abort
+  let l:cur = expand('%:p')
+  if empty(l:cur)
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
+    return
+  endif
+  let l:title = gnosis#current_title()
+  let l:seen = {}
+  let l:done = []
+  for l:p in s:link_positions_in_range(a:first, a:last)
+    let l:line = getline(l:p.lnum)
+    if l:p.col > 1 && l:line[l:p.col - 2] ==# '!'
+      continue
+    endif
+    let l:raw = matchstr(strpart(l:line, l:p.col - 1), s:link_pat)
+    let l:tg = substitute(s:extract_target(l:raw), '#.*$', '', '')
+    if empty(l:tg) || l:tg !~? '\.md$'
+      continue
+    endif
+    let l:fp = fnamemodify(gnosis#resolve_link(l:tg), ':p')
+    if has_key(l:seen, l:fp)
+      continue
+    endif
+    let l:seen[l:fp] = 1
+    if s:add_a_to_b_context(l:fp, l:cur, l:title)
+      call add(l:done, fnamemodify(l:fp, ':t'))
+    endif
+  endfor
+  if empty(l:done)
+    echo 'Gnosis: ' . gnosis#i18n#tr('追加できるリンクがありません')
+    return
+  endif
+  call s:write_current_and_sync_now()
+  echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . join(l:done, ', ')
 endfunction
 
 function! gnosis#add_to_parent() abort
@@ -7265,32 +7330,70 @@ function! s:v2_new_interactive(attr) abort
   if empty(l:cur)
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前付きバッファで実行して') | echohl NONE | return
   endif
-  if empty(a:attr)
-    echo s:fit_prompt(gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)'),
-          \ gnosis#i18n#tr('h=直下 Enter=末 t=見出し c=Context b=子 p=親 o=孤立 (Esc)'))
-  else
-    echo s:fit_prompt(gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch)  (Esc/q キャンセル)'),
-          \ gnosis#i18n#tr('h=直下 Enter=末 t=見出し c=Context b=子 p=親 o=孤立 n=BranchGroup (Esc)'))
+  let l:grp_src = s:buf_is_group()
+  if !empty(a:attr)
+    " zk: トピックIndex（グループ）は、起点になる通常のノートから n で作る。グループの上では使えない。
+    if l:grp_src
+      echohl WarningMsg
+      echo 'Gnosis: ' . gnosis#i18n#tr('グループの上では zk は使えません（トピックIndex は起点のノートで zk → n）')
+      echohl NONE
+      return
+    endif
+    echo s:fit_prompt(gnosis#i18n#tr('n=このノートから分岐するグループ（BranchGroup）を作る  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('n=BranchGroup (Esc)'))
+    let l:ch = s:getkey()
+    redraw
+    if l:ch ==# 'n'
+      call s:v2_new_run(a:attr, 'n', 0)
+    else
+      echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（n だけ）')
+    endif
+    return
   endif
+  if l:grp_src
+    " グループの上の zn: Enter = 表示名を付けてこのグループに登録 / o = 登録しないで作る
+    echo s:fit_prompt(gnosis#i18n#tr('Enter=表示名を付けてこのグループに登録 / o=登録しないで作る  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('Enter=登録 o=登録しない (Esc)'))
+    let l:ch = s:getkey()
+    redraw
+    if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+      " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
+      let l:ts = gnosis#timestamp_filename()
+      let l:r = s:ask_display_name(l:ts)
+      if !l:r.ok
+        echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+        return
+      endif
+      call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name})
+    elseif l:ch ==# 'o'
+      call s:v2_new_run('', 'o', 0)
+    else
+      echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / o のどれか）')
+    endif
+    return
+  endif
+  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / c=Context(新ノートに今のノート) / b=Branch(子) / p=Parent(親) / o=孤立  (Esc/q キャンセル)'),
+        \ gnosis#i18n#tr('Enter=末 t=見出し h=直下 c=Context b=子 p=親 o=孤立 (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
   endif
-  if l:ch ==? 't'
+  if l:ch ==# 't'
     " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
     " 続きは s:v2_new_run をコールバックで呼ぶ。
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
     return
   endif
-  if l:ch ==? 'c'
-    " c: 今のノートの Context に新ノートを入れる。新ノート側に今のノートへのリンクを
-    " どう入れるか（Enter / t / o。グループなら表示名も）を、作る前に聞く。
-    call s:ask_back_link('', [], !empty(a:attr), gnosis#current_title(),
-          \ function('s:v2_new_run_c', [a:attr]))
+  if l:ch ==# 'c'
+    " c: 新ノート（B）の Context: に今のノート（A）を入れる。A のどこに B へのリンクを置くかを、作る前に聞く。
+    if !gnosis#branch#can_parent_here()
+      return
+    endif
+    call s:c_ask_place(function('s:v2_new_run_c', [a:attr]))
     return
   endif
-  if l:ch ==? 'b'
+  if l:ch ==# 'b'
     " b: 新ノートを今のノートの ChildBranch として作る。作る前に、今のノートが親になれるか確かめる
     if !gnosis#branch#can_parent_here()
       return
@@ -7298,7 +7401,7 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, 'b', 0)
     return
   endif
-  if l:ch ==? 'p'
+  if l:ch ==# 'p'
     " p: 新ノートを今のノートの親（ParentBranch）として作る。今のノートが子になれるか先に確かめる
     if !gnosis#branch#can_child_here()
       return
@@ -7306,9 +7409,8 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, 'p', 0)
     return
   endif
-  " 位置キー以外（旧 p を含む）では何も作らない
-  if l:ch !~? (empty(a:attr) ? '^[ho]$' : '^[hon]$') && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / p / o のどれか）') | return
+  if l:ch !=# 'h' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / c / b / p / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -7332,8 +7434,8 @@ function! s:link_span_under_cursor() abort
   endwhile
 endfunction
 
-function! s:v2_new_run_c(attr, choice) abort
-  call s:v2_new_run(a:attr, 'c', 0, a:choice)
+function! s:v2_new_run_c(attr, place) abort
+  call s:v2_new_run(a:attr, 'c', 0, {'place': a:place})
 endfunction
 
 function! s:v2_new_run_t(attr, head_lnum) abort
@@ -7423,20 +7525,29 @@ function! s:outline_pick_done(lnum) abort
 endfunction
 
 " zn / zk の続き。a:ch は位置キー、a:head_lnum は t のときの見出し行。
+" a:1（任意）: {'ts': 新ノートのファイル名, 'name': グループに登録する表示名, 'place': c の置き場所（s:c_ask_place の答え）}
+"   通常のノート: Enter / t / h は今のノートにリンクを置き、b / p は Branch だけ、o は孤立、c は新ノートの Context に
+"   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
+"   h / t / c / Enter は、元ノートを親・新ノートを子とする Branch を自動で記録する（index.md・グループからは記録しない）。
+"   グループの上: Enter は表示名つきのリンクでグループに登録（新ノートの Group: に出る）、o は登録しない。
+"   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
 function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ch = a:ch
-  let l:choice = a:0 ? a:1 : {'mode': 'end', 'lnum': 0, 'name': ''}
+  let l:opt = a:0 ? a:1 : {}
   let l:cur = expand('%:p')
   let l:cur_title = gnosis#current_title()
   let l:grp_src = s:buf_is_group()
   let l:dir = expand('%:p:h')
-  let l:ts  = gnosis#timestamp_filename()
+  let l:ts  = get(l:opt, 'ts', '')
+  if empty(l:ts)
+    let l:ts = gnosis#timestamp_filename()
+  endif
   let l:file = s:join_path(l:dir, l:ts . '.md')
+  let l:place = get(l:opt, 'place', {})
+  let l:is_enter = l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
 
-  " zn で新しいノートを作ったときの系譜は、リンクの配置場所から独立させる。
-  " zk / o / p / index.md を起点とする通常作成は自動 Branch の対象外。
-  let l:auto_branch = empty(a:attr) && fnamemodify(l:cur, ':t') !=# 'index.md'
-        \ && (index(['h', 't', 'c'], tolower(l:ch)) >= 0 || l:ch ==# "\<CR>" || l:ch ==# "\<NL>")
+  let l:auto_branch = empty(a:attr) && !l:grp_src && fnamemodify(l:cur, ':t') !=# 'index.md'
+        \ && (index(['h', 't', 'c'], l:ch) >= 0 || l:is_enter)
   let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
   if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
     return
@@ -7444,7 +7555,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
 
   " 新ノートを先に作る（sync がリンク先を解決できるように）
   " t は見出しの下に直接リンクを置くので、元のノートが日記なら「今日のノート」には重ねない
-  let s:diary_skip_from = (l:ch ==? 't') ? l:cur : ''
+  let s:diary_skip_from = (l:ch ==# 't' || get(l:place, 'mode', '') ==# 'head') ? l:cur : ''
   try
     call s:write_new_note(gnosis#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
   finally
@@ -7454,9 +7565,9 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
   " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
-  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch || l:zk_branch_group
+  if l:ch ==# 'b' || l:ch ==# 'p' || l:auto_branch || l:zk_branch_group
     " p のみ逆向き。b と zn の自動関係は今のノートが親。
-    let l:br = l:ch ==? 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
+    let l:br = l:ch ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
     if !get(l:br, 'ok', 0)
       call delete(l:file)
       redraw
@@ -7467,27 +7578,28 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
 
   let l:link = '[' . l:ts . '](' . l:ts . '.md)'
+  if l:is_enter && l:grp_src
+    " グループに登録するリンクは、入力した表示名（空なら新ノートのタイトル = ファイル名）
+    let l:link = '[' . s:md_link_text(get(l:opt, 'name', l:ts)) . '](' . l:ts . '.md)'
+  endif
   let l:added = 0
   let l:save_ai = &autoindent | let l:save_si = &smartindent
   setlocal noautoindent nosmartindent
-  if l:ch ==? 'h'
+  if l:ch ==# 'h'
     " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
     let [l:at, l:blank] = s:h_insert_at()
     call append(l:at, l:blank ? ['', l:link] : [l:link])
     let l:added = 1
-  elseif l:ch ==? 't'
+  elseif l:ch ==# 't'
     call s:insert_link_under_heading(a:head_lnum, l:link)  " 見出しの本文の最後
     let l:added = 1
-  elseif l:ch ==? 'c'
-    " 今のノートの ### Context 末尾に置く → 今のノートは**新ノートの子**。
-    " よって新ノート側は親を持たず、本文リンク（子）で今のノートを指す。
-    if s:append_link_to_buffer_section('up', l:link)
-      let l:added = 1
-    endif
+  elseif l:ch ==# 'c'
+    " A（今のノート）に、選んだ置き場所で B（新ノート）へのリンクを置く。w は置かない。
+    let l:added = s:place_link_in_a(l:place, l:link)
   elseif l:ch ==# 'n' && !empty(a:attr)
     let l:added = s:append_link_to_branch_group(l:link)
-  elseif l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
-    call s:simple_body_append(l:link)  " 本文の最後（### Context の手前に空行1つ）
+  elseif l:is_enter
+    call s:simple_body_append(l:link)  " 本文の最後
     let l:added = 1
   endif
   " o … リンク無し（孤立）
@@ -7496,56 +7608,99 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
   let &autoindent = l:save_ai | let &smartindent = l:save_si
   silent noautocmd write
-  " b/p は本文リンクが無いのでここで同期。通常の zn は本文への配置後に同期する。
-  if l:branch_ok && !l:added
-    call s:run_update_one_for_sync(l:cur)
+  if l:ch ==# 'c'
+    " B の Context: に A を入れる（A の Context に B を入れるのではない）
+    call s:simple_add_parent(l:file, l:cur, l:cur_title)
+  elseif l:is_enter && l:grp_src
+    " グループへの掲載は Group（同期を待たずに新ノートの Group: に出す）。Context は足さない
+    call s:simple_add_group(l:file, l:cur, l:cur_title)
   endif
-  let l:in_body = 0
-  let l:hl = 0
-  if l:added
-    if l:ch ==? 'c'
-      " 新ノート側は「もと開いていたノート」を**本文リンク**（子）に置く（o を選んだら置かない）。
-      " c は「親（文脈）を作る」操作なので、ここを ### Context にすると循環して読めない。
-      if l:choice.mode !=# 'none' && l:choice.mode !=# 'write'
-        let l:name = empty(l:choice.name) ? l:cur_title : s:md_link_text(l:choice.name)
-        let l:back = s:make_link_from_dir(l:cur, l:name, fnamemodify(l:file, ':h'))
-        call s:simple_body_append_to_file(l:file, l:back, !empty(a:attr))
-        let l:in_body = 1
-      elseif l:choice.mode ==# 'write'
-        call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
-      endif
-    elseif (!empty(a:attr) && l:ch !=# 'n') || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
-      " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
-      " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
-      " 派生元がグループ（index.md を含む）なら、Context ではなく最初から Group: に所属を書く
-      " （Context に書くと、次の同期まで間違った関係が残る）。
-      if l:grp_src
-        call s:simple_add_group(l:file, l:cur, l:cur_title)
-      else
-        call s:simple_add_parent(l:file, l:cur, l:cur_title)
-      endif
-    endif
-    call s:run_update_one_for_sync(l:cur)
+  call s:run_update_one_for_sync(l:cur)
+  if l:is_enter && l:grp_src
+    " グループの索引を、既存の索引用の並べ替え規則（\S と同じ）で並べ替える
+    silent! call gnosis#sort_yomi()
+    silent! noautocmd update
+  endif
+  if l:ch ==# 'c' && get(l:place, 'mode', '') ==# 'w'
+    " w: B を yn と同じ方法でヤンクし、A（今のノート）を開いたままにする。A へのリンクは自動では置かない
+    call s:yank_like_yn([l:file])
+    checktime
+    return
   endif
   call gnosis#push_history()
-  " 新ノートの冒頭（Group: / Context: などのブロック）の下を、
+  " 新ノートの冒頭（ParentBranch: / Group: / Context: などのブロック）の下を、
   " 空行 / カーソル行 / 空行 の形に整えてから開く（開いたあとに書き換えない）。
-  let l:gap_ln = l:in_body ? 0 : s:new_note_gap(l:file)
+  let l:gap_ln = s:new_note_gap(l:file)
   execute 'edit ' . fnameescape(l:file)
-  " 本文入力位置へ。zn は余白 2 行なので 2 行下、zk（グループ）は 1 行下。
-  " p は本文リンクを置いた行（リンクの直後に続けて書ける位置）。
   let l:h1 = search('^#\s', 'nw')
-  if l:in_body
-    let l:hl = search('(' . escape(fnamemodify(l:cur, ':t'), '.*[]~\') . ')$', 'nw')
-  endif
-  if l:gap_ln > 0 | let l:hl = l:gap_ln | endif
+  let l:hl = l:gap_ln
   if l:h1 > 0 && l:hl == 0
-    " Context が H1 の直後にあるノートは、Context のリンクの次の空行のさらに次（zn）／次（zk）。
-    let l:cb = gnosis#context#find_block(getline(1, '$'))
-    let l:hl = !empty(l:cb) ? l:cb[1] + 1 + (empty(a:attr) ? 2 : 1) : l:h1 + (empty(a:attr) ? 2 : 1)
+    let l:hl = l:h1 + (empty(a:attr) ? 2 : 1)
   endif
   if l:hl > 0 | call cursor(l:hl, 1) | call cursor(l:hl, col('$')) | endif
   startinsert
+endfunction
+
+" ---------------------------------------------------------------------------
+" c（zn / \l / za 共通）
+"   A = 操作を始めた今のノート、B = zn で新しく作るノート、または \l / za で選んだノート。
+"   B の Context: に A を入れる。続けて、A の本文のどこに B へのリンクを置くかを選ぶ:
+"     Enter … A の本文の最後 / t … A の見出しを選び、その節の最後 / h … A のカーソル行の直下
+"     w     … A には自動で置かない。B を yn と同じ方法でヤンクし、A を開いたままにする
+"   質問（置き場所・見出し）はすべて変更の前に行う。Esc（見出し選択の取り消しを含む）なら何も変えない。
+" ---------------------------------------------------------------------------
+function! s:c_ask_place(Cont) abort
+  echo s:fit_prompt(gnosis#i18n#tr('今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / w=置かずにリンク先をヤンク  (Esc で取り消し)'),
+        \ gnosis#i18n#tr('置き場所: Enter=末 t=見出し h=直下 w=ヤンク (Esc)'))
+  let l:ch = s:getkey()
+  redraw
+  if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    call a:Cont({'mode': 'end'})
+  elseif l:ch ==# 't'
+    call s:outline_pick_here(function('s:c_place_head', [a:Cont]))
+  elseif l:ch ==# 'h'
+    call a:Cont({'mode': 'here'})
+  elseif l:ch ==# 'w'
+    call a:Cont({'mode': 'w'})
+  else
+    echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+  endif
+endfunction
+
+function! s:c_place_head(Cont, lnum) abort
+  call a:Cont({'mode': 'head', 'lnum': a:lnum})
+endfunction
+
+" A（今のバッファ）に、a:place の置き場所でリンク（行のリスト or 1 行）を置く。置いたら 1、置かなかったら 0。
+function! s:place_link_in_a(place, links) abort
+  let l:links = type(a:links) == v:t_list ? a:links : [a:links]
+  " 本文に同じリンク先が既にあれば置かない（関係のブロック・節にあるリンクは数えない。本文に置く操作なので）
+  let l:links = filter(copy(l:links), '!s:body_has_link(v:val)')
+  let l:mode = get(a:place, 'mode', '')
+  if empty(l:links) || l:mode ==# 'w' || empty(l:mode)
+    return 0
+  endif
+  if l:mode ==# 'end'
+    for l:lk in l:links
+      call s:simple_body_append(l:lk)
+    endfor
+  elseif l:mode ==# 'head'
+    for l:lk in reverse(copy(l:links))
+      call s:insert_link_under_heading(a:place.lnum, l:lk)
+    endfor
+  elseif l:mode ==# 'here'
+    let [l:at, l:blank] = s:h_insert_at()
+    call append(l:at, (l:blank ? [''] : []) + l:links)
+  endif
+  return 1
+endfunction
+
+" yn（今のファイル名をヤンク）と同じ方法で、a:paths のファイル名をヤンクする（無名レジスタとクリップボード）。
+function! s:yank_like_yn(paths) abort
+  let l:name = join(map(copy(a:paths), 'fnamemodify(v:val, ":t")'), "\n")
+  let @" = l:name
+  call gnosis#clipboard_copy(l:name)
+  echo 'Yanked: ' . l:name
 endfunction
 
 " ---------------------------------------------------------------------------
@@ -9535,8 +9690,10 @@ function! s:insert_links_core(links, ...) abort
   if empty(l:links)
     return 0
   endif
-  let l:inline = !empty(get(s:, 'inline_pos', []))
-  echo gnosis#insert_prompt_text(a:0 > 0, l:inline)
+  " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
+  " 今のノートがグループかどうかでは決めない。
+  let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
+  echo gnosis#insert_prompt_text(a:0 > 0, l:can_g)
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -9544,106 +9701,35 @@ function! s:insert_links_core(links, ...) abort
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
     return 0
   endif
-  if l:ch ==? 't' && a:0 > 0
+  if l:ch ==# 't' && a:0 > 0
     call s:outline_pick_here(function('s:insert_links_under_heading', [l:links, a:1]))
     return -1
   endif
-  if l:ch ==? 'p'
+  if l:ch ==# 'p'
     " p: ParentBranch（直接の親）。選んだノートが親、今のノートが子。b の逆向きで、同じ検証・更新を通る。
-    " （以前の p = Context 末尾は c に変わっていた。p は Branch の親として使う）
     return gnosis#branch#add_parent_links(l:links)
   endif
-  if l:ch ==# 'n' && l:inline
-    " \l → n: 表示名を入力して、今のノートの本文の最後へ入れる（入力欄は空から。
-    " 空 Enter = リンク先ノートのタイトル、Esc = 取り消し）。ノートのタイトルは変えない。
-    let l:added = 0
-    for l:lk in l:links
-      let l:tg = s:extract_target(l:lk)
-      let l:fp = gnosis#resolve_link(substitute(l:tg, '#.*$', '', ''))
-      let l:title = s:get_title(l:fp)
-      if empty(l:title)
-        let l:title = get(s:extract_markdown_link(l:lk), 'text', fnamemodify(l:fp, ':t:r'))
-      endif
-      let l:r = s:ask_display_name(l:title)
-      if !l:r.ok
-        echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
-        return 0
-      endif
-      let l:named = '[' . s:md_link_text(l:r.name) . '](' . l:tg . ')'
-      if s:insert_link_before_up_note(l:named)
-        let l:added += 1
-      else
-        echo 'Gnosis: ' . gnosis#i18n#tr('このノートには既にそのリンクがあります')
-      endif
-    endfor
-    if l:added
-      call s:ensure_blank_before_up()
-    endif
-    return l:added > 0
-  endif
-  if l:ch ==? 'i' && l:inline
-    " ピッカーを開いたときのカーソル位置に、行の中へそのまま入れる（従来の \l）
-    call cursor(s:inline_pos[1], s:inline_pos[2])
-    let l:text = join(l:links, ' ')
-    let l:cur = getline('.')
-    let l:col = col('.') - 1
-    call setline('.', strpart(l:cur, 0, l:col) . l:text . strpart(l:cur, l:col))
-    call cursor(line('.'), l:col + strlen(l:text) + 1)
-    return 1
-  endif
-  if l:ch ==? 'b'
-    " b: Branch（直接のブランチ）。今のノートが親、選んだノートが子。今のノートの ### ChildBranch と、
-    " 相手の ### ParentBranch の両方に書く。親は 1 つだけ・自己参照・循環は拒否（どちらも変更しない）。
+  if l:ch ==# 'b'
+    " b: Branch（直接のブランチ）。今のノートが親、選んだノートが子。親は 1 つだけ・自己参照・循環は拒否（どちらも変更しない）。
     return gnosis#branch#add_links(l:links)
   endif
-  if l:ch ==? 'c'
-    " 今のノートの ### Context 末尾に置く（相手が親になる）。zn / zk の c と同じ。
-    " そのあと、相手（リンク先）に今のノートへのリンクをどう入れるか（Enter / t / o）を
-    " リンクごとに聞いてから、まとめて書く（Esc なら何も書かない）。
+  if l:ch ==# 'c'
+    " c: 選んだノート（B）の Context: に今のノート（A）を入れる。続けて、A のどこに B へのリンクを置くかを選ぶ。
+    let l:bs = s:c_targets(l:links)
+    if empty(l:bs)
+      return 0
+    endif
     let l:Done = a:0 > 0 ? a:1 : function('s:noop')
-    call s:c_mode_chain(l:links, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'),
-          \ 'title': gnosis#current_title()}, l:Done)
+    call s:c_ask_place(function('s:c_links_apply', [l:bs,
+          \ {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, l:Done]))
     return -1
   endif
-  if l:ch ==? 'r'
-    " ### Related に相互追加: 今のノートの Related に相手、相手ノートの
-    " Related に今のノート（対称）。sync は Related を勝手に作らないので、
-    " ここで初めてセクションが生まれる。
-    let l:cur = expand('%:p')
-    if empty(l:cur)
-      echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きファイルで実行して') | echohl None
-      return 0
-    endif
-    let l:cur_title = gnosis#current_title()
-    let l:added = 0
-    for l:lk in l:links
-      let l:tgt = gnosis#resolve_link(s:extract_target(l:lk))
-      if empty(l:tgt) || !filereadable(l:tgt)
-        echo 'Warning: not found: ' . s:extract_target(l:lk)
-        continue
-      endif
-      if s:append_related_to_buffer(l:lk)
-        let l:added += 1
-      endif
-      call s:simple_add_related(l:tgt, l:cur, l:cur_title)
-    endfor
-    if l:added == 0
-      echo gnosis#i18n#tr('Gnosis: Related は変更なし（既に追加済み）')
-    endif
-    return l:added > 0
-  endif
-  if l:ch ==? 'g'
+  if l:ch ==# 'g' && l:can_g
     " g: 選んだノート（グループ）に、今のノートを入れる。選んだノートの本文に今のノートへのリンクが入り、
     " 今のノートの Group: に選んだノートが出る（表示名は空欄から聞く。空 Enter = 今のノートのタイトル）。
-    " 選んだノートがグループ（attribute: group）でなければ、何もしない（グループでないノートは所属先にならない）。
-    let l:groups = filter(copy(l:links), 's:link_is_group(v:val)')
-    if empty(l:groups)
-      echo 'Gnosis: ' . gnosis#i18n#tr('選んだノートはグループ（attribute: group）ではないので、入れません')
-      return 0
-    endif
-    return s:join_groups(l:groups) > 0
+    return s:join_groups(l:links) > 0
   endif
-  if l:ch ==? 'h'
+  if l:ch ==# 'h'
     " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
     let [l:ins, l:blank] = s:h_insert_at()
     if l:blank
@@ -9659,22 +9745,12 @@ function! s:insert_links_core(links, ...) abort
     endfor
     return 1
   endif
-  " 既定（Enter）: 本文の最後 = ### Context の直前
-  let l:added = 0
-  " za で、クリップボードのリンク先がグループで、今のノートがグループでないとき:
-  " Enter は「今のノートをそのグループに入れる」（グループの本文に、今のノートへのリンクを表示名つきで入れる）。
-  " グループへのリンクを今のノートの本文には置かない（所属は Group: に出る）。
-  if get(s:, 'za_join_group', 0) && !s:buf_is_group()
-    let l:groups = filter(copy(l:links), 's:link_is_group(v:val)')
-    if !empty(l:groups)
-      let l:joined = s:join_groups(l:groups)
-      if l:joined < 0
-        return 0
-      endif
-      let l:added += l:joined
-      call filter(l:links, '!s:link_is_group(v:val)')
-    endif
+  if l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('何も追加しない')
+    return 0
   endif
+  " Enter: 本文の最後。相手がグループでも、グループへの登録（g）にはしない
+  let l:added = 0
   for l:lk in l:links
     if s:insert_link_before_up_note(l:lk)
       let l:added += 1
@@ -9684,6 +9760,53 @@ function! s:insert_links_core(links, ...) abort
     call s:ensure_blank_before_up()
   endif
   return l:added > 0
+endfunction
+
+" c の B（選んだノート）を確かめる。存在しない・自分自身は外し、B が開いていて未保存なら全体を取り消す
+" （何も変えない）。戻り値 [{'link': リンク行, 'path': B の絶対パス}, …]。
+function! s:c_targets(links) abort
+  let l:cur = expand('%:p')
+  let l:out = []
+  for l:lk in a:links
+    let l:tg = substitute(s:extract_target(l:lk), '#.*$', '', '')
+    let l:fp = empty(l:tg) ? '' : fnamemodify(gnosis#resolve_link(l:tg), ':p')
+    if empty(l:fp) || !filereadable(l:fp)
+      echo gnosis#i18n#tr('見つかりません: ') . l:tg
+      continue
+    endif
+    if l:fp ==# l:cur
+      echo 'Gnosis: ' . gnosis#i18n#tr('自分自身は Context にできません')
+      continue
+    endif
+    let l:b = bufnr(l:fp)
+    if l:b > 0 && getbufvar(l:b, '&modified')
+      echohl WarningMsg
+      echo 'Gnosis: ' . gnosis#i18n#tr('リンク先に未保存の変更があります。先に保存してください（何も変更していません）')
+      echohl NONE
+      return []
+    endif
+    call add(l:out, {'link': l:lk, 'path': l:fp})
+  endfor
+  return l:out
+endfunction
+
+" \l / za の c の本体（置き場所が決まったあと）: 各 B の Context: に A を入れ、A に B へのリンクを置く。
+function! s:c_links_apply(bs, a, Done, place) abort
+  if bufnr('%') != a:a.buf && bufexists(a:a.buf)
+    execute 'silent! buffer ' . a:a.buf
+  endif
+  for l:b in a:bs
+    call s:simple_add_parent(l:b.path, a:a.path, a:a.title)
+  endfor
+  call s:place_link_in_a(a:place, map(copy(a:bs), 'v:val.link'))
+  if get(a:place, 'mode', '') ==# 'w'
+    " w: A には自動で置かない。B を yn と同じ方法でヤンクする（A は開いたまま）
+    call s:yank_like_yn(map(copy(a:bs), 'v:val.path'))
+  else
+    call s:ensure_blank_before_up()
+  endif
+  call a:Done()
+  checktime
 endfunction
 
 " リンク行の宛先がグループ（attribute: group / index.md）のノートか
@@ -9769,16 +9892,16 @@ function! s:fit_prompt(full, compact) abort
   return l:t
 endfunction
 
-" \l / za の位置キーの案内（1 行）。a:has_t は t（見出し）が使えるか、a:inline は i / n が使えるか（\l のとき）。
-function! gnosis#insert_prompt_text(has_t, inline) abort
-  let l:full = gnosis#i18n#tr('h=カーソル直下 / Enter=本文末 / ')
-        \ . (a:has_t ? gnosis#i18n#tr('t=見出し / ') : '')
-        \ . (a:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名 / ') : '')
-        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related / g=グループに入る  (Esc)')
-  let l:compact = gnosis#i18n#tr('h=直下 Enter=末 ')
+" \l / za の位置キーの案内（1 行）。a:has_t は t（見出し）が使えるか、a:has_g は g（選択先がグループのとき）が使えるか。
+function! gnosis#insert_prompt_text(has_t, has_g) abort
+  let l:full = gnosis#i18n#tr('Enter=本文の最後 / ')
+        \ . (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
+        \ . gnosis#i18n#tr('h=カーソル直下 / c=Context(リンク先に今のノート) / b=Branch(子) / p=Parent(親)')
+        \ . (a:has_g ? gnosis#i18n#tr(' / g=このグループに入る') : '') . '  (Esc)'
+  let l:compact = gnosis#i18n#tr('Enter=末 ')
         \ . (a:has_t ? gnosis#i18n#tr('t=見出し ') : '')
-        \ . (a:inline ? gnosis#i18n#tr('i=位置 n=表示名 ') : '')
-        \ . gnosis#i18n#tr('c=Context b=子 p=親 r=Related g=グループに入る (Esc)')
+        \ . gnosis#i18n#tr('h=直下 c=Context b=子 p=親')
+        \ . (a:has_g ? gnosis#i18n#tr(' g=グループに入る') : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
 
@@ -9933,6 +10056,24 @@ function! s:insert_link_before_up_note(link) abort
 endfunction
 
 " バッファ内に同じリンク（表示名または解決先一致）が無いか
+" 本文（上の先頭のブロックの下から、下の最初の節の手前まで）に、同じリンク先のリンクがあるか
+function! s:body_has_link(link) abort
+  let l:new_target = s:extract_target(a:link)
+  if empty(l:new_target) | return 0 | endif
+  let l:new_fp = fnamemodify(gnosis#resolve_link(substitute(l:new_target, '#.*$', '', ''), expand('%:p:h')), ':p')
+  let l:lines = getline(1, '$')
+  let l:first = s:top_block_last_index(l:lines) + 1
+  let l:sec = s:first_section_line()
+  let l:last = l:sec > 0 ? l:sec - 2 : len(l:lines) - 1
+  for l:i in range(max([l:first, 0]), l:last)
+    let l:t = matchstr(l:lines[l:i], '\](\zs[^)]\+\ze)')
+    if !empty(l:t) && fnamemodify(gnosis#resolve_link(substitute(l:t, '#.*$', '', ''), expand('%:p:h')), ':p') ==# l:new_fp
+      return 1
+    endif
+  endfor
+  return 0
+endfunction
+
 function! s:buffer_has_link(link) abort
   let l:new_target = s:extract_target(a:link)
   let l:new_fp = empty(l:new_target) ? '' : fnamemodify(gnosis#resolve_link(l:new_target, expand('%:p:h')), ':p')
@@ -9961,13 +10102,7 @@ function! gnosis#add_clipboard_before_up_note(...) abort
     echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
-  " クリップボードのリンク先がグループなら、Enter は今のノートをそのグループに入れる（s:join_groups）
-  let s:za_join_group = 1
-  try
-    call s:insert_links_at_position(l:links, function('s:links_added_done'))
-  finally
-    let s:za_join_group = 0
-  endtry
+  call s:insert_links_at_position(l:links, function('s:links_added_done'))
 endfunction
 
 " \l などのピッカーから: 選んだリンク（Markdown リンクの文字列のリスト）を、za と同じ置き場所キー

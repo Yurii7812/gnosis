@@ -45,157 +45,221 @@ call s:mk('b.md', 'ノートB', ['B の本文。', '', '## 節1', '', '節1の�
 call s:mk('g.md', 'グループG', ['[ノートA](a.md)', ''], 1)
 call s:mk('c.md', 'ノートC', ['C の本文。'])
 
-" ------------------------------------------------------------------ zn → c → Enter
+" ------------------------------------------------------------------ zn（通常のノート）→ Enter: Context を足さない
 execute 'edit ' . fnameescape(s:v . '/a.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ["\r"]
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:new = s:newest_except(s:before)
+call s:ok('zn Enter: 新ノートができ、A の本文の最後にリンク', !empty(s:new) && s:has('a.md', '^\[' . fnamemodify(s:new, ':r') . '\](' . s:new . ')$'))
+call s:ok('zn Enter: 新ノートに Context を足さない（ParentBranch だけ）', empty(gnosis#context#find_block(s:file(s:new))) && index(s:file(s:new), 'ParentBranch:') >= 0, string(s:file(s:new)))
+
+" ------------------------------------------------------------------ zn → h / t / b / p / o: Context を足さない
+for [s:k, s:hd] in [['h', ''], ['t', '節1'], ['b', ''], ['p', ''], ['o', '']]
+  execute 'edit ' . fnameescape(s:v . (s:k ==# 'p' ? '/c.md' : '/b.md'))
+  call cursor(search('^B の本文。$', 'nw') > 0 ? search('^B の本文。$', 'nw') : 1, 1)
+  let s:before = s:files()
+  let g:gnosis_test_keys = [s:k]
+  if !empty(s:hd) | let g:gnosis_test_heading = s:hd | endif
+  sleep 1100m
+  call gnosis#v2_new_plain()
+  stopinsert
+  silent! unlet g:gnosis_test_heading
+  let s:nk = s:newest_except(s:before)
+  call s:ok('zn ' . s:k . ': 新ノートができ、Context は足さない', !empty(s:nk) && empty(gnosis#context#find_block(s:file(s:nk))) && index(s:file(s:nk), '### Context') < 0, string(s:file(s:nk)))
+endfor
+
+" ------------------------------------------------------------------ zn（通常のノート）: 決められたキー以外では何も作らない
+for s:k in ['n', 'g', 'i', 'r', 'x']
+  execute 'edit ' . fnameescape(s:v . '/a.md')
+  let s:before = s:files()
+  let s:a_before = s:file('a.md')
+  let g:gnosis_test_keys = [s:k]
+  call gnosis#v2_new_plain()
+  call s:ok('zn（通常のノート）' . s:k . ': 何も作らない・A は変わらない', s:files() ==# s:before && s:file('a.md') ==# s:a_before)
+endfor
+
+" ------------------------------------------------------------------ zn → c → Enter / t / h（B の Context に A、A に B へのリンク）
+execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ['c', "\r"]
 sleep 1100m
 call gnosis#v2_new_plain()
-let s:new = s:newest_except(s:before)
-stopinsert
-call s:ok('zn c Enter: 新ノートができる', !empty(s:new))
-call s:ok('zn c Enter: A の Context に新ノート', s:has('a.md', '(' . s:new . ')') && !empty(gnosis#context#find_block(s:file('a.md'))) && index(s:file('a.md'), '### Context') < 0)
-call s:ok('zn c Enter: 新ノートの本文に A へのリンク', s:has(s:new, '^\[ノートA\](a\.md)$'))
-
-" ------------------------------------------------------------------ zn → c → o
-execute 'edit ' . fnameescape(s:v . '/a.md')
-let s:before = s:files()
-let g:gnosis_test_keys = ['c', 'o']
-sleep 1100m
-call gnosis#v2_new_plain()
 stopinsert
 let s:new = s:newest_except(s:before)
-call s:ok('zn c o: 新ノートができる', !empty(s:new))
-call s:ok('zn c o: A の Context に新ノート（c の追加は維持）', s:has('a.md', '(' . s:new . ')'))
-let s:b_lines = s:file(s:new)
-let s:pb = index(s:b_lines, 'ParentBranch:')
-call s:ok('zn c o: 本文には A を置かず ParentBranch のみ記録',
-      \ s:pb > 0 && get(s:b_lines, s:pb + 1, '') ==# '[ノートA](a.md)'
-      \ && index(s:b_lines, '### Context') < 0
-      \ && index(s:b_lines[: s:pb - 1], '[ノートA](a.md)') < 0, string(s:b_lines))
-
-" ------------------------------------------------------------------ zn → c → t（新ノートは見出しが無いので本文の最後）
-execute 'edit ' . fnameescape(s:v . '/a.md')
+call s:ok('zn c Enter: 新ノート B の Context: に A', !empty(s:new) && gnosis#context#links(s:file(s:new)) ==# ['[ノートB](b.md)'], string(s:file(s:new)))
+call s:ok('zn c Enter: A の本文の最後に B へのリンク・A に Context を作らない', s:has('b.md', '^\[' . fnamemodify(s:new, ':r') . '\](' . s:new . ')$') && empty(gnosis#context#find_block(s:file('b.md'))))
+call s:ok('zn c Enter: B の本文に A を置かない', count(s:file(s:new), '[ノートB](b.md)') <= 2 && index(s:file(s:new), '[ノートB](b.md)') < index(s:file(s:new), 'Context:') + 2)
+call s:ok('zn c Enter: B を開く', fnamemodify(expand('%:p'), ':t') ==# s:new)
+execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_heading = '節1'
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+unlet g:gnosis_test_heading
+let s:new = s:newest_except(s:before)
+let s:bl = s:file('b.md')
+let s:i_link = index(s:bl, '[' . fnamemodify(s:new, ':r') . '](' . s:new . ')')
+call s:ok('zn c t: A の「節1」の節の最後（zn → t と同じ位置: 節1の文の後・次の見出しの前）に B', s:i_link > index(s:bl, '節1の文。') && s:i_link < index(s:bl, '### 小節'), string(s:bl))
+call s:ok('zn c t: B の Context に A', gnosis#context#links(s:file(s:new)) ==# ['[ノートB](b.md)'])
+execute 'edit ' . fnameescape(s:v . '/b.md')
+call cursor(search('^節2の文。$', 'nw'), 1)
+let s:before = s:files()
+let g:gnosis_test_keys = ['c', 'h']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:new = s:newest_except(s:before)
-call s:ok('zn c t: 新ノートの本文に A へのリンク', !empty(s:new) && s:has(s:new, '^\[ノートA\](a\.md)$'))
+let s:bl = s:file('b.md')
+call s:ok('zn c h: A のカーソル行の直下に B', get(s:bl, index(s:bl, '節2の文。') + 1, '') ==# '[' . fnamemodify(s:new, ':r') . '](' . s:new . ')', string(s:bl))
+call s:ok('zn c h: B の Context に A', gnosis#context#links(s:file(s:new)) ==# ['[ノートB](b.md)'])
 
-" ------------------------------------------------------------------ zn → c → Esc（何も作らない）
+" ------------------------------------------------------------------ zn → c → Esc / 見出し選択の取り消し（何も作らない）
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:before = s:files()
 let s:a_before = s:file('a.md')
 let g:gnosis_test_keys = ['c', "\x1b"]
 sleep 1100m
 call gnosis#v2_new_plain()
-call s:ok('zn c Esc: 新ノートを作らない', s:files() ==# s:before)
-call s:ok('zn c Esc: A は変わらない', s:file('a.md') ==# s:a_before)
-
-" ------------------------------------------------------------------ zk → c → Enter → 表示名（空 Enter = A のタイトル）
-execute 'edit ' . fnameescape(s:v . '/c.md')
+call s:ok('zn c Esc: 新ノートを作らない・A は変わらない', s:files() ==# s:before && s:file('a.md') ==# s:a_before)
+execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['c', "\r"]
-let g:gnosis_test_display_name = ['']
-sleep 1100m
-call gnosis#v2_new_group()
-stopinsert
-let s:new = s:newest_except(s:before)
-call s:ok('zk c Enter 空表示名: グループの本文に [ノートC](c.md)', !empty(s:new) && s:has(s:new, '^\[ノートC\](c\.md)$'))
-call s:ok('zk c Enter 空表示名: C の Context にグループ', s:has('c.md', '(' . s:new . ')'))
-
-" ------------------------------------------------------------------ zk → c → Enter → 表示名を入力（日本語・空白・角かっこ）
-execute 'edit ' . fnameescape(s:v . '/c.md')
-let s:before = s:files()
-let g:gnosis_test_keys = ['c', "\r"]
-let g:gnosis_test_display_name = ['別の 名前 [注]']
-sleep 1100m
-call gnosis#v2_new_group()
-stopinsert
-let s:new2 = s:newest_except(s:before)
-call s:ok('zk c 表示名入力: 入力した文字が表示名（[ ] はエスケープ）', !empty(s:new2) && s:has(s:new2, '^\[別の 名前 \\\[注\\\]\](c\.md)$'), string(s:file(s:new2)))
-call s:ok('zk c 表示名入力: C のタイトルは変わらない', s:has('c.md', '^title: ノートC$'))
-
-" ------------------------------------------------------------------ zk → c → Enter → Esc（表示名の取り消し = 何も変えない）
-execute 'edit ' . fnameescape(s:v . '/c.md')
-let s:before = s:files()
-let s:c_before = s:file('c.md')
-let g:gnosis_test_keys = ['c', "\r"]
-let g:gnosis_test_display_name = ["\x1b"]
-sleep 1100m
-call gnosis#v2_new_group()
-call s:ok('zk c 表示名 Esc: 何も作らない', s:files() ==# s:before)
-call s:ok('zk c 表示名 Esc: C は変わらない', s:file('c.md') ==# s:c_before)
-
-" ------------------------------------------------------------------ za → c → t（B の見出し「節1」の節の最後。小節の後、節2の前）
-execute 'edit ' . fnameescape(s:v . '/a.md')
-let @" = '[ノートB](b.md)'
-let @0 = '[ノートB](b.md)'
+let s:b_before = s:file('b.md')
 let g:gnosis_test_keys = ['c', 't']
-let g:gnosis_test_heading = '節1'
-call gnosis#add_clipboard_before_up_note()
+let g:gnosis_test_heading = 'そんな見出しは無い'
+call gnosis#v2_new_plain()
 unlet g:gnosis_test_heading
-let s:b = s:file('b.md')
-let s:i_link = index(s:b, '[ノートA](a.md)')
-call s:ok('za c t: A の Context に B', s:has('a.md', '^\[ノートB\](b\.md)$'))
-call s:ok('za c t: B の「節1」の節の最後（小節の後・節2の前）に A', s:i_link > index(s:b, '小節の文。') && s:i_link < index(s:b, '## 節2'), string(s:b))
+call s:ok('zn c t で見出しを選ばない: 新ノートを作らない・A は変わらない', s:files() ==# s:before && s:file('b.md') ==# s:b_before)
 
-" ------------------------------------------------------------------ za → c → o（A 側は入る、B 側は入れない）
+" ------------------------------------------------------------------ グループの上の zn: Enter（表示名を付けて登録）/ o（登録しない）
+call s:mk('gz.md', 'グループZ', ['[ゼータ](zeta.md)', '[アルファ](alpha.md)'], 1)
+call s:mk('zeta.md', 'ゼータ', ['本文。'])
+call s:mk('alpha.md', 'アルファ', ['本文。'])
+execute 'edit ' . fnameescape(s:v . '/gz.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['いちご']
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:ng = s:newest_except(s:before)
+let s:gl = s:file('gz.md')
+call s:ok('グループの zn Enter: 入力した表示名でグループに登録', !empty(s:ng) && index(s:gl, '[いちご](' . s:ng . ')') >= 0, string(s:gl))
+call s:ok('グループの zn Enter: 表示名でタイトル・ファイル名を変えない', s:has(s:ng, '^title: ' . fnamemodify(s:ng, ':r') . '$') && s:ng =~# '^\d\{12}\.md$')
+call s:ok('グループの zn Enter: 新ノートの Group: にグループ・Context と Branch は無い', index(s:file(s:ng), 'Group:') >= 0 && s:has(s:ng, '^\[グループZ\](gz\.md)$')
+      \ && empty(gnosis#context#find_block(s:file(s:ng))) && index(s:file(s:ng), 'ParentBranch:') < 0 && !s:has('gz.md', '^ChildBranch:$'), string(s:file(s:ng)))
+call s:ok('グループの zn Enter: 新ノートを開く', fnamemodify(expand('%:p'), ':t') ==# s:ng)
+call s:ok('グループの zn Enter: 索引をよみ順に並べ替える（アルファ・いちご・ゼータ）',
+      \ index(s:gl, '[アルファ](alpha.md)') < index(s:gl, '[いちご](' . s:ng . ')') && index(s:gl, '[いちご](' . s:ng . ')') < index(s:gl, '[ゼータ](zeta.md)'), string(s:gl))
+execute 'edit ' . fnameescape(s:v . '/gz.md')
+let s:before = s:files()
+let s:gz_before = s:file('gz.md')
+let g:gnosis_test_keys = ['o']
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:no = s:newest_except(s:before)
+call s:ok('グループの zn o: 新ノートを作り、グループには登録しない', !empty(s:no) && s:file('gz.md') ==# s:gz_before && index(s:file(s:no), 'Group:') < 0)
+for s:k in ['h', 'c', 't', 'b', 'p']
+  execute 'edit ' . fnameescape(s:v . '/gz.md')
+  let s:before = s:files()
+  let s:gz_before = s:file('gz.md')
+  let g:gnosis_test_keys = [s:k]
+  call gnosis#v2_new_plain()
+  call s:ok('グループの zn ' . s:k . ': 何も作らない（Enter / o だけ）', s:files() ==# s:before && s:file('gz.md') ==# s:gz_before)
+endfor
+execute 'edit ' . fnameescape(s:v . '/gz.md')
+let s:before = s:files()
+let s:gz_before = s:file('gz.md')
+let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ["\x1b"]
+call gnosis#v2_new_plain()
+call s:ok('グループの zn Enter → 表示名で Esc: 何も作らない', s:files() ==# s:before && s:file('gz.md') ==# s:gz_before)
+
+" ------------------------------------------------------------------ zk: 通常のノートは n だけ・グループの上では使えない
+for s:k in ["\r", 'c', 'h', 'o', 'b', 'p', 't']
+  execute 'edit ' . fnameescape(s:v . '/a.md')
+  let s:before = s:files()
+  let g:gnosis_test_keys = [s:k]
+  call gnosis#v2_new_group()
+  call s:ok('zk ' . (s:k ==# "\r" ? 'Enter' : s:k) . ': 何も作らない（n だけ）', s:files() ==# s:before)
+endfor
+execute 'edit ' . fnameescape(s:v . '/gz.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ['n']
+call gnosis#v2_new_group()
+call s:ok('グループの上の zk: 使えない（何も作らない）', s:files() ==# s:before)
+let g:gnosis_test_keys = []
+execute "normal! ggVj\<Esc>"
+call gnosis#v2_new_group_visual()
+call s:ok('グループの上のビジュアル zk: 使えない（何も作らない・グループは変わらない）', s:files() ==# s:before && s:file('gz.md') ==# getline(1, '$'))
+
+" ------------------------------------------------------------------ za → c → t / Enter（B の Context に A、A に B）
 call s:mk('d.md', 'ノートD', ['D の本文。'])
-execute 'edit ' . fnameescape(s:v . '/a.md')
+execute 'edit ' . fnameescape(s:v . '/b.md')
 let @" = '[ノートD](d.md)'
 let @0 = @"
-let g:gnosis_test_keys = ['c', 'o']
+let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_heading = '節2'
 call gnosis#add_clipboard_before_up_note()
-call s:ok('za c o: A の Context に D', s:has('a.md', '^\[ノートD\](d\.md)$'))
-call s:ok('za c o: D に A へのリンクは無い', !s:has('d.md', '(a\.md)'))
-
-" ------------------------------------------------------------------ za → c → Enter（相手がグループ: 表示名を聞く。本文の最後）
+unlet g:gnosis_test_heading
+call s:ok('za c t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
+call s:ok('za c t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
+call s:ok('za c t: D の本文に A は置かない', count(s:file('d.md'), '[ノートB](b.md)') == 1)
+" 相手がグループでも、c は Context（グループ登録にはしない）
 execute 'edit ' . fnameescape(s:v . '/c.md')
 let @" = '[グループG](g.md)'
 let @0 = @"
+let s:g_before = s:file('g.md')
 let g:gnosis_test_keys = ['c', "\r"]
-let g:gnosis_test_display_name = ['C から']
 call gnosis#add_clipboard_before_up_note()
-call s:ok('za c Enter グループ: G の本文の最後に [C から](c.md)', s:has('g.md', '^\[C から\](c\.md)$'))
-call s:ok('za c Enter グループ: C に G', s:has('c.md', '(g\.md)'))
+call s:ok('za c Enter（相手がグループ）: G の Context に C・G の本文には入れない', gnosis#context#links(s:file('g.md')) ==# ['[ノートC](c.md)'] && !s:has('g.md', '^\[ノートC\](c\.md)$') || index(s:file('g.md'), 'Context:') >= 0, string(s:file('g.md')))
+call s:ok('za c Enter（相手がグループ）: C の本文の最後に G・C は G に所属しない', s:has('c.md', '^\[グループG\](g\.md)$') && index(s:file('c.md'), 'Group:') < 0, string(s:file('c.md')))
 
-" ------------------------------------------------------------------ \l → c → Enter（ピッカーから）
+" ------------------------------------------------------------------ za → Enter（相手がグループでも、暗黙のグループ登録にしない）
+call s:mk('ze.md', 'ノートZE', ['ZE の本文。'])
+execute 'edit ' . fnameescape(s:v . '/ze.md')
+let @" = '[グループG](g.md)'
+let @0 = @"
+let s:g_before = s:file('g.md')
+let g:gnosis_test_keys = ["\r"]
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za Enter（相手がグループ）: 本文の最後にリンク・グループの本文は変えない・Group: は作らない',
+      \ s:has('ze.md', '^\[グループG\](g\.md)$') && s:file('g.md') ==# s:g_before && index(s:file('ze.md'), 'Group:') < 0, string(s:file('ze.md')))
+
+" ------------------------------------------------------------------ \l → c → Enter / h（ピッカーから）
 call s:mk('e.md', 'ノートE', ['E の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let g:gnosis_test_keys = ['c', "\r"]
 call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
-call s:ok('\l c Enter: A の Context に E', s:has('a.md', '^\[ノートE\](e\.md)$'))
-call s:ok('\l c Enter: E の本文の最後に A', s:has('e.md', '^\[ノートA\](a\.md)$'))
-
-" ------------------------------------------------------------------ \l → c → o
+call s:ok('\l c Enter: E の Context に A', gnosis#context#links(s:file('e.md')) ==# ['[ノートA](a.md)'], string(s:file('e.md')))
+call s:ok('\l c Enter: A の本文の最後に E・A に Context は作らない', s:has('a.md', '^\[ノートE\](e\.md)$') && empty(gnosis#context#find_block(s:file('a.md'))))
 call s:mk('f.md', 'ノートF', ['F の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
-let g:gnosis_test_keys = ['c', 'o']
+call cursor(search('^本文の文。$', 'nw'), 1)
+let g:gnosis_test_keys = ['c', 'h']
 call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
-call s:ok('\l c o: A の Context に F', s:has('a.md', '^\[ノートF\](f\.md)$'))
-call s:ok('\l c o: F に A は入らない', !s:has('f.md', '(a\.md)'))
+call s:ok('\l c h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
+call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
 
-" ------------------------------------------------------------------ \l → n（表示名: 空 Enter = タイトル / 入力 / Esc）
+" ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 i / n / r）は何もしない
 call s:mk('h.md', 'ノートH', ['H の本文。'])
-call s:mk('i.md', 'ノートI', ['I の本文。'])
-execute 'edit ' . fnameescape(s:v . '/c.md')
-let g:gnosis_test_keys = ['n']
-let g:gnosis_test_display_name = ['']
-call gnosis#insert_links_pick(['[h](h.md)'], getpos('.'))
-call s:ok('\l n 空 Enter: リンク先のタイトルが表示名', s:has('c.md', '^\[ノートH\](h\.md)$'))
-let g:gnosis_test_keys = ['n']
-let g:gnosis_test_display_name = ['好きな*名前_']
-call gnosis#insert_links_pick(['[ノートI](i.md)'], getpos('.'))
-call s:ok('\l n 入力: 入力した文字が表示名', s:has('c.md', '^\[好きな\*名前_\](i\.md)$'), string(s:file('c.md')))
-call s:ok('\l n 入力: I のタイトルは変わらない', s:has('i.md', '^title: ノートI$'))
-let s:c_before = getline(1, '$')
-let g:gnosis_test_keys = ['n']
-let g:gnosis_test_display_name = ["\x1b"]
-call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
-call s:ok('\l n Esc: 何も入れない', getline(1, '$') ==# s:c_before)
+for s:k in ['i', 'n', 'r', 'x']
+  execute 'edit ' . fnameescape(s:v . '/c.md')
+  let s:c_before = getline(1, '$')
+  let g:gnosis_test_keys = [s:k]
+  let g:gnosis_test_display_name = ['']
+  call gnosis#insert_links_pick(['[ノートH](h.md)'], getpos('.'))
+  call s:ok('\l ' . s:k . ': 何もしない', getline(1, '$') ==# s:c_before && s:file('h.md')[-1] ==# 'H の本文。')
+endfor
+let s:cols_save = &columns
+let &columns = 200
+call s:ok('\l の案内: 選択先がグループのときだけ g を出す', gnosis#insert_prompt_text(1, 1) =~# 'g=' && gnosis#insert_prompt_text(1, 0) !~# 'g=')
+let &columns = s:cols_save
 
 " ------------------------------------------------------------------ \l → 選ぶ → g（選んだグループに、今のノートを入れる → 今のノートの Group: に出る）
 call s:mk('jg4.md', 'ノートJG4', ['JG4 の本文。'])
@@ -252,7 +316,7 @@ for s:cols in [80, 100, 120]
   call s:ok('案内は 1 行に収まり g も見える（幅 ' . s:cols . '）', strdisplaywidth(s:worst) <= s:cols - 2 && s:worst =~# 'g=', s:worst . ' / ' . strdisplaywidth(s:worst))
 endfor
 let &columns = 200
-call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=グループ' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
+call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=このグループに入る' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
 let &columns = s:cols_save
 
 " ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
@@ -344,9 +408,8 @@ call setpos("'>", [0, 10, 1, 0])
 call gnosis#sort_selection()
 call s:ok('\S ビジュアル: 選択の外は変えない', getline(9, 11) ==# ['[い](n2.md)', '[う](n3.md)', '[あ](n1.md)'], string(getline(9, 11)))
 
-" ------------------------------------------------------------------ za → c → Esc / 表示名 Esc（何も変えない）
+" ------------------------------------------------------------------ za → c → Esc（何も変えない）
 call s:mk('k.md', 'ノートK', ['K の本文。'])
-call s:mk('gk.md', 'グループK', ['K'], 1)
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:a_before = s:file('a.md')
 let s:k_before = s:file('k.md')
@@ -355,13 +418,6 @@ let @0 = @"
 let g:gnosis_test_keys = ['c', "\x1b"]
 call gnosis#add_clipboard_before_up_note()
 call s:ok('za c Esc: A も K も変わらない', s:file('a.md') ==# s:a_before && s:file('k.md') ==# s:k_before && getline(1, '$') ==# s:a_before)
-let s:gk_before = s:file('gk.md')
-let @" = '[グループK](gk.md)'
-let @0 = @"
-let g:gnosis_test_keys = ['c', "\r"]
-let g:gnosis_test_display_name = ["\x1b"]
-call gnosis#add_clipboard_before_up_note()
-call s:ok('za c 表示名 Esc: A もグループも変わらない', s:file('a.md') ==# s:a_before && s:file('gk.md') ==# s:gk_before && getline(1, '$') ==# s:a_before)
 
 " ------------------------------------------------------------------ zk（ビジュアル）は従来どおり
 call s:mk('vz.md', 'ビジュアル', ['一行目', '[ノートB](b.md)', '三行目'])
@@ -381,6 +437,7 @@ call s:ok('zk ビジュアル: 選択行がグループの中身になり、元�
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_display_name = ['']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
@@ -391,6 +448,37 @@ let s:nl = s:file(s:ni)
 let s:lk = index(s:nl, '[Index](index.md)')
 call s:ok('新ノート: ブロックの下は 空行 / カーソル行 / 空行', s:lk >= 0 && s:nl[s:lk + 1 :] ==# ['', '', ''], string(s:nl))
 call s:ok('新ノート: カーソルは真ん中の空行', line('.') == s:lk + 3, line('.') . ' vs ' . (s:lk + 3))
+
+" ------------------------------------------------------------------ ビジュアル \l: 選択範囲を、選んだノートへのリンクに置き換える（表示名は選択した文字列。位置キーは聞かない）
+call s:mk('vl.md', 'ビジュアル L', ['ハーブガーデンを作ってみたい話。'])
+call s:mk('herb.md', 'ハーブガーデンを作ってみたい', ['本文。'])
+execute 'edit ' . fnameescape(s:v . '/vl.md')
+let s:vl_ln = search('^ハーブガーデン', 'nw')
+call setpos("'<", [0, s:vl_ln, 1, 0])
+call setpos("'>", [0, s:vl_ln, strlen('ハーブガーデン'), 0])
+execute "normal! " . s:vl_ln . "G0v" . (strchars('ハーブガーデン') - 1) . "l\<Esc>"
+let g:gnosis_test_keys = ['x']
+let g:gnosis_test_pick = [s:v . '/herb.md' . "\t" . 'ハーブガーデンを作ってみたい']
+'<,'>call gnosis_search#pick_insert_link_visual()
+call s:ok('ビジュアル \l: 選んだ文字が表示名のリンクに置き換わる', getline(s:vl_ln) ==# '[ハーブガーデン](herb.md)を作ってみたい話。', getline(s:vl_ln))
+call s:ok('ビジュアル \l: 位置キーは聞かない（キーが残っている）', g:gnosis_test_keys ==# ['x'])
+let g:gnosis_test_keys = []
+
+" ------------------------------------------------------------------ ビジュアル \P: 選んだ範囲の複数のリンク先 B の Context: に、今のノート A を入れる
+call s:mk('vp.md', 'ビジュアル P', ['[ノートP1](vp1.md) と [ノートP2](vp2.md)', '[自分](vp.md) と [無い](nothing.md)', '![画像](vp3.md)'])
+call s:mk('vp1.md', 'ノートP1', ['P1。'])
+call s:mk('vp2.md', 'ノートP2', ['Context:', '[ビジュアル P](vp.md)', '', 'P2。'])
+call s:mk('vp3.md', 'ノートP3', ['P3。'])
+execute 'edit ' . fnameescape(s:v . '/vp.md')
+let s:vp_first = search('^\[ノートP1\]', 'nw')
+let s:vp_before = s:file('vp.md')
+let s:vp2_before = s:file('vp2.md')
+let s:vp3_before = s:file('vp3.md')
+call gnosis#add_current_as_parent_range(s:vp_first, s:vp_first + 2)
+call s:ok('ビジュアル \P: P1 の Context: に A（今のノート）', gnosis#context#links(s:file('vp1.md')) ==# ['[ビジュアル P](vp.md)'], string(s:file('vp1.md')))
+call s:ok('ビジュアル \P: 既に Context にある P2 は重複しない', s:file('vp2.md') ==# s:vp2_before)
+call s:ok('ビジュアル \P: 画像のリンク先・自分自身・無いノートには何もしない', s:file('vp3.md') ==# s:vp3_before && gnosis#context#links(s:file('vp.md')) ==# [] && !filereadable(s:v . '/nothing.md'))
+call s:ok('ビジュアル \P: A の本文は変えない（向きは B の Context に A）', s:file('vp.md')[5 :] ==# s:vp_before[5 :])
 
 " ------------------------------------------------------------------ zw（日記でなくても本文の一番下から書き始める）
 call s:mk('wb.md', 'ノートWB', ['最初の文。', '最後の文。', '', '', '', 'Related:', '[ノートA](a.md)'])
