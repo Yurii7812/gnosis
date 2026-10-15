@@ -197,22 +197,64 @@ let g:gnosis_test_display_name = ["\x1b"]
 call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
 call s:ok('\l n Esc: 何も入れない', getline(1, '$') ==# s:c_before)
 
-" ------------------------------------------------------------------ zk → g（今のノートを新グループのメンバーにする）
+" ------------------------------------------------------------------ \l → g（選んだノートを選んだグループの所属にする。表示名も聞く）
+" g:gnosis_test_group_pick … 試験用にグループを選ぶ（空文字 = 取り消し）
+execute 'edit ' . fnameescape(s:v . '/c.md')
+" 直前の操作の非同期の同期（update_one）が終わるのを待つ（zk の試験と同じ）
+sleep 1100m
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = [s:v . '/g.md']
+let g:gnosis_test_display_name = ['']
+call gnosis#insert_links_pick(['[ノートH](h.md)'], getpos('.'))
+call s:ok('\l g: グループ本文に表示名つきのリンク（空 Enter = タイトル）', s:has('g.md', '^\[ノートH\](h\.md)$'), string(s:file('g.md')))
+call s:ok('\l g: 相手 H の Group: がそのグループ', index(s:file('h.md'), 'Group:') >= 0 && s:has('h.md', '(g\.md)'), string(s:file('h.md')))
+call s:ok('\l g: 今のノート C の本文末にもリンク', s:has('c.md', '^\[ノートH\](h\.md)$'), string(s:file('c.md')))
+call s:ok('\l g: H のタイトルは変わらない', s:has('h.md', '^title: ノートH$'))
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = [s:v . '/g.md']
+let g:gnosis_test_display_name = ['好きな*名前_']
+call gnosis#insert_links_pick(['[ノートI](i.md)'], getpos('.'))
+call s:ok('\l g 表示名入力: 入力した文字が表示名', s:has('g.md', '^\[好きな\*名前_\](i\.md)$'), string(s:file('g.md')))
+execute 'edit ' . fnameescape(s:v . '/g.md')
+let s:g_before = getline(1, '$')
+execute 'edit ' . fnameescape(s:v . '/c.md')
+let s:c_before3 = getline(1, '$')
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = [s:v . '/g.md']
+let g:gnosis_test_display_name = ["\x1b"]
+call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
+call s:ok('\l g 表示名 Esc: グループも今のノートも変えない', getline(1, '$') ==# s:c_before3 && readfile(s:v . '/g.md') ==# s:g_before)
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = ['']
+let g:gnosis_test_display_name = ['']
+call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
+call s:ok('\l g グループ未選択: 何も変えない', getline(1, '$') ==# s:c_before3 && readfile(s:v . '/g.md') ==# s:g_before)
+
+" ------------------------------------------------------------------ za → g（za も同じ位置キーで所属にできる）
+call s:mk('k.md', 'ノートK', ['K の本文。'])
+execute 'edit ' . fnameescape(s:v . '/c.md')
+sleep 1100m
+let @" = '[ノートK](k.md)'
+let @0 = '[ノートK](k.md)'
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_group_pick = [s:v . '/g.md']
+let g:gnosis_test_display_name = ['']
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za g: グループ本文に K のリンク', s:has('g.md', '^\[ノートK\](k\.md)$'), string(s:file('g.md')))
+call s:ok('za g: K の Group: がそのグループ', index(s:file('k.md'), 'Group:') >= 0 && s:has('k.md', '(g\.md)'), string(s:file('k.md')))
+
+" ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
 call s:mk('j.md', 'ノートJ', ['前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ'])
 execute 'edit ' . fnameescape(s:v . '/j.md')
-call cursor(8, 1)  " リンク上でなくても機能する
+call cursor(8, 1)
 let s:before = s:files()
+let s:j_before = getline(1, '$')
 let g:gnosis_test_keys = ['g']
 sleep 1100m
 call gnosis#v2_new_group()
 stopinsert
-let s:grp = s:newest_except(s:before)
-call s:ok('zk g: グループができる', !empty(s:grp) && s:has(s:grp, '^attribute: group$'))
-call s:ok('zk g: 現ノート J をグループ本文に登録', !empty(s:grp) && s:has(s:grp, '^\[ノートJ\](j\.md)$'))
-call s:ok('zk g: リンク先 B/C を移動しない', !s:has(s:grp, '^\[ノートC\](c\.md)$') && !s:has(s:grp, '^\[ノートB\](b\.md)$'))
-call s:ok('zk g: 元の本文は変更しない', index(s:file('j.md'), '前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ') >= 0)
-call s:ok('zk g: 元ノートの Group: に自動登録', index(s:file('j.md'), 'Group:') >= 0 && s:has('j.md', '(' . s:grp . ')'))
-call s:ok('zk g: 旧 ### Group を生成しない', index(s:file('j.md'), '### Group') < 0)
+call s:ok('zk g: 位置キーに無いので何も作らない', s:files() ==# s:before)
+call s:ok('zk g: 元ノート J は変わらない', getline(1, '$') ==# s:j_before)
 
 " ------------------------------------------------------------------ zk → n（現在のノートの BranchGroup: に登録）
 execute 'edit ' . fnameescape(s:v . '/j.md')
@@ -232,14 +274,14 @@ call s:ok('zk n: 元ノート J の ChildBranch にグループ', index(s:file('
       \ && s:has('j.md', '(' . s:grp2 . ')'))
 call s:ok('zk n: Context への余分な逆リンクを作らない',
       \ index(s:file(s:grp2), 'Context:') < 0 && index(s:file(s:grp2), '### Context') < 0)
-call s:ok('zk n: BranchGroup と Group のリンクが重複しない',
-      \ index(s:file('j.md'), 'Group:') >= 0 && s:has('j.md', '(' . s:grp2 . ')')
-      \ && len(filter(copy(s:file('j.md')), 'v:val =~# "(" . escape(s:grp2, ".") . ")"')) == 2)
+" BranchGroup と ChildBranch の 2 か所だけ（同じグループを重ねて入れない）
+call s:ok('zk n: グループへのリンクが重複しない（BranchGroup と ChildBranch の 2 か所）',
+      \ len(filter(copy(s:file('j.md')), 'v:val =~# "(" . escape(s:grp2, ".") . ")"')) == 2)
 call s:ok('zk n: 元の本文は変更しない', index(s:file('j.md'), '前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ') >= 0)
 let s:blocks = s:file('j.md')
-call s:ok('ノートの見出し順: BranchGroup → Group → Context',
-      \ index(s:blocks, 'BranchGroup:') < index(s:blocks, 'Group:')
-      \ && (index(s:blocks, 'Context:') < 0 || index(s:blocks, 'Group:') < index(s:blocks, 'Context:')))
+call s:ok('ノートの見出し順: BranchGroup → Context',
+      \ index(s:blocks, 'BranchGroup:') >= 0
+      \ && (index(s:blocks, 'Context:') < 0 || index(s:blocks, 'BranchGroup:') < index(s:blocks, 'Context:')))
 
 " ------------------------------------------------------------------ 旧 ThisNoteGroup から zk n
 call s:mk('legacy.md', '旧ノート', ['ThisNoteGroup:', '[グループG](g.md)', ''])

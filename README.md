@@ -239,10 +239,10 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 | キー | 動作 |
 | --- | --- |
 | `zn` | ノート作成（`h` カーソル直下 / `Enter` 本文の最後 / `t` 見出しの下 / `c` Context 末尾 / **`b` ChildBranch（直接の子）/ `p` ParentBranch（直接の親）** / `o` 孤立） |
-| `zk` | グループ作成（位置キーは `zn` と同じ。**`g` = カーソル下のリンク 1 本を新しいグループへ**） |
+| `zk` | グループ作成（位置キーは `zn` と同じ） |
 | `zk`（ビジュアル） | 選択範囲を中身にしたグループ |
 | `za` / `zA` / `zp` | クリップボード・ヤンクのリンクを追加（`zA` は表示名つき） |
-| `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ**） |
+| `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ** / **`g` = グループを選んで所属にする（表示名も聞く）**） |
 | `\L` | ファイル名のリンク化 / 選択範囲から新ノート |
 | `\S` | リンク行をよみ順に並べる（**グループでは本文の最後のブロックだけ**） |
 | `\d` | 今日の日記 |
@@ -261,7 +261,7 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 B がグループなら、表示名を入力します。入力欄は空から始まり、空のまま `Enter` で A のタイトル、文字を入れて `Enter` でその文字、`Esc` で取り消し。
 表示名はノートのタイトルやファイル名を変えず、保存・同期しても残ります（自動生成の BackLink とは別もの）。
 
-アプリでは、リンクを `Alt` + クリックすると、開かずにカーソルだけがリンクに移ります（`zk` → `g` などに使います）。
+アプリでは、リンクを `Alt` + クリックすると、開かずにカーソルだけがリンクに移ります。
 
 ---
 
@@ -341,7 +341,7 @@ ESC O B（application cursor Down）のような端末制御コードはGnosis�
 5. 旧テーマ（kalisi）を使い続けるなら、設定画面のテーマの追加に `Plug 'freeo/vim-kalisi'`
 6. 旧 vimrc（`~/.vimrc-simple-yurii-note`）で起動しても動きます（その場合だけ、従来どおり root.txt も更新します）
 
-キーの変更点: 短いキー（`zn`・`zk`・`\l` など）は変わりません。追加は `zk` → `g`・`\l` → `n`・`c` のあとの `Enter` / `t` / `o`。`\S` はグループでは最後のブロックだけを並べます。
+キーの変更点: 短いキー（`zn`・`zk`・`\l` など）は変わりません。追加は `\l` → `n` / `g`（表示名・グループ所属）・`c` のあとの `Enter` / `t` / `o`。`\S` はグループでは最後のブロックだけを並べます。
 
 ---
 
@@ -390,7 +390,7 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
   XFCE Terminal, xterm and WezTerm get the size when a Gnosis window opens. The terminal's own Ctrl + / − / 0 cannot be saved.
 - **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, light / dark,
   themes (standard, custom colors, or `Plug 'author/repo'` themes from GitHub, safely parsed).
-- **New keys**: `zk` → `g` groups the link under the cursor; `\l` → `n` adds a link with a typed display name;
+- **New keys**: `\l` → `g` (or `za` → `g`) puts the note into a group you choose, with a display name; `\l` → `n` adds a link with a typed display name;
   after `c` in `zn` / `zk` / `za` / `\l`, choose how the target links back: `Enter` end of body, `t` end of a chosen section, `o` none.
   `\S` in a group sorts only the last blank-line-separated block.
 - **Migration**: the old vault is imported automatically on first start; old `g:simple_yurii_note_*` settings and `:Yurii*` commands keep working.

@@ -7127,7 +7127,7 @@ function! s:v2_new_interactive(attr) abort
   if empty(a:attr)
     echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch) / g=Group(現ノート)  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch)  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -7164,7 +7164,7 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   " 位置キー以外（旧 p を含む）では何も作らない
-  if l:ch !~? (empty(a:attr) ? '^[ho]$' : '^[hong]$') && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+  if l:ch !~? (empty(a:attr) ? '^[ho]$' : '^[hon]$') && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（h / Enter / t / c / b / p / o のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
@@ -7340,11 +7340,6 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     endif
   elseif l:ch ==# 'n' && !empty(a:attr)
     let l:added = s:append_link_to_branch_group(l:link)
-  elseif l:ch ==# 'g' && !empty(a:attr)
-    " カーソル位置は参照せず、現在開いているノートへのリンクを新グループ本文に置く。
-    let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
-    call s:simple_body_append_to_file(l:file, l:back, 1)
-    let l:added = 1
   elseif l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
     call s:simple_body_append(l:link)  " 本文の最後（### Context の手前に空行1つ）
     let l:added = 1
@@ -7373,17 +7368,12 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       elseif l:choice.mode ==# 'write'
         call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
       endif
-    elseif (!empty(a:attr) && index(['g', 'n'], l:ch) < 0) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    elseif (!empty(a:attr) && l:ch !=# 'n') || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
     endif
-    if l:ch ==# 'g' && !empty(a:attr)
-      " 新グループの本文から元ノートの Group: へ所属を確定してから開く。
-      call s:run_update_one_for_sync(l:cur, 1)
-    else
-      call s:run_update_one_for(l:cur)
-    endif
+    call s:run_update_one_for(l:cur)
   endif
   call gnosis#push_history()
   execute 'edit ' . fnameescape(l:file)
@@ -9367,7 +9357,7 @@ function! s:insert_links_core(links, ...) abort
   echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文末 / ')
         \ . (a:0 > 0 ? gnosis#i18n#tr('t=見出し / ') : '')
         \ . (l:inline ? gnosis#i18n#tr('i=カーソル位置 / n=表示名 / ') : '')
-        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related  (Esc)')
+        \ . gnosis#i18n#tr('c=Context末尾 / b=Branch(子) / p=Parent(親) / r=Related / g=グループ  (Esc)')
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -9463,6 +9453,13 @@ function! s:insert_links_core(links, ...) abort
     endif
     return l:added > 0
   endif
+  if l:ch ==? 'g'
+    " g: 選んだノートを、選んだグループの所属にする（グループ本文にリンクを入れる）。
+    " 今のノートの本文末にも Enter と同じリンクを置く。グループ選びは非同期なので、続きは選択後に行い Done を呼ぶ。
+    let l:Done = a:0 > 0 ? a:1 : function('s:noop')
+    call s:group_pick(function('s:insert_links_into_group', [l:links, l:Done]))
+    return -1
+  endif
   if l:ch ==? 'h'
     let l:ins = line('.')
     for l:lk in reverse(copy(l:links))
@@ -9495,6 +9492,129 @@ function! s:insert_links_under_heading(links, Done, lnum) abort
     endif
   endfor
   call a:Done()
+endfunction
+
+" g の追加先に選べるグループ（attribute: group）のノートの絶対パス。隠しフォルダ（.gnosis など）は見ない。
+function! s:group_note_paths() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root) | return [] | endif
+  let l:out = []
+  for l:p in globpath(l:root, '**/*.md', 0, 1)
+    if l:p =~# '/\.' | continue | endif
+    if s:v2_path_attr(l:p) ==# 'group' | call add(l:out, fnamemodify(l:p, ':p')) | endif
+  endfor
+  return sort(l:out)
+endfunction
+
+" グループを 1 つ選ぶ（fzf。無ければ番号で選ぶ）。選んだ絶対パスを a:Cb に渡す。取り消しなら呼ばない。
+" 今開いているノート自身は候補に出さない。
+function! s:group_pick(Cb) abort
+  let l:cur = expand('%:p')
+  let l:paths = filter(s:group_note_paths(), 'v:val !=# l:cur')
+  if exists('g:gnosis_test_group_pick')
+    let l:pick = remove(g:gnosis_test_group_pick, 0)
+    if !empty(l:pick) | call a:Cb(l:pick) | endif
+    return
+  endif
+  if empty(l:paths)
+    echo gnosis#i18n#tr('Gnosis: 追加先にできるグループ（attribute: group）のノートがありません')
+    return
+  endif
+  if !exists('*fzf#run')
+    let l:menu = [gnosis#i18n#tr('追加するグループを選んでください:')]
+    let l:i = 0
+    for l:p in l:paths
+      let l:i += 1
+      call add(l:menu, printf('%d. %s', l:i, s:group_label(l:p)))
+    endfor
+    let l:n = inputlist(l:menu)
+    if l:n >= 1 && l:n <= len(l:paths) | call a:Cb(l:paths[l:n - 1]) | endif
+    return
+  endif
+  call fzf#run(fzf#wrap({
+        \ 'source': map(copy(l:paths), {_, p -> p . "\t" . s:group_label(p)}),
+        \ 'sink': function('s:group_pick_sink', [a:Cb]),
+        \ 'options': '--delimiter="\t" --with-nth=2 --accept-nth=1'
+        \   . ' --prompt=' . shellescape(gnosis#i18n#tr('グループ> ')),
+        \ }))
+endfunction
+
+function! s:group_pick_sink(Cb, path) abort
+  if !empty(a:path) | call a:Cb(a:path) | endif
+endfunction
+
+" グループの表示名（タイトル。空ならファイル名）
+function! s:group_label(path) abort
+  let l:t = s:get_title(a:path)
+  return empty(l:t) ? fnamemodify(a:path, ':t:r') : l:t
+endfunction
+
+" g の本体: 選んだノートを a:gfp（グループ）の本文に、表示名つきのリンクで入れる（＝所属）。
+" 表示名は n と同じく 1 本ずつ聞く（Esc で全部取り消し、何も書かない）。
+" 今のノートの本文末には Enter と同じリンクを置く。入れ終わったら Done を呼ぶ。
+function! s:insert_links_into_group(links, Done, gfp) abort
+  let l:gfp = fnamemodify(a:gfp, ':p')
+  let l:gdir = fnamemodify(l:gfp, ':h')
+  let l:gb = bufnr(l:gfp)
+  if l:gb > 0 && getbufvar(l:gb, '&modified')
+    echo 'Gnosis: ' . gnosis#i18n#tr('開いているグループに未保存の変更があります。先に保存してください')
+    return
+  endif
+  let l:members = []
+  for l:lk in a:links
+    let l:tg = s:extract_target(l:lk)
+    let l:fp = fnamemodify(gnosis#resolve_link(substitute(l:tg, '#.*$', '', '')), ':p')
+    if l:fp ==# l:gfp
+      continue
+    endif
+    let l:title = s:get_title(l:fp)
+    if empty(l:title)
+      let l:title = get(s:extract_markdown_link(l:lk), 'text', fnamemodify(l:fp, ':t:r'))
+    endif
+    let l:r = s:ask_display_name(l:title)
+    if !l:r.ok
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+      return
+    endif
+    call add(l:members, {'fp': l:fp, 'link': s:make_link_from_dir(l:fp, s:md_link_text(l:r.name), l:gdir)})
+  endfor
+  " グループ本文に既にある相手は足さない（同じリンクを二重に持たない）
+  for l:m in l:members
+    let l:dup = 0
+    for l:line in readfile(l:gfp)
+      let l:old = matchstr(l:line, '\](\zs[^)]\+\ze)')
+      if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, l:gdir), ':p') ==# l:m.fp
+        let l:dup = 1
+        break
+      endif
+    endfor
+    if !l:dup
+      call s:simple_body_append_to_file(l:gfp, l:m.link, 1)
+    endif
+  endfor
+  " 今のノートの本文末に、選んだリンクを Enter と同じく置く
+  let l:cur_added = 0
+  for l:lk in a:links
+    if s:insert_link_before_up_note(l:lk)
+      let l:cur_added += 1
+    endif
+  endfor
+  if l:cur_added
+    call s:ensure_blank_before_up()
+  endif
+  echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . s:group_label(l:gfp)
+  " 今のノートを保存（Done）してから、相手の Group: をグループ本文から確定させる（自分自身は対象外）。
+  " 同期は外部でファイルを書き換えるので、保存の後に行う（前だと未保存の変更と衝突する）。
+  call a:Done()
+  for l:m in l:members
+    if l:m.fp !=# expand('%:p')
+      call s:run_update_one_for_sync(l:m.fp, 1)
+    endif
+  endfor
+  " 同期が今のノートを書き換えたことがあるので、未保存の変更が無ければ読み直す
+  if !&modified
+    silent! edit
+  endif
 endfunction
 
 " a:Done があれば、入れ終わったあと（t のときは見出しを選んだあと）に呼ぶ。
