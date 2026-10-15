@@ -1,6 +1,6 @@
 " リンク操作の回帰網（test/link_ops_net.sh から呼ぶ）。
 "   zn / zk / za / \l の c → Enter / t / o、グループへの表示名、Esc の取り消し、
-"   \l → n（表示名を入力）、zk → g（現ノートを新グループに登録）・zk → n（ThisNoteGroup に登録）、グループの \S。
+"   \l → n（表示名を入力）、zk → g（現ノートを新グループに登録）・zk → n（BranchGroup と ChildBranch に登録）、グループの \S。
 " 結果は $LINKOPS_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
 set nomore
 let s:work = $LINKOPS_WORK
@@ -214,7 +214,7 @@ call s:ok('zk g: 元の本文は変更しない', index(s:file('j.md'), '前の�
 call s:ok('zk g: 元ノートの Group: に自動登録', index(s:file('j.md'), 'Group:') >= 0 && s:has('j.md', '(' . s:grp . ')'))
 call s:ok('zk g: 旧 ### Group を生成しない', index(s:file('j.md'), '### Group') < 0)
 
-" ------------------------------------------------------------------ zk → n（現在のノートの ThisNoteGroup: に登録）
+" ------------------------------------------------------------------ zk → n（現在のノートの BranchGroup: に登録）
 execute 'edit ' . fnameescape(s:v . '/j.md')
 call cursor(8, 1)
 let s:before = s:files()
@@ -224,12 +224,21 @@ call gnosis#v2_new_group()
 stopinsert
 let s:grp2 = s:newest_except(s:before)
 call s:ok('zk n: グループができる', !empty(s:grp2) && s:has(s:grp2, '^attribute: group$'))
-call s:ok('zk n: 元ノートの ThisNoteGroup: に登録', index(s:file('j.md'), 'ThisNoteGroup:') >= 0 && s:has('j.md', '(' . s:grp2 . ')'))
-call s:ok('zk n: Context に現ノートを持つ', !empty(s:grp2) && s:has(s:grp2, '^\[ノートJ\](j\.md)$'))
+call s:ok('zk n: 元ノートの BranchGroup: に登録', index(s:file('j.md'), 'BranchGroup:') >= 0 && s:has('j.md', '(' . s:grp2 . ')'))
+call s:ok('zk n: 新しいグループの ParentBranch に J', !empty(s:grp2)
+      \ && index(s:file(s:grp2), '### ParentBranch') >= 0
+      \ && s:has(s:grp2, '^\[ノートJ\](j\.md)$'))
+call s:ok('zk n: 元ノート J の ChildBranch にグループ', index(s:file('j.md'), '### ChildBranch') >= 0
+      \ && s:has('j.md', '(' . s:grp2 . ')'))
+call s:ok('zk n: Context への余分な逆リンクを作らない',
+      \ index(s:file(s:grp2), 'Context:') < 0 && index(s:file(s:grp2), '### Context') < 0)
+call s:ok('zk n: BranchGroup と Group のリンクが重複しない',
+      \ index(s:file('j.md'), 'Group:') >= 0 && s:has('j.md', '(' . s:grp2 . ')')
+      \ && len(filter(copy(s:file('j.md')), 'v:val =~# "(" . escape(s:grp2, ".") . ")"')) == 2)
 call s:ok('zk n: 元の本文は変更しない', index(s:file('j.md'), '前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ') >= 0)
 let s:blocks = s:file('j.md')
-call s:ok('ノートの見出し順: ThisNoteGroup → Group → Context',
-      \ index(s:blocks, 'ThisNoteGroup:') < index(s:blocks, 'Group:')
+call s:ok('ノートの見出し順: BranchGroup → Group → Context',
+      \ index(s:blocks, 'BranchGroup:') < index(s:blocks, 'Group:')
       \ && (index(s:blocks, 'Context:') < 0 || index(s:blocks, 'Group:') < index(s:blocks, 'Context:')))
 
 " ------------------------------------------------------------------ グループの \S（最後のブロックだけ）
