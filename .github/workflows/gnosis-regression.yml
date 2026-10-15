@@ -45,7 +45,7 @@ jobs:
       - name: Test tab management, outline visual range and mode readability
         run: sh test/work_tabs_outline_net.sh
       - name: Test saved font settings and terminal launch arguments
-        run: sh -x test/termfont_net.sh
+        run: sh test/termfont_net.sh
       - name: Test autosave versus asynchronous sync while editing
         run: sh test/autosync_dirty_guard_net.sh
       - name: Test diary hierarchy across year rollover
