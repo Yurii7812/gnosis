@@ -1703,6 +1703,11 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     if links:
         blocks += [CONTEXT_HEAD] + links
     if not blocks:
+        # Context ブロックが空になった際、その位置に残る余分な空行 1 つだけを除く。
+        # 新規ノートの入力用余白は減らさない。
+        at = n.get("ctx_at", -1)
+        if 0 <= at < len(body) and at > 0 and not body[at].strip() and not body[at - 1].strip():
+            del body[at]
         return body
 
     flags = _fenced(body)
