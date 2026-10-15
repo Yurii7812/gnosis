@@ -7074,13 +7074,13 @@ function! gnosis#add_to_parent() abort
   echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
-" zk n は開いているノートの ThisNoteGroup: へ追加。
-function! s:append_link_to_thisnote_group(link) abort
+" zk n は開いているノートの BranchGroup: へ追加。
+function! s:append_link_to_branch_group(link) abort
   let l:lines = getline(1, '$')
   let l:flags = s:fence_flags(l:lines)
   let l:head = -1
   for l:i in range(0, len(l:lines) - 1)
-    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'ThisNoteGroup:'
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'BranchGroup:'
       let l:head = l:i
       break
     endif
@@ -7108,7 +7108,7 @@ function! s:append_link_to_thisnote_group(link) abort
       endif
     endfor
     if l:h1 < 0 | return 0 | endif
-    call extend(l:lines, ['', 'ThisNoteGroup:', a:link, ''], l:h1 + 1)
+    call extend(l:lines, ['', 'BranchGroup:', a:link, ''], l:h1 + 1)
   endif
   call s:replace_buffer_lines(l:lines)
   return 1
@@ -7125,7 +7125,7 @@ function! s:v2_new_interactive(attr) abort
   if empty(a:attr)
     echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=リンク無し(孤立)  (Esc/q キャンセル)')
   else
-    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=ThisNoteGroup / g=Group(現ノート)  (Esc/q キャンセル)')
+    echo gnosis#i18n#tr('h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch) / g=Group(現ノート)  (Esc/q キャンセル)')
   endif
   let l:ch = s:getkey()
   redraw
@@ -7291,7 +7291,8 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " zk / o / p / index.md を起点とする通常作成は自動 Branch の対象外。
   let l:auto_branch = empty(a:attr) && fnamemodify(l:cur, ':t') !=# 'index.md'
         \ && (index(['h', 't', 'c'], tolower(l:ch)) >= 0 || l:ch ==# "\<CR>" || l:ch ==# "\<NL>")
-  if l:auto_branch && !gnosis#branch#can_parent_here()
+  let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
+  if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
     return
   endif
 
@@ -7307,7 +7308,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
   " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
-  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch
+  if l:ch ==? 'b' || l:ch ==? 'p' || l:auto_branch || l:zk_branch_group
     " p のみ逆向き。b と zn の自動関係は今のノートが親。
     let l:br = l:ch ==? 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
     if !get(l:br, 'ok', 0)
@@ -7336,7 +7337,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       let l:added = 1
     endif
   elseif l:ch ==# 'n' && !empty(a:attr)
-    let l:added = s:append_link_to_thisnote_group(l:link)
+    let l:added = s:append_link_to_branch_group(l:link)
   elseif l:ch ==# 'g' && !empty(a:attr)
     " カーソル位置は参照せず、現在開いているノートへのリンクを新グループ本文に置く。
     let l:back = s:make_link_from_dir(l:cur, l:cur_title, fnamemodify(l:file, ':h'))
@@ -7370,7 +7371,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       elseif l:choice.mode ==# 'write'
         call s:yank_filename(l:cur)   " w: 新ノートには自動で書かない。元のノートのファイル名をヤンクして、新ノートを自分で編集する
       endif
-    elseif (!empty(a:attr) && l:ch !=# 'g') || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    elseif (!empty(a:attr) && index(['g', 'n'], l:ch) < 0) || l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
       " zn → Enter は派生元を Context にも記録する（ParentBranch と独立）。
       " h/t は配置のみ、c は既存の文脈指定を維持。zk の既存の Context 動作も維持する。
       call s:simple_add_parent(l:file, l:cur, l:cur_title)
