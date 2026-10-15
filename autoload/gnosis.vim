@@ -6851,12 +6851,44 @@ endfunction
 "   通常の zn は新ノートとの Branch 関係も記録する。zk は明示的な b/p 以外 Branch を付けない。
 "   あとから手で グループ / きっかけ: などを書く。`:` / `;` は sync がそのまま扱う。
 "   位置キー: h=カーソル直下 / Enter=Child末尾 / o=リンク無し(孤立) / p=Parent末尾。
+" 本文冒頭のブロック（Group: / Context: / BranchGroup: と、続くリンク行）の、最後のリンク行の index（0 始まり）。
+" 無ければ -1。本文のリンクを足すとき、このすぐ下には空行を 1 つ挟む（挟まないと、同期がそのリンクを
+" ブロックの一部（所属・親）として読んでしまう）。
+function! s:top_block_last_index(lines) abort
+  let l:flags = s:fence_flags(a:lines)
+  let l:h1 = -1
+  for l:i in range(0, len(a:lines) - 1)
+    if !l:flags[l:i] && a:lines[l:i] =~# '^#\s'
+      let l:h1 = l:i
+      break
+    endif
+  endfor
+  if l:h1 < 0 | return -1 | endif
+  let l:i = l:h1 + 1
+  let l:last = -1
+  while 1
+    while l:i < len(a:lines) && trim(a:lines[l:i]) ==# '' | let l:i += 1 | endwhile
+    if l:i < len(a:lines) && trim(a:lines[l:i]) =~# '^\%(Group\|Context\|BranchGroup\|ThisNoteGroup\):$'
+      let l:i += 1
+      while l:i < len(a:lines) && a:lines[l:i] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        let l:last = l:i
+        let l:i += 1
+      endwhile
+    else
+      break
+    endif
+  endwhile
+  return l:last
+endfunction
+
 " simple: 本文の最後（### Context の手前）へ link を、空行 1 つを挟んで置く
 function! s:simple_body_append(link) abort
+  let l:blk = s:top_block_last_index(getline(1, '$'))
   " 本文の終わり = 最初の関係の節の見出し（Context / Group / Related / BackLink のうち最初のもの）
   let l:up = s:first_section_line()
   if l:up == 0
-    call append(line('$'), a:link)
+    " ブロック（Group: など）のすぐ下なら、空行を 1 つ挟む
+    call append(line('$'), l:blk == line('$') - 1 ? ['', a:link] : [a:link])
     return
   endif
   " ### Context の直前（本文の最後）にリンクを挿入。
@@ -6864,7 +6896,7 @@ function! s:simple_body_append(link) abort
   " Enter で連続で置いても空行が累積しない。既存の空行はそのまま。
   let l:prev = l:up - 1
   if l:prev >= 1 && trim(getline(l:prev)) !=# ''
-        \ && (trim(getline(l:prev)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:prev))
+        \ && (trim(getline(l:prev)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:prev) || l:blk == l:prev - 1)
     call append(l:prev, ['', a:link])
   else
     call append(l:prev, a:link)
@@ -9791,12 +9823,14 @@ endfunction
 
 function! s:insert_link_before_up_note(link) abort
   let l:up = s:first_section_line()
+  let l:blk = s:top_block_last_index(getline(1, '$'))
   if l:up <= 0
     " 見張りが無いとき（index.md など）は末尾へ
     if s:buffer_has_link(a:link)
       return 0
     endif
-    call append(line('$'), a:link)
+    " ブロック（Group: など）のすぐ下なら、空行を 1 つ挟む
+    call append(line('$'), l:blk == line('$') - 1 ? ['', a:link] : [a:link])
     return 1
   endif
 
@@ -9807,7 +9841,7 @@ function! s:insert_link_before_up_note(link) abort
   let l:ins = l:up - 1
   " 本文末尾が散文のときだけ、空行を 1 つ開けてからリンクを置く
   if l:ins >= 1 && trim(getline(l:ins)) !=# ''
-        \ && (trim(getline(l:ins)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:ins))
+        \ && (trim(getline(l:ins)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:ins) || l:blk == l:ins - 1)
     call append(l:ins, '')
     let l:ins += 1
   endif
@@ -14255,7 +14289,8 @@ function! s:diary_op_add_raw(link, section, lines) abort
         return l:lines
       endif
     endfor
-    if l:end > 0 && trim(l:lines[l:end - 1]) !=# '' && l:lines[l:end - 1] !~# ')\s*$'
+    if l:end > 0 && trim(l:lines[l:end - 1]) !=# ''
+          \ && (l:lines[l:end - 1] !~# ')\s*$' || s:top_block_last_index(l:lines) == l:end - 1)
       call insert(l:lines, '', l:end)
       let l:end += 1
     endif

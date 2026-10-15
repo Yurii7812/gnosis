@@ -1436,9 +1436,13 @@ def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bo
 
 
 def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
-    """新しい Group: と旧 ### Group をリンクの連続ブロックとして読む。
+    """新しい Group: と旧 ### Group を読む。
 
-    後ろに本文が続いても Group の内容には取り込まない。
+    Group: は「このノートが属するグループ」の一覧。範囲は、見出しの直後に**続けて**並ぶリンク行だけ
+    （空行・文章・別の見出しで終わる）。空行より後ろのリンクは本文で、Group: には入れない。
+    本文の中でリンクされた相手は、相手がグループなら「その本文に自分がある」ので、同期が Group: を足す
+    （グループの Group: に書かれた相手は、そのグループの親であって、メンバーではない）。
+    旧 `### Group`（末尾の節）だけは、従来どおり次の見出しまでの空行つきのリンク群を読む。
     単独リンク・区切り空行以外の本文は残す（移行時に失わない）。
     """
     flags = _fenced(lines)
@@ -1446,9 +1450,17 @@ def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
         if flags[i] or ln.strip() not in (GROUP_MARK, LEGACY_GROUP_MARK):
             continue
         j = i + 1
-        while j < len(lines) and (not lines[j].strip() or _SIMPLE_LINK_LINE_RE.match(lines[j])):
+        if ln.strip() == LEGACY_GROUP_MARK:
+            while j < len(lines) and (not lines[j].strip() or _SIMPLE_LINK_LINE_RE.match(lines[j])):
+                j += 1
+            return lines[i + 1:j], lines[:i] + lines[j:]
+        while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
             j += 1
-        return lines[i + 1:j], lines[:i] + lines[j:]
+        links = lines[i + 1:j]
+        # ブロックと本文のあいだの区切りの空行は、書き戻しが作り直すので取り除く
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        return links, lines[:i] + lines[j:]
     return [], lines
 
 

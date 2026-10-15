@@ -72,5 +72,45 @@ call s:ok('二重の節: 1 つにまとまる', s:count(s:ul, '^## 今日のノ�
 call s:ok('二重の節: リンクは重複なく全部残る（A B C D）', s:count(s:ul, '(a.md)') == 1 && s:count(s:ul, '(b.md)') == 1 && s:count(s:ul, '(c.md)') == 1 && s:count(s:ul, '(d.md)') == 1, string(s:ul))
 call s:ok('二重の節: Group: は先頭のまま', index(s:ul, 'Group:') >= 0 && index(s:ul, '[Index](index.md)') == index(s:ul, 'Group:') + 1)
 
+" ------------------------------------------------------------------ 月・日記のグループ: 子のリンクは本文（Group: の下に空行を挟む）。Context: を作らない
+function! s:find_title(title) abort
+  for l:f in glob(s:v . '/*.md', 1, 1)
+    if index(readfile(l:f), 'title: ' . a:title) >= 0 | return l:f | endif
+  endfor
+  return ''
+endfunction
+let s:mf = s:find_title('2026-10')
+let s:ml2 = filereadable(s:mf) ? readfile(s:mf) : []
+let s:gi = index(s:ml2, 'Group:')
+call s:ok('月のグループ: Group: の次に親、空行を 1 つ挟んで子（今日の日記）が本文に入る',
+      \ s:gi >= 0 && s:ml2[s:gi + 2] ==# '' && s:ml2[s:gi + 3] =~# '^\[2026-10-15-[A-Z][A-Z]\](', string(s:ml2))
+call s:ok('月のグループ: Context: を作らない', index(s:ml2, 'Context:') < 0, string(s:ml2))
+call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))
+call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))
+let s:ml3 = readfile(s:mf)
+call s:ok('同期のあとも、月のグループに Context: が出来ず、子は本文のまま', index(s:ml3, 'Context:') < 0 && s:ml3 ==# s:ml2, string(s:ml3))
+
+" Group: ブロックだけ（本文なし）のノートに Enter でリンクを足す → Group: の下に空行を 1 つ挟む
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 本文なし', '---', '', '# 本文なし', '', 'Group:', '[Index](index.md)'], s:v . '/blk.md')
+execute 'edit ' . fnameescape(s:v . '/blk.md')
+let g:gnosis_test_keys = ["\r"]
+call gnosis#insert_links_pick(['[相手](other.md)'], getpos('.'))
+let s:bl = getline(1, '$')
+call s:ok('本文なしのノート: Group: の下に空行を挟んで本文のリンク', s:bl[-3 :] ==# ['[Index](index.md)', '', '[相手](other.md)'], string(s:bl))
+silent! write
+
+" zk → Enter（グループを作る）: 元のノートが Group: ブロックだけでも、新しいグループへのリンクは空行を挟んで本文に入る
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 元', '---', '', '# 元', '', 'Group:', '[Index](index.md)'], s:v . '/src.md')
+execute 'edit ' . fnameescape(s:v . '/src.md')
+sleep 3300m
+let g:gnosis_test_keys = ["\r"]
+call gnosis#v2_new_group()
+stopinsert
+silent! write
+let s:sl = readfile(s:v . '/src.md')
+call s:ok('zk Enter: Group: だけのノートでも、新しいグループへのリンクは空行を挟んで本文に入る',
+      \ len(s:sl) >= 3 && s:sl[-3] ==# '[Index](index.md)' && s:sl[-2] ==# '' && s:sl[-1] =~# '^\[\d\{12}\](\d\{12}\.md)$', string(s:sl))
+call s:ok('zk Enter: 元のノートに Context: が出来ない', index(s:sl, 'Context:') < 0, string(s:sl))
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
