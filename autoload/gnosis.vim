@@ -7080,8 +7080,10 @@ function! s:append_link_to_branch_group(link) abort
   let l:flags = s:fence_flags(l:lines)
   let l:head = -1
   for l:i in range(0, len(l:lines) - 1)
-    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'BranchGroup:'
+    if !l:flags[l:i] && index(['BranchGroup:', 'ThisNoteGroup:'], trim(l:lines[l:i])) >= 0
       let l:head = l:i
+      " 旧ノートの見出しをその場で移行して、新旧 2 つのブロックを作らない。
+      let l:lines[l:i] = 'BranchGroup:'
       break
     endif
   endfor
