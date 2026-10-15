@@ -391,15 +391,15 @@ let s:lk = index(s:nl, '[Index](index.md)')
 call s:ok('新ノート: ブロックの下は 空行 / カーソル行 / 空行', s:lk >= 0 && s:nl[s:lk + 1 :] ==# ['', '', ''], string(s:nl))
 call s:ok('新ノート: カーソルは真ん中の空行', line('.') == s:lk + 3, line('.') . ' vs ' . (s:lk + 3))
 
-" ------------------------------------------------------------------ \D（日記でなくても本文の一番下から書き始める）
+" ------------------------------------------------------------------ zw（日記でなくても本文の一番下から書き始める）
 call s:mk('wb.md', 'ノートWB', ['最初の文。', '最後の文。', '', '', '', '### Related', '[ノートA](a.md)'])
 execute 'edit ' . fnameescape(s:v . '/wb.md')
 call gnosis#write_at_bottom()
 stopinsert
 let s:wl = getline(1, '$')
 let s:li = index(s:wl, '最後の文。')
-call s:ok('\D: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', '### Related'], string(s:wl))
-call s:ok('\D: カーソルは最後の文の 2 行下', line('.') == s:li + 3, line('.') . ' vs ' . (s:li + 3))
+call s:ok('zw: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', '### Related'], string(s:wl))
+call s:ok('zw: カーソルは最後の文の 2 行下', line('.') == s:li + 3, line('.') . ' vs ' . (s:li + 3))
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

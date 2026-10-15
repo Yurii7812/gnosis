@@ -69,7 +69,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `Alt` + click on a link in the app … moves only the cursor onto the link without opening it (to move only the cursor onto a link)
 - The app also draws tables (`| a | b |`) and `<img src="…" width="50%">`. Inside a table or in insert mode the cursor line stays plain text
 - `\d` … open today's diary (created if missing; `:GnosisToday`). Notes you create are added to the diary's "today's notes" automatically (`:GnosisDiaryUpdate` updates all diaries; `:GnosisDiaryAdopt` registers the current note as the diary of its date)
-- `\D` … start writing at the bottom of the body of the open note (any note, not only a diary): the cursor goes on the line after one blank line below the last sentence (with one more blank line below it)
+- `zw` … start writing at the bottom of the body of the open note (any note, not only a diary): the cursor goes on the line after one blank line below the last sentence (with one more blank line below it)
 - `\I` … change the size of image markup (visual: the selection)
 
 ## Expanding, images and more

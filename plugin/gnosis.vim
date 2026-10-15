@@ -438,8 +438,8 @@ nnoremap <silent> \tdr :TDR<CR>
 nnoremap <silent> \tdc :TDC<CR>
 nnoremap <silent> \ua  :UpdateAll<CR>
 nnoremap <silent> \d   <Cmd>call gnosis#diary_today()<CR>
-" \D … 今のノート（日記でなくてもよい）の本文の一番下、空行を 1 つ空けたところから書き始める。
-nnoremap <silent> \D   <Cmd>call gnosis#write_at_bottom()<CR>
+" zw … 今のノート（日記でなくてもよい）の本文の一番下、空行を 1 つ空けたところから書き始める。
+nnoremap <silent> zw  <Cmd>call gnosis#write_at_bottom()<CR>
 " \\r はリンクの内容を触らず、Vim側の検索/matchハイライトと色を再適用。
 nnoremap <silent> \r   <Cmd>call gnosis#color#refresh()<CR>
 

@@ -14865,7 +14865,7 @@ function! s:new_note_gap(file) abort
   return l:last + 3
 endfunction
 
-" \D … 今開いているノート（日記でなくてもよい）の本文の一番下から書き始める。
+" zw … 今開いているノート（日記でなくてもよい）の本文の一番下から書き始める。
 " 本文の最後の文のあとに空行を 1 つ空けて、その次の行にカーソルを置く（その下にも空行を 1 つ）。
 function! gnosis#write_at_bottom() abort
   if &buftype !=# '' || !&modifiable
