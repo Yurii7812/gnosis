@@ -101,6 +101,8 @@ DOWN_MARK = "### BackLink"
 # 旧 `### Parent` は parse だけが読み、sync が `### Context` へ移行する。
 CONTEXT_MARK = "### Context"
 GROUP_MARK = "Group:"
+BRANCH_GROUP_HEAD = "BranchGroup:"
+LEGACY_THIS_NOTE_GROUP_HEAD = "ThisNoteGroup:"  # 読み込み互換
 LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統一する。
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
@@ -1413,6 +1415,26 @@ def _simple_parse(path: Path) -> dict:
     return _simple_parse_text(path, path.read_text(encoding="utf-8"))
 
 
+def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bool]:
+    """BranchGroup（旧 ThisNoteGroup）の直下にあるリンクだけを抜き出す。
+
+    コードブロック中の同名文字列や、それ以降の自由本文はそのまま保つ。
+    """
+    flags = _fenced(lines)
+    for i, ln in enumerate(lines):
+        if flags[i] or ln.strip() not in (BRANCH_GROUP_HEAD, LEGACY_THIS_NOTE_GROUP_HEAD):
+            continue
+        j = i + 1
+        links: list[str] = []
+        while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
+            links.append(lines[j])
+            j += 1
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        return links, lines[:i] + lines[j:], True
+    return [], lines, False
+
+
 def _take_group_block(lines: list[str]) -> tuple[list[str], list[str]]:
     """新しい Group: と旧 ### Group をリンクの連続ブロックとして読む。
 
@@ -1435,7 +1457,10 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # `### Parent` より前の空行（本文の途中の余白）は残る。
     fm, rest = _split_front_matter(text.rstrip("\n").split("\n"))
     title = _fm_title(fm) or path.stem
-    # 新形式の Context ブロックを先に取り出す（本文の位置 ctx_at を覚えて、書き戻すとき同じ場所へ戻す）
+    # Group / BranchGroup の後ろに Context がある形式でも、先頭のブロックを
+    # 順に取り除いてから Context を読む。旧 ThisNoteGroup も受け付ける。
+    group_block, rest = _take_group_block(rest)
+    branch_links, rest, has_branch_group = _take_branch_group_block(rest)
     ctx: list[str] = []
     ctx_at = -1
     blk = find_context_block(rest)
@@ -1443,7 +1468,6 @@ def _simple_parse_text(path: Path, text: str) -> dict:
         ctx = rest[blk[0] + 1:blk[1] + 1]
         ctx_at = blk[0]
         rest = rest[:blk[0]] + rest[blk[1] + 1:]
-    group_block, rest = _take_group_block(rest)
     sec: dict[str, list[str]] = {k: [] for k in ("body", "parent", "group", "related", "back",
                                                   "pbranch", "cbranch")}
     heads = {CONTEXT_MARK: "parent", UP_MARK: "parent",  # UP_MARK = 旧 `### Parent`
@@ -1459,6 +1483,10 @@ def _simple_parse_text(path: Path, text: str) -> dict:
             cur = heads[s]
             continue
         sec[cur].append(ln)
+    # キャッシュ形式を変えず、BranchGroup は正規化された本文の一部として保存する。
+    # 書き戻し時に必ず H1 の直後へ移す。
+    if has_branch_group:
+        sec["body"] += [BRANCH_GROUP_HEAD] + branch_links
     # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
@@ -1670,34 +1698,21 @@ _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
-    """本文冒頭のブロックを ThisNoteGroup: → Group: → Context: の順で出力する。
+    """本文冒頭のブロックを BranchGroup: → Group: → Context: の順で出力する。
 
-    ThisNoteGroup はユーザー管理のリンク。Group は所属（手動＋
-    attribute: group のノート本文からの自動判定）、Context は文脈。
-    旧 ### Group は parse で読み取り、必ず Group: に移行する。
+    BranchGroup は直接のブランチで派生したグループ（旧 ThisNoteGroup）。
+    Group は所属（手動＋自動）、Context は文脈。
     """
     body = list(n["body"])
     links = [ln for ln in links if ln.strip()]
     groups = [ln for ln in (group_lines or []) if ln.strip()]
 
-    # ThisNoteGroup: を本文中から回収し、ほかのブロックと順序を統一する。
-    this_group = []
-    found_this_group = False
-    flags = _fenced(body)
-    for i, ln in enumerate(body):
-        if flags[i] or ln.strip() != "ThisNoteGroup:":
-            continue
-        found_this_group = True
-        j = i + 1
-        while j < len(body) and _SIMPLE_LINK_LINE_RE.match(body[j]):
-            this_group.append(body[j])
-            j += 1
-        del body[i:j]
-        break
+    # BranchGroup と旧 ThisNoteGroup を回収して先頭へ正規化する。
+    branch_links, body, found_branch_group = _take_branch_group_block(body)
 
     blocks: list[str] = []
-    if found_this_group:
-        blocks += ["ThisNoteGroup:"] + this_group
+    if found_branch_group:
+        blocks += [BRANCH_GROUP_HEAD] + branch_links
     if groups:
         blocks += [GROUP_MARK] + groups
     if links:
@@ -1987,6 +2002,9 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             n["_leftover"] = []
         parent_lines = _preserve_parent(parent_src, p, res, titles)
         parent_lines = _prune_dangling(parent_lines, p, res)
+        branch_links, _, _ = _take_branch_group_block(n["body"])
+        branch_targets = {rp for _display, tg in _links_from(branch_links)
+                          for rp in [res(tg, dirs[p])] if rp is not None}
         group_lines = _preserve_parent(n["group"], p, res, titles)
         group_lines = _prune_dangling(group_lines, p, res)
         parent_set: set[Path] = set()
@@ -2069,7 +2087,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 continue
             desired.append(s)
         for s in auto_group:
-            if s in parent_set:
+            if s in parent_set or s in branch_targets:
                 continue
             parent_set.add(s)
             group_lines.append(f"[{titles[s]}]({_rel(p.parent, s)})")
@@ -2105,7 +2123,8 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         for ln in group_lines:
             if _link_kind(ln) is True:
                 rp = res(_link_target(ln), dirs[p])
-                if rp in seen_g:
+                # BranchGroup にあるグループを通常 Group に重複表示しない。
+                if rp in branch_targets or rp in seen_g:
                     continue
                 seen_g.add(rp)
             dedup.append(ln)
