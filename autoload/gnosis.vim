@@ -15370,6 +15370,12 @@ function! s:new_note_gap(file) abort
   let l:lines = readfile(a:file)
   let l:h1 = match(l:lines, '^#\s\+')
   if l:h1 < 0 | return 0 | endif
+  " カーソルが画面の一番下に張り付かないよう、画面の上から 4 割ほどの高さに置く
+  " （日記の節は末尾にあるので、末尾より下に空白が出てもよい）
+  let l:view = winsaveview()
+  let l:view.topline = max([1, l:n - 2 - winheight(0) * 2 / 5])
+  let l:view.topfill = 0
+  call winrestview(l:view)
   let l:i = l:h1 + 1
   let l:last = -1
   while 1
