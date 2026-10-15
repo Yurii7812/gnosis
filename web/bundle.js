@@ -33327,7 +33327,7 @@ ${h3.join(`
       h2("div", { class: "l-hint", text: t2("web.zoom_note") })
     );
   }
-  var COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+  var COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline", "hintfg", "hintbg"];
   var HUES = [[-1, 0], [0, 0.62], [28, 0.72], [50, 0.78], [130, 0.45], [175, 0.5], [212, 0.62], [275, 0.45]];
   var LIGHTS = [0.12, 0.22, 0.34, 0.46, 0.58, 0.7, 0.82, 0.92, 0.98];
   function normHex(text) {
@@ -33377,6 +33377,8 @@ ${h3.join(`
     const pal = (app ? await G2.appPalette(draft) : await G2.palette(draft)) || {};
     const colors = {};
     for (const k of COLOR_KEYS) colors[k] = normHex(cur[k]) || normHex(pal[k]) || "#808080";
+    if (!normHex(cur.hintfg) && !normHex(pal.hintfg)) colors.hintfg = colors.bg;
+    if (!normHex(cur.hintbg) && !normHex(pal.hintbg)) colors.hintbg = normHex(pal.muted) || mixHex(colors.fg, colors.bg, 0.35);
     editing = { target, name: name2 || (app ? "my-app-theme" : "my-theme"), colors, orig: { ...colors }, key: "bg" };
     message = "";
     render();
@@ -33434,13 +33436,15 @@ ${h3.join(`
       sel: c.selection,
       cur: c.cursorline,
       dim: mixHex(c.fg, c.bg, 0.35),
-      strong: mixHex(c.fg, dark ? "#ffffff" : "#000000", 0.6)
+      strong: mixHex(c.fg, dark ? "#ffffff" : "#000000", 0.6),
+      hintfg: c.hintfg,
+      hintbg: c.hintbg
     };
     for (const [k, v2] of Object.entries(vars)) pv.style.setProperty("--pv-" + k, v2);
     const box = $2("e-contrast");
     if (box) {
-      box.replaceChildren(...[["fg", t2("settings.color.fg")], ["link", t2("settings.color.link")], ["heading", t2("settings.color.heading")]].map(([k, label]) => {
-        const r = contrastOf(c[k], c.bg);
+      box.replaceChildren(...[["fg", t2("settings.color.fg")], ["link", t2("settings.color.link")], ["heading", t2("settings.color.heading")], ["hintfg", t2("settings.color.hintfg")]].map(([k, label]) => {
+        const r = contrastOf(c[k], k === "hintfg" ? c.hintbg : c.bg);
         return h2("div", { class: r >= 4.5 ? "e-ok" : "e-warn", text: `${label}  ${r.toFixed(1)} : 1  ${r >= 4.5 ? "\u2713" : t2("theme_edit.low_contrast")}` });
       }));
     }
@@ -33530,12 +33534,12 @@ ${h3.join(`
       h2("div", { class: "pv-h1 pv-h" }, h2("span", { class: "pv-dim", text: "# " }), "\u690D\u7269\u306B\u3064\u3044\u3066"),
       h2("p", {}, "\u690D\u7269", h2("span", { class: "pv-sel", text: "\u306B\u3064\u3044\u3066\u306E\u60C5\u5831" }), "\u3092\u307E\u3068\u3081\u308B\u3002"),
       h2("p", { text: "\u95A2\u9023\u3059\u308B\u60C5\u5831\uFF1A" }),
-      h2("div", { class: "pv-cur" }, h2("a", { text: "\u30ED\u30FC\u30BA\u30DE\u30EA\u30FC" }), h2("span", { class: "pv-dim", text: "  \u2190 " + t2("theme_edit.cursor_line") })),
-      h2("div", {}, h2("a", { text: "\u30EC\u30E2\u30F3\u30D0\u30FC\u30E0" })),
+      h2("div", { class: "pv-cur" }, h2("span", { class: "pv-hint", text: "1" }), h2("a", { text: "\u30ED\u30FC\u30BA\u30DE\u30EA\u30FC" }), h2("span", { class: "pv-dim", text: "  \u2190 " + t2("theme_edit.cursor_line") })),
+      h2("div", {}, h2("span", { class: "pv-hint", text: "2" }), h2("a", { text: "\u30EC\u30E2\u30F3\u30D0\u30FC\u30E0" })),
       h2("div", { class: "pv-h" }, h2("span", { class: "pv-dim", text: "### " }), "Context"),
-      h2("div", {}, h2("a", { text: "\u30CF\u30FC\u30D6" })),
+      h2("div", {}, h2("span", { class: "pv-hint", text: "3" }), h2("a", { text: "\u30CF\u30FC\u30D6" })),
       h2("div", { class: "pv-h" }, h2("span", { class: "pv-dim", text: "### " }), "ChildBranch"),
-      h2("div", {}, h2("a", { text: "\u690D\u7269\u306E\u683D\u57F9" }))
+      h2("div", {}, h2("span", { class: "pv-hint", text: "4" }), h2("a", { text: "\u690D\u7269\u306E\u683D\u57F9" }))
     );
     const panel = h2(
       "div",

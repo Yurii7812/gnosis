@@ -19,7 +19,7 @@
 "       Tab パレットへ（↑ ↓ ← → で選ぶ。Enter か Tab で戻る） / r この色を元に戻す / n 名前 / s 保存 / Esc・q 取り消し
 " =============================================================================
 
-let s:keys = ['bg', 'fg', 'link', 'heading', 'selection', 'cursorline']
+let s:keys = ['bg', 'fg', 'link', 'heading', 'selection', 'cursorline', 'hintfg', 'hintbg']
 let s:hues = [[-1, 0.0], [0, 0.62], [28, 0.72], [50, 0.78], [130, 0.45], [175, 0.5], [212, 0.62], [275, 0.45]]
 let s:lights = [0.12, 0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.92, 0.98]
 let s:st = {}
@@ -85,10 +85,20 @@ endfunction
 " ---------------------------------------------------------------------------
 function! gnosis#theme_edit#open(opts) abort
   let l:colors = {}
+  let l:given = get(a:opts, 'colors', {})
   for l:k in s:keys
-    let l:v = gnosis#color#normalize(get(get(a:opts, 'colors', {}), l:k, ''))
+    let l:v = gnosis#color#normalize(get(l:given, l:k, ''))
     let l:colors[l:k] = empty(l:v) ? '#808080' : l:v
   endfor
+  " リンク番号の色は、設定が無いテーマでは今の表示と同じ色（文字は背景色・札は補助の色）から始める
+  let l:bg = l:colors.bg
+  if empty(gnosis#color#normalize(get(l:given, 'hintfg', '')))
+    let l:colors.hintfg = l:bg
+  endif
+  if empty(gnosis#color#normalize(get(l:given, 'hintbg', '')))
+    let l:muted = gnosis#color#normalize(get(l:given, 'muted', ''))
+    let l:colors.hintbg = empty(l:muted) ? gnosis#color#mix(l:colors.fg, l:bg, 0.35) : l:muted
+  endif
   let s:st = {
         \ 'target': get(a:opts, 'target', 'vim'),
         \ 'name': get(a:opts, 'name', 'my-theme'),
@@ -361,7 +371,7 @@ endfunction
 
 let s:type_names = []
 function! s:define_types() abort
-  let l:names = ['GnosisTeText', 'GnosisTeDim', 'GnosisTeHead', 'GnosisTeLink', 'GnosisTeSel',
+  let l:names = ['GnosisTeText', 'GnosisTeDim', 'GnosisTeHead', 'GnosisTeLink', 'GnosisTeSel', 'GnosisTeHint',
         \ 'GnosisTeCurText', 'GnosisTeCurDim', 'GnosisTeCurLink', 'GnosisTeCurSel']
   for l:i in range(len(s:keys))
     call add(l:names, 'GnosisTeSw' . l:i)
@@ -402,6 +412,7 @@ function! s:apply_highlights() abort
   call s:hlset('GnosisTeHead', l:c.heading, l:c.bg, 'bold')
   call s:hlset('GnosisTeLink', l:c.link, l:c.bg, 'underline')
   call s:hlset('GnosisTeSel', l:d.strong, l:c.selection, '')
+  call s:hlset('GnosisTeHint', l:c.hintfg, l:c.hintbg, 'bold')
   call s:hlset('GnosisTeCurText', l:c.fg, l:c.cursorline, '')
   call s:hlset('GnosisTeCurDim', l:d.dim, l:c.cursorline, '')
   call s:hlset('GnosisTeCurLink', l:c.link, l:c.cursorline, 'underline')
@@ -444,13 +455,14 @@ function! s:sample(width) abort
   call add(l:out, s:preview_line([['植物', 'GnosisTeText'], ['についての情報', 'GnosisTeSel'], ['をまとめる。', 'GnosisTeText']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([['関連する情報：', 'GnosisTeText']], a:width, 'GnosisTeText'))
-  call add(l:out, s:preview_line([['ローズマリー', 'GnosisTeCurLink'], ['  ← カーソル行', 'GnosisTeCurDim']], a:width, 'GnosisTeCurText'))
-  call add(l:out, s:preview_line([['レモンバーム', 'GnosisTeLink']], a:width, 'GnosisTeText'))
+  " リンクの手前の番号（実際の表示と同じ「札」）。文字の色と背景の色は、ここで決めた色。
+  call add(l:out, s:preview_line([['1', 'GnosisTeHint'], ['ローズマリー', 'GnosisTeCurLink'], ['  ← カーソル行', 'GnosisTeCurDim']], a:width, 'GnosisTeCurText'))
+  call add(l:out, s:preview_line([['2', 'GnosisTeHint'], ['レモンバーム', 'GnosisTeLink']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([['### ', 'GnosisTeDim'], ['Context', 'GnosisTeHead']], a:width, 'GnosisTeText'))
-  call add(l:out, s:preview_line([['ハーブ', 'GnosisTeLink']], a:width, 'GnosisTeText'))
+  call add(l:out, s:preview_line([['3', 'GnosisTeHint'], ['ハーブ', 'GnosisTeLink']], a:width, 'GnosisTeText'))
   call add(l:out, s:preview_line([['### ', 'GnosisTeDim'], ['ChildBranch', 'GnosisTeHead']], a:width, 'GnosisTeText'))
-  call add(l:out, s:preview_line([['植物の栽培', 'GnosisTeLink']], a:width, 'GnosisTeText'))
+  call add(l:out, s:preview_line([['4', 'GnosisTeHint'], ['植物の栽培', 'GnosisTeLink']], a:width, 'GnosisTeText'))
   return l:out
 endfunction
 
@@ -526,7 +538,7 @@ function! gnosis#theme_edit#render() abort
   endfor
   call add(l:lines, '')
   " ---- 読みやすさ（コントラスト比）
-  for [l:lab, l:fg, l:bg] in [[s:t('settings.color.fg'), l:c.fg, l:c.bg], [s:t('settings.color.link'), l:c.link, l:c.bg], [s:t('settings.color.heading'), l:c.heading, l:c.bg]]
+  for [l:lab, l:fg, l:bg] in [[s:t('settings.color.fg'), l:c.fg, l:c.bg], [s:t('settings.color.link'), l:c.link, l:c.bg], [s:t('settings.color.heading'), l:c.heading, l:c.bg], [s:t('settings.color.hintfg'), l:c.hintfg, l:c.hintbg]]
     let [l:txt, l:good] = s:ratio_line(l:lab, l:fg, l:bg)
     call add(l:lines, '   ' . l:txt)
     call add(l:hls, [l:good ? 'gnosisSettingsOk' : 'gnosisSettingsWarn', len(l:lines), 0, 0])

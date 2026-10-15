@@ -13315,10 +13315,47 @@ endfunction
 
 " Vim 終了 = 自動ロック（busy なら静かに諦める）
 
-" 矢印キーなどの端末の制御文字列（ESC O D / ESC [ D など）が、キーとして解釈されず文字のまま
-" ノートに入ってしまうことがある（「定^[OD、」のように見える）。入ったらその場で取り除く。
-" 本物の ESC 文字（0x1b）を含む行だけが対象で、普通の文章には影響しない。
-let s:stray_esc_pat = '\e\%(O[A-DFHPQRS]\|\[[0-9;]*[A-DFHPQRSZ~]\)'
+" 端末の制御文字列が、キーとして解釈されず文字のまま、ノートに入ってしまうことがある
+" （矢印キーの ESC O D / ESC [ D、フォーカス通知の ESC [ I / ESC [ O、カーソル位置などの端末の応答、
+"  OSC / DCS など。「定^[OD、」「[[[OO」のように見える）。入ったらその場で取り除く。
+" 取り除くのは、
+"   1. 本物の ESC 文字（0x1b）から始まる制御文字列（CSI / SS3 / OSC / DCS）と、残った ESC 1 文字
+"      （普通の文章には ESC は入らないので、文章には影響しない）
+"   2. ESC だけが先に消費されて、あとの文字だけが残った「まぎれようのない断片」
+"      （端末の応答 [?…c・[行;桁R・マウス [<…M、フォーカス通知の繰り返し [O[O …）
+" 保存の直前にも同じ掃除をするので、入ってしまっても保存されない。
+let s:stray_esc_pats = [
+      \ '\e\[\[[A-E]',
+      \ '\e\[[0-9;:?<>=!]*[ -/]*[@-~]',
+      \ '\eO[@-~]',
+      \ '\e\][^\x07\x1b]*\%(\x07\|\e\\\)\=',
+      \ '\e[PX^_][^\x1b]*\%(\e\\\)\=',
+      \ ]
+let s:stray_frag_pats = [
+      \ '\[?[0-9;]*c',
+      \ '\[[0-9]\+;[0-9]\+R',
+      \ '\[<[0-9;]\+[Mm]',
+      \ '\%(\[[IO]\)\{2,}',
+      \ ]
+
+function! s:strip_stray(text) abort
+  let l:t = a:text
+  if stridx(l:t, "\x1b") >= 0
+    for l:p in s:stray_esc_pats
+      let l:t = substitute(l:t, l:p, '', 'g')
+    endfor
+    let l:t = substitute(l:t, "\x1b", '', 'g')
+  endif
+  for l:p in s:stray_frag_pats
+    let l:t = substitute(l:t, l:p, '', 'g')
+  endfor
+  return l:t
+endfunction
+
+" 制御文字列・断片を含みうる行か（安い判定。含まない行は触らない）
+function! s:maybe_stray(line) abort
+  return stridx(a:line, "\x1b") >= 0 || a:line =~# '\[\%([?<]\|[0-9]\+;[0-9]\+R\|[IO]\[\)'
+endfunction
 
 function! gnosis#strip_stray_escape() abort
   if &buftype !=# '' || !&modifiable
@@ -13326,18 +13363,36 @@ function! gnosis#strip_stray_escape() abort
   endif
   let l:lnum = line('.')
   let l:line = getline(l:lnum)
-  if stridx(l:line, "\x1b") < 0
+  if !s:maybe_stray(l:line)
     return
   endif
   let l:col = col('.')
-  let l:new = substitute(l:line, s:stray_esc_pat, '', 'g')
+  let l:new = s:strip_stray(l:line)
   if l:new ==# l:line
     return
   endif
   " カーソルより手前で取り除いた分だけ、カーソルを戻す
-  let l:before = substitute(strpart(l:line, 0, l:col - 1), s:stray_esc_pat, '', 'g')
+  let l:before = s:strip_stray(strpart(l:line, 0, l:col - 1))
   call setline(l:lnum, l:new)
   call cursor(l:lnum, strlen(l:before) + 1)
+endfunction
+
+" バッファ全体の掃除（保存の直前・読み込み直後）。含む行だけを書き換え、カーソルと undo の位置は動かさない。
+function! gnosis#strip_stray_escape_all() abort
+  if &buftype !=# '' || !&modifiable
+    return
+  endif
+  let l:view = winsaveview()
+  for l:i in range(1, line('$'))
+    let l:line = getline(l:i)
+    if s:maybe_stray(l:line)
+      let l:new = s:strip_stray(l:line)
+      if l:new !=# l:line
+        call setline(l:i, l:new)
+      endif
+    endif
+  endfor
+  call winrestview(l:view)
 endfunction
 
 " 終了時: この Vim が使っていた vault ごとに、自分の使用登録を外す。ほかに使っているウィンドウ・アプリが

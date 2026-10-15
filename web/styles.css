@@ -163,6 +163,7 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .e-preview .pv-h1 { font-size: 1.35em; }
 .e-preview .pv-dim { color: var(--pv-dim, #666); font-weight: 400; }
 .e-preview .pv-sel { background: var(--pv-sel, #cde); color: var(--pv-strong, #000); }
+.e-preview .pv-hint { background: var(--pv-hintbg, #666); color: var(--pv-hintfg, #fff); font-weight: 700; padding: 0 .35em; margin-right: .3em; border-radius: 2px; }
 .e-preview .pv-cur { background: var(--pv-cur, #eee); margin: 0 -16px; padding: 0 16px; }
 .e-contrast { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 .e-ok { color: #0a5c1f; }

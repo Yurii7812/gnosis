@@ -235,6 +235,7 @@ gnosis#startup_restore_root
 gnosis#startup_sequence
 gnosis#state_dir
 gnosis#strip_stray_escape
+gnosis#strip_stray_escape_all
 gnosis#switch_vault
 gnosis#table_add_col
 gnosis#table_add_row

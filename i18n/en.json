@@ -338,6 +338,8 @@
     "settings.color.cursorline": "cursor line",
     "settings.color.fg": "text",
     "settings.color.heading": "headings",
+    "settings.color.hintbg": "link number background",
+    "settings.color.hintfg": "link number text",
     "settings.color.link": "links",
     "settings.color.selection": "selection",
     "settings.dark": "Dark",

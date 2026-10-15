@@ -530,8 +530,13 @@ augroup gnosis_link_hints
   " 重い再計算（大きいノートで約45ms）を同期でやると Esc がもっさりするので、
   " TextChanged と同じ debounce に回す。ラベルは少し遅れて更新されるが、
   " 数字ジャンプ等は s:hint_positions を直接見るので機能は遅れない。
-  autocmd BufEnter,BufWinEnter *.md call gnosis#refresh_link_hints()
+  " 外から読み直された（同期・別ウィンドウの保存）・ウィンドウを移った・ファイル種別が決まった、
+  " ときも作り直す（読み直しでテキストプロパティが消えるのに、番号が出ないままになるのを防ぐ）。
+  autocmd BufEnter,BufWinEnter,BufReadPost,WinEnter,FileChangedShellPost *.md call s:refresh_link_hints_now()
+  autocmd FileType markdown,vimwiki call s:refresh_link_hints_now()
   autocmd TextChanged,InsertLeave *.md call s:schedule_refresh_link_hints()
+  " 念のための安全網: 本文が変わったのに番号が古いままなら、カーソルを動かした・止めたときに作り直す。
+  autocmd CursorMoved,CursorHold *.md if get(g:, 'gnosis_link_hints', 1) && (&l:filetype ==# 'markdown' || &l:filetype ==# 'vimwiki') && get(b:, 'gnosis_hint_built_tick', -1) != b:changedtick | call s:schedule_refresh_link_hints() | endif
   " ラベルはドキュメント順で固定なのでスクロールでの振り直しは不要。
 augroup END
 
@@ -543,9 +548,18 @@ function! s:schedule_refresh_link_hints() abort
   if has('timers')
     let b:gnosis_hint_timer =
           \ timer_start(get(g:, 'gnosis_link_hints_delay', 120),
-          \ {-> gnosis#refresh_link_hints()})
+          \ {-> s:refresh_link_hints_now()})
   else
     call gnosis#refresh_link_hints()
+  endif
+endfunction
+
+" 番号を作り直して、すぐ画面に出す。タイマーや autocmd の中で足した仮想テキストは、
+" 再描画しないと次のキー入力（カーソル移動）まで画面に出ないことがある。
+function! s:refresh_link_hints_now() abort
+  call gnosis#refresh_link_hints()
+  if mode() ==# 'n'
+    redraw
   endif
 endfunction
 " 標準のジャンプリスト戻りでも、E37 を出さず保存してから移動する
@@ -1000,6 +1014,7 @@ augroup gnosis_vault
   autocmd VimLeavePre * call gnosis#before_write_viminfo()
   autocmd BufWritePre * call gnosis#guard_vault_write(expand('<afile>:p'))
   autocmd TextChangedI,TextChanged,InsertLeave *.md call gnosis#strip_stray_escape()
+  autocmd BufWritePre *.md call gnosis#strip_stray_escape_all()
 augroup END
 
 

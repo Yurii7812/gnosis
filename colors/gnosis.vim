@@ -178,4 +178,5 @@ call s:hl('gnosisSettingsOk', s:green, '', 'bold')
 call s:hl('gnosisSettingsWarn', s:yellow, '', 'bold')
 
 " リンクの番号ヒント（1〜9・0・g1 …）。本文の文字と混ざらないよう、控えめな色の札にする
-call s:hl('GnosisLinkHint', s:bg, s:dim, 'bold')
+" 文字と札の色は、配色エディタで決められる（hintfg / hintbg）。無ければ 文字=背景色・札=補助の色。
+call s:hl('GnosisLinkHint', get(s:p, 'hintfg', '') =~# '^#\x\{6}$' ? s:p.hintfg : s:bg, get(s:p, 'hintbg', '') =~# '^#\x\{6}$' ? s:p.hintbg : s:dim, 'bold')

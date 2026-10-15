@@ -170,7 +170,7 @@ function renderSettings() {
 // ---------------------------------------------------------------- 配色の編集（カラーパレット・ライブプレビュー）
 // 色を変えると、保存する前でもすぐプレビューに反映される（<input type=color> を動かしている間も）。
 // 保存（「保存して使う」）するまで設定は書き換えない。取り消せば元の配色のまま。ノートは一切変更しない。
-const COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+const COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline", "hintfg", "hintbg"];
 const HUES = [[-1, 0], [0, 0.62], [28, 0.72], [50, 0.78], [130, 0.45], [175, 0.5], [212, 0.62], [275, 0.45]];
 const LIGHTS = [0.12, 0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.92, 0.98];
 
@@ -220,6 +220,9 @@ async function startEdit(target) {
   const pal = (app ? await G.appPalette(draft) : await G.palette(draft)) || {};
   const colors = {};
   for (const k of COLOR_KEYS) colors[k] = normHex(cur[k]) || normHex(pal[k]) || "#808080";
+  // リンク番号の札は、設定が無いテーマでは今の表示と同じ色（文字=背景色・札=補助の色）から始める
+  if (!normHex(cur.hintfg) && !normHex(pal.hintfg)) colors.hintfg = colors.bg;
+  if (!normHex(cur.hintbg) && !normHex(pal.hintbg)) colors.hintbg = normHex(pal.muted) || mixHex(colors.fg, colors.bg, 0.35);
   editing = { target, name: name || (app ? "my-app-theme" : "my-theme"), colors, orig: { ...colors }, key: "bg" };
   message = "";
   render();
@@ -272,12 +275,12 @@ function updatePreview() {
   const c = editing.colors;
   const dark = luminanceOf(c.bg) < 0.4;
   const vars = { bg: c.bg, fg: c.fg, link: c.link, heading: c.heading, sel: c.selection, cur: c.cursorline,
-    dim: mixHex(c.fg, c.bg, 0.35), strong: mixHex(c.fg, dark ? "#ffffff" : "#000000", 0.6) };
+    dim: mixHex(c.fg, c.bg, 0.35), strong: mixHex(c.fg, dark ? "#ffffff" : "#000000", 0.6), hintfg: c.hintfg, hintbg: c.hintbg };
   for (const [k, v] of Object.entries(vars)) pv.style.setProperty("--pv-" + k, v);
   const box = $("e-contrast");
   if (box) {
-    box.replaceChildren(...[["fg", t("settings.color.fg")], ["link", t("settings.color.link")], ["heading", t("settings.color.heading")]].map(([k, label]) => {
-      const r = contrastOf(c[k], c.bg);
+    box.replaceChildren(...[["fg", t("settings.color.fg")], ["link", t("settings.color.link")], ["heading", t("settings.color.heading")], ["hintfg", t("settings.color.hintfg")]].map(([k, label]) => {
+      const r = contrastOf(c[k], k === "hintfg" ? c.hintbg : c.bg);
       return h("div", { class: r >= 4.5 ? "e-ok" : "e-warn", text: `${label}  ${r.toFixed(1)} : 1  ${r >= 4.5 ? "✓" : t("theme_edit.low_contrast")}` });
     }));
   }
@@ -328,12 +331,12 @@ function renderEditor() {
     h("div", { class: "pv-h1 pv-h" }, h("span", { class: "pv-dim", text: "# " }), "植物について"),
     h("p", {}, "植物", h("span", { class: "pv-sel", text: "についての情報" }), "をまとめる。"),
     h("p", { text: "関連する情報：" }),
-    h("div", { class: "pv-cur" }, h("a", { text: "ローズマリー" }), h("span", { class: "pv-dim", text: "  ← " + t("theme_edit.cursor_line") })),
-    h("div", {}, h("a", { text: "レモンバーム" })),
+    h("div", { class: "pv-cur" }, h("span", { class: "pv-hint", text: "1" }), h("a", { text: "ローズマリー" }), h("span", { class: "pv-dim", text: "  ← " + t("theme_edit.cursor_line") })),
+    h("div", {}, h("span", { class: "pv-hint", text: "2" }), h("a", { text: "レモンバーム" })),
     h("div", { class: "pv-h" }, h("span", { class: "pv-dim", text: "### " }), "Context"),
-    h("div", {}, h("a", { text: "ハーブ" })),
+    h("div", {}, h("span", { class: "pv-hint", text: "3" }), h("a", { text: "ハーブ" })),
     h("div", { class: "pv-h" }, h("span", { class: "pv-dim", text: "### " }), "ChildBranch"),
-    h("div", {}, h("a", { text: "植物の栽培" })));
+    h("div", {}, h("span", { class: "pv-hint", text: "4" }), h("a", { text: "植物の栽培" })));
   const panel = h("div", { class: "l-panel l-editor" },
     h("div", { class: "l-head" }, h("button", { id: "e-cancel-top", onclick: cancelEdit }, "← " + t("web.cancel")), h("h2", { text: t(app ? "theme_edit.title_app" : "theme_edit.title_vim") })),
     h("div", { class: "l-vpath", text: t("settings.vault") + " " + st.selected }),

@@ -194,7 +194,7 @@ function validateSettings(s) {
   return out;
 }
 
-const COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline"];
+const COLOR_KEYS = ["bg", "fg", "link", "heading", "selection", "cursorline", "hintfg", "hintbg"];
 
 function cleanCustomThemes(raw) {
   const ct = {};

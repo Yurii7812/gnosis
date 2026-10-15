@@ -95,6 +95,7 @@ let s:colors = {'bg': '#0c1d32', 'fg': '#ebebeb', 'link': '#e1f4e4', 'heading': 
 call gnosis#theme_edit#open({'target': 'vim', 'name': 'my-theme', 'colors': s:colors, 'on_close': function('s:closed')})
 call s:ok('編集: プレビューの背景（最初は今の色）', s:gui('GnosisTeText', 'bg') ==# '#0c1d32' && s:gui('GnosisTeText', 'fg') ==# '#ebebeb')
 call s:ok('編集: プレビューのリンクは下線・見出しは太字', synIDattr(hlID('GnosisTeLink'), 'underline', 'gui') ==# '1' && synIDattr(hlID('GnosisTeHead'), 'bold', 'gui') ==# '1')
+call s:ok('編集: リンク番号の札は今の表示と同じ色から始まる（文字=背景色・札=補助の色）', s:gui('GnosisTeHint', 'fg') ==# '#0c1d32' && s:gui('GnosisTeHint', 'bg') ==# gnosis#color#mix('#ebebeb', '#0c1d32', 0.35) && synIDattr(hlID('GnosisTeHint'), 'bold', 'gui') ==# '1', s:gui('GnosisTeHint', 'fg') . ' ' . s:gui('GnosisTeHint', 'bg'))
 " 背景を変えると、保存する前でもすぐプレビューに反映される
 call gnosis#theme_edit#set_color('bg', '#ffffff')
 call s:ok('編集: 背景の変更がすぐプレビューに反映', s:gui('GnosisTeText', 'bg') ==# '#ffffff' && s:gui('GnosisTeLink', 'bg') ==# '#ffffff' && s:gui('GnosisTeHead', 'bg') ==# '#ffffff')
@@ -105,6 +106,10 @@ call s:ok('編集: 本文・リンク・見出しも個別にすぐ反映', s:gu
 call gnosis#theme_edit#set_color('selection', '#b6d6ff')
 call gnosis#theme_edit#set_color('cursorline', '#f2f5f8')
 call s:ok('編集: 選択状態とカーソル行も反映', s:gui('GnosisTeSel', 'bg') ==# '#b6d6ff' && s:gui('GnosisTeCurText', 'bg') ==# '#f2f5f8')
+call gnosis#theme_edit#set_color('hintfg', '#ffffff')
+call gnosis#theme_edit#set_color('hintbg', '#2d70be')
+call s:ok('編集: リンク番号の文字と背景がすぐプレビューに反映', s:gui('GnosisTeHint', 'fg') ==# '#ffffff' && s:gui('GnosisTeHint', 'bg') ==# '#2d70be')
+call s:ok('編集: プレビューのリンクの手前に番号が出る', join(getline(1, '$'), "\n") =~# '1ローズマリー' && join(getline(1, '$'), "\n") =~# '2レモンバーム' && join(getline(1, '$'), "\n") =~# 'リンク番号の文字\|link number text')
 call s:ok('編集: 実際のテーマ（Normal）は保存するまで変わらない', s:gui('Normal', 'bg') ==# '#0c1d32')
 call s:ok('編集: 保存するまで設定ファイルもノートも変わらない', readfile(s:v . '/.gnosis/settings.json') ==# s:settings_before && readfile(s:v . '/index.md') ==# s:note_before)
 call s:ok('編集: 画面に HEX・日本語のプレビュー・リンクの表示名が出る', join(getline(1, '$'), "\n") =~# '#FFFFFF' && join(getline(1, '$'), "\n") =~# '植物について' && join(getline(1, '$'), "\n") =~# 'ローズマリー' && join(getline(1, '$'), "\n") !~# 'example\.md')
@@ -164,6 +169,14 @@ call s:ok('再起動: Vim のテーマとアプリのテーマが別々に残る
 let s:ui.appCustomThemes.app1.link = '#880000'
 call gnosis#settings#save(s:v, s:ui)
 call s:ok('再起動: アプリ側だけ変えても Vim 側は変わらない', gnosis#theme#palette(gnosis#settings#load(s:v)).link ==# '#006400' && gnosis#theme#app_palette(gnosis#settings#load(s:v)).link ==# '#880000')
+
+" リンクの番号の札（GnosisLinkHint）: 配色に hintfg / hintbg があればその色、無ければ 文字=背景色・札=補助の色
+let g:gnosis_palette = copy(gnosis#settings#builtin_palettes().dark)
+silent! colorscheme gnosis
+call s:ok('リンク番号の札: 設定が無ければ 文字=背景色・札=補助の色', s:gui('GnosisLinkHint', 'fg') ==# tolower(g:gnosis_palette.bg) && s:gui('GnosisLinkHint', 'bg') ==# tolower(g:gnosis_palette.muted), s:gui('GnosisLinkHint', 'fg') . ' ' . s:gui('GnosisLinkHint', 'bg'))
+let g:gnosis_palette = extend(copy(gnosis#settings#builtin_palettes().dark), {'hintfg': '#ffffff', 'hintbg': '#2d70be'})
+silent! colorscheme gnosis
+call s:ok('リンク番号の札: hintfg / hintbg が実際の表示に効く', s:gui('GnosisLinkHint', 'fg') ==# '#ffffff' && s:gui('GnosisLinkHint', 'bg') ==# '#2d70be', s:gui('GnosisLinkHint', 'fg') . ' ' . s:gui('GnosisLinkHint', 'bg'))
 
 call writefile(s:res, s:w . '/result.txt')
 qa!

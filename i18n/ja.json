@@ -8,6 +8,8 @@
     "settings.color.cursorline": "カーソル行",
     "settings.color.fg": "本文",
     "settings.color.heading": "見出し",
+    "settings.color.hintbg": "リンク番号の背景",
+    "settings.color.hintfg": "リンク番号の文字",
     "settings.color.link": "リンク",
     "settings.color.selection": "選択範囲",
     "settings.dark": "ダーク",

@@ -401,5 +401,42 @@ let s:li = index(s:wl, '最後の文。')
 call s:ok('zw: 最後の文の下は 空行 / カーソル行 / 空行 で関係の節の前', s:li >= 0 && s:wl[s:li + 1 : s:li + 4] ==# ['', '', '', '### Related'], string(s:wl))
 call s:ok('zw: カーソルは最後の文の 2 行下', line('.') == s:li + 3, line('.') . ' vs ' . (s:li + 3))
 
+" ------------------------------------------------------------------ リンクの番号（読み直し・外からの書き換えのあとも出る）
+call s:mk('hn.md', 'ノートHN', ['[ノートA](a.md) と [ノートB](b.md)'])
+execute 'edit ' . fnameescape(s:v . '/hn.md')
+function! s:hint_count() abort
+  let l:n = 0
+  for l:i in range(1, line('$'))
+    let l:n += len(prop_list(l:i, {'types': ['gnosisLinkHint']}))
+  endfor
+  return l:n
+endfunction
+call s:ok('リンクの番号: 開いたときに出る', s:hint_count() == 2, string(s:hint_count()))
+call writefile(readfile(s:v . '/hn.md') + ['[ノートC](c.md)'], s:v . '/hn.md')
+silent edit!
+call s:ok('リンクの番号: 外から書き換えて読み直したあとも出る（リンク 3 本）', s:hint_count() == 3, string(s:hint_count()))
+
+" ------------------------------------------------------------------ 端末の制御文字列が本文に混ざらない（一切残さない）
+enew
+let s:e = "\x1b"
+call setline(1, [
+      \ '定' . s:e . 'OD、矢印',
+      \ '焦点' . s:e . '[O と ' . s:e . '[I',
+      \ '応答' . s:e . '[24;80R と ' . s:e . '[?64;1;2c と ' . s:e . '[<35;10;5M',
+      \ '色' . s:e . ']10;rgb:ffff/ffff/ffff' . s:e . '\ のあと',
+      \ '残り' . s:e . 'だけ',
+      \ '断片 [?64;1;2c と [24;80R と [O[O[O と [<35;10;5M',
+      \ 'ふつう [[wiki]] と [ノート](a.md) と 配列[0] と [?] と [OK] と a[i] と OO',
+      \ ])
+call gnosis#strip_stray_escape_all()
+call s:ok('制御文字列: 矢印', getline(1) ==# '定、矢印', getline(1))
+call s:ok('制御文字列: フォーカス通知 ESC[O / ESC[I', getline(2) ==# '焦点 と ', getline(2))
+call s:ok('制御文字列: 端末の応答（カーソル位置・DA・マウス）', getline(3) ==# '応答 と  と ', getline(3))
+call s:ok('制御文字列: OSC', getline(4) ==# '色 のあと', getline(4))
+call s:ok('制御文字列: 残った ESC 1 文字', getline(5) ==# '残りだけ', getline(5))
+call s:ok('制御文字列: ESC が消えて残った断片', getline(6) ==# '断片  と  と  と ', getline(6))
+call s:ok('制御文字列: ふつうの文章（[[wiki]]・[0]・[OK]）は変えない', getline(7) ==# 'ふつう [[wiki]] と [ノート](a.md) と 配列[0] と [?] と [OK] と a[i] と OO', getline(7))
+bwipeout!
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
