@@ -194,7 +194,7 @@ class TestSyncNewForm(Base):
         self.sync()
         out = self.r("b.md")
         self.assertIn("Context:\n[A](a.md)\n\n本文。", out)
-        self.assertIn("### Group\n[G](g.md)", out)
+        self.assertIn("Group:\n[G](g.md)", out)
 
     def test_parent_branch_and_context_to_same_note_coexist(self) -> None:
         self.w("a.md", fm("A") + "\n# A\n\n本文A。\n")
