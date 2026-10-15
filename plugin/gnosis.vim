@@ -1018,6 +1018,8 @@ augroup END
 augroup gnosis_autosync
   autocmd!
   autocmd BufReadPost *.md call gnosis#remember_title()
+  " record は on_write_post より先に置く（同期が付ける「自分の同期」の印を、record が消さないように）
+  autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
   autocmd BufWritePost *.md call s:on_write_post()
   if get(g:, 'gnosis_realtime_link_sync', 0)
     autocmd BufReadPost,BufEnter *.md call gnosis#realtime_sync_snapshot()
@@ -1026,7 +1028,6 @@ augroup gnosis_autosync
   " 他のウィンドウ・プロセスが同じノートを書き換えたとき: 未保存の変更が無ければ読み直す。
   " 未保存の変更があれば読み直さず、退避して警告する（変更を失わない・相手の変更も上書きしない）
   autocmd FileChangedShell *.md call gnosis#conflict#on_changed_shell()
-  autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
 augroup END
 
 function! s:on_write_post() abort
