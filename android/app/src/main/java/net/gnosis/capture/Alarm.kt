@@ -88,7 +88,11 @@ object Alarm {
         return p
     }
 
-    fun notify(ctx: Context) {
+    /**
+     * 通知を出す。ringSeconds が 0 より大きいと、その秒数のあいだ音を繰り返し（FLAG_INSISTENT）、
+     * 時間が来たら音なしで出し直して止める（通知は残る）。0 なら 1 回だけ鳴らす。
+     */
+    fun notify(ctx: Context, ringSeconds: Int = Store(ctx).loadSettings().ringSeconds, silent: Boolean = false) {
         ensureChannel(ctx)
         prefs(ctx).edit().putBoolean("prompt", true).apply()
         val open = Intent(ctx, MainActivity::class.java).apply {
@@ -104,9 +108,34 @@ object Alarm {
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSilent(silent)
             .build()
-        try { ctx.getSystemService(NotificationManager::class.java).notify(REQ, n) }
-        catch (_: SecurityException) { /* 画面側に通知の許可状態を表示する。 */ }
+        if (!silent && ringSeconds > 0) n.flags = n.flags or android.app.Notification.FLAG_INSISTENT
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        try {
+            if (silent) nm.cancel(REQ)   // 繰り返している音は、出し直す前に消すと止まる
+            nm.notify(REQ, n)
+        } catch (_: SecurityException) { /* 画面側に通知の許可状態を表示する。 */ }
+        if (!silent && ringSeconds > 0) scheduleStop(ctx, ringSeconds)
+    }
+
+    /** ringSeconds 秒後に音を止める（RingStopReceiver が音なしで出し直す）。 */
+    private fun scheduleStop(ctx: Context, seconds: Int) {
+        val am = ctx.getSystemService(AlarmManager::class.java)
+        val pi = PendingIntent.getBroadcast(ctx, REQ + 2, Intent(ctx, RingStopReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val at = System.currentTimeMillis() + seconds * 1000L
+        try {
+            if (canScheduleExact(ctx)) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        } catch (_: SecurityException) { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) }
+    }
+
+    /** 鳴っている通知があれば、音なしで出し直して音を止める（アプリを開いたときも止める）。 */
+    fun stopRinging(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (nm.activeNotifications.any { it.id == REQ && (it.notification.flags and android.app.Notification.FLAG_INSISTENT) != 0 })
+            notify(ctx, 0, silent = true)
     }
 }
 
@@ -120,6 +149,10 @@ class AlarmReceiver : BroadcastReceiver() {
             if (AlarmTiming.inside(s.fromHour, s.toHour, hour)) Alarm.notify(ctx)
         } finally { Alarm.schedule(ctx, s) }
     }
+}
+
+class RingStopReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) { Alarm.stopRinging(ctx) }
 }
 
 class BootReceiver : BroadcastReceiver() {

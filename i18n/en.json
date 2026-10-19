@@ -6,7 +6,7 @@
     "g=所属 ": "g=join group ",
     "g=このグループに入る / ": "g=join this group / ",
     "キャンセル（Enter / t / h / c / b / p / o / r のどれか）": "Cancelled (Enter / t / h / c / b / p / o / r)",
-    "時刻モード: オン（Enter で空行と次の時刻。\\T で切る）": "Time mode: on (Enter adds a blank line and the next time. \\T turns it off)",
+    "時刻モード: オン（書き始めた行の頭に時刻。\\T で切る）": "Time mode: on (the time goes at the start of each line you begin. \\T turns it off)",
     "その時系列記録はありません: ": "No such chronological record: ",
     "時系列記録の名前（例: 夢）: ": "Name of the chronological record (e.g. Dreams): ",
     "その名前は使えません（日記・時系列記録・数字で始まる名前・[ ] ( ) / は不可）: ": "That name cannot be used (not 日記, 時系列記録, names starting with a digit, or [ ] ( ) /): ",
@@ -406,7 +406,12 @@
     "取り消しました（Enter / t / w / o のどれか。何も変更していません）": "Cancelled (use Enter / t / w / o; nothing was changed)",
     "未所属": "No topic",
     "（メモはありません）": "(No memos)",
-    "トピック（空欄で未選択）: ": "Topic (empty for no topic): "
+    "トピック（空欄で未選択）: ": "Topic (empty for no topic): ",
+    "見出しへのリンクを直しました（%d ノート）": "Updated links to the heading (%d notes)",
+    "まとめられる時系列記録が 2 つ以上ありません": "There are not two or more chronological records to merge",
+    "時系列記録「%s」を「%s」にまとめました（その日のノート %d 件）": "Merged chronological record \"%s\" into \"%s\" (%d daily notes)",
+    "まとめる元（消える方）:": "Merge from (will be removed):",
+    "まとめる先（残る方）:": "Merge into (will remain):"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

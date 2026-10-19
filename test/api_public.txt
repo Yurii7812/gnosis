@@ -89,6 +89,8 @@ gnosis#group_review_check
 gnosis#group_review_snapshot
 gnosis#guard_vault_write
 gnosis#has_python
+gnosis#heading_links_after
+gnosis#heading_links_before
 gnosis#hint_goto
 gnosis#home#dir
 gnosis#home#ensure_fzf_path
@@ -176,6 +178,7 @@ gnosis#quit_unmount
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
 gnosis#recent_map
+gnosis#record_merge
 gnosis#record_migrate
 gnosis#record_new
 gnosis#record_open
@@ -322,6 +325,8 @@ gnosis#theme_edit#open
 gnosis#theme_edit#render
 gnosis#theme_edit#set_color
 gnosis#theme_edit#state
+gnosis#time_char_pre
+gnosis#time_mode_on_enter
 gnosis#time_mode_toggle
 gnosis#time_stamp
 gnosis#timestamp_filename

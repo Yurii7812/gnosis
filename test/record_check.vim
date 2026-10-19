@@ -78,6 +78,26 @@ try
         \ s:has('old-day.md', '^record: "旧夢"$') && s:has('old-diary.md', '^\[2026-10-12-MO-夢-病院\](old-day.md)$')
         \ && len(filter(s:file('old-diary.md'), 'v:val =~# "^\\[.*\\](old-day\\.md)$"')) == 1, string(s:file('old-diary.md')))
   call s:ok('移行: 本文のリンクは残す', s:has('old-diary.md', '今日は\[病院の夢\](old-day.md)を見た'))
+  " 表記揺れをまとめる: ゆめ → 夢（同じ日のノートは段落を時刻の順にまぜる・無い日は題を改めて移す）
+  call gnosis#record_new('ゆめ')
+  let s:ymd = s:title(s:today . '-' . s:wd . '-ゆめ')
+  enew
+  silent! execute 'bwipeout! ' . bufnr(s:v . '/' . s:ymd)
+  silent! execute 'bwipeout! ' . bufnr(s:v . '/' . s:day)
+  let s:l = s:file(s:ymd)
+  call writefile(extend(s:l, ['', '07:30 B', ''], (index(s:l, 'BackLink:') < 0 ? len(s:l) : index(s:l, 'BackLink:'))), s:v . '/' . s:ymd)
+  let s:l = s:file(s:day)
+  call writefile(extend(s:l, ['', '07:00 A', '', '08:00 C', ''], (index(s:l, 'BackLink:') < 0 ? len(s:l) : index(s:l, 'BackLink:'))), s:v . '/' . s:day)
+  call gnosis#record_merge('ゆめ', '夢')
+  let s:dl = s:file(s:day)
+  call s:ok('まとめる: 同じ日のノートに時刻の順でまざる', match(s:dl, '^07:00 A$') < match(s:dl, '^07:30 B$') && match(s:dl, '^07:30 B$') < match(s:dl, '^08:00 C$') && match(s:dl, '^07:00 A$') > 0, string(s:dl))
+  call s:ok('まとめる: 元のノートは消え、日記の上のリンクは 1 つ', !filereadable(s:v . '/' . s:ymd)
+        \ && len(filter(s:file(s:diary), 'stridx(v:val, "](" . s:day . ")") >= 0')) == 1 && !s:has(s:diary, s:ymd), string(s:file(s:diary)))
+  call s:ok('まとめる: 元の記録は時系列記録から消える', empty(s:title('ゆめ')) && !s:has(s:rec, 'ゆめ'))
+  call gnosis#record_merge('旧夢', '夢')
+  call s:ok('まとめる: 無い日のノートは record を改めて、先の月のグループへ（題に記録名が無ければ題はそのまま）', s:has('old-day.md', '^title: 2026-10-12-MO-夢-病院$') && s:has('old-day.md', '^record: "夢"$')
+        \ && s:has(s:title('2026-10-夢'), '](old-day.md)') && s:has('old-diary.md', '^\[2026-10-12-MO-夢-病院\](old-day.md)$')
+        \ && !filereadable(s:v . '/old-dream.md') && !filereadable(s:v . '/old-month.md'), string(s:file('old-day.md')))
 catch
   call add(s:out, 'NG 例外: ' . v:exception . ' @ ' . v:throwpoint)
 endtry

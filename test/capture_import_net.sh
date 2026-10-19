@@ -25,10 +25,19 @@ E = [
  {"id": "261018161000", "created": ms("2026-10-18 16:10"), "topic": "読書", "text": "二冊目", "images": [], "parent": None, "contexts": []},
  {"id": "261018070000", "created": ms("2026-10-18 07:00"), "topic": "夢", "text": "空を飛んだ\n高かった", "images": [], "parent": None, "contexts": []},
  {"id": "261018071000", "created": ms("2026-10-18 07:10"), "topic": "夢", "text": "海の夢", "images": [], "parent": None, "contexts": []},
+ {"id": "261018170000", "created": ms("2026-10-18 17:00"), "topic": "メモ", "text": "見積もりの続き\n前の[電話](memo:261018151000)を参照\n[本](memo:261018160000)", "images": [], "parent": "261018151000", "contexts": []},
 ]
 M = {"仕事": {"single": True, "stamp": True}, "読書": {"single": True, "stamp": False}, "日記": {"single": True}, "夢": {"record": True, "single": True}}
 json.dump({"format": "gnosis-capture", "version": 1, "entries": E, "topicModes": M}, open(D + "/pack/capture.json", "w"), ensure_ascii=False)
 open(D + "/pack/images/a.jpg", "wb").write(b"\xff\xd8fake")
+# 2 回目: 夢の続き（PC で書いた 07:30 の分と時刻の順にまざる）
+E2 = E + [
+ {"id": "261018072000", "created": ms("2026-10-18 07:20"), "topic": "夢", "text": "三つ目の夢", "images": [], "parent": None, "contexts": []},
+ {"id": "261018074000", "created": ms("2026-10-18 07:40"), "topic": "夢", "text": "四つ目の夢", "images": [], "parent": None, "contexts": []},
+]
+os.makedirs(D + "/pack2/images")
+open(D + "/pack2/images/a.jpg", "wb").write(b"\xff\xd8fake")
+json.dump({"format": "gnosis-capture", "version": 1, "entries": E2, "topicModes": M}, open(D + "/pack2/capture.json", "w"), ensure_ascii=False)
 EOF
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -S "$REPO/test/capture_import_check.vim" </dev/null 2>"$D/err" || true
@@ -52,13 +61,17 @@ book=$(grep -l '^capture_topic: "読書"$' "$V"/*.md | head -1)
 chk "まとめるトピックは 1 つのノート（トピック名の題）" '[ -n "$work" ] && grep -q "^# 仕事$" "$work" && [ ! -f "$V/261018151000.md" ] && [ ! -f "$V/261019090000.md" ]'
 chk "日時あり: 日付の見出しの下に時刻つき（同じ日は見出し 1 つ）" '[ "$(grep -c "^## 2026-10-18（日）$" "$work")" = 1 ] && grep -q "^15:10 電話した$" "$work" && grep -q "^## 2026-10-19（月）$" "$work" && grep -q "^09:00 翌日の作業$" "$work"'
 chk "日時あり: 複数行の本文もそのまま" 'grep -A1 "^15:10 電話した$" "$work" | grep -q "^折り返し待ち$"'
-chk "日時あり: 文脈の相手になったメモもノートにしてリンク" '[ -f "$V/261018150000.md" ] && grep -q "^15:00 \[見積もりを出す\](261018150000.md)$" "$work"'
-chk "日時あり: つながりのあるメモは別のノートにして、トピックのノートからリンク" '[ -f "$V/261019091000.md" ] && grep -q "^09:10 \[会議の話\](261019091000.md)$" "$work" && grep -A1 "^ParentBranch:" "$V/261019091000.md" | grep -q "261018150000.md"'
+W=$(basename "$work")
+chk "まとめる: 使われたメモは見出しの節（見出しも本文に残る。すぐ下が見出しなら閉じない）" '[ ! -f "$V/261018150000.md" ] && grep -A4 "^## 見積もりを出す$" "$work" | tr "\n" "|" | grep -q "^## 見積もりを出す|15:00 見積もりを出す|来週まで||## 電話した|"'
+chk "まとめる: 下に見出しが無い節は ## だけの行で閉じる" 'grep -A4 "^## 一冊目$" "$book" | tr "\n" "|" | grep -q "^## 一冊目|一冊目|##||二冊目"'
+chk "まとめる: 使ったメモは同じノートの中で、その見出しへのリンクの行" '[ ! -f "$V/261019091000.md" ] && grep -q "^09:10 会議の話$" "$work" && grep -q "^文脈: \[仕事#見積もりを出す\]($W#見積もりを出す)$" "$work"'
+chk "ほかのノートから: 親が節なら見出しへのリンクの行と、トピックのノートを文脈に" 'grep -q "^↳ \[仕事#電話した\]($W#電話した) の続き$" "$V/261018170000.md" && grep -q "^前の\[仕事#電話した\]($W#電話した)を参照$" "$V/261018170000.md" && grep -A1 "^Context:" "$V/261018170000.md" | grep -q "$W"'
 chk "日時なし: 本文だけを足す" '[ -n "$book" ] && grep -q "^一冊目$" "$book" && grep -q "^二冊目$" "$book" && ! grep -q "^## 2026" "$book"'
 chk "日記はまとめる設定にしない（日記のまま）" '! grep -l "^capture_topic: \"日記\"" "$V"/*.md >/dev/null 2>&1'
 dream=$(grep -l '^title: 2026-10-18-SU-夢$' "$V"/*.md | head -1)
 recg=$(grep -l '^title: 時系列記録$' "$V"/*.md | head -1)
 chk "時系列記録: その日の記録のノート（日付-曜日-夢）に時刻つき" '[ -n "$dream" ] && grep -q "^record: \"夢\"$" "$dream" && grep -q "^07:00 空を飛んだ$" "$dream" && grep -A1 "^07:00 空を飛んだ$" "$dream" | grep -q "^高かった$" && grep -q "^07:10 海の夢$" "$dream"'
+chk "時系列記録: 2 回目はその日のノートへ、PC で書いた分と時刻の順にまぜる" '[ "$(grep -o "^07:[0-9]* [^ ]*" "$dream" | cut -c1-5 | tr "\n" " ")" = "07:00 07:10 07:20 07:30 07:40 " ]'
 chk "時系列記録: その日の日記の上にリンク・時系列記録の中に夢" 'grep -q "^\[2026-10-18-SU-夢\]($(basename "$dream"))$" "$diary" && grep -q "^\[夢\](" "$recg"'
-chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "電話した" "$work")" = 1 ] && [ "$(grep -c "二冊目" "$book")" = 1 ] && [ "$(grep -c "海の夢" "$dream")" = 1 ]'
-if [ $ng = 0 ]; then echo "capture_import OK"; else cat "$D/err" >&2; exit 1; fi
+chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "^15:10 電話した" "$work")" = 1 ] && [ "$(grep -c "^二冊目" "$book")" = 1 ] && [ "$(grep -c "海の夢" "$dream")" = 1 ]'
+if [ $ng = 0 ]; then echo "capture_import OK"; else cat "$D/err" >&2; [ -n "${KEEP:-}" ] && cp -r "$D" "$KEEP"; exit 1; fi

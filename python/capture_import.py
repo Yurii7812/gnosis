@@ -9,6 +9,7 @@ USB でつないだスマホ（adb）から、アプリの中のデータ（entr
 CLI:
     capture_import.py adbpull OUTDIR                 # スマホのアプリから OUTDIR/capture.json と images/ を作る
     capture_import.py adbmark ROOT                   # 取り込み済みの id をスマホのアプリへ書き戻す
+    capture_import.py adbrecords < JSON              # PC の時系列記録の名前（["夢", …]）をスマホのアプリへ書く
     capture_import.py adbinstall APK                 # つながっているスマホへ APK を入れる（adb install -r）
     capture_import.py plan OUTDIR ROOT               # 取り込む内容を JSON で出す（取り込み済みの id は除く）
     capture_import.py whatsapp TXT OUTDIR [TOPIC]    # WhatsApp の「チャットのエクスポート」を capture.json にする
@@ -136,6 +137,9 @@ def record_note(root: Path, kind: str, date: str) -> str:
 
 
 def _destination_exists(root: Path, target: str) -> bool:
+    if "#" in target and not target.startswith("("):
+        # まとめるトピックのノートの中の見出し（ノート.md#見出し）
+        target = target.split("#", 1)[0]
     if target.startswith("(record:"):
         kind, _, date = target[len("(record:"):-1].rpartition(":")
         return bool(record_note(root, kind, date))
@@ -182,6 +186,21 @@ def adb_mark(root: str) -> int:
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
 
 
+def adb_records(names: list[str]) -> int:
+    """PC にある時系列記録の名前をアプリへ渡す（files/records.json）。スマホでは選ぶだけにして表記揺れを防ぐ。"""
+    if adb_ready():
+        return 0
+    data = {"version": 1, "records": [n for n in names if isinstance(n, str) and n]}
+    r = subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "tee", "files/records.json.tmp"],
+                       input=json.dumps(data, ensure_ascii=False).encode("utf-8"),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode:
+        return r.returncode
+    return subprocess.run([_adb(), "exec-out", "run-as", PACKAGE, "mv",
+                           "files/records.json.tmp", "files/records.json"],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
+
+
 # スマホのメモの本文の中の、ほかのメモへのリンク（[表示名](memo:ID)）。取り込むと Gnosis のリンクになる。
 MEMO_LINK = re.compile(r"\[([^\]\n]*)\]\(memo:([^)\s]+)\)")
 
@@ -209,13 +228,15 @@ def plan(outdir: str, root: str) -> dict:
     modes = {k: v for k, v in raw_modes.items() if v.get("single") and k not in records}
     # 関係のある日記は 1 件のノートにもする（Branch / Context / 本文のリンクの相手になれるように）
     related = set()
+    # ほかのメモから親・文脈・リンクで使われたメモ（まとめるトピックでは見出しの節にして、そこを指す）
+    referenced = set()
     for e in entries:
         if e.get("parent"):
-            related.add(e["id"]); related.add(e["parent"])
+            related.add(e["id"]); related.add(e["parent"]); referenced.add(e["parent"])
         for c in e.get("contexts") or []:
-            related.add(e["id"]); related.add(c)
+            related.add(e["id"]); related.add(c); referenced.add(c)
         for m in MEMO_LINK.finditer(e.get("text") or ""):
-            related.add(e["id"]); related.add(m.group(2))
+            related.add(e["id"]); related.add(m.group(2)); referenced.add(m.group(2).split("#", 1)[0])
     items = []
     for e in sorted(entries, key=lambda x: x.get("created", 0)):
         t = dt.datetime.fromtimestamp(e.get("created", 0) / 1000)
@@ -226,12 +247,14 @@ def plan(outdir: str, root: str) -> dict:
         topic = normalize_topic(e.get("topic") or "")
         single = topic in modes
         record = topic in records
-        # 日記・まとめるトピック・時系列記録は、関係のあるものだけ 1 件のノートにする
-        needs_note = (topic != "日記" and not single and not record) or e["id"] in related
+        # 日記・時系列記録は、関係のあるものだけ 1 件のノートにする。まとめるトピックはノートにせず、
+        # 使われたものだけトピックのノートの中で見出しの節にする
+        needs_note = not single and ((topic != "日記" and not record) or e["id"] in related)
+        section = single and e["id"] in referenced
         # 旧版の記録は本文が残っていない。ノートのファイルが実在するなら取り込み済みとして扱い、
         # 同じメモを別ファイルで重ねて作らない。日記に書いただけの旧記録は、ノートが要るなら取り込み直す。
         legacy = previous is None and not target.startswith("(diary:")
-        appended = target.startswith(("(diary:", "(topic:", "(record:"))
+        appended = target.startswith(("(diary:", "(topic:", "(record:")) or "#" in target
         done = exists and (same or legacy) and not (needs_note and appended)
         metadata_only = exists and previous is not None and all(
             _snapshot(previous)[k] == _snapshot(e)[k] for k in ("text", "images")) and not appended
@@ -252,18 +275,23 @@ def plan(outdir: str, root: str) -> dict:
             "contexts": [c for c in e.get("contexts") or [] if c],
             "note": needs_note,
             "single": single,
+            "section": section,
             "record": record,
             "stamp": bool(single and modes[topic].get("stamp", True)),
             "done": done,
             "file": target if exists else "",
             "update": metadata_only and not done,
             "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or [])
-                                                + [m.group(2) for m in MEMO_LINK.finditer(e.get("text") or "")])
+                                                + [m.group(2).split("#", 1)[0] for m in MEMO_LINK.finditer(e.get("text") or "")])
                       if k and k in st.get("ids", {}) and k not in by_id
                       and not st["ids"][k].startswith(("(diary:", "(topic:", "(record:"))
                       and _destination_exists(Path(root), st["ids"][k])},
         })
-    return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"])}
+    # 親・文脈の行に使う相手の題（取り込み済みの相手は、取り込んだときの本文から）
+    titles = {}
+    for k, e in list(st.get("entries", {}).items()) + [(e["id"], e) for e in entries]:
+        titles[k] = _first_line_title(MEMO_LINK.sub(r"\1", e.get("text") or "")) or k
+    return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"]), "titles": titles}
 
 
 def record(root: str, pairs: list[tuple[str, str]], outdir: str = "") -> None:
@@ -350,6 +378,8 @@ def _main(argv: list[str]) -> int:
         return adb_pull(argv[1])
     if len(argv) == 2 and argv[0] == "adbmark":
         return adb_mark(argv[1])
+    if len(argv) == 1 and argv[0] == "adbrecords":
+        return adb_records(json.loads(sys.stdin.read() or "[]"))
     if len(argv) == 2 and argv[0] == "adbinstall":
         return adb_install(argv[1])
     if len(argv) == 3 and argv[0] == "plan":

@@ -105,4 +105,4 @@ printf '{"days": {"2026-10-12": "old-diary.md"}, "notes": {"old-day.md": "old-di
 HOME="$W/home" GNOSIS_HOME="$W/home/gh" RECORD_VAULT="$V" RECORD_RESULT="$W/result.txt" \
   timeout 60 vim -u "$REPO/vimrc_gnosis" -N -n -i NONE -es --cmd "let g:gnosis_root='$V/'" -S "$REPO/test/record_check.vim" </dev/null >/dev/null 2>&1 || true
 cat "$W/result.txt" 2>/dev/null || echo "NG 結果がありません"
-if [ -f "$W/result.txt" ] && ! grep -q '^NG' "$W/result.txt"; then echo "record OK"; else echo "NG: record"; exit 1; fi
+if [ -f "$W/result.txt" ] && ! grep -q "^NG" "$W/result.txt"; then echo "record OK"; else echo "NG: record"; [ -n "${KEEP:-}" ] && cp -r "$W" "$KEEP"; exit 1; fi

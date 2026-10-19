@@ -69,4 +69,12 @@ class CaptureTest {
         assertFalse(matchesQuery(text, "会議 予算"))
         assertTrue(matchesQuery(text, ""))
     }
+
+    @Test fun rangeAndHeadings() {
+        val order = listOf("a", "b", "c", "d")
+        assertEquals(listOf("b", "c", "d"), rangeIds(order, "d", "b"))   // 逆向きでも間を全部
+        assertEquals(listOf("b", "c"), rangeIds(order, "b", "c"))
+        assertEquals(listOf("x"), rangeIds(order, "zz", "x"))
+        assertEquals(listOf("見出し 1", "二つ目"), memoHeadings("本文\n## 見出し 1\n#タグではない\n### 二つ目 \n"))
+    }
 }

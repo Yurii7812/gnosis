@@ -6,6 +6,7 @@ W=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/time-mode.XXXXXX")
 trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/v" "$W/home"
 printf '%s\n' '---' 'title: t' '---' '' '# t' '' > "$W/v/t.md"
+printf '%s\n' '---' 'title: 2026-10-19-MO-夢' 'record: "夢"' '---' '' '# 2026-10-19-MO-夢' '' > "$W/v/rec.md"
 HOME="$W/home" GNOSIS_HOME="$W/home/gh" TIME_VAULT="$W/v" TIME_RESULT="$W/result.txt" \
   timeout 40 vim -u "$REPO/vimrc_gnosis" -N -n -i NONE -es --cmd "let g:gnosis_root='$W/v/'" -S "$REPO/test/time_mode_check.vim" </dev/null >/dev/null 2>&1 || true
 cat "$W/result.txt" 2>/dev/null || echo "NG 結果がありません"

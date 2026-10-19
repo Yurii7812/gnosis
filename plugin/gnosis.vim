@@ -444,11 +444,18 @@ inoremap <silent> <C-t> <C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> <C-t> i<C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> \T   <Cmd>call gnosis#time_mode_toggle()<CR>
 command! GnosisTimeMode call gnosis#time_mode_toggle()
+" 時刻モードはそのノートだけ: 出すたびに決め直す（時系列記録のノートはオン）。書き始めた行の頭に時刻
+augroup gnosis_time_mode
+  autocmd!
+  autocmd BufWinEnter *.md call gnosis#time_mode_on_enter(str2nr(expand('<abuf>')))
+  autocmd InsertCharPre *.md call gnosis#time_char_pre()
+augroup END
 " 時系列記録（夢など。日記と同じ形で日ごとのノート）: \R で選んで今日のノートを作る・開く
 nnoremap <silent> \R   <Cmd>call gnosis#record_pick()<CR>
 command! GnosisRecord call gnosis#record_pick()
 command! -nargs=? GnosisRecordNew call gnosis#record_new(<q-args>)
 command! -nargs=+ GnosisRecordMigrate call gnosis#record_migrate(<f-args>)
+command! -nargs=* GnosisRecordMerge call gnosis#record_merge(<f-args>)
 " zw … 今のノート（日記でなくてもよい）の本文の一番下、空行を 1 つ空けたところから書き始める。
 nnoremap <silent> zw  <Cmd>call gnosis#write_at_bottom()<CR>
 " \\r はリンクの内容を触らず、Vim側の検索/matchハイライトと色を再適用。
@@ -1049,6 +1056,9 @@ augroup gnosis_autosync
   " グループに増えたメンバーに気づくのは、同期が書き直して読み直す（控えが取り直される）より前
   autocmd BufWritePost *.md call gnosis#group_review_check()
   autocmd BufWritePost *.md call s:on_write_post()
+  " 見出しを書き換えたら、その見出しへのリンクも直す（保存の前の見出しを控えて比べる）
+  autocmd BufWritePre *.md call gnosis#heading_links_before()
+  autocmd BufWritePost *.md call gnosis#heading_links_after()
   autocmd BufReadPost *.md call gnosis#group_review_snapshot()
   if get(g:, 'gnosis_realtime_link_sync', 0)
     autocmd BufReadPost,BufEnter *.md call gnosis#realtime_sync_snapshot()

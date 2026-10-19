@@ -29,6 +29,8 @@ data class Settings(
     val topics: List<String> = listOf(DIARY),
     val lastTopic: String = ALL,
     val topicModes: Map<String, TopicMode> = emptyMap(),
+    val ringSeconds: Int = 0,        // アラームを鳴らし続ける長さ（秒）。0 は 1 回だけ鳴らす
+    val expandAll: Boolean = false,  // 長いメモを「続きを見る」を押さずに全部見せる
 )
 
 /**
@@ -50,6 +52,18 @@ fun topicLabel(topic: String) = when (topic) {
 }
 fun visibleEntries(entries: List<Entry>, topic: String) = entries.filter { topic == ALL || it.topic == topic }
 fun writingTopic(topic: String) = if (topic == ALL) UNASSIGNED else topic
+
+/** 並び list の中で a から b まで（どちら向きでも）の id。範囲選択に使う。 */
+fun rangeIds(list: List<String>, a: String, b: String): List<String> {
+    val i = list.indexOf(a); val j = list.indexOf(b)
+    if (i < 0 || j < 0) return listOf(b)
+    return list.subList(minOf(i, j), maxOf(i, j) + 1)
+}
+
+/** メモの中の見出し（# で始まる行）の文字。アウトライン引用で選ぶ。 */
+fun memoHeadings(text: String): List<String> =
+    text.lineSequence().mapNotNull { Regex("^#{1,6}\\s+(.+?)\\s*$").find(it)?.groupValues?.get(1) }
+        .map { it.replace("[", "").replace("]", "").replace(")", "") }.filter { it.isNotBlank() }.toList()
 
 /** 検索用に揃える: 全角・半角（NFKC）、大文字・小文字、カタカナ→ひらがな。 */
 fun searchKey(s: String): String {
@@ -121,7 +135,19 @@ class Store(private val ctx: Context) {
                     val t = m.getJSONObject(k); TopicMode(t.optBoolean("single", false), t.optBoolean("stamp", true), t.optBoolean("record", false))
                 }
             } ?: emptyMap(),
+            ringSeconds = o.optInt("ringSeconds", 0).coerceIn(0, 600),
+            expandAll = o.optBoolean("expandAll", false),
         )
+    }
+
+    /** PC の Gnosis にある時系列記録の名前（PC が \M のときに files/records.json へ書く）。表記揺れを防ぐため、ここから選ぶ。 */
+    fun loadRecords(): List<String> {
+        val f = File(ctx.filesDir, "records.json")
+        if (!f.exists()) return emptyList()
+        return try {
+            val a = JSONObject(f.readText()).optJSONArray("records") ?: return emptyList()
+            (0 until a.length()).map { a.getString(it) }.filter { it.isNotBlank() && it != DIARY }.distinct()
+        } catch (e: Exception) { emptyList() }
     }
 
     fun saveSettings(s: Settings) {
@@ -129,6 +155,7 @@ class Store(private val ctx: Context) {
         o.put("alarmOn", s.alarmOn); o.put("alarmMinutes", s.alarmMinutes)
         o.put("fromHour", s.fromHour); o.put("toHour", s.toHour)
         o.put("topics", JSONArray(s.topics)); o.put("lastTopic", s.lastTopic)
+        o.put("ringSeconds", s.ringSeconds); o.put("expandAll", s.expandAll)
         // PC の取り込み（\M）もこのファイルを読む（topicModes）
         val modes = JSONObject()
         s.topicModes.forEach { (k, v) -> modes.put(k, JSONObject().put("single", v.single).put("stamp", v.stamp).put("record", v.record)) }

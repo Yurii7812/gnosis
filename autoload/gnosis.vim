@@ -471,6 +471,86 @@ function! s:jump_to_fragment(frag) abort
   return 0
 endfunction
 
+" 見出しを書き換えたら、ほかのノートのその見出しへのリンク（[題#見出し](ノート.md#スラッグ)）も直す。
+" 保存の前に、ファイルにある見出しを控えておき（BufWritePre）、保存のあとで比べる（BufWritePost）。
+" 前後で同じ並びのまま文字だけ変わった見出しを「書き換え」とみなす（足した・消した見出しは触らない）。
+function! gnosis#heading_links_before() abort
+  let l:path = expand('<afile>:p')
+  let b:gnosis_heads_before = filereadable(l:path) ? map(s:file_heading_items(l:path), '[v:val.slug, v:val.text]') : []
+endfunction
+
+function! gnosis#heading_links_after() abort
+  let l:old = get(b:, 'gnosis_heads_before', [])
+  unlet! b:gnosis_heads_before
+  if empty(l:old)
+    return
+  endif
+  let l:path = expand('<afile>:p')
+  let l:new = map(s:file_heading_items(l:path), '[v:val.slug, v:val.text]')
+  let l:renames = s:heading_renames(l:old, l:new)
+  if empty(l:renames)
+    return
+  endif
+  let l:dir = fnamemodify(l:path, ':h') . '/'
+  let l:base = fnamemodify(l:path, ':t')
+  let l:n = 0
+  for l:f in glob(l:dir . '*.md', 0, 1)
+    if l:f ==# l:path || stridx(join(readfile(l:f), "\n"), '](' . l:base . '#') < 0
+      continue
+    endif
+    let l:n += s:diary_edit_file(l:f, function('s:heading_op_relink', [l:base, l:renames]))
+  endfor
+  if l:n
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('見出しへのリンクを直しました（%d ノート）'), l:n)
+  endif
+endfunction
+
+" 前後の見出しの並び（[スラッグ, 文字]）から、書き換えた見出しを {古いスラッグ: [新しいスラッグ, 古い文字, 新しい文字]} で返す。
+" 前と後ろで同じところを除いた真ん中が同じ数のときだけ、順に対応させる。
+function! s:heading_renames(old, new) abort
+  let l:p = 0
+  while l:p < len(a:old) && l:p < len(a:new) && a:old[l:p] ==# a:new[l:p]
+    let l:p += 1
+  endwhile
+  let l:q = 0
+  while l:q < len(a:old) - l:p && l:q < len(a:new) - l:p && a:old[-1 - l:q] ==# a:new[-1 - l:q]
+    let l:q += 1
+  endwhile
+  let l:om = a:old[l:p : len(a:old) - l:q - 1]
+  let l:nm = a:new[l:p : len(a:new) - l:q - 1]
+  let l:out = {}
+  if len(l:om) != len(l:nm)
+    return l:out
+  endif
+  for l:i in range(len(l:om))
+    if l:om[l:i][0] !=# l:nm[l:i][0]
+      let l:out[l:om[l:i][0]] = [l:nm[l:i][0], l:om[l:i][1], l:nm[l:i][1]]
+    endif
+  endfor
+  return l:out
+endfunction
+
+" [表示名](a:base#古いスラッグ) を新しいスラッグに。表示名が「…#古い見出し」なら「…#新しい見出し」に
+function! s:heading_op_relink(base, renames, lines) abort
+  return map(copy(a:lines), {_, v -> stridx(v, '](' . a:base . '#') < 0 ? v :
+        \ substitute(v, '\[\(\%(\\.\|[^\]\\]\)*\)\](' . escape(a:base, '.') . '#\([^)]*\))',
+        \ '\=s:heading_relink_one(submatch(0), submatch(1), submatch(2), a:base, a:renames)', 'g')})
+endfunction
+
+function! s:heading_relink_one(all, label, slug, base, renames) abort
+  if !has_key(a:renames, a:slug)
+    return a:all
+  endif
+  let [l:slug, l:old, l:new] = a:renames[a:slug]
+  let l:label = a:label
+  if l:label =~# '#' && strpart(l:label, strridx(l:label, '#') + 1) ==# l:old
+    let l:label = strpart(l:label, 0, strridx(l:label, '#') + 1) . l:new
+  elseif l:label ==# l:old
+    let l:label = l:new
+  endif
+  return '[' . l:label . '](' . a:base . '#' . l:slug . ')'
+endfunction
+
 function! s:outline_editor_lines(items) abort
   let l:lines = []
   call add(l:lines, gnosis#i18n#tr('# OutlineEdit: 見出しを編集して :write で反映'))
@@ -5434,18 +5514,27 @@ function! gnosis#capture_import(...) abort
     call delete(l:tmp, 'rf')
     if !(a:0 && !empty(a:1))
       call s:capture_run(['adbmark', l:root])
+      call s:capture_push_records(l:root)
     endif
     return
   endif
   call gnosis#save_current_note()
   let l:files = {}
+  " まとめるトピックのノートの中の節になったメモ: ID → {target: ノート.md#スラッグ, label: 題#見出し}
+  let l:anchors = {}
+  let l:titles = get(l:plan, 'titles', {})
   for l:it in l:plan.items
     if !empty(l:it.file) && l:it.file !~# '^(\(diary\|topic\|record\):'
-      let l:files[l:it.id] = l:root . '/' . l:it.file
+      call s:capture_known(l:root, l:files, l:anchors, l:it.id, l:it.file)
     endif
     for [l:k, l:v] in items(l:it.known)
-      let l:files[l:k] = l:root . '/' . l:v
+      call s:capture_known(l:root, l:files, l:anchors, l:k, l:v)
     endfor
+  endfor
+  " これから節になるメモ（つながりの行を書くのに使う）
+  let l:sections = {}
+  for l:it in l:todo
+    if get(l:it, 'section', 0) | let l:sections[l:it.id] = 1 | endif
   endfor
   " 画像は vault の capture-images/ に置く
   let l:imgdir = l:root . '/capture-images'
@@ -5495,7 +5584,8 @@ function! gnosis#capture_import(...) abort
         let l:n += 1
       endwhile
       let l:title = substitute(l:it.title, '[\[\]]', '', 'g')
-      let l:body = split(l:it.text, "\n", 1)
+      " 親・文脈がまとめるトピックの中の節なら、本文の下にその見出しへのリンクの行を置く
+      let l:body = split(l:it.text, "\n", 1) + s:capture_rel_lines(l:it, l:titles, extend(copy(l:sections), map(copy(l:anchors), '1')))
       " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
       let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
@@ -5531,9 +5621,11 @@ function! gnosis#capture_import(...) abort
             \ 'lines': split(l:it.text, "\n", 1) + (empty(l:img) ? [] : [''] + l:img)})
       call add(l:made, [l:it.id, '(record:' . l:it.topic . ':' . l:it.date . ')'])
     elseif get(l:it, 'single', 0)
-      " 1 つのノートにまとめるトピック: 本文をそのトピックのノートへ追記する
+      " 1 つのノートにまとめるトピック: 本文をそのトピックのノートへ追記する。ほかのメモから使われたメモは
+      " 見出しの節にする（記録はあとで節の場所に直す）。親・文脈は本文の下にリンクの行で残す
       call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
-            \ 'lines': split(l:it.text, "\n", 1) + (empty(l:img) ? [] : [''] + l:img)})
+            \ 'id': l:it.id, 'section': get(l:it, 'section', 0), 'heading': s:capture_heading(l:it.title),
+            \ 'lines': split(l:it.text, "\n", 1) + s:capture_rel_lines(l:it, l:titles) + (empty(l:img) ? [] : [''] + l:img)})
       call add(l:made, [l:it.id, '(topic:' . l:it.topic . ')'])
     else
       let l:body = split(l:it.text, "\n", 1)
@@ -5543,25 +5635,37 @@ function! gnosis#capture_import(...) abort
       call add(l:made, [l:it.id, '(diary:' . l:it.date . ')'])
     endif
   endfor
-  " 本文の中のほかのメモへのリンク（[表示名](memo:ID)）を、取り込んだノートへのリンクに直す
+  " まとめるトピックを、そのトピックのノートへ（無ければ作る）。節になったメモの場所（見出し）がここで決まる
+  let l:touched = []
+  for [l:name, l:blocks] in items(l:topic_lines)
+    let l:sec = s:capture_topic_append(l:root, l:name, l:blocks)
+    call extend(l:anchors, l:sec)
+    call add(l:touched, l:root . '/' . s:capture_topic_note(l:root, l:name))
+    for l:m in l:made
+      if has_key(l:sec, l:m[0]) | let l:m[1] = l:sec[l:m[0]].target | endif
+    endfor
+  endfor
+  " 本文の中のほかのメモへのリンク（[表示名](memo:ID)）を、取り込んだノート（節ならその見出し）へのリンクに直す
   " （取り込んでいない相手は表示名だけの文字にする）。ノートも日記も vault の直下なので、ファイル名で指す。
   let l:rel = {}
   for [l:k, l:v] in items(l:files)
     let l:rel[l:k] = stridx(l:v, l:root . '/') == 0 ? l:v[len(l:root) + 1 :] : l:v
   endfor
   for l:blocks in values(l:diary_lines)
-    call map(l:blocks, 'map(v:val, "s:capture_memo_links(v:val, l:rel)")')
+    call map(l:blocks, 'map(v:val, "s:capture_memo_links(v:val, l:rel, l:anchors)")')
   endfor
-  for l:blocks in values(l:topic_lines) + values(l:record_lines)
+  for l:blocks in values(l:record_lines)
     for l:b in l:blocks
-      call map(l:b.lines, 's:capture_memo_links(v:val, l:rel)')
+      call map(l:b.lines, 's:capture_memo_links(v:val, l:rel, l:anchors)')
     endfor
   endfor
   for [l:id, l:name] in l:made
-    if l:name =~# '^(\(diary\|topic\|record\):' | continue | endif
-    let l:p = l:root . '/' . l:name
+    if l:name =~# '^(\(diary\|topic\|record\):' || l:name =~# '#' | continue | endif
+    call add(l:touched, l:root . '/' . l:name)
+  endfor
+  for l:p in uniq(sort(l:touched))
     let l:lines = readfile(l:p)
-    let l:new = map(copy(l:lines), 's:capture_memo_links(v:val, l:rel)')
+    let l:new = map(copy(l:lines), 's:capture_memo_links(v:val, l:rel, l:anchors)')
     if l:new !=# l:lines
       call s:syn_writefile(l:new, l:p)
     endif
@@ -5570,11 +5674,7 @@ function! gnosis#capture_import(...) abort
   for [l:date, l:blocks] in items(l:diary_lines)
     call s:capture_diary_append(l:root, l:date, l:blocks)
   endfor
-  " まとめるトピックを、そのトピックのノートへ（無ければ作る）
-  for [l:name, l:blocks] in items(l:topic_lines)
-    call s:capture_topic_append(l:root, l:name, l:blocks)
-  endfor
-  " 時系列記録を、その日の記録のノートへ（無ければ作る。その日の日記の上にリンク）
+  " 時系列記録を、その日の記録のノートへ（無ければ作る。その日の日記の上にリンク。PC で書いた分と時刻の順にまぜる）
   for [l:key, l:blocks] in items(l:record_lines)
     let [l:kind, l:date] = split(l:key, "\t")
     call s:capture_record_append(l:root, l:kind, l:date, l:blocks)
@@ -5592,10 +5692,20 @@ function! gnosis#capture_import(...) abort
         call add(l:warn, l:it.title . ': ' . gnosis#branch#message(l:r))
       endif
     endif
+    " 相手がまとめるトピックの節なら、本文の行で見出しを指し、つながりはそのトピックのノートを文脈にする
+    let l:ctx_files = []
+    if has_key(l:anchors, l:it.parent)
+      call add(l:ctx_files, l:root . '/' . matchstr(l:anchors[l:it.parent].target, '^[^#]*'))
+    endif
     for l:c in l:it.contexts
-      if has_key(l:files, l:c)
-        call s:simple_add_parent(l:me, l:files[l:c], s:get_title(l:files[l:c]))
+      if has_key(l:anchors, l:c)
+        call add(l:ctx_files, l:root . '/' . matchstr(l:anchors[l:c].target, '^[^#]*'))
+      elseif has_key(l:files, l:c)
+        call add(l:ctx_files, l:files[l:c])
       endif
+    endfor
+    for l:c in uniq(l:ctx_files)
+      call s:simple_add_parent(l:me, l:c, s:get_title(l:c))
     endfor
   endfor
   call s:capture_run(['record', l:root, l:tmp], join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
@@ -5606,6 +5716,7 @@ function! gnosis#capture_import(...) abort
   call delete(l:tmp, 'rf')
   if !(a:0 && !empty(a:1))
     call s:capture_run(['adbmark', l:root])
+    call s:capture_push_records(l:root)
   endif
   call gnosis#clear_title_cache()
   silent! call s:run_sync([g:gnosis_python, 'update', l:root])
@@ -5618,11 +5729,72 @@ function! gnosis#capture_import(...) abort
   endif
 endfunction
 
+" PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
+function! s:capture_push_records(root) abort
+  let l:notes = s:diary_scan(a:root)
+  let l:rec = s:diary_find_group(l:notes, '時系列記録')
+  let l:kinds = empty(l:rec) ? [] : map(s:record_kinds(a:root, l:notes, l:rec), 'v:val.title')
+  call s:capture_run(['adbrecords'], json_encode(l:kinds))
+endfunction
+
+" 取り込み済みのメモの行き先: ノート（l:files）か、まとめるトピックのノートの中の節（ノート.md#スラッグ）
+function! s:capture_known(root, files, anchors, id, target) abort
+  if a:target =~# '#'
+    let l:file = matchstr(a:target, '^[^#]*')
+    let l:head = get(filter(s:file_heading_items(a:root . '/' . l:file), 'v:val.slug ==# matchstr(a:target, "#\\zs.*")'), 0, {})
+    let a:anchors[a:id] = {'target': a:target,
+          \ 'label': s:get_yaml_title(a:root . '/' . l:file) . (empty(l:head) ? '' : '#' . l:head.text)}
+  else
+    let a:files[a:id] = a:root . '/' . a:target
+  endif
+endfunction
+
+" 親・文脈のリンクの行（本文の下に置く）。a:1（辞書）を渡すと、その中にある相手だけ
+"   ↳ [題](memo:親) の続き ／ 文脈: [題](memo:文脈)。リンクはあとで取り込んだ先に直る
+function! s:capture_rel_lines(it, titles, ...) abort
+  let l:out = []
+  let l:check = a:0 > 0
+  let l:only = a:0 ? a:1 : {}
+  let l:Link = {id -> '[' . s:md_link_text(get(a:titles, id, id)) . '](memo:' . id . ')'}
+  if !empty(a:it.parent) && index(a:it.contexts, a:it.parent) < 0 && (!l:check || has_key(l:only, a:it.parent))
+    call add(l:out, '↳ ' . l:Link(a:it.parent) . ' の続き')
+  endif
+  for l:c in a:it.contexts
+    if !l:check || has_key(l:only, l:c)
+      call add(l:out, '文脈: ' . l:Link(l:c))
+    endif
+  endfor
+  return empty(l:out) ? [] : [''] + l:out
+endfunction
+
 " 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
 function! s:capture_record_bucket(lines, it) abort
   let l:k = a:it.topic . "\t" . a:it.date
   if !has_key(a:lines, l:k) | let a:lines[l:k] = [] | endif
   return a:lines[l:k]
+endfunction
+
+" a:head（ノートの本文まで）に段落 a:blocks（[{hm, lines}]。lines は「時:分 」から始まる）を足す。
+" すでにある「時:分 」で始まる段落（PC で書いた分）とまぜて時刻の順に入れる。hm が空なら最後に足す。
+function! s:record_insert_blocks(head, blocks) abort
+  let l:h1 = match(a:head, '^# ')
+  for l:b in sort(copy(a:blocks), {x, y -> x.hm ==# y.hm ? 0 : x.hm ># y.hm ? 1 : -1})
+    let l:at = -1
+    let l:fence = s:fence_flags(a:head)
+    for l:i in range(max([1, l:h1 + 1]), len(a:head) - 1)
+      if !empty(l:b.hm) && !l:fence[l:i] && trim(a:head[l:i - 1]) ==# '' && a:head[l:i] =~# '^\d\d:\d\d\%(\s\|$\)'
+            \ && a:head[l:i][0 : 4] ># l:b.hm
+        let l:at = l:i
+        break
+      endif
+    endfor
+    if l:at < 0
+      call s:capture_trim_tail(a:head)
+      call extend(a:head, [''] + l:b.lines)
+    else
+      call extend(a:head, l:b.lines + [''], l:at)
+    endif
+  endfor
 endfunction
 
 " 時系列記録 a:kind の a:date のノートへ追記する（記録が無ければ「時系列記録」の中に作る）。
@@ -5653,15 +5825,18 @@ function! s:capture_record_append(root, kind, date, blocks) abort
   while !empty(l:head) && trim(l:head[-1]) ==# ''
     call remove(l:head, -1)
   endwhile
-  for l:b in sort(copy(a:blocks), {x, y -> x.hm ==# y.hm ? 0 : x.hm ># y.hm ? 1 : -1})
+  let l:blocks = []
+  for l:b in a:blocks
     let l:body = copy(l:b.lines)
     while len(l:body) > 1 && trim(l:body[-1]) ==# ''
       call remove(l:body, -1)
     endwhile
     let l:body[0] = l:b.hm . ' ' . l:body[0]
-    call extend(l:head, [''] + l:body)
+    call add(l:blocks, {'hm': l:b.hm, 'lines': l:body})
   endfor
+  call s:record_insert_blocks(l:head, l:blocks)
   call s:syn_writefile(l:head + [''] + l:tail, l:path)
+  return l:path
 endfunction
 
 function! s:capture_topic_bucket(lines, it) abort
@@ -5710,8 +5885,11 @@ endfunction
 " まとめるトピックのノートへ追記する。本文の最後（ChildBranch: / Related: / BackLink: の前）に、古い順。
 " 日時あり: 日付の見出しの下に「時:分 本文」（同じ日の見出しがすでに最後にあれば、その下に続ける）。
 " 日時なし: 本文だけを空行で区切って足す。
+" ほかのメモから使われたメモ（section）は「## 本文の最初の 20 文字ほど」の見出しの節にする（見出しも本文に残す）。
+" 下に見出しが続かない節は「##」だけの行で閉じる。返り値は {メモの id: {'target': ノート.md#スラッグ, 'label': 題#見出し}}。
 function! s:capture_topic_append(root, topic, blocks) abort
-  let l:path = a:root . '/' . s:capture_topic_note(a:root, a:topic)
+  let l:file = s:capture_topic_note(a:root, a:topic)
+  let l:path = a:root . '/' . l:file
   let l:lines = readfile(l:path)
   let l:at = len(l:lines)
   let l:fence = s:fence_flags(l:lines)
@@ -5723,9 +5901,7 @@ function! s:capture_topic_append(root, topic, blocks) abort
   endfor
   let l:head = l:lines[: l:at - 1]
   let l:tail = l:lines[l:at :]
-  while !empty(l:head) && trim(l:head[-1]) ==# ''
-    call remove(l:head, -1)
-  endwhile
+  call s:capture_trim_tail(l:head)
   " 本文の最後の日付の見出し（同じ日なら見出しを重ねない）
   let l:last_day = ''
   for l:ln in l:head
@@ -5733,6 +5909,7 @@ function! s:capture_topic_append(root, topic, blocks) abort
       let l:last_day = l:ln
     endif
   endfor
+  let l:heads = {}
   for l:b in sort(copy(a:blocks), {x, y -> x.date . x.hm ==# y.date . y.hm ? 0 : x.date . x.hm ># y.date . y.hm ? 1 : -1})
     let l:body = copy(l:b.lines)
     while len(l:body) > 1 && trim(l:body[-1]) ==# ''
@@ -5741,23 +5918,80 @@ function! s:capture_topic_append(root, topic, blocks) abort
     if l:b.stamp
       let l:day = s:capture_day_heading(l:b.date)
       if l:day !=# l:last_day
+        call s:capture_drop_closer(l:head)
         call extend(l:head, ['', l:day])
         let l:last_day = l:day
       endif
       let l:body[0] = l:b.hm . ' ' . l:body[0]
     endif
-    call extend(l:head, [''] + l:body)
+    if get(l:b, 'section', 0)
+      call s:capture_drop_closer(l:head)
+      call add(l:head, '')
+      let l:heads[l:b.id] = [len(l:head), l:b.heading]
+      call extend(l:head, ['## ' . l:b.heading] + l:body + ['##'])
+    else
+      " 自分で見出しを書いたメモが続くなら、前の節の「##」は要らない
+      if l:body[0] =~# '^#\+\s'
+        call s:capture_drop_closer(l:head)
+      endif
+      call extend(l:head, [''] + l:body)
+    endif
   endfor
-  call s:syn_writefile(l:head + [''] + (empty(l:tail) ? [] : l:tail), l:path)
+  let l:new = l:head + [''] + (empty(l:tail) ? [] : l:tail)
+  call s:syn_writefile(l:new, l:path)
+  let l:out = {}
+  let l:title = s:get_yaml_title(l:path)
+  for l:it in s:file_heading_items(l:path, l:new)
+    for [l:id, l:h] in items(l:heads)
+      if l:it.lnum == l:h[0] + 1
+        let l:out[l:id] = {'target': l:file . '#' . l:it.slug, 'label': l:title . '#' . l:h[1]}
+      endif
+    endfor
+  endfor
+  return l:out
 endfunction
 
-" 1 行の中の [表示名](memo:ID) を、取り込んだノートへのリンク（a:rel は ID → vault の中のパス）か表示名だけに直す
-function! s:capture_memo_links(line, rel) abort
+function! s:capture_trim_tail(lines) abort
+  while !empty(a:lines) && trim(a:lines[-1]) ==# ''
+    call remove(a:lines, -1)
+  endwhile
+endfunction
+
+" 最後が節を閉じる「##」だけの行なら外す（すぐ下に見出しが来るので要らない）
+function! s:capture_drop_closer(lines) abort
+  call s:capture_trim_tail(a:lines)
+  if !empty(a:lines) && a:lines[-1] ==# '##'
+    call remove(a:lines, -1)
+    call s:capture_trim_tail(a:lines)
+  endif
+endfunction
+
+" スマホのメモの見出し（本文の最初の行の 20 文字ほど。[ ] # は外す）
+function! s:capture_heading(title) abort
+  let l:h = trim(substitute(substitute(a:title, '\.\.\.$', '', ''), '[\[\]#]', '', 'g'))
+  return empty(l:h) ? 'メモ' : l:h
+endfunction
+
+" 1 行の中の [表示名](memo:ID) を、取り込んだノートへのリンク（a:rel は ID → vault の中のパス）か表示名だけに直す。
+" a:anchors は まとめるトピックの節になったメモ（ID → {target, label}）。memo:ID#見出し はそのノートの見出しを指す。
+function! s:capture_memo_links(line, rel, ...) abort
   if a:line !~# '](memo:'
     return a:line
   endif
+  let l:anchors = a:0 ? a:1 : {}
   return substitute(a:line, '\[\([^]]*\)\](memo:\([^) \t]\+\))',
-        \ '\=has_key(a:rel, submatch(2)) ? "[" . submatch(1) . "](" . a:rel[submatch(2)] . ")" : submatch(1)', 'g')
+        \ '\=s:capture_memo_link(submatch(1), submatch(2), a:rel, l:anchors)', 'g')
+endfunction
+
+function! s:capture_memo_link(label, ref, rel, anchors) abort
+  let l:id = matchstr(a:ref, '^[^#]*')
+  let l:frag = matchstr(a:ref, '#\zs.*')
+  if has_key(a:anchors, l:id)
+    return '[' . s:md_link_text(a:anchors[l:id].label) . '](' . a:anchors[l:id].target . ')'
+  elseif has_key(a:rel, l:id)
+    return '[' . a:label . '](' . a:rel[l:id] . (empty(l:frag) ? '' : '#' . s:gh_slug(l:frag)) . ')'
+  endif
+  return a:label
 endfunction
 
 function! s:capture_diary_append(root, date, blocks) abort
@@ -13205,18 +13439,49 @@ function! gnosis#time_stamp() abort
   return strftime('%H:%M') . ' '
 endfunction
 
-" 時刻モード（\T / :GnosisTimeMode）: Enter を押すたびに、空行を 1 つはさんで次の行の頭に時刻を入れる。
-" そのバッファだけ。もう一度で切る。
+" 時刻モード（\T / :GnosisTimeMode）: 空の行に書き始めると、行の頭に時刻（時:分 ）が入る。
+" Enter では空行を 1 つはさんで次の行へ。そのバッファだけで、ほかのノートへ移る・閉じると切れる。
+" 時系列記録のノート（front matter に record:）は、開いたときにオンになる。
 function! gnosis#time_mode_toggle() abort
   let b:gnosis_time_mode = !get(b:, 'gnosis_time_mode', 0)
   redrawstatus
-  echo 'Gnosis: ' . gnosis#i18n#tr(b:gnosis_time_mode ? '時刻モード: オン（Enter で空行と次の時刻。\T で切る）' : '時刻モード: オフ')
+  echo 'Gnosis: ' . gnosis#i18n#tr(b:gnosis_time_mode ? '時刻モード: オン（書き始めた行の頭に時刻。\T で切る）' : '時刻モード: オフ')
 endfunction
 
-" 時刻モードの Enter。時刻だけの行（まだ何も書いていない）で押したら、時刻を消してふつうの空行にする。
-" 行の途中で押したら、カーソルより後ろを次の時刻の行へ移す。
+" ウィンドウに出したとき: 時系列記録のノートなら時刻モードをオン（それ以外は前の状態を持ち越さない）
+function! gnosis#time_mode_on_enter(bnr) abort
+  let l:head = getbufline(a:bnr, 1, 20)
+  let l:end = l:head[0] ==# '---' ? index(l:head, '---', 1) : -1
+  call setbufvar(a:bnr, 'gnosis_time_mode', l:end > 0 && match(l:head[: l:end], '^record:') >= 0)
+endfunction
+
+" 時刻モードで、本文の空の行に最初の 1 文字を打ったとき、その前に時刻を足す（InsertCharPre）。
+" 見出し・箇条書き・引用・表・コードの書き始め（# - * > | `）と空白では足さない。
+function! gnosis#time_char_pre() abort
+  if !get(b:, 'gnosis_time_mode', 0) || getline('.') !=# '' || v:char =~# '^[[:space:]#*>|`-]'
+    return
+  endif
+  let l:lnum = line('.')
+  let l:lines = getline(1, '$')
+  let l:h1 = match(l:lines, '^# ')
+  if l:h1 < 0 || l:lnum - 1 <= l:h1 || get(s:fence_flags(l:lines), l:lnum - 1, 0)
+    return
+  endif
+  if l:lnum - 1 < s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 'Context:'])
+    return
+  endif
+  let l:sec = s:first_section_index_in_lines(l:lines)
+  if l:sec >= 0 && l:lnum - 1 > l:sec
+    return
+  endif
+  let v:char = gnosis#time_stamp() . v:char
+endfunction
+
+" 時刻モードの Enter。空行を 1 つはさんで次の行へ（時刻は書き始めたときに入る）。
+" 時刻だけの行で押したら、時刻を消してふつうの空行にする。空の行ではふつうの Enter。
+" 行の途中で押したら、カーソルより後ろを時刻つきで次の行へ移す。
 function! s:time_cr(lnum, line) abort
-  if !get(b:, 'gnosis_time_mode', 0)
+  if !get(b:, 'gnosis_time_mode', 0) || a:line ==# ''
     return 0
   endif
   if a:line =~# '^\d\d:\d\d \=$'
@@ -13227,9 +13492,9 @@ function! s:time_cr(lnum, line) abort
   let l:col = col('.') - 1
   let l:rest = substitute(strpart(a:line, l:col), '^\s\+', '', '')
   call setline(a:lnum, substitute(strpart(a:line, 0, l:col), '\s\+$', '', ''))
-  let l:ts = gnosis#time_stamp()
-  call append(a:lnum, ['', l:ts . l:rest])
-  call cursor(a:lnum + 2, strlen(l:ts) + 1)
+  let l:next = empty(l:rest) ? '' : gnosis#time_stamp() . l:rest
+  call append(a:lnum, ['', l:next])
+  call cursor(a:lnum + 2, empty(l:rest) ? 1 : strlen(gnosis#time_stamp()) + 1)
   return 1
 endfunction
 
@@ -16840,6 +17105,135 @@ function! gnosis#record_migrate(old, kind) abort
   endwhile
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('「%s」を時系列記録「%s」に移しました（その日のノート %d 件）'), a:old, a:kind, l:moved)
         \ . (l:unlinked ? printf(gnosis#i18n#tr('。日記が見つからずリンクを置かなかったもの %d 件'), l:unlinked) : '')
+endfunction
+
+" 表記揺れで分かれた時系列記録 a:from を a:into へまとめる（:GnosisRecordMerge 元 先）。
+"   同じ日のノートがあれば、本文の段落を時刻の順にまぜて元のノートを消す（リンクは先のノートへ付け替える）。
+"   無ければ、元のノートの題・record: を改めて、先の月のグループへ移す。最後に元の記録と月・年のグループを消す。
+function! gnosis#record_merge(...) abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:dir = fnamemodify(l:root, ':p')
+  let l:notes = s:diary_scan(l:root)
+  let l:rec = s:diary_find_group(l:notes, '時系列記録')
+  let l:kinds = empty(l:rec) ? [] : s:record_kinds(l:root, l:notes, l:rec)
+  let l:names = map(copy(l:kinds), 'v:val.title')
+  let l:args = copy(a:000)
+  for l:q in ['まとめる元（消える方）:', 'まとめる先（残る方）:']
+    if len(l:args) >= 2 | break | endif
+    if len(l:names) < 2
+      echo 'Gnosis: ' . gnosis#i18n#tr('まとめられる時系列記録が 2 つ以上ありません')
+      return
+    endif
+    let l:n = gnosis#ui#inputlist([gnosis#i18n#tr(l:q)] + map(copy(l:names), '(v:key + 1) . ". " . v:val'))
+    if l:n < 1 || l:n > len(l:names) | return | endif
+    call add(l:args, l:names[l:n - 1])
+  endfor
+  let [l:from, l:into] = l:args[0 : 1]
+  let l:fg = get(filter(copy(l:kinds), 'v:val.title ==# l:from'), 0, {})
+  let l:tg = get(filter(copy(l:kinds), 'v:val.title ==# l:into'), 0, {})
+  if empty(l:fg) || empty(l:tg) || l:from ==# l:into
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その時系列記録はありません: ') . (empty(l:fg) ? l:from : l:into) | echohl NONE
+    return
+  endif
+  call gnosis#save_current_note()
+  " 元の記録の中（年・月のグループと、その日のノート）
+  let l:groups = [l:fg.file]
+  let l:days = []
+  let l:i = 0
+  while l:i < len(l:groups)
+    for l:t in keys(s:record_members(l:root, l:groups[l:i]))
+      let l:n = get(filter(copy(l:notes), 'v:val.file ==# l:t'), 0, {})
+      if empty(l:n) || l:t ==# 'index.md' | continue | endif
+      if l:n.group && l:n.title =~# '^\d\{4}\%(-\d\d\)\=-' . escape(l:from, '\.*[]~^$') . '$' && index(l:groups, l:t) < 0
+        call add(l:groups, l:t)
+      elseif !l:n.group && l:n.title =~# '^\d\{4}-\d\d-\d\d-'
+        call add(l:days, {'file': l:t, 'title': l:n.title, 'date': l:n.title[0 : 9], 'month': l:groups[l:i]})
+      endif
+    endfor
+    let l:i += 1
+  endwhile
+  let l:merged = 0
+  for l:d in l:days
+    let l:pat = '^' . l:d.date . '-\u\u-' . escape(l:into, '\.*[]~^$') . '\%(-\|$\)'
+    let l:same = get(filter(copy(l:notes), '!v:val.group && v:val.file !=# l:d.file && get(v:val, "record", "") ==# l:into && v:val.title =~# l:pat'), 0, {})
+    if !empty(l:same)
+      " 同じ日のノートへ、本文の段落を時刻の順にまぜる
+      let l:src = readfile(l:dir . l:d.file)
+      let l:h1 = match(l:src, '^# ')
+      let l:e = max([l:h1 + 1, s:top_blocks_end(l:src, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 'Context:'])])
+      let l:sec = s:first_section_index_in_lines(l:src)
+      let l:body = l:src[l:e : (l:sec < 0 ? -1 : l:sec - 1)]
+      let l:blocks = []
+      for l:para in split(join(l:body, "\n"), '\n\s*\n')
+        let l:ls = split(l:para, "\n", 1)
+        while !empty(l:ls) && trim(l:ls[0]) ==# '' | call remove(l:ls, 0) | endwhile
+        if empty(l:ls) | continue | endif
+        call add(l:blocks, {'hm': matchstr(l:ls[0], '^\d\d:\d\d\ze\%(\s\|$\)'), 'lines': l:ls})
+      endfor
+      call s:diary_edit_file(l:dir . l:same.file, {lines -> s:record_op_merge(lines, l:blocks)})
+      " 元のノートへのリンクを先のノートへ（同じリンクが続いたら 1 つに）
+      for l:f in glob(l:dir . '*.md', 0, 1)
+        if fnamemodify(l:f, ':t') ==# l:d.file || stridx(join(readfile(l:f), "\n"), '](' . l:d.file . ')') < 0
+          continue
+        endif
+        call s:diary_edit_file(l:f, function('s:record_op_repoint', [l:d.file, l:same.file, l:same.title]))
+      endfor
+      call s:diary_edit_file(l:dir . l:d.month, function('s:diary_op_unlink_body', [l:d.file]))
+      let l:nr = bufnr(l:dir . l:d.file)
+      if l:nr > 0 | silent! execute 'bwipeout! ' . l:nr | endif
+      call delete(l:dir . l:d.file)
+    else
+      " 題と record: を改めて、先の月のグループへ移す
+      " 題の記録名の部分だけ改める（「2026-10-12-MO-ゆめ-病院」→「…-夢-病院」。記録名が無い題はそのまま）
+      let l:title = substitute(l:d.title, '^\(\d\{4}-\d\d-\d\d-\u\u-\)' . escape(l:from, '\.*[]~^$') . '\ze\%(-\|$\)', '\1' . escape(l:into, '\&'), '')
+      if l:title !=# l:d.title
+        call s:record_retitle(l:root, l:d.file, l:d.title, l:title)
+      endif
+      call s:diary_edit_file(l:dir . l:d.file, {lines -> map(copy(lines), {_, v -> v =~# '^record:' ? 'record: ' . json_encode(l:into) : v})})
+      let [l:mg, l:month] = s:record_month(l:root, l:notes, l:tg.file, l:into, l:d.date)
+      call s:diary_edit_file(l:dir . l:d.month, function('s:diary_op_unlink_body', [l:d.file]))
+      call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:d.file, l:title), '']))
+      call s:diary_edit_file(l:dir . l:d.file, function('s:diary_op_parent_swap', [l:d.month, s:diary_link(l:mg, l:month)]))
+      for l:n in l:notes
+        if l:n.file ==# l:d.file | let l:n.title = l:title | let l:n.record = l:into | endif
+      endfor
+    endif
+    let l:merged += 1
+  endfor
+  " 元の記録と、その月・年のグループを消す
+  call s:diary_edit_file(l:dir . l:rec, function('s:diary_op_unlink_body', [l:fg.file]))
+  for l:g in l:groups
+    let l:nr = bufnr(l:dir . l:g)
+    if l:nr > 0 | silent! execute 'bwipeout! ' . l:nr | endif
+    call delete(l:dir . l:g)
+  endfor
+  call gnosis#clear_title_cache()
+  silent! call s:run_sync([g:gnosis_python, 'update', l:root])
+  silent! checktime
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('時系列記録「%s」を「%s」にまとめました（その日のノート %d 件）'), l:from, l:into, l:merged)
+endfunction
+
+" 同じ日の記録のノートへ、ほかのノートの段落をまぜる（本文の最後＝関係の節の前まで）
+function! s:record_op_merge(lines, blocks) abort
+  let l:at = s:first_section_index_in_lines(a:lines)
+  let l:head = l:at < 0 ? copy(a:lines) : a:lines[: l:at - 1]
+  let l:tail = l:at < 0 ? [] : a:lines[l:at :]
+  call s:record_insert_blocks(l:head, a:blocks)
+  return l:head + [''] + l:tail
+endfunction
+
+" a:old へのリンクを a:new（題 a:title）へのリンクにする。同じリンクだけの行が並んだら 1 つにする
+function! s:record_op_repoint(old, new, title, lines) abort
+  let l:out = []
+  for l:ln in a:lines
+    let l:ln = substitute(l:ln, '\[\%(\\.\|[^\]\\]\)*\](' . escape(a:old, '.') . ')', escape(s:diary_link(a:new, a:title), '\&'), 'g')
+    if l:ln =~# '^\[[^]]*\]([^)]*)\s*$' && index(l:out, l:ln) >= 0
+      continue
+    endif
+    call add(l:out, l:ln)
+  endfor
+  return l:out
 endfunction
 
 function! s:record_op_mark(lines, kind) abort
