@@ -50,6 +50,7 @@ gnosis#color#on_note_enter
 gnosis#color#refresh
 gnosis#conflict#disk_changed
 gnosis#conflict#handle
+gnosis#conflict#mark_own_sync
 gnosis#conflict#on_changed_shell
 gnosis#conflict#record
 gnosis#conflict#safe_update
@@ -78,6 +79,7 @@ gnosis#digit_key
 gnosis#ensure_root_and_index
 gnosis#exit_cleanup
 gnosis#expand_s_under_cursor
+gnosis#fix_fullwidth_heading
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
@@ -115,6 +117,7 @@ gnosis#is_vault_path
 gnosis#jump_down_bottom
 gnosis#jump_down_top
 gnosis#jump_last_link_before_up
+gnosis#jump_last_section
 gnosis#jump_link
 gnosis#jump_relation_link
 gnosis#jump_section_header
@@ -150,10 +153,12 @@ gnosis#open_gallery_smart
 gnosis#open_index
 gnosis#open_link_under_cursor
 gnosis#open_web
+gnosis#orphans_open
 gnosis#outline_edit
 gnosis#outline_editor_apply
 gnosis#outline_shift_current
 gnosis#outline_shift_visual
+gnosis#pad_cleanup
 gnosis#paper_index
 gnosis#paper_scan
 gnosis#paste_charwise

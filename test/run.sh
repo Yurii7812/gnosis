@@ -27,6 +27,7 @@ python3 "$REPO/python/test_group_semantics.py"
 python3 "$REPO/python/test_section_colon.py"
 python3 "$REPO/python/test_paper_branchgroup.py"
 python3 "$REPO/python/test_theme_palette.py"
+python3 "$REPO/python/test_orphans.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \

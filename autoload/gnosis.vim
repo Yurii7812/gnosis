@@ -5316,6 +5316,40 @@ function! gnosis#hub_open() abort
   call timer_start(50, function('s:timer_redraw_cb'))
 endfunction
 
+" \u … どこにもつながっていないノート（オーファン）の一覧を、\h と同じ編集可能な Markdown 画面で開く。
+" 開くたびに作り直す（雑に書いたノートを後でつなぐための入口）。
+function! gnosis#orphans_open() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:py = s:note_root . '/python/orphans.py'
+  let l:out = systemlist(join(map([gnosis#python_cmd(), l:py, l:root], 'shellescape(v:val)'), ' '))
+  if v:shell_error != 0
+    echohl WarningMsg | echo 'Gnosis: orphans: ' . join(l:out, ' ') | echohl NONE
+    return
+  endif
+  let l:lines = [gnosis#i18n#tr('# つながっていないノート'), '']
+  for l:ln in l:out
+    let l:f = split(l:ln, "\t", 1)
+    if len(l:f) >= 2
+      call add(l:lines, '[' . substitute(l:f[1], '[\\\[\]]', '\\&', 'g') . '](' . l:f[0] . ')')
+    endif
+  endfor
+  if len(l:lines) == 2
+    call add(l:lines, gnosis#i18n#tr('（つながっていないノートはありません）'))
+  endif
+  let l:dir = s:hub_dir()
+  if !isdirectory(l:dir)
+    call mkdir(l:dir, 'p')
+  endif
+  let l:file = l:dir . s:sep() . 'orphans-' . sha256(s:hub_root_key())[0:15] . '.md'
+  call s:syn_writefile(l:lines, l:file)
+  call gnosis#push_history()
+  call timer_start(0, function('s:timer_hub_edit_cb', [l:file]))
+  call timer_start(50, function('s:timer_redraw_cb'))
+endfunction
+
 function! gnosis#hub_set(...) abort
   let l:file = expand('%:p')
   if empty(l:file) || !s:is_markdown_file(l:file)
@@ -8828,7 +8862,7 @@ endfunction
 "   BackLink は同期が行を作り直すため fragment が消える → 対象外。
 " ---------------------------------------------------------------------------
 
-function! s:link_to_outline_apply(frag) abort
+function! s:link_to_outline_apply(frag, ...) abort
   if !exists('s:link_to_outline_ctx')
     return
   endif
@@ -8842,7 +8876,14 @@ function! s:link_to_outline_apply(frag) abort
   if !empty(a:frag)
     let l:new_target .= '#' . a:frag
   endif
-  let l:new_raw = '[' . l:lk.text . '](' . l:new_target . ')'
+  " 表示名は「タイトル#見出し」にして、見出しを指すリンクだと見えるようにする（外すと#見出しも消す）
+  let l:base_text = l:lk.text
+  if l:lk.target =~# '#' && l:base_text =~# '#'
+    let l:base_text = substitute(l:base_text, '#[^#]*$', '', '')
+  endif
+  let l:htext = a:0 ? a:1 : ''
+  let l:new_text = (!empty(a:frag) && !empty(l:htext)) ? l:base_text . '#' . l:htext : l:base_text
+  let l:new_raw = '[' . l:new_text . '](' . l:new_target . ')'
   execute 'buffer ' . l:ctx.buf
   call setline(l:ctx.lnum, strpart(getline(l:ctx.lnum), 0, l:lk.startcol - 1)
         \ . l:new_raw . strpart(getline(l:ctx.lnum), l:lk.endcol))
@@ -8858,7 +8899,8 @@ function! s:link_to_outline_sink(line) abort
   if a:line ==# gnosis#i18n#tr('（見出しなし）')
     call s:link_to_outline_apply('')
   else
-    call s:link_to_outline_apply(get(split(a:line, "\t", 1), 1, ''))
+    let l:f = split(a:line, "\t", 1)
+    call s:link_to_outline_apply(get(l:f, 1, ''), substitute(get(l:f, 0, ''), '^#\+\s*', '', ''))
   endif
 endfunction
 
@@ -8878,7 +8920,7 @@ function! s:link_to_outline_fallback(items) abort
   if l:sel == 1
     call s:link_to_outline_apply('')
   else
-    call s:link_to_outline_apply(a:items[l:sel - 2].slug)
+    call s:link_to_outline_apply(a:items[l:sel - 2].slug, a:items[l:sel - 2].text)
   endif
 endfunction
 
@@ -13835,6 +13877,29 @@ function! gnosis#strip_stray_escape() abort
   let l:before = s:strip_stray(strpart(l:line, 0, l:col - 1))
   call setline(l:lnum, l:new)
   call cursor(l:lnum, strlen(l:before) + 1)
+endfunction
+
+" 全角の「＃＃　タイトル」を、行頭だけ半角の「## タイトル」に直す（日本語入力のまま見出しを書けるように）。
+function! gnosis#fix_fullwidth_heading() abort
+  if &buftype !=# '' || !&modifiable
+    return
+  endif
+  let l:lnum = line('.')
+  let l:line = getline(l:lnum)
+  if l:line !~# '^[＃#]*＃[＃#]*[　 ]'
+    return
+  endif
+  let l:m = matchlist(l:line, '^\([＃#]\+\)[　 ]\(.*\)$')
+  if empty(l:m)
+    return
+  endif
+  let l:head = substitute(l:m[1], '＃', '#', 'g') . ' '
+  let l:new = l:head . l:m[2]
+  let l:col = col('.')
+  let l:old_head_len = strlen(l:m[1]) + (strpart(l:line, strlen(l:m[1]), 3) ==# '　' ? 3 : 1)
+  let l:shift = l:old_head_len - strlen(l:head)
+  call setline(l:lnum, l:new)
+  call cursor(l:lnum, max([1, l:col - (l:col > l:old_head_len ? l:shift : 0)]))
 endfunction
 
 " バッファ全体の掃除（保存の直前・読み込み直後）。含む行だけを書き換え、カーソルと undo の位置は動かさない。

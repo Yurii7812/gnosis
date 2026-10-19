@@ -470,6 +470,8 @@ nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
 " 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
 nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
+nnoremap <silent> \u       <Cmd>call gnosis#orphans_open()<CR>
+command! GnosisOrphans call gnosis#orphans_open()
 " \q は作業タブ管理。\o はリンクを別の論理タブとして開く。
 nnoremap <silent> \q       <Cmd>call gnosis#tabs#popup()<CR>
 nnoremap <silent> \o       <Cmd>call gnosis#tabs#open_link()<CR>
@@ -1002,6 +1004,7 @@ augroup gnosis_vault
   autocmd VimLeavePre * call gnosis#before_write_viminfo()
   autocmd BufWritePre * call gnosis#guard_vault_write(expand('<afile>:p'))
   autocmd TextChangedI,TextChanged,InsertLeave *.md call gnosis#strip_stray_escape()
+  autocmd TextChangedI,InsertLeave *.md call gnosis#fix_fullwidth_heading()
   autocmd BufWritePre *.md call gnosis#strip_stray_escape_all()
 augroup END
 

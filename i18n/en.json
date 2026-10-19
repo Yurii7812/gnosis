@@ -121,6 +121,8 @@
     "Gnosis: ノートを開いてから実行してください": "Gnosis: open a note first",
     "Gnosis: ノートを開いて実行して": "Gnosis: open a note first",
     "Gnosis: ノート上で実行して": "Gnosis: run this on a note",
+    "# つながっていないノート": "# Unconnected notes",
+    "（つながっていないノートはありません）": "(No unconnected notes)",
     "Gnosis: ハブ %s は未登録（\\H で登録）": "Gnosis: hub %s is not set (set it with \\H)",
     "Gnosis: ハブに追加（%d 件）": "Gnosis: added to the hub (%d)",
     "Gnosis: ハブ登録済み": "Gnosis: already in the hub",

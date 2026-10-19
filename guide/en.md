@@ -70,7 +70,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `1`〜`9` / `0` … open links by their running number (top to bottom of the document, including the Context at the top)
 - `\k` / `\m` / `\j` / `\J` … to the topmost "Name:" line (Group:, Context:, etc.) / to the bottommost "Name:" line / to the first BackLink / to the last BackLink
 - `\bu` … last link near Context ・ `<S-Space>` … pick from the link list and move
-- `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub
+- `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub ・ `\u` (`:GnosisOrphans`) … list of notes not connected to anything (connect rough notes later)
 - `\1`〜`\9` … jump to the Nth hub entry (inside the hub, normal link numbers)
 - `\i` … open `index.md` ・ `\A` … the note app (Electron / browser)
 - `\q` … list of work tabs (shown by note **title**; duplicate titles also show the file name). Pick with `↑` / `↓` (`j` / `k`), switch with `Enter`, close with `Esc` (`q`). `/` filters by title, `a` add ・ `x` close ・ `X` close others ・ `C` close all (`:GnosisTabs`)
