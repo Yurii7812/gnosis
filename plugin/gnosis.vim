@@ -180,6 +180,7 @@ command!          GnosisWNext call gnosis#write_next()
 command! -bang -nargs=* GnosisContextMigrate call gnosis#context#migrate_command(<q-args>, <bang>0)
 command!          GnosisFolgezettelMove call gnosis#folgezettel#toggle()
 command!          GnosisBranchCheck call gnosis#branch#check_command()
+command!          GnosisBranchFromContext call gnosis#branch#context_migrate()
 command!          GnosisOpenLinkTab call gnosis#tabs#open_link()
 command!          GnosisRefreshColors call gnosis#color#refresh()
 command!          GnosisColorDoctor call gnosis#color#doctor()
@@ -445,10 +446,11 @@ inoremap <silent> <C-t> <C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> <C-t> i<C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> \T   <Cmd>call gnosis#time_mode_toggle()<CR>
 command! GnosisTimeMode call gnosis#time_mode_toggle()
-" 時刻モードはそのノートだけ: 出すたびに決め直す（時系列記録のノートはオン）。書き始めた行の頭に時刻
+" 時刻モードはそのノートだけ: 開いたときに決め（時系列記録のノートはオン）、閉じる・ほかのノートへ移ると取りやめる。書き始めた行の頭に時刻
 augroup gnosis_time_mode
   autocmd!
   autocmd BufWinEnter *.md call gnosis#time_mode_on_enter(str2nr(expand('<abuf>')))
+  autocmd BufWinLeave,BufUnload *.md call gnosis#time_mode_on_leave(str2nr(expand('<abuf>')))
   autocmd InsertCharPre *.md call gnosis#time_char_pre()
 augroup END
 " 時系列記録（夢など。日記と同じ形で日ごとのノート）: \R で選んで今日のノートを作る・開く
@@ -585,11 +587,11 @@ endfunction
 
 " 番号を作り直して、すぐ画面に出す。タイマーや autocmd の中で足した仮想テキストは、
 " 再描画しないと次のキー入力（カーソル移動）まで画面に出ないことがある。
+" 番号はここで付けるだけ。描くのは Vim に任せる（ノートを移る途中で描くと、途中の画面が見えてガクガクする）。
+" 移り終わったら 1 回だけ画面全体を描き直す（gnosis#ui#settle_redraw）
 function! s:refresh_link_hints_now() abort
   call gnosis#refresh_link_hints()
-  if mode() ==# 'n'
-    redraw
-  endif
+  call gnosis#ui#settle_redraw()
 endfunction
 " 標準のジャンプリスト戻りでも、E37 を出さず保存してから移動する
 nnoremap <silent> <C-O>    <Cmd>call gnosis#save_before_normal_jump("\<C-O>")<CR>
@@ -600,7 +602,7 @@ nnoremap <nowait> <silent> \bu <Cmd>call gnosis#jump_last_link_before_up()<CR>
 " timeoutlen 待ちになるため \ 側へ移した。k=上 / j=下 の連想。
 nnoremap <nowait> <silent> \k  <Cmd>call gnosis#jump_up_cursor()<CR>
 nnoremap <nowait> <silent> \j  <Cmd>call gnosis#jump_down_top()<CR>
-" \m … 本文末尾に最も近い関係見出し（ChildBranch: / Related: / BackLink: など）へ
+" \m … 一番下の関係の節（最後の Context: / Related: / BackLink: など）の見出しへ（\k の反対）
 nnoremap <nowait> <silent> \m  <Cmd>call gnosis#jump_last_section()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call gnosis#jump_down_bottom()<CR>
 

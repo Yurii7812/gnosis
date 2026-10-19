@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""どこにもつながっていないノート（オーファン）の一覧。
+"""未所属のノート（Folgezettel ID の無いノート）の一覧。
 
-他のノートへのリンクも、他のノートからのリンクも無いノートを探す。
-Index・操作ガイド・日記は「つながり」に数えない（日記は作ったノートへ自動でリンクするため）。
+Folgezettel ID（front matter の folgezettel:）があるノートは、Index・日記・時系列記録から Branch でたどれる
+ので「所属あり」。ID が無いものが未所属（\\N に出る）。ID はまだ振られていなくても、次の同期で振られる
+もの（folgezettel.allocation の計画）は数えない。
+Index・操作ガイド・グループ・日記・時系列記録・紙の PKM のノート（題が ID・folgezettel-Index など）は出さない。
 
 CLI: orphans.py ROOT   → 1 行 1 件 `絶対パス<TAB>タイトル<TAB>トピック`（新しい順。topic:（旧 capture: も読む）。作成端末を区別しない）
 """
@@ -13,57 +15,40 @@ import os
 import re
 import sys
 from pathlib import Path
-from urllib.parse import unquote
 
 try:
     import note_format_v2 as nf
+    import folgezettel as fz
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import note_format_v2 as nf
+    import folgezettel as fz
 
-_DIARY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(-.+)?\.md$")
 _SKIP_NAMES = {"index.md", "gnosis-guide.md", "simple-yurii-note-guide.md"}
-
-
-def _skipped(p: Path) -> bool:
-    return p.name.lower() in _SKIP_NAMES or bool(_DIARY_RE.match(p.name))
+# 紙の PKM のノート: スキャン（題が ID）・トピック（ID-題）・番号の一覧・紙の日記
+_PAPER_RE = re.compile(r"^(?:\d+[a-z0-9]*(?:-.*)?|[Ff]olgezettel-Index(?:-.*)?|Paper-Zettelkasten-Index|\d{4}-\d{2}-\d{2}\(.*)$")
 
 
 def find_orphans(root) -> list[tuple[Path, str, str]]:
     root = Path(root).resolve()
-    notes: dict[Path, str] = {}
+    notes: dict[Path, dict] = {}
+    texts: dict[Path, str] = {}
     for p in nf._iter_md(root):
         try:
-            notes[Path(os.path.normpath(str(p.resolve())))] = p.read_text(encoding="utf-8")
+            text = p.read_text(encoding="utf-8")
         except OSError:
             continue
-    known = {str(p) for p in notes}
-    # Gnosis の日記は YYMMDDHHMMSS.md も使う。名前だけで判定すると、
-    # 自動の「今日のノート」リンクだけで全メモが整理済みになってしまう。
-    skipped = {p for p, text in notes.items() if _skipped(p) or
-               re.fullmatch(r"\d{4}-\d{2}-\d{2}-(?:MO|TU|WE|TH|FR|SA|SU|[月火水木金土日]曜?)-?",
-                            nf._simple_parse_text(p, text)["title"])}
-    try:
-        days = json.loads((root / ".state/diary_days.json").read_text(encoding="utf-8")).get("days", {})
-        skipped.update((root / name).resolve() for name in days.values())
-    except (OSError, ValueError):
-        pass
-    linked: set[Path] = set()
-    for p, text in notes.items():
-        if p in skipped:
-            continue
-        for tg in nf._links_in(text.split("\n")):
-            for cand in (tg, unquote(tg)):
-                q = Path(os.path.normpath(cand if cand.startswith("/") else os.path.join(str(p.parent), cand)))
-                if str(q) in known and q != p and q not in skipped:
-                    linked.add(p)
-                    linked.add(q)
-                    break
+        rp = p.resolve()
+        texts[rp] = text
+        notes[rp] = nf._simple_parse_text(rp, text)
+    planned = fz.allocation(root, notes)
     out = []
-    for p, text in notes.items():
-        if p in skipped or p in linked:
+    for p, n in notes.items():
+        if p.name.lower() in _SKIP_NAMES or fz.is_group(n) or fz.is_daily(n) or _PAPER_RE.match(n["title"]):
             continue
-        out.append((p, nf._simple_parse_text(p, text)["title"], _topic(text)))
+        if fz.value(texts[p]) or p in planned:
+            continue
+        out.append((p, n["title"], _topic(texts[p])))
     out.sort(key=lambda x: x[0].stat().st_mtime, reverse=True)
     return out
 

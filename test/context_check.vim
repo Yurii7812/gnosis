@@ -95,8 +95,10 @@ call s:ok('c: 表示名が違っても同じノートは重複しない', s:file
 execute 'edit ' . fnameescape(s:v . '/f.md')
 call s:za('[ノートE](e.md)', ['c', 'w'])
 let s:el = s:file('e.md')
-call s:ok('Context が無いノートでは H1 の直後に作る', s:el[5] ==# '# ノートE' && s:el[6] ==# '' && s:el[7] ==# 'Context:' && s:el[8] ==# '[ノートF](f.md)' && s:el[9] ==# '', string(s:el))
-call s:ok('コードブロック内の Context: は Context として扱わない（そのまま残る）', s:el[10 : 14] ==# ['```', 'Context:', '[偽](fake.md)', '```', ''] && s:el[-1] ==# '本文E。', string(s:el))
+" 親（Branch）が無かったので、最初の Context の F が親にもなる（ParentBranch: が Context: の上）
+call s:ok('Context が無いノートでは H1 の直後に作る（親が無ければ ParentBranch: も）', s:el[5] ==# '# ノートE' && s:el[6] ==# '' && s:el[7] ==# 'ParentBranch:' && s:el[8] ==# '[ノートF](f.md)'
+      \ && s:el[9] ==# 'Context:' && s:el[10] ==# '[ノートF](f.md)' && s:el[11] ==# '', string(s:el))
+call s:ok('コードブロック内の Context: は Context として扱わない（そのまま残る）', s:el[12 : 16] ==# ['```', 'Context:', '[偽](fake.md)', '```', ''] && s:el[-1] ==# '本文E。', string(s:el))
 call s:ok('コードブロック内のリンクは Context に数えない', gnosis#context#links(s:el) ==# ['[ノートF](f.md)'])
 
 " ============================================================ 旧 ### Context からの移行（c で足したノートだけ）
@@ -155,7 +157,8 @@ call s:ok('c の置き場所で Esc: A も B も変えない・移動しない',
 " Enter: A の本文の最後に B
 call s:za('[相手の4](w4.md)', ['c', "\r"])
 call s:ok('c → Enter: B の Context に A・A の本文の最後に B・A のまま', index(s:file('w4.md'), '[ローズマリー](w1.md)') >= 0 && s:file('w1.md')[-1] ==# '[相手の4](w4.md)' && fnamemodify(expand('%:p'), ':t') ==# 'w1.md', string(s:file('w1.md')))
-call s:ok('c → Enter: B の本文には A を置かない（A は B の Context だけ）', count(s:file('w4.md'), '[ローズマリー](w1.md)') == 1 && gnosis#context#links(s:file('w4.md')) ==# ['[ローズマリー](w1.md)'])
+call s:ok('c → Enter: B の本文には A を置かない（A は B の Context と、親が無かったので ParentBranch だけ）', count(s:file('w4.md'), '[ローズマリー](w1.md)') == 2
+      \ && index(s:file('w4.md'), 'ParentBranch:') >= 0 && gnosis#context#links(s:file('w4.md')) ==# ['[ローズマリー](w1.md)'], string(s:file('w4.md')))
 " t: A の見出しの節の最後に B
 call s:mk('w5.md', '相手の5', ['# 相手の5', '', '五つ目。'])
 let g:gnosis_test_heading = '育て方'
@@ -176,7 +179,8 @@ call s:mk('m3.md', 'ターゲット3', ['# ターゲット3', '', 'みっつめ�
 execute 'edit ' . fnameescape(s:v . '/m1.md')
 call s:za("[ターゲット2](m2.md)\n[ターゲット3](m3.md)", ['c', 'w'])
 call s:ok('c 複数: 両方の B の Context に A', index(s:file('m2.md'), '[複数の元](m1.md)') >= 0 && index(s:file('m3.md'), '[複数の元](m1.md)') >= 0)
-call s:ok('c 複数 → w: A のまま・A には自動で置かない', fnamemodify(expand('%:p'), ':t') ==# 'm1.md' && s:file('m1.md') ==# ['---', 'time: 2026-01-01 00:00:00', 'title: 複数の元', '---', '', '# 複数の元', '', '本文。'])
+call s:ok('c 複数 → w: A のまま・A の本文には自動で置かない（親になったので ChildBranch: だけ）', fnamemodify(expand('%:p'), ':t') ==# 'm1.md' && s:file('m1.md')[: 7] ==# ['---', 'time: 2026-01-01 00:00:00', 'title: 複数の元', '---', '', '# 複数の元', '', '本文。']
+      \ && index(s:file('m1.md'), 'ChildBranch:') >= 0 && index(s:file('m1.md'), '[ターゲット2](m2.md)') > index(s:file('m1.md'), 'ChildBranch:'), string(s:file('m1.md')))
 " \l（gnosis#insert_links_pick）からも同じ
 execute 'edit ' . fnameescape(s:v . '/f.md')
 let g:gnosis_test_keys = ['c', 'w']
@@ -195,7 +199,7 @@ call s:ok('zn → c → w: 新ノート B の Context に A', !empty(s:nw) && gn
 call s:ok('zn → c → w: B をヤンクし、A を開いたまま', getreg('"') ==# s:nw && fnamemodify(expand('%:p'), ':t') ==# 'f.md', getreg('"') . ' / ' . expand('%:p'))
 let s:fl = s:file('f.md')
 let s:fcb = index(s:fl, 'ChildBranch:')
-call s:ok('zn → c → w: A の本文に B へのリンクを自動で置かない（自動 Branch の ChildBranch: だけ）', count(s:fl, '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')') == 1 && s:fcb >= 0 && s:fl[s:fcb + 1] ==# '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')', string(s:fl))
+call s:ok('zn → c → w: A の本文に B へのリンクを自動で置かない（自動 Branch の ChildBranch: だけ）', count(s:fl, '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')') == 1 && s:fcb >= 0 && index(s:fl, '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')') > s:fcb, string(s:fl))
 
 " ============================================================ 未保存データ
 execute 'edit ' . fnameescape(s:v . '/m1.md')

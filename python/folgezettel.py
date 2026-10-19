@@ -79,6 +79,18 @@ def assign_child(parent_text: str, child_text: str, sibling_texts: list[str]) ->
     return set_value(child_text, next_child(pid, sibling_texts))
 
 
+DAILY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}-(?:MO|TU|WE|TH|FR|SA|SU)(?:-|$)')
+
+
+def is_group(note: dict) -> bool:
+    return bool(nf._GROUP_ATTR_RE.search('\n'.join(note['fm'])))
+
+
+def is_daily(note: dict) -> bool:
+    """日記・時系列記録のその日のノート。"""
+    return bool(DAILY_RE.match(note['title'])) or any(re.match(r'^record\s*:', ln) for ln in note['fm'])
+
+
 def creation_key(path: Path, note: dict) -> tuple:
     """Prefer YAML creation time, then the timestamp filename; unknown dates last."""
     for line in note['fm']:
@@ -130,7 +142,12 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     reserved = set(ids.values())
     index = root / 'index.md'
     top = targets(notes[index]['body'], root) if index in notes else []
-    number = max((int(ids[p]) for p in top if ids[p].isdigit()), default=0)
+    # 日記（YYYY-MM-DD-曜日）と時系列記録のその日のノート（front matter の record:）も最上位にする。
+    # グループの中にあって Branch の親を持たないので、ここで番号を振らないと、日記から伸びたノートにも番号が付かない
+    for p, n in notes.items():
+        if p not in top and p.name != 'index.md' and not is_group(n) and is_daily(n):
+            top.append(p)
+    number = max((int(i) for i in ids.values() if i.isdigit()), default=0)
     for p in sorted(top, key=lambda p: creation_key(p, notes[p])):
         if parents[p] or ids[p] or nf._editor_has_unsaved_changes(p):
             continue

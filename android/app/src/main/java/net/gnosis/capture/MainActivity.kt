@@ -46,6 +46,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -155,7 +156,7 @@ private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>,
         dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } })
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val ctx = LocalContext.current
@@ -204,6 +205,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val prompt by promptState
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    // キーボードを閉じたら（戻るボタン・下へ払うなど）入力欄の選択も外す（枠の色とカーソルが残らないように）
+    val imeVisible = WindowInsets.isImeVisible
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible) focusManager.clearFocus()
+        imeWasVisible = imeVisible
+    }
     val listState = rememberLazyListState()
     val byId = entries.associateBy { it.id }
 

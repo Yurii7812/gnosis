@@ -55,7 +55,7 @@ chk "画像は capture-images/ に置く" '[ -f "$V/capture-images/a.jpg" ] && g
 chk "本文の中のメモへのリンクは、取り込んだノートへのリンクになる" 'grep -q "^前の \[APKに画像添付\](261018101000.md) を見る$" "$V/261018130000.md"'
 chk "取り込んでいないメモへのリンクは表示名だけ" 'grep -q "^消えたメモ は文字だけ$" "$V/261018130000.md"'
 chk "親が無いときは最初の文脈が親（Branch）になる" 'grep -A1 "^ParentBranch:" "$V/261018130000.md" | grep -q "261018140000.md" && grep -A1 "^Context:" "$V/261018130000.md" | grep -q "261018140000.md"'
-chk "スマホでつないだノートは未整理（\\N）に出ない" '! PYTHONDONTWRITEBYTECODE=1 python3 "$REPO/python/orphans.py" "$V" | grep -q "26101813000\|261018101500\|261018101000"'
+chk "番号（Folgezettel ID）の無いメモは未所属（\\N）に出る（スマホでつないだだけでは番号は付かない）" 'PYTHONDONTWRITEBYTECODE=1 python3 "$REPO/python/orphans.py" "$V" | grep -q "261018101000"'
 work=$(grep -l '^capture_topic: "仕事"$' "$V"/*.md | head -1)
 book=$(grep -l '^capture_topic: "読書"$' "$V"/*.md | head -1)
 chk "まとめるトピックは 1 つのノート（トピック名の題）" '[ -n "$work" ] && grep -q "^# 仕事$" "$work" && [ ! -f "$V/261018151000.md" ] && [ ! -f "$V/261019090000.md" ]'

@@ -258,3 +258,44 @@ function! s:warn(msg) abort
   echom 'Gnosis: ' . a:msg
   echohl NONE
 endfunction
+
+" :GnosisBranchFromContext … 親（Branch）が無く Context があるノートに、最初の Context を親として付ける（c と同じ規則）。
+" 番号（Folgezettel ID）は次の同期で親の番号に続けて振られる。循環になるものは飛ばす。
+function! gnosis#branch#context_migrate() abort
+  let l:root = s:root()
+  if empty(l:root) || !gnosis#has_python()
+    return
+  endif
+  call gnosis#save_current_note()
+  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root))
+  try
+    let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
+    return
+  endtry
+  call system(gnosis#python_cmd() . ' ' . shellescape(g:gnosis_python) . ' update ' . shellescape(l:root))
+  call gnosis#clear_title_cache()
+  silent! checktime
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('最初の Context を親（Branch）にしました: %d 件（飛ばしたもの %d 件）'), len(l:r.added), len(l:r.skipped))
+endfunction
+
+" a:paths のノートのうち親（Branch）が無いものに、最初の Context を親として付ける（c のあと）。開いているノートは読み直す
+function! gnosis#branch#context_parent(paths) abort
+  let l:root = s:root()
+  if empty(l:root) || empty(a:paths) || !gnosis#has_python()
+    return
+  endif
+  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root)
+        \ . ' ' . join(map(copy(a:paths), 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
+  catch
+    return
+  endtry
+  let l:touched = []
+  for l:pair in get(l:r, 'added', [])
+    call extend(l:touched, l:pair)
+  endfor
+  call s:reload(uniq(sort(l:touched)))
+endfunction

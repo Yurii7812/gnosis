@@ -3170,15 +3170,14 @@ function! gnosis#jump_up_cursor() abort
   call s:jump_head_centered(l:h[0])
 endfunction
 
-" \m … 本文の終わりに最も近い関係見出し（ChildBranch: / Related: / BackLink: など）へ
+" \m … このノートで一番下の「名前:」行へ
 function! gnosis#jump_last_section() abort
-  " 上部の ParentBranch: / Group: / Context: は飛ばし、本文末尾の最初の関係見出しへ移る。
-  let l:head = s:first_section_line()
-  if l:head <= 0
+  let l:h = s:colon_head_lines()
+  if empty(l:h)
     echo 'Context: section not found'
     return
   endif
-  call s:jump_head_centered(l:head)
+  call s:jump_head_centered(l:h[-1])
 endfunction
 
 function! gnosis#jump_down_top() abort
@@ -10781,6 +10780,8 @@ function! s:c_links_apply(bs, a, Done, place) abort
   for l:b in a:bs
     call s:simple_add_parent(l:b.path, a:a.path, a:a.title)
   endfor
+  " 親（Branch）がまだ無い B は、最初の Context（グループでないノート）を親にする（スマホのメモと同じ）。親があれば何もしない
+  call gnosis#branch#context_parent(map(copy(a:bs), 'v:val.path'))
   call s:place_link_in_a(a:place, map(copy(a:bs), 'v:val.link'))
   if get(a:place, 'mode', '') ==# 'w'
     " w: A には自動で置かない。B を yn と同じ方法でヤンクする（A は開いたまま）
@@ -13449,11 +13450,28 @@ function! gnosis#time_mode_toggle() abort
   echo 'Gnosis: ' . gnosis#i18n#tr(b:gnosis_time_mode ? '時刻モード: オン（書き始めた行の頭に時刻。\T で切る）' : '時刻モード: オフ')
 endfunction
 
-" ウィンドウに出したとき: 時系列記録のノートなら時刻モードをオン（それ以外は前の状態を持ち越さない）
+" ウィンドウに出したとき: まだ決めていなければ、時系列記録のノートだけ時刻モードをオンにする。
+" 決めたあと（\T で切り替えたあとも）は、検索の画面を閉じた・読み直した・同期したなどで出し直しても変えない。
 function! gnosis#time_mode_on_enter(bnr) abort
+  if type(getbufvar(a:bnr, 'gnosis_time_mode', v:none)) != v:t_none
+    return
+  endif
   let l:head = getbufline(a:bnr, 1, 20)
-  let l:end = l:head[0] ==# '---' ? index(l:head, '---', 1) : -1
+  let l:end = get(l:head, 0, '') ==# '---' ? index(l:head, '---', 1) : -1
   call setbufvar(a:bnr, 'gnosis_time_mode', l:end > 0 && match(l:head[: l:end], '^record:') >= 0)
+endfunction
+
+" ノートを閉じた・ほかのノートへ移ったら、そのノートの時刻モードは取りやめる（次に開いたときに決め直す）。
+" 一時的にほかのバッファへ切り替えてすぐ戻る処理では消さないよう、少しあとで、どのウィンドウにも出ていないときだけ消す
+function! gnosis#time_mode_on_leave(bnr) abort
+  call timer_start(50, {-> s:time_mode_forget(a:bnr)})
+endfunction
+
+function! s:time_mode_forget(bnr) abort
+  if bufexists(a:bnr) && bufwinnr(a:bnr) < 0 && empty(win_findbuf(a:bnr))
+    call setbufvar(a:bnr, 'gnosis_time_mode', v:none)
+    silent! call remove(getbufvar(a:bnr, ''), 'gnosis_time_mode')
+  endif
 endfunction
 
 " 時刻モードで、本文の空の行に最初の 1 文字を打ったとき、その前に時刻を足す（InsertCharPre）。

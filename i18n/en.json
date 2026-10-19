@@ -411,7 +411,8 @@
     "まとめられる時系列記録が 2 つ以上ありません": "There are not two or more chronological records to merge",
     "時系列記録「%s」を「%s」にまとめました（その日のノート %d 件）": "Merged chronological record \"%s\" into \"%s\" (%d daily notes)",
     "まとめる元（消える方）:": "Merge from (will be removed):",
-    "まとめる先（残る方）:": "Merge into (will remain):"
+    "まとめる先（残る方）:": "Merge into (will remain):",
+    "最初の Context を親（Branch）にしました: %d 件（飛ばしたもの %d 件）": "Made the first Context the parent (Branch): %d notes (%d skipped)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

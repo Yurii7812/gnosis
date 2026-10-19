@@ -28,6 +28,8 @@ gnosis#branch#can_child_here
 gnosis#branch#can_parent_here
 gnosis#branch#check
 gnosis#branch#check_command
+gnosis#branch#context_migrate
+gnosis#branch#context_parent
 gnosis#branch#message
 gnosis#branch#run
 gnosis#branch#warn
@@ -81,6 +83,8 @@ gnosis#ensure_root_and_index
 gnosis#exit_cleanup
 gnosis#expand_s_under_cursor
 gnosis#fix_fullwidth_heading
+gnosis#folgezettel#move
+gnosis#folgezettel#toggle
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
@@ -326,6 +330,7 @@ gnosis#theme_edit#set_color
 gnosis#theme_edit#state
 gnosis#time_char_pre
 gnosis#time_mode_on_enter
+gnosis#time_mode_on_leave
 gnosis#time_mode_toggle
 gnosis#time_stamp
 gnosis#timestamp_filename
@@ -339,6 +344,7 @@ gnosis#trash_empty
 gnosis#trash_list
 gnosis#ui#getkey
 gnosis#ui#inputlist
+gnosis#ui#settle_redraw
 gnosis#ui#statusline
 gnosis#update_all
 gnosis#update_current_buffer

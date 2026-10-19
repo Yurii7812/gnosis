@@ -211,7 +211,7 @@ call gnosis#add_clipboard_before_up_note()
 unlet g:gnosis_test_heading
 call s:ok('za c t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
 call s:ok('za c t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
-call s:ok('za c t: D の本文に A は置かない', count(s:file('d.md'), '[ノートB](b.md)') == 1)
+call s:ok('za c t: D の本文に A は置かない（Context と、親が無かったので ParentBranch だけ）', count(s:file('d.md'), '[ノートB](b.md)') == 2 && index(s:file('d.md'), 'ParentBranch:') >= 0, string(s:file('d.md')))
 " 相手がグループでも、c は Context（グループ登録にはしない）
 execute 'edit ' . fnameescape(s:v . '/c.md')
 let @" = '[グループG](g.md)'

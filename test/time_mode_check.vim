@@ -34,14 +34,21 @@ try
   call s:ok('\T でオフ: ふつうの Enter', getline(line('$') - 1) ==# 'foo' && getline('$') ==# 'bar', string(getline(1, '$')[-2:]))
   " 時系列記録のノートは開くとオン・ほかのノートへ移るとそのノートはオフ
   call feedkeys("\\T", 'xt')
+  call s:ok('\T でもう一度オン', get(b:, 'gnosis_time_mode', 0) == 1)
+  " 検索の画面などで別のウィンドウを開いて閉じても（ノートが出し直されても）切れない
+  split
+  enew
+  close
+  call s:ok('ウィンドウを開いて閉じても時刻モードは切れない', get(b:, 'gnosis_time_mode', 0) == 1)
   silent write
   execute 'edit ' . fnameescape($TIME_VAULT . '/rec.md')
+  sleep 200m
   call s:ok('時系列記録のノートは開くと時刻モード', get(b:, 'gnosis_time_mode', 0) == 1)
   call feedkeys("Go見た夢\<Esc>", 'xt')
   call s:ok('時系列記録: 書き始めると時刻', getline('$') =~# '^' . s:t . '見た夢$', getline('$'))
   silent write
   execute 'edit ' . fnameescape($TIME_VAULT . '/t.md')
-  call s:ok('ふつうのノートへ戻ると時刻モードは切れている', get(b:, 'gnosis_time_mode', 0) == 0)
+  call s:ok('オンのまま離れたノートへ戻ると、時刻モードは切れている', get(b:, 'gnosis_time_mode', 0) == 0)
   call feedkeys("Gobaz\<Esc>", 'xt')
   call s:ok('切れているので時刻は入らない', getline('$') ==# 'baz', getline('$'))
 catch

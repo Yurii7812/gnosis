@@ -17,6 +17,7 @@
 CLI（結果は 1 行の JSON）:
     branch_ops.py add   ROOT PARENT_FILE CHILD_FILE... [--dry-run]
     branch_ops.py check ROOT
+    branch_ops.py context-migrate ROOT [FILE...] [--dry-run]   # 親が無いノートに最初の Context を親（Branch）として付ける（FILE だけに限れる）
 """
 from __future__ import annotations
 
@@ -395,7 +396,47 @@ def add_branch(root, parent_file, child_file, dry_run: bool = False) -> dict:
     return add_branches(root, parent_file, [child_file], dry_run)
 
 
+def context_parent(v: "Vault", p: Path) -> Path | None:
+    """親（Branch）が無いノートの、最初の Context（グループ・index.md でないノート）。無ければ None。"""
+    if v.parents(p):
+        return None
+    known = {str(q) for q in v.parsed}
+    for _d, tg in nf._links_from(v.parsed[p].get("ctx") or []):
+        q = _resolve(tg, p.parent, known)
+        if q is None or q == p or q.name == "index.md":
+            continue
+        if nf._GROUP_ATTR_RE.search("\n".join(v.parsed[q]["fm"])):
+            continue
+        return q
+    return None
+
+
+def context_migrate(root, dry_run: bool = False, only: list | None = None) -> dict:
+    """親（Branch）が無く Context があるノートに、最初の Context を親（Branch）として付ける（c と同じ規則）。
+    循環になる・親を持てないものは飛ばす（何も変えない）。結果: {ok, added: [[親, 子]…], skipped: [[子, 理由]…]}。"""
+    v = Vault(root)
+    added, skipped = [], []
+    want = {_norm(x) for x in only} if only else None
+    for p in sorted(v.parsed, key=lambda q: q.name):
+        if want is not None and p not in want:
+            continue
+        q = context_parent(v, p)
+        if q is None:
+            continue
+        r = add_branch(root, str(q), str(p), dry_run=dry_run)
+        if r.get("ok"):
+            added.append([str(q), str(p)])
+        else:
+            skipped.append([str(p), r.get("code", "")])
+    return {"ok": True, "added": added, "skipped": skipped}
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) >= 3 and argv[1] == "context-migrate":
+        files = [a for a in argv[3:] if a != "--dry-run"]
+        r = context_migrate(argv[2], dry_run="--dry-run" in argv[3:], only=files or None)
+        print(json.dumps(r, ensure_ascii=False))
+        return 0
     if len(argv) >= 5 and argv[1] == "add":
         rest = [a for a in argv[4:] if a != "--dry-run"]
         r = add_branches(argv[2], argv[3], rest, dry_run="--dry-run" in argv[4:])

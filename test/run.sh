@@ -28,6 +28,7 @@ python3 "$REPO/python/test_section_colon.py"
 python3 "$REPO/python/test_paper_branchgroup.py"
 python3 "$REPO/python/test_theme_palette.py"
 python3 "$REPO/python/test_orphans.py"
+python3 "$REPO/python/test_folgezettel.py"
 python3 "$REPO/python/test_capture_import.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \

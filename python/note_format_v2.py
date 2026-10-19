@@ -63,6 +63,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 try:
     from japanese_yomi import parse_yomi_map, set_yomi_map
@@ -1876,18 +1877,34 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     body[pos:pos] = ([""] if pos else []) + blocks + [""]
     return body
 
-def _split_child_branch(cbranch: list[str], rendered: list[str]) -> list[str]:
-    """ChildBranch: の中を、本文・BranchGroup: に出ている子（上）と出ていない子（下）に分け、間に空行を 1 つ入れる。
-    それぞれの中の並びは元のまま。`rendered` は ChildBranch より上の部分（本文と上のブロック）。"""
+def _split_child_branch(cbranch: list[str], rendered: list[str], base: Path | None = None,
+                        ctx_kids: set | None = None) -> list[str]:
+    """ChildBranch: の中を 2 つに分け、間に空行を 1 つ入れる（それぞれの中の並びは元のまま）。
+    上: このノートを Context にしている子・このノートの本文（と上のブロック）にリンクが書かれている子。
+    下: ただの子（Branch でつないだだけ）。`rendered` は ChildBranch より上の部分。"""
     def key(tg: str) -> str:
         return tg.split("#", 1)[0].strip()
 
+    def resolved(t: str):
+        if base is None:
+            return None
+        for cand in (t, unquote(t)):
+            try:
+                q = (base.parent / cand).resolve()
+            except (OSError, ValueError):
+                continue
+            if q.exists():
+                return q
+        return None
+
     shown = {key(tg) for _d, tg in _links_from(rendered)}
+    kids = ctx_kids or set()
     entries = [ln for ln in cbranch if ln.strip()]
     top, rest = [], []
     for ln in entries:
         tgs = [key(tg) for _d, tg in _links_from([ln])]
-        (top if tgs and all(t in shown for t in tgs) else rest).append(ln)
+        up = bool(tgs) and all(t in shown or resolved(t) in kids for t in tgs)
+        (top if up else rest).append(ln)
     return top + ([""] if top and rest else []) + rest
 
 
@@ -1918,7 +1935,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     elif use_block and _has(n.get("_leftover")):
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     if _has(n.get("cbranch")):
-        sections.append((CHILD_BRANCH_MARK, _split_child_branch(n["cbranch"], lines)))
+        sections.append((CHILD_BRANCH_MARK, _split_child_branch(n["cbranch"], lines, path, n.get("_ctx_kids"))))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
     if _has(related):
         sections.append((RELATED_MARK, related))
@@ -2025,6 +2042,15 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         fm = notes[p]["fm"] or ["---", "title: " + notes[p]["title"], "---"]
         updated = fz.set_value("\n".join(fm), ident)
         notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
+    # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
+    for cp, cn in notes.items():
+        for _d, tg in _links_from(cn.get("ctx") or []):
+            raw = tg.split("#", 1)[0]
+            for cand in (raw, unquote(raw)):
+                q = (cp.parent / cand).resolve()
+                if q in notes:
+                    notes[q].setdefault("_ctx_kids", set()).add(cp)
+                    break
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
