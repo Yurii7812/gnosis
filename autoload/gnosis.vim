@@ -2773,11 +2773,18 @@ endfunction
 " 本文全体が意図せず別色になるのを防ぐ。
 function! s:gnosis_safe_markdown_inline() abort
   silent! syntax clear markdownItalic
+  silent! syntax clear markdownBold
   silent! syntax clear markdownCode
   " 閉じ記号が同じ行に存在する時だけ有効にする（未閉じは通常の本文色）。
   " 'oneline' が標準 markdown.vim の多行連結を防ぐ。
+  " * が 2 つ並んだところ（**太字**）は斜体として読まない。日本語の「。**全部**する」で
+  " 開きの ** が斜体に取られ、閉じの ** から段落の終わりまで太字になっていた。
   syntax region markdownItalic matchgroup=markdownItalicDelimiter
-        \ start=/\*\ze\S[^*\n]*\*/ end=/\S\@<=\*/ oneline keepend
+        \ start=/\*\@<!\*\ze[^*[:space:]][^*\n]*\*\@<!\*\*\@!/ end=/\S\@<=\*\@<!\*\*\@!/ oneline keepend
+  syntax region markdownBold matchgroup=markdownBoldDelimiter
+        \ start=/\*\@<!\*\*\ze[^*[:space:]]\%([^*\n]\|\*\*\@!\)*\*\*/ end=/\S\@<=\*\*/ oneline keepend contains=markdownItalic
+  syntax region markdownBold matchgroup=markdownBoldDelimiter
+        \ start=/\k\@<!__\ze\S[^_\n]*__\k\@!/ end=/\S\@<=__\k\@!/ oneline keepend contains=markdownItalic
   " \\k は日本語文字も含む。ファイル名 'スクリーンショット_2026.png' は斜体ではない。
   syntax region markdownItalic matchgroup=markdownItalicDelimiter
         \ start=/\k\@<!_\ze\S[^_\n]*_\k\@!/ end=/\S\@<=_\k\@!/ oneline keepend

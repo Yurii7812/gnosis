@@ -7,7 +7,7 @@
 " 読みやすさの方針（役割で色を分ける。起動画面だけは Chnoubis 10番の夜空×水色）:
 "   - ダークは普通の濃い灰色の背景に明るい灰色の本文、ライトは白い背景に黒に近い本文
 "   - リンクは本文と見分けられる空色＋下線（本文と同じ明るさの色だと区別がつかない）
-"   - 見出しは # と ## が淡い金、### 以下は水色（階層を色で分ける）＋太字。記号は控えめな色
+"   - 見出しは太字。標準・ダークは # ## が淡い金・### 以下は水色、ライトは本文と同じ黒（ブラウザの表示と同じ）
 "   - 補助の文字も背景との差を十分に取る（コントラスト比 4.5:1 以上）
 "   - 斜体は Markdown の *強調* だけ（コメントなどに斜体は使わない）
 highlight clear
@@ -38,6 +38,8 @@ let s:link = s:p.link
 let s:heading = s:p.heading
 let s:dim = get(s:p, 'muted', '') =~# '^#\x\{6}$' ? s:p.muted : s:mix(s:fg, s:bg, 0.35)
 let s:accent = get(s:p, 'accent', '') =~# '^#\x\{6}$' ? s:p.accent : s:link
+" ### 以下の見出し（無ければ見出しと同じ色。ライトはブラウザの表示に合わせて本文と同じ黒の太字）
+let s:subheading = get(s:p, 'subheading', '') =~# '^#\x\{6}$' ? s:p.subheading : s:heading
 let s:strong = s:mix(s:fg, &background ==# 'dark' ? '#ffffff' : '#000000', 0.6)
 let s:line = s:mix(s:fg, s:bg, 0.80)
 let s:panel = s:mix(s:fg, s:bg, 0.92)
@@ -132,10 +134,10 @@ call s:hl('SpellCap', '', '', 'undercurl')
 " ---- Markdown（本文・見出し・リンク）
 call s:hl('markdownH1', s:heading, '', 'bold')
 call s:hl('markdownH2', s:heading, '', 'bold')
-call s:hl('markdownH3', s:accent, '', 'bold')
-call s:hl('markdownH4', s:accent, '', 'bold')
-call s:hl('markdownH5', s:accent, '', 'bold')
-call s:hl('markdownH6', s:accent, '', 'bold')
+call s:hl('markdownH3', s:subheading, '', 'bold')
+call s:hl('markdownH4', s:subheading, '', 'bold')
+call s:hl('markdownH5', s:subheading, '', 'bold')
+call s:hl('markdownH6', s:subheading, '', 'bold')
 call s:hl('markdownHeadingDelimiter', s:dim, '', '')
 call s:hl('markdownBold', s:strong, '', 'bold')
 call s:hl('markdownItalic', s:strong, '', 'italic')

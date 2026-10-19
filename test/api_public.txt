@@ -211,6 +211,7 @@ gnosis#settings#activate
 gnosis#settings#apply
 gnosis#settings#apply_gui
 gnosis#settings#apply_terminal_font
+gnosis#settings#background
 gnosis#settings#builtin_palettes
 gnosis#settings#current
 gnosis#settings#current_vault

@@ -111,6 +111,7 @@ function applyLook(s) {
     r.setProperty("--link", p.link);
     r.setProperty("--accent", p.link);
     r.setProperty("--heading", p.heading);
+    r.setProperty("--subheading", p.subheading || p.heading);
     r.setProperty("--selection", p.selection);
     r.setProperty("--cursorline", p.cursorline);
     r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);

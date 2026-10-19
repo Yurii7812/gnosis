@@ -247,9 +247,9 @@ function! gnosis#settings#builtin_palettes() abort
     if empty(s:palettes)
       let s:palettes = {
             \ 'start': {'base': 'dark', 'bg': '#0C1D32', 'fg': '#EBEBEB', 'link': '#E1F4E4', 'heading': '#EEDA77', 'muted': '#B3B3B3', 'accent': '#83AFE2', 'selection': '#21538C', 'cursorline': '#15365B'},
-            \ 'standard': {'base': 'dark', 'bg': '#11253D', 'fg': '#DCE3EC', 'link': '#8CC4FF', 'heading': '#EFD67A', 'muted': '#9DAFC4', 'accent': '#83AFE2', 'selection': '#2B5A8E', 'cursorline': '#1A3454'},
-            \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1A1A1A', 'link': '#0A58B8', 'heading': '#7A3B00', 'muted': '#5C5C5C', 'accent': '#2463B0', 'selection': '#C7DCF5', 'cursorline': '#F2F4F7'},
-            \ 'dark': {'base': 'dark', 'bg': '#1E1E1E', 'fg': '#D8D8D8', 'link': '#6CB6FF', 'heading': '#E5C07B', 'muted': '#9A9A9A', 'accent': '#83AFE2', 'selection': '#264F78', 'cursorline': '#2A2A2A'},
+            \ 'standard': {'base': 'dark', 'bg': '#11253D', 'fg': '#D9E1EA', 'link': '#8CC4FF', 'heading': '#EFD67A', 'subheading': '#83AFE2', 'muted': '#9DAFC4', 'accent': '#83AFE2', 'selection': '#2B5A8E', 'cursorline': '#1A3454'},
+            \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1F2328', 'link': '#0969DA', 'heading': '#1F2328', 'subheading': '#1F2328', 'muted': '#59636E', 'accent': '#0550AE', 'selection': '#CFE3FA', 'cursorline': '#F6F8FA'},
+            \ 'dark': {'base': 'dark', 'bg': '#22272E', 'fg': '#CDD5DE', 'link': '#6CB6FF', 'heading': '#E5C07B', 'subheading': '#83AFE2', 'muted': '#909DAB', 'accent': '#83AFE2', 'selection': '#2D4F75', 'cursorline': '#2D333B'},
             \ 'app': {'base': 'light', 'bg': '#FAFAFA', 'fg': '#1F1F1F', 'link': '#21538C', 'heading': '#603510', 'muted': '#575757', 'accent': '#2D70BE', 'selection': '#B5CFEE', 'cursorline': '#EBEBEB'},
             \ }
     endif

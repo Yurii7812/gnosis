@@ -2,7 +2,7 @@
 let s:errors = []
 call gnosis#theme#apply(gnosis#settings#defaults())
 call assert_equal('#11253D', g:gnosis_palette.bg, 'Gnosis #10 background')
-call assert_equal('#DCE3EC', g:gnosis_palette.fg, 'Gnosis #10 foreground')
+call assert_equal('#D9E1EA', g:gnosis_palette.fg, 'Gnosis #10 foreground')
 call assert_equal('#8CC4FF', g:gnosis_palette.link, 'Gnosis #10 link (sky blue)')
 
 let s:logo = gnosis#start#logo(80, 23)

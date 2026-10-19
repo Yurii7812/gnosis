@@ -125,12 +125,14 @@ except Exception:
 PY
 }
 
-# フォント: terminal.json の fontFamily。空なら、読みやすい等幅フォントを入っているものから選ぶ
-# （日本語の文字は端末がフォントの置き換えで描く）。どれも無ければ fc-match の monospace。
+# フォント: terminal.json の fontFamily。空なら、読みやすい等幅フォントを入っているものから選ぶ。
+# 日本語と英字を同じ設計で揃えた等幅フォントを先に選ぶ（英字用フォントに日本語を置き換えで混ぜると、
+# 字形・字間・高さが揃わず読みにくい）。BIZ UDゴシックは読みやすさを検証したユニバーサルデザイン書体。
+# どれも無ければ fc-match の monospace。
 font_family() {
   f=$(tf_get fontFamily "")
   if [ -z "$f" ] && have fc-list; then
-    for c in "Hack" "DejaVu Sans Mono" "Noto Sans Mono" "Liberation Mono" "Ubuntu Mono" "Source Code Pro" "Menlo"; do
+    for c in "BIZ UDGothic" "UDEV Gothic" "PlemolJP" "HackGen" "Noto Sans Mono CJK JP" "Hack" "DejaVu Sans Mono" "Noto Sans Mono" "Liberation Mono" "Ubuntu Mono" "Source Code Pro" "Menlo"; do
       if [ -n "$(fc-list "$c" family 2>/dev/null | head -1)" ]; then f=$c; break; fi
     done
   fi

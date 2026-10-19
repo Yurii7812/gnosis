@@ -105,6 +105,10 @@ function! gnosis#theme#palette(s) abort
       if has_key(l:c, 'bg') || has_key(l:c, 'fg')
         call remove(l:p, 'muted')
       endif
+      " 見出しの色を変えた配色では、### 以下も同じ色にする（組み込みの副見出しの色を残さない）
+      if has_key(l:c, 'heading') && !has_key(l:c, 'subheading') && has_key(l:p, 'subheading')
+        call remove(l:p, 'subheading')
+      endif
       call extend(l:p, filter(copy(l:c), 'v:val =~# "^#\\x\\{6}$" || v:key ==# "base"'))
       let l:p.base = l:base
       return l:p
@@ -116,11 +120,12 @@ function! gnosis#theme#palette(s) abort
 endfunction
 
 " \A のアプリ（Electron）の配色。通常の Vim の配色（palette）とは別の設定（appTheme / appCustomThemes）。
-"   既定は白い背景。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
+"   既定は通常の Vim と同じ見た目（標準・ダーク・ライト）。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
 "   背景か本文を変えた配色では、補助の色（muted / accent）を組み込みのものから引き継がず作り直す。
 function! gnosis#theme#app_palette(s) abort
   let l:pals = gnosis#settings#builtin_palettes()
-  let l:p = copy(get(l:pals, 'app', l:pals.light))
+  " 組み込みは通常の Vim と同じ見た目（標準・ダーク・ライト）。\A 用のカスタム配色を選んだときだけ別の色
+  let l:p = copy(get(l:pals, get(a:s, 'appearance', 'standard'), l:pals.standard))
   let l:th = get(a:s, 'appTheme', {})
   if get(l:th, 'kind', 'builtin') ==# 'custom'
     let l:c = get(get(a:s, 'appCustomThemes', {}), get(l:th, 'name', ''), {})
@@ -134,7 +139,7 @@ function! gnosis#theme#app_palette(s) abort
       return l:p
     endif
   endif
-  let l:p.base = get(l:p, 'base', 'light')
+  let l:p.base = gnosis#settings#background(a:s)
   return l:p
 endfunction
 
@@ -194,7 +199,7 @@ endfunction
 function! gnosis#theme#apply(s) abort
   let l:kind = get(a:s.theme, 'kind', 'builtin')
   let &background = gnosis#settings#background(a:s)
-  " \A のアプリの中の Vim は、アプリ用の配色（appTheme。既定は白）を使う。
+  " \A のアプリの中の Vim は、アプリ用の配色（appTheme。既定は通常の Vim と同じ見た目）を使う。
   " 通常の Vim 用のテーマ（theme / customThemes / 追加テーマ）はアプリには効かない。
   if gnosis#theme#in_app()
     let g:gnosis_palette = gnosis#theme#app_palette(a:s)

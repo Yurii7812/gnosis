@@ -67,6 +67,7 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.35; padding-bottom: .3em; padding-top: .6em; border-bottom: 1px solid var(--line); }
 .cm-md-h3 { font-size: 1.25em; font-weight: 700; padding-top: .4em; }
 .cm-md-h4, .cm-md-h5, .cm-md-h6 { font-weight: 700; }
+.cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--subheading, var(--heading)); }
 .cm-md-bold { font-weight: 700; }
 .cm-md-em { font-style: italic; }
 .cm-md-strike { text-decoration: line-through; color: var(--fg-dim); }

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""標準テーマ（assets/themes/builtin.json）の色が、配色エディタのカラーパレット（8 色相 × 9 段階）の色だけで作られている。"""
+"""組み込みテーマ（assets/themes/builtin.json）の確認。
+- 起動画面（start）と旧アプリ用（app）は、配色エディタのカラーパレット（8 色相 × 9 段階）の色だけで作られている。
+- 見た目の 3 つ（standard・light・dark）は読みやすさに合わせて細かく調整した色（エディタでは HEX で入力できる）。
+  代わりに、背景とのコントラスト比が十分か（本文 7 以上、リンク・見出し・補助の文字 4.5 以上）を確かめる。"""
 import json
 import sys
 from pathlib import Path
@@ -32,8 +35,32 @@ def hsl2hex(h, s, l):
 
 palette = {hsl2hex(h, s, l) for h, s in HUES for l in LIGHTS}
 themes = json.loads((REPO / "assets/themes/builtin.json").read_text(encoding="utf-8"))
+def lum(h):
+    c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def contrast(a, b):
+    x, y = sorted([lum(a), lum(b)], reverse=True)
+    return (x + 0.05) / (y + 0.05)
+
+
 ng = 0
+for name in ("standard", "light", "dark"):
+    t = themes[name]
+    for key, need in (("fg", 7), ("link", 4.5), ("heading", 4.5), ("subheading", 4.5), ("muted", 4.5)):
+        if key not in t:
+            continue
+        r = contrast(t[key], t["bg"])
+        ok = r >= need
+        if not ok:
+            ng += 1
+        print(("  ok   " if ok else "  FAIL ") + f"{name}.{key} {t[key]} コントラスト {r:.1f}（{need} 以上）")
+
 for name, t in themes.items():
+    if name not in ("start", "app"):
+        continue
     for key, val in t.items():
         if key == "base":
             continue
