@@ -7482,25 +7482,15 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if l:grp_src
-    " グループの上の zn: Enter = 表示名を付けてこのグループに登録 / o = 登録しないで作る
-    echo s:fit_prompt(gnosis#i18n#tr('Enter=表示名を付けてこのグループに登録 / o=登録しないで作る  (Esc/q キャンセル)'),
-          \ gnosis#i18n#tr('Enter=登録 o=登録しない (Esc)'))
-    let l:ch = s:getkey()
-    redraw
-    if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
-      " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
-      let l:ts = gnosis#timestamp_filename()
-      let l:r = s:ask_display_name(l:ts)
-      if !l:r.ok
-        echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
-        return
-      endif
-      call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name})
-    elseif l:ch ==# 'o'
-      call s:v2_new_run('', 'o', 0)
-    else
-      echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / o のどれか）')
+    " グループの上の zn: 置き場所は聞かない。表示名を付けてこのグループに登録する（あとで必ず並べる）
+    " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
+    let l:ts = gnosis#timestamp_filename()
+    let l:r = s:ask_display_name(l:ts)
+    if !l:r.ok
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+      return
     endif
+    call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name})
     return
   endif
   echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
@@ -9902,6 +9892,21 @@ function! s:insert_links_core(links, ...) abort
   if empty(l:links)
     return 0
   endif
+  " グループ（Index を含む）では置き場所や関係を聞かない。本文の最後に足して保存すれば、
+  " 保存の後の気づきが名前とよみの確認画面を開き、並べ替える。選べるのは通常のノートだけ。
+  if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
+    let l:n = 0
+    for l:lk in l:links
+      if !s:buffer_has_link(l:lk)
+        call s:simple_body_append(l:lk)
+        let l:n += 1
+      endif
+    endfor
+    if a:0 == 0
+      silent write
+    endif
+    return l:n > 0 ? 1 : 0
+  endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
   " 今のノートがグループかどうかでは決めない。
   let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
@@ -10742,17 +10747,6 @@ function! gnosis#add_clipboard_before_up_note(...) abort
   let l:links = s:pick_links()
   if empty(l:links)
     echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
-    return
-  endif
-  " グループでは置き場所を聞かない（足したあと必ず並べ替えるので）。本文の最後に足して保存すると、
-  " 保存の後の気づき（group_review_check）が名前とよみの確認画面を開く。
-  if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
-    for l:lk in l:links
-      if !s:buffer_has_link(l:lk)
-        call s:simple_body_append(l:lk)
-      endif
-    endfor
-    call s:links_added_done()
     return
   endif
   call s:insert_links_at_position(l:links, function('s:links_added_done'))
@@ -12648,6 +12642,33 @@ function! gnosis#table_stab_action() abort
   endif
 endfunction
 
+" チェックボックス（- [ ] / - [x]）の行で挿入モードの Enter: 次の行にも「- [ ] 」を作る（右に空白 1 つ、
+" カーソルはその後ろ）。カーソルより後ろの文字は新しい行へ移す。中身が空の項目で Enter なら、
+" 項目をやめて空行にする（リストを終える）。
+function! s:checkbox_cr(lnum, line) abort
+  let l:m = matchlist(a:line, '^\(\s*\)\([-*+]\|\d\+[.)]\)\s\+\[[ xX]\]\s\?')
+  if empty(l:m)
+    return 0
+  endif
+  let l:head = l:m[0]
+  let l:col = col('.') - 1
+  if l:col < strlen(l:head)
+    return 0
+  endif
+  if trim(strpart(a:line, strlen(l:head))) ==# ''
+    call setline(a:lnum, '')
+    call cursor(a:lnum, 1)
+    return 1
+  endif
+  let l:bullet = l:m[2] =~# '^\d' ? (str2nr(l:m[2]) + 1) . matchstr(l:m[2], '[.)]$') : l:m[2]
+  let l:new_head = l:m[1] . l:bullet . ' [ ] '
+  let l:rest = substitute(strpart(a:line, l:col), '^\s\+', '', '')
+  call setline(a:lnum, substitute(strpart(a:line, 0, l:col), '\s\+$', '', ''))
+  call append(a:lnum, l:new_head . l:rest)
+  call cursor(a:lnum + 1, strlen(l:new_head) + 1)
+  return 1
+endfunction
+
 function! gnosis#table_cr_action() abort
   if &l:filetype !=# 'markdown' && &l:filetype !=# 'vimwiki'
     call s:feedkeys_insert("\<CR>")
@@ -12655,6 +12676,9 @@ function! gnosis#table_cr_action() abort
   endif
   let l:cur_lnum = line('.')
   let l:cur_line = getline(l:cur_lnum)
+  if s:checkbox_cr(l:cur_lnum, l:cur_line)
+    return
+  endif
   if !s:is_table_line(l:cur_line)
     call s:feedkeys_insert("\<CR>")
     return

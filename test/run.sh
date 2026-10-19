@@ -65,6 +65,9 @@ sh "$REPO/test/sort_yomi_net.sh"
 # グループへの追加は名前とよみの確認画面を通って必ず並ぶ（za・手で貼る・行を消す・Q・:GnosisYomiReview）
 sh "$REPO/test/group_review_net.sh"
 
+# - [ ] の行で Enter すると次の行にも - [ ] を作る
+sh "$REPO/test/checkbox_net.sh"
+
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
 if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/test_folgezettel_scan_diary.py"; fi
 

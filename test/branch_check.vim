@@ -131,14 +131,15 @@ let g:gnosis_test_keys = ['b']
 call gnosis#add_clipboard_before_up_note()
 call s:ok('D→A 循環 拒否: D も A も変わらない', s:file('d.md') ==# s:d_snap && s:file('a.md') ==# s:a2)
 
-" ---------------------------------------------------------------- index.md からの zn → b は何も作らない
+" ---------------------------------------------------------------- index.md（グループ）の zn は置き場所を聞かず、b（Branch）は選べない。表示名で Esc なら何も作らない
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let s:i_snap = s:file('index.md')
-let g:gnosis_test_keys = ['b']
+let g:gnosis_test_keys = []
+let g:gnosis_test_display_name = ["\x1b"]
 sleep 1100m
 call gnosis#v2_new_plain()
-call s:ok('index.md の zn b: 新ノートを作らない・index.md も変わらない', s:files() ==# s:before && s:file('index.md') ==# s:i_snap)
+call s:ok('index.md の zn: Branch は作らない・Esc で新ノートも index.md の変更も無し', s:files() ==# s:before && s:file('index.md') ==# s:i_snap)
 
 " ---------------------------------------------------------------- 未保存の編集は失われない（保存してから足す）
 execute 'edit ' . fnameescape(s:v . '/e.md')
