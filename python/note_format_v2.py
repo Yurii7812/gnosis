@@ -1488,7 +1488,7 @@ def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bo
         j = i + 1
         links: list[str] = []
         while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
-            links.append(lines[j])
+            links.append(lines[j].lstrip(" "))  # 段は付けない（並びだけ。昔の段つきの行も sync で段なしに戻る）
             j += 1
         if j < len(lines) and not lines[j].strip():
             j += 1  # 区切りの空行は 1 行だけ（それ以上は本文の余白として残す）

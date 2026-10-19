@@ -361,31 +361,6 @@ let g:gnosis_test_keys = ["\r"]
 call gnosis#add_clipboard_before_up_note()
 call s:ok('za Enter は従来どおり（本文の最後に本文リンク・Branch は作らない）', s:count('t1.md', '^\[ノートQ1\](q1\.md)$') == 1 && s:count('q1.md', 'ChildBranch') == 0, string(s:file('t1.md')))
 
-" ------------------------------------------------------------------ BranchGroup: の並び（階層）: Nest / Unnest
-call s:mk('bg.md', 'BG', ['BranchGroup:', '[A](a.md)', '[B](b.md)', '[C](c.md)', '[D](d.md)', '', '本文。'])
-execute 'edit ' . fnameescape(s:v . '/bg.md')
-let s:h = search('^BranchGroup:$', 'nw')
-function! s:bg() abort
-  let l:h = search('^BranchGroup:$', 'nw')
-  return getline(l:h + 1, l:h + 4)
-endfunction
-call s:ok('Nest: 先頭の行は下げられない（変更なし）', gnosis#branch#nest(s:h + 1, s:h + 1, 1) == 0 && s:bg() ==# ['[A](a.md)', '[B](b.md)', '[C](c.md)', '[D](d.md)'])
-call gnosis#branch#nest(s:h + 2, s:h + 2, 1)
-call s:ok('Nest: 今の行（範囲 1 行）を 1 段下げる → B は A の下', s:bg() ==# ['[A](a.md)', '  [B](b.md)', '[C](c.md)', '[D](d.md)'], string(s:bg()))
-call gnosis#branch#nest(s:h + 3, s:h + 4, 1)
-call s:ok('Nest: ビジュアルで 2 行まとめて下げる → C と D は A の下（B と同じ段）', s:bg() ==# ['[A](a.md)', '  [B](b.md)', '  [C](c.md)', '  [D](d.md)'], string(s:bg()))
-call s:ok('Nest: 直前の行の 1 段下までしか下げられない', gnosis#branch#nest(s:h + 2, s:h + 2, 1) == 0 && s:bg()[1] ==# '  [B](b.md)')
-call gnosis#branch#nest(s:h + 3, s:h + 3, 1)
-call s:ok('Nest: C を B の下へ（2 段目）', s:bg() ==# ['[A](a.md)', '  [B](b.md)', '    [C](c.md)', '  [D](d.md)'], string(s:bg()))
-call gnosis#branch#nest(s:h + 2, s:h + 2, -1)
-call s:ok('Unnest: B を上げると、選んでいない子（C）もいっしょに動く', s:bg() ==# ['[A](a.md)', '[B](b.md)', '  [C](c.md)', '  [D](d.md)'], string(s:bg()))
-call s:ok('Unnest: 一番上の階層の行は上げられない（変更なし）', gnosis#branch#nest(s:h + 1, s:h + 1, -1) == 0)
-call s:ok('Nest: BranchGroup の外の行は何もしない', gnosis#branch#nest(line('$'), line('$'), 1) == 0 && getline('$') ==# '本文。')
-call s:ok('Nest: 本文・見出しは変えない', getline(s:h) ==# 'BranchGroup:' && getline(s:h + 6) ==# '本文。')
-call s:mk('nobg.md', 'NOBG', ['[A](a.md)'])
-execute 'edit ' . fnameescape(s:v . '/nobg.md')
-call s:ok('Nest: BranchGroup: が無いノートでは何もしない', gnosis#branch#nest(1, line('$'), 1) == 0)
-
 call writefile(s:res, s:work . '/result.txt')
 qa!
 ) == 0 && s:count('d.md', '(' . s:nt . ')') >= 2,
