@@ -1423,6 +1423,12 @@ function! s:timer_hub_edit_cb(...) abort
   redraw!
 endfunction
 
+" 新しく作った vault は、最初に操作ガイドを開く（Index へはガイドのリンクから戻れる）。
+function! s:first_open_path(root, index) abort
+  let l:guide = fnamemodify(a:root, ':p') . s:guide_file_name(a:root)
+  return filereadable(l:guide) ? l:guide : a:index
+endfunction
+
 function! s:open_index_with_delay(index_path) abort
   call gnosis#push_history()
   call timer_start(0, function('s:timer_edit_file_cb', [a:index_path]))
@@ -1453,7 +1459,7 @@ function! s:startup_recover_missing_root() abort
   if filereadable(l:index)
     execute 'cd ' . fnameescape(l:new_root)
     if s:consume_index_created_flag()
-      call s:open_index_with_delay(l:index)
+      call s:open_index_with_delay(s:first_open_path(l:new_root, l:index))
     else
       call gnosis#push_history()
       silent execute 'edit ' . fnameescape(l:index)
@@ -1619,7 +1625,7 @@ function! s:setup_root_and_index(open_index) abort
   if a:open_index && filereadable(l:index)
     execute 'cd ' . fnameescape(l:root)
     if s:consume_index_created_flag()
-      call s:open_index_with_delay(l:index)
+      call s:open_index_with_delay(s:first_open_path(l:root, l:index))
     else
       call gnosis#push_history()
       silent execute 'edit ' . fnameescape(l:index)
@@ -11190,7 +11196,7 @@ function! gnosis#open_index() abort
   let l:index = s:index_path(l:root)
   if filereadable(l:index)
     if s:consume_index_created_flag()
-      call s:open_index_with_delay(l:index)
+      call s:open_index_with_delay(s:first_open_path(l:root, l:index))
     else
       call gnosis#push_history()
       execute 'edit ' . fnameescape(l:index)
@@ -11448,6 +11454,72 @@ function! s:group_last_block() abort
     endwhile
   endif
   return l:first <= l:end ? [l:first, l:end] : []
+endfunction
+
+" ---------------------------------------------------------------------------
+" グループに新しいメンバーが入ったら、保存の後で自動的によみ順に並べ直す（\S と同じ規則）。
+"   対象: attribute: group のノート（Index・紙PKM の生成物・日記のグループは除く）。
+"   本文の最後のブロックに、読み込み・前回の並べ替え以降に増えたリンク行があるときだけ並べる。
+" ---------------------------------------------------------------------------
+
+function! s:group_autosort_target() abort
+  if &buftype !=# '' || !s:sort_group_mode()
+    return 0
+  endif
+  for l:ln in getline(1, min([line('$'), 12]))
+    if l:ln =~# '^title:\s*\%(\d\{4}\%(-\d\d\)\?\|日記\)\s*$'
+      return 0
+    endif
+  endfor
+  return 1
+endfunction
+
+function! s:group_member_lines() abort
+  if !s:group_autosort_target()
+    return []
+  endif
+  let l:r = s:group_last_block()
+  if empty(l:r)
+    return []
+  endif
+  let l:rx = '^\[\%(\\.\|[^\]\\]\)*\]([^)]\+)$'
+  return filter(map(getline(l:r[0], l:r[1]), 'trim(v:val)'), 'v:val =~# l:rx')
+endfunction
+
+function! gnosis#group_autosort_snapshot() abort
+  let b:gnosis_group_members = s:group_member_lines()
+endfunction
+
+function! gnosis#group_autosort_check() abort
+  if !exists('b:gnosis_group_members')
+    call gnosis#group_autosort_snapshot()
+    return
+  endif
+  let l:cur = s:group_member_lines()
+  let l:new = filter(copy(l:cur), 'index(b:gnosis_group_members, v:val) < 0')
+  if empty(l:new) || len(l:cur) < 2
+    let b:gnosis_group_members = l:cur
+    return
+  endif
+  if mode() =~# '^[iR]'
+    return
+  endif
+  call timer_start(700, function('s:group_autosort_cb', [bufnr('%')]))
+endfunction
+
+function! s:group_autosort_cb(bufnr, ...) abort
+  if bufnr('%') != a:bufnr || &modified || mode() =~# '^[iR]' || !s:group_autosort_target()
+    return
+  endif
+  let l:path = expand('%:p')
+  if empty(l:path) || !filereadable(l:path)
+    return
+  endif
+  call s:sort_group_file(l:path)
+  if s:disk_differs_from_buffer(l:path)
+    call s:reload_by_edit(l:path)
+  endif
+  call gnosis#group_autosort_snapshot()
 endfunction
 
 " 範囲内の「リンクだけの行」（コードブロックの外）の数
