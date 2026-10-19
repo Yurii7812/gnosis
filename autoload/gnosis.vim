@@ -10770,6 +10770,10 @@ endfunction
 
 " zn / zk でグループに新しいノートを作ったとき: 入れた表示名のよみを 1 行で聞く（既定は推測）。
 function! s:ask_new_member_yomi(group, note, name) abort
+  " 確認画面を省く回帰テストでは、この入力も省く（EOF で Vim が終了するのを防ぐ）。
+  if get(g:, 'gnosis_test_review_skip', 0)
+    return
+  endif
   if empty(a:name) || !filereadable(a:note)
     return
   endif
