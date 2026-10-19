@@ -1,6 +1,6 @@
 {
   "start": {"base": "dark", "bg": "#0C1D32", "fg": "#EBEBEB", "link": "#E1F4E4", "heading": "#EEDA77", "muted": "#B3B3B3", "accent": "#83AFE2", "selection": "#21538C", "cursorline": "#15365B"},
-  "light": {"base": "dark", "bg": "#0C1D32", "fg": "#EBEBEB", "link": "#E1F4E4", "heading": "#EEDA77", "muted": "#B3B3B3", "accent": "#83AFE2", "selection": "#21538C", "cursorline": "#15365B"},
-  "dark":  {"base": "dark", "bg": "#0C1D32", "fg": "#EBEBEB", "link": "#E1F4E4", "heading": "#EEDA77", "muted": "#B3B3B3", "accent": "#83AFE2", "selection": "#21538C", "cursorline": "#15365B"},
+  "light": {"base": "dark", "bg": "#11253D", "fg": "#DCE3EC", "link": "#8CC4FF", "heading": "#EFD67A", "muted": "#9DAFC4", "accent": "#83AFE2", "selection": "#2B5A8E", "cursorline": "#1A3454"},
+  "dark":  {"base": "dark", "bg": "#11253D", "fg": "#DCE3EC", "link": "#8CC4FF", "heading": "#EFD67A", "muted": "#9DAFC4", "accent": "#83AFE2", "selection": "#2B5A8E", "cursorline": "#1A3454"},
   "app":   {"base": "light", "bg": "#FAFAFA", "fg": "#1F1F1F", "link": "#21538C", "heading": "#603510", "muted": "#575757", "accent": "#2D70BE", "selection": "#B5CFEE", "cursorline": "#EBEBEB"}
 }

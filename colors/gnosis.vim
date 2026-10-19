@@ -5,9 +5,9 @@
 " g:gnosis_palette が無いときは &background に合わせた組み込みの色。
 "
 " 読みやすさの方針（Chnoubis 10番の夜空×水色を土台に、役割で色を分ける）:
-"   - 本文は白に近い色（水色の文字は字画が青くにじみ、長文が読みにくい）
-"   - リンクは淡いミントグリーン＋下線（本文との色差が小さいため下線を維持）
-"   - 見出しは別の色相（淡い金）＋太字。### などの記号は控えめな色
+"   - 背景は起動画面より少し明るい紺、本文はわずかに青みのある白（真っ白より眩しさが少ない）
+"   - リンクは本文と見分けられる空色＋下線（本文と同じ明るさの色だと区別がつかない）
+"   - 見出しは # と ## が淡い金、### 以下は水色（階層を色で分ける）＋太字。記号は控えめな色
 "   - 補助の文字も背景との差を十分に取る（コントラスト比 4.5:1 以上）
 "   - 斜体は Markdown の *強調* だけ（コメントなどに斜体は使わない）
 highlight clear
@@ -132,10 +132,10 @@ call s:hl('SpellCap', '', '', 'undercurl')
 " ---- Markdown（本文・見出し・リンク）
 call s:hl('markdownH1', s:heading, '', 'bold')
 call s:hl('markdownH2', s:heading, '', 'bold')
-call s:hl('markdownH3', s:heading, '', 'bold')
-call s:hl('markdownH4', s:heading, '', 'bold')
-call s:hl('markdownH5', s:heading, '', 'bold')
-call s:hl('markdownH6', s:heading, '', 'bold')
+call s:hl('markdownH3', s:accent, '', 'bold')
+call s:hl('markdownH4', s:accent, '', 'bold')
+call s:hl('markdownH5', s:accent, '', 'bold')
+call s:hl('markdownH6', s:accent, '', 'bold')
 call s:hl('markdownHeadingDelimiter', s:dim, '', '')
 call s:hl('markdownBold', s:strong, '', 'bold')
 call s:hl('markdownItalic', s:strong, '', 'italic')
