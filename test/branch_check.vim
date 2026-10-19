@@ -10,6 +10,7 @@ let g:gnosis_root = s:v . '/'
 let g:gnosis_autosync = 0
 let g:gnosis_skip_interactive_mount = 1
 let g:gnosis_diary_auto = 0
+let g:gnosis_test_review_skip = 1
 
 function! s:ok(name, cond, ...) abort
   call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))

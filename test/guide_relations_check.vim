@@ -115,6 +115,17 @@ try
   let s:t = s:tail(s:guide())
   call gnosis#i18n#set_lang('en')
   call gnosis#refresh_guide()
+  " 題変更のリンク更新は非同期。完了前の状態をスナップショットにしない。
+  for s:wait in range(50)
+    let s:pending = 0
+    for s:ref in [s:v . '/index.md', s:v . '/261013140400.md']
+      if index(readfile(s:ref), '[Gnosis 操作ガイド](gnosis-guide.md)') >= 0
+        let s:pending = 1
+      endif
+    endfor
+    if !s:pending | break | endif
+    sleep 100m
+  endfor
   let s:g = s:guide()
   call s:ok('英語: 題が英語', index(s:g, 'title: Gnosis Guide') >= 0 && index(s:g, '# Gnosis Guide') >= 0)
   call s:ok('英語: 関係の節が残る', s:tail(s:g) ==# s:t)

@@ -33,10 +33,12 @@ def _state_path(root: Path) -> Path:
 
 def load_state(root: Path) -> dict:
     p = _state_path(root)
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"ids": {}}
+    if not p.exists():
+        return {"ids": {}, "entries": {}}
+    state = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(state, dict) or not isinstance(state.get("ids"), dict):
+        raise ValueError("取り込み記録が壊れています: " + str(p))
+    return state
 
 
 PACKAGE = "net.gnosis.capture"
@@ -91,29 +93,63 @@ def adb_pull(outdir: str) -> int:
             continue
         r = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/images/" + n],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if r.returncode == 0 and r.stdout:
-            (out / "images" / n).write_bytes(r.stdout)
+        if r.returncode != 0 or not r.stdout:
+            print("画像を読めませんでした（取り込み済みにはしません）: " + n, file=sys.stderr)
+            return 2
+        (out / "images" / n).write_bytes(r.stdout)
     data = {"format": "gnosis-capture", "version": 1, "entries": entries}
     (out / "capture.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     print(len(entries))
     return 0
 
 
+def _destination_exists(root: Path, target: str) -> bool:
+    if target.startswith("(diary:"):
+        # 旧版の記録。日記は日時のファイル名を使うので日付とファイルの対応も読む。
+        date = target[len("(diary:"):-1]
+        try:
+            days = json.loads((root / ".state/diary_days.json").read_text(encoding="utf-8"))["days"]
+            return (root / days[date]).is_file()
+        except (OSError, ValueError, KeyError):
+            return False
+    return bool(target) and (root / target).is_file()
+
+
+def _snapshot(e: dict) -> dict:
+    return {"text": e.get("text") or "", "topic": normalize_topic(e.get("topic") or ""),
+            "images": e.get("images") or [], "parent": e.get("parent") or None,
+            "contexts": e.get("contexts") or []}
+
+
+def normalize_topic(topic: str) -> str:
+    return "" if topic == "メモ" else topic
+
+
 def adb_mark(root: str) -> int:
-    """取り込み済みの id（vault の記録すべて）を、アプリの files/imported.json へ書く。"""
+    """この vault に実在する取り込み先のスナップショットだけを返す。スマホの原本は消さない。"""
     if adb_ready():
         return 0
-    ids = sorted(load_state(Path(root)).get("ids", {}).keys())
-    r = subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "sh", "-c", "cat > files/imported.json"],
-                       input=json.dumps(ids).encode("utf-8"))
-    return r.returncode
+    rp = Path(root).resolve()
+    state = load_state(rp)
+    entries = [e for key, e in state.get("entries", {}).items()
+               if _destination_exists(rp, state["ids"].get(key, ""))]
+    data = {"version": 2, "vault": str(rp), "entries": entries}
+    r = subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "tee", "files/imported.json.tmp"],
+                       input=json.dumps(data, ensure_ascii=False).encode("utf-8"),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode:
+        return r.returncode
+    # リダイレクトを adb の外側のシェルに解釈させず、アプリの権限で原子的に置き換える。
+    return subprocess.run([_adb(), "exec-out", "run-as", PACKAGE, "mv",
+                           "files/imported.json.tmp", "files/imported.json"],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
 
 
-def _first_line_title(text: str, limit: int = 30) -> str:
+def _first_line_title(text: str, limit: int = 20) -> str:
     for ln in text.splitlines():
         ln = ln.strip().lstrip("#").strip()
         if ln:
-            return ln if len(ln) <= limit else ln[:limit] + "…"
+            return ln if len(ln) <= limit else ln[:limit] + "..."
     return ""
 
 
@@ -134,34 +170,57 @@ def plan(outdir: str, root: str) -> dict:
     items = []
     for e in sorted(entries, key=lambda x: x.get("created", 0)):
         t = dt.datetime.fromtimestamp(e.get("created", 0) / 1000)
-        done = e["id"] in st.get("ids", {})
+        previous = st.get("entries", {}).get(e["id"])
+        target = st.get("ids", {}).get(e["id"], "")
+        exists = _destination_exists(Path(root), target)
+        same = previous is not None and _snapshot(previous) == _snapshot(e)
+        # 旧版の記録に本文が無い場合は再取り込みし、スマホの原本を保全する。
+        needs_note = e.get("topic") != "日記" or e["id"] in related
+        done = exists and same and not (needs_note and target.startswith("(diary:"))
+        metadata_only = exists and previous is not None and all(
+            _snapshot(previous)[k] == _snapshot(e)[k] for k in ("text", "images")) and not target.startswith("(diary:")
+        missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
+        if not done and missing:
+            raise ValueError("画像がありません（取り込み済みにはしません）: " + ", ".join(missing))
         items.append({
             "id": e["id"],
             "time": t.strftime("%Y-%m-%d %H:%M:%S"),
             "date": t.strftime("%Y-%m-%d"),
             "hm": t.strftime("%H:%M"),
-            "topic": e.get("topic") or "メモ",
+            "topic": normalize_topic(e.get("topic") or ""),
             "text": e.get("text") or "",
             "title": _first_line_title(e.get("text") or "") or t.strftime("%H:%M のメモ"),
             "images": [i for i in e.get("images") or [] if (Path(outdir) / "images" / i).is_file()],
             "parent": e.get("parent") or "",
             "contexts": [c for c in e.get("contexts") or [] if c],
-            "note": (e.get("topic") != "日記") or (e["id"] in related),
+            "note": needs_note,
             "done": done,
-            "file": st.get("ids", {}).get(e["id"], ""),
+            "file": target if exists else "",
+            "update": metadata_only and not done,
             "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or []))
-                      if k and k in st.get("ids", {}) and k not in by_id},
+                      if k and k in st.get("ids", {}) and k not in by_id
+                      and not st["ids"][k].startswith("(diary:")
+                      and _destination_exists(Path(root), st["ids"][k])},
         })
     return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"])}
 
 
-def record(root: str, pairs: list[tuple[str, str]]) -> None:
+def record(root: str, pairs: list[tuple[str, str]], outdir: str = "") -> None:
     rp = Path(root)
     st = load_state(rp)
+    for key, target in pairs:
+        if not _destination_exists(rp, target):
+            raise ValueError("取り込み先がありません（記録を更新しません）: " + target)
     st.setdefault("ids", {}).update(dict(pairs))
+    if outdir:
+        entries = json.loads((Path(outdir) / "capture.json").read_text(encoding="utf-8"))["entries"]
+        made = {key for key, _ in pairs}
+        st.setdefault("entries", {}).update({e["id"]: e for e in entries if e["id"] in made})
     p = _state_path(rp)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(p)
 
 
 _WA_RE = re.compile(r"^(\d{4})/(\d{1,2})/(\d{1,2}) (\d{1,2}):(\d{2}) - ([^:]+): (.*)$")
@@ -233,7 +292,7 @@ def main(argv: list[str]) -> int:
         return 0
     if len(argv) >= 3 and argv[0] == "record":
         pairs = [tuple(x.split("\t", 1)) for x in sys.stdin.read().splitlines() if "\t" in x]
-        record(argv[1], pairs)  # type: ignore[arg-type]
+        record(argv[1], pairs, argv[2])  # type: ignore[arg-type]
         return 0
     if len(argv) >= 3 and argv[0] == "whatsapp":
         return whatsapp(argv[1], argv[2], argv[3] if len(argv) > 3 else "日記")

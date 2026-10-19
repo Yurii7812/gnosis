@@ -26,11 +26,21 @@ data class Settings(
     val alarmMinutes: Int = 60,
     val fromHour: Int = 9,
     val toHour: Int = 23,
-    val topics: List<String> = listOf(DIARY, "メモ"),
-    val lastTopic: String = DIARY,
+    val topics: List<String> = listOf(DIARY),
+    val lastTopic: String = ALL,
 )
 
 const val DIARY = "日記"
+const val ALL = "__all__"
+const val UNASSIGNED = ""
+fun normalizedTopic(topic: String) = if (topic == "メモ") UNASSIGNED else topic
+fun topicLabel(topic: String) = when (topic) {
+    ALL -> "全部表示"
+    UNASSIGNED -> "トピック未選択"
+    else -> topic
+}
+fun visibleEntries(entries: List<Entry>, topic: String) = entries.filter { topic == ALL || it.topic == topic }
+fun writingTopic(topic: String) = if (topic == ALL) UNASSIGNED else topic
 
 /**
  * データはアプリの中だけ（entries.json と images/）。共有フォルダには置かない。
@@ -52,7 +62,7 @@ class Store(private val ctx: Context) {
         list.forEach { arr.put(toJson(it)) }
         val tmp = File(ctx.filesDir, "entries.json.tmp")
         tmp.writeText(arr.toString())
-        tmp.renameTo(file)
+        check(tmp.renameTo(file)) { "メモを保存できませんでした" }
     }
 
     /** PC の Gnosis が取り込んだ id（PC が書き戻す）。 */
@@ -60,7 +70,13 @@ class Store(private val ctx: Context) {
         val f = File(ctx.filesDir, "imported.json")
         if (!f.exists()) return emptySet()
         return try {
-            val a = JSONArray(f.readText()); (0 until a.length()).map { a.getString(it) }.toSet()
+            val imported = JSONObject(f.readText()).optJSONArray("entries") ?: return emptySet()
+            val current = load().associateBy { it.id }
+            (0 until imported.length()).mapNotNull { i ->
+                val old = fromJson(imported.getJSONObject(i))
+                val now = current[old.id]
+                if (now != null && old.copy(edited = 0, exported = false) == now.copy(edited = 0, exported = false)) old.id else null
+            }.toSet()
         } catch (e: Exception) { emptySet() }
     }
 
@@ -73,8 +89,8 @@ class Store(private val ctx: Context) {
             alarmMinutes = o.optInt("alarmMinutes", 60).coerceAtLeast(1),
             fromHour = o.optInt("fromHour", 9),
             toHour = o.optInt("toHour", 23),
-            topics = if (topics.isNullOrEmpty()) Settings().topics else topics,
-            lastTopic = o.optString("lastTopic", DIARY),
+            topics = (listOf(DIARY) + (topics ?: emptyList()).map(::normalizedTopic)).filter { it.isNotEmpty() && it != ALL }.distinct(),
+            lastTopic = o.optString("lastTopic", ALL).let { if (it == ALL) ALL else normalizedTopic(it) },
         )
     }
 
@@ -107,7 +123,7 @@ class Store(private val ctx: Context) {
         fun fromJson(o: JSONObject): Entry {
             fun strs(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
             return Entry(
-                id = o.getString("id"), created = o.getLong("created"), topic = o.optString("topic", DIARY),
+                id = o.getString("id"), created = o.getLong("created"), topic = normalizedTopic(o.optString("topic", UNASSIGNED)),
                 text = o.optString("text", ""), images = strs("images"),
                 parent = if (o.isNull("parent")) null else o.optString("parent").ifEmpty { null },
                 contexts = strs("contexts"), exported = o.optBoolean("exported", false), edited = o.optLong("edited", 0),

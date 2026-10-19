@@ -5,6 +5,8 @@ on:
       - "bin/**"
       - "install/**"
       - "autoload/**"
+      - "android/**"
+      - "python/**"
       - "test/**"
       - ".github/workflows/gnosis-regression.yml"
   workflow_dispatch:
@@ -27,6 +29,14 @@ jobs:
           sh -n bin/gnosis
           sh -n install/install.sh
           node --check bin/gnosis-kwin-maximize.js
+      - name: Test phone capture, vault isolation and topic organization
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          python3 python/test_capture_import.py
+          python3 python/test_orphans.py
+          sh test/capture_import_net.sh
+          sh test/capture_topics_net.sh
       - name: Test Python note relationship synchronization
         run: |
           python3 python/test_note_format_v2.py
@@ -82,3 +92,24 @@ jobs:
       - name: Run the same installer tests in PowerShell 7
         shell: pwsh
         run: ./test/windows_ps51_installer.ps1
+
+  android-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test, lint and build Android capture
+        working-directory: android
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnosis-capture-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

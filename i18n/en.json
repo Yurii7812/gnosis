@@ -389,7 +389,10 @@
     "h=カーソル直下 / Enter=本文の最後 / t=見出しの下 / c=Context末尾 / b=Branch(子) / p=Parent(親) / o=孤立 / n=BranchGroup(ChildBranch)  (Esc/q キャンセル)": "h=below the cursor / Enter=end of the body / t=under a heading / c=end of Context / b=Branch(child) / p=Parent / o=orphan / n=BranchGroup(ChildBranch)  (Esc/q cancel)",
     "キャンセル（h / Enter / t / c / b / p / o のどれか）": "Cancelled (use one of h / Enter / t / c / b / p / o)",
     "リンク先に、今のノートへのリンクを: Enter=本文の最後 / t=見出しを選んでその節の最後 / w=リンク先を開いて編集 / o=入れない  (Esc で取り消し)": "Put a link back to the current note in the target: Enter=end of body / t=end of a chosen section / w=open the target and edit it yourself / o=do not add  (Esc cancels)",
-    "取り消しました（Enter / t / w / o のどれか。何も変更していません）": "Cancelled (use Enter / t / w / o; nothing was changed)"
+    "取り消しました（Enter / t / w / o のどれか。何も変更していません）": "Cancelled (use Enter / t / w / o; nothing was changed)",
+    "トピック未選択": "No topic selected",
+    "（メモはありません）": "(No memos)",
+    "トピック（空欄で未選択）: ": "Topic (empty for no topic): "
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

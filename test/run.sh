@@ -28,6 +28,7 @@ python3 "$REPO/python/test_section_colon.py"
 python3 "$REPO/python/test_paper_branchgroup.py"
 python3 "$REPO/python/test_theme_palette.py"
 python3 "$REPO/python/test_orphans.py"
+python3 "$REPO/python/test_capture_import.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \
@@ -70,6 +71,7 @@ sh "$REPO/test/checkbox_net.sh"
 
 # スマホのメモの取り込み
 sh "$REPO/test/capture_import_net.sh"
+sh "$REPO/test/capture_topics_net.sh"
 
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
 if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/test_folgezettel_scan_diary.py"; fi

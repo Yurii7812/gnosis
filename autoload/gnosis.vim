@@ -1420,6 +1420,11 @@ function! s:timer_hub_edit_cb(...) abort
   silent! execute 'hide edit ' . fnameescape(l:path)
   setlocal bufhidden=hide
   setlocal noundofile
+  if fnamemodify(l:path, ':t') =~# '^orphans-'
+    let b:gnosis_topic_list = 1
+    nnoremap <silent><buffer> t :call gnosis#topic#assign(line('.'), line('.'), '')<CR>
+    xnoremap <silent><buffer> t :<C-u>call gnosis#topic#assign(line("'<"), line("'>"), '')<CR>
+  endif
   redraw!
 endfunction
 
@@ -5415,13 +5420,15 @@ function! gnosis#capture_import(...) abort
   if empty(l:todo)
     echo gnosis#i18n#tr('Gnosis: 新しいメモはありません（全部取り込み済み）')
     call delete(l:tmp, 'rf')
-    call s:capture_run(['adbmark', l:root])
+    if !(a:0 && !empty(a:1))
+      call s:capture_run(['adbmark', l:root])
+    endif
     return
   endif
   call gnosis#save_current_note()
   let l:files = {}
   for l:it in l:plan.items
-    if l:it.done && !empty(l:it.file)
+    if !empty(l:it.file) && l:it.file !~# '^(diary:'
       let l:files[l:it.id] = l:root . '/' . l:it.file
     endif
     for [l:k, l:v] in items(l:it.known)
@@ -5439,7 +5446,27 @@ function! gnosis#capture_import(...) abort
       call writefile(readfile(l:tmp . '/images/' . l:name, 'b'), l:imgdir . '/' . l:name, 'b')
       call add(l:img, '![](capture-images/' . l:name . ')')
     endfor
-    if l:it.note
+    if l:it.update
+      let l:path = l:root . '/' . l:it.file
+      let l:lines = readfile(l:path)
+      let l:end = index(l:lines, '---', 1)
+      if l:end > 0
+        for l:k in reverse(range(1, l:end - 1))
+          if l:lines[l:k] =~# '^\(topic\|capture\):'
+            call remove(l:lines, l:k)
+          endif
+        endfor
+        call insert(l:lines, 'topic: ' . l:it.topic, 1)
+        call insert(l:lines, 'capture: ' . l:it.topic, 1)
+        call s:syn_writefile(l:lines, l:path)
+        let l:files[l:it.id] = l:path
+        call add(l:made, [l:it.id, l:it.file])
+        if l:it.topic ==# '日記'
+          if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
+          call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:it.title) . '](' . l:it.file . ')'])
+        endif
+      endif
+    elseif l:it.note
       let l:name = l:it.id . '.md'
       let l:n = 2
       while filereadable(l:root . '/' . l:name)
@@ -5448,14 +5475,8 @@ function! gnosis#capture_import(...) abort
       endwhile
       let l:title = substitute(l:it.title, '[\[\]]', '', 'g')
       let l:body = split(l:it.text, "\n", 1)
-      " 題にした 1 行目は本文に繰り返さない（長くて省略した題のときは本文に残す）
-      if !empty(l:body) && trim(substitute(l:body[0], '^#\+\s*', '', '')) ==# l:title
-        call remove(l:body, 0)
-        while !empty(l:body) && trim(l:body[0]) ==# ''
-          call remove(l:body, 0)
-        endwhile
-      endif
-      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, '---', '', '# ' . l:title, '']
+      " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
+      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'topic: ' . l:it.topic, '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
       try
         if filereadable(l:root . '/' . l:name)
@@ -5508,7 +5529,11 @@ function! gnosis#capture_import(...) abort
       endif
     endfor
   endfor
-  call s:capture_run(['record', l:root, 'x'], join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
+  call s:capture_run(['record', l:root, l:tmp], join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
+  if v:shell_error
+    echohl WarningMsg | echom 'Gnosis: 取り込み記録を保存できませんでした。スマホの原本は残っています。' | echohl NONE
+    return
+  endif
   call delete(l:tmp, 'rf')
   if !(a:0 && !empty(a:1))
     call s:capture_run(['adbmark', l:root])
@@ -5602,8 +5627,8 @@ function! gnosis#orphans_open() abort
     return
   endif
   let l:lines = [gnosis#i18n#tr('# つながっていないノート'), '']
-  " スマホのメモ（capture:）はトピックごと、ほかは「ノート」にまとめる
-  let l:by = {}
+  " 作成端末を区別せずトピックごとに並べる。未指定も常に見出しを出す。
+  let l:by = {'': []}
   let l:order = []
   for l:ln in l:out
     let l:f = split(l:ln, "\t", 1)
@@ -5616,13 +5641,12 @@ function! gnosis#orphans_open() abort
       call add(l:by[l:topic], '[' . substitute(l:f[1], '[\\\[\]]', '\\&', 'g') . '](' . l:f[0] . ')')
     endif
   endfor
+  call add(l:order, '')
   for l:topic in l:order
-    if len(l:order) > 1 || !empty(l:topic)
-      call add(l:lines, '## ' . (empty(l:topic) ? gnosis#i18n#tr('ノート') : l:topic))
-    endif
-    call extend(l:lines, l:by[l:topic] + [''])
+    call add(l:lines, '## ' . (empty(l:topic) ? gnosis#i18n#tr('トピック未選択') : l:topic))
+    call extend(l:lines, (empty(l:by[l:topic]) ? [gnosis#i18n#tr('（メモはありません）')] : l:by[l:topic]) + [''])
   endfor
-  if len(l:lines) == 2
+  if empty(l:out)
     call add(l:lines, gnosis#i18n#tr('（つながっていないノートはありません）'))
   endif
   let l:dir = s:hub_dir()
@@ -10746,6 +10770,10 @@ endfunction
 
 " zn / zk でグループに新しいノートを作ったとき: 入れた表示名のよみを 1 行で聞く（既定は推測）。
 function! s:ask_new_member_yomi(group, note, name) abort
+  " 確認画面を省く回帰テストでは、この入力も省く（EOF で Vim が終了するのを防ぐ）。
+  if get(g:, 'gnosis_test_review_skip', 0)
+    return
+  endif
   if empty(a:name) || !filereadable(a:note)
     return
   endif
