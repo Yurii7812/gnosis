@@ -126,7 +126,7 @@ private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>,
     var q by remember { mutableStateOf("") }
     val chosen = remember { mutableStateListOf<String>() }
     val multi = kind != "parent"
-    val list = entries.filter { it.id !in exclude && (q.isBlank() || it.text.contains(q.trim(), ignoreCase = true)) }
+    val list = entries.filter { it.id !in exclude && matchesQuery(it.text, q) }
         .sortedByDescending { it.created }
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(when (kind) { "link" -> "リンクするメモ"; "context" -> "文脈にするメモ"; else -> "親（Branch）にするメモ" }) },
@@ -178,7 +178,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var replyTo by remember { mutableStateOf<String?>(null) }      // 次に書くものの Branch の親
     val contextsTo = remember { mutableStateListOf<String>() }      // 次に書くものの文脈にするメモ（右スワイプで足す）
     var flash by remember { mutableStateOf<String?>(null) }
-    var insertMenu by remember { mutableStateOf(false) }           // 上のバーの「＋」（チェックボックス・リンク・文脈・親）
+    var insertMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }           // 上のバーの「＋」（チェックボックス・リンク・文脈・親）
     var pick by remember { mutableStateOf<Pick?>(null) }           // メモを探して選ぶ画面
     var relEditFor by remember { mutableStateOf<String?>(null) }   // 文脈・親を編集しているメモ        // 飛んだ先のメモを少しのあいだ目立たせる
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
@@ -187,6 +188,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var topicDialogFor by remember { mutableStateOf<String?>(null) }
     var addTopicOpen by remember { mutableStateOf(false) }
     var topicListOpen by remember { mutableStateOf(false) }       // 「その他」のトピック一覧
+    var modeFor by remember { mutableStateOf<String?>(null) }      // 取り込み方（1 つのノートにまとめる・日時）を変えるトピック
     var search by remember { mutableStateOf<String?>(null) }      // 全文検索（null で閉じている）
     var settingsOpen by remember { mutableStateOf(false) }
     var imported by remember { mutableStateOf(store.importedIds()) }
@@ -370,15 +372,17 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             modifier = Modifier.fillMaxWidth().focusRequester(fr))
                         LaunchedEffect(Unit) { fr.requestFocus() }
                     } else Column {
-                        Text(if (selecting) "${selected.size} 件選択" else topicLabel(topic), fontWeight = FontWeight.Bold)
-                        Text(if (n == 0) "すべて PC に取り込み済み" else "PC にまだ取り込んでいない: $n 件", fontSize = 12.sp)
+                        Text(if (selecting) "${selected.size} 件選択" else topicLabel(topic), fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (n == 0) "すべて取り込み済み" else "未取り込み $n 件", fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 actions = {
                     IconButton(onClick = { search = if (search == null) "" else null }) {
                         Icon(if (search != null) Icons.Filled.Close else Icons.Filled.Search, if (search != null) "検索をやめる" else "全文検索")
                     }
-                    if (search == null) Box {
+                    if (search == null && !selecting) Box {
                         IconButton(onClick = { insertMenu = true }) { Icon(Icons.Filled.AddCircleOutline, "挿入（チェックボックス・リンク・文脈・親）") }
                         DropdownMenu(expanded = insertMenu, onDismissRequest = { insertMenu = false }) {
                             DropdownMenuItem(text = { Text("チェックボックス") }, leadingIcon = { Icon(Icons.Filled.CheckBox, null) }, onClick = {
@@ -395,11 +399,22 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             })
                         }
                     }
-                    IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null; if (selecting) keyboard?.hide() }) {
-                        Icon(if (selecting) Icons.Filled.Close else Icons.Filled.Checklist, if (selecting) "選択をやめる" else "複数選択")
+                    // 選択中は「選択をやめる」だけを出す。ほかのあまり使わない操作は ⋮ のメニューに
+                    if (selecting) IconButton(onClick = { selecting = false; selected.clear() }) { Icon(Icons.Filled.Close, "選択をやめる") }
+                    else if (search == null) Box {
+                        IconButton(onClick = { moreMenu = true }) { Icon(Icons.Filled.MoreVert, "そのほか") }
+                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                            DropdownMenuItem(text = { Text("複数選択") }, leadingIcon = { Icon(Icons.Filled.Checklist, null) }, onClick = {
+                                moreMenu = false; selecting = true; selected.clear(); contextFor = null; keyboard?.hide()
+                            })
+                            DropdownMenuItem(text = { Text("取り込み済みのメモを消す") }, leadingIcon = { Icon(Icons.Filled.DeleteSweep, null) }, onClick = {
+                                moreMenu = false; cleanImportedOpen = true
+                            })
+                            DropdownMenuItem(text = { Text("アラームと設定") }, leadingIcon = { Icon(Icons.Filled.Alarm, null) }, onClick = {
+                                moreMenu = false; settingsOpen = true
+                            })
+                        }
                     }
-                    IconButton(onClick = { cleanImportedOpen = true }) { Icon(Icons.Filled.DeleteSweep, "PC に取り込み済みのメモを消す") }
-                    IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Alarm, "アラームと設定") }
                 },
             )
         },
@@ -484,7 +499,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     ) { pad ->
         // 検索中はトピックに関係なく、全部のメモの本文から探す
         val sq = search?.trim().orEmpty()
-        val shown = (if (search != null && sq.isNotEmpty()) entries.filter { it.text.contains(sq, ignoreCase = true) }
+        val shown = (if (search != null && sq.isNotEmpty()) entries.filter { matchesQuery(it.text, sq) }
             else visibleEntries(entries, topic)).sortedByDescending { it.created }
         LazyColumn(Modifier.fillMaxSize().padding(pad), state = listState, reverseLayout = true,
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -605,7 +620,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
 
     if (topicListOpen) {
         var q by remember { mutableStateOf("") }
-        val list = topics.filter { it != DIARY && (q.isBlank() || it.contains(q.trim(), ignoreCase = true)) }
+        val list = topics.filter { it != DIARY && matchesQuery(it, q) }
         AlertDialog(onDismissRequest = { topicListOpen = false }, title = { Text("トピック") },
             text = { Column {
                 OutlinedTextField(q, { q = it }, placeholder = { Text("探す") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -615,8 +630,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         val n = entries.count { it.topic == t }
                         Row(Modifier.fillMaxWidth().clickable { setTopic(t); topicListOpen = false }.padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(t, Modifier.weight(1f), fontSize = 16.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
+                            Column(Modifier.weight(1f)) {
+                                Text(t, fontSize = 16.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
+                                settings.topicModes[t]?.takeIf { it.single }?.let { m ->
+                                    Text("1 つのノートにまとめる" + if (m.stamp) "・日時あり" else "", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
                             Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                            IconButton(onClick = { modeFor = t }) { Icon(Icons.Filled.Settings, "取り込み方") }
                         }
                     }
                     if (list.isEmpty()) item { Text(if (q.isBlank()) "まだトピックがありません" else "見つかりません", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline) }
@@ -626,14 +647,44 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             confirmButton = { TextButton(onClick = { topicListOpen = false }) { Text("閉じる") } })
     }
 
+    // トピックの取り込み方: 1 件 = 1 ノート（既定）か、このトピックの 1 つのノートにまとめるか
+    modeFor?.let { t ->
+        val m = settings.topicModes[t] ?: TopicMode()
+        fun save(n: TopicMode) { settings = settings.copy(topicModes = settings.topicModes + (t to n)); store.saveSettings(settings) }
+        AlertDialog(onDismissRequest = { modeFor = null }, title = { Text("「$t」の取り込み方") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("1 つのノートにまとめる", Modifier.weight(1f)); Switch(m.single, { save(m.copy(single = it)) })
+                }
+                Text(if (m.single) "PC に取り込むと「$t」のノートに追記します（文脈・親・リンクでつないだメモは、別のノートにしてリンクします）。"
+                    else "PC に取り込むと 1 件 = 1 ノートになります。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("日時を付ける", Modifier.weight(1f), color = if (m.single) Color.Unspecified else MaterialTheme.colorScheme.outline)
+                    Switch(m.stamp, { save(m.copy(stamp = it)) }, enabled = m.single)
+                }
+                Text("日時ありは、日付ごとの見出しの下に「時:分 本文」で入ります。なしは本文だけを足します。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+            } },
+            confirmButton = { TextButton(onClick = { modeFor = null }) { Text("閉じる") } })
+    }
+
     if (addTopicOpen) {
         var name by remember { mutableStateOf("") }
+        var single by remember { mutableStateOf(false) }
+        var stamp by remember { mutableStateOf(true) }
         AlertDialog(onDismissRequest = { addTopicOpen = false },
             title = { Text("トピックを足す") },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("例: アイデア") }) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("例: アイデア") })
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(single, { single = it }); Text("1 つのノートにまとめる") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(stamp, { stamp = it }, enabled = single)
+                    Text("日時を付ける", color = if (single) Color.Unspecified else MaterialTheme.colorScheme.outline)
+                }
+            } },
             confirmButton = { TextButton(onClick = {
                 val t = normalizedTopic(name.trim()).takeUnless { it == ALL || it == "全部" || it == "全部表示" || it == "未所属" || it == "トピック未選択" || it == "その他" } ?: ""
                 if (t.isNotEmpty() && t !in settings.topics) { settings = settings.copy(topics = settings.topics + t); store.saveSettings(settings) }
+                if (t.isNotEmpty() && t != DIARY && single) { settings = settings.copy(topicModes = settings.topicModes + (t to TopicMode(true, stamp))); store.saveSettings(settings) }
                 if (t.isNotEmpty()) setTopic(t)
                 addTopicOpen = false
             }) { Text("足す") } },

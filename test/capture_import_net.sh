@@ -17,8 +17,15 @@ E = [
  {"id": "261018120000", "created": ms("2026-10-18 12:00"), "topic": "日記", "text": "お昼はスコーン\n二切れだけ", "images": [], "parent": None, "contexts": []},
  {"id": "261018130000", "created": ms("2026-10-18 13:00"), "topic": "メモ", "text": "前の [APKに画像添付](memo:261018101000) を見る\n[消えたメモ](memo:999999999999) は文字だけ", "images": [], "parent": None, "contexts": ["261018140000"]},
  {"id": "261018140000", "created": ms("2026-10-18 14:00"), "topic": "日記", "text": "散歩した", "images": [], "parent": None, "contexts": []},
+ {"id": "261018150000", "created": ms("2026-10-18 15:00"), "topic": "仕事", "text": "見積もりを出す\n来週まで", "images": [], "parent": None, "contexts": []},
+ {"id": "261018151000", "created": ms("2026-10-18 15:10"), "topic": "仕事", "text": "電話した\n折り返し待ち", "images": [], "parent": None, "contexts": []},
+ {"id": "261019090000", "created": ms("2026-10-19 09:00"), "topic": "仕事", "text": "翌日の作業", "images": [], "parent": None, "contexts": []},
+ {"id": "261019091000", "created": ms("2026-10-19 09:10"), "topic": "仕事", "text": "会議の話", "images": [], "parent": None, "contexts": ["261018150000"]},
+ {"id": "261018160000", "created": ms("2026-10-18 16:00"), "topic": "読書", "text": "一冊目", "images": [], "parent": None, "contexts": []},
+ {"id": "261018161000", "created": ms("2026-10-18 16:10"), "topic": "読書", "text": "二冊目", "images": [], "parent": None, "contexts": []},
 ]
-json.dump({"format": "gnosis-capture", "version": 1, "entries": E}, open(D + "/pack/capture.json", "w"), ensure_ascii=False)
+M = {"仕事": {"single": True, "stamp": True}, "読書": {"single": True, "stamp": False}, "日記": {"single": True}}
+json.dump({"format": "gnosis-capture", "version": 1, "entries": E, "topicModes": M}, open(D + "/pack/capture.json", "w"), ensure_ascii=False)
 open(D + "/pack/images/a.jpg", "wb").write(b"\xff\xd8fake")
 EOF
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
@@ -38,5 +45,14 @@ chk "本文の中のメモへのリンクは、取り込んだノートへのリ
 chk "取り込んでいないメモへのリンクは表示名だけ" 'grep -q "^消えたメモ は文字だけ$" "$V/261018130000.md"'
 chk "親が無いときは最初の文脈が親（Branch）になる" 'grep -A1 "^ParentBranch:" "$V/261018130000.md" | grep -q "261018140000.md" && grep -A1 "^Context:" "$V/261018130000.md" | grep -q "261018140000.md"'
 chk "スマホでつないだノートは未整理（\\N）に出ない" '! PYTHONDONTWRITEBYTECODE=1 python3 "$REPO/python/orphans.py" "$V" | grep -q "26101813000\|261018101500\|261018101000"'
-chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ]'
+work=$(grep -l '^capture_topic: "仕事"$' "$V"/*.md | head -1)
+book=$(grep -l '^capture_topic: "読書"$' "$V"/*.md | head -1)
+chk "まとめるトピックは 1 つのノート（トピック名の題）" '[ -n "$work" ] && grep -q "^# 仕事$" "$work" && [ ! -f "$V/261018151000.md" ] && [ ! -f "$V/261019090000.md" ]'
+chk "日時あり: 日付の見出しの下に時刻つき（同じ日は見出し 1 つ）" '[ "$(grep -c "^## 2026-10-18（日）$" "$work")" = 1 ] && grep -q "^15:10 電話した$" "$work" && grep -q "^## 2026-10-19（月）$" "$work" && grep -q "^09:00 翌日の作業$" "$work"'
+chk "日時あり: 複数行の本文もそのまま" 'grep -A1 "^15:10 電話した$" "$work" | grep -q "^折り返し待ち$"'
+chk "日時あり: 文脈の相手になったメモもノートにしてリンク" '[ -f "$V/261018150000.md" ] && grep -q "^15:00 \[見積もりを出す\](261018150000.md)$" "$work"'
+chk "日時あり: つながりのあるメモは別のノートにして、トピックのノートからリンク" '[ -f "$V/261019091000.md" ] && grep -q "^09:10 \[会議の話\](261019091000.md)$" "$work" && grep -A1 "^ParentBranch:" "$V/261019091000.md" | grep -q "261018150000.md"'
+chk "日時なし: 本文だけを足す" '[ -n "$book" ] && grep -q "^一冊目$" "$book" && grep -q "^二冊目$" "$book" && ! grep -q "^## 2026" "$book"'
+chk "日記はまとめる設定にしない（日記のまま）" '! grep -l "^capture_topic: \"日記\"" "$V"/*.md >/dev/null 2>&1'
+chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "電話した" "$work")" = 1 ] && [ "$(grep -c "二冊目" "$book")" = 1 ]'
 if [ $ng = 0 ]; then echo "capture_import OK"; else cat "$D/err" >&2; exit 1; fi

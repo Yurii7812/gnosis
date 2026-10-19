@@ -5440,7 +5440,7 @@ function! gnosis#capture_import(...) abort
   call gnosis#save_current_note()
   let l:files = {}
   for l:it in l:plan.items
-    if !empty(l:it.file) && l:it.file !~# '^(diary:'
+    if !empty(l:it.file) && l:it.file !~# '^(\(diary\|topic\):'
       let l:files[l:it.id] = l:root . '/' . l:it.file
     endif
     for [l:k, l:v] in items(l:it.known)
@@ -5451,6 +5451,8 @@ function! gnosis#capture_import(...) abort
   let l:imgdir = l:root . '/capture-images'
   let l:made = []
   let l:diary_lines = {}
+  " 1 つのノートにまとめるトピック: トピック名 → [{date, hm, lines, stamp}]（あとでトピックのノートへ追記）
+  let l:topic_lines = {}
   for l:it in l:todo
     let l:img = []
     for l:name in l:it.images
@@ -5476,6 +5478,9 @@ function! gnosis#capture_import(...) abort
         if l:it.topic ==# '日記'
           if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
           call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:it.title) . '](' . l:it.file . ')'])
+        elseif get(l:it, 'single', 0)
+          call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
+                \ 'lines': ['[' . s:md_link_text(l:it.title) . '](' . l:it.file . ')']})
         endif
       endif
     elseif l:it.note
@@ -5509,7 +5514,16 @@ function! gnosis#capture_import(...) abort
       if l:it.topic ==# '日記'
         if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
         call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:title) . '](' . l:name . ')'])
+      elseif get(l:it, 'single', 0)
+        " まとめるトピックでも、つながりのあるメモは別のノートにして、トピックのノートからリンクする
+        call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
+              \ 'lines': ['[' . s:md_link_text(l:title) . '](' . l:name . ')']})
       endif
+    elseif get(l:it, 'single', 0)
+      " 1 つのノートにまとめるトピック: 本文をそのトピックのノートへ追記する
+      call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
+            \ 'lines': split(l:it.text, "\n", 1) + (empty(l:img) ? [] : [''] + l:img)})
+      call add(l:made, [l:it.id, '(topic:' . l:it.topic . ')'])
     else
       let l:body = split(l:it.text, "\n", 1)
       let l:body[0] = l:it.hm . ' ' . l:body[0]
@@ -5527,8 +5541,13 @@ function! gnosis#capture_import(...) abort
   for l:blocks in values(l:diary_lines)
     call map(l:blocks, 'map(v:val, "s:capture_memo_links(v:val, l:rel)")')
   endfor
+  for l:blocks in values(l:topic_lines)
+    for l:b in l:blocks
+      call map(l:b.lines, 's:capture_memo_links(v:val, l:rel)')
+    endfor
+  endfor
   for [l:id, l:name] in l:made
-    if l:name =~# '^(diary:' | continue | endif
+    if l:name =~# '^(\(diary\|topic\):' | continue | endif
     let l:p = l:root . '/' . l:name
     let l:lines = readfile(l:p)
     let l:new = map(copy(l:lines), 's:capture_memo_links(v:val, l:rel)')
@@ -5539,6 +5558,10 @@ function! gnosis#capture_import(...) abort
   " 日記トピックを、その日の日記の本文へ（時刻順。「今日のノート」の節の前）
   for [l:date, l:blocks] in items(l:diary_lines)
     call s:capture_diary_append(l:root, l:date, l:blocks)
+  endfor
+  " まとめるトピックを、そのトピックのノートへ（無ければ作る）
+  for [l:name, l:blocks] in items(l:topic_lines)
+    call s:capture_topic_append(l:root, l:name, l:blocks)
   endfor
   " スマホでつないだ Branch と Context
   let l:warn = []
@@ -5580,6 +5603,93 @@ function! gnosis#capture_import(...) abort
 endfunction
 
 " 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
+function! s:capture_topic_bucket(lines, it) abort
+  if !has_key(a:lines, a:it.topic) | let a:lines[a:it.topic] = [] | endif
+  return a:lines[a:it.topic]
+endfunction
+
+" 1 つのノートにまとめるトピックのノート（vault の中のパス）。<vault>/.state/capture_topic_notes.json に
+" トピック名 → ファイル名を記録する（Python の topic_note と同じ）。無い・消えていれば作る。
+function! s:capture_topic_note(root, topic) abort
+  let l:f = a:root . '/.state/capture_topic_notes.json'
+  let l:map = {}
+  if filereadable(l:f)
+    try
+      let l:map = json_decode(join(readfile(l:f), "\n"))
+    catch
+      let l:map = {}
+    endtry
+  endif
+  let l:rel = get(l:map, a:topic, '')
+  if !empty(l:rel) && filereadable(a:root . '/' . l:rel)
+    return l:rel
+  endif
+  let l:name = gnosis#timestamp_filename() . '.md'
+  let l:n = 2
+  while filereadable(a:root . '/' . l:name)
+    let l:name = gnosis#timestamp_filename() . '-' . l:n . '.md'
+    let l:n += 1
+  endwhile
+  let l:title = substitute(a:topic, '[\[\]]', '', 'g')
+  call s:write_new_note(['---', 'time: ' . gnosis#timestamp_yaml(), 'title: ' . l:title, 'topic: ' . json_encode(a:topic),
+        \ 'capture_topic: ' . json_encode(a:topic), '---', '', '# ' . l:title, ''], a:root . '/' . l:name)
+  let l:map[a:topic] = l:name
+  call mkdir(a:root . '/.state', 'p')
+  call writefile([json_encode(l:map)], l:f)
+  return l:name
+endfunction
+
+" 日付の見出し（## 2026-10-19（月））
+function! s:capture_day_heading(date) abort
+  let l:t = strptime('%Y-%m-%d', a:date)
+  let l:w = l:t > 0 ? ['日', '月', '火', '水', '木', '金', '土'][str2nr(strftime('%w', l:t))] : ''
+  return '## ' . a:date . (empty(l:w) ? '' : '（' . l:w . '）')
+endfunction
+
+" まとめるトピックのノートへ追記する。本文の最後（ChildBranch: / Related: / BackLink: の前）に、古い順。
+" 日時あり: 日付の見出しの下に「時:分 本文」（同じ日の見出しがすでに最後にあれば、その下に続ける）。
+" 日時なし: 本文だけを空行で区切って足す。
+function! s:capture_topic_append(root, topic, blocks) abort
+  let l:path = a:root . '/' . s:capture_topic_note(a:root, a:topic)
+  let l:lines = readfile(l:path)
+  let l:at = len(l:lines)
+  let l:fence = s:fence_flags(l:lines)
+  for l:i in range(len(l:lines))
+    if !l:fence[l:i] && l:lines[l:i] =~# '^\%(ChildBranch\|Related\|BackLink\):\s*$'
+      let l:at = l:i
+      break
+    endif
+  endfor
+  let l:head = l:lines[: l:at - 1]
+  let l:tail = l:lines[l:at :]
+  while !empty(l:head) && trim(l:head[-1]) ==# ''
+    call remove(l:head, -1)
+  endwhile
+  " 本文の最後の日付の見出し（同じ日なら見出しを重ねない）
+  let l:last_day = ''
+  for l:ln in l:head
+    if l:ln =~# '^## \d\{4}-\d\d-\d\d'
+      let l:last_day = l:ln
+    endif
+  endfor
+  for l:b in sort(copy(a:blocks), {x, y -> x.date . x.hm ==# y.date . y.hm ? 0 : x.date . x.hm ># y.date . y.hm ? 1 : -1})
+    let l:body = copy(l:b.lines)
+    while len(l:body) > 1 && trim(l:body[-1]) ==# ''
+      call remove(l:body, -1)
+    endwhile
+    if l:b.stamp
+      let l:day = s:capture_day_heading(l:b.date)
+      if l:day !=# l:last_day
+        call extend(l:head, ['', l:day])
+        let l:last_day = l:day
+      endif
+      let l:body[0] = l:b.hm . ' ' . l:body[0]
+    endif
+    call extend(l:head, [''] + l:body)
+  endfor
+  call s:syn_writefile(l:head + [''] + (empty(l:tail) ? [] : l:tail), l:path)
+endfunction
+
 " 1 行の中の [表示名](memo:ID) を、取り込んだノートへのリンク（a:rel は ID → vault の中のパス）か表示名だけに直す
 function! s:capture_memo_links(line, rel) abort
   if a:line !~# '](memo:'

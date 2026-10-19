@@ -58,4 +58,15 @@ class CaptureTest {
         // 表示名は最初の行を短く、[ ] を含めない
         assertEquals("ab c", linkLabel("\n[ab] c\n2行目"))
     }
+
+    @Test fun searchWithSpaces() {
+        val text = "あしたの会議でアイデアを話す"
+        assertTrue(matchesQuery(text, "あ　い"))           // 全角の空白で区切ると、すべての語を含むもの
+        assertTrue(matchesQuery(text, "会議 アイデア"))
+        assertTrue(matchesQuery(text, "  会議   "))
+        assertTrue(matchesQuery(text, "あいであ"))          // カタカナとひらがなは同じ
+        assertTrue(matchesQuery("ＡＢＣ memo", "abc"))      // 全角・半角、大文字・小文字は同じ
+        assertFalse(matchesQuery(text, "会議 予算"))
+        assertTrue(matchesQuery(text, ""))
+    }
 }

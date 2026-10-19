@@ -183,6 +183,8 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 - Open the app and write right away. One entry = one note. Diary-topic entries go into the diary body with the time when imported.
 - Only four topic chips: **All, No topic, Diary, Other**. "Other" opens the topic list (search, add a new topic). Writing under "All" saves with no topic.
+- Per-topic import (gear in the list, or when adding): **Collect into one note** appends the topic's memos to a single note named after the topic (front matter `capture_topic:`) instead of one note per memo. **Add date and time** puts `HH:MM text` under a date heading (`## 2026-10-19 (Mon)`); without it only the text is added. Memos connected by context, parent or link become their own notes and the topic note links to them. Not for the diary.
+- Search: words separated by spaces (full- or half-width) must all appear, in any order. Width, case and katakana/hiragana are ignored.
 - Top bar: magnifier = full-text search of memos (across all topics; tap a result to jump to it) / + = insert (checkbox `- [ ] `, link, context, parent) / checklist = multi-select / brush = delete memos already imported to the PC / clock = alarm and settings.
 - Links, contexts and parents are chosen by searching memo text (links and contexts can be several). A link goes into the body as `[name](memo:…)` and becomes a Gnosis link when imported. Tap "↳ continued from", "Context:" or "Link:" in a memo to jump there.
 - Swipe right = continue with that memo as context (any number), swipe left = continue as its child (Branch). Long-press → "Edit context / parent" to add or remove later. **Without a parent, the first context becomes the parent (Branch)** (same as `c` on the PC).

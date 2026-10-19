@@ -28,7 +28,14 @@ data class Settings(
     val toHour: Int = 23,
     val topics: List<String> = listOf(DIARY),
     val lastTopic: String = ALL,
+    val topicModes: Map<String, TopicMode> = emptyMap(),
 )
+
+/**
+ * トピックの取り込み方（日記以外）。single = PC に取り込むとこのトピックの 1 つのノートに追記する
+ * （1 件 = 1 ノートにしない）。stamp = 追記するとき日付の見出しと時刻を付ける。
+ */
+data class TopicMode(val single: Boolean = false, val stamp: Boolean = true)
 
 const val DIARY = "日記"
 const val ALL = "__all__"
@@ -41,6 +48,22 @@ fun topicLabel(topic: String) = when (topic) {
 }
 fun visibleEntries(entries: List<Entry>, topic: String) = entries.filter { topic == ALL || it.topic == topic }
 fun writingTopic(topic: String) = if (topic == ALL) UNASSIGNED else topic
+
+/** 検索用に揃える: 全角・半角（NFKC）、大文字・小文字、カタカナ→ひらがな。 */
+fun searchKey(s: String): String {
+    val n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC).lowercase()
+    val b = StringBuilder(n.length)
+    for (c in n) b.append(if (c in 'ァ'..'ヶ') c - 0x60 else c)
+    return b.toString()
+}
+
+/** 空白（全角・半角）で区切った語をすべて含むか（順番は問わない）。空の検索はすべてに当たる。 */
+fun matchesQuery(text: String, query: String): Boolean {
+    val terms = searchKey(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (terms.isEmpty()) return true
+    val t = searchKey(text)
+    return terms.all { it in t }
+}
 
 /**
  * データはアプリの中だけ（entries.json と images/）。共有フォルダには置かない。
@@ -91,6 +114,11 @@ class Store(private val ctx: Context) {
             toHour = o.optInt("toHour", 23),
             topics = (listOf(DIARY) + (topics ?: emptyList()).map(::normalizedTopic)).filter { it.isNotEmpty() && it != ALL }.distinct(),
             lastTopic = o.optString("lastTopic", ALL).let { if (it == ALL) ALL else normalizedTopic(it) },
+            topicModes = o.optJSONObject("topicModes")?.let { m ->
+                m.keys().asSequence().filter { it.isNotEmpty() && it != DIARY }.associateWith { k ->
+                    val t = m.getJSONObject(k); TopicMode(t.optBoolean("single", false), t.optBoolean("stamp", true))
+                }
+            } ?: emptyMap(),
         )
     }
 
@@ -99,6 +127,10 @@ class Store(private val ctx: Context) {
         o.put("alarmOn", s.alarmOn); o.put("alarmMinutes", s.alarmMinutes)
         o.put("fromHour", s.fromHour); o.put("toHour", s.toHour)
         o.put("topics", JSONArray(s.topics)); o.put("lastTopic", s.lastTopic)
+        // PC の取り込み（\M）もこのファイルを読む（topicModes）
+        val modes = JSONObject()
+        s.topicModes.forEach { (k, v) -> modes.put(k, JSONObject().put("single", v.single).put("stamp", v.stamp)) }
+        o.put("topicModes", modes)
         settingsFile.writeText(o.toString())
     }
 
