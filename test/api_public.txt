@@ -83,8 +83,6 @@ gnosis#fix_fullwidth_heading
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
-gnosis#group_autosort_check
-gnosis#group_autosort_snapshot
 gnosis#guard_vault_write
 gnosis#has_python
 gnosis#hint_goto

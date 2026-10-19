@@ -1029,8 +1029,6 @@ augroup gnosis_autosync
   " record は on_write_post より先に置く（同期が付ける「自分の同期」の印を、record が消さないように）
   autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
   autocmd BufWritePost *.md call s:on_write_post()
-  autocmd BufReadPost *.md call gnosis#group_autosort_snapshot()
-  autocmd BufWritePost *.md call gnosis#group_autosort_check()
   if get(g:, 'gnosis_realtime_link_sync', 0)
     autocmd BufReadPost,BufEnter *.md call gnosis#realtime_sync_snapshot()
     autocmd TextChanged,TextChangedI *.md call gnosis#realtime_sync_on_text_changed()
