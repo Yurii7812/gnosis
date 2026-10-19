@@ -15491,7 +15491,7 @@ function! s:diary_head(lines) abort
   " 紙の日記かどうかは front matter の目印ではなく、本文の画像 `![](paper-diary-…)` で判定する
   " （月・年・一番上のグループは s:diary_scan がリンク先から判定する）。links は本文の .md リンク先。
   " scan: スキャン由来のノート（front matter の source: scan。紙の日記・スキャンノート・トピック）。「今日のノート」に載せない
-  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': []}
+  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': [], 'record': ''}
   let l:fence = 0
   for l:ln in a:lines
     if l:ln ==# '---'
@@ -15524,6 +15524,9 @@ function! s:diary_head(lines) abort
       let l:r.paper = 1
     elseif l:ln =~# '^source:\s*scan\s*$'
       let l:r.scan = 1
+    elseif l:ln =~# '^record:'
+      " 時系列記録（夢など）のその日のノート。日記の「今日のノート」ではなく、日記の上に並べる
+      let l:r.record = trim(substitute(l:ln, '^record:\s*', '', ''), '" ')
     endif
   endfor
   return l:r
@@ -15587,7 +15590,7 @@ function! s:diary_scan(root) abort
   let l:out = []
   for l:h in l:all
     if has_key(l:paper, l:h.file) || l:h.scan | continue | endif
-    call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group, 'time': l:h.time})
+    call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group, 'time': l:h.time, 'record': l:h.record})
   endfor
   return l:out
 endfunction
@@ -15920,28 +15923,53 @@ function! s:diary_new_group(root, notes, title, parent_file, parent_title, ...) 
     call s:diary_edit_file(l:dir . a:parent_file,
           \ function('s:diary_op_add', [s:diary_link(l:file, a:title), '']))
   endif
-  call add(a:notes, {'file': l:file, 'title': a:title, 'group': 1, 'time': ''})
+  call add(a:notes, {'file': l:file, 'title': a:title, 'group': 1, 'time': '', 'record': ''})
   return l:file
 endfunction
 
-" 「日記」は Index に載る最上位グループ。初回の \\d で作成し、
-" 以前の版で孤立していた日記グループも Index に再接続する。
-" index.md 自体はグループ階層のルートであり、日記の本文に手動の変更がある
-" 場合はバッファ優先で読み書きして、未保存の編集を壊さない。
-function! s:diary_ensure_top(root, notes, ...) abort
-  let l:top = s:diary_find_group(a:notes, '日記')
+" 「時系列記録」は Index に載る最上位グループ。中に「日記」と、夢などの時系列記録（:GnosisRecordNew）が並ぶ。
+" 無ければ作り、Index の本文と自分の Group: のリンクを直す。
+function! s:record_top(root, notes, ...) abort
+  let l:top = s:diary_find_group(a:notes, '時系列記録')
   if empty(l:top)
-    return call('s:diary_new_group',
-          \ [a:root, a:notes, '日記', 'index.md', 'Index'] + a:000)
+    return call('s:diary_new_group', [a:root, a:notes, '時系列記録', 'index.md', 'Index'] + a:000)
   endif
   let l:dir = fnamemodify(a:root, ':p')
   call s:diary_edit_file(l:dir . 'index.md',
-        \ function('s:diary_op_add', [s:diary_link(l:top, '日記'), '']))
-  " Index に所属する親リンクを持たない既存トップグループも修復する。
+        \ function('s:diary_op_add', [s:diary_link(l:top, '時系列記録'), '']))
   if !s:diary_parent_has(a:root, l:top, 'index.md')
     call s:diary_edit_file(l:dir . l:top,
           \ function('s:diary_op_parent_swap', ['', s:diary_link('index.md', 'Index')]))
   endif
+  return l:top
+endfunction
+
+" グループ a:file を、親 a:old（Index など）から「時系列記録」a:rec の中へ移す（本文のリンクと Group: を直す）
+function! s:record_move_under(root, file, title, old, rec) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  if !empty(a:old) && filereadable(l:dir . a:old)
+    call s:diary_edit_file(l:dir . a:old, function('s:diary_op_unlink_body', [a:file]))
+  endif
+  call s:diary_edit_file(l:dir . a:rec, function('s:diary_op_add', [s:diary_link(a:file, a:title), '']))
+  if s:diary_parent_has(a:root, a:file, a:old)
+    call s:diary_edit_file(l:dir . a:file, function('s:diary_op_parent_swap', [a:old, s:diary_link(a:rec, '時系列記録')]))
+  elseif !s:diary_parent_has(a:root, a:file, a:rec)
+    call s:diary_edit_file(l:dir . a:file, function('s:diary_op_parent_swap', ['', s:diary_link(a:rec, '時系列記録')]))
+  endif
+endfunction
+
+" 「日記」は「時系列記録」（Index の中）の中のグループ。初回の \d で作成し、
+" 以前の版で Index の直下にあった「日記」は「時系列記録」の中へ移す。
+" index.md 自体はグループ階層のルートであり、日記の本文に手動の変更がある
+" 場合はバッファ優先で読み書きして、未保存の編集を壊さない。
+function! s:diary_ensure_top(root, notes, ...) abort
+  let l:rec = call('s:record_top', [a:root, a:notes] + a:000)
+  let l:top = s:diary_find_group(a:notes, '日記')
+  if empty(l:top)
+    return call('s:diary_new_group',
+          \ [a:root, a:notes, '日記', l:rec, '時系列記録'] + a:000)
+  endif
+  call s:record_move_under(a:root, l:top, '日記', 'index.md', l:rec)
   return l:top
 endfunction
 
@@ -16096,7 +16124,7 @@ function! s:diary_place(path, ...) abort
   endif
   let l:lines = a:0 > 0 ? a:1 : readfile(a:path, '', 30)
   let l:head = s:diary_head(l:lines)
-  if l:head.group || l:head.paper || l:head.scan
+  if l:head.group || l:head.paper || l:head.scan || !empty(l:head.record)
     return
   endif
   let l:st = s:diary_state_read()
@@ -16119,7 +16147,7 @@ function! s:diary_place(path, ...) abort
     " 日記が見つからない日に、題が日付で始まる別のノート（昔の日記など）があるときは、
     " 重複した日記を作らない。:GnosisDiaryAdopt でその日記を登録すると使える。
     for l:n in l:notes
-      if l:n.file !=# l:tail && l:n.title =~# '^' . l:date . '-' && !has_key(l:st.notes, l:n.file)
+      if l:n.file !=# l:tail && l:n.title =~# '^' . l:date . '-' && !has_key(l:st.notes, l:n.file) && empty(get(l:n, 'record', ''))
         echohl WarningMsg
         echom 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記が見つかりません（') . l:n.file
               \ . gnosis#i18n#tr(' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt')
@@ -16373,7 +16401,7 @@ function! gnosis#diary_today() abort
   let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
   if empty(l:diary)
     for l:n in l:notes
-      if !l:n.group && l:n.title =~# '^' . l:date . '-' && !s:diary_is_diary_title(l:n.title)
+      if !l:n.group && l:n.title =~# '^' . l:date . '-' && !s:diary_is_diary_title(l:n.title) && empty(get(l:n, 'record', ''))
         echohl WarningMsg
         echo 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記が見つかりません（') . l:n.file
               \ . gnosis#i18n#tr(' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt')
@@ -16399,6 +16427,321 @@ function! gnosis#diary_today() abort
   endif
   " 開いたらすぐ書き始められるように、挿入モードにする
   startinsert
+endfunction
+
+" =============================================================================
+" 時系列記録（夢など）。日記と同じ形で、日ごとのノートを月（年）のグループにまとめる。
+"   Index > 時系列記録 > 日記 / 夢 > （2026-夢 >）2026-10-夢 > 2026-10-19-MO-夢
+"   その日のノートは front matter に record: "夢"。その日の日記の上（Group: の下）にリンクが並ぶ。
+"   :GnosisRecordNew 名前 … 新しい時系列記録を作り、今日のノートを開く
+"   \R / :GnosisRecord   … 時系列記録を選んで、今日のノートを作る・開く
+" =============================================================================
+
+" 「時系列記録」の中の記録（日記を除くグループ）。[{file, title}]
+function! s:record_kinds(root, notes, rec) abort
+  let l:out = []
+  for l:n in a:notes
+    if l:n.group && l:n.title !=# '日記' && l:n.title !=# '時系列記録' && s:diary_parent_has(a:root, l:n.file, a:rec)
+      call add(l:out, {'file': l:n.file, 'title': l:n.title})
+    endif
+  endfor
+  return sort(l:out, {x, y -> x.title ==# y.title ? 0 : x.title ># y.title ? 1 : -1})
+endfunction
+
+function! s:record_valid_name(name) abort
+  return !empty(a:name) && a:name !~# '[\[\]()/\\]' && index(['日記', '時系列記録', 'Index'], a:name) < 0
+        \ && a:name !~# '^\d'
+endfunction
+
+" 記録 a:kind の月グループ（YYYY-MM-夢）。無ければ作る。年が替わって最初なら、それまでの月を
+" 年のグループ（YYYY-夢）にまとめてから、新しい年のグループの中に作る（日記と同じ）。
+function! s:record_month(root, notes, kg, kind, date) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  let l:month = a:date[0 : 6] . '-' . a:kind
+  let l:year = a:date[0 : 3] . '-' . a:kind
+  let l:mg = s:diary_find_group(a:notes, l:month)
+  if !empty(l:mg)
+    return [l:mg, l:month]
+  endif
+  let l:yg = s:diary_find_group(a:notes, l:year)
+  if empty(l:yg)
+    " 記録の直下にある、前の年の月グループ
+    let l:old = {}
+    let l:has_years = 0
+    for l:n in a:notes
+      if !l:n.group | continue | endif
+      if l:n.title =~# '^\d\{4}-\d\d-' . escape(a:kind, '\.*[]~^$') . '$' && l:n.title[0 : 3] <# a:date[0 : 3]
+            \ && s:diary_parent_has(a:root, l:n.file, a:kg)
+        let l:old[l:n.title[0 : 3]] = get(l:old, l:n.title[0 : 3], []) + [l:n]
+      elseif l:n.title =~# '^\d\{4}-' . escape(a:kind, '\.*[]~^$') . '$' && s:diary_parent_has(a:root, l:n.file, a:kg)
+        let l:has_years = 1
+      endif
+    endfor
+    for [l:yr, l:mgs] in items(l:old)
+      let l:ytitle = l:yr . '-' . a:kind
+      let l:og = s:diary_find_group(a:notes, l:ytitle)
+      if empty(l:og)
+        let l:og = s:diary_new_group(a:root, a:notes, l:ytitle, a:kg, a:kind)
+      endif
+      for l:m in l:mgs
+        call s:diary_edit_file(l:dir . a:kg, function('s:diary_op_unlink_body', [l:m.file]))
+        call s:diary_edit_file(l:dir . l:og, function('s:diary_op_add', [s:diary_link(l:m.file, l:m.title), '']))
+        call s:diary_edit_file(l:dir . l:m.file, function('s:diary_op_parent_swap', [a:kg, s:diary_link(l:og, l:ytitle)]))
+      endfor
+    endfor
+    if !empty(l:old) || l:has_years
+      let l:yg = s:diary_new_group(a:root, a:notes, l:year, a:kg, a:kind)
+    endif
+  endif
+  if !empty(l:yg)
+    return [s:diary_new_group(a:root, a:notes, l:month, l:yg, l:year), l:month]
+  endif
+  return [s:diary_new_group(a:root, a:notes, l:month, a:kg, a:kind), l:month]
+endfunction
+
+" 日記の上（Group: などの直後、空行のあと）に、時系列記録のリンクを並べる。同じリンクは足さない。
+function! s:record_op_top_link(link, file, lines) abort
+  let l:lines = copy(a:lines)
+  " すでにリンクだけの行があれば足さない（本文の文中のリンクは数えない）
+  for l:ln in l:lines
+    if l:ln =~# '^\[[^]]*\](' . escape(a:file, '.') . ')\s*$' && l:ln !~# '^\[.*\](.*)\s*\[' 
+      if index(l:lines, l:ln) < match(l:lines, '^## ') || match(l:lines, '^## ') < 0
+        return l:lines
+      endif
+    endif
+  endfor
+  let l:h1 = -1
+  let l:fm = 0
+  for l:i in range(len(l:lines))
+    if l:lines[l:i] ==# '---' && l:fm < 2 | let l:fm += 1 | continue | endif
+    if l:fm >= 2 && l:lines[l:i] =~# '^# ' | let l:h1 = l:i | break | endif
+  endfor
+  if l:h1 < 0
+    return l:lines
+  endif
+  let l:e = s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 'Context:'])
+  if l:e <= 0
+    let l:e = l:h1 + 1
+  endif
+  let l:i = l:e
+  while l:i < len(l:lines) && trim(l:lines[l:i]) ==# ''
+    let l:i += 1
+  endwhile
+  let l:pat = '^\[\d\{4}-\d\d-\d\d-\u\u-[^]]\+\]([^)]\+\.md)\s*$'
+  if l:i < len(l:lines) && l:lines[l:i] =~# l:pat
+    while l:i < len(l:lines) && l:lines[l:i] =~# l:pat
+      let l:i += 1
+    endwhile
+    call insert(l:lines, a:link, l:i)
+  else
+    let l:add = ['', a:link]
+    if l:e < len(l:lines) && trim(l:lines[l:e]) !=# ''
+      call add(l:add, '')
+    endif
+    call extend(l:lines, l:add, l:e)
+  endif
+  return l:lines
+endfunction
+
+" その日の日記（無ければ作る）の上に、時系列記録のノートへのリンクを置く
+function! s:record_link_diary(root, notes, date, file, title) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  let l:st = s:diary_state_read()
+  let l:diary = s:diary_find(a:root, a:date, l:st, a:notes)
+  if empty(l:diary)
+    let l:diary = s:diary_create(a:root, a:date, a:notes)
+    let l:st.days[a:date] = l:diary
+    call s:diary_state_write(l:st)
+  endif
+  call s:diary_edit_file(l:dir . l:diary, function('s:record_op_top_link', [s:diary_link(a:file, a:title), a:file]))
+endfunction
+
+" 記録 a:kind のその日のノート（無ければ作る）。ファイル名を返す。
+function! s:record_day(root, notes, kg, kind, date) abort
+  let l:pat = '^' . a:date . '-\u\u-' . escape(a:kind, '\.*[]~^$') . '\%(-\|$\)'
+  for l:n in a:notes
+    if !l:n.group && l:n.title =~# l:pat
+      return l:n.file
+    endif
+  endfor
+  let l:dir = fnamemodify(a:root, ':p')
+  let [l:mg, l:month] = s:record_month(a:root, a:notes, a:kg, a:kind, a:date)
+  let l:title = a:date . '-' . s:diary_weekday(a:date) . '-' . a:kind
+  let l:file = s:diary_new_filename(a:root)
+  let l:lines = s:diary_new_lines(l:title, 0, s:diary_link(l:mg, l:month))
+  let l:t = index(l:lines, 'title: ' . l:title)
+  call insert(l:lines, 'record: ' . json_encode(a:kind), l:t >= 0 ? l:t + 1 : 1)
+  call s:syn_writefile(l:lines, l:dir . l:file)
+  call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
+  call add(a:notes, {'file': l:file, 'title': l:title, 'group': 0, 'time': '', 'record': a:kind})
+  call s:record_link_diary(a:root, a:notes, a:date, l:file, l:title)
+  return l:file
+endfunction
+
+" 記録 a:kind の今日のノートを作る・開く（a:kind が無ければ作らない。作るのは :GnosisRecordNew）
+function! gnosis#record_open(kind) abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:dir = fnamemodify(l:root, ':p')
+  let l:notes = s:diary_scan(l:root)
+  call s:diary_ensure_top(l:root, l:notes)
+  let l:rec = s:record_top(l:root, l:notes)
+  let l:kg = ''
+  for l:k in s:record_kinds(l:root, l:notes, l:rec)
+    if l:k.title ==# a:kind | let l:kg = l:k.file | endif
+  endfor
+  if empty(l:kg)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その時系列記録はありません: ') . a:kind | echohl NONE
+    return
+  endif
+  call gnosis#save_current_note()
+  let l:file = s:record_day(l:root, l:notes, l:kg, a:kind, s:diary_day_of_time(''))
+  call gnosis#push_history()
+  execute 'edit ' . fnameescape(l:dir . l:file)
+  " 本文の最初の空行（Group: のブロックのあと）から書けるように
+  let l:e = s:top_blocks_end(getline(1, '$'), max([0, search('^# ', 'nw') - 1]), ['Group:', 'Context:'])
+  call cursor(max([1, l:e + 2]), 1)
+endfunction
+
+" 新しい時系列記録（夢など）を作り、今日のノートを開く
+function! gnosis#record_new(...) abort
+  let l:name = a:0 && !empty(a:1) ? trim(a:1) : trim(input(gnosis#i18n#tr('時系列記録の名前（例: 夢）: ')))
+  if empty(l:name) | return | endif
+  if !s:record_valid_name(l:name)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その名前は使えません（日記・時系列記録・数字で始まる名前・[ ] ( ) / は不可）: ') . l:name | echohl NONE
+    return
+  endif
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:notes = s:diary_scan(l:root)
+  call s:diary_ensure_top(l:root, l:notes)
+  let l:rec = s:record_top(l:root, l:notes)
+  let l:found = 0
+  for l:k in s:record_kinds(l:root, l:notes, l:rec)
+    if l:k.title ==# l:name | let l:found = 1 | endif
+  endfor
+  if !l:found
+    if !empty(s:diary_find_group(l:notes, l:name))
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('同じ名前のグループがすでにあります（移すなら :GnosisRecordMigrate）: ') . l:name | echohl NONE
+      return
+    endif
+    call s:diary_new_group(l:root, l:notes, l:name, l:rec, '時系列記録')
+  endif
+  call gnosis#record_open(l:name)
+endfunction
+
+" 時系列記録の一覧から選んで、今日のノートを作る・開く（\R）
+function! gnosis#record_pick() abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:notes = s:diary_scan(l:root)
+  let l:rec = s:diary_find_group(l:notes, '時系列記録')
+  let l:kinds = empty(l:rec) ? [] : map(s:record_kinds(l:root, l:notes, l:rec), 'v:val.title')
+  if empty(l:kinds)
+    echo 'Gnosis: ' . gnosis#i18n#tr('時系列記録がまだありません。:GnosisRecordNew 名前 で作れます')
+    return
+  endif
+  if exists('g:gnosis_test_record_pick')
+    return gnosis#record_open(g:gnosis_test_record_pick)
+  endif
+  if exists('*fzf#run')
+    call fzf#run(fzf#wrap({'source': l:kinds, 'sink': function('gnosis#record_open'),
+          \ 'options': ['--prompt', gnosis#i18n#tr('時系列記録> ')]}))
+    return
+  endif
+  let l:n = gnosis#ui#inputlist([gnosis#i18n#tr('時系列記録（今日のノートを開く）:')] + map(copy(l:kinds), '(v:key + 1) . ". " . v:val'))
+  if l:n >= 1 && l:n <= len(l:kinds)
+    call gnosis#record_open(l:kinds[l:n - 1])
+  endif
+endfunction
+
+" 題 a:old のノート a:file を a:new に改める（front matter の title・見出し・vault 中の表示名 [a:old](a:file)）
+function! s:record_retitle(root, file, old, new) abort
+  let l:dir = fnamemodify(a:root, ':p')
+  call s:diary_edit_file(l:dir . a:file, {lines -> map(copy(lines),
+        \ {_, v -> v ==# 'title: ' . a:old ? 'title: ' . a:new : v ==# '# ' . a:old ? '# ' . a:new : v})})
+  let l:from = '[' . a:old . '](' . a:file . ')'
+  let l:to = '[' . a:new . '](' . a:file . ')'
+  for l:f in glob(l:dir . '*.md', 0, 1)
+    if index(readfile(l:f), l:from) < 0 && match(readfile(l:f), '\V' . escape(l:from, '\')) < 0
+      continue
+    endif
+    call s:diary_edit_file(l:f, {lines -> map(copy(lines), {_, v -> substitute(v, '\V' . escape(l:from, '\'), escape(l:to, '\&'), 'g')})})
+  endfor
+endfunction
+
+" 既存のグループ（例: 夢日記）を時系列記録 a:kind（例: 夢）へ移す:
+"   グループの題を a:kind に・「時系列記録」の中へ・月グループ YYYY-MM を YYYY-MM-夢 に・
+"   その日のノートに record: を付け、日記の「今日のノート」から外して日記の上に並べる。
+function! gnosis#record_migrate(old, kind) abort
+  if !s:record_valid_name(a:kind)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その名前は使えません（日記・時系列記録・数字で始まる名前・[ ] ( ) / は不可）: ') . a:kind | echohl NONE
+    return
+  endif
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  call gnosis#save_current_note()
+  let l:dir = fnamemodify(l:root, ':p')
+  let l:notes = s:diary_scan(l:root)
+  let l:kg = s:diary_find_group(l:notes, a:old)
+  if empty(l:kg)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('そのグループがありません: ') . a:old | echohl NONE
+    return
+  endif
+  call s:diary_ensure_top(l:root, l:notes)
+  let l:rec = s:record_top(l:root, l:notes)
+  if a:old !=# a:kind
+    call s:record_retitle(l:root, l:kg, a:old, a:kind)
+  endif
+  call s:record_move_under(l:root, l:kg, a:kind, 'index.md', l:rec)
+  let l:st = s:diary_state_read()
+  let l:sec = get(g:, 'gnosis_diary_section', '今日のノート')
+  let l:moved = 0
+  " 月（と年）のグループと、その中のその日のノート
+  let l:groups = [l:kg]
+  let l:seen = {}
+  while !empty(l:groups)
+    let l:g = remove(l:groups, 0)
+    if has_key(l:seen, l:g) | continue | endif
+    let l:seen[l:g] = 1
+    for l:t in s:diary_head(readfile(l:dir . l:g)).links
+      let l:n = get(filter(copy(l:notes), 'v:val.file ==# l:t'), 0, {})
+      " 下へだけたどる: 年・月の題のグループと、日付で始まるノート（Index や親のグループへは戻らない）
+      if empty(l:n) || l:t ==# 'index.md' || !s:diary_parent_has(l:root, l:t, l:g) | continue | endif
+      if l:n.group
+        if l:n.title =~# '^\d\{4}\%(-\d\d\)\=$'
+          call s:record_retitle(l:root, l:t, l:n.title, l:n.title . '-' . a:kind)
+          call add(l:groups, l:t)
+        elseif l:n.title =~# '^\d\{4}\%(-\d\d\)\=-' . escape(a:kind, '\.*[]~^$') . '$'
+          call add(l:groups, l:t)
+        endif
+        continue
+      endif
+      let l:date = matchstr(l:n.title, '^\d\{4}-\d\d-\d\d')
+      if empty(l:date) | continue | endif
+      call s:diary_edit_file(l:dir . l:t, {lines -> s:record_op_mark(lines, a:kind)})
+      let l:prev = get(l:st.notes, l:t, '')
+      if !empty(l:prev) && filereadable(l:dir . l:prev)
+        call s:diary_edit_file(l:dir . l:prev, function('s:diary_op_remove', [l:t, l:sec]))
+        call remove(l:st.notes, l:t)
+      endif
+      call s:diary_state_write(l:st)
+      call s:record_link_diary(l:root, l:notes, l:date, l:t, l:n.title)
+      let l:st = s:diary_state_read()
+      let l:moved += 1
+    endfor
+  endwhile
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('「%s」を時系列記録「%s」に移しました（その日のノート %d 件）'), a:old, a:kind, l:moved)
+endfunction
+
+function! s:record_op_mark(lines, kind) abort
+  let l:lines = copy(a:lines)
+  if match(l:lines, '^record:') >= 0
+    return l:lines
+  endif
+  let l:t = match(l:lines, '^title:')
+  call insert(l:lines, 'record: ' . json_encode(a:kind), l:t >= 0 ? l:t + 1 : 1)
+  return l:lines
 endfunction
 
 " 日記を開いたときのカーソル位置と、その周りの形を整える。

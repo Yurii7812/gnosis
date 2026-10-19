@@ -30,8 +30,11 @@ try
   let s:top = s:find(s:notes, '日記')
   let s:month10 = s:find(s:notes, '2026-10')
   call s:assert('初回に 日記 グループが作成される', filereadable(s:root . '/' . s:top))
-  call s:assert('Index 本文に 日記 リンク', index(readfile(s:root . '/index.md'), '[日記](' . s:top . ')') >= 0)
-  call s:assert('日記 の ### Group に Index', s:parent_has(s:root, s:top, 'index.md'))
+  " 日記は Index の中の「時系列記録」の中（夢などの時系列記録と並ぶ）
+  let s:rec = s:find(s:notes, '時系列記録')
+  call s:assert('Index 本文に 時系列記録 リンク・Index には日記を直接置かない', index(readfile(s:root . '/index.md'), '[時系列記録](' . s:rec . ')') >= 0
+        \ && index(readfile(s:root . '/index.md'), '[日記](' . s:top . ')') < 0)
+  call s:assert('日記 の ### Group に 時系列記録・時系列記録の本文に日記', s:parent_has(s:root, s:top, s:rec) && index(readfile(s:root . '/' . s:rec), '[日記](' . s:top . ')') >= 0)
   call s:assert('10月は日記の直下', s:parent_has(s:root, s:month10, s:top))
   call s:assert('2026年内に年グループは作られない', empty(s:find(s:notes, '2026')))
   call s:assert('日記ノートは10月グループに属する', s:parent_has(s:root, s:oct14, s:month10))
@@ -58,7 +61,8 @@ try
   let s:y2028 = s:find(s:notes, '2028')
   let s:m2028 = s:find(s:notes, '2028-02')
   call s:assert('3年目も月を直下にせず年グループ', !empty(s:y2028) && s:parent_has(s:root, s:y2028, s:top) && s:parent_has(s:root, s:m2028, s:y2028) && s:parent_has(s:root, s:feb, s:m2028))
-  call s:assert('Index に 日記 は一件のみ', len(filter(readfile(s:root . '/index.md'), 'v:val =~# "^\\[日記\\]("')) == 1)
+  call s:assert('Index に 時系列記録 は一件のみ・日記は時系列記録に一件のみ', len(filter(readfile(s:root . '/index.md'), 'v:val =~# "^\\[時系列記録\\]("')) == 1
+        \ && len(filter(readfile(s:root . '/' . s:find(s:notes, '時系列記録')), 'v:val =~# "^\\[日記\\]("')) == 1)
   " 旧バージョンでトップ「日記」が無く、2026-10 のみ孤立した vault。
   let s:legacy = s:root . '/legacy'
   call mkdir(s:legacy, 'p')

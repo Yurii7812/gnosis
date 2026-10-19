@@ -76,6 +76,9 @@ sh "$REPO/test/capture_topics_net.sh"
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）
 sh "$REPO/test/time_mode_net.sh"
 
+# 時系列記録（:GnosisRecordNew・\R・:GnosisRecordMigrate）
+sh "$REPO/test/record_net.sh"
+
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
 if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/test_folgezettel_scan_diary.py"; fi
 

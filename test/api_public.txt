@@ -176,6 +176,10 @@ gnosis#quit_unmount
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
 gnosis#recent_map
+gnosis#record_migrate
+gnosis#record_new
+gnosis#record_open
+gnosis#record_pick
 gnosis#refresh_guide
 gnosis#refresh_link_hints
 gnosis#relation_link_popup
