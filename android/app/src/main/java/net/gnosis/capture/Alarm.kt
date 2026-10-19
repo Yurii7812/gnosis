@@ -1,5 +1,8 @@
 package net.gnosis.capture
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -39,6 +42,9 @@ object Alarm {
         val ch = ctx.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL)
         return NotificationManagerCompat.from(ctx).areNotificationsEnabled() && ch.importance != NotificationManager.IMPORTANCE_NONE
     }
+
+    fun hasNotificationPermission(ctx: Context): Boolean = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     fun canScheduleExact(ctx: Context): Boolean = Build.VERSION.SDK_INT < 31 || ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     fun scheduledTime(ctx: Context) = prefs(ctx).getLong("next", 0)

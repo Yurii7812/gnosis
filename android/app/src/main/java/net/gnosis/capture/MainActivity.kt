@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -191,7 +192,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null }) {
+                    IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null; if (selecting) keyboard?.hide() }) {
                         Icon(if (selecting) Icons.Filled.Close else Icons.Filled.Checklist, if (selecting) "選択をやめる" else "複数選択")
                     }
                     IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Alarm, "アラームと設定") }
@@ -216,12 +217,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 }
                 if (selecting) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            selected.clear(); selected.addAll(visibleEntries(entries, topic).map { it.id })
-                        }) { Text("表示中を全選択") }
-                        TextButton(onClick = { selected.clear() }) { Text("選択解除") }
-                        Button(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty()) { Text("トピックへ移動") }
+                    Column {
+                        Row {
+                            TextButton(onClick = {
+                                selected.clear(); selected.addAll(visibleEntries(entries, topic).map { it.id })
+                            }) { Text("表示中を全選択") }
+                            TextButton(onClick = { selected.clear() }) { Text("選択解除") }
+                        }
+                        Button(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("トピックへ移動") }
                     }
                 }
                 // 表示と書き込み先を同時に切り替える。全部表示からは未選択で保存。
@@ -309,7 +312,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextFor = null })
                     add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手をタップ）") { contextFor = target.id; replyTo = null })
                     add(Triple(Icons.Filled.Edit, "書き直す") { editing = target.id; input = target.text })
-                    add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); contextFor = null })
+                    add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); contextFor = null; keyboard?.hide() })
                     add(Triple(Icons.Filled.Label, "トピックを変える") { topicDialogFor = target.id })
                     add(Triple(Icons.Filled.ContentCopy, "コピー") {
                         ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", target.text))
@@ -327,7 +330,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 acts.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                         row.forEach { (icon, label, act) ->
-                            OutlinedButton(onClick = { act(); sheetFor = null; scope.launch { delay(100); focus.requestFocus() } },
+                            OutlinedButton(onClick = { act(); sheetFor = null; if (!selecting) scope.launch { delay(100); focus.requestFocus() } },
                                 modifier = Modifier.weight(1f).heightIn(min = 64.dp), shape = RoundedCornerShape(14.dp)) {
                                 Icon(icon, null); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp)
                             }
@@ -342,7 +345,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     topicDialogFor?.let { id ->
         AlertDialog(onDismissRequest = { topicDialogFor = null }, confirmButton = {}, title = { Text("トピック") },
             text = {
-                Column { (listOf(UNASSIGNED) + topics).forEach { t ->
+                Column(Modifier.verticalScroll(rememberScrollState())) { (listOf(UNASSIGNED) + topics).forEach { t ->
                     TextButton(onClick = {
                         moveEntries(listOf(id), t)
                         topicDialogFor = null
@@ -354,7 +357,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     if (moveSelectedOpen) {
         AlertDialog(onDismissRequest = { moveSelectedOpen = false }, confirmButton = {},
             title = { Text("${selected.size} 件の移動先") }, text = {
-                Column { (listOf(UNASSIGNED) + topics).forEach { t ->
+                Column(Modifier.verticalScroll(rememberScrollState())) { (listOf(UNASSIGNED) + topics).forEach { t ->
                     TextButton(onClick = {
                         moveEntries(selected.toList(), t)
                         selected.clear(); selecting = false; moveSelectedOpen = false
@@ -416,15 +419,15 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 if (settings.alarmOn && nextAlarm > 0) Text("次回: " + SimpleDateFormat("M/d HH:mm", Locale.JAPAN).format(Date(nextAlarm)), fontSize = 13.sp)
                 if (!notificationsEnabled) Text("通知が許可されていません。「通知と音の設定」で許可してください。", fontSize = 13.sp)
                 TextButton(onClick = {
-                    if (Build.VERSION.SDK_INT >= 33 && !notificationsEnabled) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    else ctx.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Alarm.CHANNEL))
+                    val action = if (NotificationManagerCompat.from(ctx).areNotificationsEnabled()) AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS else AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS
+                    ctx.startActivity(Intent(action).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Alarm.CHANNEL))
                 }) { Text("通知と音の設定") }
                 if (!exactEnabled && Build.VERSION.SDK_INT >= 31) {
                     Text("時刻どおりに鳴らすには「アラームとリマインダー」を許可してください。未許可では遅れる場合があります。", fontSize = 13.sp)
                     TextButton(onClick = { ctx.startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}"))) }) { Text("アラームの時刻を許可") }
                 }
                 TextButton(onClick = {
-                    if (Build.VERSION.SDK_INT >= 33 && !notificationsEnabled) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= 33 && !Alarm.hasNotificationPermission(ctx)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                     else Alarm.notify(ctx)
                 }) { Text("テスト通知を鳴らす") }
                 HorizontalDivider()
@@ -436,7 +439,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
                     fromHour = (from.toIntOrNull() ?: 9).coerceIn(0, 23), toHour = (to.toIntOrNull() ?: 23).coerceIn(0, 24))
                 store.saveSettings(settings)
-                if (on && Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                if (on && Build.VERSION.SDK_INT >= 33 && !Alarm.hasNotificationPermission(ctx)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 Alarm.ensureChannel(ctx); Alarm.schedule(ctx, settings)
                 nextAlarm = Alarm.scheduledTime(ctx)
                 settingsOpen = false
