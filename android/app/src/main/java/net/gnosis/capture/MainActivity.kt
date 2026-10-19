@@ -98,6 +98,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var selecting by remember { mutableStateOf(false) }
     var moveSelectedOpen by remember { mutableStateOf(false) }
     var deleteSelectedOpen by remember { mutableStateOf(false) }
+    var cleanImportedOpen by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Alarm.notificationsEnabled(ctx)) }
     var exactEnabled by remember { mutableStateOf(Alarm.canScheduleExact(ctx)) }
     var nextAlarm by remember { mutableStateOf(Alarm.scheduledTime(ctx)) }
@@ -206,6 +207,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null; if (selecting) keyboard?.hide() }) {
                         Icon(if (selecting) Icons.Filled.Close else Icons.Filled.Checklist, if (selecting) "選択をやめる" else "複数選択")
                     }
+                    IconButton(onClick = { cleanImportedOpen = true }) { Icon(Icons.Filled.DeleteSweep, "PC に取り込み済みのメモを消す") }
                     IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Alarm, "アラームと設定") }
                 },
             )
@@ -399,6 +401,15 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             dismissButton = { TextButton(onClick = { addTopicOpen = false }) { Text("やめる") } })
     }
 
+    if (cleanImportedOpen) {
+        val gone = entries.filter { it.id in imported }.map { it.id }.toSet()
+        AlertDialog(onDismissRequest = { cleanImportedOpen = false }, title = { Text("取り込み済みのメモを消す") },
+            text = { Text(if (gone.isEmpty()) "PC に取り込み済みのメモはありません。"
+                else "PC に取り込み済み（✓）の ${gone.size} 件をスマホから消します。取り込んだ vault にメモが残っていることを確認してください。テスト用 vault に取り込んだだけなら消さないでください。画像も消え、元に戻せません。") },
+            confirmButton = { TextButton(enabled = gone.isNotEmpty(), onClick = { deleteEntries(gone); cleanImportedOpen = false }) { Text("消す") } },
+            dismissButton = { TextButton(onClick = { cleanImportedOpen = false }) { Text("やめる") } })
+    }
+
     if (deleteSelectedOpen) {
         AlertDialog(onDismissRequest = { deleteSelectedOpen = false }, title = { Text("${selected.size} 件を消しますか？") },
             text = { Text("画像も消えます。元に戻せません。") },
@@ -422,7 +433,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         var minutes by remember { mutableStateOf(settings.alarmMinutes.toString()) }
         var from by remember { mutableStateOf(settings.fromHour.toString()) }
         var to by remember { mutableStateOf(settings.toHour.toString()) }
-        var cleanAsk by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { settingsOpen = false }, title = { Text("アラームと設定") },
             text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -455,8 +465,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 }) { Text("テスト通知を鳴らす") }
                 HorizontalDivider()
                 Text("PC へは USB でつなぎ、Gnosis で \\M を押すと取り込めます（パスワードは要りません）。", fontSize = 13.sp)
-                TextButton(onClick = { cleanAsk = true }) { Text("PC に取り込み済みのメモをスマホから消す") }
-                if (cleanAsk) Text("取り込んだ vault にメモが残っていることを確認してください。テスト用 vault だけに取り込んだ場合や、別の vault にも取り込む場合は消さないでください。取り込みだけでスマホの原本が消えることはありません。", fontSize = 13.sp)
             } },
             confirmButton = { TextButton(onClick = {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
@@ -467,18 +475,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 nextAlarm = Alarm.scheduledTime(ctx)
                 settingsOpen = false
             }) { Text("保存") } },
-            dismissButton = { TextButton(onClick = {
-                if (cleanAsk) {
-                    val gone = entries.filter { it.id in imported }.map { it.id }.toSet()
-                    entries.filter { it.id in gone }.flatMap { it.images }.forEach { File(store.imageDir, it).delete() }
-                    entries.removeAll { it.id in gone }
-                    for (k in entries.indices) {
-                        val e = entries[k]
-                        if (e.parent in gone || e.contexts.any { it in gone }) entries[k] = e.copy(parent = e.parent.takeIf { it !in gone }, contexts = e.contexts.filter { it !in gone })
-                    }
-                    persist(); settingsOpen = false
-                } else settingsOpen = false
-            }) { Text(if (cleanAsk) "消す" else "閉じる") } })
+            dismissButton = { TextButton(onClick = { settingsOpen = false }) { Text("閉じる") } })
     }
 }
 
