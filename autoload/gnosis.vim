@@ -11458,12 +11458,18 @@ endfunction
 
 " ---------------------------------------------------------------------------
 " グループに新しいメンバーが入ったら、保存の後で自動的によみ順に並べ直す（\S と同じ規則）。
-"   対象: attribute: group のノート（Index・紙PKM の生成物・日記のグループは除く）。
+"   対象: attribute: group のノートと Index（紙PKM の生成物・日記のグループは除く）。
 "   本文の最後のブロックに、読み込み・前回の並べ替え以降に増えたリンク行があるときだけ並べる。
 " ---------------------------------------------------------------------------
 
 function! s:group_autosort_target() abort
-  if &buftype !=# '' || !s:sort_group_mode()
+  if &buftype !=# ''
+    return 0
+  endif
+  if s:is_current_index_buffer()
+    return 1
+  endif
+  if !s:sort_group_mode()
     return 0
   endif
   for l:ln in getline(1, min([line('$'), 12]))
@@ -11478,11 +11484,14 @@ function! s:group_member_lines() abort
   if !s:group_autosort_target()
     return []
   endif
+  let l:rx = '^\[\%(\\.\|[^\]\\]\)*\]([^)]\+)$'
+  if s:is_current_index_buffer()
+    return filter(map(getline(1, '$'), 'trim(v:val)'), 'v:val =~# l:rx')
+  endif
   let l:r = s:group_last_block()
   if empty(l:r)
     return []
   endif
-  let l:rx = '^\[\%(\\.\|[^\]\\]\)*\]([^)]\+)$'
   return filter(map(getline(l:r[0], l:r[1]), 'trim(v:val)'), 'v:val =~# l:rx')
 endfunction
 
@@ -11513,6 +11522,13 @@ function! s:group_autosort_cb(bufnr, ...) abort
   endif
   let l:path = expand('%:p')
   if empty(l:path) || !filereadable(l:path)
+    return
+  endif
+  if s:is_current_index_buffer()
+    " Index は \S と同じくバッファ全体のリンク行を並べて保存する（保存し直しても新しいメンバーは増えない）
+    call s:sort_lines_by_yomi(1, line('$'))
+    call gnosis#group_autosort_snapshot()
+    silent! write
     return
   endif
   call s:sort_group_file(l:path)

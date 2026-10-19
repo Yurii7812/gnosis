@@ -19,6 +19,7 @@ attribute: group
 [ウ](u.md)
 [イ](i.md)
 EOF
+printf -- "---\ntime: 2026-01-01 00:00:00\ntitle: Index\n---\n\n# Index\n\n[ウ](u.md)\n[イ](i.md)\n" > "$TMP/index.md"
 cat > "$TMP/t.vim" <<EOF
 set nocp
 let g:gnosis_skip_interactive_mount=1
@@ -29,6 +30,12 @@ call append(line('\$'), '[ア](a.md)')
 write
 sleep 2000m
 call writefile(readfile('$TMP/g.md'), '$TMP/out.txt')
+let g:gnosis_root = '$TMP/'
+edit $TMP/index.md
+call append(line('\$'), '[ア](a.md)')
+write
+sleep 2000m
+call writefile(readfile('$TMP/index.md'), '$TMP/out_index.txt')
 qa!
 EOF
 timeout 60 vim -u NONE -N -es -S "$TMP/t.vim" </dev/null 2>"$TMP/err" || true
@@ -36,7 +43,8 @@ WANT="[ア](a.md)
 [イ](i.md)
 [ウ](u.md)"
 GOT=$(tail -3 "$TMP/out.txt")
-if [ "$GOT" = "$WANT" ]; then
+GOT_IDX=$(tail -3 "$TMP/out_index.txt")
+if [ "$GOT" = "$WANT" ] && [ "$GOT_IDX" = "$WANT" ]; then
   echo "group_autosort OK"
 else
   echo "NG: グループに足して保存してもよみ順に並ばない" >&2
