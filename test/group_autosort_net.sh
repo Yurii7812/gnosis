@@ -44,7 +44,11 @@ WANT="[ア](a.md)
 [ウ](u.md)"
 GOT=$(tail -3 "$TMP/out.txt")
 GOT_IDX=$(tail -3 "$TMP/out_index.txt")
-if [ "$GOT" = "$WANT" ] && [ "$GOT_IDX" = "$WANT" ]; then
+# Index を開いて足したときは、勝手に並べない（足した位置のまま）
+WANT_IDX="[ウ](u.md)
+[イ](i.md)
+[ア](a.md)"
+if [ "$GOT" = "$WANT" ] && [ "$GOT_IDX" = "$WANT_IDX" ]; then
   echo "group_autosort OK"
 else
   echo "NG: グループに足して保存してもよみ順に並ばない" >&2
