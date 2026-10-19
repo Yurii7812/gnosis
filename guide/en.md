@@ -181,15 +181,16 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 ## Phone memo (Gnosis memo APK)
 
-- Open the app and start writing right away. One entry = one note. Entries in the diary topic go into the diary body with a timestamp when imported.
-- Writing in "All" leaves the topic unselected. Switch between all, diary, individual topics and unselected, and move several entries by selecting them.
-- PC `\N` also groups memos by topic regardless of device. Press `t` on one line or a visual selection to change topics (empty for unselected). `:GnosisTopic 仕事` also changes the topic.
+- Open the app and write right away. One entry = one note. Diary-topic entries go into the diary body with the time when imported.
+- Only four topic chips: **All, No topic, Diary, Other**. "Other" opens the topic list (search, add a new topic). Writing under "All" saves with no topic.
+- Top bar: magnifier = full-text search of memos (across all topics; tap a result to jump to it) / + = insert (checkbox `- [ ] `, link, context, parent) / checklist = multi-select / brush = delete memos already imported to the PC / clock = alarm and settings.
+- Links, contexts and parents are chosen by searching memo text (links and contexts can be several). A link goes into the body as `[name](memo:…)` and becomes a Gnosis link when imported. Tap "↳ continued from", "Context:" or "Link:" in a memo to jump there.
+- Swipe right = continue with that memo as context (any number), swipe left = continue as its child (Branch). Long-press → "Edit context / parent" to add or remove later. **Without a parent, the first context becomes the parent (Branch)** (same as `c` on the PC).
+- Multi-select: merge (into one, oldest first), copy, move, delete.
+- `\N` on the PC lists by topic regardless of the device (memos connected on the phone by context, Branch or link are connected after import, so they are not listed). Select lines and press `t` to change the topic (empty = no topic). `:GnosisTopic work` also works.
 - To move them to the PC, connect the phone by USB and press `\M` in Gnosis on the PC. No password is needed. Imported entries get a ✓ on the phone. Each vault imports independently; importing never deletes phone originals. Titles use the first 20 characters; the body stays intact.
-- Periodic alarm (the clock at the top right of the phone app): off at first. Set "every N minutes", "from hour" and "until hour" as numbers.
-  - To ring around the clock: press **24時間** (sets **from** 0 and **until** 24).
-  - The "until" hour is not included (9 to 23 means the last ring is in the 22:xx hour).
-  - Equal "from" and "until" hours also mean all day. Settings show notification permissions, sound, the next alarm time and a test notification.
-- For installing on the phone (including the USB debugging permission), see "Build and install the APK" in `docs/11-スマホのメモ.md`.
+- Periodic alarm (the clock at the top right of the phone app): off at first. Turn on "ring periodically" and set "every N minutes" and the hours ("ring 24 hours" disables the hour fields). The "until" hour is not included (9–23 rings last in the 22:00 hour). After it rings, the next time you open the app it starts in the diary; closing the app returns to All. The settings show notification permission, sound and the next time, and can ring a test notification.
+- For installing on the phone (including the USB debugging permission), see "Build and install the APK" in `docs/11-スマホのメモ.md`. From the PC: `:GnosisApkInstall`.
 
 ## Ex commands
 

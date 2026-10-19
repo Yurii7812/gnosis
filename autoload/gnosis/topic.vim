@@ -19,7 +19,7 @@ function! gnosis#topic#assign(first, last, name) abort
     return
   endtry
   let l:topic = trim(l:topic)
-  if l:topic ==# 'トピック未選択' || l:topic ==# 'メモ' | let l:topic = '' | endif
+  if l:topic ==# '未所属' || l:topic ==# 'トピック未選択' || l:topic ==# 'メモ' | let l:topic = '' | endif
   for l:path in uniq(sort(l:paths))
     if !filereadable(l:path) | continue | endif
     if getbufvar(bufnr(l:path), '&modified')

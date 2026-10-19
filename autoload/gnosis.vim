@@ -5682,7 +5682,7 @@ function! gnosis#orphans_open() abort
   endfor
   call add(l:order, '')
   for l:topic in l:order
-    call add(l:lines, '## ' . (empty(l:topic) ? gnosis#i18n#tr('トピック未選択') : l:topic))
+    call add(l:lines, '## ' . (empty(l:topic) ? gnosis#i18n#tr('未所属') : l:topic))
     call extend(l:lines, (empty(l:by[l:topic]) ? [gnosis#i18n#tr('（メモはありません）')] : l:by[l:topic]) + [''])
   endfor
   if empty(l:out)

@@ -186,6 +186,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var sheetFor by remember { mutableStateOf<String?>(null) }
     var topicDialogFor by remember { mutableStateOf<String?>(null) }
     var addTopicOpen by remember { mutableStateOf(false) }
+    var topicListOpen by remember { mutableStateOf(false) }       // 「その他」のトピック一覧
+    var search by remember { mutableStateOf<String?>(null) }      // 全文検索（null で閉じている）
     var settingsOpen by remember { mutableStateOf(false) }
     var imported by remember { mutableStateOf(store.importedIds()) }
     var deleteFor by remember { mutableStateOf<String?>(null) }
@@ -361,13 +363,22 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             TopAppBar(
                 title = {
                     val n = entries.count { it.id !in imported }
-                    Column {
+                    val sq = search
+                    if (sq != null) {
+                        val fr = remember { FocusRequester() }
+                        OutlinedTextField(sq, { search = it }, placeholder = { Text("メモを全文検索") }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth().focusRequester(fr))
+                        LaunchedEffect(Unit) { fr.requestFocus() }
+                    } else Column {
                         Text(if (selecting) "${selected.size} 件選択" else topicLabel(topic), fontWeight = FontWeight.Bold)
                         Text(if (n == 0) "すべて PC に取り込み済み" else "PC にまだ取り込んでいない: $n 件", fontSize = 12.sp)
                     }
                 },
                 actions = {
-                    Box {
+                    IconButton(onClick = { search = if (search == null) "" else null }) {
+                        Icon(if (search != null) Icons.Filled.Close else Icons.Filled.Search, if (search != null) "検索をやめる" else "全文検索")
+                    }
+                    if (search == null) Box {
                         IconButton(onClick = { insertMenu = true }) { Icon(Icons.Filled.AddCircleOutline, "挿入（チェックボックス・リンク・文脈・親）") }
                         DropdownMenu(expanded = insertMenu, onDismissRequest = { insertMenu = false }) {
                             DropdownMenuItem(text = { Text("チェックボックス") }, leadingIcon = { Icon(Icons.Filled.CheckBox, null) }, onClick = {
@@ -429,13 +440,17 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         }
                     }
                 }
-                // 表示と書き込み先を同時に切り替える。全部表示からは未選択で保存。
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(listOf(ALL, UNASSIGNED) + topics) { t ->
+                // 表示と書き込み先を同時に切り替える。全部表示からは未所属で保存。
+                // 並べるのは 全部・未所属・日記・その他 だけ。その他を押すとトピックの一覧（探す・足す）
+                val other = topic !in listOf(ALL, UNASSIGNED, DIARY)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(ALL, UNASSIGNED, DIARY).forEach { t ->
                         FilterChip(selected = t == topic, onClick = { setTopic(t) }, label = { Text(topicLabel(t)) },
                             leadingIcon = if (t == DIARY) ({ Icon(Icons.Filled.Book, null, Modifier.size(16.dp)) }) else null)
                     }
-                    item { AssistChip(onClick = { addTopicOpen = true }, label = { Text("＋ トピック") }) }
+                    FilterChip(selected = other, onClick = { topicListOpen = true },
+                        label = { Text(if (other) topic else "その他", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(18.dp)) })
                 }
                 if (pendingImages.isNotEmpty()) {
                     LazyRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -456,7 +471,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     OutlinedTextField(
                         value = input, onValueChange = { input = it },
                         modifier = Modifier.weight(1f).focusRequester(focus),
-                        placeholder = { Text(if (prompt) "今まで何してた？" else if (topic == DIARY) "日記（時刻は自動で付きます）" else if (writingTopic(topic).isEmpty()) "メモを書く（トピック未選択）" else "$topic に書く") },
+                        placeholder = { Text(if (prompt) "今まで何してた？" else if (topic == DIARY) "日記（時刻は自動で付きます）" else if (writingTopic(topic).isEmpty()) "メモを書く（未所属）" else "$topic に書く") },
                         maxLines = 6, shape = RoundedCornerShape(20.dp),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Text),
                     )
@@ -467,7 +482,10 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             }
         },
     ) { pad ->
-        val shown = visibleEntries(entries, topic).sortedByDescending { it.created }
+        // 検索中はトピックに関係なく、全部のメモの本文から探す
+        val sq = search?.trim().orEmpty()
+        val shown = (if (search != null && sq.isNotEmpty()) entries.filter { it.text.contains(sq, ignoreCase = true) }
+            else visibleEntries(entries, topic)).sortedByDescending { it.created }
         LazyColumn(Modifier.fillMaxSize().padding(pad), state = listState, reverseLayout = true,
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEachIndexed { i, e ->
@@ -496,7 +514,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id, selected = e.id in selected || e.id == flash, selectionMode = selecting,
                         onTap = {
                             val cf = contextFor
-                            if (selecting) toggleSelection(e.id)
+                            if (search != null) { search = null; jumpTo(e.id) }   // 検索の結果を押すと、そのメモの場所へ
+                            else if (selecting) toggleSelection(e.id)
                             else if (cf != null && cf != e.id) {
                                 // 続けてタップして複数の文脈をつなぐ（もう一度タップすると外す）
                                 val k = entries.indexOfFirst { it.id == cf }
@@ -584,13 +603,36 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             })
     }
 
+    if (topicListOpen) {
+        var q by remember { mutableStateOf("") }
+        val list = topics.filter { it != DIARY && (q.isBlank() || it.contains(q.trim(), ignoreCase = true)) }
+        AlertDialog(onDismissRequest = { topicListOpen = false }, title = { Text("トピック") },
+            text = { Column {
+                OutlinedTextField(q, { q = it }, placeholder = { Text("探す") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Filled.Search, null) })
+                LazyColumn(Modifier.heightIn(max = 360.dp).padding(top = 6.dp)) {
+                    items(list) { t ->
+                        val n = entries.count { it.topic == t }
+                        Row(Modifier.fillMaxWidth().clickable { setTopic(t); topicListOpen = false }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(t, Modifier.weight(1f), fontSize = 16.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
+                            Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                    if (list.isEmpty()) item { Text(if (q.isBlank()) "まだトピックがありません" else "見つかりません", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline) }
+                }
+                OutlinedButton(onClick = { topicListOpen = false; addTopicOpen = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("＋ 新しいトピック") }
+            } },
+            confirmButton = { TextButton(onClick = { topicListOpen = false }) { Text("閉じる") } })
+    }
+
     if (addTopicOpen) {
         var name by remember { mutableStateOf("") }
         AlertDialog(onDismissRequest = { addTopicOpen = false },
             title = { Text("トピックを足す") },
             text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("例: アイデア") }) },
             confirmButton = { TextButton(onClick = {
-                val t = normalizedTopic(name.trim()).takeUnless { it == ALL || it == "全部表示" || it == "トピック未選択" } ?: ""
+                val t = normalizedTopic(name.trim()).takeUnless { it == ALL || it == "全部" || it == "全部表示" || it == "未所属" || it == "トピック未選択" || it == "その他" } ?: ""
                 if (t.isNotEmpty() && t !in settings.topics) { settings = settings.copy(topics = settings.topics + t); store.saveSettings(settings) }
                 if (t.isNotEmpty()) setTopic(t)
                 addTopicOpen = false

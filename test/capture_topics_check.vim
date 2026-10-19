@@ -50,7 +50,7 @@ call writefile(['# PC のメモ', '', 'そのままの本文'], $D . '/v/pc.md')
 call gnosis#orphans_open()
 sleep 100m
 call assert_true(index(getline(1, '$'), '## 仕事') >= 0)
-call assert_true(index(getline(1, '$'), '## トピック未選択') >= 0)
+call assert_true(index(getline(1, '$'), '## 未所属') >= 0)
 call assert_false(index(getline(1, '$'), '## ノート') >= 0)
 call assert_true(exists('b:gnosis_topic_list'))
 call gnosis#topic#assign(1, line('$'), 'アイデア')
@@ -58,10 +58,10 @@ sleep 100m
 call assert_true(index(readfile($D . '/v/pc.md'), 'topic: "アイデア"') >= 0)
 call assert_true(index(readfile(s:n), 'topic: "アイデア"') >= 0)
 call assert_true(index(readfile($D . '/v/pc.md'), 'そのままの本文') >= 0)
-call gnosis#topic#assign(1, line('$'), 'トピック未選択')
+call gnosis#topic#assign(1, line('$'), '未所属')
 sleep 100m
 call assert_true(index(readfile(s:n), 'topic: ""') >= 0)
-call assert_true(index(getline(1, '$'), '## トピック未選択') >= 0)
+call assert_true(index(getline(1, '$'), '## 未所属') >= 0)
 call assert_false(index(getline(1, '$'), '## 仕事') >= 0)
 call writefile(v:errors, $D . '/errors')
 if !empty(v:errors) | cquit | endif

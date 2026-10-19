@@ -35,8 +35,8 @@ const val ALL = "__all__"
 const val UNASSIGNED = ""
 fun normalizedTopic(topic: String) = if (topic == "メモ") UNASSIGNED else topic
 fun topicLabel(topic: String) = when (topic) {
-    ALL -> "全部表示"
-    UNASSIGNED -> "トピック未選択"
+    ALL -> "全部"
+    UNASSIGNED -> "未所属"
     else -> topic
 }
 fun visibleEntries(entries: List<Entry>, topic: String) = entries.filter { topic == ALL || it.topic == topic }
