@@ -179,6 +179,16 @@
 - 紙のノート `1` と `1a` … `1a` の `ParentBranch:` に `1`、`1` の `ChildBranch:` に `1a`（Context では代用しない）。トピック（`1-タイトル`）の `ParentBranch:` は `1`。トピックは `folgezettel-Index-1` の `## 1` の節にも並ぶ（親トピックが先・インデントなし。親子は front matter の `topic_parent:`。親が分からないものは推測しない）
 - 紙の日記 … その日のデジタル日記の、タイトルの下（空行 1 行・本文より上）に `[紙の日記]` のリンクが入る（再生成しても重複しない。デジタル日記が無い日は作らず、日記ができたあとの `\ua` でリンクする）。スキャン由来のノートは front matter の `source: scan` で、「今日のノート」に載せない
 
+## スマホのメモ（Gnosis メモ APK）
+
+- スマホでアプリを開くとすぐ書ける。1 件 = 1 ノート。日記トピックは取り込むと日記の本文に時刻つきで入る。
+- PC へは USB でつないで PC の Gnosis で `\M`。パスワードは要らない。取り込んだものはスマホで ✓ が付く。
+- 定期アラーム（スマホ右上の時計）: 初めは鳴らさない。「何分おき」「何時から」「何時まで」を数字で決める。
+  - 24 時間鳴らす: 何時から **0**、何時まで **24**。
+  - 「何時まで」の時刻は含まない（9〜23 なら、最後に鳴るのは 22 時台）。
+  - 「何時から」と「何時まで」が同じ（例: 1 と 1）だと時間帯が空になり、毎日「何時から」の 1 回だけ鳴る。
+- スマホに入れる手順（USB デバッグの許可を含む）は `docs/11-スマホのメモ.md` の「APK を作る・入れる」。
+
 ## Ex コマンド一覧
 
 すべてのコマンドの正式名は `:Gnosis` で始まる（`:Gnosis` のあと Tab で候補）。旧名の `:Yurii` で始まるコマンドは、同じ名前の `:Gnosis` のコマンドの別名（互換）。短い旧名（`:NF` など）も互換のため残している。
@@ -218,6 +228,7 @@
 ### 同期・その他
 - `:GnosisUpdateMD` / `:UpdateMD` / `:GnosisUpdateAll` / `:UpdateAll` / `:UpdateALL` 同期 ・ `:GnosisSortYomi` / `:SortYomi` よみ順 ・ `:GnosisSortTime` / `:SortTime` 時刻順 ・ `:GnosisToggleCheckbox` / `:ToggleCheckbox` チェック切替 ・ `:GnosisCopyStack` / `:CopyStack`
 - `:GnosisCheckPrefix` / `:CheckPrefix` 接頭辞検査 ・ `:GnosisRename` / `:Rename` ファイル名変更 ・ `:GnosisAutocwindow` / `:Autocwindow` quickfix 自動ジャンプ切替 ・ `:GnosisRP` / `:RP` 接頭辞リネーム
+- `:GnosisApkInstall` … スマホ用の Gnosis メモ APK をビルドして、USB でつないだスマホへ入れる（スマホで USB デバッグを許可しておく）
 - `:GnosisFcitxOn` `:GnosisFcitxOff` `:GnosisFcitxStatus` 日本語入力（fcitx）の切り替え（Linux）
 - `:Gnosis` … 入口（`:Gnosis` のあとに Tab で候補を出す）
 

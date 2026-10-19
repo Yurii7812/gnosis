@@ -9,6 +9,7 @@ USB でつないだスマホ（adb）から、アプリの中のデータ（entr
 CLI:
     capture_import.py adbpull OUTDIR                 # スマホのアプリから OUTDIR/capture.json と images/ を作る
     capture_import.py adbmark ROOT                   # 取り込み済みの id をスマホのアプリへ書き戻す
+    capture_import.py adbinstall APK                 # つながっているスマホへ APK を入れる（adb install -r）
     capture_import.py plan OUTDIR ROOT               # 取り込む内容を JSON で出す（取り込み済みの id は除く）
     capture_import.py whatsapp TXT OUTDIR [TOPIC]    # WhatsApp の「チャットのエクスポート」を capture.json にする
 """
@@ -195,11 +196,34 @@ def whatsapp(txt: str, outdir: str, topic: str = "日記") -> int:
     return 0
 
 
+def adb_install(apk: str) -> int:
+    """つながっているスマホへ APK を入れる（adb install -r）。結果は標準出力へ。"""
+    exe = _adb()
+    if not exe:
+        print("adb が見つかりません")
+        return 1
+    r = subprocess.run([exe, "devices"], stdout=subprocess.PIPE, text=True)
+    devs = [ln for ln in r.stdout.splitlines()[1:] if ln.strip().endswith("\tdevice")]
+    if not devs:
+        un = [ln for ln in r.stdout.splitlines()[1:] if "unauthorized" in ln]
+        print("スマホで「USB デバッグを許可」を押してください" if un
+              else "スマホが見つかりません（USB でつなぎ、USB デバッグをオンに）")
+        return 1
+    if len(devs) > 1:
+        print("スマホが 2 台以上つながっています")
+        return 1
+    r = subprocess.run([exe, "install", "-r", apk], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(r.stdout, end="")
+    return r.returncode
+
+
 def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[0] == "adbpull":
         return adb_pull(argv[1])
     if len(argv) == 2 and argv[0] == "adbmark":
         return adb_mark(argv[1])
+    if len(argv) == 2 and argv[0] == "adbinstall":
+        return adb_install(argv[1])
     if len(argv) == 3 and argv[0] == "plan":
         try:
             print(json.dumps(plan(argv[1], argv[2]), ensure_ascii=False))

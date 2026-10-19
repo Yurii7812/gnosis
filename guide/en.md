@@ -179,6 +179,16 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - Paper notes `1` and `1a` … `1` goes into `1a`'s `ParentBranch:` and `1a` into `1`'s `ChildBranch:` (Context is not used for this). A topic (`1-title`) has `1` as its `ParentBranch:`. Topics are also listed in the `## 1` section of `folgezettel-Index-1` (parent topic first, no indentation; the parent is the front matter `topic_parent:`; an unknown parent is never guessed)
 - Paper diary … a `[紙の日記]` link is put under the title of that day's digital diary (one blank line, above the body; never duplicated on regeneration. If there is no digital diary that day, none is created; the link is added by `\ua` after the diary exists). Notes from scans carry `source: scan` in the front matter and are not listed in "today's notes"
 
+## Phone memo (Gnosis memo APK)
+
+- Open the app and start writing right away. One entry = one note. Entries in the diary topic go into the diary body with a timestamp when imported.
+- To move them to the PC, connect the phone by USB and press `\M` in Gnosis on the PC. No password is needed. Imported entries get a ✓ on the phone.
+- Periodic alarm (the clock at the top right of the phone app): off at first. Set "every N minutes", "from hour" and "until hour" as numbers.
+  - To ring around the clock: set **from** 0 and **until** 24.
+  - The "until" hour is not included (9 to 23 means the last ring is in the 22:xx hour).
+  - If "from" and "until" are the same (e.g. 1 and 1), the time window is empty and it rings once a day at the "from" hour.
+- For installing on the phone (including the USB debugging permission), see "Build and install the APK" in `docs/11-スマホのメモ.md`.
+
 ## Ex commands
 
 The canonical name of every command starts with `:Gnosis` (press Tab after `:Gnosis` for candidates). Old commands starting with `:Yurii` are aliases of the `:Gnosis` command with the same name (compatibility). Short old names (`:NF` etc.) are kept for compatibility too.
@@ -218,6 +228,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 ### Sync and more
 - `:GnosisUpdateMD` / `:UpdateMD` / `:GnosisUpdateAll` / `:UpdateAll` / `:UpdateALL` sync ・ `:GnosisSortYomi` / `:SortYomi` by reading ・ `:GnosisSortTime` / `:SortTime` by time ・ `:GnosisToggleCheckbox` / `:ToggleCheckbox` toggle checkbox ・ `:GnosisCopyStack` / `:CopyStack`
 - `:GnosisCheckPrefix` / `:CheckPrefix` check prefixes ・ `:GnosisRename` / `:Rename` rename the file ・ `:GnosisAutocwindow` / `:Autocwindow` toggle quickfix auto jump ・ `:GnosisRP` / `:RP` rename the prefix
+- `:GnosisApkInstall` build the phone memo APK and install it on the phone connected by USB (allow USB debugging on the phone first)
 - `:GnosisFcitxOn` `:GnosisFcitxOff` `:GnosisFcitxStatus` switch the Japanese input method (fcitx, Linux)
 - `:Gnosis` … entry point (press Tab after `:Gnosis` for candidates)
 

@@ -5344,6 +5344,36 @@ function! s:capture_run(args, ...) abort
   return a:0 ? system(l:cmd, a:1) : system(l:cmd)
 endfunction
 
+" ---------------------------------------------------------------------------
+" スマホ用の Gnosis メモ APK を作って入れる: :GnosisApkInstall
+"   android/ で assembleDebug（ビルド環境は ~/Android）→ USB でつないだスマホへ adb install -r。
+"   取り込み（\M）は run-as を使うので、入れるのはデバッグ版の APK。
+" ---------------------------------------------------------------------------
+
+function! gnosis#apk_install() abort
+  let l:android = s:note_root . '/android'
+  let l:apk = l:android . '/app/build/outputs/apk/debug/app-debug.apk'
+  let l:build = 'export JAVA_HOME=$HOME/Android/jdk ANDROID_HOME=$HOME/Android/Sdk; cd '
+        \ . shellescape(l:android) . ' && ./gradlew assembleDebug'
+  echo gnosis#i18n#tr('Gnosis: APK をビルドしています…（数分かかることがあります）')
+  redraw
+  let l:out = system('sh -c ' . shellescape(l:build) . ' 2>&1')
+  if v:shell_error
+    echohl ErrorMsg | echo gnosis#i18n#tr('ビルドに失敗しました') | echohl NONE
+    echo join(split(l:out, "\n")[-5:], "\n")
+    return
+  endif
+  echo gnosis#i18n#tr('Gnosis: スマホへ入れています…')
+  redraw
+  let l:msg = s:capture_run(['adbinstall', l:apk])
+  if v:shell_error
+    echohl ErrorMsg | echo gnosis#i18n#tr('スマホへ入れられませんでした') | echohl NONE
+    echo substitute(l:msg, '\n\+$', '', '')
+    return
+  endif
+  echo gnosis#i18n#tr('Gnosis: スマホに入れました。アプリを開いて確認してください')
+endfunction
+
 function! gnosis#capture_import(...) abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
