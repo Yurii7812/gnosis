@@ -339,8 +339,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     }
 
     fun send() {
-        val text = input
-        if (text.isBlank() && pendingImages.isEmpty()) return
+        val text = input.trim()
+        if (text.isEmpty() && pendingImages.isEmpty()) return
         val ed = editing
         if (ed != null) {
             val i = entries.indexOfFirst { it.id == ed }

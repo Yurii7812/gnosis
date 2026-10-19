@@ -5468,7 +5468,7 @@ function! gnosis#capture_import(...) abort
             call remove(l:lines, l:k)
           endif
         endfor
-        call insert(l:lines, 'topic: ' . l:it.topic, 1)
+        call insert(l:lines, 'topic: ' . json_encode(l:it.topic), 1)
         call insert(l:lines, 'capture: ' . l:it.topic, 1)
         call s:syn_writefile(l:lines, l:path)
         let l:files[l:it.id] = l:path
@@ -5488,7 +5488,7 @@ function! gnosis#capture_import(...) abort
       let l:title = substitute(l:it.title, '[\[\]]', '', 'g')
       let l:body = split(l:it.text, "\n", 1)
       " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
-      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'topic: ' . l:it.topic, '---', '', '# ' . l:title, '']
+      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
       try
         if filereadable(l:root . '/' . l:name)

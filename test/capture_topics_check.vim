@@ -13,7 +13,7 @@ let s:original = readfile(s:n)
 call assert_true(index(s:original, 'title: こんにちは今日はいい天気だと思ったけどそ...') >= 0)
 call assert_true(index(s:original, 'こんにちは今日はいい天気だと思ったけどそうでもないかもしれない') >= 0)
 call assert_true(index(s:original, 'ところで最近はいい感じ。') >= 0)
-call assert_true(index(s:original, 'topic: ') >= 0)
+call assert_true(index(s:original, 'topic: ""') >= 0)
 call gnosis#capture_import($D . '/pack')
 call assert_false(filereadable($D . '/v/261019100000-2.md'))
 " 別の vault へ切り替えても、同じスマホの原本を独立して取り込める。
@@ -35,7 +35,7 @@ let s:data = json_decode(join(readfile($D . '/pack/capture.json'), "\n"))
 let s:data.entries[0].topic = '仕事'
 call writefile([json_encode(s:data)], $D . '/pack/capture.json')
 call gnosis#capture_import($D . '/pack')
-call assert_true(index(readfile(s:n), 'topic: 仕事') >= 0)
+call assert_true(index(readfile(s:n), 'topic: "仕事"') >= 0)
 call assert_true(index(readfile(s:n), 'PC での追記') >= 0)
 call assert_false(filereadable($D . '/v/261019100000-2.md'))
 " 本文の変更時は元の PC ファイルを上書きせず別版として残す。

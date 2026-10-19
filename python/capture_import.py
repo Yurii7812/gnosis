@@ -180,9 +180,11 @@ def plan(outdir: str, root: str) -> dict:
         target = st.get("ids", {}).get(e["id"], "")
         exists = _destination_exists(Path(root), target)
         same = previous is not None and _snapshot(previous) == _snapshot(e)
-        # 旧版の記録に本文が無い場合は再取り込みし、スマホの原本を保全する。
         needs_note = e.get("topic") != "日記" or e["id"] in related
-        done = exists and same and not (needs_note and target.startswith("(diary:"))
+        # 旧版の記録は本文が残っていない。ノートのファイルが実在するなら取り込み済みとして扱い、
+        # 同じメモを別ファイルで重ねて作らない。日記に書いただけの旧記録は、ノートが要るなら取り込み直す。
+        legacy = previous is None and not target.startswith("(diary:")
+        done = exists and (same or legacy) and not (needs_note and target.startswith("(diary:"))
         metadata_only = exists and previous is not None and all(
             _snapshot(previous)[k] == _snapshot(e)[k] for k in ("text", "images")) and not target.startswith("(diary:")
         missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
@@ -285,6 +287,14 @@ def adb_install(apk: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    try:
+        return _main(argv)
+    except (OSError, ValueError, KeyError) as e:
+        print(str(e), file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[0] == "adbpull":
         return adb_pull(argv[1])
     if len(argv) == 2 and argv[0] == "adbmark":

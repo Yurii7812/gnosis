@@ -82,9 +82,9 @@ class CaptureImportTest(unittest.TestCase):
     def test_legacy_state_recovers_original_and_diary_missing_is_reimportable(self):
         dest = self.record()
         ci._state_path(self.root).write_text(json.dumps({'ids': {self.entry['id']: dest.name}}))
-        self.assertFalse(self.plan()['done'])
+        self.assertTrue(self.plan()['done'])
         self.assertFalse(self.plan()['update'])
-        diary = self.root / 'diary.md'; diary.write_text('# diary')
+        diary =self.root / 'diary.md'; diary.write_text('# diary')
         (self.root / '.state/diary_days.json').write_text(json.dumps({'days': {'2026-10-19': diary.name}}))
         self.assertTrue(ci._destination_exists(self.root, '(diary:2026-10-19)'))
         diary.unlink()
