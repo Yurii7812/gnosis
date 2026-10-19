@@ -96,7 +96,7 @@ function! s:value(item) abort
   elseif a:item ==# 'window'
     return l:s.window.width . ' × ' . l:s.window.height
   elseif a:item ==# 'appearance'
-    return l:s.appearance ==# 'dark' ? s:t('settings.dark') : s:t('settings.light')
+    return s:t('settings.' . (l:s.appearance =~# '^\(dark\|light\)$' ? l:s.appearance : 'standard'))
   elseif a:item ==# 'theme'
     return s:theme_label(l:s)
   elseif a:item ==# 'app_theme'
@@ -284,7 +284,8 @@ function! s:change(item) abort
     endif
     return
   elseif a:item ==# 'appearance'
-    let l:s.appearance = l:s.appearance ==# 'light' ? 'dark' : 'light'
+    " 標準 → ダーク → ライト → 標準
+    let l:s.appearance = get({'standard': 'dark', 'dark': 'light'}, l:s.appearance, 'standard')
   elseif a:item ==# 'theme'
     call s:choose_theme()
   elseif a:item ==# 'theme_add'

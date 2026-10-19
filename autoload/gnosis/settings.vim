@@ -7,7 +7,7 @@
 "     "window": {"maximized": true, "width": 1200, "height": 860},
 "     "fontSize": 16,          ← 以前の版の文字サイズ（今は Gnosis ホームの terminal.json。
 "                                 アプリ向けに同じ値を書き写す。gnosis#termfont）
-"     "appearance": "light" | "dark",
+"     "appearance": "standard" | "dark" | "light",   ← 標準（青系）・ダーク（灰色）・ライト（白）
 "     "theme": {"kind": "builtin"}
 "            | {"kind": "custom", "name": "名前"}
 "            | {"kind": "plugin", "repo": "作者/リポジトリ", "colorscheme": "名前"},
@@ -45,7 +45,7 @@ function! gnosis#settings#defaults() abort
         \ 'language': l:lang,
         \ 'window': {'maximized': v:true, 'width': 1200, 'height': 860},
         \ 'fontSize': 16,
-        \ 'appearance': 'dark',
+        \ 'appearance': 'standard',
         \ 'theme': {'kind': 'builtin'},
         \ 'customThemes': {},
         \ 'appTheme': {'kind': 'builtin'},
@@ -83,8 +83,8 @@ function! gnosis#settings#validate(s) abort
   if l:s.language !~# '^\(ja\|en\)$'
     let l:s.language = gnosis#settings#defaults().language
   endif
-  if l:s.appearance !~# '^\(light\|dark\)$'
-    let l:s.appearance = 'light'
+  if l:s.appearance !~# '^\(standard\|light\|dark\)$'
+    let l:s.appearance = 'standard'
   endif
   let l:fs = type(l:s.fontSize) == v:t_number ? l:s.fontSize : float2nr(l:s.fontSize)
   let l:s.fontSize = max([8, min([48, l:fs])])
@@ -235,6 +235,11 @@ function! gnosis#settings#apply_gui(s) abort
   endif
 endfunction
 
+" Vim の &background に使う値（標準とダークは dark、ライトは light）
+function! gnosis#settings#background(s) abort
+  return get(a:s, 'appearance', 'standard') ==# 'light' ? 'light' : 'dark'
+endfunction
+
 " 組み込みテーマの色（assets/themes/builtin.json。Electron と共通）
 function! gnosis#settings#builtin_palettes() abort
   if !exists('s:palettes')
@@ -242,6 +247,7 @@ function! gnosis#settings#builtin_palettes() abort
     if empty(s:palettes)
       let s:palettes = {
             \ 'start': {'base': 'dark', 'bg': '#0C1D32', 'fg': '#EBEBEB', 'link': '#E1F4E4', 'heading': '#EEDA77', 'muted': '#B3B3B3', 'accent': '#83AFE2', 'selection': '#21538C', 'cursorline': '#15365B'},
+            \ 'standard': {'base': 'dark', 'bg': '#11253D', 'fg': '#DCE3EC', 'link': '#8CC4FF', 'heading': '#EFD67A', 'muted': '#9DAFC4', 'accent': '#83AFE2', 'selection': '#2B5A8E', 'cursorline': '#1A3454'},
             \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1A1A1A', 'link': '#0A58B8', 'heading': '#7A3B00', 'muted': '#5C5C5C', 'accent': '#2463B0', 'selection': '#C7DCF5', 'cursorline': '#F2F4F7'},
             \ 'dark': {'base': 'dark', 'bg': '#1E1E1E', 'fg': '#D8D8D8', 'link': '#6CB6FF', 'heading': '#E5C07B', 'muted': '#9A9A9A', 'accent': '#83AFE2', 'selection': '#264F78', 'cursorline': '#2A2A2A'},
             \ 'app': {'base': 'light', 'bg': '#FAFAFA', 'fg': '#1F1F1F', 'link': '#21538C', 'heading': '#603510', 'muted': '#575757', 'accent': '#2D70BE', 'selection': '#B5CFEE', 'cursorline': '#EBEBEB'},

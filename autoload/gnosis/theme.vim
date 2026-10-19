@@ -98,7 +98,7 @@ function! gnosis#theme#palette(s) abort
   if l:kind ==# 'custom'
     let l:c = get(get(a:s, 'customThemes', {}), get(a:s.theme, 'name', ''), {})
     if !empty(l:c)
-      let l:base = get(l:c, 'base', a:s.appearance)
+      let l:base = get(l:c, 'base', gnosis#settings#background(a:s))
       let l:p = copy(get(l:pals, l:base, l:pals.light))
       " 背景か本文の色を変えたカスタム配色では、補助の色（muted）は組み込みのものを使わず
       " その配色の本文と背景から作る（明るい背景に暗い補助色、のような食い違いを防ぐ）
@@ -110,8 +110,8 @@ function! gnosis#theme#palette(s) abort
       return l:p
     endif
   endif
-  let l:p = copy(get(l:pals, a:s.appearance, l:pals.light))
-  let l:p.base = a:s.appearance
+  let l:p = copy(get(l:pals, a:s.appearance, l:pals.standard))
+  let l:p.base = gnosis#settings#background(a:s)
   return l:p
 endfunction
 
@@ -193,7 +193,7 @@ endfunction
 " 設定のテーマを反映する。失敗したら組み込みテーマへ戻し、メッセージを出す。
 function! gnosis#theme#apply(s) abort
   let l:kind = get(a:s.theme, 'kind', 'builtin')
-  let &background = a:s.appearance
+  let &background = gnosis#settings#background(a:s)
   " \A のアプリの中の Vim は、アプリ用の配色（appTheme。既定は白）を使う。
   " 通常の Vim 用のテーマ（theme / customThemes / 追加テーマ）はアプリには効かない。
   if gnosis#theme#in_app()
@@ -217,7 +217,7 @@ function! gnosis#theme#apply(s) abort
           set termguicolors
         endif
         execute 'colorscheme ' . fnameescape(l:name)
-        let &background = a:s.appearance
+        let &background = gnosis#settings#background(a:s)
         " 読み込めたか（端末の色数などで途中で止まるテーマもある）
         let l:ok = get(g:, 'colors_name', '') ==# l:name
       catch
@@ -225,7 +225,7 @@ function! gnosis#theme#apply(s) abort
       endtry
     endif
     if l:ok
-      let g:gnosis_palette = s:palette_from_highlights(a:s.appearance)
+      let g:gnosis_palette = s:palette_from_highlights(gnosis#settings#background(a:s))
       call s:apply_link_highlight()
       let g:gnosis_theme_state = {'kind': 'plugin', 'name': l:name, 'palette': g:gnosis_palette}
       return 1
