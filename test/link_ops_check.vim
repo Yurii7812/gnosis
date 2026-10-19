@@ -157,14 +157,29 @@ call s:ok('グループの zn Enter: 新ノートの Group: にグループ・Co
 call s:ok('グループの zn Enter: 新ノートを開く', fnamemodify(expand('%:p'), ':t') ==# s:ng)
 call s:ok('グループの zn Enter: 索引をよみ順に並べ替える（アルファ・いちご・ゼータ）',
       \ index(s:gl, '[アルファ](alpha.md)') < index(s:gl, '[いちご](' . s:ng . ')') && index(s:gl, '[いちご](' . s:ng . ')') < index(s:gl, '[ゼータ](zeta.md)'), string(s:gl))
-" グループの zn は置き場所を聞かない（o・h・c・t・b・p は無い）。表示名の入力で Esc なら何も作らない
+" グループの zn は Enter（登録）と o（孤立）だけ（h・c・t・b・p は無い）。表示名の入力で Esc なら何も作らない
 execute 'edit ' . fnameescape(s:v . '/gz.md')
 let s:before = s:files()
 let s:gz_before = s:file('gz.md')
-let g:gnosis_test_keys = []
+let g:gnosis_test_keys = ["\r"]
 let g:gnosis_test_display_name = ["\x1b"]
 call gnosis#v2_new_plain()
 call s:ok('グループの zn → 表示名で Esc: 何も作らない', s:files() ==# s:before && s:file('gz.md') ==# s:gz_before)
+for s:k in ['h', 'c', 't', 'b', 'p']
+  let g:gnosis_test_keys = [s:k]
+  call gnosis#v2_new_plain()
+  call s:ok('グループの zn ' . s:k . ': 何も作らない', s:files() ==# s:before && s:file('gz.md') ==# s:gz_before)
+endfor
+" グループ（Index も）の上でも o で孤立のノートを作れる（グループは変えない・新ノートに Group: も Branch も無い）
+execute 'edit ' . fnameescape(s:v . '/gz.md')
+let g:gnosis_test_keys = ['o']
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:ng = s:newest_except(s:before)
+call s:ok('グループの zn o: 孤立のノートを作る（グループは変わらない）', !empty(s:ng) && s:file('gz.md') ==# s:gz_before, string(s:ng))
+call s:ok('グループの zn o: 新ノートに Group: も Context も Branch も無い', !empty(s:ng) && index(s:file(s:ng), 'Group:') < 0
+      \ && empty(gnosis#context#find_block(s:file(s:ng))) && index(s:file(s:ng), 'ParentBranch:') < 0, string(s:ng is '' ? [] : s:file(s:ng)))
 
 " ------------------------------------------------------------------ zk: 通常のノートは n だけ・グループの上では使えない
 for s:k in ["\r", 'c', 'h', 'o', 'b', 'p', 't']

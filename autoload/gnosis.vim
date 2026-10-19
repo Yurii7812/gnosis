@@ -7793,8 +7793,20 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if l:grp_src
-    " グループの上の zn: 置き場所は聞かない。表示名を付けてこのグループに登録する（あとで必ず並べる）
+    " グループの上の zn: Enter=表示名を付けてこのグループに登録する（あとで必ず並べる）/ o=孤立（どこにもつながない）。
+    " 孤立はどのノートの上でも使えるようにする（Index で思いつきを書いて、あとで \N で整理する）。
     " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
+    echo s:fit_prompt(gnosis#i18n#tr('Enter=このグループに登録 / o=孤立（どこにもつながない）  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('Enter=登録 o=孤立 (Esc)'))
+    let l:gch = s:getkey()
+    redraw
+    if l:gch ==? 'o'
+      call s:v2_new_run('', 'o', 0)
+      return
+    endif
+    if l:gch !=# "\<CR>" && l:gch !=# "\<NL>"
+      echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
+    endif
     let l:ts = gnosis#timestamp_filename()
     let l:r = s:ask_display_name(l:ts)
     if !l:r.ok
