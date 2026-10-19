@@ -131,8 +131,7 @@ class SearchScreen(unittest.TestCase):
             s.wait(2)
             s.send('g', .3)
             s.send('\r', .5)
-            state = self.dump(s)
-            self.assertIn('[Group G](g.md)', state['lines'])
+            # グループに入ると名前とよみの確認画面が開く。グループのノート自体を見る
             group = (self.vault / 'g.md').read_text().splitlines()
             added = group.index('[Ordinary B](b.md)')
             self.assertEqual(group[added - 1], '[別名](a.md)')

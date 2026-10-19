@@ -68,7 +68,7 @@
 - `<Tab>` / `<S-Tab>` … 次の / 前のリンクへ ・ `<CR>` … カーソル下のリンクを開く
 - `<BS>` … 戻る ・ `<S-BS>` / `\.` … 進む ・ `_` … 直前のノートと往復
 - `1`〜`9` / `0` … ドキュメントの上から順（冒頭の Context も含む）の通し番号のリンクを開く
-- `\k` / `\m` / `\j` / `\J` … 一番上の「名前:」行（Group: や Context: など）へ / 一番下の「名前:」行へ / BackLink の先頭へ / BackLink の末尾へ
+- `\k` / `\m` / `\j` / `\J` … 一番上の「名前:」行（Group: や Context: など）へ / 本文の終わりから一番近い「名前:」行（ChildBranch: や BackLink: など）へ / BackLink の先頭へ / BackLink の末尾へ
 - `\bu` … Context 付近の最後のリンクへ ・ `<S-Space>` … リンク一覧から選んで移動
 - `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加 ・ グループ（Index を含む）にメンバーが入ると、どの方法でも**名前とよみの確認画面**が開く（`[表示名](…) — よみ`。推測には「（推測）」。表示名もよみも書き換えられ、行を消すとグループから外れる。`Enter` で中身を見る。`q` で保存して並べ替え、`Q` は保存せずに並べ替え。離れたら `:GnosisReview` で戻る。全員を見直すのは `:GnosisYomiReview`）・ `- [ ]` の行で挿入モードの Enter … 次の行にも `- [ ] ` を作る（空の項目で Enter ならやめる） ・ `\n`（`:GnosisQuick`）… とりあえず書く（何も聞かずにまっさらなノート。日記に自動で載る。つなぐのは後で） ・ `\M`（`:GnosisCaptureImport`）… USB でつないだスマホから Gnosis メモ APK のメモを取り込む ・ `\N`（`:GnosisOrphans`）… 未所属（Folgezettel ID の無い）ノートの一覧（雑に書いたノートを後でつなぐ。グループ・日記・紙の PKM のノートは出ない）
 - `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）
@@ -142,7 +142,7 @@
 - `語::` … 両方の同じセクションに `語:`
 - **Context は本文の冒頭（H1 タイトルの直後）の `Context:` ブロック**（Markdown の見出しではなく、ふつうのテキスト行。直下にリンクが並ぶ）。`c` で足したリンクは既存リンクの最後に入り、同じノートは重複しない。旧形式 `### Context` も読める（`c` で足したノートは、リンクを失わず新形式へ移る。旧形式のノートは開いただけ・同期しただけでは書き換えない。移行は `:GnosisContextMigrate`（今のノート）/ `:GnosisContextMigrate all`（試走）/ `:GnosisContextMigrate! all`（vault 全体）で明示的に）。コードブロックの中の `Context:` は Context ではない
 - グループ（`attribute: group`）へのリンクは `Group:` に、普通のノートへのリンクは `Context:` に、sync が自動で振り分ける。中身が空の節（ParentBranch / Group / ChildBranch / Related / BackLink）は見出しごと無い
-- `ChildBranch:` の中は、このノートを `Context:` にしている子・本文（や `BranchGroup:`）にリンクが書かれている子が上、ただの子が下で、間に空行が 1 つ入る（同期が並べ直す。それぞれの中の並びは元のまま）
+- 本文にリンクがある子は `ChildBranch:` に書かない（本文の一覧がそのまま子の一覧。本文からリンクを消すと、子の `ParentBranch:` をもとに同期が `ChildBranch:` に戻す）。`BranchGroup:` の子は書く。`ChildBranch:` の中は、このノートを `Context:` にしている子が上、ただの子が下で、間に空行が 1 つ入る（同期が並べ直す。それぞれの中の並びは元のまま）
 - Folgezettel ID（front matter の `folgezettel:`）は同期が振る。Index の本文に載っているノートと、日記・時系列記録のその日のノートが最上位の番号（`51`）、その Branch の子が `51a`、孫が `51a1` …（親が 1 つのものだけ。一度振った番号は変えない）。ID の無いノートが未所属で `\N` に出る。Context だけで親の無い古いノートは `:GnosisBranchFromContext` で、最初の Context を親（Branch）にできる。`:GnosisFolgezettelMove` でオンにすると、`Ctrl-↑` / `Ctrl-↓` / `Ctrl-←` / `Ctrl-→` で番号の親・最初の子・前後のきょうだいへ移る（もう一度で切る）
 - ノートの並び: `ParentBranch:` → `BranchGroup:` → `Group:` → `Context:`（ここまでは本文の上、H1 の直後のブロック。続くリンク行だけがブロックで、空行で終わる）→ 本文 → `ChildBranch:` → `Related:` → `BackLink:`（本文の下の節）。中身が空のものは書かない。`ParentBranch:` / `ChildBranch:` は `b` / `p` で明示した関係で、sync は追加も削除もしない（表示名の追従と、消えたファイルの掃除だけ。Context には変換しない）。カーソルがこれらのブロックの上にあるときの `h`（カーソル直下）は、リンクを本文に置く（ブロックには入れない）
 

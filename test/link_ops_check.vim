@@ -431,7 +431,7 @@ call cursor(1, 1)
 call gnosis#jump_up_cursor()
 call s:ok('\k: 一番上の「名前:」行（Group:）へ', getline('.') ==# 'Group:', getline('.'))
 call gnosis#jump_last_section()
-call s:ok('\m: 一番下の「名前:」行（コードブロックの外の BackLink:）へ', getline('.') ==# 'BackLink:' && getline(line('.') + 1) ==# '[c](c.md)', getline('.') . ' @' . line('.'))
+call s:ok('\m: 本文の終わりから一番近い「名前:」行（ChildBranch:）へ', getline('.') ==# 'ChildBranch:' && getline(line('.') + 1) ==# '[a](a.md)', getline('.') . ' @' . line('.'))
 
 " ------------------------------------------------------------------ \l → g → Enter / za → g: 入れたグループを \S と同じ規則でよみ順に並べる
 call s:mk('gj1.md', 'あ', [])

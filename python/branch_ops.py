@@ -104,6 +104,14 @@ class Vault:
                     if rp is not None and rp not in out:
                         out.append(rp)
                 store[p] = out
+        # 本文（BranchGroup: は除く）にリンクがあるノート。本文にある子は ChildBranch: に書かない
+        self.body_links: dict[Path, set[Path]] = {}
+        for p, n in self.parsed.items():
+            body = n["body"]
+            if nf.BRANCH_GROUP_HEAD in body:
+                body = body[:body.index(nf.BRANCH_GROUP_HEAD)]
+            self.body_links[p] = {rp for _d, tg in nf._links_from(body)
+                                  for rp in [_resolve(tg, p.parent, known)] if rp is not None}
 
     def parents(self, p: Path) -> list[Path]:
         """p の親（自分の ParentBranch と、相手の ChildBranch に p があるものの和集合）。"""
@@ -149,7 +157,7 @@ def check(root) -> dict:
         if len(ps) > 1:
             issues["multi_parent"].append({"note": rel(p), "parents": [rel(q) for q in ps]})
         for q in v.declared_parents.get(p, []):
-            if p not in v.declared_children.get(q, []):
+            if p not in v.declared_children.get(q, []) and p not in v.body_links.get(q, set()):
                 issues["one_sided"].append({"parent": rel(q), "child": rel(p), "missing": "ChildBranch"})
         for c in v.declared_children.get(p, []):
             if p not in v.declared_parents.get(c, []):
@@ -355,7 +363,9 @@ def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) 
             bad = _check_pair(v, parent, child)
             if bad is not None:
                 return bad
-        todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])]
+        # 親の本文にリンクがある子は、親の ChildBranch: に書かない（本文の一覧が子の一覧）
+        todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])
+                   and c not in v.body_links.get(parent, set())]
         todo_pb = [c for c in children if parent not in v.declared_parents.get(c, [])]
         todo_id = [c for c in children if not fz.value(v.texts[c])
                    and fz.ID_RE.fullmatch(fz.value(v.texts[parent]))]

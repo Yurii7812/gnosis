@@ -3170,14 +3170,15 @@ function! gnosis#jump_up_cursor() abort
   call s:jump_head_centered(l:h[0])
 endfunction
 
-" \m … このノートで一番下の「名前:」行へ
+" \m … 本文の終わりから一番近い関係の見出し（ChildBranch: / Related: / BackLink: など）へ。
+" 上の ParentBranch: / Group: / Context: のブロックは飛ばす
 function! gnosis#jump_last_section() abort
-  let l:h = s:colon_head_lines()
-  if empty(l:h)
+  let l:head = s:first_section_line()
+  if l:head <= 0
     echo 'Context: section not found'
     return
   endif
-  call s:jump_head_centered(l:h[-1])
+  call s:jump_head_centered(l:head)
 endfunction
 
 function! gnosis#jump_down_top() abort
@@ -9016,6 +9017,31 @@ endfunction
 " 現在バッファに未保存の変更があれば書き出す。
 " 「外部アプリで開く前」「ゴミ箱へ移す前」「同期の前」など、保存が要る瞬間に使う。
 " 保存したら 1、変更なし・特殊バッファなど対象外なら 0 を返す。
+" 開いていて保存済み（未保存の変更が無い）のノートに残った「編集中」の印を消す。a:paths は絶対パス。
+" python 側（同期・Branch の追加など）は印のあるノートを書き換えないので、その前に呼ぶ
+function! gnosis#dirty_guard_release(paths) abort
+  let l:dir = $GNOSIS_SYNC_GUARD_DIR
+  if empty(l:dir) || !isdirectory(l:dir)
+    return
+  endif
+  for l:p in a:paths
+    let l:nr = bufnr(fnamemodify(l:p, ':p'))
+    if l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+      continue
+    endif
+    if l:nr > 0 && l:nr == bufnr('%') && mode(1) =~# '^[iR]'
+      continue
+    endif
+    let l:marker = l:dir . '/' . strpart(sha256(fnamemodify(l:p, ':p')), 0, 16) . '.' . getpid() . '.dirty'
+    if filereadable(l:marker)
+      call delete(l:marker)
+    endif
+    if l:nr > 0
+      call setbufvar(l:nr, 'gnosis_sync_dirty_guard', '')
+    endif
+  endfor
+endfunction
+
 function! gnosis#save_current_note() abort
   if !&modified || &buftype !=# '' || !&modifiable || &readonly
     return 0
@@ -9348,6 +9374,8 @@ endfunction
 
 function! gnosis#autosync_on_save() abort
   call gnosis#autosync_log('autosync_on_save file=' . expand('%:p'))
+  " 開いていて保存済みのノートに残った「編集中」の印を外す（残っていると同期がそのノートを更新しない）
+  call gnosis#dirty_guard_release(map(filter(getbufinfo({'bufloaded': 1}), '!v:val.changed && v:val.name =~# "\\.md$"'), 'v:val.name'))
   if !filereadable(g:gnosis_python)
     call gnosis#autosync_log('  skip: python script not readable: ' . g:gnosis_python)
     call s:sync_problem('skip: python script not readable: ' . g:gnosis_python)

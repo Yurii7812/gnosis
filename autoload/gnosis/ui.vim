@@ -104,23 +104,3 @@ function! gnosis#ui#inputlist(lines) abort
   return l:result
 endfunction
 
-" ノートを移ったあと・読み直したあとに、画面全体を 1 回だけ描き直す。
-" リンクの番号（行の中の仮想テキスト）や日本語の幅で、前のページの文字が端末に残ることがあるため。
-" 続けて呼ばれても、最後の 1 回だけ（移り終わってから）描く。
-let s:settle_timer = -1
-function! gnosis#ui#settle_redraw() abort
-  if !has('timers')
-    return
-  endif
-  call timer_stop(s:settle_timer)
-  let s:settle_timer = timer_start(30, {-> s:settle_now()})
-endfunction
-
-function! s:settle_now() abort
-  let s:settle_timer = -1
-  " コマンドラインの入力中・検索の画面（端末）では描き直さない
-  if mode() =~# '^[cr]' || &buftype ==# 'terminal'
-    return
-  endif
-  redraw!
-endfunction

@@ -79,6 +79,7 @@ gnosis#diary_test_add
 gnosis#diary_today
 gnosis#diary_update
 gnosis#digit_key
+gnosis#dirty_guard_release
 gnosis#ensure_root_and_index
 gnosis#exit_cleanup
 gnosis#expand_s_under_cursor
@@ -344,7 +345,6 @@ gnosis#trash_empty
 gnosis#trash_list
 gnosis#ui#getkey
 gnosis#ui#inputlist
-gnosis#ui#settle_redraw
 gnosis#ui#statusline
 gnosis#update_all
 gnosis#update_current_buffer

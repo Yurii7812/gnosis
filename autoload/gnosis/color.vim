@@ -36,8 +36,7 @@ function! gnosis#color#on_note_enter() abort
     if get(g:, 'colors_name', '') ==# 'gnosis'
       silent! colorscheme gnosis
     endif
-    " 開いている途中では描かず、移り終わってから 1 回だけ描き直す
-    call gnosis#ui#settle_redraw()
+    redraw!
   endif
 endfunction
 

@@ -40,6 +40,8 @@ function! gnosis#branch#run(root, parent, children, ...) abort
   if !gnosis#has_python()
     return {'ok': 0, 'code': 'error', 'message': 'python not found'}
   endif
+  " 保存済みのノートに残った「編集中」の印で断られないように（未保存のものは残す）
+  call gnosis#dirty_guard_release([a:parent] + a:children)
   let l:cmd = gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' add ' . shellescape(a:root)
         \ . ' ' . shellescape(a:parent) . ' ' . join(map(copy(a:children), 'shellescape(v:val)'), ' ')
         \ . (a:0 && a:1 ? ' --dry-run' : '')
@@ -286,6 +288,7 @@ function! gnosis#branch#context_parent(paths) abort
   if empty(l:root) || empty(a:paths) || !gnosis#has_python()
     return
   endif
+  call gnosis#dirty_guard_release(a:paths)
   let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root)
         \ . ' ' . join(map(copy(a:paths), 'shellescape(v:val)'), ' '))
   try

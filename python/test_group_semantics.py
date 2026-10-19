@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as d:
     check("[M2](m2.md)" in r.split("\nGroup:")[1], "本文のリンクは本文に残る")
 
 
-# ChildBranch: は、本文・BranchGroup: に出ている子（上）と出ていない子（下）を空行 1 つで分ける
+# ChildBranch: は、本文にリンクがある子を書かない（BranchGroup: の子は書く）
 with tempfile.TemporaryDirectory() as d:
     root = Path(d)
     note(root, "index.md", "Index", ["[P](p.md)"], group=True)
@@ -97,8 +97,23 @@ with tempfile.TemporaryDirectory() as d:
     p_ = read(root, "p.md")
     i = p_.index("ChildBranch:")
     cb = p_[i + 1:p_.index("BackLink:") if "BackLink:" in p_ else len(p_)]
-    check(cb[:5] == ["[B](b.md)", "[G](g.md)", "", "[A](a.md)", "[C](c.md)"],
-          f"ChildBranch: 出ている子→空行→出ていない子（元の並びのまま）: {cb}")
+    # 本文にリンクがある子（B）は ChildBranch: に書かない。BranchGroup: の G は書く
+    check(cb[:3] == ["[A](a.md)", "[C](c.md)", "[G](g.md)"] and "[B](b.md)" not in cb,
+          f"ChildBranch: 本文にある子は書かない（ほかは元の並びのまま）: {cb}")
+    # 本文からリンクを消すと、子の ParentBranch: をもとに ChildBranch: に戻る
+    note(root, "b.md", "B", ["ParentBranch:", "[P](p.md)", "", "x"])
+    txt = (root / "p.md").read_text(encoding="utf-8").replace("本文 [B](b.md)", "本文")
+    (root / "p.md").write_text(txt, encoding="utf-8")
+    sync(root)
+    p_ = read(root, "p.md")
+    cb = p_[p_.index("ChildBranch:") + 1:]
+    check("[B](b.md)" in cb, f"本文から消した子は ChildBranch: に戻る: {cb}")
+    # このノートを Context にしている子は上、空行、ただの子は下
+    note(root, "c.md", "C", ["ParentBranch:", "[P](p.md)", "Context:", "[P](p.md)", "", "x"])
+    sync(root)
+    p_ = read(root, "p.md")
+    cb = p_[p_.index("ChildBranch:") + 1:]
+    check(cb[0] == "[C](c.md)" and cb[1] == "" and "[A](a.md)" in cb[2:], f"Context にしている子が上: {cb}")
 
 print("all passed" if ng == 0 else f"{ng} failed")
 sys.exit(1 if ng else 0)

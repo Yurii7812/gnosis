@@ -1877,11 +1877,12 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     body[pos:pos] = ([""] if pos else []) + blocks + [""]
     return body
 
-def _split_child_branch(cbranch: list[str], rendered: list[str], base: Path | None = None,
-                        ctx_kids: set | None = None) -> list[str]:
-    """ChildBranch: の中を 2 つに分け、間に空行を 1 つ入れる（それぞれの中の並びは元のまま）。
-    上: このノートを Context にしている子・このノートの本文（と上のブロック）にリンクが書かれている子。
-    下: ただの子（Branch でつないだだけ）。`rendered` は ChildBranch より上の部分。"""
+def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
+                        ctx_kids: set | None = None, pb_kids: set | None = None,
+                        titles: dict | None = None) -> list[str]:
+    """ChildBranch: に書く子。本文（BranchGroup: は除く）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
+    子の側の ParentBranch: にこのノートがあるのに ChildBranch: にも本文にも無い子は足す（本文から消したときに戻す）。
+    並び: 上にこのノートを Context にしている子、空行、下にただの子（それぞれの中の並びは元のまま）。"""
     def key(tg: str) -> str:
         return tg.split("#", 1)[0].strip()
 
@@ -1897,14 +1898,27 @@ def _split_child_branch(cbranch: list[str], rendered: list[str], base: Path | No
                 return q
         return None
 
-    shown = {key(tg) for _d, tg in _links_from(rendered)}
+    # BranchGroup:（zk の分岐グループ）は本文に数えない。そこにある子は ChildBranch: にも書く
+    if BRANCH_GROUP_HEAD in body:
+        body = body[:body.index(BRANCH_GROUP_HEAD)]
+    shown = {resolved(key(tg)) for _d, tg in _links_from(body)} - {None}
     kids = ctx_kids or set()
-    entries = [ln for ln in cbranch if ln.strip()]
-    top, rest = [], []
-    for ln in entries:
-        tgs = [key(tg) for _d, tg in _links_from([ln])]
-        up = bool(tgs) and all(t in shown or resolved(t) in kids for t in tgs)
-        (top if up else rest).append(ln)
+    entries: list[tuple[str, list]] = []
+    for ln in cbranch:
+        if not ln.strip():
+            continue
+        tgs = [resolved(key(tg)) for _d, tg in _links_from([ln])]
+        if tgs and all(t is not None and t in shown for t in tgs):
+            continue
+        entries.append((ln, tgs))
+    listed = {t for _ln, tgs in entries for t in tgs}
+    for c in sorted(pb_kids or set(), key=lambda q: q.name):
+        if c in shown or c in listed or base is None:
+            continue
+        title = (titles or {}).get(c) or c.stem
+        entries.append(("[" + title + "](" + os.path.relpath(str(c), str(base.parent)) + ")", [c]))
+    top = [ln for ln, tgs in entries if tgs and all(t in kids for t in tgs)]
+    rest = [ln for ln, tgs in entries if not (tgs and all(t in kids for t in tgs))]
     return top + ([""] if top and rest else []) + rest
 
 
@@ -1934,8 +1948,10 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         sections.append((CONTEXT_MARK, parent_lines))
     elif use_block and _has(n.get("_leftover")):
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
-    if _has(n.get("cbranch")):
-        sections.append((CHILD_BRANCH_MARK, _split_child_branch(n["cbranch"], lines, path, n.get("_ctx_kids"))))
+    cbranch = _split_child_branch(n.get("cbranch") or [], n.get("body") or [], path, n.get("_ctx_kids"),
+                                  n.get("_pb_kids"), titles)
+    if _has(cbranch):
+        sections.append((CHILD_BRANCH_MARK, cbranch))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
     if _has(related):
         sections.append((RELATED_MARK, related))
@@ -2050,6 +2066,14 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 q = (cp.parent / cand).resolve()
                 if q in notes:
                     notes[q].setdefault("_ctx_kids", set()).add(cp)
+                    break
+        # 子の側の ParentBranch:（親の ChildBranch: に無くても、子として扱う）
+        for _d, tg in _links_from(cn.get("pbranch") or []):
+            raw = tg.split("#", 1)[0]
+            for cand in (raw, unquote(raw)):
+                q = (cp.parent / cand).resolve()
+                if q in notes:
+                    notes[q].setdefault("_pb_kids", set()).add(cp)
                     break
     titles = {p: n["title"] for p, n in notes.items()}
 

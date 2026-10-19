@@ -361,6 +361,23 @@ let g:gnosis_test_keys = ["\r"]
 call gnosis#add_clipboard_before_up_note()
 call s:ok('za Enter は従来どおり（本文の最後に本文リンク・Branch は作らない）', s:count('t1.md', '^\[ノートQ1\](q1\.md)$') == 1 && s:count('q1.md', 'ChildBranch') == 0, string(s:file('t1.md')))
 
+" 保存済みなのに「編集中」の印だけが残っていても、Branch を足せる（zk などで「未保存の編集」と断られない）
+let $GNOSIS_SYNC_GUARD_DIR = s:work . '/guard'
+call mkdir($GNOSIS_SYNC_GUARD_DIR, 'p')
+call s:mk('gd1.md', 'ノートGD1', ['GD1 の本文。'])
+call s:mk('gd2.md', 'ノートGD2', ['GD2 の本文。'])
+execute 'edit ' . fnameescape(s:v . '/gd1.md')
+let s:mark = $GNOSIS_SYNC_GUARD_DIR . '/' . strpart(sha256(s:v . '/gd1.md'), 0, 16) . '.' . getpid() . '.dirty'
+call writefile([], s:mark)
+let s:r = gnosis#branch#add_paths(s:v . '/gd1.md', [s:v . '/gd2.md'])
+call s:ok('残った「編集中」の印があっても、保存済みなら Branch を足せる', get(s:r, 'ok', 0) && s:count('gd1.md', '^\[ノートGD2\](gd2\.md)$') == 1 && !filereadable(s:mark), string(s:r))
+" 本当に未保存のときは、今のノートは保存してから足す
+call s:mk('gd3.md', 'ノートGD3', ['GD3 の本文。'])
+call append(line('$'), '追記')
+let s:r = gnosis#branch#add_paths(s:v . '/gd1.md', [s:v . '/gd3.md'])
+call s:ok('今のノートに未保存の変更があれば、保存してから足す', get(s:r, 'ok', 0) && !&modified && s:count('gd1.md', '^追記$') == 1, string(s:r))
+unlet $GNOSIS_SYNC_GUARD_DIR
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
 ) == 0 && s:count('d.md', '(' . s:nt . ')') >= 2,

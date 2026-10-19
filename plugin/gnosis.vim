@@ -565,6 +565,9 @@ augroup gnosis_link_hints
   " ときも作り直す（読み直しでテキストプロパティが消えるのに、番号が出ないままになるのを防ぐ）。
   autocmd BufEnter,BufWinEnter,BufReadPost,WinEnter,FileChangedShellPost *.md call s:refresh_link_hints_now()
   autocmd FileType markdown,vimwiki call s:refresh_link_hints_now()
+  " ノートを画面に出したとき・外から読み直したときは、画面全体を描き直す（前のページの文字が端末に残らないように）。
+  " その場で描く（遅れて描くと、そのあとに出る質問の案内が消える）
+  autocmd BufWinEnter,FileChangedShellPost *.md if mode() ==# 'n' && &buftype ==# '' | redraw! | endif
   autocmd TextChanged,InsertLeave *.md call s:schedule_refresh_link_hints()
   " 念のための安全網: 本文が変わったのに番号が古いままなら、カーソルを動かした・止めたときに作り直す。
   autocmd CursorMoved,CursorHold *.md if get(g:, 'gnosis_link_hints', 1) && (&l:filetype ==# 'markdown' || &l:filetype ==# 'vimwiki') && get(b:, 'gnosis_hint_built_tick', -1) != b:changedtick | call s:schedule_refresh_link_hints() | endif
@@ -587,11 +590,11 @@ endfunction
 
 " 番号を作り直して、すぐ画面に出す。タイマーや autocmd の中で足した仮想テキストは、
 " 再描画しないと次のキー入力（カーソル移動）まで画面に出ないことがある。
-" 番号はここで付けるだけ。描くのは Vim に任せる（ノートを移る途中で描くと、途中の画面が見えてガクガクする）。
-" 移り終わったら 1 回だけ画面全体を描き直す（gnosis#ui#settle_redraw）
 function! s:refresh_link_hints_now() abort
   call gnosis#refresh_link_hints()
-  call gnosis#ui#settle_redraw()
+  if mode() ==# 'n'
+    redraw
+  endif
 endfunction
 " 標準のジャンプリスト戻りでも、E37 を出さず保存してから移動する
 nnoremap <silent> <C-O>    <Cmd>call gnosis#save_before_normal_jump("\<C-O>")<CR>
@@ -602,7 +605,7 @@ nnoremap <nowait> <silent> \bu <Cmd>call gnosis#jump_last_link_before_up()<CR>
 " timeoutlen 待ちになるため \ 側へ移した。k=上 / j=下 の連想。
 nnoremap <nowait> <silent> \k  <Cmd>call gnosis#jump_up_cursor()<CR>
 nnoremap <nowait> <silent> \j  <Cmd>call gnosis#jump_down_top()<CR>
-" \m … 一番下の関係の節（最後の Context: / Related: / BackLink: など）の見出しへ（\k の反対）
+" \m … 本文の終わりから一番近い関係の見出し（ChildBranch: / Related: / BackLink: など）へ
 nnoremap <nowait> <silent> \m  <Cmd>call gnosis#jump_last_section()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call gnosis#jump_down_bottom()<CR>
 
@@ -988,7 +991,9 @@ endfunction
 augroup gnosis_autosave
   autocmd!
   autocmd InsertEnter *.md call s:dirty_guard_mark()
-  autocmd TextChanged,TextChangedI *.md call s:dirty_guard_mark()
+  " Gnosis が書き換えてすぐ保存したあとにも TextChanged は遅れて届く。保存済みなら印を付けない
+  " （残った印のせいで、同期や zk・b などが「未保存の編集がある」と断るのを防ぐ）
+  autocmd TextChanged,TextChangedI *.md if &modified | call s:dirty_guard_mark() | endif
   autocmd TextChanged,TextChangedI *.md,*.csv call s:schedule_autosave()
   " nested が要る: autocmd の中で :write すると、nested が無いと BufWritePost が発火せず、
   " 保存の記録（gnosis#conflict#record）も保存後の同期（autosync）も走らない。
