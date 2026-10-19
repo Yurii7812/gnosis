@@ -47,7 +47,7 @@ function! s:back(t) abort
 endfunction
 function! s:second(t) abort
   call s:ok('Enter: vault の Index が開く', expand('%:t') ==# 'index.md' && stridx(expand('%:p'), $START_VAULT) == 0, expand('%:p'))
-  call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && tolower(s:hl('bg')) ==# '#11253d', &background . ' ' . s:hl('bg'))
+  call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && tolower(s:hl('bg')) ==# '#1e1e1e', &background . ' ' . s:hl('bg'))
   call s:ok('Enter: vault の言語（英語）', gnosis#i18n#lang() ==# 'en', execute('messages'))
   call writefile(s:res, s:w . '/result.txt')
   qa!
