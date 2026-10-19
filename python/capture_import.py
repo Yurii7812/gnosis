@@ -122,7 +122,23 @@ def topic_note(root: Path, name: str) -> str:
     return rel if rel and (root / rel).is_file() else ""
 
 
+def record_note(root: Path, kind: str, date: str) -> str:
+    """時系列記録 kind のその日のノート（front matter の record: と、題が 日付- で始まる）。無ければ ''。"""
+    want = 'record: ' + json.dumps(kind, ensure_ascii=False)
+    for p in sorted(root.glob("*.md")):
+        try:
+            head = p.read_text(encoding="utf-8").split("\n", 15)[:15]
+        except OSError:
+            continue
+        if want in head and any(ln.startswith("title: " + date + "-") for ln in head):
+            return p.name
+    return ""
+
+
 def _destination_exists(root: Path, target: str) -> bool:
+    if target.startswith("(record:"):
+        kind, _, date = target[len("(record:"):-1].rpartition(":")
+        return bool(record_note(root, kind, date))
     if target.startswith("(topic:"):
         return bool(topic_note(root, target[len("(topic:"):-1]))
     if target.startswith("(diary:"):
@@ -186,8 +202,11 @@ def plan(outdir: str, root: str) -> dict:
     entries = data.get("entries", [])
     by_id = {e["id"]: e for e in entries}
     # 日記以外で「1 つのノートにまとめる」トピック（取り込むとそのトピックのノートに追記する）
-    modes = {k: v for k, v in (data.get("topicModes") or {}).items()
-             if k and k != "日記" and isinstance(v, dict) and v.get("single")}
+    raw_modes = {k: v for k, v in (data.get("topicModes") or {}).items()
+                 if k and k != "日記" and isinstance(v, dict)}
+    # 時系列記録（日記のように日ごとのノート）。名前に使えない文字があるものは、ふつうのトピックとして扱う
+    records = {k for k, v in raw_modes.items() if v.get("record") and not re.search(r"[\[\]()/\\]", k) and not k[:1].isdigit()}
+    modes = {k: v for k, v in raw_modes.items() if v.get("single") and k not in records}
     # 関係のある日記は 1 件のノートにもする（Branch / Context / 本文のリンクの相手になれるように）
     related = set()
     for e in entries:
@@ -206,12 +225,13 @@ def plan(outdir: str, root: str) -> dict:
         same = previous is not None and _snapshot(previous) == _snapshot(e)
         topic = normalize_topic(e.get("topic") or "")
         single = topic in modes
-        # 日記と、まとめるトピックは、関係のあるものだけ 1 件のノートにする
-        needs_note = (topic != "日記" and not single) or e["id"] in related
+        record = topic in records
+        # 日記・まとめるトピック・時系列記録は、関係のあるものだけ 1 件のノートにする
+        needs_note = (topic != "日記" and not single and not record) or e["id"] in related
         # 旧版の記録は本文が残っていない。ノートのファイルが実在するなら取り込み済みとして扱い、
         # 同じメモを別ファイルで重ねて作らない。日記に書いただけの旧記録は、ノートが要るなら取り込み直す。
         legacy = previous is None and not target.startswith("(diary:")
-        appended = target.startswith("(diary:") or target.startswith("(topic:")
+        appended = target.startswith(("(diary:", "(topic:", "(record:"))
         done = exists and (same or legacy) and not (needs_note and appended)
         metadata_only = exists and previous is not None and all(
             _snapshot(previous)[k] == _snapshot(e)[k] for k in ("text", "images")) and not appended
@@ -232,6 +252,7 @@ def plan(outdir: str, root: str) -> dict:
             "contexts": [c for c in e.get("contexts") or [] if c],
             "note": needs_note,
             "single": single,
+            "record": record,
             "stamp": bool(single and modes[topic].get("stamp", True)),
             "done": done,
             "file": target if exists else "",
@@ -239,7 +260,7 @@ def plan(outdir: str, root: str) -> dict:
             "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or [])
                                                 + [m.group(2) for m in MEMO_LINK.finditer(e.get("text") or "")])
                       if k and k in st.get("ids", {}) and k not in by_id
-                      and not st["ids"][k].startswith("(diary:") and not st["ids"][k].startswith("(topic:")
+                      and not st["ids"][k].startswith(("(diary:", "(topic:", "(record:"))
                       and _destination_exists(Path(root), st["ids"][k])},
         })
     return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"])}

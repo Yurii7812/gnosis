@@ -23,8 +23,10 @@ E = [
  {"id": "261019091000", "created": ms("2026-10-19 09:10"), "topic": "仕事", "text": "会議の話", "images": [], "parent": None, "contexts": ["261018150000"]},
  {"id": "261018160000", "created": ms("2026-10-18 16:00"), "topic": "読書", "text": "一冊目", "images": [], "parent": None, "contexts": []},
  {"id": "261018161000", "created": ms("2026-10-18 16:10"), "topic": "読書", "text": "二冊目", "images": [], "parent": None, "contexts": []},
+ {"id": "261018070000", "created": ms("2026-10-18 07:00"), "topic": "夢", "text": "空を飛んだ\n高かった", "images": [], "parent": None, "contexts": []},
+ {"id": "261018071000", "created": ms("2026-10-18 07:10"), "topic": "夢", "text": "海の夢", "images": [], "parent": None, "contexts": []},
 ]
-M = {"仕事": {"single": True, "stamp": True}, "読書": {"single": True, "stamp": False}, "日記": {"single": True}}
+M = {"仕事": {"single": True, "stamp": True}, "読書": {"single": True, "stamp": False}, "日記": {"single": True}, "夢": {"record": True, "single": True}}
 json.dump({"format": "gnosis-capture", "version": 1, "entries": E, "topicModes": M}, open(D + "/pack/capture.json", "w"), ensure_ascii=False)
 open(D + "/pack/images/a.jpg", "wb").write(b"\xff\xd8fake")
 EOF
@@ -54,5 +56,9 @@ chk "日時あり: 文脈の相手になったメモもノートにしてリン�
 chk "日時あり: つながりのあるメモは別のノートにして、トピックのノートからリンク" '[ -f "$V/261019091000.md" ] && grep -q "^09:10 \[会議の話\](261019091000.md)$" "$work" && grep -A1 "^ParentBranch:" "$V/261019091000.md" | grep -q "261018150000.md"'
 chk "日時なし: 本文だけを足す" '[ -n "$book" ] && grep -q "^一冊目$" "$book" && grep -q "^二冊目$" "$book" && ! grep -q "^## 2026" "$book"'
 chk "日記はまとめる設定にしない（日記のまま）" '! grep -l "^capture_topic: \"日記\"" "$V"/*.md >/dev/null 2>&1'
-chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "電話した" "$work")" = 1 ] && [ "$(grep -c "二冊目" "$book")" = 1 ]'
+dream=$(grep -l '^title: 2026-10-18-SU-夢$' "$V"/*.md | head -1)
+recg=$(grep -l '^title: 時系列記録$' "$V"/*.md | head -1)
+chk "時系列記録: その日の記録のノート（日付-曜日-夢）に時刻つき" '[ -n "$dream" ] && grep -q "^record: \"夢\"$" "$dream" && grep -q "^07:00 空を飛んだ$" "$dream" && grep -A1 "^07:00 空を飛んだ$" "$dream" | grep -q "^高かった$" && grep -q "^07:10 海の夢$" "$dream"'
+chk "時系列記録: その日の日記の上にリンク・時系列記録の中に夢" 'grep -q "^\[2026-10-18-SU-夢\]($(basename "$dream"))$" "$diary" && grep -q "^\[夢\](" "$recg"'
+chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "電話した" "$work")" = 1 ] && [ "$(grep -c "二冊目" "$book")" = 1 ] && [ "$(grep -c "海の夢" "$dream")" = 1 ]'
 if [ $ng = 0 ]; then echo "capture_import OK"; else cat "$D/err" >&2; exit 1; fi

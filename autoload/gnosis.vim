@@ -5440,7 +5440,7 @@ function! gnosis#capture_import(...) abort
   call gnosis#save_current_note()
   let l:files = {}
   for l:it in l:plan.items
-    if !empty(l:it.file) && l:it.file !~# '^(\(diary\|topic\):'
+    if !empty(l:it.file) && l:it.file !~# '^(\(diary\|topic\|record\):'
       let l:files[l:it.id] = l:root . '/' . l:it.file
     endif
     for [l:k, l:v] in items(l:it.known)
@@ -5453,6 +5453,8 @@ function! gnosis#capture_import(...) abort
   let l:diary_lines = {}
   " 1 つのノートにまとめるトピック: トピック名 → [{date, hm, lines, stamp}]（あとでトピックのノートへ追記）
   let l:topic_lines = {}
+  " 時系列記録: 'トピック名' . "\t" . 日付 → [{hm, lines}]（あとでその日の記録のノートへ追記）
+  let l:record_lines = {}
   for l:it in l:todo
     let l:img = []
     for l:name in l:it.images
@@ -5478,6 +5480,8 @@ function! gnosis#capture_import(...) abort
         if l:it.topic ==# '日記'
           if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
           call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:it.title) . '](' . l:it.file . ')'])
+        elseif get(l:it, 'record', 0)
+          call add(s:capture_record_bucket(l:record_lines, l:it), {'hm': l:it.hm, 'lines': ['[' . s:md_link_text(l:it.title) . '](' . l:it.file . ')']})
         elseif get(l:it, 'single', 0)
           call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
                 \ 'lines': ['[' . s:md_link_text(l:it.title) . '](' . l:it.file . ')']})
@@ -5514,11 +5518,18 @@ function! gnosis#capture_import(...) abort
       if l:it.topic ==# '日記'
         if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
         call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:title) . '](' . l:name . ')'])
+      elseif get(l:it, 'record', 0)
+        call add(s:capture_record_bucket(l:record_lines, l:it), {'hm': l:it.hm, 'lines': ['[' . s:md_link_text(l:title) . '](' . l:name . ')']})
       elseif get(l:it, 'single', 0)
         " まとめるトピックでも、つながりのあるメモは別のノートにして、トピックのノートからリンクする
         call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
               \ 'lines': ['[' . s:md_link_text(l:title) . '](' . l:name . ')']})
       endif
+    elseif get(l:it, 'record', 0)
+      " 時系列記録: その日の記録のノート（2026-10-19-MO-夢）へ時刻つきで追記する
+      call add(s:capture_record_bucket(l:record_lines, l:it), {'hm': l:it.hm,
+            \ 'lines': split(l:it.text, "\n", 1) + (empty(l:img) ? [] : [''] + l:img)})
+      call add(l:made, [l:it.id, '(record:' . l:it.topic . ':' . l:it.date . ')'])
     elseif get(l:it, 'single', 0)
       " 1 つのノートにまとめるトピック: 本文をそのトピックのノートへ追記する
       call add(s:capture_topic_bucket(l:topic_lines, l:it), {'date': l:it.date, 'hm': l:it.hm, 'stamp': l:it.stamp,
@@ -5541,13 +5552,13 @@ function! gnosis#capture_import(...) abort
   for l:blocks in values(l:diary_lines)
     call map(l:blocks, 'map(v:val, "s:capture_memo_links(v:val, l:rel)")')
   endfor
-  for l:blocks in values(l:topic_lines)
+  for l:blocks in values(l:topic_lines) + values(l:record_lines)
     for l:b in l:blocks
       call map(l:b.lines, 's:capture_memo_links(v:val, l:rel)')
     endfor
   endfor
   for [l:id, l:name] in l:made
-    if l:name =~# '^(\(diary\|topic\):' | continue | endif
+    if l:name =~# '^(\(diary\|topic\|record\):' | continue | endif
     let l:p = l:root . '/' . l:name
     let l:lines = readfile(l:p)
     let l:new = map(copy(l:lines), 's:capture_memo_links(v:val, l:rel)')
@@ -5562,6 +5573,11 @@ function! gnosis#capture_import(...) abort
   " まとめるトピックを、そのトピックのノートへ（無ければ作る）
   for [l:name, l:blocks] in items(l:topic_lines)
     call s:capture_topic_append(l:root, l:name, l:blocks)
+  endfor
+  " 時系列記録を、その日の記録のノートへ（無ければ作る。その日の日記の上にリンク）
+  for [l:key, l:blocks] in items(l:record_lines)
+    let [l:kind, l:date] = split(l:key, "\t")
+    call s:capture_record_append(l:root, l:kind, l:date, l:blocks)
   endfor
   " スマホでつないだ Branch と Context
   let l:warn = []
@@ -5603,6 +5619,51 @@ function! gnosis#capture_import(...) abort
 endfunction
 
 " 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
+function! s:capture_record_bucket(lines, it) abort
+  let l:k = a:it.topic . "\t" . a:it.date
+  if !has_key(a:lines, l:k) | let a:lines[l:k] = [] | endif
+  return a:lines[l:k]
+endfunction
+
+" 時系列記録 a:kind の a:date のノートへ追記する（記録が無ければ「時系列記録」の中に作る）。
+" 本文の最後（ChildBranch: / Related: / BackLink: の前）に、時刻順で「時:分 本文」。
+function! s:capture_record_append(root, kind, date, blocks) abort
+  let l:notes = s:diary_scan(a:root)
+  call s:diary_ensure_top(a:root, l:notes)
+  let l:rec = s:record_top(a:root, l:notes)
+  let l:kg = ''
+  for l:k in s:record_kinds(a:root, l:notes, l:rec)
+    if l:k.title ==# a:kind | let l:kg = l:k.file | endif
+  endfor
+  if empty(l:kg)
+    let l:kg = s:diary_new_group(a:root, l:notes, a:kind, l:rec, '時系列記録')
+  endif
+  let l:path = a:root . '/' . s:record_day(a:root, l:notes, l:kg, a:kind, a:date)
+  let l:lines = readfile(l:path)
+  let l:at = len(l:lines)
+  let l:fence = s:fence_flags(l:lines)
+  for l:i in range(len(l:lines))
+    if !l:fence[l:i] && l:lines[l:i] =~# '^\%(ChildBranch\|Related\|BackLink\):\s*$'
+      let l:at = l:i
+      break
+    endif
+  endfor
+  let l:head = l:lines[: l:at - 1]
+  let l:tail = l:lines[l:at :]
+  while !empty(l:head) && trim(l:head[-1]) ==# ''
+    call remove(l:head, -1)
+  endwhile
+  for l:b in sort(copy(a:blocks), {x, y -> x.hm ==# y.hm ? 0 : x.hm ># y.hm ? 1 : -1})
+    let l:body = copy(l:b.lines)
+    while len(l:body) > 1 && trim(l:body[-1]) ==# ''
+      call remove(l:body, -1)
+    endwhile
+    let l:body[0] = l:b.hm . ' ' . l:body[0]
+    call extend(l:head, [''] + l:body)
+  endfor
+  call s:syn_writefile(l:head + [''] + l:tail, l:path)
+endfunction
+
 function! s:capture_topic_bucket(lines, it) abort
   if !has_key(a:lines, a:it.topic) | let a:lines[a:it.topic] = [] | endif
   return a:lines[a:it.topic]

@@ -33,9 +33,11 @@ data class Settings(
 
 /**
  * トピックの取り込み方（日記以外）。single = PC に取り込むとこのトピックの 1 つのノートに追記する
- * （1 件 = 1 ノートにしない）。stamp = 追記するとき日付の見出しと時刻を付ける。
+ * （1 件 = 1 ノートにしない）。stamp = 追記するとき時刻を付け、日が替わったら日付の見出しを入れる。
+ * record = 時系列記録（PC の :GnosisRecordNew と同じ。日記のように、その日のノート「2026-10-19-MO-夢」に時刻つきで入る）。
+ * single と record は同時に使わない（record が優先）。
  */
-data class TopicMode(val single: Boolean = false, val stamp: Boolean = true)
+data class TopicMode(val single: Boolean = false, val stamp: Boolean = true, val record: Boolean = false)
 
 const val DIARY = "日記"
 const val ALL = "__all__"
@@ -116,7 +118,7 @@ class Store(private val ctx: Context) {
             lastTopic = o.optString("lastTopic", ALL).let { if (it == ALL) ALL else normalizedTopic(it) },
             topicModes = o.optJSONObject("topicModes")?.let { m ->
                 m.keys().asSequence().filter { it.isNotEmpty() && it != DIARY }.associateWith { k ->
-                    val t = m.getJSONObject(k); TopicMode(t.optBoolean("single", false), t.optBoolean("stamp", true))
+                    val t = m.getJSONObject(k); TopicMode(t.optBoolean("single", false), t.optBoolean("stamp", true), t.optBoolean("record", false))
                 }
             } ?: emptyMap(),
         )
@@ -129,7 +131,7 @@ class Store(private val ctx: Context) {
         o.put("topics", JSONArray(s.topics)); o.put("lastTopic", s.lastTopic)
         // PC の取り込み（\M）もこのファイルを読む（topicModes）
         val modes = JSONObject()
-        s.topicModes.forEach { (k, v) -> modes.put(k, JSONObject().put("single", v.single).put("stamp", v.stamp)) }
+        s.topicModes.forEach { (k, v) -> modes.put(k, JSONObject().put("single", v.single).put("stamp", v.stamp).put("record", v.record)) }
         o.put("topicModes", modes)
         settingsFile.writeText(o.toString())
     }

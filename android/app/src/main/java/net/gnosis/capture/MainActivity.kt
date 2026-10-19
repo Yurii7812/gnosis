@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -179,7 +180,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val contextsTo = remember { mutableStateListOf<String>() }      // 次に書くものの文脈にするメモ（右スワイプで足す）
     var flash by remember { mutableStateOf<String?>(null) }
     var insertMenu by remember { mutableStateOf(false) }
-    var moreMenu by remember { mutableStateOf(false) }           // 上のバーの「＋」（チェックボックス・リンク・文脈・親）
+    var moreMenu by remember { mutableStateOf(false) }
+    var bigInput by remember { mutableStateOf(false) }             // 入力欄を大きくしている           // 上のバーの「＋」（チェックボックス・リンク・文脈・親）
     var pick by remember { mutableStateOf<Pick?>(null) }           // メモを探して選ぶ画面
     var relEditFor by remember { mutableStateOf<String?>(null) }   // 文脈・親を編集しているメモ        // 飛んだ先のメモを少しのあいだ目立たせる
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
@@ -218,10 +220,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         }
     }
 
-    // 開いたらすぐ書ける: 入力欄にカーソルを置き、キーボードを出す
-    LaunchedEffect(Unit) {
-        delay(150); focus.requestFocus(); keyboard?.show()
-    }
+    // 開いただけでは入力欄を選ばない（カーソルもキーボードも出さない）。入力欄を押したとき・
+    // 書く操作（続けて書く・書き直す・スワイプ・挿入）・アラームの通知から開いたときだけ選ぶ
     LaunchedEffect(prompt) {
         if (prompt) { fromPrompt = true; setTopic(DIARY); delay(150); focus.requestFocus(); keyboard?.show() }
     }
@@ -485,13 +485,20 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                     OutlinedTextField(
                         value = input, onValueChange = { input = it },
-                        modifier = Modifier.weight(1f).focusRequester(focus),
+                        modifier = Modifier.weight(1f).focusRequester(focus)
+                            .then(if (bigInput) Modifier.height((LocalConfiguration.current.screenHeightDp * 0.45f).dp) else Modifier),
                         placeholder = { Text(if (prompt) "今まで何してた？" else if (topic == DIARY) "日記（時刻は自動で付きます）" else if (writingTopic(topic).isEmpty()) "メモを書く（未所属）" else "$topic に書く") },
-                        maxLines = 6, shape = RoundedCornerShape(20.dp),
+                        maxLines = if (bigInput) Int.MAX_VALUE else 6, shape = RoundedCornerShape(20.dp),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Text),
                     )
-                    IconButton(onClick = { send() }, enabled = input.isNotBlank() || pendingImages.isNotEmpty()) {
-                        Icon(Icons.AutoMirrored.Filled.Send, "送る")
+                    Column {
+                        // 入力欄を大きくする・戻す
+                        IconButton(onClick = { bigInput = !bigInput }) {
+                            Icon(if (bigInput) Icons.Filled.CloseFullscreen else Icons.Filled.OpenInFull, if (bigInput) "入力欄を小さく" else "入力欄を大きく")
+                        }
+                        IconButton(onClick = { send() }, enabled = input.isNotBlank() || pendingImages.isNotEmpty()) {
+                            Icon(Icons.AutoMirrored.Filled.Send, "送る")
+                        }
                     }
                 }
             }
@@ -582,7 +589,11 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 acts.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                         row.forEach { (icon, label, act) ->
-                            OutlinedButton(onClick = { act(); sheetFor = null; if (!selecting && relEditFor == null) scope.launch { delay(100); focus.requestFocus() } },
+                            OutlinedButton(onClick = {
+                                act(); sheetFor = null
+                                // 書く操作のあとだけ入力欄を選ぶ（コピー・トピックを変えるなどでは選ばない）
+                                if (replyTo != null || editing != null) scope.launch { delay(100); focus.requestFocus(); keyboard?.show() }
+                            },
                                 modifier = Modifier.weight(1f).heightIn(min = 64.dp), shape = RoundedCornerShape(14.dp)) {
                                 Icon(icon, null); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp)
                             }
@@ -632,8 +643,9 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(t, fontSize = 16.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
-                                settings.topicModes[t]?.takeIf { it.single }?.let { m ->
-                                    Text("1 つのノートにまとめる" + if (m.stamp) "・日時あり" else "", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                settings.topicModes[t]?.let { m ->
+                                    val label = if (m.record) "時系列記録" else if (m.single) "1 つのノートにまとめる" + if (m.stamp) "・時刻あり" else "" else null
+                                    if (label != null) Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
@@ -647,22 +659,31 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             confirmButton = { TextButton(onClick = { topicListOpen = false }) { Text("閉じる") } })
     }
 
-    // トピックの取り込み方: 1 件 = 1 ノート（既定）か、このトピックの 1 つのノートにまとめるか
+    // トピックの取り込み方: 1 件 = 1 ノート（既定）・このトピックの 1 つのノートにまとめる・時系列記録（日ごとのノート）
     modeFor?.let { t ->
         val m = settings.topicModes[t] ?: TopicMode()
         fun save(n: TopicMode) { settings = settings.copy(topicModes = settings.topicModes + (t to n)); store.saveSettings(settings) }
+        val kind = if (m.record) 2 else if (m.single) 1 else 0
         AlertDialog(onDismissRequest = { modeFor = null }, title = { Text("「$t」の取り込み方") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("1 つのノートにまとめる", Modifier.weight(1f)); Switch(m.single, { save(m.copy(single = it)) })
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(
+                    "1 件 = 1 ノート" to "PC に取り込むと、メモ 1 件が 1 つのノートになります。",
+                    "1 つのノートにまとめる" to "「$t」のノートに追記します。",
+                    "時系列記録（日ごとのノート）" to "日記のように、その日のノート（例: 2026-10-19-MO-$t）に時刻つきで入ります。その日の日記の上にリンクが並びます。",
+                ).forEachIndexed { i, (label, note) ->
+                    Row(Modifier.fillMaxWidth().clickable { save(m.copy(single = i == 1, record = i == 2)) }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = kind == i, onClick = { save(m.copy(single = i == 1, record = i == 2)) })
+                        Column { Text(label); Text(note, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline) }
+                    }
                 }
-                Text(if (m.single) "PC に取り込むと「$t」のノートに追記します（文脈・親・リンクでつないだメモは、別のノートにしてリンクします）。"
-                    else "PC に取り込むと 1 件 = 1 ノートになります。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("日時を付ける", Modifier.weight(1f), color = if (m.single) Color.Unspecified else MaterialTheme.colorScheme.outline)
-                    Switch(m.stamp, { save(m.copy(stamp = it)) }, enabled = m.single)
+                if (kind == 1) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("時刻を付ける")
+                        Text("各メモの頭に「時:分」。日が替わったときだけ日付の見出しを入れます。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(m.stamp, { save(m.copy(stamp = it)) })
                 }
-                Text("日時ありは、日付ごとの見出しの下に「時:分 本文」で入ります。なしは本文だけを足します。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("文脈・親・リンクでつないだメモは、どの方法でも別のノートにしてリンクします。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             } },
             confirmButton = { TextButton(onClick = { modeFor = null }) { Text("閉じる") } })
     }
@@ -671,20 +692,22 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         var name by remember { mutableStateOf("") }
         var single by remember { mutableStateOf(false) }
         var stamp by remember { mutableStateOf(true) }
+        var record by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { addTopicOpen = false },
             title = { Text("トピックを足す") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("例: アイデア") })
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(single, { single = it }); Text("1 つのノートにまとめる") }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(single, { single = it; if (it) record = false }); Text("1 つのノートにまとめる") }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp)) {
                     Checkbox(stamp, { stamp = it }, enabled = single)
-                    Text("日時を付ける", color = if (single) Color.Unspecified else MaterialTheme.colorScheme.outline)
+                    Text("時刻を付ける", color = if (single) Color.Unspecified else MaterialTheme.colorScheme.outline)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(record, { record = it; if (it) single = false }); Text("時系列記録（日ごとのノート）") }
             } },
             confirmButton = { TextButton(onClick = {
                 val t = normalizedTopic(name.trim()).takeUnless { it == ALL || it == "全部" || it == "全部表示" || it == "未所属" || it == "トピック未選択" || it == "その他" } ?: ""
                 if (t.isNotEmpty() && t !in settings.topics) { settings = settings.copy(topics = settings.topics + t); store.saveSettings(settings) }
-                if (t.isNotEmpty() && t != DIARY && single) { settings = settings.copy(topicModes = settings.topicModes + (t to TopicMode(true, stamp))); store.saveSettings(settings) }
+                if (t.isNotEmpty() && t != DIARY && (single || record)) { settings = settings.copy(topicModes = settings.topicModes + (t to TopicMode(single, stamp, record))); store.saveSettings(settings) }
                 if (t.isNotEmpty()) setTopic(t)
                 addTopicOpen = false
             }) { Text("足す") } },
