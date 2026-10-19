@@ -86,20 +86,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Gnosis の起動画面（夜空×水色、見出しは金）に合わせた配色。文字は背景との差を大きめに取る。 */
+/** PC の Gnosis のダーク（既定のテーマ・起動画面と同じ）に合わせた配色。文字は真っ白にせず、背景との差は十分に取る。 */
 private val GnosisColors = darkColorScheme(
-    primary = Color(0xFF83AFE2), onPrimary = Color(0xFF0C1D32),
-    primaryContainer = Color(0xFF21538C), onPrimaryContainer = Color(0xFFF2F6FB),
-    secondary = Color(0xFFEEDA77), onSecondary = Color(0xFF0C1D32),
-    secondaryContainer = Color(0xFF3A3520), onSecondaryContainer = Color(0xFFF7EEC6),
-    tertiary = Color(0xFFE1F4E4), onTertiary = Color(0xFF0C1D32),
-    background = Color(0xFF0C1D32), onBackground = Color(0xFFEBEBEB),
-    surface = Color(0xFF0C1D32), onSurface = Color(0xFFEBEBEB),
-    surfaceVariant = Color(0xFF15365B), onSurfaceVariant = Color(0xFFD5DEE9),
-    surfaceContainerLowest = Color(0xFF081627), surfaceContainerLow = Color(0xFF0F2440),
-    surfaceContainer = Color(0xFF122A4A), surfaceContainerHigh = Color(0xFF163154),
-    surfaceContainerHighest = Color(0xFF1A385F),
-    outline = Color(0xFFB3B3B3), outlineVariant = Color(0xFF3A5576),
+    primary = Color(0xFF6CB6FF), onPrimary = Color(0xFF0D1117),
+    primaryContainer = Color(0xFF2D4F75), onPrimaryContainer = Color(0xFFE6EDF3),
+    secondary = Color(0xFFE5C07B), onSecondary = Color(0xFF22272E),
+    secondaryContainer = Color(0xFF3D3726), onSecondaryContainer = Color(0xFFF2E3C0),
+    tertiary = Color(0xFF83AFE2), onTertiary = Color(0xFF22272E),
+    background = Color(0xFF22272E), onBackground = Color(0xFFCDD5DE),
+    surface = Color(0xFF22272E), onSurface = Color(0xFFCDD5DE),
+    surfaceVariant = Color(0xFF2D333B), onSurfaceVariant = Color(0xFFADBAC7),
+    surfaceContainerLowest = Color(0xFF1C2128), surfaceContainerLow = Color(0xFF262C34),
+    surfaceContainer = Color(0xFF2A3038), surfaceContainerHigh = Color(0xFF30363F),
+    surfaceContainerHighest = Color(0xFF373E47),
+    outline = Color(0xFF909DAB), outlineVariant = Color(0xFF444C56),
 )
 
 private val timeFmt = SimpleDateFormat("HH:mm", Locale.JAPAN)
