@@ -472,7 +472,8 @@ nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
 nnoremap <silent> \u       <Cmd>call gnosis#orphans_open()<CR>
 command! GnosisOrphans call gnosis#orphans_open()
-command! GnosisStage call gnosis#stage_open()
+command! GnosisYomiReview call gnosis#yomi_review()
+command! GnosisReview call gnosis#review_reopen()
 " \q は作業タブ管理。\o はリンクを別の論理タブとして開く。
 nnoremap <silent> \q       <Cmd>call gnosis#tabs#popup()<CR>
 nnoremap <silent> \o       <Cmd>call gnosis#tabs#open_link()<CR>
@@ -986,7 +987,8 @@ augroup END
 autocmd BufReadPre,BufNewFile *.md if gnosis#is_vault_path(expand('<afile>:p')) | setlocal noswapfile | endif
 " ハブも swap を作らない（vault 外なので上記が効かず、残骸 .swp から E325 と読専化が出る）。
 execute 'autocmd BufReadPre,BufNewFile ' . escape(printf('%s/hubs/*.md', gnosis#state_dir()), '\\ ') . ' setlocal noswapfile noundofile'
-execute 'autocmd BufEnter ' . escape(printf('%s/hubs/stage-*.md', gnosis#state_dir()), '\\ ') . ' call gnosis#stage_setup()'
+" vault を切り替えても効くよう、場所は決め打ちしない（.state/hubs/review-*.md）
+autocmd BufEnter */.state/hubs/review-*.md call gnosis#review_setup()
 
 augroup gnosis_lock
   autocmd!
@@ -1030,7 +1032,10 @@ augroup gnosis_autosync
   autocmd BufReadPost *.md call gnosis#remember_title()
   " record は on_write_post より先に置く（同期が付ける「自分の同期」の印を、record が消さないように）
   autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
+  " グループに増えたメンバーに気づくのは、同期が書き直して読み直す（控えが取り直される）より前
+  autocmd BufWritePost *.md call gnosis#group_review_check()
   autocmd BufWritePost *.md call s:on_write_post()
+  autocmd BufReadPost *.md call gnosis#group_review_snapshot()
   if get(g:, 'gnosis_realtime_link_sync', 0)
     autocmd BufReadPost,BufEnter *.md call gnosis#realtime_sync_snapshot()
     autocmd TextChanged,TextChangedI *.md call gnosis#realtime_sync_on_text_changed()

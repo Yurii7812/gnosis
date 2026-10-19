@@ -7765,10 +7765,14 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     call s:simple_add_group(l:file, l:cur, l:cur_title)
   endif
   call s:run_update_one_for_sync(l:cur)
-  if l:is_enter && l:grp_src
-    " グループの索引を、既存の索引用の並べ替え規則（\S と同じ）で並べ替える
-    silent! call gnosis#sort_yomi()
-    silent! noautocmd update
+  if l:grp_src && l:added && s:group_path_reviewable(l:cur)
+    " 新しいノートは表示名を入れたばかりなので、ここでよみだけを聞いてから並べる（Esc なら保存しない）
+    call s:ask_new_member_yomi(l:cur, l:file, matchstr(l:link, '^\[\zs\%(\\.\|[^\]\\]\)*\ze\]'))
+    call s:sort_group_file(l:cur)
+    if s:disk_differs_from_buffer(l:cur)
+      call s:reload_by_edit(l:cur)
+    endif
+    call gnosis#group_review_snapshot()
   endif
   if l:ch ==# 'c' && get(l:place, 'mode', '') ==# 'w'
     " w: B を yn と同じ方法でヤンクし、A（今のノート）を開いたままにする。A へのリンクは自動では置かない
@@ -8086,15 +8090,12 @@ function! s:apply_back_link(target, a_path, a_title, choice) abort
   let l:title = empty(a:choice.name) ? a:a_title : a:choice.name
   let l:link = s:make_link_from_dir(a:a_path, s:md_link_text(l:title), l:bdir)
   let l:lines = s:insert_link_in_lines(l:lines, l:link, a:choice.mode, a:choice.lnum)
-  " グループの本文の最後に足したときは、\S と同じ規則（最後のブロックをよみ順に）で並べ直す
-  if a:choice.mode ==# 'end' && s:v2_path_attr(a:target) ==# 'group'
-    let l:lines = s:sort_group_lines_by_yomi(l:lines, l:bdir)
-    silent! checktime
-  endif
   call s:syn_writefile(l:lines, a:target)
   if l:nr > 0
     silent! execute 'checktime ' . l:nr
   endif
+  " 相手がグループなら（どこに入れても）名前とよみを確かめてから並べる
+  call s:review_open(a:target, [a:a_path], {'ret': expand('%:p')})
   return 1
 endfunction
 
@@ -8121,7 +8122,7 @@ function! s:sort_group_lines_by_yomi(lines, base_dir) abort
   endif
   let l:block = a:lines[l:r[0] - 1 : l:r[1] - 1]
   let l:report = tempname()
-  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(a:base_dir)
+  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --dry-run --base ' . shellescape(a:base_dir)
         \ . ' --report-file ' . shellescape(l:report)
   let l:out = system(l:cmd, join(l:block, "\n") . "\n")
   call delete(l:report)
@@ -10078,33 +10079,20 @@ function! s:join_groups(groups) abort
     let l:n += 1
   endfor
   if l:n > 0
-    " \S と同じ規則で、グループの本文の最後のブロックをよみ順に並べ直す。よみ（yomi:）は今のノートの
-    " ファイルにも書かれるので、先に今のノートを保存してから並べ、終わったら読み直す。
+    " よみ（yomi:）は今のノートのファイルに書かれるので、先に今のノートを保存しておく。
+    " 並べ替えは、グループごとに名前とよみの確認画面を通してから（終わったら今のノートへ戻る）。
     if &modified && &buftype ==# ''
       silent! write
     endif
-    for l:p in l:plan
-      call s:sort_group_file(l:p.gfp)
-    endfor
-    " よみが今のノートに書かれていたら読み直す（checktime は更新時刻が同じ秒だと気づかない）
-    let l:cur_file = expand('%:p')
-    if !&modified && !empty(l:cur_file) && filereadable(l:cur_file) && s:disk_differs_from_buffer(l:cur_file)
-      call s:reload_by_edit(l:cur_file)
-    endif
     silent! checktime
     echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . join(map(copy(l:plan), 's:group_label(v:val.gfp)'), ', ')
+    for l:p in l:plan
+      call s:review_open(l:p.gfp, [l:cur], {'ret': l:cur})
+    endfor
   endif
   return l:n
 endfunction
 
-" グループのファイルの本文の最後のブロックを、\S と同じ規則でよみ順に並べて書き戻す（変わらなければ書かない）。
-function! s:sort_group_file(path) abort
-  let l:lines = readfile(a:path)
-  let l:new = s:sort_group_lines_by_yomi(l:lines, fnamemodify(a:path, ':h'))
-  if l:new !=# l:lines
-    call s:syn_writefile(l:new, a:path)
-  endif
-endfunction
 
 " 見出しが選ばれたあと: その見出しの本文の最後にリンクを入れ、Done を呼ぶ。
 function! s:insert_links_under_heading(links, Done, lnum) abort
@@ -10332,122 +10320,420 @@ endfunction
 " za: ca と同じ そっちにとって 側だが、関係は常に既定の「ノート」固定
 " （ピッカーも「相手にも書くか」の質問も出さない）。
 " ---------------------------------------------------------------------------
-" 追加待ち画面: グループ（Index を含む）に複数のリンクを za で足すときは、\h と同じ形の編集できる画面を
-" 開き、q で確定するまで足さない。画面の中で Enter で中身を見たり、zl で表示名を決めたりでき、
-" q で全部をそのグループに足して、よみ順に並べ直す。Q は何も足さずに閉じる。
+" 名前とよみの確認画面: グループ（Index を含む）にメンバーが入ったら、並べ替える前に必ずこの画面を通す。
+"   \h と同じ形の編集できる画面に「[表示名](リンク先) — よみ」を並べる。よみが未登録のものは
+"   推測（pykakasi）を出し「（推測）」と付ける。表示名もよみも書き換えてよい。行を消すとグループから外す。
+"   Enter でリンク先の中身を見られる。q で表示名・よみを保存して並べ替え、Q は保存せずに並べ替える。
+"   入口: グループを開いての追加（za・\l・p・c+v・\p・手書き・zl など、保存の後で気づく）、
+"   開かずに足す \l / za の g・c、\S、:GnosisYomiReview。推測のよみを黙って保存することはしない。
 " ---------------------------------------------------------------------------
 
-let s:stage = {}
+let s:review = {}
+let s:review_queue = []
+let s:link_only_rx = '^\s*\(\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\)\s*$'
 
-function! s:stage_file() abort
+function! s:review_file() abort
   let l:dir = s:hub_dir()
   if !isdirectory(l:dir)
     call mkdir(l:dir, 'p')
   endif
-  return l:dir . s:sep() . 'stage-' . sha256(s:hub_root_key())[0:15] . '.md'
+  return l:dir . s:sep() . 'review-' . sha256(s:hub_root_key())[0:15] . '.md'
 endfunction
 
-function! s:stage_header(group_path) abort
-  return [gnosis#i18n#tr('# 追加待ち: ') . s:group_label(a:group_path),
-        \ gnosis#i18n#tr('q=グループに足して並べる  Q=取り消し  Enter=中身を見る  zl=表示名を変える'),
-        \ '']
+function! s:is_review_buffer() abort
+  return !empty(s:review) && fnamemodify(expand('%:p'), ':p') ==# fnamemodify(s:review.file, ':p')
 endfunction
 
-" za のリンクが複数で、今のノートがグループなら追加待ち画面に回す。回したら 1。
-function! s:stage_maybe(links) abort
-  if len(a:links) < 2 || !s:buf_is_group() || &buftype !=# ''
+" 並べ替え・確認の対象のグループか（日記のグループと紙PKM の生成物は日付・番号の順なので除く）
+function! s:group_path_reviewable(path) abort
+  if empty(a:path) || !filereadable(a:path)
     return 0
   endif
-  let l:group = expand('%:p')
-  if &modified
-    silent! write
+  let l:t = fnamemodify(a:path, ':t')
+  if l:t =~# '^\%(Index-write\|Paper-Zettelkasten-Index\|Folgezettel-Index\)\.md$'
+    return 0
   endif
-  let l:lines = s:stage_header(l:group)
-  for l:lk in a:links
-    let l:m = s:extract_markdown_link(l:lk)
-    let l:abs = fnamemodify(gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', '')), ':p')
-    let l:frag = matchstr(s:extract_target(l:lk), '#.*$')
-    call add(l:lines, '[' . l:m.text . '](' . l:abs . l:frag . ')')
+  if l:t !=# 'index.md' && s:v2_path_attr(a:path) !=# 'group'
+    return 0
+  endif
+  for l:ln in readfile(a:path, '', 12)
+    if l:ln =~# '^title:\s*\%(\d\{4}\%(-\d\d\)\?\|日記\)\s*$'
+      return 0
+    endif
   endfor
-  let l:file = s:stage_file()
-  call s:syn_writefile(l:lines, l:file)
-  let s:stage = {'file': l:file, 'group': l:group}
-  call gnosis#push_history()
-  call timer_start(0, function('s:timer_hub_edit_cb', [l:file]))
-  call timer_start(50, function('s:timer_redraw_cb'))
   return 1
 endfunction
 
-" 追加待ち画面のキー（q / Q）。画面を開くたびに BufEnter から呼ぶ。
-function! gnosis#stage_setup() abort
-  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#stage_commit()<CR>
-  nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#stage_cancel()<CR>
+" グループのメンバーの行（0 始まりの行番号のリスト）。Index は本文のリンク行すべて、
+" ほかのグループは本文の最後のブロック（\S と同じ範囲）。冒頭の Group: などのブロックは含めない。
+function! s:group_member_idx(lines, is_index) abort
+  let l:start = 0
+  if get(a:lines, 0, '') =~# '^---\s*$'
+    let l:i = 1
+    while l:i < len(a:lines) && a:lines[l:i] !~# '^---\s*$'
+      let l:i += 1
+    endwhile
+    let l:start = l:i + 1
+  endif
+  let l:end = s:first_section_index_in_lines(a:lines)
+  let l:end = l:end < 0 ? len(a:lines) : l:end
+  let l:heads = '^\s*\%(Group\|Context\|BranchGroup\|ParentBranch\)\s*[:：]\s*$'
+  let l:out = []
+  if a:is_index
+    let l:in_head = 0
+    for l:i in range(l:start, l:end - 1)
+      let l:ln = a:lines[l:i]
+      if l:ln =~# l:heads
+        let l:in_head = 1
+      elseif trim(l:ln) ==# ''
+        let l:in_head = 0
+      elseif !l:in_head && l:ln =~# s:link_only_rx
+        call add(l:out, l:i)
+      endif
+    endfor
+    return l:out
+  endif
+  let l:last = l:end - 1
+  while l:last >= l:start && trim(a:lines[l:last]) ==# ''
+    let l:last -= 1
+  endwhile
+  let l:first = l:last
+  while l:first > l:start && trim(a:lines[l:first - 1]) !=# ''
+    let l:first -= 1
+  endwhile
+  if l:last < l:start || a:lines[l:first] =~# l:heads || (l:first > 0 && a:lines[l:first - 1] =~# l:heads)
+    return []
+  endif
+  return filter(range(l:first, l:last), 'a:lines[v:val] =~# s:link_only_rx')
 endfunction
 
-function! gnosis#stage_open() abort
-  if empty(s:stage) || !filereadable(get(s:stage, 'file', ''))
-    echo gnosis#i18n#tr('Gnosis: 追加待ちはありません')
+" メンバーの {line, name, target, abs}（abs はリンク先の絶対パス。# 以降は target に残る）
+function! s:group_members(path, lines) abort
+  let l:dir = fnamemodify(a:path, ':h')
+  let l:out = []
+  for l:i in s:group_member_idx(a:lines, fnamemodify(a:path, ':t') ==# 'index.md')
+    let l:m = s:extract_markdown_link(trim(a:lines[l:i]))
+    if empty(l:m.target)
+      continue
+    endif
+    let l:abs = fnamemodify(gnosis#resolve_link(substitute(l:m.target, '#.*$', '', ''), l:dir), ':p')
+    call add(l:out, {'idx': l:i, 'line': trim(a:lines[l:i]), 'name': l:m.text, 'target': l:m.target, 'abs': l:abs})
+  endfor
+  return l:out
+endfunction
+
+" グループのファイルを、メンバーのよみ順に並べて書き戻す（推測のよみは保存しない）。
+function! s:sort_group_file(path) abort
+  let l:lines = readfile(a:path)
+  if fnamemodify(a:path, ':t') ==# 'index.md'
+    let l:idx = s:group_member_idx(l:lines, 1)
+    let l:new = copy(l:lines)
+    if len(l:idx) > 1
+      let l:block = map(copy(l:idx), 'l:lines[v:val]')
+      let l:cmd = s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' sort --dry-run --base ' . shellescape(fnamemodify(a:path, ':h'))
+      let l:out = split(system(l:cmd, join(l:block, "\n") . "\n"), "\n")
+      if v:shell_error == 0 && len(l:out) == len(l:block)
+        for l:k in range(len(l:idx))
+          let l:new[l:idx[l:k]] = l:out[l:k]
+        endfor
+      endif
+    endif
+  else
+    let l:new = s:sort_group_lines_by_yomi(l:lines, fnamemodify(a:path, ':h'))
+  endif
+  if l:new !=# l:lines
+    call s:syn_writefile(l:new, a:path)
+  endif
+endfunction
+
+function! s:review_readings(group, members) abort
+  if empty(a:members)
+    return []
+  endif
+  let l:in = join(map(copy(a:members), '"[" . v:val.name . "](" . v:val.abs . ")"'), "\n") . "\n"
+  let l:cmd = s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' readings --base ' . shellescape(fnamemodify(a:group, ':h'))
+  let l:out = split(system(l:cmd, l:in), "\n")
+  if v:shell_error != 0 || len(l:out) != len(a:members)
+    return map(copy(a:members), '[0, v:val.name]')
+  endif
+  return map(l:out, '[str2nr(matchstr(v:val, "^\\d")), matchstr(v:val, "\\t\\zs.*")]')
+endfunction
+
+" zn / zk でグループに新しいノートを作ったとき: 入れた表示名のよみを 1 行で聞く（既定は推測）。
+function! s:ask_new_member_yomi(group, note, name) abort
+  if empty(a:name) || !filereadable(a:note)
+    return
+  endif
+  let l:rd = s:review_readings(a:group, [{'name': a:name, 'abs': fnamemodify(a:note, ':p')}])
+  let l:def = get(get(l:rd, 0, [0, a:name]), 1, a:name)
+  redraw
+  let l:r = inputdialog(printf(gnosis#i18n#tr('よみ（%s）: '), a:name), l:def, "\x01")
+  if l:r ==# "\x01" || empty(trim(l:r))
+    return
+  endif
+  call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany',
+        \ fnamemodify(a:note, ':p') . "\t" . a:name . "\t" . trim(l:r) . "\n")
+endfunction
+
+" グループ a:group の確認画面を開く（すでに開いていれば順番待ちに入れる）。
+"   a:targets … 確かめるメンバーのリンク先（絶対パス）。よみが未登録のメンバーはいつも加える。
+"   a:opts.all … メンバー全員（:GnosisYomiReview）。a:opts.ret … 終わったら戻るファイル。
+function! s:review_open(group, targets, ...) abort
+  let l:opts = a:0 ? a:1 : {}
+  let l:group = fnamemodify(a:group, ':p')
+  if !s:group_path_reviewable(l:group)
+    return
+  endif
+  if !has_key(l:opts, 'ret')
+    let l:opts.ret = expand('%:p')
+  endif
+  if !empty(s:review)
+    if s:review.group ==# l:group
+      return
+    endif
+    call add(s:review_queue, [l:group, a:targets, l:opts])
+    return
+  endif
+  if get(g:, 'gnosis_test_review_skip', 0)
+    " 試験用: 画面を出さずに Q と同じ（保存せずに並べる）
+    call s:sort_group_file(l:group)
+    call s:review_after(l:group)
+    return
+  endif
+  let l:members = s:group_members(l:group, readfile(l:group))
+  let l:rd = s:review_readings(l:group, l:members)
+  let l:want = map(copy(a:targets), 'fnamemodify(v:val, ":p")')
+  let l:items = []
+  for l:k in range(len(l:members))
+    let l:mm = l:members[l:k]
+    let l:mm.reading = get(get(l:rd, l:k, [0, '']), 1, '')
+    let l:mm.registered = get(get(l:rd, l:k, [0, '']), 0, 0)
+    if get(l:opts, 'all', 0) || !l:mm.registered || index(l:want, l:mm.abs) >= 0
+      call add(l:items, l:mm)
+    endif
+  endfor
+  if empty(l:items)
+    call s:sort_group_file(l:group)
+    call s:review_after(l:group)
+    return
+  endif
+  let l:lines = [gnosis#i18n#tr('# 名前とよみの確認: ') . s:group_label(l:group),
+        \ gnosis#i18n#tr('q=保存して並べる  Q=保存せずに並べる  Enter=中身を見る  行を消す=グループから外す'),
+        \ gnosis#i18n#tr('「（推測）」のよみは自動の推測です。違っていたら直してください。'),
+        \ '']
+  for l:it in l:items
+    call add(l:lines, '[' . l:it.name . '](' . l:it.abs . matchstr(l:it.target, '#.*$') . ') — '
+          \ . l:it.reading . (l:it.registered ? '' : gnosis#i18n#tr('（推測）')))
+  endfor
+  let l:file = s:review_file()
+  call s:syn_writefile(l:lines, l:file)
+  let s:review = {'file': l:file, 'group': l:group, 'items': l:items, 'ret': l:opts.ret}
+  call timer_start(0, function('s:review_show'))
+endfunction
+
+function! s:review_show(...) abort
+  if empty(s:review)
     return
   endif
   call gnosis#push_history()
-  call timer_start(0, function('s:timer_hub_edit_cb', [s:stage.file]))
-  call timer_start(50, function('s:timer_redraw_cb'))
+  call s:timer_hub_edit_cb(s:review.file)
+  echo gnosis#i18n#tr('Gnosis: 名前とよみを確かめて q（並べ替える）')
 endfunction
 
-function! gnosis#stage_cancel() abort
-  if empty(s:stage)
-    return
-  endif
-  let l:st = s:stage
-  let s:stage = {}
-  let l:nr = bufnr(l:st.file)
-  silent! execute 'hide edit ' . fnameescape(l:st.group)
-  if l:nr > 0
-    silent! execute 'bwipeout! ' . l:nr
-  endif
-  call delete(l:st.file)
-  echo gnosis#i18n#tr('Gnosis: 追加待ちを取り消しました（何も足していません）')
+" 確認画面のキー。画面を開くたびに BufEnter から呼ぶ。
+function! gnosis#review_setup() abort
+  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#review_commit()<CR>
+  nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#review_skip()<CR>
 endfunction
 
-function! gnosis#stage_commit() abort
-  if empty(s:stage) || expand('%:p') !=# fnamemodify(s:stage.file, ':p')
+" 確認画面を開き直す（離れてしまったとき）
+function! gnosis#review_reopen() abort
+  if empty(s:review)
+    echo gnosis#i18n#tr('Gnosis: 確認待ちはありません')
     return
   endif
-  let l:st = s:stage
-  let l:gnr = bufnr(l:st.group)
-  if l:gnr > 0 && getbufvar(l:gnr, '&modified')
+  call s:review_show()
+endfunction
+
+" :GnosisYomiReview … 今のグループのメンバー全員の表示名とよみを確かめる
+function! gnosis#yomi_review() abort
+  let l:path = expand('%:p')
+  if !s:group_path_reviewable(l:path)
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: グループ（Index を含む）で実行して') | echohl NONE
+    return
+  endif
+  if &modified
+    silent! write
+  endif
+  call s:review_open(l:path, [], {'all': 1, 'ret': l:path})
+endfunction
+
+function! s:review_group_buffer_dirty(group) abort
+  let l:nr = bufnr(a:group)
+  return l:nr > 0 && bufloaded(l:nr) && getbufvar(l:nr, '&modified')
+endfunction
+
+function! gnosis#review_commit() abort
+  if !s:is_review_buffer()
+    return
+  endif
+  let l:st = s:review
+  if s:review_group_buffer_dirty(l:st.group)
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('グループに未保存の変更があります。先に保存してください') | echohl NONE
     return
   endif
-  silent! write
-  let l:rx = '^\s*\(\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\)\s*$'
-  let l:items = []
+  let l:rx = '^\s*\[\(\%(\\.\|[^\]\\]\)*\)\](\([^)]\+\))\s*\%(—\s*\(.\{-}\)\)\?\s*$'
+  let l:edited = {}
   for l:ln in getline(1, '$')
     let l:m = matchlist(l:ln, l:rx)
-    if !empty(l:m)
-      call add(l:items, l:m[1])
+    if empty(l:m)
+      continue
+    endif
+    let l:abs = fnamemodify(substitute(l:m[2], '#.*$', '', ''), ':p')
+    let l:edited[l:abs] = {'name': l:m[1], 'reading': trim(substitute(l:m[3], gnosis#i18n#tr('（推測）') . '$', '', ''))}
+  endfor
+  let l:lines = readfile(l:st.group)
+  let l:members = s:group_member_idx(l:lines, fnamemodify(l:st.group, ':t') ==# 'index.md')
+  let l:drop = []
+  for l:it in l:st.items
+    let l:pos = -1
+    for l:i in l:members
+      if trim(l:lines[l:i]) ==# l:it.line
+        let l:pos = l:i
+        break
+      endif
+    endfor
+    if l:pos < 0
+      continue
+    endif
+    if !has_key(l:edited, l:it.abs)
+      call add(l:drop, l:pos)
+    elseif l:edited[l:it.abs].name !=# l:it.name
+      let l:lines[l:pos] = substitute(l:lines[l:pos], '\V[' . escape(l:it.name, '\') . '](', '[' . escape(l:edited[l:it.abs].name, '\&') . '](', '')
     endif
   endfor
-  let s:stage = {}
-  let l:snr = bufnr('%')
-  silent! execute 'hide edit ' . fnameescape(l:st.group)
-  silent! execute 'bwipeout! ' . l:snr
+  for l:pos in reverse(sort(l:drop, 'n'))
+    call remove(l:lines, l:pos)
+  endfor
+  call s:syn_writefile(l:lines, l:st.group)
+  let l:tsv = []
+  for [l:abs, l:e] in items(l:edited)
+    if !empty(l:e.reading) && filereadable(l:abs)
+      call add(l:tsv, l:abs . "\t" . l:e.name . "\t" . l:e.reading)
+    endif
+  endfor
+  if !empty(l:tsv)
+    " よみはメンバーのノートの front matter に書く。開いていて未保存のノートは先に保存する
+    let l:here = bufnr('%')
+    for l:abs in keys(l:edited)
+      let l:bn = bufnr(l:abs)
+      if l:bn > 0 && bufloaded(l:bn) && getbufvar(l:bn, '&modified')
+        silent! execute 'buffer ' . l:bn
+        silent! update
+      endif
+    endfor
+    if bufnr('%') != l:here
+      silent! execute 'buffer ' . l:here
+    endif
+    call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
+  endif
+  call s:sort_group_file(l:st.group)
+  call s:review_close()
+  echo printf(gnosis#i18n#tr('Gnosis: 表示名とよみを保存して並べました（%d 件）'), len(l:edited))
+endfunction
+
+function! gnosis#review_skip() abort
+  if !s:is_review_buffer()
+    return
+  endif
+  call s:sort_group_file(s:review.group)
+  call s:review_close()
+  echo gnosis#i18n#tr('Gnosis: よみは保存せずに並べました（次に並べるときにまた聞きます）')
+endfunction
+
+function! s:review_close() abort
+  let l:st = s:review
+  let s:review = {}
+  let l:nr = bufnr(l:st.file)
+  let l:ret = filereadable(l:st.ret) ? l:st.ret : l:st.group
+  silent! execute 'hide edit ' . fnameescape(l:ret)
+  if l:nr > 0 && l:nr != bufnr('%')
+    silent! execute 'bwipeout! ' . l:nr
+  endif
   call delete(l:st.file)
-  let l:gdir = expand('%:p:h')
-  let l:n = 0
-  for l:it in l:items
-    let l:m = s:extract_markdown_link(l:it)
-    let l:abs = fnamemodify(gnosis#resolve_link(substitute(l:m.target, '#.*$', '', '')), ':p')
-    let l:link = s:make_link_from_dir(l:abs . matchstr(l:m.target, '#.*$'), l:m.text, l:gdir)
-    if !s:buffer_has_link(l:link)
-      call s:simple_body_append(l:link)
-      let l:n += 1
+  " よみを書いたノートが今のノートなら読み直す（checktime は更新時刻が同じ秒だと気づかない）
+  if !&modified && &buftype ==# '' && filereadable(expand('%:p')) && s:disk_differs_from_buffer(expand('%:p'))
+    call s:reload_by_edit(expand('%:p'))
+  endif
+  silent! checktime
+  call s:review_after(l:st.group)
+  if !empty(s:review_queue)
+    let l:next = remove(s:review_queue, 0)
+    call s:review_open(l:next[0], l:next[1], l:next[2])
+  endif
+endfunction
+
+" 並べ替えたグループを開いているバッファへ反映し、気づき用の控えを取り直す
+function! s:review_after(group) abort
+  let l:nr = bufnr(a:group)
+  if l:nr <= 0 || !bufloaded(l:nr) || getbufvar(l:nr, '&modified')
+    return
+  endif
+  if l:nr == bufnr('%')
+    if s:disk_differs_from_buffer(a:group)
+      call s:reload_by_edit(a:group)
     endif
-  endfor
-  call s:links_added_done()
-  silent! call gnosis#sort_yomi()
-  silent! write
-  echo printf(gnosis#i18n#tr('Gnosis: %d 件をグループに足して、よみ順に並べました'), l:n)
+    call gnosis#group_review_snapshot()
+  else
+    silent! execute 'checktime ' . l:nr
+    call setbufvar(l:nr, 'gnosis_group_members', [])
+    call setbufvar(l:nr, 'gnosis_group_snap_stale', 1)
+  endif
+endfunction
+
+" --- グループを開いての追加に気づく（保存の後） ---------------------------------
+
+function! s:group_member_lines_of_buffer() abort
+  let l:path = expand('%:p')
+  if &buftype !=# '' || !s:group_path_reviewable(l:path)
+    return v:null
+  endif
+  return map(s:group_member_idx(getline(1, '$'), fnamemodify(l:path, ':t') ==# 'index.md'), 'trim(getline(v:val + 1))')
+endfunction
+
+function! gnosis#group_review_snapshot() abort
+  let l:m = s:group_member_lines_of_buffer()
+  if l:m is v:null
+    silent! unlet b:gnosis_group_members
+  else
+    let b:gnosis_group_members = l:m
+  endif
+  silent! unlet b:gnosis_group_snap_stale
+endfunction
+
+" BufWritePost: 前回の控えから増えた・変わったメンバーの行があれば、確認画面を開く
+function! gnosis#group_review_check() abort
+  if s:is_review_buffer() || !exists('b:gnosis_group_members') || get(b:, 'gnosis_group_snap_stale', 0)
+    call gnosis#group_review_snapshot()
+    return
+  endif
+  let l:cur = s:group_member_lines_of_buffer()
+  if l:cur is v:null
+    return
+  endif
+  let l:new = filter(copy(l:cur), 'index(b:gnosis_group_members, v:val) < 0')
+  if empty(l:new)
+    let b:gnosis_group_members = l:cur
+    return
+  endif
+  if mode() =~# '^[iR]'
+    return
+  endif
+  let l:path = expand('%:p')
+  let l:dir = expand('%:p:h')
+  let l:targets = map(l:new, 'fnamemodify(gnosis#resolve_link(substitute(s:extract_target(v:val), "#.*$", "", ""), l:dir), ":p")')
+  let b:gnosis_group_members = l:cur
+  call timer_start(0, {-> s:review_open(l:path, l:targets, {'ret': l:path})})
 endfunction
 
 function! gnosis#add_clipboard_before_up_note(...) abort
@@ -10458,7 +10744,15 @@ function! gnosis#add_clipboard_before_up_note(...) abort
     echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
     return
   endif
-  if s:stage_maybe(l:links)
+  " グループでは置き場所を聞かない（足したあと必ず並べ替えるので）。本文の最後に足して保存すると、
+  " 保存の後の気づき（group_review_check）が名前とよみの確認画面を開く。
+  if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
+    for l:lk in l:links
+      if !s:buffer_has_link(l:lk)
+        call s:simple_body_append(l:lk)
+      endif
+    endfor
+    call s:links_added_done()
     return
   endif
   call s:insert_links_at_position(l:links, function('s:links_added_done'))
@@ -11482,7 +11776,7 @@ function! s:sort_lines_by_yomi(first, last) abort
     return
   endif
   let l:report = tempname()
-  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(expand('%:p:h'))
+  let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --dry-run --base ' . shellescape(expand('%:p:h'))
         \ . (expand('%:t') ==# 'Index-write.md' ? ' --keyword-lines' : '')
         \ . ' --report-file ' . shellescape(l:report)
   " 1 万行の Index では数秒かかる。無反応に見えないよう先に表示する。
@@ -11521,6 +11815,14 @@ endfunction
 " \S（ノーマル）/ :SortYomi … バッファ内の本文リンク行をよみ順にソート（主に index.md）。
 " ### Context / ### Related / ### BackLink 以降のリンクは動かさない。
 function! gnosis#sort_yomi() abort
+  " グループ（Index を含む）は、よみが未登録のメンバーがいれば確認画面を通してから並べる
+  if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
+    if &modified
+      silent! write
+    endif
+    call s:review_open(expand('%:p'), [], {'ret': expand('%:p')})
+    return
+  endif
   if s:sort_group_mode()
     let l:r = s:group_last_block()
     if empty(l:r) || s:count_link_lines(l:r[0], l:r[1]) <= 1

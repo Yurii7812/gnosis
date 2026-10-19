@@ -83,6 +83,8 @@ gnosis#fix_fullwidth_heading
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
+gnosis#group_review_check
+gnosis#group_review_snapshot
 gnosis#guard_vault_write
 gnosis#has_python
 gnosis#hint_goto
@@ -187,6 +189,10 @@ gnosis#rename_yomi
 gnosis#rename_yomi_with_default
 gnosis#replace_visual_selection
 gnosis#resolve_link
+gnosis#review_commit
+gnosis#review_reopen
+gnosis#review_setup
+gnosis#review_skip
 gnosis#save_before_normal_jump
 gnosis#save_current_note
 gnosis#session#alive
@@ -227,10 +233,6 @@ gnosis#stack_copy_delete_visual
 gnosis#stack_copy_toggle
 gnosis#stack_copy_yank_line
 gnosis#stack_copy_yank_visual
-gnosis#stage_cancel
-gnosis#stage_commit
-gnosis#stage_open
-gnosis#stage_setup
 gnosis#start#active
 gnosis#start#art
 gnosis#start#begin
@@ -358,6 +360,7 @@ gnosis#write_at_bottom
 gnosis#write_guide
 gnosis#write_next
 gnosis#yank_name
+gnosis#yomi_review
 gnosis_search#ensure_hl_group
 gnosis_search#pick_insert_link
 gnosis_search#pick_insert_link_visual

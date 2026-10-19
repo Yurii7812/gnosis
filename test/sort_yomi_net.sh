@@ -26,6 +26,7 @@ EOF
 cat > "$TMP/t.vim" <<EOF
 set nocp
 let g:gnosis_skip_interactive_mount=1
+let g:gnosis_test_review_skip=1
 set rtp^=$REPO
 runtime plugin/gnosis.vim
 edit $TMP/g.md

@@ -11,6 +11,8 @@
     sort_yomi.py list --note PATH       # yomi の表示名を登録順に一覧
     sort_yomi.py set  --note PATH --name NAME [--reading READING]
                                         # READING 省略時は推測。空文字で削除
+    sort_yomi.py readings --base DIR    # stdin のリンク行ごとに「登録済み(1/0)<TAB>よみ」
+    sort_yomi.py setmany                # stdin の「ノート<TAB>表示名<TAB>よみ」を全部登録
 
 ソートはリンク行だけを対象にし、リンクでない行は位置ごと動かさない。
 `sort` は未登録の表示名のよみを pykakasi で `yomi:` に書き込む（`--dry-run` で抑止）。
@@ -68,7 +70,32 @@ def main(argv: list[str]) -> int:
     p_set.add_argument("--name", required=True)
     p_set.add_argument("--reading", default=None, help="省略時は推測。空文字で削除")
 
+    p_readings = sub.add_parser("readings", help="リンク行ごとの登録済みのよみ（無ければ推測）")
+    p_readings.add_argument("--base", default=".")
+    sub.add_parser("setmany", help="ノート・表示名・よみ（TSV）を stdin から全部登録")
+
     args = ap.parse_args(argv)
+
+    if args.mode == "readings":
+        for line in sys.stdin.read().split("\n"):
+            if not line.strip():
+                continue
+            disp = jy.display_name(line)
+            note = jy.resolve_note(args.base, jy.link_target(line))
+            got = jy.get_yomi(note, disp) if note is not None and note.is_file() else ""
+            print(f"1\t{got}" if got else f"0\t{jy.reading_for(disp)}")
+        return 0
+
+    if args.mode == "setmany":
+        n = 0
+        for line in sys.stdin.read().split("\n"):
+            f = line.split("\t")
+            if len(f) != 3 or not f[0] or not f[1]:
+                continue
+            if jy.set_yomi(f[0], f[1], f[2].strip()):
+                n += 1
+        print(n)
+        return 0
 
     if args.mode == "sort":
         data = sys.stdin.read()
