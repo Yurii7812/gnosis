@@ -251,6 +251,7 @@ gnosis#start#pick_art
 gnosis#start#render
 gnosis#start#return
 gnosis#start#should_show
+gnosis#start#squash
 gnosis#startup_restore_root
 gnosis#startup_sequence
 gnosis#state_dir
@@ -291,6 +292,7 @@ gnosis#termfont#defaults
 gnosis#termfont#describe
 gnosis#termfont#detect
 gnosis#termfont#file
+gnosis#termfont#font_choices
 gnosis#termfont#load
 gnosis#termfont#restore_on_exit
 gnosis#termfont#save

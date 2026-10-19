@@ -15,7 +15,7 @@
 - 起動画面 … Chnoubis のシンボル・選択中の vault・`Enter` で開始。`v` で vault の選択・管理、`s` で設定、`q` で終了
 - vault の一覧 … `j` / `k` で選ぶ ・ `Enter` で開く ・ `a` 既存のフォルダを登録 ・ `n` 新しい vault を作る ・ `d` 一覧から外す（ノートとフォルダは消さない） ・ `Esc` 戻る
 - `:GnosisStart` 起動画面 ・ `:GnosisVaults` vault の一覧（使用中に切り替える） ・ `:GnosisSettings` 設定画面
-- 設定は vault ごと（`.gnosis/settings.json`）: 言語・起動時に最大化・通常のウィンドウサイズ・ライト／ダーク・テーマ・カスタム配色。文字サイズ・フォント・行間・使う端末は Gnosis 全体（Gnosis ホームの `terminal.json`）
+- 設定は vault ごと（`.gnosis/settings.json`）: 言語・起動時に最大化・通常のウィンドウサイズ・テーマ（ダーク／ライト）・追加テーマ・カスタム配色。文字サイズ・フォント・行間・使う端末は Gnosis 全体（Gnosis ホームの `terminal.json`）
 - `:GnosisThemeAdd` `Plug '作者/リポジトリ'` … GitHub の Vim テーマを追加してこの vault のテーマにする ・ `:GnosisThemeReset` 標準テーマに戻す
 - 配色エディタ（設定の「配色を作る・直す」）では、背景・本文・リンク・見出し・選択範囲・カーソル行に加えて、**リンクの手前の番号（1〜9・0・g1 …）の文字色と背景色**も決められる。変えるとすぐプレビュー（番号つきの例）に出る。決めなければ今までどおり（文字=背景色・札=補助の色）
 - `:GnosisFontSize` 文字サイズ（`20` / `+1` / `-1` / `reset`。保存して、できる端末ではその場で反映） ・ `:GnosisLinkSource` リンクの元の Markdown を見せる／隠す

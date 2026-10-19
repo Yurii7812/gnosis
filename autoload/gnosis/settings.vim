@@ -7,7 +7,7 @@
 "     "window": {"maximized": true, "width": 1200, "height": 860},
 "     "fontSize": 16,          ← 以前の版の文字サイズ（今は Gnosis ホームの terminal.json。
 "                                 アプリ向けに同じ値を書き写す。gnosis#termfont）
-"     "appearance": "standard" | "dark" | "light",   ← 標準（青系）・ダーク（灰色）・ライト（白）
+"     "appearance": "dark" | "light",   ← ダーク（既定）・ライト（白）。以前の "standard"（青系）はダークとして読む
 "     "theme": {"kind": "builtin"}
 "            | {"kind": "custom", "name": "名前"}
 "            | {"kind": "plugin", "repo": "作者/リポジトリ", "colorscheme": "名前"},
@@ -45,7 +45,7 @@ function! gnosis#settings#defaults() abort
         \ 'language': l:lang,
         \ 'window': {'maximized': v:true, 'width': 1200, 'height': 860},
         \ 'fontSize': 16,
-        \ 'appearance': 'standard',
+        \ 'appearance': 'dark',
         \ 'theme': {'kind': 'builtin'},
         \ 'customThemes': {},
         \ 'appTheme': {'kind': 'builtin'},
@@ -83,8 +83,9 @@ function! gnosis#settings#validate(s) abort
   if l:s.language !~# '^\(ja\|en\)$'
     let l:s.language = gnosis#settings#defaults().language
   endif
-  if l:s.appearance !~# '^\(standard\|light\|dark\)$'
-    let l:s.appearance = 'standard'
+  if l:s.appearance !~# '^\(light\|dark\)$'
+    " 以前の青系の "standard" も含め、ダーク（既定）にする（青系の配色は assets/themes/archive に保管）
+    let l:s.appearance = 'dark'
   endif
   let l:fs = type(l:s.fontSize) == v:t_number ? l:s.fontSize : float2nr(l:s.fontSize)
   let l:s.fontSize = max([8, min([48, l:fs])])
@@ -170,7 +171,7 @@ function! gnosis#settings#activate(vault) abort
   call gnosis#settings#apply(s:current)
 endfunction
 
-" 起動画面に戻るとき: Chnoubis 10番（夜空×水色）
+" 起動画面に戻るとき: ダークの背景と、ダークのリンクの色の Chnoubis
 function! gnosis#settings#deactivate() abort
   let g:gnosis_active_vault = ''
   unlet! s:current
@@ -235,9 +236,9 @@ function! gnosis#settings#apply_gui(s) abort
   endif
 endfunction
 
-" Vim の &background に使う値（標準とダークは dark、ライトは light）
+" Vim の &background に使う値（ダークは dark、ライトは light）
 function! gnosis#settings#background(s) abort
-  return get(a:s, 'appearance', 'standard') ==# 'light' ? 'light' : 'dark'
+  return get(a:s, 'appearance', 'dark') ==# 'light' ? 'light' : 'dark'
 endfunction
 
 " 組み込みテーマの色（assets/themes/builtin.json。Electron と共通）
@@ -246,10 +247,9 @@ function! gnosis#settings#builtin_palettes() abort
     let s:palettes = gnosis#home#read_json(s:palette_file, {})
     if empty(s:palettes)
       let s:palettes = {
-            \ 'start': {'base': 'dark', 'bg': '#0C1D32', 'fg': '#EBEBEB', 'link': '#E1F4E4', 'heading': '#EEDA77', 'muted': '#B3B3B3', 'accent': '#83AFE2', 'selection': '#21538C', 'cursorline': '#15365B'},
-            \ 'standard': {'base': 'dark', 'bg': '#11253D', 'fg': '#D9E1EA', 'link': '#8CC4FF', 'heading': '#EFD67A', 'subheading': '#83AFE2', 'muted': '#9DAFC4', 'accent': '#83AFE2', 'selection': '#2B5A8E', 'cursorline': '#1A3454'},
+            \ 'start': {'base': 'dark', 'bg': '#22272E', 'fg': '#CDD5DE', 'link': '#6CB6FF', 'heading': '#E5C07B', 'muted': '#909DAB', 'accent': '#6CB6FF', 'selection': '#2D4F75', 'cursorline': '#2D333B'},
             \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1F2328', 'link': '#0969DA', 'heading': '#1F2328', 'subheading': '#1F2328', 'muted': '#59636E', 'accent': '#0550AE', 'selection': '#CFE3FA', 'cursorline': '#F6F8FA'},
-            \ 'dark': {'base': 'dark', 'bg': '#22272E', 'fg': '#CDD5DE', 'link': '#6CB6FF', 'heading': '#E5C07B', 'subheading': '#83AFE2', 'muted': '#909DAB', 'accent': '#83AFE2', 'selection': '#2D4F75', 'cursorline': '#2D333B'},
+            \ 'dark': {'base': 'dark', 'bg': '#22272E', 'fg': '#CDD5DE', 'link': '#6CB6FF', 'heading': '#E5C07B', 'subheading': '#83AFE2', 'muted': '#909DAB', 'accent': '#6CB6FF', 'selection': '#2D4F75', 'cursorline': '#2D333B'},
             \ 'app': {'base': 'light', 'bg': '#FAFAFA', 'fg': '#1F1F1F', 'link': '#21538C', 'heading': '#603510', 'muted': '#575757', 'accent': '#2D70BE', 'selection': '#B5CFEE', 'cursorline': '#EBEBEB'},
             \ }
     endif

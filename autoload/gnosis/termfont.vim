@@ -33,6 +33,46 @@ function! gnosis#termfont#defaults() abort
   return {'fontSize': 16, 'fontFamily': '', 'lineSpacing': 2, 'terminal': ''}
 endfunction
 
+" フォントの選択肢（設定画面の一覧）: 入っているものだけ。おすすめ（読みやすい・日本語向け）を先に、
+" 続けてほかの等幅フォント。各要素は {'name': フォント名, 'note': 説明}。fc-list が無ければ空。
+function! gnosis#termfont#font_choices() abort
+  if !executable('fc-list')
+    return []
+  endif
+  let l:rec = [
+        \ ['Hack', '英字が読みやすい・起動画面の図案がきれい（既定）'],
+        \ ['BIZ UDGothic', '日本語向け・読みやすさを検証したユニバーサルデザイン書体'],
+        \ ['UDEV Gothic', '日本語向け（BIZ UDゴシック＋JetBrains Mono）'],
+        \ ['PlemolJP', '日本語向け（IBM Plex Sans JP＋IBM Plex Mono）'],
+        \ ['HackGen', '日本語向け（Hack＋源柔ゴシック）'],
+        \ ['Noto Sans Mono CJK JP', '日本語向け（ブラウザと同じ Noto の字形・行が高め）'],
+        \ ['DejaVu Sans Mono', ''],
+        \ ['Source Code Pro', ''],
+        \ ['JetBrains Mono', ''],
+        \ ]
+  let l:all = split(system('fc-list :spacing=mono family; fc-list :spacing=dual:lang=ja family'), "\n")
+  let l:names = {}
+  for l:line in l:all
+    " 「名前,別名」の形は最初の名前だけ
+    let l:n = substitute(trim(split(l:line, ',')[0]), '\\\(.\)', '\1', 'g')
+    if !empty(l:n) && l:n !~? 'emoji\|signwriting\|symbol'
+      let l:names[l:n] = 1
+    endif
+  endfor
+  let l:out = []
+  for [l:n, l:note] in l:rec
+    " 日本語用の等幅フォントは spacing の値がまちまちなので、名前で入っているかを確かめる
+    if has_key(l:names, l:n) || !empty(trim(system('fc-list ' . shellescape(l:n) . ' family')))
+      call add(l:out, {'name': l:n, 'note': l:note})
+      silent! call remove(l:names, l:n)
+    endif
+  endfor
+  for l:n in sort(keys(l:names))
+    call add(l:out, {'name': l:n, 'note': ''})
+  endfor
+  return l:out
+endfunction
+
 function! gnosis#termfont#file() abort
   return gnosis#home#path('terminal.json')
 endfunction

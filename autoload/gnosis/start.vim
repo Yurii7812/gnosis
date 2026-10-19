@@ -4,7 +4,7 @@
 " ふつうに起動したとき（ファイルを指定しないとき）、ノートを開く前に出す:
 "   Chnoubis のシンボル（assets/chnoubis/*.txt の Unicode Braille）・「Gnosis」・
 "   選択中の vault の名前とパス・「Enter で開始」・vault の選択と管理への入口。
-" 配色は chnoubis3.sh の10番・夜空×水色（gnosis#theme#apply_start）。vault を開くと、その vault の
+" 配色はダークの背景に、Chnoubis をダークのリンクの色で描く（gnosis#theme#apply_start）。vault を開くと、その vault の
 " 設定のテーマに切り替わる。
 "
 " 起動画面のキー:  Enter 開始 / v vault の一覧 / s 設定 / q 終了
@@ -80,10 +80,79 @@ function! gnosis#start#art(width) abort
       while !empty(l:lines) && l:lines[-1] ==# ''
         call remove(l:lines, -1)
       endwhile
+      " 行の高いフォント（日本語用の等幅フォントや行間を広げたとき）はマスが縦長で、図案が縦に伸びる。
+      " 点の間隔が正方形になるよう、点字の点の単位で縦に縮める（自分で選んだどのフォントでも崩れない）。
+      let l:r = gnosis#start#cell_ratio()
+      if l:kind !=# 'fit' && l:r < 0.9
+        let l:lines = gnosis#start#squash(l:lines, l:r)
+      endif
       return l:lines
     endif
   endfor
   return []
+endfunction
+
+" 点字（U+2800〜）の図案を縦に a:ratio 倍（0〜1）へ縮める。1 マス = 横 2 点 × 縦 4 点。
+" 縮めた先の点は、元の対応する範囲の点のどれかが立っていれば立てる（細い線が消えない）。
+function! gnosis#start#squash(lines, ratio) abort
+  let l:bits = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]]
+  " 点の格子に広げる（行 = 点の行、列 = 点の列）
+  let l:w = max(map(copy(a:lines), 'strchars(v:val)'))
+  let l:grid = []
+  for l:line in a:lines
+    let l:rows = [repeat([0], l:w * 2), repeat([0], l:w * 2), repeat([0], l:w * 2), repeat([0], l:w * 2)]
+    let l:c = 0
+    for l:ch in split(l:line, '\zs')
+      let l:n = char2nr(l:ch) - 0x2800
+      if l:n > 0 && l:n < 256
+        for l:y in range(4)
+          for l:x in range(2)
+            if and(l:n, l:bits[l:y][l:x])
+              let l:rows[l:y][l:c * 2 + l:x] = 1
+            endif
+          endfor
+        endfor
+      endif
+      let l:c += 1
+    endfor
+    call extend(l:grid, l:rows)
+  endfor
+  let l:h = len(l:grid)
+  let l:nh = max([4, float2nr(round(l:h * a:ratio))])
+  let l:nh += (4 - l:nh % 4) % 4
+  " 縮めた格子（各行に、元の範囲の行をまとめる）
+  let l:out = []
+  for l:y in range(l:nh)
+    let l:y0 = float2nr(floor(l:y * l:h / (l:nh + 0.0)))
+    let l:y1 = max([l:y0 + 1, float2nr(floor((l:y + 1) * l:h / (l:nh + 0.0)))])
+    let l:row = repeat([0], l:w * 2)
+    for l:sy in range(l:y0, min([l:y1, l:h]) - 1)
+      for l:x in range(l:w * 2)
+        if l:grid[l:sy][l:x]
+          let l:row[l:x] = 1
+        endif
+      endfor
+    endfor
+    call add(l:out, l:row)
+  endfor
+  " 点字に戻す（空白は U+2800 の空き点字。幅は元と同じ）
+  let l:res = []
+  for l:by in range(0, l:nh - 1, 4)
+    let l:s = ''
+    for l:c in range(l:w)
+      let l:n = 0
+      for l:y in range(4)
+        for l:x in range(2)
+          if l:out[l:by + l:y][l:c * 2 + l:x]
+            let l:n = or(l:n, l:bits[l:y][l:x])
+          endif
+        endfor
+      endfor
+      let l:s .= nr2char(0x2800 + l:n)
+    endfor
+    call add(l:res, l:s)
+  endfor
+  return l:res
 endfunction
 
 " 点字の点の横と縦の間隔の比（1 なら正方形）。マスの大きさ（ピクセル）が分かる端末だけ。
@@ -203,7 +272,7 @@ function! gnosis#start#render() abort
   endif
   let l:cols = winwidth(0)
   let l:rows = winheight(0)
-  " 文言は選択中の vault の言語。配色は Chnoubis #10（夜空×水色）。
+  " 文言は選択中の vault の言語。配色はダークの背景と、ダークのリンクの色の Chnoubis。
   let l:sv = s:current_vault()
   let l:lang = !empty(l:sv) && l:sv.exists ? gnosis#settings#load(l:sv.path).language : gnosis#settings#defaults().language
   call gnosis#i18n#set_lang(l:lang)

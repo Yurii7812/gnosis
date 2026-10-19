@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """組み込みテーマ（assets/themes/builtin.json）の確認。
-- 起動画面（start）と旧アプリ用（app）は、配色エディタのカラーパレット（8 色相 × 9 段階）の色だけで作られている。
-- 見た目の 3 つ（standard・light・dark）は読みやすさに合わせて細かく調整した色（エディタでは HEX で入力できる）。
+- 旧アプリ用（app）は、配色エディタのカラーパレット（8 色相 × 9 段階）の色だけで作られている。
+- 起動画面（start）と見た目の 2 つ（dark・light）は読みやすさに合わせて細かく調整した色（エディタでは HEX で入力できる）。
   代わりに、背景とのコントラスト比が十分か（本文 7 以上、リンク・見出し・補助の文字 4.5 以上）を確かめる。"""
 import json
 import sys
@@ -47,7 +47,7 @@ def contrast(a, b):
 
 
 ng = 0
-for name in ("standard", "light", "dark"):
+for name in ("start", "dark", "light"):
     t = themes[name]
     for key, need in (("fg", 7), ("link", 4.5), ("heading", 4.5), ("subheading", 4.5), ("muted", 4.5)):
         if key not in t:
@@ -59,7 +59,7 @@ for name in ("standard", "light", "dark"):
         print(("  ok   " if ok else "  FAIL ") + f"{name}.{key} {t[key]} コントラスト {r:.1f}（{need} 以上）")
 
 for name, t in themes.items():
-    if name not in ("start", "app"):
+    if name != "app":
         continue
     for key, val in t.items():
         if key == "base":

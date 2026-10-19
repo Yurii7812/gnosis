@@ -52,6 +52,11 @@ try
   call gnosis#termfont#set('fontFamily', 'DejaVu Sans Mono')
   call gnosis#termfont#set('lineSpacing', 4)
   call s:ok('フォント・行間の保存', gnosis#termfont#load().fontFamily ==# 'DejaVu Sans Mono' && gnosis#termfont#load().lineSpacing == 4)
+  if executable('fc-list')
+    let s:fc = gnosis#termfont#font_choices()
+    call s:ok('フォントの一覧: 入っている等幅フォントが並ぶ（名前の重複なし）', !empty(s:fc) && len(s:fc) == len(uniq(sort(map(copy(s:fc), 'v:val.name')))))
+    call s:ok('フォントの一覧: おすすめ（Hack など）が先頭', !executable('fc-list') || empty(system('fc-list Hack family')) || s:fc[0].name ==# 'Hack')
+  endif
 catch
   call add(s:out, 'NG 例外: ' . v:exception . ' @ ' . v:throwpoint)
 endtry

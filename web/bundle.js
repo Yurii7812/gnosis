@@ -33272,7 +33272,6 @@ ${h3.join(`
             s15.appearance = e.target.value;
             render();
           } },
-          h2("option", { value: "standard", selected: s15.appearance !== "light" && s15.appearance !== "dark" }, t2("settings.standard")),
           h2("option", { value: "light", selected: s15.appearance === "light" }, t2("settings.light")),
           h2("option", { value: "dark", selected: s15.appearance === "dark" }, t2("settings.dark"))
         )),

@@ -114,18 +114,18 @@ function! gnosis#theme#palette(s) abort
       return l:p
     endif
   endif
-  let l:p = copy(get(l:pals, a:s.appearance, l:pals.standard))
+  let l:p = copy(get(l:pals, a:s.appearance, l:pals.dark))
   let l:p.base = gnosis#settings#background(a:s)
   return l:p
 endfunction
 
 " \A のアプリ（Electron）の配色。通常の Vim の配色（palette）とは別の設定（appTheme / appCustomThemes）。
-"   既定は通常の Vim と同じ見た目（標準・ダーク・ライト）。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
+"   既定は通常の Vim と同じ見た目（ダーク・ライト）。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
 "   背景か本文を変えた配色では、補助の色（muted / accent）を組み込みのものから引き継がず作り直す。
 function! gnosis#theme#app_palette(s) abort
   let l:pals = gnosis#settings#builtin_palettes()
-  " 組み込みは通常の Vim と同じ見た目（標準・ダーク・ライト）。\A 用のカスタム配色を選んだときだけ別の色
-  let l:p = copy(get(l:pals, get(a:s, 'appearance', 'standard'), l:pals.standard))
+  " 組み込みは通常の Vim と同じ見た目（ダーク・ライト）。\A 用のカスタム配色を選んだときだけ別の色
+  let l:p = copy(get(l:pals, get(a:s, 'appearance', 'dark'), l:pals.dark))
   let l:th = get(a:s, 'appTheme', {})
   if get(l:th, 'kind', 'builtin') ==# 'custom'
     let l:c = get(get(a:s, 'appCustomThemes', {}), get(l:th, 'name', ''), {})
@@ -148,7 +148,7 @@ function! gnosis#theme#in_app() abort
   return !empty($GNOSIS_GUI_PORT)
 endfunction
 
-" 起動画面は chnoubis3.sh の10番（夜空×水色）。色は builtin.json の start から読む。
+" 起動画面はダークの背景に、Chnoubis をダークのリンクの色で描く。色は builtin.json の start から読む。
 function! gnosis#theme#apply_start() abort
   " 起動画面の前の配色（旧 vimrc の kalisi など）を覚えておく（vault に設定が無いときに戻す）
   if get(g:, 'colors_name', '') !=# 'gnosis' && !exists('s:before_start')

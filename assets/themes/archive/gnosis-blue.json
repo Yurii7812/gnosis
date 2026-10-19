@@ -1,0 +1,5 @@
+{
+  "_note": "使わなくなった Gnosis の青系の配色（2026-10-19 にアーカイブ）。builtin.json の形と同じ。戻すときは必要なものを builtin.json へ写す。",
+  "start-chnoubis10": {"base": "dark", "bg": "#0C1D32", "fg": "#EBEBEB", "link": "#E1F4E4", "heading": "#EEDA77", "muted": "#B3B3B3", "accent": "#83AFE2", "selection": "#21538C", "cursorline": "#15365B"},
+  "standard-blue": {"base": "dark", "bg": "#11253D", "fg": "#D9E1EA", "link": "#8CC4FF", "heading": "#EFD67A", "subheading": "#83AFE2", "muted": "#9DAFC4", "accent": "#83AFE2", "selection": "#2B5A8E", "cursorline": "#1A3454"}
+}

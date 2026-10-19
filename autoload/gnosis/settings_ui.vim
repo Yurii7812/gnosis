@@ -96,7 +96,7 @@ function! s:value(item) abort
   elseif a:item ==# 'window'
     return l:s.window.width . ' × ' . l:s.window.height
   elseif a:item ==# 'appearance'
-    return s:t('settings.' . (l:s.appearance =~# '^\(dark\|light\)$' ? l:s.appearance : 'standard'))
+    return l:s.appearance ==# 'light' ? s:t('settings.light') : s:t('settings.dark')
   elseif a:item ==# 'theme'
     return s:theme_label(l:s)
   elseif a:item ==# 'app_theme'
@@ -180,7 +180,7 @@ endfunction
 function! s:save() abort
   let s:settings = gnosis#settings#validate(s:settings)
   call gnosis#settings#save(s:vault, s:settings)
-  " 開いている vault の設定を即時反映。起動画面は10番の配色を維持。
+  " 開いている vault の設定を即時反映。起動画面は起動画面の配色を維持。
   if gnosis#vault#same(gnosis#settings#current_vault(), s:vault) && !gnosis#start#active()
     call gnosis#settings#activate(s:vault)
   else
@@ -256,9 +256,28 @@ function! s:change(item) abort
     call s:font_result(gnosis#termfont#set_size(str2nr(l:r)))
     return
   elseif a:item ==# 'fontFamily'
-    let l:r = s:ask(s:t('settings.prompt_font_family'), gnosis#termfont#load().fontFamily)
-    if l:r ==# "\x01" | return | endif
-    call s:font_result(gnosis#termfont#set('fontFamily', trim(l:r)))
+    " 入っているフォントの一覧から選ぶ（先頭は自動、最後は名前を自分で入力）
+    let l:fonts = gnosis#termfont#font_choices()
+    let l:cur = gnosis#termfont#load().fontFamily
+    let l:labels = [s:t('settings.choose_font')]
+    call add(l:labels, '1. ' . s:t('settings.font_auto') . (empty(l:cur) ? '  ←' : ''))
+    for l:i in range(len(l:fonts))
+      call add(l:labels, (l:i + 2) . '. ' . l:fonts[l:i].name . (empty(l:fonts[l:i].note) ? '' : '  … ' . l:fonts[l:i].note)
+            \ . (l:fonts[l:i].name ==# l:cur ? '  ←' : ''))
+    endfor
+    call add(l:labels, (len(l:fonts) + 2) . '. ' . s:t('settings.font_type_name'))
+    let l:n = gnosis#ui#inputlist(l:labels)
+    if l:n < 1 || l:n > len(l:fonts) + 2 | return | endif
+    if l:n == 1
+      let l:name = ''
+    elseif l:n <= len(l:fonts) + 1
+      let l:name = l:fonts[l:n - 2].name
+    else
+      let l:r = s:ask(s:t('settings.prompt_font_family'), l:cur)
+      if l:r ==# "\x01" | return | endif
+      let l:name = trim(l:r)
+    endif
+    call s:font_result(gnosis#termfont#set('fontFamily', l:name))
     let s:message = s:t('settings.font_family_saved')
     return
   elseif a:item ==# 'lineSpacing'
@@ -284,8 +303,7 @@ function! s:change(item) abort
     endif
     return
   elseif a:item ==# 'appearance'
-    " 標準 → ダーク → ライト → 標準
-    let l:s.appearance = get({'standard': 'dark', 'dark': 'light'}, l:s.appearance, 'standard')
+    let l:s.appearance = l:s.appearance ==# 'light' ? 'dark' : 'light'
   elseif a:item ==# 'theme'
     call s:choose_theme()
   elseif a:item ==# 'theme_add'

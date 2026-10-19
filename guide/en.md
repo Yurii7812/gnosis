@@ -15,7 +15,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - Start screen … the Chnoubis symbol, the selected vault, and `Enter` to start. `v` chooses / manages vaults, `s` opens the settings, `q` quits
 - Vault list … `j` / `k` select ・ `Enter` opens ・ `a` registers an existing folder ・ `n` creates a new vault ・ `d` removes it from the list (notes and folders are kept) ・ `Esc` goes back
 - `:GnosisStart` start screen ・ `:GnosisVaults` vault list (switch while working) ・ `:GnosisSettings` settings
-- Settings are per vault (`.gnosis/settings.json`): language, maximize on start, normal window size, light / dark, theme, custom colors. Font size, font, line spacing and terminal are Gnosis-wide (`terminal.json` in the Gnosis home)
+- Settings are per vault (`.gnosis/settings.json`): language, maximize on start, normal window size, theme (dark / light), add-on themes, custom colors. Font size, font, line spacing and terminal are Gnosis-wide (`terminal.json` in the Gnosis home)
 - `:GnosisThemeAdd` `Plug 'author/repo'` … adds a Vim theme from GitHub and uses it for this vault ・ `:GnosisThemeReset` back to the standard theme
 - The color editor ("Make / edit colors" in settings) lets you set the **text and background colors of the number before each link (1-9, 0, g1 …)** as well as background, text, links, headings, selection and cursor line. The preview (with numbered examples) updates immediately. If you set nothing, the old look stays (text = background color, badge = muted color)
 - `:GnosisFontSize` font size (`20` / `+1` / `-1` / `reset`; saved, and applied at once where the terminal allows) ・ `:GnosisLinkSource` show / hide the Markdown source of links

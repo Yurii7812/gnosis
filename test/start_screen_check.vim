@@ -18,9 +18,9 @@ function! s:first(t) abort
   call s:ok('起動画面: vault の名前とパス', l:text =~# '保管庫' && stridx(l:text, $START_VAULT) >= 0)
   call s:ok('起動画面: Enter で開始の案内', l:text =~# 'Enter')
   call s:ok('起動画面: vault の選択・管理への入口', l:text =~# 'v ')
-  " 背景は10番の #0C1D32、Chnoubis の図案は #83AFE2 のまま。案内の文字は読みやすい白系
+  " 背景はダークと同じ #22272E、Chnoubis の図案はダークのリンクの色 #6CB6FF。案内の文字はダークの本文の色
   let s:art = tolower(synIDattr(synIDtrans(hlID('gnosisStartArt')), 'fg#', 'gui'))
-  call s:ok('起動画面: chnoubis3.sh の10番', tolower(s:hl('bg')) ==# '#0c1d32' && s:art ==# '#83afe2' && tolower(s:hl('fg')) ==# '#ebebeb', s:hl('bg') . ' ' . s:art . ' ' . s:hl('fg'))
+  call s:ok('起動画面: ダークの背景に、ダークのリンクの色の Chnoubis', tolower(s:hl('bg')) ==# '#22272e' && s:art ==# '#6cb6ff' && tolower(s:hl('fg')) ==# '#cdd5de', s:hl('bg') . ' ' . s:art . ' ' . s:hl('fg'))
   call s:ok('起動画面: 標準80x24端末でもロゴ+図案が収まる',
         \ len(gnosis#start#pick_art(80, 23, 2 + len(gnosis#start#logo(80, 23)) + 2))
         \ + len(gnosis#start#logo(80, 23)) + 2 + 2 <= 23)

@@ -125,14 +125,15 @@ except Exception:
 PY
 }
 
-# フォント: terminal.json の fontFamily。空なら、読みやすい等幅フォントを入っているものから選ぶ。
-# 日本語と英字を同じ設計で揃えた等幅フォントを先に選ぶ（英字用フォントに日本語を置き換えで混ぜると、
-# 字形・字間・高さが揃わず読みにくい）。BIZ UDゴシックは読みやすさを検証したユニバーサルデザイン書体。
+# フォント: terminal.json の fontFamily。空なら、読みやすい等幅フォントを入っているものから選ぶ
+# （日本語の文字は端末がフォントの置き換えで描く。Noto Sans CJK JP が入っていればブラウザと同じ字形）。
+# 日本語用の等幅フォント（Noto Sans Mono CJK JP など）を先にしない: 起動画面の Chnoubis の点字（U+2800〜）を
+# 持たず、置き換えのフォントと幅が合わずに図案が崩れる（Hack は DejaVu 由来で、置き換えの点字と幅が揃う）。
 # どれも無ければ fc-match の monospace。
 font_family() {
   f=$(tf_get fontFamily "")
   if [ -z "$f" ] && have fc-list; then
-    for c in "BIZ UDGothic" "UDEV Gothic" "PlemolJP" "HackGen" "Noto Sans Mono CJK JP" "Hack" "DejaVu Sans Mono" "Noto Sans Mono" "Liberation Mono" "Ubuntu Mono" "Source Code Pro" "Menlo"; do
+    for c in "Hack" "DejaVu Sans Mono" "Noto Sans Mono" "Liberation Mono" "Ubuntu Mono" "Source Code Pro" "Menlo"; do
       if [ -n "$(fc-list "$c" family 2>/dev/null | head -1)" ]; then f=$c; break; fi
     done
   fi
@@ -170,8 +171,8 @@ return {
   font_size = tonumber(os.getenv('GNOSIS_FONT_SIZE')) or 16,
   line_height = tonumber(os.getenv('GNOSIS_LINE_HEIGHT')) or 1.10,
   colors = {
-    background = '#0C1D32', foreground = '#EBEBEB',
-    cursor_bg = '#83AFE2', cursor_fg = '#0C1D32',
+    background = '#22272E', foreground = '#CDD5DE',
+    cursor_bg = '#6CB6FF', cursor_fg = '#22272E',
     selection_bg = '#21538C', selection_fg = '#EBEBEB',
   },
   enable_tab_bar = false,
@@ -196,22 +197,22 @@ Description=Gnosis
 Opacity=1
 
 [Background]
-Color=20,40,61
+Color=34,39,46
 
 [BackgroundIntense]
-Color=28,53,78
+Color=45,51,59
 
 [Foreground]
-Color=230,238,245
+Color=205,213,222
 
 [ForegroundIntense]
 Color=255,255,255
 
 [Color0]
-Color=20,40,61
+Color=34,39,46
 
 [Color0Intense]
-Color=48,88,121
+Color=84,93,104
 
 [Color1]
 Color=255,138,138
@@ -250,7 +251,7 @@ Color=121,207,255
 Color=188,238,255
 
 [Color7]
-Color=230,238,245
+Color=205,213,222
 
 [Color7Intense]
 Color=255,255,255
@@ -438,9 +439,9 @@ run_new_terminal() {
       run_term wezterm --config-file "$conf" start -- "$SELF" --tui "$@" ;;
     xterm)
       if [ "$max" = 1 ]; then
-        run_term xterm -maximized -T Gnosis -bg '#0C1D32' -fg '#EBEBEB' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
+        run_term xterm -maximized -T Gnosis -bg '#22272E' -fg '#CDD5DE' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@"
       fi
-      run_term xterm -T Gnosis -bg '#0C1D32' -fg '#EBEBEB' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
+      run_term xterm -T Gnosis -bg '#22272E' -fg '#CDD5DE' -fa "$fam" -fs "$size" -e "$SELF" --tui "$@" ;;
     gnome-terminal)
       # GNOME Terminal は CLI でフォント指定できないため、Gnosis 専用の
       # GSettings profile を作って適用する。既定/他のプロファイルは変更しない。
