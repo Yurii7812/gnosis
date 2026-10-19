@@ -16605,10 +16605,11 @@ function! s:record_op_top_link(link, file, lines) abort
 endfunction
 
 " その日の日記（無ければ作る）の上に、時系列記録のノートへのリンクを置く
-function! s:record_link_diary(root, notes, date, file, title) abort
+" a:1 = 使う日記のファイル名（移行で、古い形の題の日記を使うとき。見つけたものをそのまま使う）
+function! s:record_link_diary(root, notes, date, file, title, ...) abort
   let l:dir = fnamemodify(a:root, ':p')
   let l:st = s:diary_state_read()
-  let l:diary = s:diary_find(a:root, a:date, l:st, a:notes)
+  let l:diary = a:0 && !empty(a:1) ? a:1 : s:diary_find(a:root, a:date, l:st, a:notes)
   if empty(l:diary)
     let l:diary = s:diary_create(a:root, a:date, a:notes)
     let l:st.days[a:date] = l:diary
@@ -16758,6 +16759,7 @@ function! gnosis#record_migrate(old, kind) abort
   let l:st = s:diary_state_read()
   let l:sec = get(g:, 'gnosis_diary_section', '今日のノート')
   let l:moved = 0
+  let l:unlinked = 0
   " 月（と年）のグループと、その中のその日のノート
   let l:groups = [l:kg]
   let l:seen = {}
@@ -16781,18 +16783,38 @@ function! gnosis#record_migrate(old, kind) abort
       let l:date = matchstr(l:n.title, '^\d\{4}-\d\d-\d\d')
       if empty(l:date) | continue | endif
       call s:diary_edit_file(l:dir . l:t, {lines -> s:record_op_mark(lines, a:kind)})
-      let l:prev = get(l:st.notes, l:t, '')
-      if !empty(l:prev) && filereadable(l:dir . l:prev)
-        call s:diary_edit_file(l:dir . l:prev, function('s:diary_op_remove', [l:t, l:sec]))
-        call remove(l:st.notes, l:t)
+      " その日の日記: 記録 → 「今日のノート」に載せている日記（古い形の題「日付-曜日-題」の日記も）→ その日の日記。
+      " 移行では日記を新しく作らない（見つからなければリンクだけ置かない）
+      let l:diary = get(l:st.notes, l:t, '')
+      if empty(l:diary) || !filereadable(l:dir . l:diary)
+        let l:diary = ''
+        for l:d in l:notes
+          if !l:d.group && empty(get(l:d, 'record', '')) && l:d.file !=# l:t && l:d.title =~# '^' . l:date . '-'
+                \ && match(readfile(l:dir . l:d.file), '^\[[^]]*\](' . escape(l:t, '.') . ')\s*$') >= 0
+            let l:diary = l:d.file
+            break
+          endif
+        endfor
       endif
+      if empty(l:diary)
+        let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
+      endif
+      if !empty(l:diary)
+        call s:diary_edit_file(l:dir . l:diary, function('s:diary_op_remove', [l:t, l:sec]))
+      endif
+      if has_key(l:st.notes, l:t) | call remove(l:st.notes, l:t) | endif
       call s:diary_state_write(l:st)
-      call s:record_link_diary(l:root, l:notes, l:date, l:t, l:n.title)
+      if !empty(l:diary)
+        call s:record_link_diary(l:root, l:notes, l:date, l:t, l:n.title, l:diary)
+      else
+        let l:unlinked += 1
+      endif
       let l:st = s:diary_state_read()
       let l:moved += 1
     endfor
   endwhile
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('「%s」を時系列記録「%s」に移しました（その日のノート %d 件）'), a:old, a:kind, l:moved)
+        \ . (l:unlinked ? printf(gnosis#i18n#tr('。日記が見つからずリンクを置かなかったもの %d 件'), l:unlinked) : '')
 endfunction
 
 function! s:record_op_mark(lines, kind) abort
