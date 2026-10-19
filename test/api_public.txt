@@ -318,6 +318,8 @@ gnosis#theme_edit#open
 gnosis#theme_edit#render
 gnosis#theme_edit#set_color
 gnosis#theme_edit#state
+gnosis#time_mode_toggle
+gnosis#time_stamp
 gnosis#timestamp_filename
 gnosis#timestamp_yaml
 gnosis#toggle_alternate

@@ -13138,6 +13138,39 @@ function! s:checkbox_cr(lnum, line) abort
   return 1
 endfunction
 
+" 時刻（時:分 と半角スペース）。Ctrl-T で入れる・時刻モードの Enter で次の行の頭に入れる
+function! gnosis#time_stamp() abort
+  return strftime('%H:%M') . ' '
+endfunction
+
+" 時刻モード（\T / :GnosisTimeMode）: Enter を押すたびに、空行を 1 つはさんで次の行の頭に時刻を入れる。
+" そのバッファだけ。もう一度で切る。
+function! gnosis#time_mode_toggle() abort
+  let b:gnosis_time_mode = !get(b:, 'gnosis_time_mode', 0)
+  redrawstatus
+  echo 'Gnosis: ' . gnosis#i18n#tr(b:gnosis_time_mode ? '時刻モード: オン（Enter で空行と次の時刻。\T で切る）' : '時刻モード: オフ')
+endfunction
+
+" 時刻モードの Enter。時刻だけの行（まだ何も書いていない）で押したら、時刻を消してふつうの空行にする。
+" 行の途中で押したら、カーソルより後ろを次の時刻の行へ移す。
+function! s:time_cr(lnum, line) abort
+  if !get(b:, 'gnosis_time_mode', 0)
+    return 0
+  endif
+  if a:line =~# '^\d\d:\d\d \=$'
+    call setline(a:lnum, '')
+    call cursor(a:lnum, 1)
+    return 1
+  endif
+  let l:col = col('.') - 1
+  let l:rest = substitute(strpart(a:line, l:col), '^\s\+', '', '')
+  call setline(a:lnum, substitute(strpart(a:line, 0, l:col), '\s\+$', '', ''))
+  let l:ts = gnosis#time_stamp()
+  call append(a:lnum, ['', l:ts . l:rest])
+  call cursor(a:lnum + 2, strlen(l:ts) + 1)
+  return 1
+endfunction
+
 function! gnosis#table_cr_action() abort
   if &l:filetype !=# 'markdown' && &l:filetype !=# 'vimwiki'
     call s:feedkeys_insert("\<CR>")
@@ -13149,6 +13182,9 @@ function! gnosis#table_cr_action() abort
     return
   endif
   if !s:is_table_line(l:cur_line)
+    if s:time_cr(l:cur_lnum, l:cur_line)
+      return
+    endif
     call s:feedkeys_insert("\<CR>")
     return
   endif

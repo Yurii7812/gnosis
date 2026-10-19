@@ -6,6 +6,8 @@
     "g=所属 ": "g=join group ",
     "g=このグループに入る / ": "g=join this group / ",
     "キャンセル（Enter / t / h / c / b / p / o / r のどれか）": "Cancelled (Enter / t / h / c / b / p / o / r)",
+    "時刻モード: オン（Enter で空行と次の時刻。\\T で切る）": "Time mode: on (Enter adds a blank line and the next time. \\T turns it off)",
+    "時刻モード: オフ": "Time mode: off",
     "Enter=このグループに登録 / o=孤立（どこにもつながない）  (Esc/q キャンセル)": "Enter=add to this group / o=orphan (not linked anywhere)  (Esc/q cancel)",
     "Enter=登録 o=孤立 (Esc)": "Enter=add o=orphan (Esc)",
     "Enter=末 o=孤立 b=子 p=親 t=節 h=下 c=Context r=Related (Esc)": "Enter=end o=orphan b=child p=parent t=heading h=below c=Context r=Related (Esc)",

@@ -438,6 +438,12 @@ nnoremap <silent> \tdr :TDR<CR>
 nnoremap <silent> \tdc :TDC<CR>
 nnoremap <silent> \ua  :UpdateAll<CR>
 nnoremap <silent> \d   <Cmd>call gnosis#diary_today()<CR>
+" 時刻: Ctrl-T で「時:分 」を入れる（ノーマルでは挿入モードに入って入れる。Vim 標準の Ctrl-T の字下げ・タグ戻りの代わり）
+" \T で時刻モード（Enter のたびに空行と次の行の頭に時刻）をオン／オフ
+inoremap <silent> <C-t> <C-r>=gnosis#time_stamp()<CR>
+nnoremap <silent> <C-t> i<C-r>=gnosis#time_stamp()<CR>
+nnoremap <silent> \T   <Cmd>call gnosis#time_mode_toggle()<CR>
+command! GnosisTimeMode call gnosis#time_mode_toggle()
 " zw … 今のノート（日記でなくてもよい）の本文の一番下、空行を 1 つ空けたところから書き始める。
 nnoremap <silent> zw  <Cmd>call gnosis#write_at_bottom()<CR>
 " \\r はリンクの内容を触らず、Vim側の検索/matchハイライトと色を再適用。
