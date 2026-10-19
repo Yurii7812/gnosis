@@ -14,10 +14,11 @@ function! gnosis#ui#statusline() abort
     let l:kind = 'Normal'
     let l:label = ' NORMAL '
   endif
-  " 時刻モード（\T）のときは、Enter で時刻が入ることが分かるように表示する
+  " 時刻モード（\T）のときは、時刻が入ることが分かるように表示する
   let l:time = get(b:, 'gnosis_time_mode', 0) ? '%#GnosisModeInsert# 時刻 ' : ''
   return '%#GnosisMode' . l:kind . '#' . l:label . l:time
-        \ . '%#StatusLine#  %f %m%r%=%l:%c  %p%% '
+        \ . '%#StatusLine# ' . (get(g:, 'gnosis_folgezettel_move', 0) ? '[Folgezettel ON] ' : '')
+        \ . ' %f %m%r%=%l:%c  %p%% '
 endfunction
 
 " ---------------------------------------------------------------------------

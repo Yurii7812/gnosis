@@ -932,7 +932,11 @@ def _trash_zk_note_images(root: Path, cache: dict, keys_now: set, alive_bodies=N
             for ln in fm:
                 s = ln.strip()
                 if s.startswith("folgezettel:"):
-                    legacy = s.split(":", 1)[1].strip()
+                    # The live digital Folgezettel field is independent of title;
+                    # only the retired paper marker used title-equal IDs.
+                    candidate = s.split(":", 1)[1].strip()
+                    if candidate == title:
+                        legacy = candidate
                     break
             if legacy is None and any(ln.strip().startswith("paper_topic:") for ln in fm):
                 legacy = title
@@ -1551,8 +1555,17 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # Group / BranchGroup の後ろに Context がある形式でも、先頭のブロックを
     # 順に取り除いてから Context を読む。旧 ThisNoteGroup も受け付ける。
     pb_block, rest = _take_parent_branch_block(rest)
-    group_block, rest = _take_group_block(rest)
-    branch_links, rest, has_branch_group = _take_branch_group_block(rest)
+    # 先頭のブロックは、ファイルで先に現れるほうから順に取る。Group: を先に取ると、BranchGroup: が
+    # Group: の上にあるとき、Group: と本文のあいだの空行を一緒に外してしまい、本文のリンク行が
+    # BranchGroup: に吸い込まれる。
+    _bg_at = next((i for i, ln in enumerate(rest) if ln.strip() in (BRANCH_GROUP_HEAD, LEGACY_THIS_NOTE_GROUP_HEAD)), -1)
+    _gp_at = next((i for i, ln in enumerate(rest) if ln.strip() in (GROUP_MARK, LEGACY_GROUP_MARK)), -1)
+    if _bg_at >= 0 and (_gp_at < 0 or _bg_at < _gp_at):
+        branch_links, rest, has_branch_group = _take_branch_group_block(rest)
+        group_block, rest = _take_group_block(rest)
+    else:
+        group_block, rest = _take_group_block(rest)
+        branch_links, rest, has_branch_group = _take_branch_group_block(rest)
     ctx: list[str] = []
     ctx_at = -1
     blk = find_context_block(rest)
@@ -1863,6 +1876,21 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     body[pos:pos] = ([""] if pos else []) + blocks + [""]
     return body
 
+def _split_child_branch(cbranch: list[str], rendered: list[str]) -> list[str]:
+    """ChildBranch: の中を、本文・BranchGroup: に出ている子（上）と出ていない子（下）に分け、間に空行を 1 つ入れる。
+    それぞれの中の並びは元のまま。`rendered` は ChildBranch より上の部分（本文と上のブロック）。"""
+    def key(tg: str) -> str:
+        return tg.split("#", 1)[0].strip()
+
+    shown = {key(tg) for _d, tg in _links_from(rendered)}
+    entries = [ln for ln in cbranch if ln.strip()]
+    top, rest = [], []
+    for ln in entries:
+        tgs = [key(tg) for _d, tg in _links_from([ln])]
+        (top if tgs and all(t in shown for t in tgs) else rest).append(ln)
+    return top + ([""] if top and rest else []) + rest
+
+
 def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
                    group_lines: list[str] | None = None) -> str:
     """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
@@ -1890,7 +1918,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     elif use_block and _has(n.get("_leftover")):
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     if _has(n.get("cbranch")):
-        sections.append((CHILD_BRANCH_MARK, n["cbranch"]))
+        sections.append((CHILD_BRANCH_MARK, _split_child_branch(n["cbranch"], lines)))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
     if _has(related):
         sections.append((RELATED_MARK, related))
@@ -1992,6 +2020,11 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 削除（ゴミ箱移動を含む）されたフォルゲゼッテル/トピックノートの画像も退避（2026-10-09）
     _trash_zk_note_images(root, cache, set(keys.values()),
                           [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
+    import folgezettel as fz
+    for p, ident in fz.allocation(root, notes).items():
+        fm = notes[p]["fm"] or ["---", "title: " + notes[p]["title"], "---"]
+        updated = fz.set_value("\n".join(fm), ident)
+        notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を

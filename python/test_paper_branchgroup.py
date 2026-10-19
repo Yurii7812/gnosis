@@ -137,8 +137,11 @@ def block(path: Path, head: str):
         return []
     i = ls.index(head) + 1
     out = []
-    while i < len(ls) and ls[i].strip().startswith("["):
-        out.append(ls[i])
+    while i < len(ls) and (ls[i].strip().startswith("[")
+                           # ChildBranch: は、本文に出ている子と出ていない子のあいだに空行が 1 つ入る
+                           or (head == "ChildBranch:" and not ls[i].strip() and i + 1 < len(ls) and ls[i + 1].strip().startswith("["))):
+        if ls[i].strip():
+            out.append(ls[i])
         i += 1
     return out
 

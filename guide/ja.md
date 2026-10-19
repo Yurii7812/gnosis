@@ -142,6 +142,7 @@
 - `語::` … 両方の同じセクションに `語:`
 - **Context は本文の冒頭（H1 タイトルの直後）の `Context:` ブロック**（Markdown の見出しではなく、ふつうのテキスト行。直下にリンクが並ぶ）。`c` で足したリンクは既存リンクの最後に入り、同じノートは重複しない。旧形式 `### Context` も読める（`c` で足したノートは、リンクを失わず新形式へ移る。旧形式のノートは開いただけ・同期しただけでは書き換えない。移行は `:GnosisContextMigrate`（今のノート）/ `:GnosisContextMigrate all`（試走）/ `:GnosisContextMigrate! all`（vault 全体）で明示的に）。コードブロックの中の `Context:` は Context ではない
 - グループ（`attribute: group`）へのリンクは `Group:` に、普通のノートへのリンクは `Context:` に、sync が自動で振り分ける。中身が空の節（ParentBranch / Group / ChildBranch / Related / BackLink）は見出しごと無い
+- `ChildBranch:` の中は、本文や `BranchGroup:` に出ている子が上、出ていない子が下で、間に空行が 1 つ入る（同期が並べ直す。それぞれの中の並びは元のまま）
 - ノートの並び: `ParentBranch:` → `BranchGroup:` → `Group:` → `Context:`（ここまでは本文の上、H1 の直後のブロック。続くリンク行だけがブロックで、空行で終わる）→ 本文 → `ChildBranch:` → `Related:` → `BackLink:`（本文の下の節）。中身が空のものは書かない。`ParentBranch:` / `ChildBranch:` は `b` / `p` で明示した関係で、sync は追加も削除もしない（表示名の追従と、消えたファイルの掃除だけ。Context には変換しない）。カーソルがこれらのブロックの上にあるときの `h`（カーソル直下）は、リンクを本文に置く（ブロックには入れない）
 
 ## 同期
