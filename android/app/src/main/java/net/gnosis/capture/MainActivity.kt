@@ -16,6 +16,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -128,7 +130,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var input by remember { mutableStateOf("") }
     val pendingImages = remember { mutableStateListOf<String>() }
     var replyTo by remember { mutableStateOf<String?>(null) }      // 次に書くものの Branch の親
-    var contextTo by remember { mutableStateOf<String?>(null) }    // 次に書くものの文脈にするメモ
+    val contextsTo = remember { mutableStateListOf<String>() }      // 次に書くものの文脈にするメモ（右スワイプで足す）
+    var flash by remember { mutableStateOf<String?>(null) }        // 飛んだ先のメモを少しのあいだ目立たせる
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
     var editing by remember { mutableStateOf<String?>(null) }
     var sheetFor by remember { mutableStateOf<String?>(null) }
@@ -182,6 +185,46 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         notificationsEnabled = Alarm.notificationsEnabled(ctx)
     }
+    /** 文脈や Branch の親のメモへスクロールし、少しのあいだ色を変えて知らせる。 */
+    fun jumpTo(id: String) {
+        if (visibleEntries(entries, topic).none { it.id == id }) setTopic(ALL)
+        scope.launch {
+            delay(50)
+            val list = visibleEntries(entries, topic).sortedByDescending { it.created }
+            var idx = 0
+            for ((i, x) in list.withIndex()) {
+                if (x.id == id) break
+                idx++
+                val next = list.getOrNull(i + 1)
+                if (next == null || dayKey(next.created) != dayKey(x.created)) idx++   // 日付の見出しの行
+            }
+            listState.animateScrollToItem(idx)
+            flash = id; delay(1500); if (flash == id) flash = null
+        }
+    }
+
+    /** 選んだメモを古い順に 1 件へまとめる（本文は空行で区切る。画像・文脈も引き継ぐ）。 */
+    fun mergeEntries(ids: Set<String>) {
+        val group = entries.filter { it.id in ids }.sortedBy { it.created }
+        if (group.size < 2) return
+        val base = group.first()
+        val others = group.drop(1).map { it.id }.toSet()
+        val merged = base.copy(
+            text = group.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n"),
+            images = group.flatMap { it.images },
+            parent = base.parent?.takeIf { it !in ids },
+            contexts = group.flatMap { it.contexts }.filter { it !in ids }.distinct(),
+            edited = System.currentTimeMillis(), exported = false)
+        entries.removeAll { it.id in others }
+        for (k in entries.indices) {
+            val e = if (entries[k].id == base.id) merged else entries[k]
+            val parent = if (e.parent in others) base.id else e.parent
+            val contexts = e.contexts.map { if (it in others) base.id else it }.filter { it != e.id }.distinct()
+            entries[k] = if (parent != e.parent || contexts != e.contexts) e.copy(parent = parent.takeIf { it != e.id }, contexts = contexts, exported = false) else e
+        }
+        persist()
+    }
+
     fun toggleSelection(id: String) {
         if (id in selected) selected.remove(id) else selected.add(id)
     }
@@ -214,8 +257,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         } else {
             val now = System.currentTimeMillis()
             entries.add(Entry(id = Store.newId(now, entries), created = now, topic = writingTopic(topic), text = text,
-                images = pendingImages.toList(), parent = replyTo, contexts = listOfNotNull(contextTo)))
-            replyTo = null; contextTo = null
+                images = pendingImages.toList(), parent = replyTo, contexts = contextsTo.toList()))
+            replyTo = null; contextsTo.clear()
         }
         input = ""; pendingImages.clear(); promptState.value = false
         persist()
@@ -243,14 +286,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         bottomBar = {
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 // つなぎ方の案内（WhatsApp の返信のように、何に続けて書いているかを見せる）
-                val banner: Pair<String, () -> Unit>? = when {
-                    contextFor != null -> "文脈にするメモをタップ（「${short(byId[contextFor]?.text ?: "")}」の文脈になります）" to { contextFor = null }
-                    editing != null -> "編集中: ${short(byId[editing]?.text ?: "")}" to { editing = null; input = "" }
-                    replyTo != null -> "↳ 続きとして書く（Branch の子）: ${short(byId[replyTo]?.text ?: "")}" to { replyTo = null }
-                    contextTo != null -> "⇢ 文脈として続ける: ${short(byId[contextTo]?.text ?: "")}" to { contextTo = null }
-                    else -> null
+                val banners = buildList<Pair<String, () -> Unit>> {
+                    if (contextFor != null) add("文脈にするメモを続けてタップ（「${short(byId[contextFor]?.text ?: "")}」の文脈。終わったら ×）" to { contextFor = null })
+                    if (editing != null) add("編集中: ${short(byId[editing]?.text ?: "")}" to { editing = null; input = "" })
+                    if (replyTo != null) add("↳ 続きとして書く（Branch の子）: ${short(byId[replyTo]?.text ?: "")}" to { replyTo = null })
+                    if (contextsTo.isNotEmpty()) add("⇢ 文脈 ${contextsTo.size} 件: " + contextsTo.joinToString("、") { short(byId[it]?.text ?: "", 10) } to { contextsTo.clear() })
                 }
-                if (banner != null) {
+                banners.forEach { banner ->
                     Surface(tonalElevation = 3.dp, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                         Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(banner.first, Modifier.weight(1f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -272,6 +314,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", text))
                                 selected.clear(); selecting = false
                             }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("コピー") }
+                            OutlinedButton(onClick = { mergeEntries(selected.toSet()); selected.clear(); selecting = false }, enabled = selected.size >= 2, modifier = Modifier.weight(1f)) { Text("統合") }
                             OutlinedButton(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("移動") }
                             OutlinedButton(onClick = { deleteSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("消す") }
                         }
@@ -323,8 +366,9 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     // 右へスワイプ: このメモを文脈にして続ける / 左へスワイプ: このメモの Branch の子として続ける
                     val swipe = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
                         when (v) {
-                            SwipeToDismissBoxValue.StartToEnd -> { contextTo = e.id; replyTo = null; contextFor = null; editing = null }
-                            SwipeToDismissBoxValue.EndToStart -> { replyTo = e.id; contextTo = null; contextFor = null; editing = null }
+                            // 文脈は何件でも足せる（もう一度スワイプすると外す）。Branch の親は 1 つ。
+                            SwipeToDismissBoxValue.StartToEnd -> { if (e.id in contextsTo) contextsTo.remove(e.id) else contextsTo.add(e.id); contextFor = null; editing = null }
+                            SwipeToDismissBoxValue.EndToStart -> { replyTo = e.id; contextFor = null; editing = null }
                             else -> {}
                         }
                         if (v != SwipeToDismissBoxValue.Settled) scope.launch { delay(100); focus.requestFocus(); keyboard?.show() }
@@ -340,18 +384,20 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 if (toLeft) { Text("Branch で続ける", color = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(6.dp)); Icon(Icons.Filled.SubdirectoryArrowRight, null, tint = MaterialTheme.colorScheme.primary) }
                             }
                         }) {
-                    Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id, selected = e.id in selected, selectionMode = selecting,
+                    Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id, selected = e.id in selected || e.id == flash, selectionMode = selecting,
                         onTap = {
                             val cf = contextFor
                             if (selecting) toggleSelection(e.id)
                             else if (cf != null && cf != e.id) {
+                                // 続けてタップして複数の文脈をつなぐ（もう一度タップすると外す）
                                 val k = entries.indexOfFirst { it.id == cf }
-                                if (k >= 0 && e.id !in entries[k].contexts) {
-                                    entries[k] = entries[k].copy(contexts = entries[k].contexts + e.id, exported = false); persist()
+                                if (k >= 0) {
+                                    val cs = entries[k].contexts
+                                    entries[k] = entries[k].copy(contexts = if (e.id in cs) cs - e.id else cs + e.id, exported = false); persist()
                                 }
-                                contextFor = null
                             }
                         },
+                        onJump = { jumpTo(it) },
                         onLong = { if (selecting) toggleSelection(e.id) else sheetFor = e.id })
                     }
                 }
@@ -380,8 +426,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                 Text(short(target.text, 60), fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
                 val acts = buildList<Triple<ImageVector, String, () -> Unit>> {
-                    add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextTo = null; contextFor = null })
-                    add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手をタップ）") { contextFor = target.id; replyTo = null })
+                    add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextFor = null })
+                    add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手を続けてタップ）") { contextFor = target.id; replyTo = null })
                     add(Triple(Icons.Filled.Edit, "書き直す") { editing = target.id; input = target.text })
                     add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); contextFor = null; keyboard?.hide() })
                     add(Triple(Icons.Filled.Label, "トピックを変える") { topicDialogFor = target.id })
@@ -540,10 +586,9 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, selected: Boolean, selectionMode: Boolean, onTap: () -> Unit, onLong: () -> Unit) {
-    val diary = e.topic == DIARY
+private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, selected: Boolean, selectionMode: Boolean, onTap: () -> Unit, onLong: () -> Unit, onJump: (String) -> Unit) {
+    // 日記も他のメモと同じ色（トピックは右下の小さな文字で分かる）
     val colors = if (selected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    else if (diary) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Card(colors = colors, shape = RoundedCornerShape(14.dp),
@@ -551,12 +596,16 @@ private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Sto
             modifier = Modifier.widthIn(max = 340.dp).combinedClickable(onClick = onTap, onLongClick = onLong)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 if (selectionMode) Checkbox(checked = selected, onCheckedChange = { onTap() })
+                // 押すとそのメモへ飛ぶ
                 e.parent?.let { p ->
-                    Text("↳ ${short(byId[p]?.text ?: "（書き出し済み）")} の続き", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("↳ ${short(byId[p]?.text ?: "（書き出し済み）")} の続き", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+                        textDecoration = if (p in byId) TextDecoration.Underline else null,
+                        modifier = if (p in byId) Modifier.clickable { onJump(p) }.padding(vertical = 2.dp) else Modifier)
                 }
-                if (e.contexts.isNotEmpty()) {
-                    Text("文脈: " + e.contexts.joinToString("、") { short(byId[it]?.text ?: "（書き出し済み）", 12) },
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.tertiary)
+                e.contexts.forEach { c ->
+                    Text("文脈: " + short(byId[c]?.text ?: "（書き出し済み）", 20), fontSize = 12.sp, color = MaterialTheme.colorScheme.tertiary,
+                        textDecoration = if (c in byId) TextDecoration.Underline else null,
+                        modifier = if (c in byId) Modifier.clickable { onJump(c) }.padding(vertical = 2.dp) else Modifier)
                 }
                 e.images.forEach { name ->
                     AsyncImage(File(store.imageDir, name), null, Modifier.padding(vertical = 4.dp).heightIn(max = 220.dp).fillMaxWidth(),
