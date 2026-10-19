@@ -16,6 +16,9 @@ Ordinary prose must remain the normal text color
 *italic*
 `code`
 [LinkName](other.md)
+このノートは操作ガイド。**全キーは集約**する。
+設定画面のあとの行
+日本語の*斜体*と**太字**が続く**二つ目**の文。2*3*4 の計算と ***both***
 EOF
 HOME="$WORK/home" GNOSIS_HOME="$WORK/home/.local/share/gnosis" \
  FOCUS_MARKDOWN_VAULT="$WORK/vault" FOCUS_MARKDOWN_RESULT="$WORK/results.txt" \

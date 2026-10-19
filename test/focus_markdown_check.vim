@@ -29,6 +29,12 @@ try
   call s:ok('explicit inline code retains code color', (s:has(10, 'code', 'markdownCode') || s:has(10, 'code', 'gnosisCodeInline')))
   call s:ok('headings keep heading syntax', s:has(5, 'Heading', 'markdownH1'))
   call s:ok('links keep link syntax', s:has(11, 'LinkName', 'gnosisLinkText'))
+  " 日本語の **太字**: 閉じたあとと次の行は太字にならない（開きの ** が斜体に取られていた）
+  call s:ok('Japanese bold closes', s:has(12, '全キー', 'markdownBold') && !s:has(12, 'する。', 'markdownBold') && !s:has(12, 'する。', 'markdownItalic'))
+  call s:ok('Japanese bold does not run into the next line', !s:has(13, '設定画面', 'markdownBold'))
+  call s:ok('Japanese italic and two bolds', s:has(14, '斜体', 'markdownItalic') && s:has(14, '太字', 'markdownBold') && s:has(14, '二つ目', 'markdownBold') && !s:has(14, 'が続く', 'markdownBold'))
+  call s:ok('2*3*4 is not italic', !s:has(14, '3*4', 'markdownItalic'))
+  call s:ok('***both*** is bold italic', s:has(14, 'both', 'markdownBoldItalic'))
 catch
   call add(s:out, 'NG exception: ' . v:exception . ' @ ' . v:throwpoint)
 endtry

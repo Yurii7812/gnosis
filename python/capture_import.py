@@ -145,6 +145,10 @@ def adb_mark(root: str) -> int:
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
 
 
+# スマホのメモの本文の中の、ほかのメモへのリンク（[表示名](memo:ID)）。取り込むと Gnosis のリンクになる。
+MEMO_LINK = re.compile(r"\[([^\]\n]*)\]\(memo:([^)\s]+)\)")
+
+
 def _first_line_title(text: str, limit: int = 20) -> str:
     for ln in text.splitlines():
         ln = ln.strip().lstrip("#").strip()
@@ -160,13 +164,15 @@ def plan(outdir: str, root: str) -> dict:
     st = load_state(Path(root))
     entries = data.get("entries", [])
     by_id = {e["id"]: e for e in entries}
-    # 関係のある日記は 1 件のノートにもする（Branch / Context の相手になれるように）
+    # 関係のある日記は 1 件のノートにもする（Branch / Context / 本文のリンクの相手になれるように）
     related = set()
     for e in entries:
         if e.get("parent"):
             related.add(e["id"]); related.add(e["parent"])
         for c in e.get("contexts") or []:
             related.add(e["id"]); related.add(c)
+        for m in MEMO_LINK.finditer(e.get("text") or ""):
+            related.add(e["id"]); related.add(m.group(2))
     items = []
     for e in sorted(entries, key=lambda x: x.get("created", 0)):
         t = dt.datetime.fromtimestamp(e.get("created", 0) / 1000)
@@ -189,15 +195,17 @@ def plan(outdir: str, root: str) -> dict:
             "hm": t.strftime("%H:%M"),
             "topic": normalize_topic(e.get("topic") or ""),
             "text": e.get("text") or "",
-            "title": _first_line_title(e.get("text") or "") or t.strftime("%H:%M のメモ"),
+            "title": _first_line_title(MEMO_LINK.sub(r"\1", e.get("text") or "")) or t.strftime("%H:%M のメモ"),
             "images": [i for i in e.get("images") or [] if (Path(outdir) / "images" / i).is_file()],
-            "parent": e.get("parent") or "",
+            # 親が無く文脈があるときは、最初の文脈を親（Branch）にする（PC の c と同じ）
+            "parent": e.get("parent") or next((c for c in e.get("contexts") or [] if c and c != e["id"]), ""),
             "contexts": [c for c in e.get("contexts") or [] if c],
             "note": needs_note,
             "done": done,
             "file": target if exists else "",
             "update": metadata_only and not done,
-            "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or []))
+            "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or [])
+                                                + [m.group(2) for m in MEMO_LINK.finditer(e.get("text") or "")])
                       if k and k in st.get("ids", {}) and k not in by_id
                       and not st["ids"][k].startswith("(diary:")
                       and _destination_exists(Path(root), st["ids"][k])},

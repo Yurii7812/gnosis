@@ -2779,8 +2779,13 @@ function! s:gnosis_safe_markdown_inline() abort
   " 'oneline' が標準 markdown.vim の多行連結を防ぐ。
   " * が 2 つ並んだところ（**太字**）は斜体として読まない。日本語の「。**全部**する」で
   " 開きの ** が斜体に取られ、閉じの ** から段落の終わりまで太字になっていた。
+  " 英数字に挟まれた * （2*3*4 などの式）は斜体にしない。記号（* ** ***）はどれも隠さず、控えめな色で見せる
+  " （***太字斜体*** だけ Vim 標準の構文で記号が隠れていて、ほかと揃っていなかった）。
+  silent! syntax clear markdownBoldItalic
   syntax region markdownItalic matchgroup=markdownItalicDelimiter
-        \ start=/\*\@<!\*\ze[^*[:space:]][^*\n]*\*\@<!\*\*\@!/ end=/\S\@<=\*\@<!\*\*\@!/ oneline keepend
+        \ start=/[*[:alnum:]]\@<!\*\ze[^*[:space:]][^*\n]*\*\@<!\*\%([*[:alnum:]]\)\@!/ end=/\S\@<=\*\@<!\*\%([*[:alnum:]]\)\@!/ oneline keepend
+  syntax region markdownBoldItalic matchgroup=markdownBoldItalicDelimiter
+        \ start=/\*\@<!\*\*\*\ze[^*[:space:]][^*\n]*\*\*\*/ end=/\S\@<=\*\*\*/ oneline keepend
   syntax region markdownBold matchgroup=markdownBoldDelimiter
         \ start=/\*\@<!\*\*\ze[^*[:space:]]\%([^*\n]\|\*\*\@!\)*\*\*/ end=/\S\@<=\*\*/ oneline keepend contains=markdownItalic
   syntax region markdownBold matchgroup=markdownBoldDelimiter
@@ -5513,6 +5518,24 @@ function! gnosis#capture_import(...) abort
       call add(l:made, [l:it.id, '(diary:' . l:it.date . ')'])
     endif
   endfor
+  " 本文の中のほかのメモへのリンク（[表示名](memo:ID)）を、取り込んだノートへのリンクに直す
+  " （取り込んでいない相手は表示名だけの文字にする）。ノートも日記も vault の直下なので、ファイル名で指す。
+  let l:rel = {}
+  for [l:k, l:v] in items(l:files)
+    let l:rel[l:k] = stridx(l:v, l:root . '/') == 0 ? l:v[len(l:root) + 1 :] : l:v
+  endfor
+  for l:blocks in values(l:diary_lines)
+    call map(l:blocks, 'map(v:val, "s:capture_memo_links(v:val, l:rel)")')
+  endfor
+  for [l:id, l:name] in l:made
+    if l:name =~# '^(diary:' | continue | endif
+    let l:p = l:root . '/' . l:name
+    let l:lines = readfile(l:p)
+    let l:new = map(copy(l:lines), 's:capture_memo_links(v:val, l:rel)')
+    if l:new !=# l:lines
+      call s:syn_writefile(l:new, l:p)
+    endif
+  endfor
   " 日記トピックを、その日の日記の本文へ（時刻順。「今日のノート」の節の前）
   for [l:date, l:blocks] in items(l:diary_lines)
     call s:capture_diary_append(l:root, l:date, l:blocks)
@@ -5557,6 +5580,15 @@ function! gnosis#capture_import(...) abort
 endfunction
 
 " 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
+" 1 行の中の [表示名](memo:ID) を、取り込んだノートへのリンク（a:rel は ID → vault の中のパス）か表示名だけに直す
+function! s:capture_memo_links(line, rel) abort
+  if a:line !~# '](memo:'
+    return a:line
+  endif
+  return substitute(a:line, '\[\([^]]*\)\](memo:\([^) \t]\+\))',
+        \ '\=has_key(a:rel, submatch(2)) ? "[" . submatch(1) . "](" . a:rel[submatch(2)] . ")" : submatch(1)', 'g')
+endfunction
+
 function! s:capture_diary_append(root, date, blocks) abort
   let l:st = s:diary_state_read()
   let l:notes = s:diary_scan(a:root)
