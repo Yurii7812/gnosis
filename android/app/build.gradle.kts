@@ -10,8 +10,8 @@ android {
         applicationId = "net.gnosis.capture"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
     buildTypes {
         release {
@@ -30,6 +30,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     val bom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(bom)
     implementation("androidx.core:core-ktx:1.13.1")

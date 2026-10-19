@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings as AndroidSettings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -16,6 +17,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -88,7 +91,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val scope = rememberCoroutineScope()
     val entries = remember { mutableStateListOf<Entry>().apply { addAll(store.load()) } }
     var settings by remember { mutableStateOf(store.loadSettings()) }
-    var topic by remember { mutableStateOf(settings.lastTopic.takeIf { it in settings.topics } ?: DIARY) }
+    var topic by remember { mutableStateOf(settings.lastTopic) }
+    val topics = (settings.topics + entries.map { it.topic }).filter { it.isNotEmpty() && it != ALL }.distinct()
+    val selected = remember { mutableStateListOf<String>() }
+    var selecting by remember { mutableStateOf(false) }
+    var moveSelectedOpen by remember { mutableStateOf(false) }
+    var notificationsEnabled by remember { mutableStateOf(Alarm.notificationsEnabled(ctx)) }
+    var exactEnabled by remember { mutableStateOf(Alarm.canScheduleExact(ctx)) }
+    var nextAlarm by remember { mutableStateOf(Alarm.scheduledTime(ctx)) }
     var input by remember { mutableStateOf("") }
     val pendingImages = remember { mutableStateListOf<String>() }
     var replyTo by remember { mutableStateOf<String?>(null) }      // 次に書くものの Branch の親
@@ -106,11 +116,15 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val listState = rememberLazyListState()
     val byId = entries.associateBy { it.id }
 
-    fun persist() = store.save(entries.toList())
+    fun persist() { store.save(entries.toList()); imported = store.importedIds() }
 
     // PC が取り込むたびに imported.json が変わるので、戻ってくるたびに読み直す
     LifecycleResumeEffect(Unit) {
         imported = store.importedIds()
+        notificationsEnabled = Alarm.notificationsEnabled(ctx)
+        exactEnabled = Alarm.canScheduleExact(ctx)
+        Alarm.ensureScheduled(ctx, settings)
+        nextAlarm = Alarm.scheduledTime(ctx)
         onPauseOrDispose { }
     }
     fun setTopic(t: String) {
@@ -134,11 +148,23 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             pendingImages.add(name)
         }
     }
-    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationsEnabled = Alarm.notificationsEnabled(ctx)
+    }
+    fun toggleSelection(id: String) {
+        if (id in selected) selected.remove(id) else selected.add(id)
+    }
+    fun moveEntries(ids: Collection<String>, destination: String) {
+        val now = System.currentTimeMillis()
+        for (k in entries.indices) if (entries[k].id in ids) {
+            entries[k] = entries[k].copy(topic = destination, edited = now, exported = false)
+        }
+        persist()
+    }
 
     fun send() {
-        val text = input.trim()
-        if (text.isEmpty() && pendingImages.isEmpty()) return
+        val text = input
+        if (text.isBlank() && pendingImages.isEmpty()) return
         val ed = editing
         if (ed != null) {
             val i = entries.indexOfFirst { it.id == ed }
@@ -146,7 +172,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             editing = null
         } else {
             val now = System.currentTimeMillis()
-            entries.add(Entry(id = Store.newId(now, entries), created = now, topic = topic, text = text,
+            entries.add(Entry(id = Store.newId(now, entries), created = now, topic = writingTopic(topic), text = text,
                 images = pendingImages.toList(), parent = replyTo))
             replyTo = null
         }
@@ -160,11 +186,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 title = {
                     val n = entries.count { it.id !in imported }
                     Column {
-                        Text("メモ", fontWeight = FontWeight.Bold)
+                        Text(if (selecting) "${selected.size} 件選択" else topicLabel(topic), fontWeight = FontWeight.Bold)
                         Text(if (n == 0) "すべて PC に取り込み済み" else "PC にまだ取り込んでいない: $n 件", fontSize = 12.sp)
                     }
                 },
                 actions = {
+                    IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null }) {
+                        Icon(if (selecting) Icons.Filled.Close else Icons.Filled.Checklist, if (selecting) "選択をやめる" else "複数選択")
+                    }
                     IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Alarm, "アラームと設定") }
                 },
             )
@@ -186,10 +215,19 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         }
                     }
                 }
-                // トピック（1 タップで切り替え。＋で増やす）
+                if (selecting) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = {
+                            selected.clear(); selected.addAll(visibleEntries(entries, topic).map { it.id })
+                        }) { Text("表示中を全選択") }
+                        TextButton(onClick = { selected.clear() }) { Text("選択解除") }
+                        Button(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty()) { Text("トピックへ移動") }
+                    }
+                }
+                // 表示と書き込み先を同時に切り替える。全部表示からは未選択で保存。
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(settings.topics) { t ->
-                        FilterChip(selected = t == topic, onClick = { setTopic(t) }, label = { Text(t) },
+                    items(listOf(ALL, UNASSIGNED) + topics) { t ->
+                        FilterChip(selected = t == topic, onClick = { setTopic(t) }, label = { Text(topicLabel(t)) },
                             leadingIcon = if (t == DIARY) ({ Icon(Icons.Filled.Book, null, Modifier.size(16.dp)) }) else null)
                     }
                     item { AssistChip(onClick = { addTopicOpen = true }, label = { Text("＋ トピック") }) }
@@ -213,7 +251,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     OutlinedTextField(
                         value = input, onValueChange = { input = it },
                         modifier = Modifier.weight(1f).focusRequester(focus),
-                        placeholder = { Text(if (prompt) "今まで何してた？" else if (topic == DIARY) "日記（時刻は自動で付きます）" else "$topic に書く") },
+                        placeholder = { Text(if (prompt) "今まで何してた？" else if (topic == DIARY) "日記（時刻は自動で付きます）" else if (writingTopic(topic).isEmpty()) "メモを書く（トピック未選択）" else "$topic に書く") },
                         maxLines = 6, shape = RoundedCornerShape(20.dp),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Text),
                     )
@@ -224,15 +262,16 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             }
         },
     ) { pad ->
-        val shown = entries.sortedByDescending { it.created }
+        val shown = visibleEntries(entries, topic).sortedByDescending { it.created }
         LazyColumn(Modifier.fillMaxSize().padding(pad), state = listState, reverseLayout = true,
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEachIndexed { i, e ->
                 item(key = e.id) {
-                    Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id,
+                    Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id, selected = e.id in selected, selectionMode = selecting,
                         onTap = {
                             val cf = contextFor
-                            if (cf != null && cf != e.id) {
+                            if (selecting) toggleSelection(e.id)
+                            else if (cf != null && cf != e.id) {
                                 val k = entries.indexOfFirst { it.id == cf }
                                 if (k >= 0 && e.id !in entries[k].contexts) {
                                     entries[k] = entries[k].copy(contexts = entries[k].contexts + e.id, exported = false); persist()
@@ -240,7 +279,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 contextFor = null
                             }
                         },
-                        onLong = { sheetFor = e.id })
+                        onLong = { if (selecting) toggleSelection(e.id) else sheetFor = e.id })
                 }
                 val next = shown.getOrNull(i + 1)
                 if (next == null || dayKey(next.created) != dayKey(e.created)) {
@@ -253,8 +292,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 }
             }
-            if (entries.isEmpty()) item {
-                Text("ここに書いたものは、USB でつないで Gnosis の \\M で取り込むと 1 件ずつノートになります。\n「日記」で書くと、その日の日記に時刻つきで入ります。\n長押しで「続けて書く（Branch）」「文脈につなぐ」などができます。",
+            if (shown.isEmpty()) item {
+                Text("この表示にはまだメモがありません。\nここに書いたものは、USB でつないで Gnosis の \\M で取り込むと 1 件ずつノートになります。\n「日記」で書くと、その日の日記に時刻つきで入ります。\n長押しで「続けて書く（Branch）」「文脈につなぐ」などができます。",
                     Modifier.padding(24.dp), fontSize = 14.sp)
             }
         }
@@ -270,6 +309,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextFor = null })
                     add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手をタップ）") { contextFor = target.id; replyTo = null })
                     add(Triple(Icons.Filled.Edit, "書き直す") { editing = target.id; input = target.text })
+                    add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); contextFor = null })
                     add(Triple(Icons.Filled.Label, "トピックを変える") { topicDialogFor = target.id })
                     add(Triple(Icons.Filled.ContentCopy, "コピー") {
                         ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", target.text))
@@ -302,12 +342,23 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     topicDialogFor?.let { id ->
         AlertDialog(onDismissRequest = { topicDialogFor = null }, confirmButton = {}, title = { Text("トピック") },
             text = {
-                Column { settings.topics.forEach { t ->
+                Column { (listOf(UNASSIGNED) + topics).forEach { t ->
                     TextButton(onClick = {
-                        val k = entries.indexOfFirst { it.id == id }
-                        if (k >= 0) { entries[k] = entries[k].copy(topic = t, exported = false); persist() }
+                        moveEntries(listOf(id), t)
                         topicDialogFor = null
-                    }) { Text(t, fontSize = 18.sp) }
+                    }) { Text(topicLabel(t), fontSize = 18.sp) }
+                } }
+            })
+    }
+
+    if (moveSelectedOpen) {
+        AlertDialog(onDismissRequest = { moveSelectedOpen = false }, confirmButton = {},
+            title = { Text("${selected.size} 件の移動先") }, text = {
+                Column { (listOf(UNASSIGNED) + topics).forEach { t ->
+                    TextButton(onClick = {
+                        moveEntries(selected.toList(), t)
+                        selected.clear(); selecting = false; moveSelectedOpen = false
+                    }) { Text(topicLabel(t), fontSize = 18.sp) }
                 } }
             })
     }
@@ -318,7 +369,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             title = { Text("トピックを足す") },
             text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("例: アイデア") }) },
             confirmButton = { TextButton(onClick = {
-                val t = name.trim()
+                val t = normalizedTopic(name.trim()).takeUnless { it == ALL || it == "全部表示" || it == "トピック未選択" } ?: ""
                 if (t.isNotEmpty() && t !in settings.topics) { settings = settings.copy(topics = settings.topics + t); store.saveSettings(settings) }
                 if (t.isNotEmpty()) setTopic(t)
                 addTopicOpen = false
@@ -347,12 +398,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         var to by remember { mutableStateOf(settings.toHour.toString()) }
         var cleanAsk by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { settingsOpen = false }, title = { Text("アラームと設定") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("定期的に鳴らす", Modifier.weight(1f)); Switch(on, { on = it })
                 }
                 OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit) }, label = { Text("何分おき") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                FilterChip(selected = from == "0" && to == "24", onClick = { from = "0"; to = "24" }, label = { Text("24時間") })
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(from, { from = it.filter(Char::isDigit) }, label = { Text("何時から") }, singleLine = true,
                         modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -360,10 +412,25 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
                 Text("鳴ったら通知を押すと「今まで何してた？」が日記で開きます。", fontSize = 13.sp)
+                if (from == to) Text("開始と終了が同じ場合も24時間鳴らします。", fontSize = 13.sp)
+                if (settings.alarmOn && nextAlarm > 0) Text("次回: " + SimpleDateFormat("M/d HH:mm", Locale.JAPAN).format(Date(nextAlarm)), fontSize = 13.sp)
+                if (!notificationsEnabled) Text("通知が許可されていません。「通知と音の設定」で許可してください。", fontSize = 13.sp)
+                TextButton(onClick = {
+                    if (Build.VERSION.SDK_INT >= 33 && !notificationsEnabled) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else ctx.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Alarm.CHANNEL))
+                }) { Text("通知と音の設定") }
+                if (!exactEnabled && Build.VERSION.SDK_INT >= 31) {
+                    Text("時刻どおりに鳴らすには「アラームとリマインダー」を許可してください。未許可では遅れる場合があります。", fontSize = 13.sp)
+                    TextButton(onClick = { ctx.startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}"))) }) { Text("アラームの時刻を許可") }
+                }
+                TextButton(onClick = {
+                    if (Build.VERSION.SDK_INT >= 33 && !notificationsEnabled) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else Alarm.notify(ctx)
+                }) { Text("テスト通知を鳴らす") }
                 HorizontalDivider()
                 Text("PC へは USB でつなぎ、Gnosis で \\M を押すと取り込めます（パスワードは要りません）。", fontSize = 13.sp)
                 TextButton(onClick = { cleanAsk = true }) { Text("PC に取り込み済みのメモをスマホから消す") }
-                if (cleanAsk) Text("もう一度「消す」を押すと、取り込み済み（✓）のものだけを消します。", fontSize = 13.sp)
+                if (cleanAsk) Text("取り込んだ vault にメモが残っていることを確認してください。テスト用 vault だけに取り込んだ場合や、別の vault にも取り込む場合は消さないでください。取り込みだけでスマホの原本が消えることはありません。", fontSize = 13.sp)
             } },
             confirmButton = { TextButton(onClick = {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
@@ -371,6 +438,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 store.saveSettings(settings)
                 if (on && Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 Alarm.ensureChannel(ctx); Alarm.schedule(ctx, settings)
+                nextAlarm = Alarm.scheduledTime(ctx)
                 settingsOpen = false
             }) { Text("保存") } },
             dismissButton = { TextButton(onClick = {
@@ -390,15 +458,17 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, onTap: () -> Unit, onLong: () -> Unit) {
+private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, selected: Boolean, selectionMode: Boolean, onTap: () -> Unit, onLong: () -> Unit) {
     val diary = e.topic == DIARY
-    val colors = if (diary) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    val colors = if (selected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    else if (diary) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Card(colors = colors, shape = RoundedCornerShape(14.dp),
             border = if (selecting) CardDefaults.outlinedCardBorder() else null,
             modifier = Modifier.widthIn(max = 340.dp).combinedClickable(onClick = onTap, onLongClick = onLong)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (selectionMode) Checkbox(checked = selected, onCheckedChange = { onTap() })
                 e.parent?.let { p ->
                     Text("↳ ${short(byId[p]?.text ?: "（書き出し済み）")} の続き", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
@@ -412,7 +482,7 @@ private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Sto
                 }
                 if (e.text.isNotEmpty()) Text(e.text, fontSize = 16.sp)
                 Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                    Text(e.topic, fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                    Text(topicLabel(e.topic), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.width(6.dp))
                     Text(timeFmt.format(Date(e.created)) + if (e.edited > 0) "（編集）" else "", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                     if (done) { Spacer(Modifier.width(4.dp)); Icon(Icons.Filled.DoneAll, "PC に取り込み済み", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) }

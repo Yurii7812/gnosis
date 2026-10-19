@@ -320,6 +320,7 @@ gnosis#timestamp_yaml
 gnosis#toggle_alternate
 gnosis#toggle_checkbox
 gnosis#toggle_link_source
+gnosis#topic#assign
 gnosis#trash_current
 gnosis#trash_empty
 gnosis#trash_list

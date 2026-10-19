@@ -27,8 +27,8 @@ ng=0
 chk() { if eval "$2"; then :; else echo "NG $1" >&2; ng=1; fi; }
 chk "日記の本文に時刻つきで入る" 'grep -q "^12:00 お昼はスコーン$" "$diary" && grep -q "^二切れだけ$" "$diary"'
 chk "関係のある日記はノートになり、日記には時刻つきのリンク" 'grep -q "^09:15 \[吉原駅まで歩く\](261018091500.md)$" "$diary" && [ -f "$V/261018091500.md" ]'
-chk "メモは 1 件 = 1 ノートで今日のノートに載る" 'grep -q "^\[APKに画像添付\](261018101000.md)$" "$diary" && grep -q "^capture: メモ$" "$V/261018101000.md"'
-chk "題にした 1 行目は本文に繰り返さない" '[ "$(grep -c "^APKに画像添付$" "$V/261018101000.md")" = 0 ] && grep -q "^これ重要$" "$V/261018101000.md"'
+chk "メモは 1 件 = 1 ノートで今日のノートに載る" 'grep -q "^\[APKに画像添付\](261018101000.md)$" "$diary" && grep -q "^topic: $" "$V/261018101000.md"'
+chk "題にした 1 行目も本文にそのまま残る" '[ "$(grep -c "^APKに画像添付$" "$V/261018101000.md")" = 1 ] && grep -q "^これ重要$" "$V/261018101000.md"'
 chk "Branch（続けて書く）" 'grep -A1 "^ParentBranch:" "$V/261018101500.md" | grep -q "261018101000.md" && grep -A1 "^ChildBranch:" "$V/261018101000.md" | grep -q "261018101500.md"'
 chk "Context（文脈）" 'grep -A1 "^Context:" "$V/261018101500.md" | grep -q "261018091500.md"'
 chk "画像は capture-images/ に置く" '[ -f "$V/capture-images/a.jpg" ] && grep -q "capture-images/a.jpg" "$V/261018091500.md"'
