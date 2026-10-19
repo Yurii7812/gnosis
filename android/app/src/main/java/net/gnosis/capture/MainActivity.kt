@@ -97,6 +97,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val selected = remember { mutableStateListOf<String>() }
     var selecting by remember { mutableStateOf(false) }
     var moveSelectedOpen by remember { mutableStateOf(false) }
+    var deleteSelectedOpen by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Alarm.notificationsEnabled(ctx)) }
     var exactEnabled by remember { mutableStateOf(Alarm.canScheduleExact(ctx)) }
     var nextAlarm by remember { mutableStateOf(Alarm.scheduledTime(ctx)) }
@@ -163,6 +164,16 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         persist()
     }
 
+    fun deleteEntries(ids: Set<String>) {
+        entries.filter { it.id in ids }.flatMap { it.images }.forEach { File(store.imageDir, it).delete() }
+        entries.removeAll { it.id in ids }
+        for (k in entries.indices) {
+            val e = entries[k]
+            if (e.parent in ids || e.contexts.any { it in ids }) entries[k] = e.copy(parent = e.parent.takeIf { it !in ids }, contexts = e.contexts.filter { it !in ids }, exported = false)
+        }
+        persist()
+    }
+
     fun send() {
         val text = input
         if (text.isBlank() && pendingImages.isEmpty()) return
@@ -224,7 +235,15 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             }) { Text("表示中を全選択") }
                             TextButton(onClick = { selected.clear() }) { Text("選択解除") }
                         }
-                        Button(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("トピックへ移動") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = {
+                                val text = entries.filter { it.id in selected }.sortedBy { it.created }.joinToString("\n\n") { it.text }
+                                ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", text))
+                                selected.clear(); selecting = false
+                            }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("コピー") }
+                            OutlinedButton(onClick = { moveSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("移動") }
+                            OutlinedButton(onClick = { deleteSelectedOpen = true }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("消す") }
+                        }
                     }
                 }
                 // 表示と書き込み先を同時に切り替える。全部表示からは未選択で保存。
@@ -380,16 +399,20 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             dismissButton = { TextButton(onClick = { addTopicOpen = false }) { Text("やめる") } })
     }
 
+    if (deleteSelectedOpen) {
+        AlertDialog(onDismissRequest = { deleteSelectedOpen = false }, title = { Text("${selected.size} 件を消しますか？") },
+            text = { Text("画像も消えます。元に戻せません。") },
+            confirmButton = { TextButton(onClick = {
+                deleteEntries(selected.toSet()); selected.clear(); selecting = false; deleteSelectedOpen = false
+            }) { Text("消す") } },
+            dismissButton = { TextButton(onClick = { deleteSelectedOpen = false }) { Text("やめる") } })
+    }
+
     deleteFor?.let { id ->
         AlertDialog(onDismissRequest = { deleteFor = null }, title = { Text("消しますか？") },
             text = { Text(short(byId[id]?.text ?: "", 80)) },
             confirmButton = { TextButton(onClick = {
-                entries.removeAll { it.id == id }
-                for (k in entries.indices) {
-                    val e = entries[k]
-                    if (e.parent == id || id in e.contexts) entries[k] = e.copy(parent = e.parent.takeIf { it != id }, contexts = e.contexts - id)
-                }
-                persist(); deleteFor = null
+                deleteEntries(setOf(id)); deleteFor = null
             }) { Text("消す") } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("やめる") } })
     }
