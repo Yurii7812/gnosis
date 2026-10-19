@@ -74,7 +74,8 @@ for [s:k, s:hd] in [['h', ''], ['t', '節1'], ['b', ''], ['p', ''], ['o', '']]
 endfor
 
 " ------------------------------------------------------------------ zn（通常のノート）: 決められたキー以外では何も作らない
-for s:k in ['n', 'g', 'i', 'r', 'x']
+" r は Related（正しいキー）なので含めない（含めると、ファイル名の時刻がぶつかったときだけ通る不安定な試験になる）
+for s:k in ['n', 'g', 'i', 'x']
   execute 'edit ' . fnameescape(s:v . '/a.md')
   let s:before = s:files()
   let s:a_before = s:file('a.md')
