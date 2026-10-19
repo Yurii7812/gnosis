@@ -128,6 +128,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var input by remember { mutableStateOf("") }
     val pendingImages = remember { mutableStateListOf<String>() }
     var replyTo by remember { mutableStateOf<String?>(null) }      // 次に書くものの Branch の親
+    var contextTo by remember { mutableStateOf<String?>(null) }    // 次に書くものの文脈にするメモ
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
     var editing by remember { mutableStateOf<String?>(null) }
     var sheetFor by remember { mutableStateOf<String?>(null) }
@@ -213,8 +214,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         } else {
             val now = System.currentTimeMillis()
             entries.add(Entry(id = Store.newId(now, entries), created = now, topic = writingTopic(topic), text = text,
-                images = pendingImages.toList(), parent = replyTo))
-            replyTo = null
+                images = pendingImages.toList(), parent = replyTo, contexts = listOfNotNull(contextTo)))
+            replyTo = null; contextTo = null
         }
         input = ""; pendingImages.clear(); promptState.value = false
         persist()
@@ -246,6 +247,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     contextFor != null -> "文脈にするメモをタップ（「${short(byId[contextFor]?.text ?: "")}」の文脈になります）" to { contextFor = null }
                     editing != null -> "編集中: ${short(byId[editing]?.text ?: "")}" to { editing = null; input = "" }
                     replyTo != null -> "↳ 続きとして書く（Branch の子）: ${short(byId[replyTo]?.text ?: "")}" to { replyTo = null }
+                    contextTo != null -> "⇢ 文脈として続ける: ${short(byId[contextTo]?.text ?: "")}" to { contextTo = null }
                     else -> null
                 }
                 if (banner != null) {
@@ -318,6 +320,26 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEachIndexed { i, e ->
                 item(key = e.id) {
+                    // 右へスワイプ: このメモを文脈にして続ける / 左へスワイプ: このメモの Branch の子として続ける
+                    val swipe = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+                        when (v) {
+                            SwipeToDismissBoxValue.StartToEnd -> { contextTo = e.id; replyTo = null; contextFor = null; editing = null }
+                            SwipeToDismissBoxValue.EndToStart -> { replyTo = e.id; contextTo = null; contextFor = null; editing = null }
+                            else -> {}
+                        }
+                        if (v != SwipeToDismissBoxValue.Settled) scope.launch { delay(100); focus.requestFocus(); keyboard?.show() }
+                        false   // メモ自体は動かさず元の位置に戻す
+                    })
+                    SwipeToDismissBox(swipe, enableDismissFromStartToEnd = !selecting, enableDismissFromEndToStart = !selecting,
+                        backgroundContent = {
+                            val toRight = swipe.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+                            val toLeft = swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart
+                            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = if (toLeft) Arrangement.End else Arrangement.Start) {
+                                if (toRight) { Icon(Icons.Filled.Link, null, tint = MaterialTheme.colorScheme.tertiary); Spacer(Modifier.width(6.dp)); Text("文脈で続ける", color = MaterialTheme.colorScheme.tertiary) }
+                                if (toLeft) { Text("Branch で続ける", color = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(6.dp)); Icon(Icons.Filled.SubdirectoryArrowRight, null, tint = MaterialTheme.colorScheme.primary) }
+                            }
+                        }) {
                     Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id, selected = e.id in selected, selectionMode = selecting,
                         onTap = {
                             val cf = contextFor
@@ -331,6 +353,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             }
                         },
                         onLong = { if (selecting) toggleSelection(e.id) else sheetFor = e.id })
+                    }
                 }
                 val next = shown.getOrNull(i + 1)
                 if (next == null || dayKey(next.created) != dayKey(e.created)) {
@@ -357,7 +380,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                 Text(short(target.text, 60), fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
                 val acts = buildList<Triple<ImageVector, String, () -> Unit>> {
-                    add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextFor = null })
+                    add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextTo = null; contextFor = null })
                     add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手をタップ）") { contextFor = target.id; replyTo = null })
                     add(Triple(Icons.Filled.Edit, "書き直す") { editing = target.id; input = target.text })
                     add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); contextFor = null; keyboard?.hide() })
