@@ -39,6 +39,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -104,8 +107,51 @@ private val dayFmt = SimpleDateFormat("M月d日（E）", Locale.JAPAN)
 private fun dayKey(t: Long) = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(t))
 
 private fun short(s: String, n: Int = 24): String {
-    val one = s.replace('\n', ' ').trim()
+    val one = MEMO_LINK.replace(s) { it.groupValues[1] }.replace('\n', ' ').trim()
     return if (one.length <= n) one.ifEmpty { "（画像）" } else one.take(n) + "…"
+}
+
+/** メモの本文の中の、ほかのメモへのリンク: [表示名](memo:ID)。PC で取り込むと Gnosis のリンクになる。 */
+val MEMO_LINK = Regex("\\[([^\\]\\n]*)\\]\\(memo:([^)\\s]+)\\)")
+
+/** リンクの表示名（メモにはタイトルが無いので、本文の最初の行を短く）。[ ] は使わない。 */
+fun linkLabel(text: String): String =
+    short(text.lineSequence().firstOrNull { it.isNotBlank() } ?: text, 20).replace("[", "").replace("]", "")
+
+data class Pick(val kind: String, val forId: String?)   // kind: link / context / parent
+
+/** メモを探して選ぶ画面。リンク・文脈は複数、親（parent）は 1 つ。新しい順。 */
+@Composable
+private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>, onDismiss: () -> Unit, onDone: (List<String>) -> Unit) {
+    var q by remember { mutableStateOf("") }
+    val chosen = remember { mutableStateListOf<String>() }
+    val multi = kind != "parent"
+    val list = entries.filter { it.id !in exclude && (q.isBlank() || it.text.contains(q.trim(), ignoreCase = true)) }
+        .sortedByDescending { it.created }
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text(when (kind) { "link" -> "リンクするメモ"; "context" -> "文脈にするメモ"; else -> "親（Branch）にするメモ" }) },
+        text = {
+            Column {
+                OutlinedTextField(q, { q = it }, placeholder = { Text("探す（本文の一部）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (multi) Text("複数選べます（${chosen.size} 件）", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
+                LazyColumn(Modifier.heightIn(max = 360.dp).padding(top = 6.dp)) {
+                    items(list, key = { it.id }) { e ->
+                        Row(Modifier.fillMaxWidth().clickable {
+                            if (!multi) onDone(listOf(e.id)) else if (e.id in chosen) chosen.remove(e.id) else chosen.add(e.id)
+                        }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (multi) Checkbox(checked = e.id in chosen, onCheckedChange = { if (it) chosen.add(e.id) else chosen.remove(e.id) })
+                            Column(Modifier.weight(1f)) {
+                                Text(short(e.text, 40), fontSize = 15.sp)
+                                Text(dayFmt.format(Date(e.created)) + " " + timeFmt.format(Date(e.created)) + "  " + topicLabel(e.topic),
+                                    fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { if (multi) TextButton(onClick = { onDone(chosen.toList()) }, enabled = chosen.isNotEmpty()) { Text("決定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } })
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -131,7 +177,10 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val pendingImages = remember { mutableStateListOf<String>() }
     var replyTo by remember { mutableStateOf<String?>(null) }      // 次に書くものの Branch の親
     val contextsTo = remember { mutableStateListOf<String>() }      // 次に書くものの文脈にするメモ（右スワイプで足す）
-    var flash by remember { mutableStateOf<String?>(null) }        // 飛んだ先のメモを少しのあいだ目立たせる
+    var flash by remember { mutableStateOf<String?>(null) }
+    var insertMenu by remember { mutableStateOf(false) }           // 上のバーの「＋」（チェックボックス・リンク・文脈・親）
+    var pick by remember { mutableStateOf<Pick?>(null) }           // メモを探して選ぶ画面
+    var relEditFor by remember { mutableStateOf<String?>(null) }   // 文脈・親を編集しているメモ        // 飛んだ先のメモを少しのあいだ目立たせる
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
     var editing by remember { mutableStateOf<String?>(null) }
     var sheetFor by remember { mutableStateOf<String?>(null) }
@@ -185,6 +234,49 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         notificationsEnabled = Alarm.notificationsEnabled(ctx)
     }
+    /** child の親を parent にすると循環になるか（parent をたどって child に戻る）。 */
+    fun wouldCycle(child: String, parent: String): Boolean {
+        var p: String? = parent
+        val seen = HashSet<String>()
+        while (p != null && seen.add(p)) {
+            if (p == child) return true
+            p = entries.firstOrNull { it.id == p }?.parent
+        }
+        return false
+    }
+
+    /** 親（Branch）を付け替える。null で外す。循環になるときは変えない。 */
+    fun setParent(id: String, parent: String?) {
+        val k = entries.indexOfFirst { it.id == id }
+        if (k < 0 || (parent != null && (parent == id || wouldCycle(id, parent)))) return
+        entries[k] = entries[k].copy(parent = parent, exported = false); persist()
+    }
+
+    /** 文脈を足す。親が無ければ最初の文脈を親（Branch）にする（PC の Gnosis の c と同じ）。 */
+    fun addContexts(id: String, ids: List<String>) {
+        val k = entries.indexOfFirst { it.id == id }
+        if (k < 0) return
+        val e = entries[k]
+        val cs = (e.contexts + ids).filter { it != id }.distinct()
+        val parent = e.parent ?: cs.firstOrNull { !wouldCycle(id, it) }
+        entries[k] = e.copy(contexts = cs, parent = parent, exported = false); persist()
+    }
+
+    fun removeContext(id: String, c: String) {
+        val k = entries.indexOfFirst { it.id == id }
+        if (k >= 0) { entries[k] = entries[k].copy(contexts = entries[k].contexts - c, exported = false); persist() }
+    }
+
+    /** 入力欄の最後に足す（行の途中なら改行してから）。 */
+    fun appendInput(s: String, newLine: Boolean) {
+        input = when {
+            input.isEmpty() -> s
+            newLine && !input.endsWith("\n") -> input + "\n" + s
+            !newLine && !input.endsWith(" ") && !input.endsWith("\n") -> "$input $s"
+            else -> input + s
+        }
+    }
+
     /** 文脈や Branch の親のメモへスクロールし、少しのあいだ色を変えて知らせる。 */
     fun jumpTo(id: String) {
         if (visibleEntries(entries, topic).none { it.id == id }) setTopic(ALL)
@@ -257,7 +349,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         } else {
             val now = System.currentTimeMillis()
             entries.add(Entry(id = Store.newId(now, entries), created = now, topic = writingTopic(topic), text = text,
-                images = pendingImages.toList(), parent = replyTo, contexts = contextsTo.toList()))
+                images = pendingImages.toList(), parent = replyTo ?: contextsTo.firstOrNull(), contexts = contextsTo.toList()))
             replyTo = null; contextsTo.clear()
         }
         input = ""; pendingImages.clear(); promptState.value = false
@@ -275,6 +367,23 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 },
                 actions = {
+                    Box {
+                        IconButton(onClick = { insertMenu = true }) { Icon(Icons.Filled.AddCircleOutline, "挿入（チェックボックス・リンク・文脈・親）") }
+                        DropdownMenu(expanded = insertMenu, onDismissRequest = { insertMenu = false }) {
+                            DropdownMenuItem(text = { Text("チェックボックス") }, leadingIcon = { Icon(Icons.Filled.CheckBox, null) }, onClick = {
+                                insertMenu = false; appendInput("- [ ] ", true); scope.launch { delay(100); focus.requestFocus(); keyboard?.show() }
+                            })
+                            DropdownMenuItem(text = { Text("リンク（メモを探す）") }, leadingIcon = { Icon(Icons.Filled.InsertLink, null) }, onClick = {
+                                insertMenu = false; pick = Pick("link", editing)
+                            })
+                            DropdownMenuItem(text = { Text("文脈（メモを探す）") }, leadingIcon = { Icon(Icons.Filled.Link, null) }, onClick = {
+                                insertMenu = false; pick = Pick("context", editing)
+                            })
+                            DropdownMenuItem(text = { Text("親（Branch）") }, leadingIcon = { Icon(Icons.Filled.SubdirectoryArrowRight, null) }, onClick = {
+                                insertMenu = false; pick = Pick("parent", editing)
+                            })
+                        }
+                    }
                     IconButton(onClick = { selecting = !selecting; selected.clear(); contextFor = null; if (selecting) keyboard?.hide() }) {
                         Icon(if (selecting) Icons.Filled.Close else Icons.Filled.Checklist, if (selecting) "選択をやめる" else "複数選択")
                     }
@@ -392,8 +501,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 // 続けてタップして複数の文脈をつなぐ（もう一度タップすると外す）
                                 val k = entries.indexOfFirst { it.id == cf }
                                 if (k >= 0) {
-                                    val cs = entries[k].contexts
-                                    entries[k] = entries[k].copy(contexts = if (e.id in cs) cs - e.id else cs + e.id, exported = false); persist()
+                                    if (e.id in entries[k].contexts) removeContext(cf, e.id) else addContexts(cf, listOf(e.id))
                                 }
                             }
                         },
@@ -434,20 +542,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     add(Triple(Icons.Filled.ContentCopy, "コピー") {
                         ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", target.text))
                     })
-                    if (target.parent != null) add(Triple(Icons.Filled.LinkOff, "親から外す") {
-                        val k = entries.indexOfFirst { it.id == target.id }
-                        if (k >= 0) { entries[k] = entries[k].copy(parent = null, exported = false); persist() }
-                    })
-                    if (target.contexts.isNotEmpty()) add(Triple(Icons.Filled.LinkOff, "文脈を外す") {
-                        val k = entries.indexOfFirst { it.id == target.id }
-                        if (k >= 0) { entries[k] = entries[k].copy(contexts = emptyList(), exported = false); persist() }
-                    })
+                    add(Triple(Icons.Filled.AccountTree, "文脈・親を\n編集") { relEditFor = target.id })
                     add(Triple(Icons.Filled.Delete, "消す") { deleteFor = target.id })
                 }
                 acts.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                         row.forEach { (icon, label, act) ->
-                            OutlinedButton(onClick = { act(); sheetFor = null; if (!selecting) scope.launch { delay(100); focus.requestFocus() } },
+                            OutlinedButton(onClick = { act(); sheetFor = null; if (!selecting && relEditFor == null) scope.launch { delay(100); focus.requestFocus() } },
                                 modifier = Modifier.weight(1f).heightIn(min = 64.dp), shape = RoundedCornerShape(14.dp)) {
                                 Icon(icon, null); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp)
                             }
@@ -495,6 +596,51 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 addTopicOpen = false
             }) { Text("足す") } },
             dismissButton = { TextButton(onClick = { addTopicOpen = false }) { Text("やめる") } })
+    }
+
+    // 文脈・親の編集（長押し →「文脈・親を編集」）
+    relEditFor?.let { id ->
+        val e = entries.firstOrNull { it.id == id }
+        if (e == null) { relEditFor = null; return@let }
+        AlertDialog(onDismissRequest = { relEditFor = null }, title = { Text("文脈・親を編集") },
+            text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(short(e.text, 40), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("親（Branch）", fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(e.parent?.let { short(byId[it]?.text ?: "（書き出し済み）", 24) } ?: "なし", Modifier.weight(1f))
+                    TextButton(onClick = { pick = Pick("parent", id) }) { Text("変える") }
+                    if (e.parent != null) TextButton(onClick = { setParent(id, null) }) { Text("外す") }
+                }
+                HorizontalDivider()
+                Text("文脈（${e.contexts.size}）", fontWeight = FontWeight.Bold)
+                e.contexts.forEach { c ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(short(byId[c]?.text ?: "（書き出し済み）", 28), Modifier.weight(1f))
+                        IconButton(onClick = { removeContext(id, c) }) { Icon(Icons.Filled.Close, "外す") }
+                    }
+                }
+                OutlinedButton(onClick = { pick = Pick("context", id) }, modifier = Modifier.fillMaxWidth()) { Text("＋ 文脈を追加（探す）") }
+                Text("親が無いときは、最初の文脈が親（Branch）になります。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            } },
+            confirmButton = { TextButton(onClick = { relEditFor = null }) { Text("閉じる") } })
+    }
+
+    // メモを探して選ぶ（リンク・文脈は複数、親は 1 つ）
+    pick?.let { p ->
+        PickDialog(entries = entries, kind = p.kind, exclude = setOfNotNull(p.forId),
+            onDismiss = { pick = null },
+            onDone = { ids ->
+                pick = null
+                val target = p.forId
+                when (p.kind) {
+                    "link" -> {
+                        appendInput(ids.joinToString(" ") { id -> "[" + linkLabel(byId[id]?.text ?: "") + "](memo:" + id + ")" }, false)
+                        scope.launch { delay(100); focus.requestFocus(); keyboard?.show() }
+                    }
+                    "context" -> if (target != null) addContexts(target, ids) else ids.forEach { if (it !in contextsTo) contextsTo.add(it) }
+                    "parent" -> ids.firstOrNull()?.let { if (target != null) setParent(target, it) else replyTo = it }
+                }
+            })
     }
 
     if (cleanImportedOpen) {
@@ -611,7 +757,24 @@ private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Sto
                     AsyncImage(File(store.imageDir, name), null, Modifier.padding(vertical = 4.dp).heightIn(max = 220.dp).fillMaxWidth(),
                         contentScale = ContentScale.Fit)
                 }
-                if (e.text.isNotEmpty()) Text(e.text, fontSize = 16.sp)
+                if (e.text.isNotEmpty()) {
+                    // [表示名](memo:ID) は表示名だけを下線つきで見せる。押して飛ぶのは下の「リンク:」の行
+                    val linkColor = MaterialTheme.colorScheme.primary
+                    Text(buildAnnotatedString {
+                        var last = 0
+                        for (m in MEMO_LINK.findAll(e.text)) {
+                            append(e.text.substring(last, m.range.first))
+                            withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) { append(m.groupValues[1]) }
+                            last = m.range.last + 1
+                        }
+                        append(e.text.substring(last))
+                    }, fontSize = 16.sp)
+                    MEMO_LINK.findAll(e.text).map { it.groupValues[2] }.distinct().forEach { id ->
+                        Text("リンク: " + short(byId[id]?.text ?: "（書き出し済み）", 20), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+                            textDecoration = if (id in byId) TextDecoration.Underline else null,
+                            modifier = if (id in byId) Modifier.clickable { onJump(id) }.padding(vertical = 2.dp) else Modifier)
+                    }
+                }
                 Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     Text(topicLabel(e.topic), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.width(6.dp))

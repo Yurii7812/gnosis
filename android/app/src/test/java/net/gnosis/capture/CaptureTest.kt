@@ -47,4 +47,15 @@ class CaptureTest {
             assertTrue(AlarmTiming.inside(1, 1, 12))
         } finally { TimeZone.setDefault(original) }
     }
+
+    @Test fun memoLinks() {
+        val text = "前の [買い物リスト](memo:261019100000) と [日記](memo:261019120000) を見る"
+        val ids = MEMO_LINK.findAll(text).map { it.groupValues[2] }.toList()
+        assertEquals(listOf("261019100000", "261019120000"), ids)
+        assertEquals("買い物リスト", MEMO_LINK.find(text)!!.groupValues[1])
+        // 普通の Markdown のリンクや URL はメモのリンクではない
+        assertNull(MEMO_LINK.find("[サイト](https://example.com)"))
+        // 表示名は最初の行を短く、[ ] を含めない
+        assertEquals("ab c", linkLabel("\n[ab] c\n2行目"))
+    }
 }
