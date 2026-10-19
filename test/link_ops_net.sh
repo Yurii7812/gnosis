@@ -12,9 +12,9 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/vault" "$WORK/home"
 # クリップボードは読まない（本物のクリップボードの内容で結果が変わらないように）
 LINKOPS_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= DISPLAY= \
-  timeout 120 vim -u "$REPO/vimrc_gnosis" -N -es -S "$REPO/test/link_ops_check.vim" </dev/null >"$WORK/out.txt" 2>"$WORK/err.txt" || true
+  timeout 120 vim -u "$REPO/vimrc_gnosis" -N -es -V1"$WORK/vim.log" -S "$REPO/test/link_ops_check.vim" </dev/null >"$WORK/out.txt" 2>"$WORK/err.txt" || true
 if [ ! -s "$WORK/result.txt" ]; then
-  echo "NG: link_ops の結果が無い（Vim のエラー）" >&2; cat "$WORK/out.txt" "$WORK/err.txt" >&2; exit 1
+  echo "NG: link_ops の結果が無い（Vim のエラー）" >&2; cat "$WORK/out.txt" "$WORK/err.txt" >&2; tail -80 "$WORK/vim.log" >&2; exit 1
 fi
 # 同期しても、入れたリンク・表示名が残る
 python3 "$REPO/python/note_format_v2.py" update "$WORK/vault" >/dev/null
