@@ -1,8 +1,7 @@
 #!/bin/sh
-# スマホのメモ（鍵付き .7z）の取り込み: 日記は日記の本文へ時刻つき・ほかは 1 件 = 1 ノート・Branch / Context・
-# 画像・二度目は取り込まない。7z が無ければ省略。
+# スマホのメモの取り込み（USB の代わりに capture.json と images/ を渡す）: 日記は日記の本文へ時刻つき・
+# ほかは 1 件 = 1 ノート・Branch / Context・画像・二度目は取り込まない
 set -e
-command -v 7z >/dev/null 2>&1 || { echo "capture_import: 7z が無いので省略"; exit 0; }
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/cap.XXXXXX")
 trap 'rm -rf "$D"' EXIT
@@ -20,7 +19,6 @@ E = [
 json.dump({"format": "gnosis-capture", "version": 1, "entries": E}, open(D + "/pack/capture.json", "w"), ensure_ascii=False)
 open(D + "/pack/images/a.jpg", "wb").write(b"\xff\xd8fake")
 EOF
-(cd "$D/pack" && 7z a -t7z -pPW123 ../gnosis-capture-test.7z capture.json images >/dev/null)
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -S "$REPO/test/capture_import_check.vim" </dev/null 2>"$D/err" || true
 V="$D/v"

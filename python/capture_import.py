@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """スマホのメモ（Gnosis メモ APK の書き出し）を取り込む下ごしらえ。
 
-APK は capture.json と images/ を鍵付きの .7z（または AES-256 の zip）にして書き出す。
-ここでは展開と、取り込む内容の整理だけをする。ノートを作る・日記へ入れる・Branch / Context を
+USB でつないだスマホ（adb）から、アプリの中のデータ（entries.json と images/）を直接読む
+（共有フォルダにファイルを置かないので、パスワードは要らない）。取り込んだ id はアプリへ書き戻し、
+スマホ側に「取り込み済み」と出す。ここでは読み出しと、取り込む内容の整理だけをする。ノートを作る・日記へ入れる・Branch / Context を
 つなぐのは Vim 側（gnosis#capture_import）が、普段の zn と同じ処理で行う。
 
 CLI:
-    capture_import.py unpack ARCHIVE OUTDIR          # パスワードは stdin の 1 行目。7z コマンドで展開
+    capture_import.py adbpull OUTDIR                 # スマホのアプリから OUTDIR/capture.json と images/ を作る
+    capture_import.py adbmark ROOT                   # 取り込み済みの id をスマホのアプリへ書き戻す
     capture_import.py plan OUTDIR ROOT               # 取り込む内容を JSON で出す（取り込み済みの id は除く）
     capture_import.py whatsapp TXT OUTDIR [TOPIC]    # WhatsApp の「チャットのエクスポート」を capture.json にする
-    capture_import.py newest DIR...                  # いちばん新しい gnosis-capture-*.7z / .zip のパス
 """
 from __future__ import annotations
 
@@ -37,23 +38,74 @@ def load_state(root: Path) -> dict:
         return {"ids": {}}
 
 
-def unpack(archive: str, outdir: str, password: str) -> int:
+PACKAGE = "net.gnosis.capture"
+
+
+def _adb() -> str | None:
+    return shutil.which("adb")
+
+
+def adb_ready() -> str:
+    """つながっているスマホにアプリが入っていれば ''、だめなら理由。"""
+    exe = _adb()
+    if not exe:
+        return "adb が見つかりません"
+    r = subprocess.run([exe, "devices"], stdout=subprocess.PIPE, text=True)
+    devs = [ln for ln in r.stdout.splitlines()[1:] if ln.strip().endswith("\tdevice")]
+    if not devs:
+        un = [ln for ln in r.stdout.splitlines()[1:] if "unauthorized" in ln]
+        return ("スマホで「USB デバッグを許可」を押してください" if un
+                else "スマホが見つかりません（USB でつなぎ、USB デバッグをオンに）")
+    if len(devs) > 1:
+        return "スマホが 2 台以上つながっています"
+    r = subprocess.run([exe, "shell", "pm", "path", PACKAGE], stdout=subprocess.PIPE, text=True)
+    if "package:" not in r.stdout:
+        return "スマホに Gnosis メモが入っていません"
+    return ""
+
+
+def adb_pull(outdir: str) -> int:
+    why = adb_ready()
+    if why:
+        print(why, file=sys.stderr)
+        return 3
+    exe = _adb()
     out = Path(outdir)
     if out.exists():
         shutil.rmtree(out)
-    out.mkdir(parents=True)
-    exe = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
-    if not exe:
-        print("7z が見つかりません（p7zip-full を入れてください）", file=sys.stderr)
-        return 3
-    r = subprocess.run([exe, "x", "-y", "-p" + password, "-o" + str(out), archive],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if r.returncode != 0 or not (out / "capture.json").is_file():
-        msg = (r.stderr or r.stdout).strip().splitlines()
-        wrong = any("Wrong password" in m or "password" in m.lower() for m in msg)
-        print("パスワードが違います" if wrong else "展開できませんでした: " + " / ".join(msg[-3:]), file=sys.stderr)
-        return 2
+    (out / "images").mkdir(parents=True)
+    r = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/entries.json"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    raw = r.stdout.decode("utf-8", "replace").strip()
+    if r.returncode != 0 or not raw.startswith("["):
+        if "No such file" in raw or not raw:
+            raw = "[]"
+        else:
+            print("スマホのメモを読めませんでした: " + raw[:200], file=sys.stderr)
+            return 2
+    entries = json.loads(raw)
+    names = sorted({n for e in entries for n in (e.get("images") or [])})
+    for n in names:
+        if "/" in n or n.startswith("."):
+            continue
+        r = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/images/" + n],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if r.returncode == 0 and r.stdout:
+            (out / "images" / n).write_bytes(r.stdout)
+    data = {"format": "gnosis-capture", "version": 1, "entries": entries}
+    (out / "capture.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    print(len(entries))
     return 0
+
+
+def adb_mark(root: str) -> int:
+    """取り込み済みの id（vault の記録すべて）を、アプリの files/imported.json へ書く。"""
+    if adb_ready():
+        return 0
+    ids = sorted(load_state(Path(root)).get("ids", {}).keys())
+    r = subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "sh", "-c", "cat > files/imported.json"],
+                       input=json.dumps(ids).encode("utf-8"))
+    return r.returncode
 
 
 def _first_line_title(text: str, limit: int = 30) -> str:
@@ -143,21 +195,11 @@ def whatsapp(txt: str, outdir: str, topic: str = "日記") -> int:
     return 0
 
 
-def newest(dirs: list[str]) -> str:
-    best = None
-    for d in dirs:
-        p = Path(os.path.expanduser(d))
-        if not p.is_dir():
-            continue
-        for f in list(p.glob("gnosis-capture-*.7z")) + list(p.glob("gnosis-capture-*.zip")):
-            if best is None or f.stat().st_mtime > best.stat().st_mtime:
-                best = f
-    return str(best) if best else ""
-
-
 def main(argv: list[str]) -> int:
-    if len(argv) >= 3 and argv[0] == "unpack":
-        return unpack(argv[1], argv[2], sys.stdin.readline().rstrip("\n"))
+    if len(argv) == 2 and argv[0] == "adbpull":
+        return adb_pull(argv[1])
+    if len(argv) == 2 and argv[0] == "adbmark":
+        return adb_mark(argv[1])
     if len(argv) == 3 and argv[0] == "plan":
         try:
             print(json.dumps(plan(argv[1], argv[2]), ensure_ascii=False))
@@ -171,9 +213,6 @@ def main(argv: list[str]) -> int:
         return 0
     if len(argv) >= 3 and argv[0] == "whatsapp":
         return whatsapp(argv[1], argv[2], argv[3] if len(argv) > 3 else "日記")
-    if len(argv) >= 2 and argv[0] == "newest":
-        print(newest(argv[1:]))
-        return 0
     print(__doc__, file=sys.stderr)
     return 2
 

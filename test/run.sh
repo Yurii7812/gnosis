@@ -68,7 +68,7 @@ sh "$REPO/test/group_review_net.sh"
 # - [ ] の行で Enter すると次の行にも - [ ] を作る
 sh "$REPO/test/checkbox_net.sh"
 
-# スマホのメモ（鍵付き .7z）の取り込み
+# スマホのメモの取り込み
 sh "$REPO/test/capture_import_net.sh"
 
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ

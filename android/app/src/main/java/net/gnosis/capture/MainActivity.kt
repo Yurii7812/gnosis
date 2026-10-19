@@ -2,13 +2,11 @@ package net.gnosis.capture
 
 import android.Manifest
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PersistableBundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -44,12 +42,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil.compose.AsyncImage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -102,9 +98,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var topicDialogFor by remember { mutableStateOf<String?>(null) }
     var addTopicOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
-    var exportOpen by remember { mutableStateOf(false) }
-    var exportResult by remember { mutableStateOf<Exporter.Result?>(null) }
-    var exporting by remember { mutableStateOf(false) }
+    var imported by remember { mutableStateOf(store.importedIds()) }
     var deleteFor by remember { mutableStateOf<String?>(null) }
     val prompt by promptState
     val focus = remember { FocusRequester() }
@@ -113,6 +107,12 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val byId = entries.associateBy { it.id }
 
     fun persist() = store.save(entries.toList())
+
+    // PC が取り込むたびに imported.json が変わるので、戻ってくるたびに読み直す
+    LifecycleResumeEffect(Unit) {
+        imported = store.importedIds()
+        onPauseOrDispose { }
+    }
     fun setTopic(t: String) {
         topic = t
         settings = settings.copy(lastTopic = t); store.saveSettings(settings)
@@ -158,14 +158,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         topBar = {
             TopAppBar(
                 title = {
-                    val n = entries.count { !it.exported }
+                    val n = entries.count { it.id !in imported }
                     Column {
                         Text("メモ", fontWeight = FontWeight.Bold)
-                        Text(if (n == 0) "すべて書き出し済み" else "まだ書き出していない: $n 件", fontSize = 12.sp)
+                        Text(if (n == 0) "すべて PC に取り込み済み" else "PC にまだ取り込んでいない: $n 件", fontSize = 12.sp)
                     }
                 },
                 actions = {
-                    IconButton(onClick = { exportOpen = true }) { Icon(Icons.Filled.Upload, "書き出す") }
                     IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Alarm, "アラームと設定") }
                 },
             )
@@ -230,7 +229,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEachIndexed { i, e ->
                 item(key = e.id) {
-                    Bubble(e, byId, store, selecting = contextFor != null && contextFor != e.id,
+                    Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id,
                         onTap = {
                             val cf = contextFor
                             if (cf != null && cf != e.id) {
@@ -255,7 +254,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 }
             }
             if (entries.isEmpty()) item {
-                Text("ここに書いたものは 1 件ずつ Gnosis のノートになります。\n「日記」で書くと、その日の日記に時刻つきで入ります。\n長押しで「続けて書く（Branch）」「文脈につなぐ」などができます。",
+                Text("ここに書いたものは、USB でつないで Gnosis の \\M で取り込むと 1 件ずつノートになります。\n「日記」で書くと、その日の日記に時刻つきで入ります。\n長押しで「続けて書く（Branch）」「文脈につなぐ」などができます。",
                     Modifier.padding(24.dp), fontSize = 14.sp)
             }
         }
@@ -341,51 +340,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("やめる") } })
     }
 
-    if (exportOpen) {
-        val fresh = entries.filter { !it.exported }
-        AlertDialog(onDismissRequest = { if (!exporting) exportOpen = false },
-            title = { Text("PC へ書き出す") },
-            text = { Text(if (exporting) "書き出しています…" else
-                "鍵付きの .7z を作り、パスワードをクリップボードに入れます。\nダウンロード/Gnosis にも置くので、USB でつないで PC から取れます。\n\nまだ書き出していないもの: ${fresh.size} 件") },
-            confirmButton = { TextButton(enabled = !exporting && fresh.isNotEmpty(), onClick = {
-                exporting = true
-                scope.launch {
-                    // 関係の相手（親・文脈）が前に書き出し済みでも、取り込み側が探せるよう一緒に入れる
-                    val ids = fresh.flatMap { listOfNotNull(it.parent) + it.contexts }.toSet()
-                    val list = fresh + entries.filter { it.exported && it.id in ids }
-                    val r = withContext(Dispatchers.IO) { runCatching { Exporter.export(ctx, store, list) } }
-                    exporting = false; exportOpen = false
-                    r.onSuccess { res ->
-                        val clip = ClipData.newPlainText("password", res.password)
-                        if (Build.VERSION.SDK_INT >= 33) clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
-                        ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
-                        for (k in entries.indices) if (!entries[k].exported) entries[k] = entries[k].copy(exported = true)
-                        persist(); exportResult = res
-                    }
-                }
-            }) { Text("書き出す") } },
-            dismissButton = { TextButton(enabled = !exporting, onClick = { exportOpen = false }) { Text("やめる") } })
-    }
-
-    exportResult?.let { res ->
-        AlertDialog(onDismissRequest = { exportResult = null },
-            title = { Text("書き出しました（${res.count} 件）") },
-            text = { Column {
-                Text("パスワード（クリップボードに入れました）:")
-                Text(res.password, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                Text(res.savedTo?.let { "置き場所: $it" } ?: "ダウンロードには置けませんでした。「送る」で PC へ送ってください。")
-                Text("PC の Gnosis で :GnosisCaptureImport を実行し、このパスワードを貼り付けます。", fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-            } },
-            confirmButton = { TextButton(onClick = {
-                val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", res.file)
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/octet-stream"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                ctx.startActivity(Intent.createChooser(send, "PC へ送る"))
-            }) { Text("送る") } },
-            dismissButton = { TextButton(onClick = { exportResult = null }) { Text("閉じる") } })
-    }
-
     if (settingsOpen) {
         var on by remember { mutableStateOf(settings.alarmOn) }
         var minutes by remember { mutableStateOf(settings.alarmMinutes.toString()) }
@@ -407,8 +361,9 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 }
                 Text("鳴ったら通知を押すと「今まで何してた？」が日記で開きます。", fontSize = 13.sp)
                 HorizontalDivider()
-                TextButton(onClick = { cleanAsk = true }) { Text("書き出し済みのメモをスマホから消す") }
-                if (cleanAsk) Text("PC に取り込んだのを確かめてから消してください。もう一度押すと消します。", fontSize = 13.sp)
+                Text("PC へは USB でつなぎ、Gnosis で \\M を押すと取り込めます（パスワードは要りません）。", fontSize = 13.sp)
+                TextButton(onClick = { cleanAsk = true }) { Text("PC に取り込み済みのメモをスマホから消す") }
+                if (cleanAsk) Text("もう一度「消す」を押すと、取り込み済み（✓）のものだけを消します。", fontSize = 13.sp)
             } },
             confirmButton = { TextButton(onClick = {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
@@ -420,7 +375,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             }) { Text("保存") } },
             dismissButton = { TextButton(onClick = {
                 if (cleanAsk) {
-                    val gone = entries.filter { it.exported }.map { it.id }.toSet()
+                    val gone = entries.filter { it.id in imported }.map { it.id }.toSet()
                     entries.filter { it.id in gone }.flatMap { it.images }.forEach { File(store.imageDir, it).delete() }
                     entries.removeAll { it.id in gone }
                     for (k in entries.indices) {
@@ -435,7 +390,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(e: Entry, byId: Map<String, Entry>, store: Store, selecting: Boolean, onTap: () -> Unit, onLong: () -> Unit) {
+private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, onTap: () -> Unit, onLong: () -> Unit) {
     val diary = e.topic == DIARY
     val colors = if (diary) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -460,7 +415,7 @@ private fun Bubble(e: Entry, byId: Map<String, Entry>, store: Store, selecting: 
                     Text(e.topic, fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.width(6.dp))
                     Text(timeFmt.format(Date(e.created)) + if (e.edited > 0) "（編集）" else "", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-                    if (e.exported) { Spacer(Modifier.width(4.dp)); Icon(Icons.Filled.DoneAll, "書き出し済み", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline) }
+                    if (done) { Spacer(Modifier.width(4.dp)); Icon(Icons.Filled.DoneAll, "PC に取り込み済み", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) }
                 }
             }
         }

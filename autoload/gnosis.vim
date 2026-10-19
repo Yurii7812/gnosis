@@ -5323,37 +5323,25 @@ function! gnosis#hub_open() abort
 endfunction
 
 " ---------------------------------------------------------------------------
-" スマホのメモ（Gnosis メモ APK）の取り込み: \M / :GnosisCaptureImport [ファイル]
-"   APK の書き出し（鍵付きの .7z / zip）を展開し、1 件ずつ普段の zn と同じ形のノートにする。
+" スマホのメモ（Gnosis メモ APK）の取り込み: \M / :GnosisCaptureImport [capture.json]
+"   USB でつないだスマホ（adb）から、アプリの中のデータを直接読む（パスワードは要らない）。
+"   1 件ずつ普段の zn と同じ形のノートにする。
 "   - 日記トピックは、その日の日記の本文に「HH:MM 本文」で入る（日記が無ければ作る）。
 "   - ほかのトピックは 1 件 = 1 ノート（題は 1 行目）。作った日の日記の「今日のノート」に載る。
-"     どこにもつながっていなければ \u（未整理）に出るので、あとでノートやグループにつなぐ。
+"     どこにもつながっていなければ \N（未整理）に出るので、あとでノートやグループにつなぐ。
 "   - スマホでつないだ Branch（続けて書く）と Context（文脈）は、そのままつなぐ。
 "   - 取り込んだ id は .state/capture_imported.json に記録し、同じものを二度取り込まない。
-"   ファイルを指定しなければ、USB でつないだスマホ（adb）の Download/Gnosis から最新のものを取り、
-"   無ければ ~/Downloads・~/ダウンロード・~/Desktop の最新のものを使う。
+"     スマホのアプリにも書き戻すので、スマホ側に「取り込み済み」と出る。
+"   capture.json（WhatsApp から変換したものなど。隣の images/ も読む）を指定すると、それを取り込む。
 " ---------------------------------------------------------------------------
 
 function! s:capture_py() abort
   return s:note_root . '/python/capture_import.py'
 endfunction
 
-function! s:capture_pick_archive() abort
-  let l:dl = s:state_dir() . s:sep() . 'capture-download'
-  if executable('adb') && !empty(filter(systemlist('adb devices'), 'v:val =~# "\\tdevice$"'))
-    let l:remote = filter(systemlist('adb shell ls -t /sdcard/Download/Gnosis/ 2>/dev/null'),
-          \ 'v:val =~# "^gnosis-capture-.*\\.\\%(7z\\|zip\\)\\r\\?$"')
-    if !empty(l:remote)
-      call mkdir(l:dl, 'p')
-      let l:name = substitute(l:remote[0], '\r$', '', '')
-      call system('adb pull ' . shellescape('/sdcard/Download/Gnosis/' . l:name) . ' ' . shellescape(l:dl . s:sep() . l:name))
-      if !v:shell_error && filereadable(l:dl . s:sep() . l:name)
-        return l:dl . s:sep() . l:name
-      endif
-    endif
-  endif
-  let l:dirs = [l:dl, '~/Downloads', '~/ダウンロード', '~/Desktop']
-  return trim(system(join(map([gnosis#python_cmd(), s:capture_py(), 'newest'] + l:dirs, 'shellescape(v:val)'), ' ')))
+function! s:capture_run(args, ...) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:capture_py()] + a:args, 'shellescape(v:val)'), ' ')
+  return a:0 ? system(l:cmd, a:1) : system(l:cmd)
 endfunction
 
 function! gnosis#capture_import(...) abort
@@ -5362,36 +5350,32 @@ function! gnosis#capture_import(...) abort
     return
   endif
   let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
-  if a:0 && !empty(a:1)
-    let l:arc = a:1
-  else
-    let l:arc = trim(input(gnosis#i18n#tr('取り込むファイル: '), s:capture_pick_archive(), 'file'))
-  endif
-  if empty(l:arc)
-    echo gnosis#i18n#tr('Gnosis: 中止しました')
-    return
-  endif
-  let l:arc = fnamemodify(expand(l:arc), ':p')
   let l:tmp = s:state_dir() . s:sep() . 'capture-tmp'
-  if l:arc =~? '\.json$'
-    " WhatsApp から作った capture.json などを直接
-    call mkdir(l:tmp, 'p')
-    call writefile(readfile(l:arc, 'b'), l:tmp . s:sep() . 'capture.json', 'b')
-  else
-    let l:clip = trim(s:clipboard_text_external())
-    let l:pw = exists('g:gnosis_test_capture_password') ? g:gnosis_test_capture_password
-          \ : inputsecret(gnosis#i18n#tr('パスワード（スマホに出たもの。空 Enter でクリップボードの中身）: '))
-    if empty(l:pw)
-      let l:pw = l:clip
+  call delete(l:tmp, 'rf')
+  if a:0 && !empty(a:1)
+    let l:src = fnamemodify(expand(a:1), ':p')
+    if isdirectory(l:src)
+      let l:src = substitute(l:src, '/$', '', '') . '/capture.json'
     endif
+    if !filereadable(l:src)
+      echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:src | echohl NONE
+      return
+    endif
+    call mkdir(l:tmp . '/images', 'p')
+    call writefile(readfile(l:src, 'b'), l:tmp . '/capture.json', 'b')
+    for l:img in glob(fnamemodify(l:src, ':h') . '/images/*', 1, 1)
+      call writefile(readfile(l:img, 'b'), l:tmp . '/images/' . fnamemodify(l:img, ':t'), 'b')
+    endfor
+  else
+    echo gnosis#i18n#tr('Gnosis: スマホから読み込んでいます…')
     redraw
-    let l:err = system(join(map([gnosis#python_cmd(), s:capture_py(), 'unpack', l:arc, l:tmp], 'shellescape(v:val)'), ' '), l:pw . "\n")
+    let l:err = s:capture_run(['adbpull', l:tmp])
     if v:shell_error
       echohl WarningMsg | echo 'Gnosis: ' . trim(l:err) | echohl NONE
       return
     endif
   endif
-  let l:out = system(join(map([gnosis#python_cmd(), s:capture_py(), 'plan', l:tmp, l:root], 'shellescape(v:val)'), ' '))
+  let l:out = s:capture_run(['plan', l:tmp, l:root])
   if v:shell_error
     echohl WarningMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
     return
@@ -5401,6 +5385,7 @@ function! gnosis#capture_import(...) abort
   if empty(l:todo)
     echo gnosis#i18n#tr('Gnosis: 新しいメモはありません（全部取り込み済み）')
     call delete(l:tmp, 'rf')
+    call s:capture_run(['adbmark', l:root])
     return
   endif
   call gnosis#save_current_note()
@@ -5493,14 +5478,16 @@ function! gnosis#capture_import(...) abort
       endif
     endfor
   endfor
-  call system(join(map([gnosis#python_cmd(), s:capture_py(), 'record', l:root, 'x'], 'shellescape(v:val)'), ' '),
-        \ join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
+  call s:capture_run(['record', l:root, 'x'], join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
   call delete(l:tmp, 'rf')
+  if !(a:0 && !empty(a:1))
+    call s:capture_run(['adbmark', l:root])
+  endif
   call gnosis#clear_title_cache()
   silent! call s:run_sync([g:gnosis_python, 'update', l:root])
   silent! checktime
   let l:notes = len(filter(copy(l:made), 'v:val[1] !~# "^(diary:"'))
-  echo printf(gnosis#i18n#tr('Gnosis: スマホのメモを %d 件取り込みました（ノート %d・日記 %d）。つないでいないものは \u で整理できます'),
+  echo printf(gnosis#i18n#tr('Gnosis: スマホのメモを %d 件取り込みました（ノート %d・日記 %d）。つないでいないものは \N で整理できます'),
         \ len(l:made), l:notes, len(l:made) - l:notes)
   if !empty(l:warn)
     echohl WarningMsg | echom join(l:warn, ' / ') | echohl NONE
@@ -5548,7 +5535,7 @@ endfunction
 
 " \n … とりあえず書く: 何も聞かずに、まっさらな新しいノートを開く（関係のブロックも無し）。
 "   作った日の日記の「今日のノート」に自動で載るので迷子にならない。つなぐのは書いたあとで
-"   （\l の b / c など）。どこにもつながっていないものは \u（未整理）に出る。
+"   （\l の b / c など）。どこにもつながっていないものは \N（未整理）に出る。
 function! gnosis#quick_note() abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
@@ -5567,11 +5554,11 @@ function! gnosis#quick_note() abort
   execute 'edit ' . fnameescape(l:file)
   let l:h1 = search('^#\s', 'nw')
   call cursor(l:h1 > 0 ? l:h1 + 2 : line('$'), 1)
-  echo gnosis#i18n#tr('Gnosis: とりあえず書く（つなぐのは後で。\u で未整理の一覧）')
+  echo gnosis#i18n#tr('Gnosis: とりあえず書く（つなぐのは後で。\N で未整理の一覧）')
   startinsert
 endfunction
 
-" \u … どこにもつながっていないノート（オーファン）の一覧を、\h と同じ編集可能な Markdown 画面で開く。
+" \N … どこにもつながっていないノート（オーファン・未整理）の一覧を、\h と同じ編集可能な Markdown 画面で開く。
 " 開くたびに作り直す（雑に書いたノートを後でつなぐための入口）。
 function! gnosis#orphans_open() abort
   let l:root = s:get_pkm_root()

@@ -470,7 +470,7 @@ nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
 " 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
 nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
-nnoremap <silent> \u       <Cmd>call gnosis#orphans_open()<CR>
+nnoremap <silent> \N       <Cmd>call gnosis#orphans_open()<CR>
 nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
 nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
 command! GnosisQuick call gnosis#quick_note()

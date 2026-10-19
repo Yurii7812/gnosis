@@ -32,7 +32,10 @@ data class Settings(
 
 const val DIARY = "日記"
 
-/** データはアプリの中だけ（entries.json と images/）。書き出すまで外には出さない。 */
+/**
+ * データはアプリの中だけ（entries.json と images/）。共有フォルダには置かない。
+ * PC の Gnosis が USB（adb の run-as）で直接読み、取り込んだ id を imported.json に書き戻す。
+ */
 class Store(private val ctx: Context) {
     private val file get() = File(ctx.filesDir, "entries.json")
     private val settingsFile get() = File(ctx.filesDir, "settings.json")
@@ -50,6 +53,15 @@ class Store(private val ctx: Context) {
         val tmp = File(ctx.filesDir, "entries.json.tmp")
         tmp.writeText(arr.toString())
         tmp.renameTo(file)
+    }
+
+    /** PC の Gnosis が取り込んだ id（PC が書き戻す）。 */
+    fun importedIds(): Set<String> {
+        val f = File(ctx.filesDir, "imported.json")
+        if (!f.exists()) return emptySet()
+        return try {
+            val a = JSONArray(f.readText()); (0 until a.length()).map { a.getString(it) }.toSet()
+        } catch (e: Exception) { emptySet() }
     }
 
     fun loadSettings(): Settings {
