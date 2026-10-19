@@ -630,7 +630,7 @@ def test_diary_note_keeps_a_blank_line_after_the_last_image() -> None:
 # title が正式なフォルゲゼッテルID（folgezettel: を廃止）
 # ---------------------------------------------------------------------------
 
-_LEGACY_KEYS = ("folgezettel:", "paper_index:", "paper_diary", "paper_keyword", "paper_topic", "folgezettel_index:", "topic_parent:")
+_LEGACY_KEYS = ("paper_index:", "paper_diary", "paper_keyword", "paper_topic", "folgezettel_index:", "topic_parent:")
 
 
 def _no_legacy(root: Path) -> list[str]:
@@ -686,7 +686,7 @@ def test_duplicate_ids_are_reported() -> None:
         _write(root / "261001000001.md", "---\ntime: 2026-10-01 00:00:01\ntitle: 1a\nfolgezettel: 1b\n---\n\n# 1a\n\n![](1a.jpg)\n")
         pp.regen(root, do_sync=False)
         t = (root / "261001000001.md").read_text(encoding="utf-8")
-        check("folgezettel: 1b" in t and any("一致しません" in m for m in pp.LAST_REPORT), "title と矛盾する旧 folgezettel: は消さずに報告")
+        check("folgezettel: 1b" in t and not any("一致しません" in m for m in pp.LAST_REPORT), "現役 folgezettel は title と独立して保持")
 
 
 def test_legacy_migration() -> None:
@@ -704,6 +704,7 @@ def test_legacy_migration() -> None:
             (root / n).write_bytes(b"x")
         pp.regen(root)
         snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
+        check("folgezettel: 1\n" in snap["261001000001.md"], "title と同じ現役 folgezettel も保持")
         check(_no_legacy(root) == [], f"旧メタデータが外れた: {_no_legacy(root)}")
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")
@@ -740,7 +741,10 @@ def test_group_notes_format() -> None:
         for _ in range(2):
             pp.regen(root)
         it = idx.read_text(encoding="utf-8").split("\n")
-        check(it[:6] == ["---", it[1], "title: Paper-Zettelkasten-Index", "attribute: group", "---", ""] and it[6] == "# Paper-Zettelkasten-Index",
+        header_end = it.index("---", 1)
+        check("title: Paper-Zettelkasten-Index" in it[1:header_end]
+              and "attribute: group" in it[1:header_end]
+              and it[header_end + 1:header_end + 3] == ["", "# Paper-Zettelkasten-Index"],
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
         k = it.index("[Folgezettel-Index](Folgezettel-Index.md)")
         check(it[k - 1] == "[Index-write](Index-write.md)" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")

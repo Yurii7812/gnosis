@@ -178,6 +178,7 @@ command!          GnosisToday call gnosis#diary_today()
 command!          GnosisTabs call gnosis#tabs#popup()
 command!          GnosisWNext call gnosis#write_next()
 command! -bang -nargs=* GnosisContextMigrate call gnosis#context#migrate_command(<q-args>, <bang>0)
+command!          GnosisFolgezettelMove call gnosis#folgezettel#toggle()
 command!          GnosisBranchCheck call gnosis#branch#check_command()
 " BranchGroup: の中の並び（階層）: 選んだ（または今の行の）リンクを 1 段下げる／上げる。範囲なしなら今の行。
 command! -range    GnosisBranchNest   call gnosis#branch#nest(<line1>, <line2>, 1)
@@ -574,7 +575,7 @@ nnoremap <nowait> <silent> \bu <Cmd>call gnosis#jump_last_link_before_up()<CR>
 " timeoutlen 待ちになるため \ 側へ移した。k=上 / j=下 の連想。
 nnoremap <nowait> <silent> \k  <Cmd>call gnosis#jump_up_cursor()<CR>
 nnoremap <nowait> <silent> \j  <Cmd>call gnosis#jump_down_top()<CR>
-" \m … 一番下の関係の節（最後の Context: / Related: / BackLink: など）の見出しへ（\k の反対）
+" \m … 本文末尾に最も近い関係見出し（ChildBranch: / Related: / BackLink: など）へ
 nnoremap <nowait> <silent> \m  <Cmd>call gnosis#jump_last_section()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call gnosis#jump_down_bottom()<CR>
 

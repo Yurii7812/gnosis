@@ -30,9 +30,11 @@ from urllib.parse import unquote
 
 try:
     import note_format_v2 as nf
+    import folgezettel as fz
 except ImportError:  # 実行ディレクトリ以外から import されたとき
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import note_format_v2 as nf
+    import folgezettel as fz
 
 PB = nf.PARENT_BRANCH_MARK
 CB = nf.CHILD_BRANCH_MARK
@@ -354,9 +356,11 @@ def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) 
                 return bad
         todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])]
         todo_pb = [c for c in children if parent not in v.declared_parents.get(c, [])]
-        if not todo_cb and not todo_pb:
+        todo_id = [c for c in children if not fz.value(v.texts[c])
+                   and fz.ID_RE.fullmatch(fz.value(v.texts[parent]))]
+        if not todo_cb and not todo_pb and not todo_id:
             return _result(True, "already", parent=str(parent), child=str(children[0]), changed=[])
-        touched = ([parent] if todo_cb else []) + todo_pb
+        touched = ([parent] if todo_cb else []) + list(dict.fromkeys(todo_pb + todo_id))
         for p in touched:
             if nf._editor_has_unsaved_changes(p):
                 return _result(False, "dirty", path=str(p))
@@ -367,9 +371,13 @@ def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) 
             for c in todo_cb:
                 new = insert_link(new, CB, _link(parent.parent, c, v.link_title(c)))
             plan.append((parent, old, new))
-        for c in todo_pb:
+        sibling_texts = list(v.texts.values())
+        for c in dict.fromkeys(todo_pb + todo_id):
             old = v.texts[c]
-            plan.append((c, old, insert_link(old, PB, _link(c.parent, parent, v.link_title(parent)))))
+            new = insert_link(old, PB, _link(c.parent, parent, v.link_title(parent))) if c in todo_pb else old
+            new = fz.assign_child(v.texts[parent], new, sibling_texts)
+            plan.append((c, old, new))
+            sibling_texts.append(new)
         if dry_run:
             return _result(True, "added", parent=str(parent), child=str(children[0]), changed=[], dry_run=True)
         _atomic_pair_write(plan)

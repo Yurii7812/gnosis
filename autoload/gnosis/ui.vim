@@ -15,7 +15,8 @@ function! gnosis#ui#statusline() abort
     let l:label = ' NORMAL '
   endif
   return '%#GnosisMode' . l:kind . '#' . l:label
-        \ . '%#StatusLine#  %f %m%r%=%l:%c  %p%% '
+        \ . '%#StatusLine# ' . (get(g:, 'gnosis_folgezettel_move', 0) ? '[Folgezettel ON] ' : '')
+        \ . ' %f %m%r%=%l:%c  %p%% '
 endfunction
 
 " ---------------------------------------------------------------------------

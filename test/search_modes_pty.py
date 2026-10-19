@@ -120,6 +120,23 @@ class SearchScreen(unittest.TestCase):
                     self.assertEqual(state['file'], 'b.md')
                     self.assertIn('[ハーブ](a.md)', state['lines'])
 
+    def test_link_placement_survives_idle(self):
+        self.note('g', 'Group G', '[別名](a.md)', True)
+        with self.session() as s:
+            s.send(":set updatetime=200\r", .2)
+            s.send('\\l', 1)
+            s.send('Group G', .5)
+            s.send('\r', .8)
+            self.assertIn('g=', s.text())
+            s.wait(2)
+            s.send('g', .3)
+            s.send('\r', .5)
+            state = self.dump(s)
+            self.assertIn('[Group G](g.md)', state['lines'])
+            group = (self.vault / 'g.md').read_text().splitlines()
+            added = group.index('[Ordinary B](b.md)')
+            self.assertEqual(group[added - 1], '[別名](a.md)')
+
     def test_visual_alias_uses_original_selection(self):
         with self.session() as s:
             s.send(":call cursor(line('$'), 1)\r", .3)

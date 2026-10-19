@@ -67,5 +67,38 @@ with tempfile.TemporaryDirectory() as d:
     after = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
     check(before == after, "もう一度同期しても何も変わらない（冪等）")
 
+
+# BranchGroup: が Group: の上にあっても、本文のリンク行が BranchGroup: に吸い込まれない
+with tempfile.TemporaryDirectory() as d:
+    root = Path(d)
+    note(root, "index.md", "Index", ["[R](r.md)"], group=True)
+    note(root, "g.md", "G", ["[M1](m1.md)"], group=True)
+    note(root, "m1.md", "M1", ["x"])
+    note(root, "m2.md", "M2", ["y"])
+    note(root, "r.md", "R", ["BranchGroup:", "[G](g.md)", "Group:", "[Index](index.md)", "", "[M2](m2.md)"])
+    read(root, "r.md")
+    r = "\n".join(read(root, "r.md"))
+    bg = r.split("BranchGroup:")[1].split("\nGroup:")[0]
+    check("[G](g.md)" in bg and "m2.md" not in bg, "BranchGroup: の上に Group: があっても本文リンクは BranchGroup: に入らない")
+    check("[M2](m2.md)" in r.split("\nGroup:")[1], "本文のリンクは本文に残る")
+
+
+# ChildBranch: は、本文・BranchGroup: に出ている子（上）と出ていない子（下）を空行 1 つで分ける
+with tempfile.TemporaryDirectory() as d:
+    root = Path(d)
+    note(root, "index.md", "Index", ["[P](p.md)"], group=True)
+    note(root, "g.md", "G", [], group=True)
+    for n_ in ("a", "b", "c"):
+        note(root, n_ + ".md", n_.upper(), ["x"])
+    note(root, "p.md", "P", ["BranchGroup:", "[G](g.md)", "Group:", "[Index](index.md)", "", "本文 [B](b.md)", "",
+                              "ChildBranch:", "[A](a.md)", "[B](b.md)", "[C](c.md)", "[G](g.md)"])
+    sync(root)
+    sync(root)
+    p_ = read(root, "p.md")
+    i = p_.index("ChildBranch:")
+    cb = p_[i + 1:p_.index("BackLink:") if "BackLink:" in p_ else len(p_)]
+    check(cb[:5] == ["[B](b.md)", "[G](g.md)", "", "[A](a.md)", "[C](c.md)"],
+          f"ChildBranch: 出ている子→空行→出ていない子（元の並びのまま）: {cb}")
+
 print("all passed" if ng == 0 else f"{ng} failed")
 sys.exit(1 if ng else 0)

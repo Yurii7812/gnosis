@@ -3067,14 +3067,15 @@ function! gnosis#jump_up_cursor() abort
   call s:jump_head_centered(l:h[0])
 endfunction
 
-" \m … このノートで一番下の「名前:」行へ
+" \m … 本文の終わりに最も近い関係見出し（ChildBranch: / Related: / BackLink: など）へ
 function! gnosis#jump_last_section() abort
-  let l:h = s:colon_head_lines()
-  if empty(l:h)
+  " 上部の ParentBranch: / Group: / Context: は飛ばし、本文末尾の最初の関係見出しへ移る。
+  let l:head = s:first_section_line()
+  if l:head <= 0
     echo 'Context: section not found'
     return
   endif
-  call s:jump_head_centered(l:h[-1])
+  call s:jump_head_centered(l:head)
 endfunction
 
 function! gnosis#jump_down_top() abort

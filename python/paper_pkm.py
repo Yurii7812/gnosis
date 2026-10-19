@@ -617,6 +617,8 @@ LAST_REPORT: list[str] = []  # 直近の regen / migrate が出した警告（�
 
 def _legacy_keys_of(n: NoteInfo) -> set[str]:
     keys = {k for k in LEGACY_FM_KEYS if any(_fm_key_re(k).match(ln) for ln in n.fm)}
+    # Digital IDs share this key; paper migration must never remove it.
+    keys.discard("folgezettel")
     # 値の無い `topic_parent:`（旧い形の空欄）は何も表さないので、旧い目印と同じく外す
     if any(_fm_key_re(TOPIC_PARENT_KEY).match(ln) for ln in n.fm) and not any(_legacy_values(n, TOPIC_PARENT_KEY)):
         keys.add(TOPIC_PARENT_KEY)
@@ -637,7 +639,7 @@ def migrate_legacy_metadata(root: Path) -> list[str]:
     同じノートだと確かめられたものから取り除く。確かめられない・値が矛盾するものは**消さずに**警告を返す。
 
     - 取り除くのは目印の行だけ。本文・画像・リンク・ほかの front matter は変えない。
-    - `folgezettel:` は title と一致し、かつ title と同じ名前の画像を参照しているスキャンノートだけ外す。
+    - `folgezettel:` はデジタルノートの現役IDなので、title との一致に関わらず保持する。
     - `paper_diary:` は日記の日付で、紙の日記の画像（paper-diary-…）を参照しているものだけ外す
       （題が旧い形のときは YYYY-MM-DD-曜日2文字 に直してから）。
     - 月・年・キーワードのグループは、リンク階層で今と同じノートが見つかるものだけ外す。
