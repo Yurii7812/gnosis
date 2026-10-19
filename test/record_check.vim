@@ -46,10 +46,15 @@ try
   let s:dl = s:file(s:diary)
   let s:i1 = match(s:dl, '](' . s:day . ')')
   call s:ok('二つ目の記録も日記の上に並ぶ（続けて）', !empty(s:bd) && match(s:dl, '](' . s:bd . ')') == s:i1 + 1, string(s:dl))
-  enew
-  let g:gnosis_test_record_pick = '夢'
-  call gnosis#record_pick()
-  call s:ok('\R で選ぶと今日のノートを開く（重ねて作らない）', expand('%:t') ==# s:day && len(glob(s:v . '/*.md', 0, 1)) == len(uniq(sort(glob(s:v . '/*.md', 0, 1)))))
+catch
+  call add(s:out, 'NG 例外: ' . v:exception . ' @ ' . v:throwpoint)
+endtry
+" \R はふだん try の外で動く（try の中だと、ノートを開くときの silent! のエラーが例外になる）
+enew
+let g:gnosis_test_record_pick = '夢'
+call gnosis#record_pick()
+call s:ok('\R で選ぶと今日のノートを開く（重ねて作らない）', expand('%:t') ==# s:day, expand('%:p') . ' ' . s:day)
+try
   call s:ok('同じ日の 2 回目でもリンクは 1 つ', len(filter(s:file(s:diary), 'stridx(v:val, "](" . s:day . ")") >= 0')) == 1)
   " 年越し: 前の年の月グループが記録の直下にあれば、年のグループ（YYYY-日誌）にまとめ、今年の年のグループの中に今月を作る
   let s:py = (str2nr(s:today[0:3]) - 1) . ''

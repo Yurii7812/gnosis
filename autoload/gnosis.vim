@@ -11238,12 +11238,13 @@ endfunction
 
 function! gnosis#group_review_snapshot() abort
   let l:m = s:group_member_lines_of_buffer()
+  " silent! unlet は try の中から呼ばれると例外になる（BufRead の中で、ノートを開く処理を止めていた）
   if l:m is v:null
-    silent! unlet b:gnosis_group_members
+    if exists('b:gnosis_group_members') | unlet b:gnosis_group_members | endif
   else
     let b:gnosis_group_members = l:m
   endif
-  silent! unlet b:gnosis_group_snap_stale
+  if exists('b:gnosis_group_snap_stale') | unlet b:gnosis_group_snap_stale | endif
 endfunction
 
 " BufWritePost: 前回の控えから増えた・変わったメンバーの行があれば、確認画面を開く
@@ -16498,15 +16499,33 @@ endfunction
 "   \R / :GnosisRecord   … 時系列記録を選んで、今日のノートを作る・開く
 " =============================================================================
 
-" 「時系列記録」の中の記録（日記を除くグループ）。[{file, title}]
+"「時系列記録」の中の記録（日記を除くグループ）。[{file, title}]
+" 所属はグループの本文のリンクで決まる（Group: の行は同期があとから書くので、それには頼らない）
 function! s:record_kinds(root, notes, rec) abort
   let l:out = []
+  let l:in = s:record_members(a:root, a:rec)
   for l:n in a:notes
-    if l:n.group && l:n.title !=# '日記' && l:n.title !=# '時系列記録' && s:diary_parent_has(a:root, l:n.file, a:rec)
+    if l:n.group && l:n.title !=# '日記' && l:n.title !=# '時系列記録' && has_key(l:in, l:n.file)
       call add(l:out, {'file': l:n.file, 'title': l:n.title})
     endif
   endfor
   return sort(l:out, {x, y -> x.title ==# y.title ? 0 : x.title ># y.title ? 1 : -1})
+endfunction
+
+" グループ a:group の本文（Group: などの上のブロックを除く）にリンクがあるノート {ファイル名: 1}
+function! s:record_members(root, group) abort
+  let l:lines = readfile(fnamemodify(a:root, ':p') . a:group)
+  let l:h1 = match(l:lines, '^# ')
+  let l:start = l:h1 < 0 ? 0 : max([l:h1 + 1, s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 'Context:'])])
+  let l:end = s:first_section_index_in_lines(l:lines)
+  let l:out = {}
+  for l:ln in l:lines[l:start : (l:end < 0 ? -1 : l:end - 1)]
+    let l:m = matchlist(l:ln, '\[\%(\\.\|[^\]\\]\)*\](\([^)#[:space:]]\+\.md\)')
+    if !empty(l:m)
+      let l:out[fnamemodify(l:m[1], ':t')] = 1
+    endif
+  endfor
+  return l:out
 endfunction
 
 function! s:record_valid_name(name) abort
@@ -16529,12 +16548,13 @@ function! s:record_month(root, notes, kg, kind, date) abort
     " 記録の直下にある、前の年の月グループ
     let l:old = {}
     let l:has_years = 0
+    let l:in = s:record_members(a:root, a:kg)
     for l:n in a:notes
       if !l:n.group | continue | endif
       if l:n.title =~# '^\d\{4}-\d\d-' . escape(a:kind, '\.*[]~^$') . '$' && l:n.title[0 : 3] <# a:date[0 : 3]
-            \ && s:diary_parent_has(a:root, l:n.file, a:kg)
+            \ && has_key(l:in, l:n.file)
         let l:old[l:n.title[0 : 3]] = get(l:old, l:n.title[0 : 3], []) + [l:n]
-      elseif l:n.title =~# '^\d\{4}-' . escape(a:kind, '\.*[]~^$') . '$' && s:diary_parent_has(a:root, l:n.file, a:kg)
+      elseif l:n.title =~# '^\d\{4}-' . escape(a:kind, '\.*[]~^$') . '$' && has_key(l:in, l:n.file)
         let l:has_years = 1
       endif
     endfor
@@ -16659,7 +16679,12 @@ function! gnosis#record_open(kind) abort
   call gnosis#save_current_note()
   let l:file = s:record_day(l:root, l:notes, l:kg, a:kind, s:diary_day_of_time(''))
   call gnosis#push_history()
-  execute 'edit ' . fnameescape(l:dir . l:file)
+  " 呼び出し元が try の中だと、開くときの自動コマンドの silent! のエラーが例外になって止まる。
+  " 開くこと自体はできているので、受け止めて続ける
+  try
+    execute 'edit ' . fnameescape(l:dir . l:file)
+  catch
+  endtry
   " 本文の最初の空行（Group: のブロックのあと）から書けるように
   let l:e = s:top_blocks_end(getline(1, '$'), max([0, search('^# ', 'nw') - 1]), ['Group:', 'Context:'])
   call cursor(max([1, l:e + 2]), 1)
@@ -16767,10 +16792,10 @@ function! gnosis#record_migrate(old, kind) abort
     let l:g = remove(l:groups, 0)
     if has_key(l:seen, l:g) | continue | endif
     let l:seen[l:g] = 1
-    for l:t in s:diary_head(readfile(l:dir . l:g)).links
+    for l:t in keys(s:record_members(l:root, l:g))
       let l:n = get(filter(copy(l:notes), 'v:val.file ==# l:t'), 0, {})
-      " 下へだけたどる: 年・月の題のグループと、日付で始まるノート（Index や親のグループへは戻らない）
-      if empty(l:n) || l:t ==# 'index.md' || !s:diary_parent_has(l:root, l:t, l:g) | continue | endif
+      " 下へだけたどる（グループの本文のリンク）: 年・月の題のグループと、日付で始まるノート
+      if empty(l:n) || l:t ==# 'index.md' | continue | endif
       if l:n.group
         if l:n.title =~# '^\d\{4}\%(-\d\d\)\=$'
           call s:record_retitle(l:root, l:t, l:n.title, l:n.title . '-' . a:kind)
