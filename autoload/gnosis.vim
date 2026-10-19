@@ -10331,12 +10331,134 @@ endfunction
 
 " za: ca と同じ そっちにとって 側だが、関係は常に既定の「ノート」固定
 " （ピッカーも「相手にも書くか」の質問も出さない）。
+" ---------------------------------------------------------------------------
+" 追加待ち画面: グループ（Index を含む）に複数のリンクを za で足すときは、\h と同じ形の編集できる画面を
+" 開き、q で確定するまで足さない。画面の中で Enter で中身を見たり、zl で表示名を決めたりでき、
+" q で全部をそのグループに足して、よみ順に並べ直す。Q は何も足さずに閉じる。
+" ---------------------------------------------------------------------------
+
+let s:stage = {}
+
+function! s:stage_file() abort
+  let l:dir = s:hub_dir()
+  if !isdirectory(l:dir)
+    call mkdir(l:dir, 'p')
+  endif
+  return l:dir . s:sep() . 'stage-' . sha256(s:hub_root_key())[0:15] . '.md'
+endfunction
+
+function! s:stage_header(group_path) abort
+  return [gnosis#i18n#tr('# 追加待ち: ') . s:group_label(a:group_path),
+        \ gnosis#i18n#tr('q=グループに足して並べる  Q=取り消し  Enter=中身を見る  zl=表示名を変える'),
+        \ '']
+endfunction
+
+" za のリンクが複数で、今のノートがグループなら追加待ち画面に回す。回したら 1。
+function! s:stage_maybe(links) abort
+  if len(a:links) < 2 || !s:buf_is_group() || &buftype !=# ''
+    return 0
+  endif
+  let l:group = expand('%:p')
+  if &modified
+    silent! write
+  endif
+  let l:lines = s:stage_header(l:group)
+  for l:lk in a:links
+    let l:m = s:extract_markdown_link(l:lk)
+    let l:abs = fnamemodify(gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', '')), ':p')
+    let l:frag = matchstr(s:extract_target(l:lk), '#.*$')
+    call add(l:lines, '[' . l:m.text . '](' . l:abs . l:frag . ')')
+  endfor
+  let l:file = s:stage_file()
+  call s:syn_writefile(l:lines, l:file)
+  let s:stage = {'file': l:file, 'group': l:group}
+  call gnosis#push_history()
+  call timer_start(0, function('s:timer_hub_edit_cb', [l:file]))
+  call timer_start(50, function('s:timer_redraw_cb'))
+  return 1
+endfunction
+
+" 追加待ち画面のキー（q / Q）。画面を開くたびに BufEnter から呼ぶ。
+function! gnosis#stage_setup() abort
+  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#stage_commit()<CR>
+  nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#stage_cancel()<CR>
+endfunction
+
+function! gnosis#stage_open() abort
+  if empty(s:stage) || !filereadable(get(s:stage, 'file', ''))
+    echo gnosis#i18n#tr('Gnosis: 追加待ちはありません')
+    return
+  endif
+  call gnosis#push_history()
+  call timer_start(0, function('s:timer_hub_edit_cb', [s:stage.file]))
+  call timer_start(50, function('s:timer_redraw_cb'))
+endfunction
+
+function! gnosis#stage_cancel() abort
+  if empty(s:stage)
+    return
+  endif
+  let l:st = s:stage
+  let s:stage = {}
+  let l:nr = bufnr(l:st.file)
+  silent! execute 'hide edit ' . fnameescape(l:st.group)
+  if l:nr > 0
+    silent! execute 'bwipeout! ' . l:nr
+  endif
+  call delete(l:st.file)
+  echo gnosis#i18n#tr('Gnosis: 追加待ちを取り消しました（何も足していません）')
+endfunction
+
+function! gnosis#stage_commit() abort
+  if empty(s:stage) || expand('%:p') !=# fnamemodify(s:stage.file, ':p')
+    return
+  endif
+  let l:st = s:stage
+  let l:gnr = bufnr(l:st.group)
+  if l:gnr > 0 && getbufvar(l:gnr, '&modified')
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('グループに未保存の変更があります。先に保存してください') | echohl NONE
+    return
+  endif
+  silent! write
+  let l:rx = '^\s*\(\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\)\s*$'
+  let l:items = []
+  for l:ln in getline(1, '$')
+    let l:m = matchlist(l:ln, l:rx)
+    if !empty(l:m)
+      call add(l:items, l:m[1])
+    endif
+  endfor
+  let s:stage = {}
+  let l:snr = bufnr('%')
+  silent! execute 'hide edit ' . fnameescape(l:st.group)
+  silent! execute 'bwipeout! ' . l:snr
+  call delete(l:st.file)
+  let l:gdir = expand('%:p:h')
+  let l:n = 0
+  for l:it in l:items
+    let l:m = s:extract_markdown_link(l:it)
+    let l:abs = fnamemodify(gnosis#resolve_link(substitute(l:m.target, '#.*$', '', '')), ':p')
+    let l:link = s:make_link_from_dir(l:abs . matchstr(l:m.target, '#.*$'), l:m.text, l:gdir)
+    if !s:buffer_has_link(l:link)
+      call s:simple_body_append(l:link)
+      let l:n += 1
+    endif
+  endfor
+  call s:links_added_done()
+  silent! call gnosis#sort_yomi()
+  silent! write
+  echo printf(gnosis#i18n#tr('Gnosis: %d 件をグループに足して、よみ順に並べました'), l:n)
+endfunction
+
 function! gnosis#add_clipboard_before_up_note(...) abort
   " za: 今のノートに（カーソル下のリンク or クリップボードの）リンクを 1 本足す。
   "     置き場所は h（カーソル直下）/ Enter（本文の最後）。相手側の Parent は書かない。
   let l:links = s:pick_links()
   if empty(l:links)
     echo gnosis#i18n#tr('Gnosis: クリップボードにもヤンクにも、追加できるノートへのリンクがありません')
+    return
+  endif
+  if s:stage_maybe(l:links)
     return
   endif
   call s:insert_links_at_position(l:links, function('s:links_added_done'))

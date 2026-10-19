@@ -62,6 +62,9 @@ sh "$REPO/test/autosync_dirty_guard_net.sh"
 # \S（選択なし）のよみ順ソート
 sh "$REPO/test/sort_yomi_net.sh"
 
+# グループで複数リンクを za → 追加待ち画面 → q で足して並べる・Q で取り消し
+sh "$REPO/test/stage_net.sh"
+
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ
 if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a python3 "$REPO/python/test_folgezettel_scan_diary.py"; fi
 

@@ -472,6 +472,7 @@ nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
 nnoremap <silent> \u       <Cmd>call gnosis#orphans_open()<CR>
 command! GnosisOrphans call gnosis#orphans_open()
+command! GnosisStage call gnosis#stage_open()
 " \q は作業タブ管理。\o はリンクを別の論理タブとして開く。
 nnoremap <silent> \q       <Cmd>call gnosis#tabs#popup()<CR>
 nnoremap <silent> \o       <Cmd>call gnosis#tabs#open_link()<CR>
@@ -985,6 +986,7 @@ augroup END
 autocmd BufReadPre,BufNewFile *.md if gnosis#is_vault_path(expand('<afile>:p')) | setlocal noswapfile | endif
 " ハブも swap を作らない（vault 外なので上記が効かず、残骸 .swp から E325 と読専化が出る）。
 execute 'autocmd BufReadPre,BufNewFile ' . escape(printf('%s/hubs/*.md', gnosis#state_dir()), '\\ ') . ' setlocal noswapfile noundofile'
+execute 'autocmd BufEnter ' . escape(printf('%s/hubs/stage-*.md', gnosis#state_dir()), '\\ ') . ' call gnosis#stage_setup()'
 
 augroup gnosis_lock
   autocmd!

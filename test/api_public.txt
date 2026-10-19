@@ -227,6 +227,10 @@ gnosis#stack_copy_delete_visual
 gnosis#stack_copy_toggle
 gnosis#stack_copy_yank_line
 gnosis#stack_copy_yank_visual
+gnosis#stage_cancel
+gnosis#stage_commit
+gnosis#stage_open
+gnosis#stage_setup
 gnosis#start#active
 gnosis#start#art
 gnosis#start#begin
