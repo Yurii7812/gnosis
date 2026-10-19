@@ -31,6 +31,7 @@ gnosis#branch#message
 gnosis#branch#nest
 gnosis#branch#run
 gnosis#branch#warn
+gnosis#capture_import
 gnosis#check_missing_prefix_in_current_dir
 gnosis#check_missing_prefix_in_current_dir_once
 gnosis#choose_index_root
@@ -169,6 +170,7 @@ gnosis#paste_clipboard_link_here
 gnosis#perf_diag
 gnosis#push_history
 gnosis#python_cmd
+gnosis#quick_note
 gnosis#quit_unmount
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot

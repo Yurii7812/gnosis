@@ -471,6 +471,10 @@ nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
 nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
 nnoremap <silent> \u       <Cmd>call gnosis#orphans_open()<CR>
+nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
+nnoremap <silent> \I       <Cmd>call gnosis#capture_import()<CR>
+command! GnosisQuick call gnosis#quick_note()
+command! -nargs=? -complete=file GnosisCaptureImport call gnosis#capture_import(<q-args>)
 command! GnosisOrphans call gnosis#orphans_open()
 command! GnosisYomiReview call gnosis#yomi_review()
 command! GnosisReview call gnosis#review_reopen()

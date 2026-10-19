@@ -5322,6 +5322,255 @@ function! gnosis#hub_open() abort
   call timer_start(50, function('s:timer_redraw_cb'))
 endfunction
 
+" ---------------------------------------------------------------------------
+" スマホのメモ（Gnosis メモ APK）の取り込み: \I / :GnosisCaptureImport [ファイル]
+"   APK の書き出し（鍵付きの .7z / zip）を展開し、1 件ずつ普段の zn と同じ形のノートにする。
+"   - 日記トピックは、その日の日記の本文に「HH:MM 本文」で入る（日記が無ければ作る）。
+"   - ほかのトピックは 1 件 = 1 ノート（題は 1 行目）。作った日の日記の「今日のノート」に載る。
+"     どこにもつながっていなければ \u（未整理）に出るので、あとでノートやグループにつなぐ。
+"   - スマホでつないだ Branch（続けて書く）と Context（文脈）は、そのままつなぐ。
+"   - 取り込んだ id は .state/capture_imported.json に記録し、同じものを二度取り込まない。
+"   ファイルを指定しなければ、USB でつないだスマホ（adb）の Download/Gnosis から最新のものを取り、
+"   無ければ ~/Downloads・~/ダウンロード・~/Desktop の最新のものを使う。
+" ---------------------------------------------------------------------------
+
+function! s:capture_py() abort
+  return s:note_root . '/python/capture_import.py'
+endfunction
+
+function! s:capture_pick_archive() abort
+  let l:dl = s:state_dir() . s:sep() . 'capture-download'
+  if executable('adb') && !empty(filter(systemlist('adb devices'), 'v:val =~# "\\tdevice$"'))
+    let l:remote = filter(systemlist('adb shell ls -t /sdcard/Download/Gnosis/ 2>/dev/null'),
+          \ 'v:val =~# "^gnosis-capture-.*\\.\\%(7z\\|zip\\)\\r\\?$"')
+    if !empty(l:remote)
+      call mkdir(l:dl, 'p')
+      let l:name = substitute(l:remote[0], '\r$', '', '')
+      call system('adb pull ' . shellescape('/sdcard/Download/Gnosis/' . l:name) . ' ' . shellescape(l:dl . s:sep() . l:name))
+      if !v:shell_error && filereadable(l:dl . s:sep() . l:name)
+        return l:dl . s:sep() . l:name
+      endif
+    endif
+  endif
+  let l:dirs = [l:dl, '~/Downloads', '~/ダウンロード', '~/Desktop']
+  return trim(system(join(map([gnosis#python_cmd(), s:capture_py(), 'newest'] + l:dirs, 'shellescape(v:val)'), ' ')))
+endfunction
+
+function! gnosis#capture_import(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  if a:0 && !empty(a:1)
+    let l:arc = a:1
+  else
+    let l:arc = trim(input(gnosis#i18n#tr('取り込むファイル: '), s:capture_pick_archive(), 'file'))
+  endif
+  if empty(l:arc)
+    echo gnosis#i18n#tr('Gnosis: 中止しました')
+    return
+  endif
+  let l:arc = fnamemodify(expand(l:arc), ':p')
+  let l:tmp = s:state_dir() . s:sep() . 'capture-tmp'
+  if l:arc =~? '\.json$'
+    " WhatsApp から作った capture.json などを直接
+    call mkdir(l:tmp, 'p')
+    call writefile(readfile(l:arc, 'b'), l:tmp . s:sep() . 'capture.json', 'b')
+  else
+    let l:clip = trim(s:clipboard_text_external())
+    let l:pw = exists('g:gnosis_test_capture_password') ? g:gnosis_test_capture_password
+          \ : inputsecret(gnosis#i18n#tr('パスワード（スマホに出たもの。空 Enter でクリップボードの中身）: '))
+    if empty(l:pw)
+      let l:pw = l:clip
+    endif
+    redraw
+    let l:err = system(join(map([gnosis#python_cmd(), s:capture_py(), 'unpack', l:arc, l:tmp], 'shellescape(v:val)'), ' '), l:pw . "\n")
+    if v:shell_error
+      echohl WarningMsg | echo 'Gnosis: ' . trim(l:err) | echohl NONE
+      return
+    endif
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:capture_py(), 'plan', l:tmp, l:root], 'shellescape(v:val)'), ' '))
+  if v:shell_error
+    echohl WarningMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
+    return
+  endif
+  let l:plan = json_decode(l:out)
+  let l:todo = filter(copy(l:plan.items), '!v:val.done')
+  if empty(l:todo)
+    echo gnosis#i18n#tr('Gnosis: 新しいメモはありません（全部取り込み済み）')
+    call delete(l:tmp, 'rf')
+    return
+  endif
+  call gnosis#save_current_note()
+  let l:files = {}
+  for l:it in l:plan.items
+    if l:it.done && !empty(l:it.file)
+      let l:files[l:it.id] = l:root . '/' . l:it.file
+    endif
+    for [l:k, l:v] in items(l:it.known)
+      let l:files[l:k] = l:root . '/' . l:v
+    endfor
+  endfor
+  " 画像は vault の capture-images/ に置く
+  let l:imgdir = l:root . '/capture-images'
+  let l:made = []
+  let l:diary_lines = {}
+  for l:it in l:todo
+    let l:img = []
+    for l:name in l:it.images
+      call mkdir(l:imgdir, 'p')
+      call writefile(readfile(l:tmp . '/images/' . l:name, 'b'), l:imgdir . '/' . l:name, 'b')
+      call add(l:img, '![](capture-images/' . l:name . ')')
+    endfor
+    if l:it.note
+      let l:name = l:it.id . '.md'
+      let l:n = 2
+      while filereadable(l:root . '/' . l:name)
+        let l:name = l:it.id . '-' . l:n . '.md'
+        let l:n += 1
+      endwhile
+      let l:title = substitute(l:it.title, '[\[\]]', '', 'g')
+      let l:body = split(l:it.text, "\n", 1)
+      " 題にした 1 行目は本文に繰り返さない（長くて省略した題のときは本文に残す）
+      if !empty(l:body) && trim(substitute(l:body[0], '^#\+\s*', '', '')) ==# l:title
+        call remove(l:body, 0)
+        while !empty(l:body) && trim(l:body[0]) ==# ''
+          call remove(l:body, 0)
+        endwhile
+      endif
+      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, '---', '', '# ' . l:title, '']
+            \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
+      try
+        if filereadable(l:root . '/' . l:name)
+          throw gnosis#i18n#tr('Gnosis: 既存のファイルを上書きしません: ') . l:name
+        endif
+        " 日記トピックのノートは日記の本文に時刻つきで載るので、「今日のノート」には重ねない
+        if l:it.topic ==# '日記'
+          call s:syn_writefile(l:lines, l:root . '/' . l:name)
+        else
+          call s:write_new_note(l:lines, l:root . '/' . l:name)
+        endif
+      catch
+        echohl WarningMsg | echom v:exception | echohl NONE
+        continue
+      endtry
+      let l:files[l:it.id] = l:root . '/' . l:name
+      call add(l:made, [l:it.id, l:name])
+      if l:it.topic ==# '日記'
+        if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
+        call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:title) . '](' . l:name . ')'])
+      endif
+    else
+      let l:body = split(l:it.text, "\n", 1)
+      let l:body[0] = l:it.hm . ' ' . l:body[0]
+      if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
+      call add(l:diary_lines[l:it.date], l:body + l:img)
+      call add(l:made, [l:it.id, '(diary:' . l:it.date . ')'])
+    endif
+  endfor
+  " 日記トピックを、その日の日記の本文へ（時刻順。「今日のノート」の節の前）
+  for [l:date, l:blocks] in items(l:diary_lines)
+    call s:capture_diary_append(l:root, l:date, l:blocks)
+  endfor
+  " スマホでつないだ Branch と Context
+  let l:warn = []
+  for l:it in l:todo
+    let l:me = get(l:files, l:it.id, '')
+    if empty(l:me)
+      continue
+    endif
+    if !empty(l:it.parent) && has_key(l:files, l:it.parent)
+      let l:r = gnosis#branch#add_paths(l:files[l:it.parent], [l:me])
+      if !get(l:r, 'ok', 0)
+        call add(l:warn, l:it.title . ': ' . gnosis#branch#message(l:r))
+      endif
+    endif
+    for l:c in l:it.contexts
+      if has_key(l:files, l:c)
+        call s:simple_add_parent(l:me, l:files[l:c], s:get_title(l:files[l:c]))
+      endif
+    endfor
+  endfor
+  call system(join(map([gnosis#python_cmd(), s:capture_py(), 'record', l:root, 'x'], 'shellescape(v:val)'), ' '),
+        \ join(map(copy(l:made), 'v:val[0] . "\t" . v:val[1]'), "\n") . "\n")
+  call delete(l:tmp, 'rf')
+  call gnosis#clear_title_cache()
+  silent! call s:run_sync([g:gnosis_python, 'update', l:root])
+  silent! checktime
+  let l:notes = len(filter(copy(l:made), 'v:val[1] !~# "^(diary:"'))
+  echo printf(gnosis#i18n#tr('Gnosis: スマホのメモを %d 件取り込みました（ノート %d・日記 %d）。つないでいないものは \u で整理できます'),
+        \ len(l:made), l:notes, len(l:made) - l:notes)
+  if !empty(l:warn)
+    echohl WarningMsg | echom join(l:warn, ' / ') | echohl NONE
+  endif
+endfunction
+
+" 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
+function! s:capture_diary_append(root, date, blocks) abort
+  let l:st = s:diary_state_read()
+  let l:notes = s:diary_scan(a:root)
+  let l:diary = s:diary_find(a:root, a:date, l:st, l:notes)
+  if empty(l:diary)
+    let l:diary = s:diary_create(a:root, a:date, l:notes)
+    let l:st.days[a:date] = l:diary
+    call s:diary_state_write(l:st)
+  endif
+  let l:path = a:root . '/' . l:diary
+  let l:lines = readfile(l:path)
+  let l:sec = index(l:lines, '## ' . get(g:, 'gnosis_diary_section', '今日のノート'))
+  if l:sec < 0
+    let l:sec = s:first_section_index_in_lines(l:lines)
+  endif
+  if l:sec < 0
+    let l:sec = len(l:lines)
+  endif
+  let l:at = l:sec
+  while l:at > 0 && trim(l:lines[l:at - 1]) ==# ''
+    let l:at -= 1
+  endwhile
+  let l:add = []
+  for l:b in a:blocks
+    let l:add += [''] + l:b
+  endfor
+  " 見出しの直後（本文がまだ無い）なら、見出しとの間の空行 1 つから始める
+  let l:new = l:lines[: l:at - 1] + l:add + ['', ''] + l:lines[l:sec :]
+  if l:at == 0
+    let l:new = l:add[1:] + ['', ''] + l:lines[l:sec :]
+  endif
+  call s:syn_writefile(l:new, l:path)
+  let l:nr = bufnr(l:path)
+  if l:nr > 0
+    silent! execute 'checktime ' . l:nr
+  endif
+endfunction
+
+" \n … とりあえず書く: 何も聞かずに、まっさらな新しいノートを開く（関係のブロックも無し）。
+"   作った日の日記の「今日のノート」に自動で載るので迷子にならない。つなぐのは書いたあとで
+"   （\l の b / c など）。どこにもつながっていないものは \u（未整理）に出る。
+function! gnosis#quick_note() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:ts = gnosis#timestamp_filename()
+  let l:file = fnamemodify(l:root, ':p') . l:ts . '.md'
+  try
+    call s:write_new_note(gnosis#note_template(l:ts), l:file)
+  catch
+    echohl WarningMsg | echom v:exception | echohl NONE
+    return
+  endtry
+  call gnosis#save_current_note()
+  call gnosis#push_history()
+  execute 'edit ' . fnameescape(l:file)
+  let l:h1 = search('^#\s', 'nw')
+  call cursor(l:h1 > 0 ? l:h1 + 2 : line('$'), 1)
+  echo gnosis#i18n#tr('Gnosis: とりあえず書く（つなぐのは後で。\u で未整理の一覧）')
+  startinsert
+endfunction
+
 " \u … どこにもつながっていないノート（オーファン）の一覧を、\h と同じ編集可能な Markdown 画面で開く。
 " 開くたびに作り直す（雑に書いたノートを後でつなぐための入口）。
 function! gnosis#orphans_open() abort
@@ -5336,11 +5585,25 @@ function! gnosis#orphans_open() abort
     return
   endif
   let l:lines = [gnosis#i18n#tr('# つながっていないノート'), '']
+  " スマホのメモ（capture:）はトピックごと、ほかは「ノート」にまとめる
+  let l:by = {}
+  let l:order = []
   for l:ln in l:out
     let l:f = split(l:ln, "\t", 1)
     if len(l:f) >= 2
-      call add(l:lines, '[' . substitute(l:f[1], '[\\\[\]]', '\\&', 'g') . '](' . l:f[0] . ')')
+      let l:topic = get(l:f, 2, '')
+      if !has_key(l:by, l:topic)
+        let l:by[l:topic] = []
+        call add(l:order, l:topic)
+      endif
+      call add(l:by[l:topic], '[' . substitute(l:f[1], '[\\\[\]]', '\\&', 'g') . '](' . l:f[0] . ')')
     endif
+  endfor
+  for l:topic in l:order
+    if len(l:order) > 1 || !empty(l:topic)
+      call add(l:lines, '## ' . (empty(l:topic) ? gnosis#i18n#tr('ノート') : l:topic))
+    endif
+    call extend(l:lines, l:by[l:topic] + [''])
   endfor
   if len(l:lines) == 2
     call add(l:lines, gnosis#i18n#tr('（つながっていないノートはありません）'))
@@ -15885,6 +16148,13 @@ function! gnosis#diary_today() abort
     execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
   endif
   call s:diary_cursor()
+  " 書いている時刻が分かるように、空の行なら先頭に「HH:MM 」を入れる（何も書かずに離れたら消す）
+  if get(g:, 'gnosis_diary_time_stamp', 1) && getline('.') ==# ''
+    call setline('.', strftime('%H:%M') . ' ')
+    let b:gnosis_diary_stamp = line('.')
+    startinsert!
+    return
+  endif
   " 開いたらすぐ書き始められるように、挿入モードにする
   startinsert
 endfunction
@@ -15993,6 +16263,14 @@ function! s:pad_register(first, n, prev, next) abort
 endfunction
 
 function! gnosis#pad_cleanup() abort
+  " \d が入れた時刻だけの行（何も書かなかった）は空行に戻す
+  let l:stamp = get(b:, 'gnosis_diary_stamp', 0)
+  if l:stamp > 0
+    unlet b:gnosis_diary_stamp
+    if getline(l:stamp) =~# '^\d\d:\d\d \?$'
+      call setline(l:stamp, '')
+    endif
+  endif
   let l:pad = get(b:, 'gnosis_pad', {})
   if empty(l:pad)
     return

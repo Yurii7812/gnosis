@@ -4,7 +4,7 @@
 他のノートへのリンクも、他のノートからのリンクも無いノートを探す。
 Index・操作ガイド・日記は「つながり」に数えない（日記は作ったノートへ自動でリンクするため）。
 
-CLI: orphans.py ROOT   → 1 行 1 件 `絶対パス<TAB>タイトル`（新しい順）
+CLI: orphans.py ROOT   → 1 行 1 件 `絶対パス<TAB>タイトル<TAB>トピック`（新しい順。トピックはスマホのメモの capture:）
 """
 from __future__ import annotations
 
@@ -52,17 +52,30 @@ def find_orphans(root) -> list[tuple[Path, str]]:
     for p, text in notes.items():
         if _skipped(p) or p in linked:
             continue
-        out.append((p, nf._simple_parse_text(p, text)["title"]))
+        out.append((p, nf._simple_parse_text(p, text)["title"], _topic(text)))
     out.sort(key=lambda x: x[0].stat().st_mtime, reverse=True)
     return out
+
+
+def _topic(text: str) -> str:
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return ""
+    for ln in lines[1:30]:
+        if ln.strip() == "---":
+            break
+        m = re.match(r"^capture:\s*(.+?)\s*$", ln)
+        if m:
+            return m.group(1)
+    return ""
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    for p, title in find_orphans(argv[1]):
-        print(f"{p}\t{title}")
+    for p, title, topic in find_orphans(argv[1]):
+        print(f"{p}\t{title}\t{topic}")
     return 0
 
 

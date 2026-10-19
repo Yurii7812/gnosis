@@ -85,11 +85,12 @@ call setfperm(s:v . '/c.md', 'r--r--r--')
 call s:pick(['[c](c.md)', '[e](e.md)'])
 call assert_equal(s:before, s:read('f'))
 call setfperm(s:v . '/c.md', 'rw-r--r--')
-" Group zn, zk and c submenu still reject r.
+" Group zn (no place keys in a group: only the display name, Esc cancels), zk and c submenu still reject r.
 call writefile(['---', 'title: group', 'attribute: group', '---', '', '# group'], s:v . '/group.md')
 execute 'edit ' . s:v . '/group.md'
 let s:files = glob(s:v . '/*.md')
 let g:gnosis_test_keys = ['r']
+let g:gnosis_test_display_name = ["\x1b"]
 call gnosis#v2_new_plain()
 call assert_equal(s:files, glob(s:v . '/*.md'))
 execute 'edit ' . s:v . '/f.md'

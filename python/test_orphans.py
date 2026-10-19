@@ -16,7 +16,7 @@ class T(unittest.TestCase):
             (r / "lone.md").write_text("# 孤立\n", encoding="utf-8")
             (r / "2026-10-19-月曜.md").write_text("# d\n\n[lone2](lone2.md)\n", encoding="utf-8")
             (r / "lone2.md").write_text("# 日記だけから\n", encoding="utf-8")
-            got = sorted(p.name for p, _ in orphans.find_orphans(r))
+            got = sorted(p.name for p, _t, _c in orphans.find_orphans(r))
             self.assertEqual(got, ["lone.md", "lone2.md"])
 
 
