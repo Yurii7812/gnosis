@@ -78,8 +78,19 @@ object Alarm {
         prefs(ctx).edit().putLong("next", at).putBoolean("exact", exact).apply()
     }
 
+    /** 鳴ったあと次にアプリを開いたら日記で書き始める（通知を押さずにアプリから開いた場合も）。 */
+    fun takePrompt(ctx: Context): Boolean {
+        val p = prefs(ctx).getBoolean("prompt", false)
+        if (p) {
+            prefs(ctx).edit().remove("prompt").apply()
+            ctx.getSystemService(NotificationManager::class.java).cancel(REQ)
+        }
+        return p
+    }
+
     fun notify(ctx: Context) {
         ensureChannel(ctx)
+        prefs(ctx).edit().putBoolean("prompt", true).apply()
         val open = Intent(ctx, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_PROMPT, true)

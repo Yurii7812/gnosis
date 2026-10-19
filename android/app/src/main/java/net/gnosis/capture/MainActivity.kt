@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -63,8 +64,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         promptState.value = intent?.getBooleanExtra(Alarm.EXTRA_PROMPT, false) == true
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+            MaterialTheme(colorScheme = GnosisColors) {
                 Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
             }
         }
@@ -74,7 +74,28 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(Alarm.EXTRA_PROMPT, false)) promptState.value = true
     }
+
+    override fun onResume() {
+        super.onResume()
+        if (Alarm.takePrompt(this)) promptState.value = true
+    }
 }
+
+/** Gnosis の起動画面（夜空×水色、見出しは金）に合わせた配色。文字は背景との差を大きめに取る。 */
+private val GnosisColors = darkColorScheme(
+    primary = Color(0xFF83AFE2), onPrimary = Color(0xFF0C1D32),
+    primaryContainer = Color(0xFF21538C), onPrimaryContainer = Color(0xFFF2F6FB),
+    secondary = Color(0xFFEEDA77), onSecondary = Color(0xFF0C1D32),
+    secondaryContainer = Color(0xFF3A3520), onSecondaryContainer = Color(0xFFF7EEC6),
+    tertiary = Color(0xFFE1F4E4), onTertiary = Color(0xFF0C1D32),
+    background = Color(0xFF0C1D32), onBackground = Color(0xFFEBEBEB),
+    surface = Color(0xFF0C1D32), onSurface = Color(0xFFEBEBEB),
+    surfaceVariant = Color(0xFF15365B), onSurfaceVariant = Color(0xFFD5DEE9),
+    surfaceContainerLowest = Color(0xFF081627), surfaceContainerLow = Color(0xFF0F2440),
+    surfaceContainer = Color(0xFF122A4A), surfaceContainerHigh = Color(0xFF163154),
+    surfaceContainerHighest = Color(0xFF1A385F),
+    outline = Color(0xFFB3B3B3), outlineVariant = Color(0xFF3A5576),
+)
 
 private val timeFmt = SimpleDateFormat("HH:mm", Locale.JAPAN)
 private val dayFmt = SimpleDateFormat("M月d日（E）", Locale.JAPAN)
@@ -97,6 +118,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val selected = remember { mutableStateListOf<String>() }
     var selecting by remember { mutableStateOf(false) }
     var moveSelectedOpen by remember { mutableStateOf(false) }
+    var fromPrompt by remember { mutableStateOf(false) }   // アラームから日記を開いている
+    var pickingImage by remember { mutableStateOf(false) }
     var deleteSelectedOpen by remember { mutableStateOf(false) }
     var cleanImportedOpen by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Alarm.notificationsEnabled(ctx)) }
@@ -122,17 +145,20 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     fun persist() { store.save(entries.toList()); imported = store.importedIds() }
 
     // PC が取り込むたびに imported.json が変わるので、戻ってくるたびに読み直す
+    fun setTopic(t: String) {
+        topic = t
+        settings = settings.copy(lastTopic = t); store.saveSettings(settings)
+    }
     LifecycleResumeEffect(Unit) {
         imported = store.importedIds()
         notificationsEnabled = Alarm.notificationsEnabled(ctx)
         exactEnabled = Alarm.canScheduleExact(ctx)
         Alarm.ensureScheduled(ctx, settings)
         nextAlarm = Alarm.scheduledTime(ctx)
-        onPauseOrDispose { }
-    }
-    fun setTopic(t: String) {
-        topic = t
-        settings = settings.copy(lastTopic = t); store.saveSettings(settings)
+        onPauseOrDispose {
+            // アラームの日記を書き終えてアプリを閉じたら、全部表示に戻す（画像を選びに出たときは戻さない）
+            if (fromPrompt && !pickingImage) { fromPrompt = false; promptState.value = false; setTopic(ALL) }
+        }
     }
 
     // 開いたらすぐ書ける: 入力欄にカーソルを置き、キーボードを出す
@@ -140,11 +166,12 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         delay(150); focus.requestFocus(); keyboard?.show()
     }
     LaunchedEffect(prompt) {
-        if (prompt) { setTopic(DIARY); delay(150); focus.requestFocus(); keyboard?.show() }
+        if (prompt) { fromPrompt = true; setTopic(DIARY); delay(150); focus.requestFocus(); keyboard?.show() }
     }
     LaunchedEffect(entries.size) { if (entries.isNotEmpty()) listState.animateScrollToItem(0) }
 
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        pickingImage = false
         if (uri != null) {
             val name = "img-" + System.currentTimeMillis() + ".jpg"
             ctx.contentResolver.openInputStream(uri)?.use { i -> File(store.imageDir, name).outputStream().use { i.copyTo(it) } }
@@ -269,7 +296,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 }
                 Row(verticalAlignment = Alignment.Bottom) {
-                    IconButton(onClick = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                    IconButton(onClick = { pickingImage = true; pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                         Icon(Icons.Filled.Image, "画像を付ける")
                     }
                     OutlinedTextField(
@@ -433,22 +460,30 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         var minutes by remember { mutableStateOf(settings.alarmMinutes.toString()) }
         var from by remember { mutableStateOf(settings.fromHour.toString()) }
         var to by remember { mutableStateOf(settings.toHour.toString()) }
+        var allDay by remember { mutableStateOf(settings.fromHour == settings.toHour || (settings.fromHour == 0 && settings.toHour == 24)) }
         AlertDialog(onDismissRequest = { settingsOpen = false }, title = { Text("アラームと設定") },
             text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("定期的に鳴らす", Modifier.weight(1f)); Switch(on, { on = it })
                 }
                 OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit) }, label = { Text("何分おき") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                FilterChip(selected = from == "0" && to == "24", onClick = { from = "0"; to = "24" }, label = { Text("24時間") })
+                    enabled = on, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("24時間鳴らす", Modifier.weight(1f), color = if (on) Color.Unspecified else MaterialTheme.colorScheme.outline)
+                    Switch(allDay, {
+                        allDay = it
+                        // 24時間をやめたら、時間帯を普段の値で入れておく
+                        if (!it && (from == to || (from == "0" && to == "24"))) { from = "9"; to = "23" }
+                    }, enabled = on)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(from, { from = it.filter(Char::isDigit) }, label = { Text("何時から") }, singleLine = true,
+                    OutlinedTextField(from, { from = it.filter(Char::isDigit) }, label = { Text("何時から") }, singleLine = true, enabled = on && !allDay,
                         modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    OutlinedTextField(to, { to = it.filter(Char::isDigit) }, label = { Text("何時まで") }, singleLine = true,
+                    OutlinedTextField(to, { to = it.filter(Char::isDigit) }, label = { Text("何時まで") }, singleLine = true, enabled = on && !allDay,
                         modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
                 Text("鳴ったら通知を押すと「今まで何してた？」が日記で開きます。", fontSize = 13.sp)
-                if (from == to) Text("開始と終了が同じ場合も24時間鳴らします。", fontSize = 13.sp)
+                if (on && !allDay && from == to) Text("開始と終了が同じ場合も24時間鳴らします。", fontSize = 13.sp)
                 if (settings.alarmOn && nextAlarm > 0) Text("次回: " + SimpleDateFormat("M/d HH:mm", Locale.JAPAN).format(Date(nextAlarm)), fontSize = 13.sp)
                 if (!notificationsEnabled) Text("通知が許可されていません。「通知と音の設定」で許可してください。", fontSize = 13.sp)
                 TextButton(onClick = {
@@ -468,7 +503,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             } },
             confirmButton = { TextButton(onClick = {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
-                    fromHour = (from.toIntOrNull() ?: 9).coerceIn(0, 23), toHour = (to.toIntOrNull() ?: 23).coerceIn(0, 24))
+                    fromHour = if (allDay) 0 else (from.toIntOrNull() ?: 9).coerceIn(0, 23),
+                    toHour = if (allDay) 24 else (to.toIntOrNull() ?: 23).coerceIn(0, 24))
                 store.saveSettings(settings)
                 if (on && Build.VERSION.SDK_INT >= 33 && !Alarm.hasNotificationPermission(ctx)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 Alarm.ensureChannel(ctx); Alarm.schedule(ctx, settings)
