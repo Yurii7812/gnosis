@@ -3,7 +3,7 @@
 原本: `Gnosis_Claude_Implementation_Master_Prompt.md` §8。
 
 ## いまできること（`:GnosisExportSite[!] [出力先]` / `python/export_site.py ROOT OUTDIR`）
-- **オフラインで読める静的サイト**: ノートごとの HTML、`index.html`（題の一覧）、`folgezettel.html`、`search.html`（自前の全文検索。`search.js` と `search-index.json`）。外部 CDN は使わない。
+- **オフラインで読める静的サイト**: ノートごとの HTML、`index.html`（題の一覧）、`folgezettel.html`、`search.html`（自前の全文検索。`search.js` と `search-index.js`。`file://` で直接開いても動くよう、索引は fetch でなく `<script src>` で読む。`search.html#q=語` で検索語つきのリンクにできる）。外部 CDN は使わない。
 - **通常の Markdown ビューアで読める番号表** `FOLGEZETTEL.md`（`| 番号 | 題 |`、字下げは全角空白、リンクは `.md`）。JavaScript が要るものは HTML 側だけ。
 - ノート HTML には、本文のほか Folgezettel のパンくず（親へ戻れる）、ParentBranch・Group・Context・Related・BackLink、「このノートへのリンク」を付ける（`gnosis_graph.py` から。元の索引は書き換えない）。
 - 変換は `python/md_html.py`（依存なし）。見出し・段落・箇条書き（入れ子・チェックボックス）・番号つき・引用・コードブロック・表・水平線・画像・リンク・強調・取り消し線。`.md` へのリンクは `.html` に書き換える。
@@ -20,4 +20,4 @@
 - 暗号化 vault の扱いの専用確認、大規模 vault の分割出力、PDF・EPUB 出力（UT07）、スライド（VW19）。
 - Markdown の「表示索引（views 目次）」: いまは Folgezettel の番号表だけ。タスク一覧・検索結果・トレイルなどは対応する機能と一緒に作る。
 - Markdown の網羅性: ネストした引用内のコードや HTML ブロック、脚注、定義リストは未対応（そのままテキストとして出る）。
-- ブラウザでの実表示確認（レイアウト・ダークモード）は未実施。生成した HTML の構造は試験済み。
+- ブラウザでの実表示: ヘッドレス Firefox で `file://` から開いて目視確認済み（2026-10-20: 検索（`#q=` つき）・ノート・曼荼羅の 9×9 格子・ダークモード）。自動化した画面試験ではない。Chrome・Safari・スマホ幅は未確認。

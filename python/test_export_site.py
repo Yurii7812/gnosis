@@ -38,6 +38,11 @@ class ExportTest(unittest.TestCase):
         (r / "sub" / "deep.md").write_text("---\ntitle: 深い\n---\n\n# 深い\n\n[上](../herb.md)\n", encoding="utf-8")
         self.before = {p.relative_to(r).as_posix(): p.read_bytes() for p in r.rglob("*") if p.is_file() and not p.is_symlink()}
 
+    def index(self):
+        t = (self.out / "search-index.js").read_text(encoding="utf-8")
+        assert t.startswith("window.GNOSIS_INDEX=")
+        return json.loads(t[len("window.GNOSIS_INDEX="):].rstrip().rstrip(";"))
+
     def run_export(self, **kw):
         return ex.export(self.root, self.out, **kw)
 
@@ -45,7 +50,7 @@ class ExportTest(unittest.TestCase):
         res = self.run_export()
         o = self.out
         self.assertEqual(res["skipped_private"], ["priv.md"])
-        for f in ("index.html", "herb.html", "grow.html", "nested.html", "sub/deep.html", "folgezettel.html", "FOLGEZETTEL.md", "search.html", "search.js", "search-index.json", "style.css"):
+        for f in ("index.html", "herb.html", "grow.html", "nested.html", "sub/deep.html", "folgezettel.html", "FOLGEZETTEL.md", "search.html", "search.js", "search-index.js", "style.css"):
             self.assertTrue((o / f).is_file(), f)
         herb = (o / "herb.html").read_text(encoding="utf-8")
         self.assertIn('<a href="grow.html">栽培</a>', herb)
@@ -55,6 +60,8 @@ class ExportTest(unittest.TestCase):
         self.assertFalse((o / "priv.html").exists())
         self.assertIn('<a href="../herb.html">上</a>', (o / "sub/deep.html").read_text(encoding="utf-8"))   # 階層をまたぐ相対リンク
         self.assertIn("../style.css", (o / "sub/deep.html").read_text(encoding="utf-8"))
+        # 逆向きの関係（栽培が ParentBranch でハーブを指す）も、ハーブのページから辿れる
+        self.assertRegex(herb, r'このノートへのリンク</h2><ul>.*<a href="grow.html">栽培</a>')
         md = (o / "FOLGEZETTEL.md").read_text(encoding="utf-8")
         self.assertIn("| 1 | [ハーブ](herb.md) |", md)
         self.assertIn("| 　1a | [栽培](grow.md) |", md)
@@ -70,7 +77,8 @@ class ExportTest(unittest.TestCase):
             self.assertIn("Content-Security-Policy", t)
             self.assertIn("default-src 'none'", t)
             self.assertNotRegex(t, r"(?i)(src|href)=\"https?://")   # 外部 CDN を読まない
-            self.assertNotIn("<script>", t.replace('<script src="search.js"></script>', ""))
+            self.assertNotIn("<script>", t.replace('<script src="search-index.js"></script><script src="search.js"></script>', ""))
+            self.assertNotIn("fetch(", t)
         copied = sorted(p.relative_to(o).as_posix() for p in o.rglob("*") if p.is_file())
         self.assertIn("pic.png", copied)
         self.assertIn("sub/doc.pdf", copied)
@@ -82,14 +90,15 @@ class ExportTest(unittest.TestCase):
     def test_include_private_and_search_index(self):
         self.run_export(include_private=True)
         self.assertTrue((self.out / "priv.html").is_file())
-        idx = json.loads((self.out / "search-index.json").read_text(encoding="utf-8"))
+        idx = self.index()
         self.assertIn("秘密", [e["t"] for e in idx])
 
     def test_search_index_excludes_private_by_default(self):
         self.run_export()
-        idx = json.loads((self.out / "search-index.json").read_text(encoding="utf-8"))
+        idx = self.index()
         self.assertNotIn("秘密", [e["t"] for e in idx])
         self.assertNotIn("topsecret", json.dumps(idx, ensure_ascii=False).lower())
+        self.assertNotIn("fetch(", (self.out / "search.js").read_text(encoding="utf-8"))   # file:// で動くよう fetch を使わない
 
     def test_vault_untouched_and_rerunnable(self):
         self.run_export()

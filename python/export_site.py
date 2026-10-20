@@ -4,14 +4,14 @@
   export_site.py ROOT OUTDIR [--include-private] [--title 題]
 
 - 表示専用。HTML には編集機能も任意のローカルファイルを読む仕組みも入れない。外部 CDN も使わない。
-  CSP で `default-src 'none'` とし、スクリプトは同じフォルダの search.js（全文検索）だけ。
+  CSP で `default-src 'none'` とし、スクリプトは同じフォルダの search.js（全文検索）と、その索引 search-index.js だけ。
 - `private: true` / `export: false` を front matter に書いたノートは、既定では書き出さない（--include-private で含める）。
   書き出さないノートへのリンクは文字だけにする。
 - 本文が参照するローカルの添付（画像・PDF など）は、vault の中にあるものだけをコピーする（.. やシンボリックリンクで外へ出ない）。
 - 出力先は、無い／空／前回の書き出し（.gnosis-export がある）のときだけ。それ以外は何も書かずに止まる。
 - 本物の索引・ノートは書き換えない。派生物なので、いつでも作り直せる。
 出力: ノートごとの HTML・index.html（一覧）・folgezettel.html と FOLGEZETTEL.md（番号表）・search.html + search.js +
-search-index.json・style.css。
+search-index.js・style.css。
 """
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ nav.rel h2{font-size:.95rem;margin:.6rem 0 .2rem}nav.rel ul{margin:0;padding-lef
 img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #8886;padding:.2rem .5rem}
 pre{overflow:auto;padding:.6rem;background:#8882}li.task{list-style:none;margin-left:-1.2rem}
 .crumb{font-size:.85rem;opacity:.8}"""
-JS = """(function(){var q=document.getElementById('q'),r=document.getElementById('r'),idx=null;
-function load(){return idx?Promise.resolve(idx):fetch('search-index.json').then(function(x){return x.json()}).then(function(j){idx=j;return j})}
-function run(){var v=q.value.trim().toLowerCase();r.textContent='';if(!v)return;load().then(function(d){
-var n=0;d.forEach(function(e){if(n<200&&(e.t.toLowerCase().indexOf(v)>=0||e.x.indexOf(v)>=0)){n++;
-var li=document.createElement('li'),a=document.createElement('a');a.href=e.u;a.textContent=e.t;li.appendChild(a);r.appendChild(li)}})})}
+JS = """(function(){var q=document.getElementById('q'),r=document.getElementById('r'),d=window.GNOSIS_INDEX||[];
+function run(){var v=q.value.trim().toLowerCase();r.textContent='';if(!v)return;var n=0;
+d.forEach(function(e){if(n<200&&(e.t.toLowerCase().indexOf(v)>=0||e.x.indexOf(v)>=0)){n++;
+var li=document.createElement('li'),a=document.createElement('a');a.href=e.u;a.textContent=e.t;li.appendChild(a);r.appendChild(li)}})}
+var m=/^#q=(.*)$/.exec(location.hash);if(m){try{q.value=decodeURIComponent(m[1])}catch(e){}}
 q.addEventListener('input',run);run()})();"""
 
 
@@ -163,7 +163,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
             targets = sorted({e.dst for e in g.edges if e.src == rel and e.kind == k})
             if targets:
                 rel_html += f"<h2>{label}</h2><ul>" + "".join(f"<li>{link_to(rel, t, g.nodes[t].title)}</li>" for t in targets) + "</ul>"
-        incoming = sorted({e.src for e in g.edges if e.dst == rel and e.kind in ("link", "branch_group")})
+        incoming = sorted({e.src for e in g.edges if e.dst == rel and e.kind in ("link", "branch_group", "parent_branch", "group", "context", "related")})
         if incoming:
             rel_html += "<h2>このノートへのリンク</h2><ul>" + "".join(f"<li>{link_to(rel, t, g.nodes[t].title)}</li>" for t in incoming) + "</ul>"
         rel_nav = f'<nav class="rel">{rel_html}</nav>' if rel_html else ""
@@ -185,8 +185,9 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
                                          f'<a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
-                                           '<ul id="r"></ul><script src="search.js"></script>'), encoding="utf-8")
-    (out / "search-index.json").write_text(json.dumps(search, ensure_ascii=False), encoding="utf-8")
+                                           '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
+    # fetch() はファイルとして直接開いたとき（file://）に使えないので、索引は <script src> で読む JS にする
+    (out / "search-index.js").write_text("window.GNOSIS_INDEX=" + json.dumps(search, ensure_ascii=False) + ";\n", encoding="utf-8")
 
     # Folgezettel の番号表: 通常の Markdown ビューアで読める版と HTML 版（同じデータから作る）
     rows = []
