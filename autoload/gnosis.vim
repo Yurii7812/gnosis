@@ -8123,6 +8123,11 @@ function! s:nt_show(args) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" いつ書いたか・更新したか（月別・曜日別・直近の日別・連続日数）。読むだけ
+function! gnosis#activity(...) abort
+  call s:nt_show(['activity'] + (a:0 > 0 && a:1 =~# '^[0-9]\+$' ? ['--days', a:1] : []))
+endfunction
+
 function! gnosis#stats(bang, ...) abort
   let l:root = s:nt_root()
   let l:note = a:bang ? '' : (a:0 > 0 && !empty(a:1) ? a:1 : (empty(l:root) ? '' : s:nt_rel(l:root)))

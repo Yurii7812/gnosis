@@ -37,7 +37,7 @@
 | ED14 | インライン式・計算（安全な評価器を使用。 | インライン式・計算（安全な評価器を使用。シェル実行と分離）。 | Vim + `\A` | 動作検証中（`eval` を使わない構文木の評価。四則・べき乗・関数・定数のみ。名前/属性/文字列/ラムダ等は拒否・べき乗と長さと深さに上限）。`:GnosisCalc` | 2 | `python/calc.py` `test_calc.py` `test/edit_net.sh` | P1 共通ID |
 | ED15 | 折りたたみ（見出し、引用、補足、ブランチ | 折りたたみ（見出し、引用、補足、ブランチ）。 | Vim + `\A` | 動作検証中（見出し・3 行以上の引用・関係ブロック・コードブロック・`<details>`。変更ごとに一度だけ再計算。`:GnosisFold`） | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | ED16 | フォーカス／集中モード。 | フォーカス／集中モード。 | Vim + `\A` | 動作検証中（行番号・ステータス等を消し、今の段落以外を薄くする。もう一度で元の設定に戻る）。`:GnosisFocus` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
-| ED17 | 文字数・記述量・編集履歴統計。 | 文字数・記述量・編集履歴統計。 | Vim + `\A` | 一部（文字数・語・行・見出し・リンク・タスク。vault 合計・大きいノート・空のノート。編集履歴の統計は未）。`:GnosisStats[!]` | 2 | `python/note_tools.py` `test_note_tools.py` `test/split_net.sh` | P1 共通ID |
+| ED17 | 文字数・記述量・編集履歴統計。 | 文字数・記述量・編集履歴統計。 | Vim + `\A` | 一部（文字数・語・行・見出し・リンク・タスク。vault 合計・大きいノート・空のノート。編集履歴の統計: `:GnosisActivity [日数]` で月別・曜日別・直近の日別・連続日数（更新時刻ベースで、編集の回数・量は取れない）。`:GnosisStats[!]` | 2 | `python/note_tools.py` `test_note_tools.py` `test/split_net.sh` `:GnosisActivity` | P1 共通ID |
 | ED18 | ノート名・索引名・リンク先の入力補完。 | ノート名・索引名・リンク先の入力補完。 | Vim + `\A` | 動作検証中（`<C-x><C-u>`: `](` の後はパス、`[` の後は「題](パス)」。題（front matter）でも絞り込む。サブフォルダは `../`）。IME 変換中の補完・`\A` 側は未 | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | SR01 | 高速ファジー検索。 | 高速ファジー検索。 | Vim + `\A` | 一部（`vault_index.py fuzzy` で題・番号・ファイル名。Vim/`\A` の画面は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR02 | 高速全文検索、本文・見出し・関連ファイル | 高速全文検索、本文・見出し・関連ファイル。 | Vim + `\A` | 動作検証中（SQLite FTS5 trigram＋短い語は部分一致。1 万ノートで初回 2.4 秒・差分 0.25 秒・検索 0.3 秒以下） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |

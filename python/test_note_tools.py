@@ -75,6 +75,46 @@ class NoteToolsTest(unittest.TestCase):
         self.assertEqual(run("bogus")[0], 2)
         self.same()
 
+    def test_activity(self):
+        import datetime as dt, os
+        r = self.root
+        today = dt.date(2026, 10, 21)
+        for name, day, mt in (("c.md", "2026-10-21", "2026-10-21"), ("d.md", "2026-10-20", "2026-10-20"), ("e.md", "2026-10-19", "2026-10-21"), ("f.md", "2026-08-03", "2026-08-03")):
+            (r / name).write_text(f"---\ntime: {day} 10:00:00\ntitle: {name}\n---\n\n# {name}\n\n本文\n", encoding="utf-8")
+            t = dt.datetime.fromisoformat(mt + "T12:00:00").timestamp()
+            os.utime(r / name, (t, t))
+        for n in ("a.md", "b.md", "empty.md", "same.md"):          # 既存は更新を遠い日にして、連続日数に混ざらないようにする
+            t = dt.datetime(2026, 1, 15, 12).timestamp()
+            os.utime(r / n, (t, t))
+        (r / ".hidden").mkdir()
+        (r / ".hidden" / "x.md").write_text("---\ntime: 2026-10-21 00:00:00\n---\n", encoding="utf-8")   # ドット始まりは数えない
+        a = nt.activity(r, today, days=7, months=4)
+        self.assertEqual([m["month"] for m in a["months"]], ["2026-07", "2026-08", "2026-09", "2026-10"])
+        m = {x["month"]: x for x in a["months"]}
+        self.assertEqual((m["2026-10"]["created"], m["2026-10"]["modified"]), (3, 3))      # c,d,e 作成 / c,d,e 更新(e は 21 日に更新)
+        self.assertEqual((m["2026-08"]["created"], m["2026-08"]["modified"]), (1, 1))
+        self.assertEqual(a["streak"], 3)                                                   # 19・20・21 日が続く(19 日は作成)
+        self.assertEqual(a["longest_streak"], 3)
+        self.assertEqual(len(a["daily"]), 7)
+        self.assertEqual(a["daily"][-1], {"date": "2026-10-21", "created": 1, "modified": 2})
+        self.assertEqual(a["weekday_created"][dt.date(2026, 10, 21).weekday()], 1)
+        self.assertEqual(a["busiest_day"], "2026-01-01")                                   # a,b,same,empty のうち time を持つ 3 件が 1/1
+        # 今日まだ書いていなくても昨日までの連続は切れない
+        self.assertEqual(nt.activity(r, dt.date(2026, 10, 22), 3, 2)["streak"], 3)
+        self.assertEqual(nt.activity(r, dt.date(2026, 10, 25), 3, 2)["streak"], 0)
+        self.assertEqual(nt.activity(r, today, days=0, months=0)["daily"][0]["date"], "2026-10-21")      # 範囲は丸める
+
+    def test_activity_empty_and_md(self):
+        import datetime as dt
+        e = Path(tempfile.mkdtemp(dir=str(Path.home() / "Desktop" / "test")))
+        self.addCleanup(__import__("shutil").rmtree, e, True)
+        a = nt.activity(e, dt.date(2026, 10, 21), 3, 2)
+        self.assertEqual((a["streak"], a["longest_streak"], a["busiest_day"], a["recent"]), (0, 0, None, []))
+        self.assertIn("- なし", nt.to_md("activity", a))
+        out = nt.to_md("activity", nt.activity(self.root, dt.date(2026, 10, 21), 3, 2))
+        self.assertIn("# 書いた・更新した記録", out)
+        self.assertIn("ファイルの更新時刻", out)
+
 
 if __name__ == "__main__":
     unittest.main()

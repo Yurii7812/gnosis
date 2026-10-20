@@ -7,9 +7,11 @@ diff : 2 つのノートの本文を行ごとに比べる（unified diff）。�
 CLI（JSON。--md なら Markdown）:
   note_tools.py ROOT stats [NOTE]        1 つのノート、無ければ vault 全体
   note_tools.py ROOT diff A B [--context N]
+  note_tools.py ROOT activity [--days N]  いつ書いたか・更新したか（作成日=front matter の time、更新日=ファイルの更新時刻）。月別・曜日別・直近の日別・連続日数
 """
 from __future__ import annotations
 
+import datetime as dt
 import difflib
 import json
 import os
@@ -85,6 +87,78 @@ def stats(root: str | Path, note: str | None = None, top: int = 10) -> dict:
             "empty": [r["path"] for r in rows if not r["has_content"]]}
 
 
+def activity(root: str | Path, today: dt.date | None = None, days: int = 30, months: int = 12) -> dict:
+    """編集の記録: 作成日（front matter の time）と更新日（ファイルの更新時刻）で、月別・曜日別・直近の日別の件数と、書いた日の連続日数。
+
+    ファイルの更新時刻しか履歴が無いので、「その日に更新されたノートの数」であって、編集の回数や量ではない。"""
+    root = Path(root).resolve()
+    today = today or dt.date.today()
+    days = max(1, min(int(days), 366))
+    created: dict[str, int] = {}
+    modified: dict[str, int] = {}
+    chars_by_created: dict[str, int] = {}
+    recent = []
+    for p in sorted(root.rglob("*.md")):
+        rel = p.relative_to(root)
+        if any(x.startswith(".") for x in rel.parts):
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"(?m)^time:\s*(\d{4}-\d{2}-\d{2})", text[:600])
+        mt = dt.date.fromtimestamp(p.stat().st_mtime)
+        modified[mt.isoformat()] = modified.get(mt.isoformat(), 0) + 1
+        if m:
+            created[m.group(1)] = created.get(m.group(1), 0) + 1
+            try:
+                chars_by_created[m.group(1)] = chars_by_created.get(m.group(1), 0) + _one(p, root)["chars"]
+            except (ValueError, OSError):
+                pass
+        recent.append((p.stat().st_mtime, rel.as_posix()))
+    ym = lambda d: d[:7]
+    cm: dict[str, int] = {}
+    mm: dict[str, int] = {}
+    for d, n in created.items():
+        cm[ym(d)] = cm.get(ym(d), 0) + n
+    for d, n in modified.items():
+        mm[ym(d)] = mm.get(ym(d), 0) + n
+    keys = []
+    y, mo = today.year, today.month
+    for _ in range(max(1, min(int(months), 120))):
+        keys.append(f"{y:04d}-{mo:02d}")
+        mo -= 1
+        if mo == 0:
+            y, mo = y - 1, 12
+    keys.reverse()
+    wd = [0] * 7
+    for d, n in created.items():
+        try:
+            wd[dt.date.fromisoformat(d).weekday()] += n
+        except ValueError:
+            pass
+    daily = []
+    for i in range(days - 1, -1, -1):
+        d = (today - dt.timedelta(days=i)).isoformat()
+        daily.append({"date": d, "created": created.get(d, 0), "modified": modified.get(d, 0)})
+    active = set(created) | set(modified)
+    streak = 0
+    d = today
+    if d.isoformat() not in active:     # 今日まだ書いていなくても、昨日までの連続は切らない
+        d -= dt.timedelta(days=1)
+    while d.isoformat() in active:
+        streak += 1
+        d -= dt.timedelta(days=1)
+    longest = run = 0
+    prev = None
+    for d in sorted(x for x in active if re.fullmatch(r"\d{4}-\d{2}-\d{2}", x)):
+        cur = dt.date.fromisoformat(d)
+        run = run + 1 if prev and (cur - prev).days == 1 else 1
+        longest = max(longest, run)
+        prev = cur
+    return {"today": today.isoformat(), "months": [{"month": k, "created": cm.get(k, 0), "modified": mm.get(k, 0)} for k in keys],
+            "weekday_created": wd, "daily": daily, "streak": streak, "longest_streak": longest,
+            "recent": [r for _, r in sorted(recent, reverse=True)[:10]],
+            "busiest_day": max(created.items(), key=lambda kv: (kv[1], kv[0]))[0] if created else None}
+
+
 def diff(root: str | Path, a: str, b: str, context: int = 3) -> dict:
     root = Path(root).resolve()
     pa, pb = _resolve(root, a), _resolve(root, b)
@@ -110,6 +184,15 @@ def to_md(kind: str, r: dict) -> str:
         if r["empty"]:
             L += ["", "## 本文が空のノート", ""] + [f"- [{p}]({p.replace(' ', '%20')})" for p in r["empty"][:30]]
         return "\n".join(L) + "\n"
+    if kind == "activity":
+        wn = "月火水木金土日"
+        L = ["# 書いた・更新した記録", "", f"- 連続して書いた日 {r['streak']} 日（これまでの最長 {r['longest_streak']} 日）" + (f"・最も多く作った日 {r['busiest_day']}" if r["busiest_day"] else ""),
+             "- 注: 「更新」はファイルの更新時刻で数えた、その日に変わったノートの数です（編集の回数・量ではありません）", "", "## 月ごと（作成 / 更新）", ""]
+        L += [f"- {m['month']}: {m['created']} / {m['modified']}" for m in r["months"]]
+        L += ["", "## 曜日ごとの作成", "", "- " + "　".join(f"{wn[i]} {n}" for i, n in enumerate(r["weekday_created"])), "", f"## 直近 {len(r['daily'])} 日（作成 / 更新）", ""]
+        L += [f"- {d['date']}: {d['created']} / {d['modified']}" for d in r["daily"] if d["created"] or d["modified"]] or ["- なし"]
+        L += ["", "## 最近更新したノート", ""] + [f"- [{x}]({x.replace(' ', '%20')})" for x in r["recent"]]
+        return "\n".join(L) + "\n"
     L = [f"# 比較: {r['a']} と {r['b']}", "", ("同じ内容です。" if r["identical"] else f"近さ {r['similarity']}・共通 {r['common_lines']} 行・{r['a']} だけ {r['only_a']} 行・{r['b']} だけ {r['only_b']} 行"), ""]
     if r["diff"]:
         L += ["```diff"] + r["diff"] + ["```"]
@@ -121,15 +204,20 @@ def main(argv: list[str]) -> int:
         md = "--md" in argv
         ctx = 3
         a = []
+        days = 30
         it = iter([x for x in argv if x != "--md"])
         for x in it:
             if x == "--context":
                 ctx = int(next(it))
+            elif x == "--days":
+                days = int(next(it))
             else:
                 a.append(x)
         root, cmd, rest = a[0], a[1], a[2:]
         if cmd == "stats":
             r = stats(root, rest[0] if rest else None)
+        elif cmd == "activity":
+            r = activity(root, days=days)
         elif cmd == "diff":
             r = diff(root, rest[0], rest[1], ctx)
         else:

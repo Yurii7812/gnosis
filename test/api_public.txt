@@ -1,3 +1,4 @@
+gnosis#activity
 gnosis#add_clipboard
 gnosis#add_clipboard_as_child_with_parent
 gnosis#add_clipboard_before_up

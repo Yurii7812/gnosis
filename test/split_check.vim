@@ -14,6 +14,10 @@ close
 GnosisStats!
 call assert_equal('# vault の統計', getline(1))
 close
+GnosisActivity 7
+call assert_equal('# 書いた・更新した記録', getline(1))
+call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "^## 直近 7 日"')))
+close
 GnosisDiff big.md
 call assert_match('^# 比較: small.md と big.md', getline(1))
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "^```diff"')))
