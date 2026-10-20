@@ -98,6 +98,8 @@ gnosis#dirty_guard_release
 gnosis#ensure_root_and_index
 gnosis#exit_cleanup
 gnosis#expand_s_under_cursor
+gnosis#explore
+gnosis#explore_complete
 gnosis#export_site
 gnosis#fix_fullwidth_heading
 gnosis#folgezettel#move

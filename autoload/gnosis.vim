@@ -6469,6 +6469,50 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" 知識の探索（XP01 散歩・XP02 意外な近さ・XP03 知識考古学・XP08 ルーレット・XP09 中間概念）。読み取り専用。Enter でそのノートへ。
+"   :GnosisExplore walk [ノート] | roulette [any|old|orphan] | serendipity [ノート] | archaeology [日数] | between ノートA ノートB
+let s:explore_kinds = ['walk', 'roulette', 'serendipity', 'archaeology', 'between']
+
+function! gnosis#explore_complete(A, L, P) abort
+  return join(s:explore_kinds, "\n")
+endfunction
+
+function! gnosis#explore(kind, ...) abort
+  if index(s:explore_kinds, a:kind) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('種類は次のどれかです: ') . join(s:explore_kinds, ' ') | echohl NONE
+    return
+  endif
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:args = copy(a:000)
+  if index(['serendipity'], a:kind) >= 0 && empty(l:args)
+    let l:cur = expand('%:p')
+    if stridx(l:cur, l:root . '/') != 0
+      echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+      return
+    endif
+    let l:args = [strpart(l:cur, len(l:root) + 1)]
+  endif
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/explore.py', l:root, a:kind] + l:args + ['--md'], 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
 " 時間軸の見方（TM02 カレンダー・TM10 レビュー・TM12 過去の今日）。読み取り専用。レビューを残すのは :GnosisPeriodReviewWrite のときだけ（新しいノート）。
 "   :GnosisCalendar [YYYY-MM]  :GnosisDay YYYY-MM-DD  :GnosisOnThisDay [YYYY-MM-DD]  :GnosisPeriodReview 日|週|月|年 [YYYY-MM-DD]  :GnosisPeriodReviewWrite 日|週|月|年 YYYY-MM-DD 新しいファイル
 function! gnosis#chrono(kind, ...) abort

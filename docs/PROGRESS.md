@@ -71,6 +71,9 @@
 
 - **時間軸（`python/chrono.py`・`:GnosisCalendar/Day/OnThisDay/PeriodReview/PeriodReviewWrite`）**: TM02・TM10・TM12。既存の `:GnosisReview`（review_reopen）と名前が衝突して上書きしていたのを試験で発見し、`GnosisPeriodReview` に改名した。
 
+- **探索（`python/explore.py`・`:GnosisExplore`）**: XP01/02/03/08/09。読み取り専用。
+- 再開用の定期実行（CronCreate・毎時 17/47 分）をセッション内に登録（セッションを閉じると消える・7 日で失効）。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。
