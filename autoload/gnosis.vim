@@ -5490,7 +5490,7 @@ function! gnosis#apk_install() abort
   let l:out = system('sh -c ' . shellescape(l:build) . ' 2>&1')
   if v:shell_error
     echohl ErrorMsg | echo gnosis#i18n#tr('ビルドに失敗しました') | echohl NONE
-    echo join(split(l:out, "\n")[-5:], "\n")
+    echo join(s:tail(split(l:out, "\n"), 5), "\n")        " 出力が 5 行未満でも原因を出す（[-5:] は 5 行未満だと空になる）
     return
   endif
   echo gnosis#i18n#tr('Gnosis: スマホへ入れています…')
@@ -6467,6 +6467,221 @@ function! gnosis#graph_paths(a, b) abort
     call add(l:lines, '')
   endfor
   call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+" ブックマーク・最近・知識リマインダー・トレイル・ジャンプ履歴（SR11〜SR13・TM15・XP04・XP13・XP16）。
+"   :GnosisBookmark add [スロット1-9] | remove | list | go スロット   :GnosisRecent [modified|created]   :GnosisKnowledge   :GnosisTrail save 名前 | add 名前 | show 名前 | list | remove 名前 | export 名前 新しいファイル
+"   :GnosisBack  :GnosisForward  :GnosisHistory（ノートを開いた順。Enter でそこへ）  :GnosisTrail save 名前 history（直近の履歴をトレイルに）
+let s:hist = {'list': [], 'pos': -1, 'loaded': 0, 'nav': 0}
+
+" リストの末尾 n 件。`list[-n:]` は要素数が n より少ないと空リストになる（文字列と違って丸められない）ので、これを使う。
+function! s:tail(list, n) abort
+  return len(a:list) > a:n ? a:list[len(a:list) - a:n :] : copy(a:list)
+endfunction
+
+function! s:hist_file(root) abort
+  return a:root . '/.state/history.json'
+endfunction
+
+function! s:hist_load(root) abort
+  if s:hist.loaded
+    return
+  endif
+  let s:hist.loaded = 1
+  try
+    let l:d = json_decode(join(readfile(s:hist_file(a:root)), "\n"))
+    let s:hist.list = filter(get(l:d, 'list', []), 'type(v:val) == v:t_string')
+    let s:hist.pos = len(s:hist.list) - 1
+  catch
+  endtry
+endfunction
+
+function! gnosis#hist_save() abort
+  let l:root = s:nt_root()
+  if empty(l:root) || !s:hist.loaded
+    return
+  endif
+  try
+    call mkdir(l:root . '/.state', 'p')
+    call writefile([json_encode({'list': s:tail(s:hist.list, 200)})], s:hist_file(l:root))
+  catch
+  endtry
+endfunction
+
+function! gnosis#hist_visit() abort
+  if s:hist.nav
+    return
+  endif
+  let l:root = s:nt_root()
+  if empty(l:root) || &buftype !=# ''
+    return
+  endif
+  let l:rel = s:nt_rel(l:root)
+  if empty(l:rel) || l:rel =~# '^\.'
+    return
+  endif
+  call s:hist_load(l:root)
+  if s:hist.pos >= 0 && s:hist.list[s:hist.pos] ==# l:rel
+    return
+  endif
+  " 戻った位置から新しく開いたら、その先の「進む」履歴は捨てる（ブラウザと同じ）
+  let s:hist.list = s:hist.list[: s:hist.pos] + [l:rel]
+  let s:hist.pos = len(s:hist.list) - 1
+endfunction
+
+function! s:hist_go(delta) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  call s:hist_load(l:root)
+  let l:i = s:hist.pos + a:delta
+  while l:i >= 0 && l:i < len(s:hist.list) && !filereadable(l:root . '/' . s:hist.list[l:i])
+    let l:i += a:delta                  " 消えたノートは飛ばす
+  endwhile
+  if l:i < 0 || l:i >= len(s:hist.list)
+    echo 'Gnosis: ' . gnosis#i18n#tr(a:delta < 0 ? 'これより前の履歴はありません' : 'これより先の履歴はありません')
+    return
+  endif
+  let s:hist.pos = l:i
+  let s:hist.nav = 1
+  try
+    execute 'edit ' . fnameescape(l:root . '/' . s:hist.list[l:i])
+  finally
+    let s:hist.nav = 0
+  endtry
+endfunction
+
+function! gnosis#back() abort
+  call s:hist_go(-1)
+endfunction
+
+function! gnosis#forward() abort
+  call s:hist_go(1)
+endfunction
+
+function! gnosis#history() abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  call s:hist_load(l:root)
+  let l:lines = ['# ' . gnosis#i18n#tr('ノートを開いた履歴（新しい順）'), '']
+  let l:where = {}
+  for l:i in range(len(s:hist.list) - 1, 0, -1)
+    call add(l:lines, printf('- %s[%s](%s)', l:i == s:hist.pos ? '▶ ' : '', s:hist.list[l:i], substitute(s:hist.list[l:i], ' ', '%20', 'g')))
+    let l:where[len(l:lines)] = s:hist.list[l:i]
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! s:nav_run(args, show) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return ''
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/nav.py', l:root] + a:args + (a:show ? ['--md'] : []), 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return ''
+  endif
+  return l:out
+endfunction
+
+function! s:nav_show(args) abort
+  let l:out = s:nav_run(a:args, 1)
+  if empty(l:out)
+    return
+  endif
+  let l:root = s:nt_root()
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#bookmark(action, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:rel = s:nt_rel(l:root)
+  if a:action ==# 'list'
+    call s:nav_show(['bookmark', 'list'])
+  elseif a:action ==# 'go'
+    let l:out = s:nav_run(['bookmark', 'slot', get(a:000, 0, '')], 0)
+    if !empty(l:out)
+      execute 'edit ' . fnameescape(l:root . '/' . json_decode(l:out).path)
+    endif
+  elseif a:action ==# 'add' || a:action ==# 'remove'
+    if empty(l:rel)
+      echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+      return
+    endif
+    if !empty(s:nav_run(['bookmark', a:action, l:rel] + (a:action ==# 'add' && a:0 > 0 ? [a:1] : []), 0))
+      echo 'Gnosis: ' . gnosis#i18n#tr(a:action ==# 'add' ? 'ブックマークに入れました' : 'ブックマークから外しました')
+    endif
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('add / remove / list / go のどれかです') | echohl NONE
+  endif
+endfunction
+
+function! gnosis#recent(...) abort
+  call s:nav_show(['recent', a:0 > 0 && !empty(a:1) ? a:1 : 'modified'])
+endfunction
+
+function! gnosis#knowledge() abort
+  call s:nav_show(['reminders'])
+endfunction
+
+function! gnosis#trail(action, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if a:action ==# 'list'
+    call s:nav_show(['trail', 'list'])
+  elseif a:action ==# 'show'
+    call s:nav_show(['trail', 'show'] + a:000)
+  elseif a:action ==# 'remove'
+    if !empty(s:nav_run(['trail', 'remove'] + a:000, 0))
+      echo 'Gnosis: ' . gnosis#i18n#tr('トレイルを消しました')
+    endif
+  elseif a:action ==# 'export'
+    if a:0 < 2
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('使い方: :GnosisTrail export 名前 新しいファイル') | echohl NONE
+      return
+    endif
+    if !empty(s:nav_run(['trail-export', a:1, '--write', a:2], 0))
+      execute 'edit ' . fnameescape(l:root . '/' . a:2)
+    endif
+  elseif a:action ==# 'save' || a:action ==# 'add'
+    if a:0 < 1
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('トレイルの名前を指定してください') | echohl NONE
+      return
+    endif
+    let l:notes = a:000[1:]
+    if a:action ==# 'save' && (empty(l:notes) || l:notes ==# ['history'])
+      call s:hist_load(l:root)
+      let l:notes = s:tail(s:hist.list, 30)
+    elseif a:action ==# 'add' && empty(l:notes)
+      let l:notes = [s:nt_rel(l:root)]
+    endif
+    if empty(l:notes) || empty(l:notes[0])
+      echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+      return
+    endif
+    if !empty(s:nav_run(['trail', a:action, a:1] + l:notes, 0))
+      echo 'Gnosis: ' . printf(gnosis#i18n#tr('トレイル「%s」を保存しました'), a:1)
+    endif
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('save / add / show / list / remove / export のどれかです') | echohl NONE
+  endif
 endfunction
 
 " 読書・学習（LR01・LR07・LR09〜LR14）。原本はノートの記述（==ハイライト== (p.12)・📖 書名 120/300 日付・maturity:・requires:・source:）。

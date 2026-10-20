@@ -49,9 +49,9 @@
 | SR08 | 動的索引（検索結果の読み取り専用表示、昇 | 動的索引（検索結果の読み取り専用表示、昇格は明示的操作）。 | Vim + `\A` | 動作検証中（結果は読み取り専用の Markdown。`:GnosisQueryPromote` を明示したときだけ新規ノート） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR09 | Global Index／Topic I | Global Index／Topic Indexの特定範囲で検索。実際の到達可能性に基づく。 | Vim + `\A` | 動作検証中（`in:索引.md` = 実際の到達可能性。Index→最初のノート→GroupBranch の向きで辿る） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR10 | コマンドパレット、GUIから全機能検索・ | コマンドパレット、GUIから全機能検索・起動。 | Vim + `\A` | 動作検証中（Ctrl+Shift+P。ラベル・キーワードのあいまい検索、Vim の `:Gnosis*` 全コマンドを一覧して実行（引数なしは即実行）。`\A` 内。ノート名の検索結果は未） | 2 | `web/src/app.js` `palette-core.js` `panes_e2e.mjs` | P1 共通ID |
-| SR11 | ジャンプ履歴、戻る／進む、履歴トグル。 | ジャンプ履歴、戻る／進む、履歴トグル。 | Vim + `\A` | 要確認 | 2 | ジャンプ履歴（要調査） | P1 共通ID |
-| SR12 | ブックマーク、ハブ固定キー、ピン留め。 | ブックマーク、ハブ固定キー、ピン留め。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
-| SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 要確認 | 2 | 最近のノート（要調査） | P1 共通ID |
+| SR11 | ジャンプ履歴、戻る／進む、履歴トグル。 | ジャンプ履歴、戻る／進む、履歴トグル。 | Vim + `\A` | 動作検証中（ノートを開いた順の履歴・戻る/進む・履歴画面・消えたノートは飛ばす・途中で別を開くと先は捨てる。`.state/history.json` に保存して次の起動で読み戻す）。`:GnosisBack/Forward/History` | 2 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 共通ID |
+| SR12 | ブックマーク、ハブ固定キー、ピン留め。 | ブックマーク、ハブ固定キー、ピン留め。 | Vim + `\A` | 動作検証中（ブックマーク・スロット 1〜9 = ハブ固定キー・消えたノートは印を付けて残す）。ピン留め画面は未。`:GnosisBookmark` | 2 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 共通ID |
+| SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 一部（最近更新した／作ったノート。最近「閲覧」したものは履歴で代用、取り込みしたものの一覧は未）。`:GnosisRecent` | 2 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 共通ID |
 | SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 動作検証中（`:GnosisPaths`・`\A` の分析ビューは別。種類を絞った経路の指定は gnosis_graph の API のみ） | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
@@ -83,7 +83,7 @@
 | TM12 | 過去の今日（On This Day）。 | 過去の今日（On This Day）。 | Vim + `\A` + Android | 動作検証中（過去の年の同じ月日に作ったノート・終えたタスク。今年は含めない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM13 | 前回セッションの復元。 | 前回セッションの復元。 | Vim + `\A` + Android | 要確認 | 2 | `test/session_*`（要調査） | P1 共通ID |
 | TM14 | 通知履歴・未処理タスク。 | 通知履歴・未処理タスク。 | Vim + `\A` + Android | 一部（通知の履歴と「通知したのに未処理」。Android 側・アプリ内の履歴画面は未） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
-| TM15 | 知識リマインダー（以前のノート、未完了の | 知識リマインダー（以前のノート、未完了の問い、古い仮説などを再提示）。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
+| TM15 | 知識リマインダー（以前のノート、未完了の | 知識リマインダー（以前のノート、未完了の問い、古い仮説などを再提示）。 | Vim + `\A` + Android | 一部（PC 側: 未解決の問い `? …`・90 日以上たった仮説・今日の問い・カプセルの再提示。Android の通知は未）。`:GnosisKnowledge` | 5 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 タスクエンジン |
 | TM16 | Androidホーム画面ウィジェット、ク | Androidホーム画面ウィジェット、クイックタスク追加。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM17 | 通知タップで対象ノートを開く、通知から完 | 通知タップで対象ノートを開く、通知から完了・スヌーズする。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM18 | 朝のAgenda通知、期限超過・週次レビ | 朝のAgenda通知、期限超過・週次レビュー通知、通知の集中設定。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
@@ -143,7 +143,7 @@
 | XP01 | ランダムウォーク。 | ランダムウォーク。 | `\A` | 動作検証中（リンクだけを辿る散歩。seed で再現・未訪問を優先・行き止まりで止まる）。`:GnosisExplore` | 9 | `python/explore.py` `test_explore.py` `test/explore_net.sh` | P3 |
 | XP02 | セレンディピティ推薦（普段見ない意外なノ | セレンディピティ推薦（普段見ない意外なノートとの遭遇）。 | `\A` | 動作検証中（内容は近いのにリンクで 3 歩以上／つながりなし。文字の近さによる候補で偶然もあると明記）。`:GnosisExplore` | 9 | `python/explore.py` `test_explore.py` `test/explore_net.sh` | P3 |
 | XP03 | 知識考古学（古い記述の再発掘と比較）。 | 知識考古学（古い記述の再発掘と比較）。 | `\A` | 動作検証中（長く触っていないが、最近のノートからリンクされている／最近のノートと近いものを再発見の候補に）。`:GnosisExplore` | 9 | `python/explore.py` `test_explore.py` `test/explore_net.sh` | P3 |
-| XP04 | タイムカプセル（指定時刻に過去のノート再 | タイムカプセル（指定時刻に過去のノート再提示）。 | `\A` | 未実装 | 9 |  | P3 |
+| XP04 | タイムカプセル（指定時刻に過去のノート再 | タイムカプセル（指定時刻に過去のノート再提示）。 | `\A` | 一部（`🕰 日付` の行を含むノートを日付が来たら再提示。封印（日付前に開けない）は約束事でも実装していない） | 9 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P3 |
 | XP05 | 知識の博物館（ノートを展示風に閲覧）。 | 知識の博物館（ノートを展示風に閲覧）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP06 | 記憶の宮殿（仮想空間上への任意配置）。 | 記憶の宮殿（仮想空間上への任意配置）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP07 | 思考の迷路（リンクのみを辿る探索ゲーム） | 思考の迷路（リンクのみを辿る探索ゲーム）。 | `\A` | 未実装 | 9 |  | P3 |
@@ -152,10 +152,10 @@
 | XP10 | 仮説実験室（仮説、証拠、反証、結論、履歴 | 仮説実験室（仮説、証拠、反証、結論、履歴）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP11 | 思考の対戦（相反する主張を比較・討論）。 | 思考の対戦（相反する主張を比較・討論）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP12 | 知識成長アニメーション（履歴に基づくグラ | 知識成長アニメーション（履歴に基づくグラフ変化）。 | `\A` | 未実装 | 9 |  | P3 |
-| XP13 | 未来への質問（時限再提示）。 | 未来への質問（時限再提示）。 | `\A` | 未実装 | 9 |  | P3 |
+| XP13 | 未来への質問（時限再提示）。 | 未来への質問（時限再提示）。 | `\A` | 動作検証中（`❓ 日付 問い`。日付が来ると今日の問いに出る） | 9 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P3 |
 | XP14 | 知識探索ゲーム（指定ノートへのリンク経路 | 知識探索ゲーム（指定ノートへのリンク経路を辿る）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP15 | アイデア合成器（無関係な概念の組合せ）。 | アイデア合成器（無関係な概念の組合せ）。 | `\A` | 未実装 | 9 |  | P3 |
-| XP16 | Memex型連想トレイル（閲覧順・思考経 | Memex型連想トレイル（閲覧順・思考経路を別オブジェクトとして保存／再生／共有）。 | `\A` | 未実装 | 9 |  | P3 |
+| XP16 | Memex型連想トレイル（閲覧順・思考経 | Memex型連想トレイル（閲覧順・思考経路を別オブジェクトとして保存／再生／共有）。 | `\A` | 一部（閲覧履歴の経路をトレイルとして保存・追加・表示・Markdown に書き出し（新規のみ）。`\A` での再生・共有 UI は未）。`:GnosisTrail` | 9 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P3 |
 | UT01 | 壊れたリンクの検査。 | 壊れたリンクの検査。 | Vim + API | 動作検証中（:GnosisCheck で検出のみ。修復・リネーム時の自動更新は未実装） | 1 | `python/gnosis_graph.py` `test/check_vault_net.sh` | - |
 | UT02 | Index / Topic Index  | Index / Topic Index / GroupBranchの整合性検査。 | Vim + API | 一部（Branch 検査 + 重複／抜け Folgezettel。Index→First Note→GroupBranch→Topic Index の到達性検査は未実装） | 1 | `:GnosisBranchCheck` `:GnosisCheck` | - |
 | UT03 | リネーム時の安全な参照更新。 | リネーム時の安全な参照更新。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisRename`（ファイル名変更。参照更新の範囲は要調査） | - |

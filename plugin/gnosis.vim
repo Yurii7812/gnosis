@@ -511,6 +511,18 @@ command! GnosisCheck call gnosis#check_vault()
 command! GnosisGraphReport call gnosis#graph_report()
 command! -nargs=+ -complete=custom,gnosis#ai_complete GnosisAi call gnosis#ai(<f-args>)
 command! GnosisBacklinks call gnosis#backlinks()
+command! -nargs=+ GnosisBookmark call gnosis#bookmark(<f-args>)
+command! -nargs=? GnosisRecent call gnosis#recent(<f-args>)
+command! GnosisKnowledge call gnosis#knowledge()
+command! -nargs=+ GnosisTrail call gnosis#trail(<f-args>)
+command! GnosisBack call gnosis#back()
+command! GnosisForward call gnosis#forward()
+command! GnosisHistory call gnosis#history()
+augroup gnosis_history
+  autocmd!
+  autocmd BufEnter *.md call gnosis#hist_visit()
+  autocmd VimLeavePre * call gnosis#hist_save()
+augroup END
 command! -nargs=? GnosisHighlights call gnosis#highlights(<f-args>)
 command! -nargs=? GnosisHighlightDigest call gnosis#highlight_digest(<f-args>)
 command! -nargs=? GnosisReadProgress call gnosis#read_progress(<q-args>)

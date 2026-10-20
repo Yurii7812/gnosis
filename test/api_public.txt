@@ -21,10 +21,12 @@ gnosis#at_add_reverse
 gnosis#autosync_log
 gnosis#autosync_on_save
 gnosis#autosync_problem
+gnosis#back
 gnosis#backlinks
 gnosis#backup_vault
 gnosis#backup_vault_with
 gnosis#before_write_viminfo
+gnosis#bookmark
 gnosis#branch#add_links
 gnosis#branch#add_parent_links
 gnosis#branch#add_paths
@@ -102,6 +104,7 @@ gnosis#export_site
 gnosis#fix_fullwidth_heading
 gnosis#folgezettel#move
 gnosis#folgezettel#toggle
+gnosis#forward
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
@@ -119,6 +122,9 @@ gnosis#heading_links_before
 gnosis#highlight_digest
 gnosis#highlights
 gnosis#hint_goto
+gnosis#hist_save
+gnosis#hist_visit
+gnosis#history
 gnosis#home#dir
 gnosis#home#ensure_fzf_path
 gnosis#home#init
@@ -158,6 +164,7 @@ gnosis#jump_relation_link
 gnosis#jump_section_header
 gnosis#jump_up
 gnosis#jump_up_cursor
+gnosis#knowledge
 gnosis#learn_path
 gnosis#life_log
 gnosis#link_highlight
@@ -226,6 +233,7 @@ gnosis#quit_unmount
 gnosis#read_progress
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
+gnosis#recent
 gnosis#recent_map
 gnosis#record_merge
 gnosis#record_migrate
@@ -411,6 +419,7 @@ gnosis#toggle_alternate
 gnosis#toggle_checkbox
 gnosis#toggle_link_source
 gnosis#topic#assign
+gnosis#trail
 gnosis#trash_current
 gnosis#trash_empty
 gnosis#trash_list
