@@ -104,6 +104,40 @@ class ExportTest(unittest.TestCase):
         self.assertIn("graph.html#n=herb.md&amp;depth=1", (self.out / "herb.html").read_text(encoding="utf-8").replace("&depth", "&amp;depth"))
         self.assertIn("../graph.html#n=sub/deep.md", (self.out / "sub/deep.html").read_text(encoding="utf-8").replace("%2F", "/"))
 
+    def notes_data(self):
+        t = (self.out / "notes-data.js").read_text(encoding="utf-8")
+        assert t.startswith("window.GNOSIS_NOTES=")
+        return json.loads(t[len("window.GNOSIS_NOTES="):].rstrip().rstrip(";"))
+
+    def test_notes_data_for_cards_table_timeline(self):
+        self.run_export()
+        data = {n["id"]: n for n in self.notes_data()}
+        self.assertNotIn("priv.md", data)                         # 非公開は一覧データにも出さない
+        self.assertNotIn("TOPSECRET", (self.out / "notes-data.js").read_text(encoding="utf-8"))
+        h = data["herb.md"]
+        self.assertEqual((h["title"], h["fz"], h["href"], h["time"]), ("ハーブ", "1", "herb.html", "2026-01-01 00:00:00"))
+        self.assertEqual(h["image"], "pic.png")                    # 最初の画像（コピー済みのもの）がカードの絵になる
+        # 本文のタグ風の文字は抜粋に文字として残るが、描画側は textContent だけを使う（innerHTML を使わない）
+        for js in ("views.js", "graph.js", "fznav.js"):
+            self.assertNotIn("innerHTML", (self.out / js).read_text(encoding="utf-8"), js)
+            self.assertNotIn("document.write", (self.out / js).read_text(encoding="utf-8"), js)
+        self.assertNotIn("](", h["excerpt"])                       # リンクの書き方は外す
+        self.assertNotIn("BranchGroup", h["excerpt"])
+        self.assertGreater(h["out"], 0)
+        self.assertGreater(data["grow.md"]["out"], 0)              # ParentBranch で herb を指す
+        self.assertGreater(h["in"], 0)
+        self.assertGreater(h["size"], 10)
+        for page, view in (("cards.html", "cards"), ("table.html", "table"), ("timeline.html", "timeline")):
+            t = (self.out / page).read_text(encoding="utf-8")
+            self.assertIn(f'data-view="{view}"', t)
+            self.assertIn("Content-Security-Policy", t)
+            self.assertNotIn("fetch(", t)
+
+    def test_excerpt(self):
+        e = ex._excerpt(["# 見出し", "", "本文 **強調** と [リンク](x.md) と ![図](a.png)", "- [ ] 項目", "```", "コード", "```", "BranchGroup:", "[子](c.md)"])
+        self.assertEqual(e, "本文 強調 と リンク と 項目 子")
+        self.assertEqual(len(ex._excerpt(["あ" * 500])), 180)
+
     def test_include_private_and_search_index(self):
         self.run_export(include_private=True)
         self.assertTrue((self.out / "priv.html").is_file())

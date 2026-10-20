@@ -14,7 +14,7 @@
   - `related_check.vim`: **試験は正しく、製品の不具合だった**。英語の `\l` の短縮案内が、`a=自分Ctx` の追加で 80 桁を超え、末尾の `a=… r=Related` が切れていた。`i18n/en.json` の短縮文言を直した（試験は元のまま）。※最初「未マージ枝の機能」と誤って説明していたのを訂正。
   - `context_pty_check.py`: `zn`+Enter は ParentBranch: だけを付ける（旧: Context: も）。
   - `requests_1020_net.sh`: 単独実行では通る（取得時は負荷による一時失敗の疑い）。再発したら調査。
-- **`web/test/gui_e2e.mjs`（Electron + 実 Vim）は main の時点で多数失敗**（`npm test` の基準線）。直した 3 件（`### Group` 節→`Group:` ブロック、`\l` の案内の短縮）以外に 7 件残る: zk の g キー・`zn` が新規ノートを作らない・vim modes・`:w`・`zn c` の Context ブロックなど。`zn`/`zk` の操作フローが仕様変更で変わり、試験の送るキー列が合わなくなっている様子。**1 件ずつ現行フローで確認して直す**（試験を黙って緩めない）。Phase 2 の `\A` 作業の前提なので優先度高。`npm test` の他のスクリプト（view_swap・launcher・theme・multi）は未実行。
+- **`web` の Electron E2E（`cd web && npm test`、約 10 分）は、現行仕様に合わせて全件通る（2026-10-20）**。main の時点では多数失敗していた（仕様変更への追随漏れ）。実際の出力と実装の定義で確認してから直した: `### Group` 節→`Group:` ブロック、`\l` の案内の短縮、`zn` がグループの上では登録方法→表示名→よみの 3 つを聞く、`zk → g`（リンク 1 本をグループに）の廃止、`zn → c` の意味（リンク先に今のノートを Context）、既定テーマがダーク `#22272E`・ライトが `#FAFAFA`、色の編集が 8 色。`web/node_modules` は ~/gnosis/web への読み取り専用リンクで使う（ワークツリーの `info/exclude` に登録）。`test/run.sh` からは `GNOSIS_RUN_WEB_E2E=1` のときだけ実行。
 - `test/run.sh` は `set -e` で最初の失敗で止まる。全体は約 10 分かかる。作業中は関係する試験だけ回し、区切りで全体を回す。
 - CI（`.github/workflows/gnosis-regression.yml`）は一部の試験しか回さない。
 

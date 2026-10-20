@@ -141,7 +141,8 @@ try {
   const o = R.opened || {};
   check(o.launcherHidden && /index\.md$/.test(o.file || ""), "Enter opens the vault in Vim: " + JSON.stringify(o));
   // \A のアプリの既定は白（通常の Vim の標準配色とは別。vault の「ダーク」設定にも左右されない）
-  check(String(o.bg).toLowerCase() === "#ffffff" && o.bodyBg === "rgb(255, 255, 255)" && String(o.palette).toLowerCase() === "#ffffff", "the app default theme (white) is applied after opening: " + JSON.stringify(o));
+  // 見た目の既定はダーク（#22272E。2026-10-19 に利用者が決定。白はライトテーマとして選べる）
+  check(String(o.bg).toLowerCase() === "#22272e" && o.bodyBg === "rgb(34, 39, 46)" && String(o.palette).toLowerCase() === "#22272e", "the app default theme (dark) is applied after opening: " + JSON.stringify(o));
   check(o.font === "22px", "font size from the vault settings: " + JSON.stringify(o));
   check(o.lang === "ja", "Vim uses the vault language: " + JSON.stringify(o));
   check(R.__window && R.__window.fullscreen === false, "never fullscreen: " + JSON.stringify(R.__window));

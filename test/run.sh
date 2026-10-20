@@ -172,3 +172,8 @@ python3 "$REPO/test/session_real_check.py"
 # 書き出した静的サイトのビュー（番号ナビ・グラフ・検索・曼荼羅）を本物のブラウザ（Electron の Chromium・xvfb）で操作する試験
 # （web/node_modules と xvfb-run が無ければ省略する）
 node "$REPO/web/test/site_views_e2e.mjs"
+
+# Electron アプリ（\A）全体の E2E（実 Vim・約 10 分）。普段は省略し、GNOSIS_RUN_WEB_E2E=1 のときだけ実行する
+if [ "${GNOSIS_RUN_WEB_E2E:-}" = "1" ]; then
+  (cd "$REPO/web" && npm test)
+fi

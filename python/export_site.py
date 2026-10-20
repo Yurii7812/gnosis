@@ -29,6 +29,7 @@ import folgezettel as fz  # noqa: E402
 import gnosis_graph as gg  # noqa: E402
 import mandala  # noqa: E402
 import md_html  # noqa: E402
+import tasks as taskmod  # noqa: E402
 import note_format_v2 as nf  # noqa: E402
 
 MARKER = ".gnosis-export"
@@ -48,7 +49,14 @@ button{font:inherit;cursor:pointer}.tog{border:0;background:none;width:1.4rem;co
 .lab{border-color:transparent;text-align:left}.chip.gap{border-style:dashed;opacity:.7}.chip.now{background:#4a90d955}
 .nav button.go{padding:.3rem .7rem;margin:.15rem;border:1px solid #8886;border-radius:6px;background:none;color:inherit}.nav button:disabled{opacity:.35;cursor:default}
 #cur{font-size:1.25rem;font-weight:bold}#cur.gap{opacity:.7}.row{margin:.4rem 0}.row b{display:inline-block;min-width:5.5rem;font-size:.85rem;opacity:.8}
-iframe#pv{width:100%;height:22rem;border:1px solid #8886;border-radius:6px;background:#fff}.none{opacity:.6;font-size:.85rem}"""
+iframe#pv{width:100%;height:22rem;border:1px solid #8886;border-radius:6px;background:#fff}.none{opacity:.6;font-size:.85rem}
+body.views{max-width:80rem}.toolbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.5rem 0}.toolbar input{padding:.3rem .5rem;min-width:14rem}
+#cards{column-width:17rem;column-gap:1rem}.card{break-inside:avoid;border:1px solid #8886;border-radius:8px;padding:.6rem;margin:0 0 1rem;position:relative;background:#8881}
+.card.pinned{border-color:#e0a800}.card img{width:100%;border-radius:6px}.card h3{margin:.3rem 0;font-size:1rem}.card p{margin:.3rem 0;font-size:.9rem;opacity:.9}
+.card .meta{font-size:.75rem;opacity:.7}.card .pin{position:absolute;top:.3rem;right:.3rem;border:0;background:none;color:inherit;font-size:1.1rem;cursor:pointer}
+.chip{font-size:.75rem;border:1px solid #8886;border-radius:4px;padding:0 .3rem}table.t{border-collapse:collapse;width:100%}table.t th,table.t td{border-bottom:1px solid #8884;padding:.25rem .5rem;text-align:left}
+table.t td.num{text-align:right}.sortb{border:0;background:none;color:inherit;font:inherit;font-weight:bold;cursor:pointer}
+#tl section{margin:1rem 0}#tl h2{font-size:1rem;margin:.2rem 0}#tl ul{list-style:none;padding-left:.5rem;border-left:3px solid #4a90d966}.tm{opacity:.6;font-size:.85rem}"""
 JS = """(function(){var q=document.getElementById('q'),r=document.getElementById('r'),d=window.GNOSIS_INDEX||[];
 function run(){var v=q.value.trim().toLowerCase();r.textContent='';if(!v)return;var n=0;
 d.forEach(function(e){if(n<200&&(e.t.toLowerCase().indexOf(v)>=0||e.x.indexOf(v)>=0)){n++;
@@ -57,12 +65,33 @@ var m=/^#q=(.*)$/.exec(location.hash);if(m){try{q.value=decodeURIComponent(m[1])
 q.addEventListener('input',run);run()})();"""
 
 
-def _page(title: str, body: str, css_prefix: str = "", extra_head: str = "", csp: str = CSP, body_class: str = "") -> str:
+def _page(title: str, body: str, css_prefix: str = "", extra_head: str = "", csp: str = CSP, body_class: str = "", body_attrs: str = "") -> str:
     return ("<!doctype html>\n<html lang=\"ja\"><head><meta charset=\"utf-8\">"
             f"<meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             f"<title>{html.escape(title)}</title><link rel=\"stylesheet\" href=\"{css_prefix}style.css\">{extra_head}"
-            f"</head><body{f' class=\"{body_class}\"' if body_class else ''}>{body}</body></html>\n")
+            f"</head><body{f' class=\"{body_class}\"' if body_class else ''}{f' {body_attrs}' if body_attrs else ''}>{body}</body></html>\n")
+
+
+def _excerpt(body_lines: list[str], limit: int = 180) -> str:
+    """カード・検索の抜粋: 見出し・関係のブロック・コードを除いた本文の最初の部分（記号とリンクの書き方は外す）。"""
+    out, fence = [], False
+    for ln in body_lines:
+        t = ln.strip()
+        if t.startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        if fence or not t or t.startswith("#") or t in (nf.BRANCH_GROUP_HEAD, nf.LEGACY_THIS_NOTE_GROUP_HEAD):
+            continue
+        t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
+        t = re.sub(r"\[((?:\\.|[^\]\\])*)\]\([^)]*\)", r"\1", t)
+        t = re.sub(r"^[-*+]\s+(\[[ xX]\]\s*)?", "", t)
+        t = re.sub(r"[*_`~>|]+", "", t).strip()
+        if t:
+            out.append(t)
+        if sum(len(x) for x in out) >= limit:
+            break
+    return " ".join(out)[:limit]
 
 
 def _out_name(rel: str) -> str:
@@ -118,6 +147,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
             skipped.append(rel)
             continue
         notes[rel] = d
+    assets = Path(__file__).resolve().parent / "site_assets"
     copied: set[str] = set()
     index_rows = []
     search = []
@@ -194,11 +224,49 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     items = "".join(f'<li><a href="{html.escape(_out_name(rel), quote=True)}">{html.escape(t)}</a>'
                     + (f' <small>({html.escape(f)})</small>' if f else "") + "</li>" for t, rel, f in index_rows)
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
-                                         f'<a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
+                                         f'<a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a> ・ <a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
                                            '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
+    # ノート一覧のデータ（カード・テーブル・タイムライン）。書き出したノートだけ。派生データなので vault から作り直せる
+    in_out: dict[str, list[int]] = {r: [0, 0] for r in notes}
+    for e in g.edges:
+        if e.derived or e.kind == "backlink" or e.src not in notes or e.dst not in notes:
+            continue
+        in_out[e.src][0] += 1
+        in_out[e.dst][1] += 1
+    meta = []
+    for rel, d in notes.items():
+        node = g.nodes[rel]
+        text = (root / rel).read_text(encoding="utf-8")
+        tm = next((ln.split(":", 1)[1].strip() for ln in d["fm"] if ln.startswith("time:")), "")
+        img = ""
+        m = re.search(r"!\[[^\]]*\]\(([^)\s]+)", "\n".join(d["body"]))
+        if m and not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", m.group(1)):
+            cand = (root / rel).parent / m.group(1).split("#", 1)[0]
+            try:
+                real = cand.resolve(strict=True)
+                real.relative_to(root)
+                if (out / real.relative_to(root)).is_file():
+                    img = real.relative_to(root).as_posix()
+            except (OSError, ValueError):
+                pass
+        ts = taskmod.parse_text(text, rel)
+        meta.append({"id": rel, "title": node.title, "fz": node.fz, "href": _out_name(rel), "time": tm,
+                     "mtime": int((root / rel).stat().st_mtime), "excerpt": _excerpt(d["body"]), "image": img,
+                     "out": in_out[rel][0], "in": in_out[rel][1], "size": len(text.encode("utf-8")),
+                     "tasks_open": sum(1 for t in ts if not t.done), "tasks_done": sum(1 for t in ts if t.done)})
+    (out / "notes-data.js").write_text("window.GNOSIS_NOTES=" + json.dumps(meta, ensure_ascii=False) + ";\n", encoding="utf-8")
+    for name in ("viewscore.js", "views.js"):
+        shutil.copyfile(assets / name, out / name)
+    tools = ('<div class="toolbar"><input id="q" type="search" placeholder="絞り込み（語を空白で区切る・-語で除外）" aria-label="絞り込み">{extra}<span id="count"></span></div>')
+    nav = '<p class="crumb"><a href="index.html">一覧</a> ・ <a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a></p>'
+    sorts = ('<select id="sort" aria-label="並べ替え"><option value="updated">更新日</option><option value="created">作成日</option><option value="title">題</option>'
+             '<option value="fz">番号</option><option value="links_in">被リンク</option><option value="size">サイズ</option></select><button type="button" id="dir" class="chip">降順 ▼</button>')
+    scripts = '<script src="notes-data.js"></script><script src="fznav-core.js"></script><script src="viewscore.js"></script><script src="views.js"></script>'
+    (out / "cards.html").write_text(_page("カード", nav + "<h1>カード</h1>" + tools.format(extra=sorts) + '<div id="cards"></div>' + scripts, body_class="views", body_attrs='data-view="cards"'), encoding="utf-8")
+    (out / "table.html").write_text(_page("テーブル", nav + "<h1>テーブル</h1>" + tools.format(extra="") + '<table id="tbl" class="t"></table>' + scripts, body_class="views", body_attrs='data-view="table"'), encoding="utf-8")
+    (out / "timeline.html").write_text(_page("タイムライン", nav + "<h1>タイムライン</h1>" + tools.format(extra="") + '<div id="tl"></div>' + scripts, body_class="views", body_attrs='data-view="timeline"'), encoding="utf-8")
     # グラフ表示（全体・ローカル）。書き出したノートだけを節点・辺にする（非公開ノートは節点にも辺にも出さない）
-    assets = Path(__file__).resolve().parent / "site_assets"
     for name in ("graphcore.js", "graph.js"):
         shutil.copyfile(assets / name, out / name)
     gdata = {"nodes": [{"id": r, "title": g.nodes[r].title, "fz": g.nodes[r].fz, "href": _out_name(r), "group": g.nodes[r].is_group} for r in notes],

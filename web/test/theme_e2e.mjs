@@ -152,9 +152,9 @@ try {
   if (R.fatal) { console.error("fatal: " + R.fatal); process.exit(1); }
   const e = R.editor || {};
   check(R.form?.vimBtn && R.form?.appBtn && R.form?.appSel === "builtin" && R.form.appOptions.length === 1, "settings: both color editors, app theme select defaults to builtin: " + JSON.stringify(R.form));
-  check(e.open && e.rows === 6 && e.pickers === 6 && e.hexes.length === 6 && e.palette === 72, "editor: 6 colors with picker + HEX, 8x9 palette: " + JSON.stringify(e));
+  check(e.open && e.rows === 8 && e.pickers === 8 && e.hexes.length === 8 && e.palette === 72, "editor: 8 colors with picker + HEX, 8x9 palette: " + JSON.stringify(e));
   check(/アプリ/.test(e.title || ""), "editor title says app: " + e.title);
-  check(e.previewBg === "rgb(255, 255, 255)" && e.previewFg === "rgb(31, 35, 40)", "app editor starts from the white default: " + JSON.stringify({ bg: e.previewBg, fg: e.previewFg }));
+  check(e.previewBg === "rgb(250, 250, 250)" && e.previewFg === "rgb(31, 31, 31)", "app editor starts from the builtin light colors (#FAFAFA/#1F1F1F): " + JSON.stringify({ bg: e.previewBg, fg: e.previewFg }));
   check(e.hexes[0].toLowerCase() === "#fafafa" && e.hexes[1].toLowerCase() === "#1f1f1f", "HEX codes are shown: " + JSON.stringify(e.hexes));
   check(e.link?.underline === "underline" && e.link.color !== e.previewFg, "preview: link is underlined and differs from the text: " + JSON.stringify(e.link));
   check(e.heading?.weight >= 700 && e.heading.color !== e.previewFg, "preview: heading is bold and differs from the text: " + JSON.stringify(e.heading));
@@ -167,9 +167,9 @@ try {
   check(R.palette?.hex && R.palette.hex !== "#ff8800" && R.palette.headingColor !== "rgb(255, 136, 0)", "choosing from the palette changes the selected color: " + JSON.stringify(R.palette));
   check(R.selcur?.sel === "rgb(51, 85, 119)" && R.selcur.cur === "rgb(17, 34, 68)", "selection / cursor line preview: " + JSON.stringify(R.selcur));
   check(R.afterCancel?.view === "settings" && R.afterCancel.editorGone && R.afterCancel.appSel === "builtin", "cancel returns to settings without applying: " + JSON.stringify(R.afterCancel));
-  check(R.reopen?.previewBg === "rgb(255, 255, 255)", "after cancel the editor starts from the old colors again: " + JSON.stringify(R.reopen));
+  check(R.reopen?.previewBg === "rgb(250, 250, 250)", "after cancel the editor starts from the old colors again: " + JSON.stringify(R.reopen));
   check(R.saved?.view === "settings" && R.saved.st?.kind === "custom" && R.saved.st.name === "ほんのり黄色", "saving selects the new app theme: " + JSON.stringify(R.saved));
-  check(/アプリ|app/i.test(R.vimEditor?.title || "") === false && R.vimEditor?.previewBg === "rgb(20, 40, 61)", "regular Vim editor starts from the standard navy, not the app colors: " + JSON.stringify(R.vimEditor));
+  check(/アプリ|app/i.test(R.vimEditor?.title || "") === false && R.vimEditor?.previewBg === "rgb(34, 39, 46)", "regular Vim editor starts from the standard dark (#22272E), not the app colors: " + JSON.stringify(R.vimEditor));
   check(R.escCancel?.view === "settings" && R.escCancel.editorGone, "Esc cancels the editor: " + JSON.stringify(R.escCancel));
   check(R.arrow?.idAfterDown && R.arrow.idAfterDown !== "s-lang", "ArrowDown moves between settings items: " + JSON.stringify(R.arrow));
   // 設定ファイル: アプリ用だけが保存され、通常の Vim 用は変わらない・キャンセルした分は残らない
