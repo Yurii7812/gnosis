@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import folgezettel as fz  # noqa: E402
 import gnosis_graph as gg  # noqa: E402
+import mandala  # noqa: E402
 import md_html  # noqa: E402
 import note_format_v2 as nf  # noqa: E402
 
@@ -110,7 +111,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     copied: set[str] = set()
     index_rows = []
     search = []
-    (out / "style.css").write_text(CSS, encoding="utf-8")
+    (out / "style.css").write_text(CSS + "\n" + mandala.MANDALA_CSS, encoding="utf-8")
     (out / "search.js").write_text(JS, encoding="utf-8")
 
     def link_to(src_rel: str, dst_rel: str, label: str) -> str:
@@ -167,7 +168,12 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
             rel_html += "<h2>このノートへのリンク</h2><ul>" + "".join(f"<li>{link_to(rel, t, g.nodes[t].title)}</li>" for t in incoming) + "</ul>"
         rel_nav = f'<nav class="rel">{rel_html}</nav>' if rel_html else ""
         up = "../" * rel.count("/")
-        page = _page(node.title, f'<p class="crumb"><a href="{up}index.html">一覧</a></p>{crumbs}' + md_html.render(body) + rel_nav, up)
+        if mandala.is_mandala((root / rel).read_text(encoding="utf-8")):
+            # 曼荼羅ノートは 9×9 の格子で見せる（表のマス以外の本文は、そのあとに通常どおり出す）
+            main = f"<h1>{html.escape(node.title)}</h1>" + mandala.to_html(mandala.parse(body), node.title)
+        else:
+            main = md_html.render(body)
+        page = _page(node.title, f'<p class="crumb"><a href="{up}index.html">一覧</a></p>{crumbs}' + main + rel_nav, up)
         dest = out / _out_name(rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(page, encoding="utf-8")

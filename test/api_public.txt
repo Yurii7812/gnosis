@@ -152,6 +152,9 @@ gnosis#lock_add
 gnosis#lock_remove
 gnosis#lock_vault
 gnosis#make_link
+gnosis#mandala_cell
+gnosis#mandala_new
+gnosis#mandala_sync
 gnosis#maybe_mount_interactive
 gnosis#merge#pick
 gnosis#merge#undo

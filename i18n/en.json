@@ -178,6 +178,7 @@
     "スマホへ入れられませんでした": "Could not install on the phone",
     "Gnosis: スマホに入れました。アプリを開いて確認してください": "Gnosis: installed on the phone. Open the app to check",
     "Gnosis: スマホから読み込んでいます…": "Gnosis: reading from the phone…",
+    "Gnosis: 曼荼羅を揃えました（写した %d・食い違い %d）": "Gnosis: mandala synced (%d copied, %d mismatched)",
     "Gnosis: %d 件のノートを書き出しました（非公開で除外 %d・添付 %d）: %s": "Gnosis: exported %d note(s) (%d private excluded, %d attachment(s)): %s",
     "vault の検査": "Vault check",
     "ノート %d・関係 %d・壊れたリンク %d": "%d notes, %d relations, %d broken links",

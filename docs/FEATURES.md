@@ -8,7 +8,7 @@
 | KM01 | PARA | Projects / Areas / Resources / Archives を**仮想ビュー**として提供。既存ノートの物理移動・強制分類をしない。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
 | KM02 | Zettelkasten | 原子的ノート、リンク、Folgezettelの作成・成長、紙との連携。 | `\A` HTML + Markdown | 要確認 | 6 | `zn`/`zk`・Folgezettel（python/folgezettel*.py） | P2 View API |
 | KM03 | MOC/索引案 | Map of Contentの表示、ノート群から索引案生成（既存索引は勝手に改変しない）。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM04 | 曼荼羅ノート | 9×9=81マスの思考展開。各マスからMarkdownノートや別の81マス曼荼羅を開く。曼荼羅そのものの表示はHTML中心、ノートは実際のMarkdownを開く。81マスの構造デー | `\A` HTML + Markdown | 未実装 | 3 |  | P2 View API |
+| KM04 | 曼荼羅ノート | 9×9=81マスの思考展開。各マスからMarkdownノートや別の81マス曼荼羅を開く。曼荼羅そのものの表示はHTML中心、ノートは実際のMarkdownを開く。81マスの構造デー | `\A` HTML + Markdown | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | KM05 | Cornell Notes | ノート本文、質問欄、要約欄の編集・出力。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
 | KM06 | Feynmanモード | 自分の説明を書き、理解の抜けを発見する。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
 | KM07 | KJ法 | カードの一時的グルーピング、名称付け、関連の仮置き。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
@@ -90,7 +90,7 @@
 | VW01 | グローバルグラフ（全体／選択した索引から | グローバルグラフ（全体／選択した索引から到達できる範囲）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW02 | ローカルグラフ（深さ1〜任意N、方向・関 | ローカルグラフ（深さ1〜任意N、方向・関係の絞り込み）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW03 | Google Keep風のMasonry | Google Keep風のMasonryカード（本文プレビュー、画像、選択、ピン留め、フィルタ）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
-| VW04 | 9×9曼荼羅HTMLビュー。セルからノー | 9×9曼荼羅HTMLビュー。セルからノート／別曼荼羅へ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
+| VW04 | 9×9曼荼羅HTMLビュー。セルからノー | 9×9曼荼羅HTMLビュー。セルからノート／別曼荼羅へ。 | `\A` HTML | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | VW05 | マインドマップ。 | マインドマップ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW06 | 意味付きコンセプトマップ。 | 意味付きコンセプトマップ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW07 | 階層ツリー（Folder Treeではな | 階層ツリー（Folder Treeではなく索引／Branch／Folgezettelの関係）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |

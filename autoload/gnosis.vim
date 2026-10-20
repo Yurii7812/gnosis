@@ -6040,6 +6040,56 @@ function! gnosis#export_site(bang, ...) abort
   echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートを書き出しました（非公開で除外 %d・添付 %d）: %s'), l:r.notes, len(l:r.skipped_private), l:r.assets, l:r.out)
 endfunction
 
+" 曼荼羅ノート（9×9 = 81 マス。ふつうの Markdown の表）: :GnosisMandalaNew 主題 [副題 … 最大8] / :GnosisMandalaSync / :GnosisMandalaCell[!]
+"   Cell … カーソルのマスの文字から新しいノートを作ってマスをリンクにする（! なら別の曼荼羅）。
+function! s:mandala_run(args) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/mandala.py'] + a:args, 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  try
+    return json_decode(l:out)
+  catch
+    return {'ok': 0, 'error': trim(l:out)}
+  endtry
+endfunction
+
+function! gnosis#mandala_new(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root) || a:0 < 1
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  call gnosis#save_current_note()
+  let l:file = l:root . '/' . gnosis#timestamp_filename() . '.md'
+  let l:r = s:mandala_run(['new', l:file] + a:000)
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  execute 'edit ' . fnameescape(l:file)
+endfunction
+
+function! gnosis#mandala_sync() abort
+  call gnosis#save_current_note()
+  let l:r = s:mandala_run(['sync', expand('%:p')])
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  silent! checktime
+  echo printf(gnosis#i18n#tr('Gnosis: 曼荼羅を揃えました（写した %d・食い違い %d）'), len(l:r.filled), len(l:r.conflicts))
+endfunction
+
+function! gnosis#mandala_cell(bang) abort
+  call gnosis#save_current_note()
+  let l:r = s:mandala_run(['link', expand('%:p'), line('.'), col('.'), a:bang ? 'mandala' : 'note'])
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  silent! checktime
+  execute 'edit ' . fnameescape(fnamemodify(expand('%:p'), ':h') . '/' . l:r.file)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)
