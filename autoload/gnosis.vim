@@ -6469,6 +6469,35 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" バックリンクと未リンクの言及（ED01・ED02）。今のノートを指している他のノートを、関係の種類と該当行つきで一覧する。読み取り専用。Enter でそのノートへ。
+function! gnosis#backlinks() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cur = expand('%:p')
+  if stridx(l:cur, l:root . '/') != 0
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/backlinks.py', l:root, strpart(l:cur, len(l:root) + 1), '--md'], 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
 " ローカル完結の知識支援（クラウド・外部通信なし。ノートも索引も書き換えない。提案・疑い・根拠つきの候補だけ）:
 "   :GnosisAi 種類 [引数…]  種類: similar links index summary keywords questions conflicts stale duplicates ask semantic hybrid nl report patrol common
 "   ノートを取る種類（similar links index summary keywords questions）は、引数が無ければ今のノート。結果は読み取り専用の Markdown で、Enter でそのノートへ。

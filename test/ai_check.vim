@@ -32,6 +32,15 @@ close
 call gnosis#ai('nl', '今月の', 'タスク')
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "has:task"')))
 close
+" バックリンク（ref.md は rose.md へのリンクを持つ）
+execute 'edit ' . fnameescape($D . '/v/rose.md')
+call gnosis#backlinks()
+let s:b = getline(1, '$')
+call assert_match('^# バックリンク: ローズマリー', s:b[0])
+call assert_true(!empty(filter(copy(s:b), 'v:val =~# "(ref.md)" && v:val =~# "本文のリンク"')))
+call cursor(match(s:b, '(ref.md)') + 1, 1)
+execute "normal \<CR>"
+call assert_equal($D . '/v/ref.md', expand('%:p'))
 " 種類の誤り・存在しないノートはエラー表示だけ
 let s:w = winnr('$')
 call gnosis#ai('nonsense')

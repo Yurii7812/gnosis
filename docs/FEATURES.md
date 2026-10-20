@@ -21,8 +21,8 @@
 | KM14 | IBIS | Issue/Position/Argument (問題・提案・支持・反論)を関係として管理。 | `\A` HTML + Markdown | 動作検証中（IBIS（提案と根拠の対応検査）: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
 | KM15 | ADR | 意思決定の選択肢・根拠・結果・変更履歴。 | `\A` HTML + Markdown | 動作検証中（ADR（状態・変更履歴の検査）: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
 | KM16 | 概念辞書 | 用語・定義・関連概念の索引と比較。 | `\A` HTML + Markdown | 動作検証中（概念辞書: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
-| ED01 | バックリンク、出典ノートのプレビューと関 | バックリンク、出典ノートのプレビューと関係区分。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| ED02 | 未リンク参照検出（文字列・意味類似を分け | 未リンク参照検出（文字列・意味類似を分ける）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
+| ED01 | バックリンク、出典ノートのプレビューと関 | バックリンク、出典ノートのプレビューと関係区分。 | Vim + `\A` | 動作検証中（関係の種類・該当行と前後つき。BackLink 欄・番号の親子は別扱い。`:GnosisBacklinks`） | 3 | `python/backlinks.py` `test_backlinks.py` `test/ai_net.sh` | P2 View API |
+| ED02 | 未リンク参照検出（文字列・意味類似を分け | 未リンク参照検出（文字列・意味類似を分ける）。 | Vim + `\A` | 動作検証中（題の文字一致のみ。コード・リンク内は除外。意味の近さは `:GnosisAi links`） | 3 | `python/backlinks.py` `test_backlinks.py` `test/ai_net.sh` | P2 View API |
 | ED03 | リンクホバー／クリック前プレビュー。 | リンクホバー／クリック前プレビュー。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | ED04 | 見出し・段落・ブロック単位の安定リンクと | 見出し・段落・ブロック単位の安定リンクとリネーム耐性。 | Vim + `\A` | 要確認 | 2 | 見出しリンク（`test/heading_links_*`）・ブロックは要調査 | P1 共通ID |
 | ED05 | 他ノート本文・ブロックのトランスクルージ | 他ノート本文・ブロックのトランスクルージョン、循環検出。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |

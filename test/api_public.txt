@@ -21,6 +21,7 @@ gnosis#at_add_reverse
 gnosis#autosync_log
 gnosis#autosync_on_save
 gnosis#autosync_problem
+gnosis#backlinks
 gnosis#backup_vault
 gnosis#backup_vault_with
 gnosis#before_write_viminfo
