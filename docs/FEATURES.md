@@ -159,7 +159,7 @@
 | UT01 | 壊れたリンクの検査。 | 壊れたリンクの検査。 | Vim + API | 動作検証中（:GnosisCheck で検出のみ。修復・リネーム時の自動更新は未実装） | 1 | `python/gnosis_graph.py` `test/check_vault_net.sh` | - |
 | UT02 | Index / Topic Index  | Index / Topic Index / GroupBranchの整合性検査。 | Vim + API | 一部（Branch 検査 + 重複／抜け Folgezettel。Index→First Note→GroupBranch→Topic Index の到達性検査は未実装） | 1 | `:GnosisBranchCheck` `:GnosisCheck` | - |
 | UT03 | リネーム時の安全な参照更新。 | リネーム時の安全な参照更新。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisRename`（ファイル名変更。参照更新の範囲は要調査） | - |
-| UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 一部（`vault_backup.py`: tar.gz＋manifest(SHA-256)・検証・新しいフォルダへの復元・巨大ファイルの扱いは試験済み。Vim コマンド・自動バックアップ・暗号化 vault は未） | 1 | `python/vault_backup.py` `test_vault_backup.py` | - |
+| UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 動作検証中（`:GnosisBackup/Verify/Restore/List`。tar.gz＋SHA-256 manifest・書いた直後に検証・中ほどを壊すと検証 NG で復元しない・既存の中身があるフォルダへ復元しない・vault 内への出力は拒否）。**未了**: 自動（定期）実行・暗号化・Git 連携 | 1 | `python/vault_backup.py` `test_vault_backup.py` `test/backup_net.sh` | - |
 | UT05 | Git連携、差分表示、バックアップ対象選 | Git連携、差分表示、バックアップ対象選別。 | Vim + API | 要確認 | 1 | Git 連携（要調査） | - |
 | UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 動作検証中（静的 HTML・検索・番号表。EXIF 除去・分割出力・ブラウザ実表示は未） | 3 | `python/export_site.py` `md_html.py` `docs/HTML_EXPORT.md` | P2 View API |
 | UT07 | PDF・EPUBへのエクスポート。 | PDF・EPUBへのエクスポート。 | Vim + API | 未実装 | 3 |  | P2 View API |

@@ -6469,6 +6469,81 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" vault のバックアップ・検証・復元（UT04）。  :GnosisBackup [出力先]  :GnosisBackupVerify アーカイブ  :GnosisBackupRestore アーカイブ 新しい空のフォルダ  :GnosisBackupList [出力先]
+" バックアップは tar.gz + manifest（SHA-256）で、元の vault は読むだけ。復元は新しい空のフォルダにだけ行い、既存の vault は上書きしない。
+" 出力先の既定は <vault>/../gnosis-backups（vault の外）。
+function! s:backup_run(args) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/vault_backup.py'] + a:args, 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  try
+    return json_decode(l:out)
+  catch
+    return {'error': l:out}
+  endtry
+endfunction
+
+function! s:backup_default_dir(root) abort
+  return fnamemodify(a:root, ':h') . '/gnosis-backups'
+endfunction
+
+function! gnosis#backup(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:out = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:backup_default_dir(l:root)
+  if stridx(l:out . '/', l:root . '/') == 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('バックアップ先は vault の外にしてください') | echohl NONE
+    return
+  endif
+  let l:r = s:backup_run([l:root, 'backup', l:out])
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('バックアップしました（%d ファイル・検証 %s）: %s'), get(l:r, 'files', 0), get(l:r, 'verified', 0) ? 'OK' : 'NG', get(l:r, 'archive', ''))
+endfunction
+
+function! gnosis#backup_verify(archive) abort
+  let l:r = s:backup_run(['verify', fnamemodify(a:archive, ':p')])
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  echo 'Gnosis: ' . (get(l:r, 'ok', 0) ? printf(gnosis#i18n#tr('検証 OK（%d ファイル）'), get(l:r, 'files', 0)) : printf(gnosis#i18n#tr('検証 NG（問題 %d 件）'), len(get(l:r, 'problems', []))))
+endfunction
+
+function! gnosis#backup_restore(archive, newdir) abort
+  let l:r = s:backup_run(['restore', fnamemodify(a:archive, ':p'), fnamemodify(a:newdir, ':p')])
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('復元しました（%d ファイル・検証 %s）: %s'), get(l:r, 'restored', 0), get(l:r, 'verified', 0) ? 'OK' : 'NG', a:newdir)
+endfunction
+
+function! gnosis#backup_list(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root) && a:0 == 0
+    return
+  endif
+  let l:dir = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:backup_default_dir(substitute(fnamemodify(l:root, ':p'), '/$', '', ''))
+  let l:r = s:backup_run(['list', l:dir])
+  if type(l:r) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = ['# ' . gnosis#i18n#tr('バックアップの一覧'), '']
+  for l:b in l:r
+    call add(l:lines, printf('- %s — %s（%s ファイル）', get(l:b, 'archive', ''), get(l:b, 'created', ''), get(l:b, 'files', '?')))
+  endfor
+  if empty(l:r)
+    call add(l:lines, gnosis#i18n#tr('- なし'))
+  endif
+  call s:ga_show(l:dir, l:lines, {})
+endfunction
+
 " バックリンクと未リンクの言及（ED01・ED02）。今のノートを指している他のノートを、関係の種類と該当行つきで一覧する。読み取り専用。Enter でそのノートへ。
 function! gnosis#backlinks() abort
   let l:root = s:get_pkm_root()

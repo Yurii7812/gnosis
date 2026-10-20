@@ -22,8 +22,12 @@ gnosis#autosync_log
 gnosis#autosync_on_save
 gnosis#autosync_problem
 gnosis#backlinks
+gnosis#backup
+gnosis#backup_list
+gnosis#backup_restore
 gnosis#backup_vault
 gnosis#backup_vault_with
+gnosis#backup_verify
 gnosis#before_write_viminfo
 gnosis#branch#add_links
 gnosis#branch#add_parent_links
