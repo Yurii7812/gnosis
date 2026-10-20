@@ -63,6 +63,7 @@ gnosis#color#mix
 gnosis#color#normalize
 gnosis#color#on_note_enter
 gnosis#color#refresh
+gnosis#compat
 gnosis#conceal_eol_fix
 gnosis#conflict#disk_changed
 gnosis#conflict#handle
@@ -221,6 +222,7 @@ gnosis#paste_charwise
 gnosis#paste_clipboard
 gnosis#paste_clipboard_link_here
 gnosis#perf_diag
+gnosis#profile
 gnosis#push_history
 gnosis#python_cmd
 gnosis#query

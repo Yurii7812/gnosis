@@ -163,11 +163,11 @@
 | UT05 | Git連携、差分表示、バックアップ対象選 | Git連携、差分表示、バックアップ対象選別。 | Vim + API | 要確認 | 1 | Git 連携（要調査） | - |
 | UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 動作検証中（静的 HTML・検索・番号表。EXIF 除去・分割出力・ブラウザ実表示は未） | 3 | `python/export_site.py` `md_html.py` `docs/HTML_EXPORT.md` | P2 View API |
 | UT07 | PDF・EPUBへのエクスポート。 | PDF・EPUBへのエクスポート。 | Vim + API | 未実装 | 3 |  | P2 View API |
-| UT08 | Markdown互換性検査。 | Markdown互換性検査。 | Vim + API | 未実装 | 3 |  | P2 View API |
+| UT08 | Markdown互換性検査。 | Markdown互換性検査。 | Vim + API | 動作検証中（error: 閉じないコードブロック/front matter・表の列数・文字化け／warn: 空白を含むリンク先・BOM・改行混在・画像なし・見出し重複／info: 階層の飛び・Gnosis 拡張記法）。見つけるだけで直さない。実際に GitHub/Obsidian 等で開いての確認は未。`:GnosisCompat` `:GnosisProfile` | 3 | `python/diagnose.py` `test_diagnose.py` `test/diagnose_net.sh` | P2 View API |
 | UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 動作検証中（派生 SQLite。消しても作り直せる。書き出しサイト内の検索も別にある） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | UT10 | 設定プロファイル、vaultごとの設定。 | 設定プロファイル、vaultごとの設定。 | Vim + API | 要確認 | 1 | vault ごとの設定 `.gnosis/settings.json` | - |
 | UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 一部（表示専用ビューの種類を layout.js の KINDS と panes.js の PAGES に登録する形。外部プラグインが登録する公開 API・Vim 側のプラグイン API は未） | 2 |  | P1 共通ID |
-| UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 未実装 | 1 |  | - |
+| UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 一部（読み込み・関係グラフ・全文索引・類似度の準備の処理時間と大きいノート。vault に書かない。UI 操作の応答時間・メモリは未計測）。`:GnosisCompat` `:GnosisProfile` | 1 | `python/diagnose.py` `test_diagnose.py` `test/diagnose_net.sh` | - |
 | UT13 | Undo可能な一括変更、ゴミ箱、復元、d | Undo可能な一括変更、ゴミ箱、復元、dry-run。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisTrash*`（ゴミ箱の送り・一覧・空に・復元あり）。dry-run・一括変更の Undo は無い | - |
 | UT14 | インポート・エクスポート・移行の再開／検 | インポート・エクスポート・移行の再開／検証。 | Vim + API | 未実装 | 1 |  | - |
 ## 追加ID（原本 §3・§6・§7・§8・§10 から台帳化）

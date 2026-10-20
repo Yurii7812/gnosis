@@ -6827,6 +6827,36 @@ function! gnosis#ir_rate(id, grade) abort
   endif
 endfunction
 
+" Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
+function! s:dg_show(args) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/diagnose.py', l:root] + a:args + ['--md'], 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#compat(...) abort
+  call s:dg_show(['compat'] + (a:0 > 0 && !empty(a:1) ? ['--level', a:1] : []))
+endfunction
+
+function! gnosis#profile() abort
+  call s:dg_show(['profile'])
+endfunction
+
 " ノートの名前変更・移動（UT03）。他のノートのリンク・取り込み記録も更新し、取り消せる。
 "   :GnosisRename[!] [新しい名前]  （! は確認なし）   :GnosisRenameUndo[!]
 function! s:rn_run(args) abort
