@@ -25,8 +25,83 @@ function! s:on_msg(ch, msg) abort
       call gnosis#settings#activate(l:m.vault)
       redraw!
       call s:snapshot(1)
+    elseif type(l:m) == v:t_dict && type(get(l:m, 'id', '')) == v:t_number
+      call s:gui_command(l:m)
     endif
   endwhile
+endfunction
+
+" GUI 編集モード（アプリ）からの知らせ。どれも id つきで、終わったら {"ack": id, ...} を 1 行返す。
+"   save   … 今のバッファに未保存の変更があれば、ふだんの保存（gnosis#save_current_note）をする
+"   commit … GUI が編集した本文 text を file のバッファに入れて、ふだんの :write で保存する（保存時の処理が全部走る）
+"            reload=1 なら先にディスクから読み直す（外の変更を取り込んでから上書きするとき）
+"   open   … file を開く（ふだんのジャンプ履歴に積む）
+"   reload … 外で変わったファイルを読み直す（GUI 編集から Vim に戻るとき）
+function! s:ack(id, d) abort
+  if ch_status(s:ch) ==# 'open'
+    call ch_sendraw(s:ch, json_encode(extend({'ack': a:id}, a:d)) . "\n")
+  endif
+endfunction
+
+function! s:same_file(a, b) abort
+  return fnamemodify(a:a, ':p') ==# fnamemodify(a:b, ':p')
+endfunction
+
+function! s:gui_command(m) abort
+  let l:t = get(a:m, 'type', '')
+  let l:r = {'ok': 0, 'file': expand('%:p')}
+  try
+    if l:t ==# 'save'
+      if &modified && &buftype ==# '' && !empty(expand('%:p'))
+        silent! call gnosis#save_current_note()
+      endif
+      let l:r.ok = !&modified
+    elseif l:t ==# 'commit' && type(get(a:m, 'file', 0)) == v:t_string && type(get(a:m, 'text', 0)) == v:t_string
+      if !s:same_file(expand('%:p'), a:m.file)
+        if &modified | throw 'unsaved changes in the current buffer' | endif
+        execute 'silent! edit ' . fnameescape(a:m.file)
+      endif
+      if get(a:m, 'reload', 0) && !&modified
+        silent! edit!
+      endif
+      if &modified | throw 'the buffer has unsaved changes' | endif
+      let l:lines = split(a:m.text, "\n", 1)
+      if len(l:lines) > 1 && l:lines[-1] ==# ''
+        call remove(l:lines, -1)
+      endif
+      call setline(1, l:lines)
+      if line('$') > len(l:lines)
+        silent execute (len(l:lines) + 1) . ',$delete _'
+      endif
+      let v:errmsg = ''
+      silent! write
+      let l:r.ok = !&modified && empty(v:errmsg)
+      if !l:r.ok | let l:r.error = v:errmsg | endif
+    elseif l:t ==# 'open' && type(get(a:m, 'file', 0)) == v:t_string
+      if &modified && &buftype ==# '' && !empty(expand('%:p'))
+        silent! call gnosis#save_current_note()
+      endif
+      if !s:same_file(expand('%:p'), a:m.file)
+        silent! call gnosis#push_history()
+        execute 'silent! edit ' . fnameescape(a:m.file)
+      endif
+      let l:r.ok = s:same_file(expand('%:p'), a:m.file)
+    elseif l:t ==# 'reload'
+      silent! checktime
+      if !&modified && &buftype ==# '' && !empty(expand('%:p')) && filereadable(expand('%:p'))
+        let l:v = winsaveview()
+        silent! edit
+        call winrestview(l:v)
+      endif
+      let l:r.ok = 1
+    endif
+  catch
+    let l:r.error = v:exception
+  endtry
+  let l:r.file = expand('%:p')
+  let l:r.mod = &modified ? 1 : 0
+  call s:ack(a:m.id, l:r)
+  call s:snapshot(1)
 endfunction
 
 let s:ch = ch_open('127.0.0.1:' . $GNOSIS_GUI_PORT, {'mode': 'raw', 'waittime': 3000, 'callback': function('s:on_msg')})

@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
+import { createGuiEdit } from "./guiedit.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -11,6 +12,7 @@ const STRIP_ROWS = 2; // 普段は端末の下の 2 行（ステータス行・�
 let term = null;
 let fit = null;
 let view = null;
+let guiEdit = null; // GUI 編集モード（src/guiedit.js）
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
@@ -136,6 +138,12 @@ function applyLook(s) {
 
 function applyState(s) {
   applyLook(s);
+  if (guiEdit && guiEdit.isOn()) {
+    // GUI 編集中は、画面が編集の主体。Vim の状態（別のノートを開いた・保存時の同期で内容が変わった）だけ取り込む
+    last = { ...last, file: s.file !== undefined ? s.file : last.file, bt: s.bt !== undefined ? s.bt : last.bt };
+    guiEdit.onVimState(s);
+    return;
+  }
   const prevCur = last.cur;
   last = { ...last, ...s, lines: undefined };
   if (viewInCmd) {
@@ -176,6 +184,38 @@ function applyState(s) {
     viewFollow = 0;
     view.revealCursor();
   }
+}
+
+// ---------------------------------------------------------------- モード（Real Vim / GUI 編集 / 閲覧専用）と、ツールバー
+// 排他。GUI 編集から出るときは、保存して Vim に読み直させる。保存できない（競合の確認待ちなど）ときは移らない。
+function currentMode() { return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim"; }
+
+async function setMode(m) {
+  if (m === currentMode()) return true;
+  if (guiEdit.isOn() && !(await guiEdit.leave())) return false;
+  if (m === "view") setViewOnly(true);
+  else if (m === "vim") { if (viewOnly) setViewOnly(false); term.focus(); }
+  else if (m === "gui") { if (viewOnly) setViewOnly(false); if (!(await guiEdit.enter())) { refreshModeUI(); return false; } }
+  refreshModeUI();
+  return true;
+}
+
+function refreshModeUI() {
+  const m = currentMode();
+  for (const b of document.querySelectorAll("#modes [data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
+  const tools = $("edit-tools");
+  if (tools) tools.hidden = m !== "gui";
+  if (m === "gui") { const el = $("mode"); el.textContent = "EDIT"; el.className = "mode edit"; $("file").textContent = (guiEdit.state().file || "").split("/").pop(); }
+}
+
+function initToolbar() {
+  for (const b of document.querySelectorAll("#modes [data-mode]")) b.addEventListener("click", () => setMode(b.dataset.mode));
+  for (const b of document.querySelectorAll("#edit-tools [data-cmd]")) {
+    // ボタンを押しても編集欄のフォーカス（選択）を失わない
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => { guiEdit.run(b.dataset.cmd); });
+  }
+  refreshModeUI();
 }
 
 // ---------------------------------------------------------------- 起動
@@ -364,8 +404,14 @@ function viewOnlyKey(e) {
 }
 
 // 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
-function onClick({ pos, link, alt }) {
+function onClick({ pos, link, href, alt, mod }) {
   if (pos == null) return;
+  // GUI 編集中: カーソルの移動はブラウザに任せる。描かれたリンクのクリック・Ctrl+クリックでそのノートを開く
+  if (guiEdit && guiEdit.isOn()) {
+    if (link && href) guiEdit.openAt(pos, href);
+    else if (mod) guiEdit.openAt(pos, "");
+    return;
+  }
   // Alt + クリック: リンクでも開かず、カーソルだけをそこへ動かす（zk → g などに使う）
   if (alt) link = false;
   if (viewOnly && !link) return; // 見るだけ: カーソルは動かさない（リンクだけ開く）
@@ -390,7 +436,13 @@ function showError(msg) {
 async function boot() {
   window.addEventListener("error", (e) => showError(e.message || e.error));
   window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
-  view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
+  view = createView({
+    parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick,
+    onCommand: (id) => (guiEdit ? guiEdit.run(id) : false),
+    onUserChange: (u) => guiEdit && guiEdit.onUserChange(u),
+  });
+  guiEdit = createGuiEdit({ view, gui, $, getLast: () => last, showError, onChange: () => refreshModeUI() });
+  initToolbar();
 
   term = new Terminal({
     fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -415,7 +467,8 @@ async function boot() {
       return sw ? false : !viewBlocks();
     }
     swallowed = false;
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setViewOnly(!viewOnly); return false; }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setMode(viewOnly ? "vim" : "view"); return false; }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") { e.preventDefault(); swallowed = true; setMode("gui"); return false; }
     if (viewBlocks()) { swallowed = true; viewOnlyKey(e); return false; }
     return true;
   });
@@ -436,9 +489,16 @@ async function boot() {
     const d = fitTerm();
     gui.resize(d.cols, d.rows);
   });
-  // どこを押しても、キー入力は端末（Vim）へ戻す
-  document.addEventListener("mousedown", () => setTimeout(() => { if (document.getElementById("launcher").hidden) term.focus(); }, 0));
-  window.addEventListener("focus", () => { if (document.getElementById("launcher").hidden) term.focus(); });
+  // どこを押しても、キー入力は端末（Vim）へ戻す。GUI 編集中は編集欄に戻す
+  const backToInput = () => { if (document.getElementById("launcher").hidden) { if (guiEdit.isOn()) { if (!document.activeElement || document.activeElement === document.body) view.focus(); } else term.focus(); } };
+  document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
+  window.addEventListener("focus", backToInput);
+  // GUI 編集中（編集欄にフォーカスがあるとき）のモード切替キー
+  document.addEventListener("keydown", (e) => {
+    if (!guiEdit.isOn() || !e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.code === "KeyV") { e.preventDefault(); setMode("view"); }
+    else if (e.code === "KeyE") { e.preventDefault(); setMode("vim"); }
+  });
 
   // デバッグ・テスト用フック
   window.__gui = {
@@ -448,6 +508,7 @@ async function boot() {
     isExpanded: () => expanded,
     isViewOnly: () => viewOnly,
     setViewOnly,
+    setMode, currentMode, guiEdit: () => guiEdit,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

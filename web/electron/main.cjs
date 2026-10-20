@@ -21,6 +21,7 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const cfg = require("./config.cjs");
+const noteio = require("./noteio.cjs");
 
 const env = (name) => process.env["GNOSIS_" + name] || process.env["PKM_" + name] || "";
 const WEB = path.resolve(__dirname, "..");
@@ -65,6 +66,20 @@ let bridge = null;
 let server = null;
 let vimSock = null; // Vim（gui.vim）とつないだソケット。アプリ → Vim の知らせにも使う
 let activeVault = "";
+let noteRootDir = ""; // 開いている vault のノートのフォルダ（GUI 編集モードの読み書きの範囲）
+let ackSeq = 0;
+const pendingAck = new Map(); // id → resolve（Vim へ送った知らせの応答待ち）
+
+// Vim（gui.vim）へ知らせを送り、{ack: id, ...} の応答を待つ。Vim がつながっていない・応答が無いときは {ok:false, error}。
+function vimCall(msg, timeoutMs = 10000) {
+  return new Promise((resolve) => {
+    if (!vimSock) return resolve({ ok: false, error: "Vim がつながっていません" });
+    const id = ++ackSeq;
+    const timer = setTimeout(() => { pendingAck.delete(id); resolve({ ok: false, error: "Vim から応答がありません" }); }, timeoutMs);
+    pendingAck.set(id, (r) => { clearTimeout(timer); resolve(r); });
+    try { vimSock.write(JSON.stringify({ ...msg, id }) + "\n"); } catch (e) { clearTimeout(timer); pendingAck.delete(id); resolve({ ok: false, error: String(e) }); }
+  });
+}
 let newVaults = new Set(); // このアプリで作ったばかりの vault（Index を黙って作る）
 
 function startServer() {
@@ -80,6 +95,7 @@ function startServer() {
           const line = buf.slice(0, i);
           buf = buf.slice(i + 1);
           let st; try { st = JSON.parse(line); } catch { continue; } /* 壊れた行は捨てる */
+          if (st && typeof st.ack === "number") { const f = pendingAck.get(st.ack); if (f) { pendingAck.delete(st.ack); f(st); } continue; }
           if (st.vault && !cfg.same(st.vault, activeVault)) { activeVault = st.vault; }
           send("vim:state", st);
         }
@@ -133,6 +149,7 @@ async function startVim(cols, rows, vaultPath) {
   if (vault) {
     activeVault = cfg.normalize(vault);
     const root = EXPLICIT_ROOT && !vaultPath ? EXPLICIT_ROOT : cfg.noteRoot(vault);
+    noteRootDir = root;
     args.push("--cmd", `let g:gnosis_root = ${vimStr(root.replace(/\\/g, "/") + "/")}`);
     if (newVaults.has(cfg.normalize(vault))) args.push("--cmd", "let g:gnosis_new_vault = 1");
   }
@@ -335,6 +352,44 @@ ipcMain.on("vim:start", (_e, cols, rows, vault) => startVim(cols, rows, vault));
 ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* ignore */ } });
 ipcMain.on("pty:resize", (_e, cols, rows) => { try { bridge?.resize(cols, rows); } catch { /* ignore */ } });
 ipcMain.on("app:quit", () => app.quit());
+
+// ---- GUI 編集モード（アプリの編集モード。書き込みは Vim が普通の :write で行い、保存時の処理が全部走る） ----
+const noteErr = (e) => ({ ok: false, error: String((e && e.message) || e) });
+// モードに入る前: Vim の未保存の変更を保存させる。{ok, file}
+ipcMain.handle("gui:enter", async () => {
+  const r = await vimCall({ type: "save" });
+  return { ok: !!r.ok, file: r.file || "", error: r.error || "" };
+});
+// ディスクのノートを読む（内容と、保存のときに添える内容ハッシュ）
+ipcMain.handle("note:read", (_e, file) => { try { return { ok: true, ...noteio.readNote(noteRootDir, file) }; } catch (e) { return noteErr(e); } });
+// 確定。force=false で、ディスクが読んだときと違えば競合を返す。force=true は、ディスクの版を .state/conflicts に残して上書き。
+ipcMain.handle("note:commit", async (_e, file, text, expectedHash, force) => {
+  try {
+    const cur = noteio.readNote(noteRootDir, file);
+    const conflict = cur.hash !== expectedHash;
+    let savedAside = "";
+    if (conflict) {
+      if (!force) return { ok: false, conflict: true, disk: { text: cur.text, hash: cur.hash } };
+      savedAside = noteio.saveAside(noteRootDir, file, cur.text, "disk");
+    }
+    if (!conflict && cur.text === text) return { ok: true, hash: cur.hash, text: cur.text, unchanged: true };
+    if (vimSock) {
+      const r = await vimCall({ type: "commit", file, text, reload: conflict });
+      if (!r.ok) return { ok: false, error: r.error || "Vim が保存できませんでした" };
+    } else {
+      noteio.writeNote(noteRootDir, file, text, cur.hash, { force: true });
+    }
+    const now = noteio.readNote(noteRootDir, file); // 保存時の処理（記号の除去など）で内容が変わっているかもしれない
+    return { ok: true, hash: now.hash, text: now.text, savedAside };
+  } catch (e) { return noteErr(e); }
+});
+// 競合で捨てる側（自分の版）を .state/conflicts に残す
+ipcMain.handle("note:aside", (_e, file, text) => { try { noteio.inside(noteRootDir, file); return { ok: true, path: noteio.saveAside(noteRootDir, file, String(text), "mine") }; } catch (e) { return noteErr(e); } });
+ipcMain.handle("note:resolve", (_e, file, href) => { try { return { ok: true, ...noteio.resolveLink(noteRootDir, file, href) }; } catch (e) { return noteErr(e); } });
+// ノートを開く（Vim のバッファとして。GUI 編集モードの画面は、そのあとの Vim の状態で入れ替わる）
+ipcMain.handle("note:open", async (_e, file) => { const r = await vimCall({ type: "open", file }); return { ok: !!r.ok, file: r.file || "", error: r.error || "" }; });
+// GUI 編集から Vim に戻る: 外で変わったファイルを Vim に読み直させる
+ipcMain.handle("gui:leave", async () => { const r = await vimCall({ type: "reload" }); return { ok: !!r.ok, error: r.error || "" }; });
 
 // 画像: ノートのあるフォルダからの相対パスで読む（vault の外は読まない）
 ipcMain.handle("img:read", async (_e, file, src) => {

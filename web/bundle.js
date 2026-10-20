@@ -15724,8 +15724,8 @@ ${h3.join(`
       let line = this.lineAt(cursor.head, cursor.assoc);
       if (!line)
         return;
-      let lineStart = line.posAtStart;
-      if (cursor.head == lineStart || cursor.head == lineStart + line.length)
+      let lineStart2 = line.posAtStart;
+      if (cursor.head == lineStart2 || cursor.head == lineStart2 + line.length)
         return;
       let before = this.coordsAt(cursor.head, -1), after = this.coordsAt(cursor.head, 1);
       if (!before || !after || before.bottom > after.top)
@@ -18838,9 +18838,9 @@ ${h3.join(`
         let gap = find(current, (gap2) => gap2.from >= line.from && gap2.to <= line.to && Math.abs(gap2.from - from) < halfMargin && Math.abs(gap2.to - to) < halfMargin && !avoid.some((pos) => gap2.from < pos && gap2.to > pos));
         if (!gap) {
           if (to < line.to && mayMeasure && wrapping && mayMeasure.visibleRanges.some((r) => r.from <= to && r.to >= to)) {
-            let lineStart = mayMeasure.moveToLineBoundary(EditorSelection.cursor(to), false, true).head;
-            if (lineStart > from)
-              to = lineStart;
+            let lineStart2 = mayMeasure.moveToLineBoundary(EditorSelection.cursor(to), false, true).head;
+            if (lineStart2 > from)
+              to = lineStart2;
           }
           let size = this.gapSize(line, from, to, structure);
           let displaySize = wrapping || size < 2e6 ? size : 2e6;
@@ -24749,13 +24749,13 @@ ${h3.join(`
       return null;
     let sim = context.options.simulateBreak;
     let openLine = context.state.doc.lineAt(openToken.from);
-    let lineEnd2 = sim == null || sim <= openLine.from ? openLine.to : Math.min(openLine.to, sim);
+    let lineEnd3 = sim == null || sim <= openLine.from ? openLine.to : Math.min(openLine.to, sim);
     for (let pos = openToken.to; ; ) {
       let next = tree.childAfter(pos);
       if (!next || next == last3)
         return null;
       if (!next.type.isSkipped) {
-        if (next.from >= lineEnd2)
+        if (next.from >= lineEnd3)
           return null;
         let space4 = /^ */.exec(openLine.text.slice(openToken.to - openLine.from))[0].length;
         return { from: openToken.from, to: openToken.to + space4 };
@@ -25304,20 +25304,20 @@ ${h3.join(`
       this.fieldPositions = fieldPositions;
     }
     instantiate(state, pos) {
-      let text = [], lineStart = [pos];
+      let text = [], lineStart2 = [pos];
       let lineObj = state.doc.lineAt(pos), baseIndent = /^\s*/.exec(lineObj.text)[0];
       for (let line of this.lines) {
         if (text.length) {
           let indent = baseIndent, tabs = /^\t*/.exec(line)[0].length;
           for (let i = 0; i < tabs; i++)
             indent += state.facet(indentUnit);
-          lineStart.push(pos + indent.length - tabs);
+          lineStart2.push(pos + indent.length - tabs);
           line = indent + line.slice(tabs);
         }
         text.push(line);
         pos += line.length + 1;
       }
-      let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart[pos2.line] + pos2.from, lineStart[pos2.line] + pos2.to));
+      let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart2[pos2.line] + pos2.from, lineStart2[pos2.line] + pos2.to));
       return { text, ranges };
     }
     static parse(template) {
@@ -27166,7 +27166,7 @@ ${h3.join(`
       this.cursor = null;
       this.fragmentEnd = -1;
     }
-    moveTo(pos, lineStart) {
+    moveTo(pos, lineStart2) {
       while (this.fragment && this.fragment.to <= pos)
         this.nextFragment();
       if (!this.fragment || this.fragment.from > (pos ? pos - 1 : 0))
@@ -27188,7 +27188,7 @@ ${h3.join(`
           return false;
       for (; ; ) {
         if (c.from >= rPos)
-          return this.fragment.from <= lineStart;
+          return this.fragment.from <= lineStart2;
         if (!c.childAfter(rPos))
           return false;
       }
@@ -32866,9 +32866,15 @@ ${h3.join(`
     })
   });
   var setVim = StateEffect.define();
+  var guiMode = Facet.define({ combine: (v2) => v2.some(Boolean) });
+  var external = Annotation.define();
   var vimField = StateField.define({
     create: () => ({ pos: 0, mode: "n", visFrom: null, visTo: null }),
     update(v2, tr2) {
+      if (tr2.state.facet(guiMode)) {
+        const h3 = tr2.newSelection.main.head;
+        return v2.pos === h3 && v2.mode === "i" && v2.visFrom == null ? v2 : { pos: h3, mode: "i", visFrom: null, visTo: null };
+      }
       for (const e of tr2.effects) if (e.is(setVim)) return e.value;
       return v2;
     }
@@ -32966,11 +32972,36 @@ ${h3.join(`
   ]);
   function createView(opts) {
     const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
+    const editableC = new Compartment();
+    const readOnlyExt = [EditorView.editable.of(false), EditorState.readOnly.of(true)];
+    const editExt = [EditorView.editable.of(true), EditorState.readOnly.of(false), guiMode.of(true)];
+    const guiKeys = (id2) => (view4) => {
+      if (!view4.state.facet(guiMode)) return false;
+      return opts.onCommand ? opts.onCommand(id2) !== false : false;
+    };
     const state = EditorState.create({
       doc: "",
       extensions: [
-        EditorView.editable.of(false),
-        EditorState.readOnly.of(true),
+        editableC.of(readOnlyExt),
+        // GUI 編集のキー（編集モードのときだけ効く。ボタン・メニューと同じコマンド ID を呼ぶ）
+        Prec.highest(keymap.of([
+          { key: "Mod-z", run: guiKeys("undo"), preventDefault: true },
+          { key: "Mod-y", run: guiKeys("redo"), preventDefault: true },
+          { key: "Mod-Shift-z", run: guiKeys("redo"), preventDefault: true },
+          { key: "Mod-s", run: guiKeys("save"), preventDefault: true },
+          { key: "Mod-b", run: guiKeys("bold"), preventDefault: true },
+          { key: "Mod-i", run: guiKeys("italic"), preventDefault: true },
+          { key: "Mod-e", run: guiKeys("code"), preventDefault: true },
+          { key: "Mod-k", run: guiKeys("link"), preventDefault: true },
+          { key: "Enter", run: guiKeys("enter") },
+          { key: "Tab", run: guiKeys("indent") },
+          { key: "Shift-Tab", run: guiKeys("outdent") }
+        ])),
+        EditorView.updateListener.of((u) => {
+          if (!u.docChanged || !u.state.facet(guiMode)) return;
+          if (u.transactions.some((tr2) => tr2.annotation(external))) return;
+          opts.onUserChange?.(u);
+        }),
         EditorView.lineWrapping,
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(mdHighlight),
@@ -32985,7 +33016,7 @@ ${h3.join(`
           mousedown: (e, view4) => {
             const el2 = e.target?.closest?.("[data-md-href]");
             const pos = view4.posAtCoords({ x: e.clientX, y: e.clientY });
-            opts.onClick?.({ pos, link: !!el2, doc: view4.state.doc, alt: e.altKey });
+            opts.onClick?.({ pos, link: !!el2, href: el2 ? el2.getAttribute("data-md-href") : "", doc: view4.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
             return false;
           }
         }),
@@ -33002,6 +33033,48 @@ ${h3.join(`
     const api = {
       view: view3,
       getText: () => view3.state.doc.toString(),
+      // GUI 編集モードの入り切り。入ると編集できる状態になり、Vim の状態の反映（カーソル・ビジュアル）はやめる
+      setEditable(on2) {
+        this.editing = !!on2;
+        view3.dispatch({ effects: editableC.reconfigure(on2 ? editExt : readOnlyExt) });
+        if (!on2) view3.dispatch({ effects: setVim.of({ pos: view3.state.selection.main.head, mode: "n", visFrom: null, visTo: null }) });
+      },
+      isEditing: () => !!api.editing,
+      focus: () => view3.focus(),
+      selection: () => {
+        const r = view3.state.selection.main;
+        return { from: r.from, to: r.to, anchor: r.anchor, head: r.head };
+      },
+      // editcmds.js の結果（{changes, anchor, head}）を適用する。ユーザーの編集として扱う（履歴・自動保存の対象）
+      applyEdit(result) {
+        if (!result) return false;
+        view3.dispatch({ changes: result.changes, selection: { anchor: result.anchor, head: result.head }, scrollIntoView: true, userEvent: "input" });
+        view3.focus();
+        return true;
+      },
+      // 履歴の取り消し・やり直しで文書全体を入れ替える（変わったところだけ差し替え、カーソルはその末尾へ）。
+      // ユーザーの編集として扱わない（履歴に積まない・自動保存の「変更」として数えるのは呼び出し側）
+      replaceAll(text) {
+        const cur = view3.state.doc.toString();
+        if (cur === text) return;
+        let a = 0;
+        const max = Math.min(cur.length, text.length);
+        while (a < max && cur.charCodeAt(a) === text.charCodeAt(a)) a++;
+        let b2 = 0;
+        while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
+        const insert2 = text.slice(a, text.length - b2);
+        view3.dispatch({ changes: { from: a, to: cur.length - b2, insert: insert2 }, selection: { anchor: a + insert2.length }, annotations: external.of(true), scrollIntoView: true });
+      },
+      // 位置 pos にあるマークダウンのリンク [表示](先) の先（無ければ ""）。編集中の行（記法が見えている行）でリンクを開くのに使う
+      linkAt(pos) {
+        const line = view3.state.doc.lineAt(pos);
+        const re2 = /\[(?:\\.|[^\]\\])*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+        let m;
+        while ((m = re2.exec(line.text)) !== null) {
+          if (pos >= line.from + m.index && pos <= line.from + m.index + m[0].length) return m[1];
+        }
+        return "";
+      },
       // 変わったところだけ差し替える（スクロールや選択を乱さない）
       setText(text) {
         const cur = view3.state.doc.toString();
@@ -33011,7 +33084,7 @@ ${h3.join(`
         while (a < max && cur.charCodeAt(a) === text.charCodeAt(a)) a++;
         let b2 = 0;
         while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
-        view3.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) } });
+        view3.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) }, annotations: external.of(true) });
       },
       setLinkSource(on2) {
         if (cfg.linkSource === !!on2) return;
@@ -33800,6 +33873,467 @@ ${h3.join(`
     render();
   }
 
+  // src/editcmds.js
+  function lineStart(doc2, pos) {
+    const i = doc2.lastIndexOf("\n", pos - 1);
+    return i < 0 ? 0 : i + 1;
+  }
+  function lineEnd2(doc2, pos) {
+    const i = doc2.indexOf("\n", pos);
+    return i < 0 ? doc2.length : i;
+  }
+  function toggleWrap(doc2, from, to, open, close = open) {
+    const before = doc2.slice(Math.max(0, from - open.length), from);
+    const after = doc2.slice(to, to + close.length);
+    if (from !== to && before === open && after === close) {
+      return { changes: [{ from: from - open.length, to: from, insert: "" }, { from: to, to: to + close.length, insert: "" }], anchor: from - open.length, head: to - open.length };
+    }
+    const sel2 = doc2.slice(from, to);
+    if (from !== to && sel2.startsWith(open) && sel2.endsWith(close) && sel2.length >= open.length + close.length) {
+      const inner = sel2.slice(open.length, sel2.length - close.length);
+      return { changes: [{ from, to, insert: inner }], anchor: from, head: from + inner.length };
+    }
+    if (from === to) return { changes: [{ from, to, insert: open + close }], anchor: from + open.length, head: from + open.length };
+    return { changes: [{ from, to, insert: open + sel2 + close }], anchor: from + open.length, head: from + open.length + sel2.length };
+  }
+  function setHeading(doc2, pos, level) {
+    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
+    const line = doc2.slice(a, b2);
+    const m = /^(#{1,6})\s+/.exec(line);
+    const prefix = "#".repeat(level) + " ";
+    let insert2, delta;
+    if (m && m[1].length === level) {
+      insert2 = line.slice(m[0].length);
+      delta = -m[0].length;
+    } else if (m) {
+      insert2 = prefix + line.slice(m[0].length);
+      delta = prefix.length - m[0].length;
+    } else {
+      insert2 = prefix + line;
+      delta = prefix.length;
+    }
+    const p = Math.max(a, pos + delta);
+    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: p, head: p };
+  }
+  var PREFIXES = { bullet: /^(\s*)[-*+]\s+(?!\[[ xX]\])/, task: /^(\s*)[-*+]\s+\[[ xX]\]\s+/, quote: /^(\s*)>\s?/, number: /^(\s*)\d+[.)]\s+/ };
+  var MAKE = { bullet: (ind) => ind + "- ", task: (ind) => ind + "- [ ] ", quote: (ind) => ind + "> ", number: (ind, n) => ind + (n + 1) + ". " };
+  function toggleLinePrefix(doc2, from, to, kind) {
+    const re2 = PREFIXES[kind];
+    const a = lineStart(doc2, from), b2 = lineEnd2(doc2, to > from && doc2[to - 1] === "\n" ? to - 1 : to);
+    const lines = doc2.slice(a, b2).split("\n");
+    const allHave = lines.filter((l) => l.trim()).every((l) => re2.test(l));
+    const out = lines.map((l, i) => {
+      if (!l.trim()) return l;
+      if (allHave) return l.replace(re2, "$1");
+      const stripped = l.replace(PREFIXES.bullet, "$1").replace(PREFIXES.task, "$1").replace(PREFIXES.number, "$1").replace(PREFIXES.quote, "$1");
+      const ind = /^\s*/.exec(stripped)[0];
+      return MAKE[kind](ind, i) + stripped.slice(ind.length);
+    });
+    const insert2 = out.join("\n");
+    if (insert2 === doc2.slice(a, b2)) return null;
+    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: a, head: a + insert2.length };
+  }
+  function toggleTaskAt(doc2, pos) {
+    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
+    const line = doc2.slice(a, b2);
+    const m = /^(\s*[-*+]\s+\[)([ xX])(\])/.exec(line);
+    if (!m) return null;
+    const at2 = a + m[1].length;
+    return { changes: [{ from: at2, to: at2 + 1, insert: m[2] === " " ? "x" : " " }], anchor: pos, head: pos };
+  }
+  function makeLink(doc2, from, to, url) {
+    const sel2 = doc2.slice(from, to);
+    const insert2 = `[${sel2}](${url})`;
+    const inner = from + 1;
+    return { changes: [{ from, to, insert: insert2 }], anchor: sel2 ? from + insert2.length : inner, head: sel2 ? from + insert2.length : inner };
+  }
+  function enterInList(doc2, pos) {
+    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
+    if (pos !== b2) return null;
+    const line = doc2.slice(a, b2);
+    const m = /^(\s*)([-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?(.*)$/.exec(line);
+    if (!m) return null;
+    if (m[4].trim() === "") {
+      return { changes: [{ from: a, to: b2, insert: m[1] }], anchor: a + m[1].length, head: a + m[1].length };
+    }
+    const bullet = /^\d/.test(m[2]) ? parseInt(m[2], 10) + 1 + m[2].slice(-1) : m[2];
+    const prefix = m[1] + bullet + " " + (m[3] ? "[ ] " : "");
+    return { changes: [{ from: pos, to: pos, insert: "\n" + prefix }], anchor: pos + 1 + prefix.length, head: pos + 1 + prefix.length };
+  }
+  function indentLines(doc2, from, to, dir) {
+    const a = lineStart(doc2, from), b2 = lineEnd2(doc2, to);
+    const lines = doc2.slice(a, b2).split("\n");
+    let changed = false;
+    const out = lines.map((l) => {
+      if (!/^\s*([-*+]|\d+[.)])\s/.test(l)) return l;
+      if (dir > 0) {
+        changed = true;
+        return "  " + l;
+      }
+      const m = /^( {1,2}|\t)/.exec(l);
+      if (!m) return l;
+      changed = true;
+      return l.slice(m[0].length);
+    });
+    if (!changed) return null;
+    const insert2 = out.join("\n");
+    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: a, head: a + insert2.length };
+  }
+
+  // src/history.js
+  function createHistory({ limit = 200, group = 700 } = {}) {
+    let undo = [];
+    let redo = [];
+    let lastTime = 0;
+    return {
+      // 変更の前の文書 prev を覚える（ユーザーの編集のたびに呼ぶ）
+      // prev は文字列、または文字列を返す関数（まとめる編集のときは呼ばない。毎回の入力で文書全体を文字列にしないため）
+      record(prev, now = Date.now()) {
+        if (undo.length && now - lastTime < group) {
+          lastTime = now;
+          return;
+        }
+        undo.push({ doc: typeof prev === "function" ? prev() : prev });
+        if (undo.length > limit) undo.shift();
+        redo = [];
+        lastTime = now;
+      },
+      canUndo: () => undo.length > 0,
+      canRedo: () => redo.length > 0,
+      // 戻る。今の文書 current を redo に積み、戻り先の文書を返す（無ければ null）
+      undo(current) {
+        const s15 = undo.pop();
+        if (!s15) return null;
+        redo.push({ doc: current });
+        lastTime = 0;
+        return s15.doc;
+      },
+      redo(current) {
+        const s15 = redo.pop();
+        if (!s15) return null;
+        undo.push({ doc: current });
+        lastTime = 0;
+        return s15.doc;
+      },
+      // 文書が入れ替わったとき（別のノートを開いた・読み直した）は履歴を捨てる
+      reset() {
+        undo = [];
+        redo = [];
+        lastTime = 0;
+      },
+      size: () => undo.length
+    };
+  }
+
+  // src/guiedit.js
+  var SAVE_DELAY = 1e3;
+  function createGuiEdit({ view: view3, gui: gui2, $: $4, getLast, showError: showError2, onChange }) {
+    let on2 = false;
+    let file = "";
+    let hash2 = "";
+    let dirty = false;
+    let saving = false;
+    let again = false;
+    let timer = null;
+    let paused = false;
+    let loading = false;
+    const hist = createHistory();
+    const sel2 = () => view3.selection();
+    const doc2 = () => view3.getText();
+    function status() {
+      const el2 = $4("save-state");
+      if (el2) {
+        el2.textContent = !on2 ? "" : paused ? "\u7AF6\u5408: \u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" : saving ? "\u4FDD\u5B58\u4E2D\u2026" : dirty ? "\u672A\u4FDD\u5B58" : "\u4FDD\u5B58\u6E08\u307F";
+        el2.className = "save-state" + (paused ? " conflict" : dirty ? " dirty" : "");
+      }
+      const d = $4("dirty");
+      if (d && on2) d.textContent = dirty ? "\u25CF" : "";
+      for (const b2 of document.querySelectorAll("#edit-tools [data-cmd='undo']")) b2.disabled = !hist.canUndo();
+      for (const b2 of document.querySelectorAll("#edit-tools [data-cmd='redo']")) b2.disabled = !hist.canRedo();
+      onChange?.(on2);
+    }
+    async function load(f) {
+      loading = true;
+      try {
+        const r = await gui2.readNote(f);
+        if (!r.ok) throw new Error(r.error || "\u8AAD\u307F\u8FBC\u3081\u307E\u305B\u3093");
+        file = f;
+        hash2 = r.hash;
+        dirty = false;
+        paused = false;
+        view3.setText(r.text);
+        hist.reset();
+      } finally {
+        loading = false;
+        status();
+      }
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (paused) return;
+      timer = setTimeout(() => {
+        save();
+      }, SAVE_DELAY);
+    }
+    async function save({ force = false } = {}) {
+      clearTimeout(timer);
+      if (!on2 || !file) return true;
+      if (saving) {
+        again = true;
+        return false;
+      }
+      if (!dirty && !force) return true;
+      saving = true;
+      status();
+      const text = doc2();
+      let ok = false;
+      try {
+        const r = await gui2.commitNote(file, text, hash2, force);
+        if (r.ok) {
+          hash2 = r.hash;
+          paused = false;
+          ok = true;
+          dirty = doc2() !== text;
+          if (!dirty && typeof r.text === "string" && r.text !== text) view3.setText(r.text);
+          hideConflict();
+        } else if (r.conflict) {
+          paused = true;
+          showConflict(r.disk);
+        } else {
+          showError2(r.error || "\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
+        }
+      } catch (e) {
+        showError2(e && e.message || e);
+      }
+      saving = false;
+      status();
+      if ((again || dirty) && ok && !paused) {
+        again = false;
+        schedule();
+      }
+      return ok;
+    }
+    function hideConflict() {
+      const c = $4("conflict");
+      if (c) c.hidden = true;
+    }
+    function showConflict(disk) {
+      const c = $4("conflict");
+      if (!c) return;
+      c.hidden = false;
+      c.querySelector(".msg").textContent = "\u3053\u306E\u30CE\u30FC\u30C8\u306F\u3001\u7DE8\u96C6\u4E2D\u306B\u5225\u306E\u3082\u306E\uFF08\u5225\u306E Vim\u30FB\u30B9\u30DE\u30DB\u53D6\u308A\u8FBC\u307F\u306A\u3069\uFF09\u304C\u66F8\u304D\u63DB\u3048\u307E\u3057\u305F\u3002\u3069\u3061\u3089\u3092\u6B8B\u3057\u307E\u3059\u304B\uFF1F \u3069\u3061\u3089\u3092\u9078\u3093\u3067\u3082\u3001\u6368\u3066\u308B\u5074\u306F\u9000\u907F\u3057\u307E\u3059\u3002";
+      c.querySelector("[data-act='mine']").onclick = async () => {
+        hideConflict();
+        paused = false;
+        await save({ force: true });
+      };
+      c.querySelector("[data-act='theirs']").onclick = async () => {
+        try {
+          await gui2.asideNote(file, doc2());
+          loading = true;
+          hash2 = disk.hash;
+          view3.setText(disk.text);
+          hist.reset();
+          dirty = false;
+          paused = false;
+          loading = false;
+        } catch (e) {
+          showError2(e && e.message || e);
+        }
+        hideConflict();
+        status();
+      };
+      c.querySelector("[data-act='later']").onclick = () => {
+        hideConflict();
+      };
+    }
+    async function enter() {
+      if (on2) return true;
+      const last3 = getLast();
+      if (!last3.file || last3.bt) {
+        showError2("\u3053\u306E\u30D0\u30C3\u30D5\u30A1\u306F GUI \u7DE8\u96C6\u306B\u3067\u304D\u307E\u305B\u3093\uFF08\u30CE\u30FC\u30C8\u3092\u958B\u3044\u3066\u304F\u3060\u3055\u3044\uFF09");
+        return false;
+      }
+      const r = await gui2.enterEdit();
+      if (!r.ok) {
+        showError2(r.error || "Vim \u306E\u672A\u4FDD\u5B58\u306E\u5909\u66F4\u3092\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
+        return false;
+      }
+      try {
+        await load(r.file || last3.file);
+      } catch (e) {
+        showError2(e && e.message || e);
+        return false;
+      }
+      on2 = true;
+      view3.setEditable(true);
+      document.body.classList.add("gui-edit");
+      view3.focus();
+      status();
+      return true;
+    }
+    async function leave() {
+      if (!on2) return true;
+      clearTimeout(timer);
+      if (dirty && !await save()) {
+        showError2("\u4FDD\u5B58\u3067\u304D\u3066\u3044\u306A\u3044\u306E\u3067\u3001GUI \u7DE8\u96C6\u306E\u307E\u307E\u306B\u3057\u307E\u3059");
+        return false;
+      }
+      on2 = false;
+      view3.setEditable(false);
+      document.body.classList.remove("gui-edit");
+      hideConflict();
+      await gui2.leaveEdit();
+      status();
+      return true;
+    }
+    async function onVimState(s15) {
+      if (!on2 || loading || saving) return;
+      if (s15.file && s15.file !== file && !s15.bt) {
+        if (dirty) await save();
+        try {
+          await load(s15.file);
+        } catch (e) {
+          showError2(e && e.message || e);
+        }
+        return;
+      }
+      if (s15.lines && !dirty && !paused) {
+        const vimText = s15.lines.join("\n");
+        if (doc2().replace(/\n$/, "") !== vimText) {
+          const r = await gui2.readNote(file);
+          if (r.ok && r.hash !== hash2 && !dirty) {
+            hash2 = r.hash;
+            view3.setText(r.text);
+            hist.reset();
+            status();
+          }
+        }
+      }
+    }
+    function onUserChange(u) {
+      if (!on2 || loading) return;
+      hist.record(() => u.startState.doc.toString());
+      dirty = true;
+      schedule();
+      status();
+    }
+    function apply(result) {
+      return view3.applyEdit(result);
+    }
+    async function openLink(href) {
+      const r = await gui2.resolveLink(file, href);
+      if (!r.ok) {
+        showError2(r.error || "\u30EA\u30F3\u30AF\u3092\u89E3\u6C7A\u3067\u304D\u307E\u305B\u3093");
+        return;
+      }
+      if (r.external) {
+        showError2("\u5916\u90E8\u306E\u30EA\u30F3\u30AF\u3067\u3059: " + r.external);
+        return;
+      }
+      if (r.self || !r.file) {
+        if (r.missing) showError2("\u30EA\u30F3\u30AF\u5148\u306E\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093: " + href);
+        return;
+      }
+      if (dirty && !await save()) return;
+      const o2 = await gui2.openNote(r.file);
+      if (!o2.ok) showError2(o2.error || "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F");
+    }
+    async function openAt(pos, href) {
+      const h3 = href || view3.linkAt(pos);
+      if (h3) await openLink(h3);
+      return !!h3;
+    }
+    const ask = (label, initial = "") => new Promise((resolve) => {
+      const box = $4("ask");
+      if (!box) return resolve(null);
+      box.hidden = false;
+      box.querySelector("label").textContent = label;
+      const input = box.querySelector("input");
+      input.value = initial;
+      input.focus();
+      const done = (v2) => {
+        box.hidden = true;
+        input.onkeydown = null;
+        box.querySelector("[data-act='ok']").onclick = null;
+        box.querySelector("[data-act='cancel']").onclick = null;
+        view3.focus();
+        resolve(v2);
+      };
+      input.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          done(input.value);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          done(null);
+        }
+      };
+      box.querySelector("[data-act='ok']").onclick = () => done(input.value);
+      box.querySelector("[data-act='cancel']").onclick = () => done(null);
+    });
+    const commands = {
+      undo() {
+        const prev = hist.undo(doc2());
+        if (prev == null) return false;
+        view3.replaceAll(prev);
+        dirty = true;
+        schedule();
+        status();
+        return true;
+      },
+      redo() {
+        const next = hist.redo(doc2());
+        if (next == null) return false;
+        view3.replaceAll(next);
+        dirty = true;
+        schedule();
+        status();
+        return true;
+      },
+      async save() {
+        return save({ force: false });
+      },
+      bold: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "**")),
+      italic: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "*")),
+      strike: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "~~")),
+      code: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "`")),
+      h1: () => apply(setHeading(doc2(), sel2().head, 1)),
+      h2: () => apply(setHeading(doc2(), sel2().head, 2)),
+      h3: () => apply(setHeading(doc2(), sel2().head, 3)),
+      bullet: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "bullet")),
+      number: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "number")),
+      task: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "task")),
+      quote: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "quote")),
+      checkbox: () => apply(toggleTaskAt(doc2(), sel2().head)),
+      async link() {
+        const s15 = sel2();
+        const url = await ask("\u30EA\u30F3\u30AF\u5148\uFF08\u30CE\u30FC\u30C8\u306E\u30D5\u30A1\u30A4\u30EB\u540D\u30FBURL\uFF09", "");
+        if (url == null || !url.trim()) return false;
+        return apply(makeLink(doc2(), s15.from, s15.to, url.trim()));
+      },
+      async openLink() {
+        return openAt(sel2().head, "");
+      },
+      enter() {
+        return apply(enterInList(doc2(), sel2().head)) || false;
+      },
+      // false を返すと CodeMirror が普通の改行をする
+      indent() {
+        return apply(indentLines(doc2(), sel2().from, sel2().to, 1)) || false;
+      },
+      outdent() {
+        return apply(indentLines(doc2(), sel2().from, sel2().to, -1)) || false;
+      }
+    };
+    function run(id2) {
+      const f = commands[id2];
+      if (!on2 || !f) return false;
+      return f();
+    }
+    return { enter, leave, isOn: () => on2, onVimState, onUserChange, openAt, run, commands, save, state: () => ({ on: on2, file, hash: hash2, dirty, saving, paused }) };
+  }
+
   // src/app.js
   var gui = window.gui;
   var $3 = (id2) => document.getElementById(id2);
@@ -33807,6 +34341,7 @@ ${h3.join(`
   var term = null;
   var fit = null;
   var view2 = null;
+  var guiEdit = null;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
   var expanded = false;
@@ -33917,6 +34452,11 @@ ${h3.join(`
   }
   function applyState(s15) {
     applyLook(s15);
+    if (guiEdit && guiEdit.isOn()) {
+      last2 = { ...last2, file: s15.file !== void 0 ? s15.file : last2.file, bt: s15.bt !== void 0 ? s15.bt : last2.bt };
+      guiEdit.onVimState(s15);
+      return;
+    }
     const prevCur = last2.cur;
     last2 = { ...last2, ...s15, lines: void 0 };
     if (viewInCmd) {
@@ -33958,6 +34498,48 @@ ${h3.join(`
       viewFollow = 0;
       view2.revealCursor();
     }
+  }
+  function currentMode() {
+    return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim";
+  }
+  async function setMode(m) {
+    if (m === currentMode()) return true;
+    if (guiEdit.isOn() && !await guiEdit.leave()) return false;
+    if (m === "view") setViewOnly(true);
+    else if (m === "vim") {
+      if (viewOnly) setViewOnly(false);
+      term.focus();
+    } else if (m === "gui") {
+      if (viewOnly) setViewOnly(false);
+      if (!await guiEdit.enter()) {
+        refreshModeUI();
+        return false;
+      }
+    }
+    refreshModeUI();
+    return true;
+  }
+  function refreshModeUI() {
+    const m = currentMode();
+    for (const b2 of document.querySelectorAll("#modes [data-mode]")) b2.setAttribute("aria-pressed", String(b2.dataset.mode === m));
+    const tools = $3("edit-tools");
+    if (tools) tools.hidden = m !== "gui";
+    if (m === "gui") {
+      const el2 = $3("mode");
+      el2.textContent = "EDIT";
+      el2.className = "mode edit";
+      $3("file").textContent = (guiEdit.state().file || "").split("/").pop();
+    }
+  }
+  function initToolbar() {
+    for (const b2 of document.querySelectorAll("#modes [data-mode]")) b2.addEventListener("click", () => setMode(b2.dataset.mode));
+    for (const b2 of document.querySelectorAll("#edit-tools [data-cmd]")) {
+      b2.addEventListener("mousedown", (e) => e.preventDefault());
+      b2.addEventListener("click", () => {
+        guiEdit.run(b2.dataset.cmd);
+      });
+    }
+    refreshModeUI();
   }
   var imgCache = /* @__PURE__ */ new Map();
   var imgPending = /* @__PURE__ */ new Map();
@@ -34188,8 +34770,13 @@ ${h3.join(`
         return false;
     }
   }
-  function onClick({ pos, link, alt }) {
+  function onClick({ pos, link, href, alt, mod }) {
     if (pos == null) return;
+    if (guiEdit && guiEdit.isOn()) {
+      if (link && href) guiEdit.openAt(pos, href);
+      else if (mod) guiEdit.openAt(pos, "");
+      return;
+    }
     if (alt) link = false;
     if (viewOnly && !link) return;
     const [l, c] = view2.lineColAt(pos);
@@ -34211,7 +34798,17 @@ ${h3.join(`
   async function boot() {
     window.addEventListener("error", (e) => showError(e.message || e.error));
     window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
-    view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
+    view2 = createView({
+      parent: $3("view"),
+      getImageURL: imageURL,
+      getImageSize: imageSize,
+      onImageSize,
+      onClick,
+      onCommand: (id2) => guiEdit ? guiEdit.run(id2) : false,
+      onUserChange: (u) => guiEdit && guiEdit.onUserChange(u)
+    });
+    guiEdit = createGuiEdit({ view: view2, gui, $: $3, getLast: () => last2, showError, onChange: () => refreshModeUI() });
+    initToolbar();
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
       fontSize: 14,
@@ -34238,7 +34835,13 @@ ${h3.join(`
       if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") {
         e.preventDefault();
         swallowed = true;
-        setViewOnly(!viewOnly);
+        setMode(viewOnly ? "vim" : "view");
+        return false;
+      }
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") {
+        e.preventDefault();
+        swallowed = true;
+        setMode("gui");
         return false;
       }
       if (viewBlocks()) {
@@ -34274,11 +34877,24 @@ ${h3.join(`
       const d = fitTerm();
       gui.resize(d.cols, d.rows);
     });
-    document.addEventListener("mousedown", () => setTimeout(() => {
-      if (document.getElementById("launcher").hidden) term.focus();
-    }, 0));
-    window.addEventListener("focus", () => {
-      if (document.getElementById("launcher").hidden) term.focus();
+    const backToInput = () => {
+      if (document.getElementById("launcher").hidden) {
+        if (guiEdit.isOn()) {
+          if (!document.activeElement || document.activeElement === document.body) view2.focus();
+        } else term.focus();
+      }
+    };
+    document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
+    window.addEventListener("focus", backToInput);
+    document.addEventListener("keydown", (e) => {
+      if (!guiEdit.isOn() || !e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.code === "KeyV") {
+        e.preventDefault();
+        setMode("view");
+      } else if (e.code === "KeyE") {
+        e.preventDefault();
+        setMode("vim");
+      }
     });
     window.__gui = {
       term,
@@ -34288,6 +34904,9 @@ ${h3.join(`
       isExpanded: () => expanded,
       isViewOnly: () => viewOnly,
       setViewOnly,
+      setMode,
+      currentMode,
+      guiEdit: () => guiEdit,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];

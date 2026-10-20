@@ -179,7 +179,7 @@
 | FZ03 | 自然順の番号列・ツリー・パンくず・前後・親・最初最後・折りたたみ・本文プレビュー | `\A` | 動作検証中（静的サイトの番号ナビのみ。`\A` 組み込みは未） | 2 | 同上 |
 | FZ04 | 空き番号／リンク切れの区別、ID 検証（重複・抜け・循環） | `\A` + API | 動作検証中（重複・抜けの検出まで。循環・ID 変更の影響検査は未実装） | 2 | `python/folgezettel.py` `folgezettel_scan.py` |
 | FZ05 | 紙スキャン／番号付け GUI との統合、索引⇄番号ビュー往復 | `\A` | 一部（番号⇄ノート本文のプレビュー・番号表 MD。索引⇄番号の往復・紙スキャンの統合は未） | 2 | `python/paper_pkm.py` |
-| MD01 | `\A` 3 モード（Real Vim／GUI 編集／閲覧専用） | `\A` | 一部（Alt+V 閲覧のみ） | 2 | `web/src/app.js` VIEW_PASS |
+| MD01 | `\A` 3 モード（Real Vim／GUI 編集／閲覧専用） | `\A` | 動作検証中（Real Vim／GUI 編集／閲覧専用の 3 モードを切替ボタンと Alt+E／Alt+V で。実 Electron の E2E 済み。GUI 編集の保存は Vim の :write 経由で競合は退避つき） | 2 | `web/src/guiedit.js` `editcmds.js` `history.js` `electron/noteio.cjs` `vim/gui.vim` `web/test/gui_edit_e2e.mjs`
 | MD02 | タブ・分割ペイン・レイアウト保存・全機能の GUI 操作経路・コマンドパレット | `\A` | 未実装 | 2 | |
 | PD01 | vault への資産取り込み（コピー／移動／外部参照）・メタデータ・逆リンク | API | 未実装 | 4 | |
 | PD02 | 写真 GUI（グリッド・拡大・EXIF・XMP サイドカー・アルバム・一括タグ） | `\A` | 要確認 | 4 | `python/gallery.py`（中身未監査） |

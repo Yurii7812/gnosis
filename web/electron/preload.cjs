@@ -11,6 +11,14 @@ contextBridge.exposeInMainWorld("gui", {
   onExit: (cb) => ipcRenderer.on("vim:exit", (_e, code) => cb(code)),
   readImage: (file, src) => ipcRenderer.invoke("img:read", file, src),
   quit: () => ipcRenderer.send("app:quit"),
+  // GUI 編集モード
+  enterEdit: () => ipcRenderer.invoke("gui:enter"),
+  leaveEdit: () => ipcRenderer.invoke("gui:leave"),
+  readNote: (file) => ipcRenderer.invoke("note:read", file),
+  commitNote: (file, text, hash, force) => ipcRenderer.invoke("note:commit", file, text, hash, !!force),
+  resolveLink: (file, href) => ipcRenderer.invoke("note:resolve", file, href),
+  asideNote: (file, text) => ipcRenderer.invoke("note:aside", file, text),
+  openNote: (file) => ipcRenderer.invoke("note:open", file),
 });
 
 // 起動画面・vault の選択と管理・設定

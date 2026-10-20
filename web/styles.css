@@ -23,7 +23,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg-dim) 45%, transparent) transparent; }
 
 html { --strip-h: 54px; }
-#stage { position: relative; height: calc(100vh - 24px); overflow: hidden; }
+#stage { position: relative; height: calc(100vh - 24px - var(--toolbar-h, 36px)); overflow: hidden; }
 .view { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); overflow: hidden; }
 .view .cm-editor { height: 100%; }
 
@@ -34,13 +34,36 @@ html { --strip-h: 54px; }
 #term { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 6px; }
 #term .xterm-viewport { overflow: hidden !important; }
 
+/* ---- ツールバー（モード切替・GUI 編集の道具） ---- */
+#toolbar { display: flex; align-items: center; gap: 10px; height: var(--toolbar-h, 36px); padding: 0 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 13px; overflow-x: auto; white-space: nowrap; }
+#toolbar .grp { display: inline-flex; align-items: center; gap: 4px; }
+#toolbar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+#toolbar button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+#toolbar button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+#toolbar button:disabled { opacity: .4; cursor: default; }
+#toolbar #modes button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+.save-state { margin-left: auto; font-size: 12px; color: var(--fg-dim); }
+.save-state.dirty { color: #bf8700; }
+.save-state.conflict { color: #cf222e; font-weight: 700; }
+#conflict, #ask { position: fixed; left: 50%; top: 52px; transform: translateX(-50%); z-index: 30; max-width: 90vw; padding: 10px 14px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#conflict { border-color: #cf222e; }
+#conflict .msg { flex: 1 1 100%; font-size: 13px; }
+#conflict button, #ask button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 12px; cursor: pointer; }
+#ask input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
+/* GUI 編集中: 端末（Vim）は隠す。Vim 風のカーソル表示は出さず、ブラウザの文字カーソルを使う */
+.gui-edit #termwrap { display: none; }
+.gui-edit .view { bottom: 0; }
+.gui-edit span.cm-vim-bar, .gui-edit span.cm-vim-block, .gui-edit .cm-vim-block, .gui-edit span.cm-vim-under { display: none; background: transparent; }
+.gui-edit .cm-content { caret-color: var(--fg); cursor: text; }
+.gui-edit .cm-line ::selection, .gui-edit .cm-content ::selection { background: var(--selection); }
+
 /* ---- ステータスバー（モード表示） ---- */
 #statusbar {
   display: flex; align-items: center; gap: 12px; height: 24px; padding: 0 12px 0 0;
   background: var(--bg-2); border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-dim);
 }
 .mode { font-family: var(--font-mono); font-weight: 700; font-size: 11.5px; letter-spacing: .04em; padding: 0 12px; height: 100%; display: flex; align-items: center; color: #fff; background: #1a7f37; }
-.mode.insert { background: #2d70be; }
+.mode.insert, .mode.edit { background: #2d70be; }
 .mode.visual { background: #8250df; }
 .mode.replace { background: #cf222e; }
 .mode.viewonly { background: #575757; }

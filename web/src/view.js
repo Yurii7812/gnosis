@@ -1,7 +1,7 @@
 // 読み取り専用のマークダウン表示（Obsidian 風ライブプレビューの描画だけ）。
 // 編集は一切しない。本物の Vim のバッファの内容とカーソルを受け取って映す。
-import { EditorState, StateEffect, StateField } from "@codemirror/state";
-import { EditorView, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
+import { EditorState, StateEffect, StateField, Compartment, Facet, Annotation, Prec } from "@codemirror/state";
+import { EditorView, Decoration, WidgetType, ViewPlugin, keymap } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
@@ -458,9 +458,18 @@ const hitField = StateField.define({
 
 // Vim の状態（カーソル位置・モード・ビジュアル範囲）。表示だけに使う。
 const setVim = StateEffect.define();
+// GUI 編集モード（アプリの編集モード）か。このときは Vim の状態ではなく、CodeMirror 自身の選択が「カーソル」。
+const guiMode = Facet.define({ combine: (v) => v.some(Boolean) });
+// プログラムによる変更（読み込み・外の変更の取り込み）の印。ユーザーの編集（元に戻す履歴・自動保存の対象）と区別する。
+const external = Annotation.define();
 const vimField = StateField.define({
   create: () => ({ pos: 0, mode: "n", visFrom: null, visTo: null }),
   update(v, tr) {
+    if (tr.state.facet(guiMode)) {
+      // 編集中はカーソルのある行の記法を見せる（インサートと同じ見え方）。選択範囲はブラウザの選択表示に任せる
+      const h = tr.newSelection.main.head;
+      return v.pos === h && v.mode === "i" && v.visFrom == null ? v : { pos: h, mode: "i", visFrom: null, visTo: null };
+    }
     for (const e of tr.effects) if (e.is(setVim)) return e.value;
     return v;
   },
@@ -556,11 +565,34 @@ const mdHighlight = HighlightStyle.define([
 
 export function createView(opts) {
   const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
+  // 読み取り専用（Vim の内容を映す）と、GUI 編集の切り替え
+  const editableC = new Compartment();
+  const readOnlyExt = [EditorView.editable.of(false), EditorState.readOnly.of(true)];
+  const editExt = [EditorView.editable.of(true), EditorState.readOnly.of(false), guiMode.of(true)];
+  const guiKeys = (id) => (view) => { if (!view.state.facet(guiMode)) return false; return opts.onCommand ? opts.onCommand(id) !== false : false; };
   const state = EditorState.create({
     doc: "",
     extensions: [
-      EditorView.editable.of(false),
-      EditorState.readOnly.of(true),
+      editableC.of(readOnlyExt),
+      // GUI 編集のキー（編集モードのときだけ効く。ボタン・メニューと同じコマンド ID を呼ぶ）
+      Prec.highest(keymap.of([
+        { key: "Mod-z", run: guiKeys("undo"), preventDefault: true },
+        { key: "Mod-y", run: guiKeys("redo"), preventDefault: true },
+        { key: "Mod-Shift-z", run: guiKeys("redo"), preventDefault: true },
+        { key: "Mod-s", run: guiKeys("save"), preventDefault: true },
+        { key: "Mod-b", run: guiKeys("bold"), preventDefault: true },
+        { key: "Mod-i", run: guiKeys("italic"), preventDefault: true },
+        { key: "Mod-e", run: guiKeys("code"), preventDefault: true },
+        { key: "Mod-k", run: guiKeys("link"), preventDefault: true },
+        { key: "Enter", run: guiKeys("enter") },
+        { key: "Tab", run: guiKeys("indent") },
+        { key: "Shift-Tab", run: guiKeys("outdent") },
+      ])),
+      EditorView.updateListener.of((u) => {
+        if (!u.docChanged || !u.state.facet(guiMode)) return;
+        if (u.transactions.some((tr) => tr.annotation(external))) return;
+        opts.onUserChange?.(u);
+      }),
       EditorView.lineWrapping,
       markdown({ base: markdownLanguage }),
       syntaxHighlighting(mdHighlight),
@@ -575,7 +607,7 @@ export function createView(opts) {
         mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
           const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
-          opts.onClick?.({ pos, link: !!el, doc: view.state.doc, alt: e.altKey });
+          opts.onClick?.({ pos, link: !!el, href: el ? el.getAttribute("data-md-href") : "", doc: view.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
           return false;
         },
       }),
@@ -593,6 +625,45 @@ export function createView(opts) {
   const api = {
     view,
     getText: () => view.state.doc.toString(),
+    // GUI 編集モードの入り切り。入ると編集できる状態になり、Vim の状態の反映（カーソル・ビジュアル）はやめる
+    setEditable(on) {
+      this.editing = !!on;
+      view.dispatch({ effects: editableC.reconfigure(on ? editExt : readOnlyExt) });
+      if (!on) view.dispatch({ effects: setVim.of({ pos: view.state.selection.main.head, mode: "n", visFrom: null, visTo: null }) });
+    },
+    isEditing: () => !!api.editing,
+    focus: () => view.focus(),
+    selection: () => { const r = view.state.selection.main; return { from: r.from, to: r.to, anchor: r.anchor, head: r.head }; },
+    // editcmds.js の結果（{changes, anchor, head}）を適用する。ユーザーの編集として扱う（履歴・自動保存の対象）
+    applyEdit(result) {
+      if (!result) return false;
+      view.dispatch({ changes: result.changes, selection: { anchor: result.anchor, head: result.head }, scrollIntoView: true, userEvent: "input" });
+      view.focus();
+      return true;
+    },
+    // 履歴の取り消し・やり直しで文書全体を入れ替える（変わったところだけ差し替え、カーソルはその末尾へ）。
+    // ユーザーの編集として扱わない（履歴に積まない・自動保存の「変更」として数えるのは呼び出し側）
+    replaceAll(text) {
+      const cur = view.state.doc.toString();
+      if (cur === text) return;
+      let a = 0;
+      const max = Math.min(cur.length, text.length);
+      while (a < max && cur.charCodeAt(a) === text.charCodeAt(a)) a++;
+      let b = 0;
+      while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
+      const insert = text.slice(a, text.length - b);
+      view.dispatch({ changes: { from: a, to: cur.length - b, insert }, selection: { anchor: a + insert.length }, annotations: external.of(true), scrollIntoView: true });
+    },
+    // 位置 pos にあるマークダウンのリンク [表示](先) の先（無ければ ""）。編集中の行（記法が見えている行）でリンクを開くのに使う
+    linkAt(pos) {
+      const line = view.state.doc.lineAt(pos);
+      const re = /\[(?:\\.|[^\]\\])*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+      let m;
+      while ((m = re.exec(line.text)) !== null) {
+        if (pos >= line.from + m.index && pos <= line.from + m.index + m[0].length) return m[1];
+      }
+      return "";
+    },
     // 変わったところだけ差し替える（スクロールや選択を乱さない）
     setText(text) {
       const cur = view.state.doc.toString();
@@ -602,7 +673,7 @@ export function createView(opts) {
       while (a < max && cur.charCodeAt(a) === text.charCodeAt(a)) a++;
       let b = 0;
       while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
-      view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) } });
+      view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) }, annotations: external.of(true) });
     },
     setLinkSource(on) {
       if (cfg.linkSource === !!on) return;

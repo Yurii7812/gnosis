@@ -183,8 +183,12 @@ node "$REPO/web/test/site_views_e2e.mjs"
 
 # Electron アプリ（\A）全体の E2E（実 Vim・約 10 分）。普段は省略し、GNOSIS_RUN_WEB_E2E=1 のときだけ実行する
 if [ "${GNOSIS_RUN_WEB_E2E:-}" = "1" ]; then
-  (cd "$REPO/web" && npm test)
+  (cd "$REPO/web" && npm test && node test/gui_edit_e2e.mjs)
 fi
 
 # `\A` のライトの見え方（Markdown Viewer 拡張＝GitHub スタイル）と、ダークが変わらないこと（chromium が無ければ省略）
 node "$REPO/web/test/look_e2e.mjs"
+
+# `\A` の GUI 編集モード: 純関数（書式・履歴・ノートの読み書き）の単体試験。実 Electron の E2E は GNOSIS_RUN_WEB_E2E=1 で web/test/gui_edit_e2e.mjs
+node "$REPO/web/test/editcmds_test.mjs"
+node "$REPO/web/test/noteio_test.cjs"
