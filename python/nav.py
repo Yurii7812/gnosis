@@ -11,7 +11,7 @@
 
 CLI（JSON。--md なら Markdown）:
   nav.py ROOT bookmark add NOTE [スロット1-9] | remove NOTE | list
-  nav.py ROOT recent [modified|created] [件数]
+  nav.py ROOT recent [modified|created|viewed|imported] [件数]
   nav.py ROOT reminders [YYYY-MM-DD] [--days N]     未解決の問い・古い仮説・今日の問い・カプセル
   nav.py ROOT trail save 名前 NOTE… | add 名前 NOTE | show 名前 | list | remove 名前
   nav.py ROOT trail-export 名前 --write NEWFILE
@@ -120,20 +120,34 @@ def bookmark_slot(root: str | Path, slot: int) -> dict:
 
 # ---- 最近 ----
 def recent(root: str | Path, by: str = "modified", limit: int = 20) -> dict:
+    """by: modified（更新）／created（作成）／viewed（開いた順。`.state/history.json`）／imported（スマホから取り込んだ＝front matter に capture_id があるもの。作成日の新しい順）。"""
     root = Path(root).resolve()
-    if by not in ("modified", "created"):
-        raise ValueError("modified か created を指定してください")
+    if by not in ("modified", "created", "viewed", "imported"):
+        raise ValueError("modified・created・viewed・imported のどれかを指定してください")
+    limit = max(1, limit)
+    if by == "viewed":
+        hist = _load(root / ".state" / "history.json", {})
+        seen, rows = set(), []
+        for rel in reversed([x for x in (hist.get("list", []) if isinstance(hist, dict) else []) if isinstance(x, str)]):
+            if rel in seen or rel.startswith("/") or ".." in Path(rel).parts or not rel.endswith(".md") or not (root / rel).is_file():
+                continue
+            seen.add(rel)
+            d = nf._simple_parse_text(root / rel, (root / rel).read_text(encoding="utf-8"))
+            rows.append({"path": rel, "title": d["title"], "when": ""})
+        return {"by": by, "notes": rows[:limit]}
     rows = []
     for p in tk.iter_notes(root):
         text = p.read_text(encoding="utf-8")
         d = nf._simple_parse_text(p, text)
         tm = next((ln.split(":", 1)[1].strip() for ln in d["fm"] if ln.startswith("time:")), "")
-        key = tm if by == "created" else dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        if by == "imported" and not any(ln.startswith("capture_id:") for ln in d["fm"]):
+            continue
+        key = tm if by in ("created", "imported") else dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         if not key:
             continue
         rows.append({"path": p.relative_to(root).as_posix(), "title": d["title"], "when": key})
     rows.sort(key=lambda r: (r["when"], r["path"]), reverse=True)
-    return {"by": by, "notes": rows[:max(1, limit)]}
+    return {"by": by, "notes": rows[:limit]}
 
 
 # ---- 再提示 ----
@@ -264,7 +278,8 @@ def to_md(kind: str, r: dict) -> str:
         if not r["bookmarks"]:
             L.append("なし（`:GnosisBookmark add`）")
     elif kind == "recent":
-        L = [f"# 最近{'更新した' if r['by'] == 'modified' else '作った'}ノート", ""] + [f"- {x['when'][:16]} {_l(x['path'], x['title'])}" for x in r["notes"]]
+        label = {"modified": "更新した", "created": "作った", "viewed": "開いた", "imported": "スマホから取り込んだ"}[r["by"]]
+        L = [f"# 最近{label}ノート", ""] + [f"- {(x['when'][:16] + ' ') if x['when'] else ''}{_l(x['path'], x['title'])}" for x in r["notes"]] + ([] if r["notes"] else ["なし"])
     elif kind == "reminders":
         def sec(title, items, fmt):
             return [f"## {title}（{len(items)}）", ""] + ([fmt(x) for x in items[:30]] or ["なし"]) + [""]

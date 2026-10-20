@@ -3,6 +3,7 @@ import contextlib
 import datetime as dt
 import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -83,7 +84,20 @@ class NavTest(unittest.TestCase):
         m = nav.recent(self.root, "modified")["notes"]
         self.assertEqual(m[-1]["path"], "a.md")                                  # 400 日前に触ったものは最後
         with self.assertRaises(ValueError):
-            nav.recent(self.root, "viewed")
+            nav.recent(self.root, "bogus")
+
+    def test_recent_viewed_and_imported(self):
+        (self.root / ".state").mkdir(exist_ok=True)
+        (self.root / ".state" / "history.json").write_text(json.dumps({"list": ["a.md", "b.md", "gone.md", "../x.md", "a.md", "/etc/passwd", 3]}), encoding="utf-8")
+        v = nav.recent(self.root, "viewed")["notes"]
+        self.assertEqual([x["path"] for x in v], ["a.md", "b.md"])                 # 新しい順・重複と無いファイルと外のパスは除く
+        self.assertEqual(nav.recent(self.root, "viewed", 1)["notes"][0]["path"], "a.md")
+        self.assertEqual(nav.recent(Path(tempfile.mkdtemp(dir=str(Path.home() / "Desktop" / "test"))), "viewed")["notes"], [])
+        (self.root / "ph.md").write_text("---\ntime: 2026-10-19 09:00:00\ntitle: 電話\ncapture_id: 261019090000\n---\n\n# 電話\n", encoding="utf-8")
+        (self.root / "ph2.md").write_text("---\ntime: 2026-10-20 09:00:00\ntitle: 電話2\ncapture_id: 261020090000\n---\n\n# 電話2\n", encoding="utf-8")
+        self.assertEqual([x["path"] for x in nav.recent(self.root, "imported")["notes"]], ["ph2.md", "ph.md"])
+        self.assertIn("スマホから取り込んだ", nav.to_md("recent", nav.recent(self.root, "imported")))
+        self.assertIn("なし", nav.to_md("recent", {"by": "imported", "notes": []}))
 
     def test_reminders_questions_hypotheses_future_capsules(self):
         r = nav.reminders(self.root, TODAY, 90)

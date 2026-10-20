@@ -47,6 +47,13 @@ GnosisRecent created
 call assert_equal('# 最近作ったノート', getline(1))
 call assert_match('(d.md)', getline(3))               " 一番新しく作った
 close
+GnosisRecent imported
+call assert_equal('# 最近スマホから取り込んだノート', getline(1))
+call assert_equal('なし', getline(3))
+close
+GnosisRecent viewed
+call assert_equal('# 最近開いたノート', getline(1))
+close
 GnosisKnowledge
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "昔に書いた問い"')))
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "これは本当にそうなのか調べる"')))
