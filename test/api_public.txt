@@ -253,9 +253,11 @@ gnosis#remove_password
 gnosis#rename_down_links_to_yaml_title
 gnosis#rename_link_text
 gnosis#rename_link_text_with_default
+gnosis#rename_note
 gnosis#rename_prefix
 gnosis#rename_title
 gnosis#rename_title_with_default
+gnosis#rename_undo
 gnosis#rename_yomi
 gnosis#rename_yomi_with_default
 gnosis#replace_visual_selection

@@ -6827,6 +6827,89 @@ function! gnosis#ir_rate(id, grade) abort
   endif
 endfunction
 
+" ノートの名前変更・移動（UT03）。他のノートのリンク・取り込み記録も更新し、取り消せる。
+"   :GnosisRename[!] [新しい名前]  （! は確認なし）   :GnosisRenameUndo[!]
+function! s:rn_run(args) abort
+  let l:root = s:nt_root()
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/rename_note.py'] + a:args, 'shellescape(v:val)'), ' '))
+  try
+    return json_decode(l:out)
+  catch
+    return {'ok': 0, 'error': l:out}
+  endtry
+endfunction
+
+function! gnosis#rename_note(bang, name) abort
+  let l:root = s:nt_root()
+  let l:rel = empty(l:root) ? '' : s:nt_rel(l:root)
+  if empty(l:rel)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  if &modified
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:new = trim(a:name)
+  if empty(l:new)
+    let l:new = input(gnosis#i18n#tr('新しい名前（vault からの相対パス）: '), l:rel, 'file')
+  endif
+  let l:new = trim(l:new)
+  if empty(l:new) || l:new ==# l:rel
+    return
+  endif
+  if l:new !~# '\.md$'
+    let l:new .= '.md'
+  endif
+  let l:plan = s:rn_run(['rename', l:root, l:rel, l:new, '--dry-run'])
+  if !get(l:plan, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:plan, 'error', '') | echohl NONE
+    return
+  endif
+  if !a:bang && l:plan.links_updated > 0
+    let l:msg = printf(gnosis#i18n#tr('%d 件のリンク（%d ファイル）を更新して名前を変えます'), l:plan.links_updated, len(l:plan.updated))
+    if confirm(l:msg, gnosis#i18n#tr("&はい\n&いいえ"), 2) != 1
+      return
+    endif
+  endif
+  let l:r = s:rn_run(['rename', l:root, l:rel, l:new])
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  let l:old_buf = bufnr('%')
+  execute 'edit ' . fnameescape(l:root . '/' . l:r.new)
+  if bufexists(l:old_buf) && l:old_buf != bufnr('%')
+    execute 'silent! bwipeout ' . l:old_buf
+  endif
+  silent! checktime
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('名前を変えました（リンク %d 件を更新・戻すには :GnosisRenameUndo）'), l:r.links_updated)
+endfunction
+
+function! gnosis#rename_undo(bang) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:last = s:rn_run(['last', l:root])
+  let l:r = s:rn_run(['undo', l:root] + (a:bang ? ['--force'] : []))
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') . (has_key(l:r, 'changed') ? ' ' . join(l:r.changed, ', ') : '') | echohl NONE
+    return
+  endif
+  if get(l:last, 'ok', 0) && s:nt_rel(l:root) ==# l:last.new
+    let l:old_buf = bufnr('%')
+    execute 'edit ' . fnameescape(l:root . '/' . l:last.old)
+    execute 'silent! bwipeout ' . l:old_buf
+  endif
+  silent! checktime
+  echo 'Gnosis: ' . gnosis#i18n#tr('名前の変更を取り消しました')
+endfunction
+
 " ノートの分割（ED06）・統計（ED17）・比較（ED09）。
 "   :GnosisSplit [新しいファイル名]  カーソルがある節(見出し)を、同じフォルダの新しいノートに切り出す。元には → リンクを残し、新しい側に Related: で元を記録。:GnosisSplitUndo で戻す
 "   :GnosisStats [ノート]  :GnosisDiff 相手のノート（今のノートと比べる）

@@ -346,7 +346,9 @@ command!          GnosisTableAddRow call gnosis#table_add_row()
 command!          GnosisTableAddCol call gnosis#table_add_col()
 
 " 別ファイル（plugin/*.vim）で定義された既存コマンドへの別名
-command!          GnosisRename Rename
+" :GnosisRename は参照も更新する安全版（python/rename_note.py）。素の :Rename（plugin/RenameFile.vim）はそのまま残す
+command! -bang -nargs=? -complete=file GnosisRename call gnosis#rename_note(<bang>0, <q-args>)
+command! -bang GnosisRenameUndo call gnosis#rename_undo(<bang>0)
 command! -range   GnosisSetImageSize <line1>,<line2>SetImageSize
 command!          GnosisAutocwindow Autocwindow
 command!          GnosisFSearch call gnosis_search#run()
