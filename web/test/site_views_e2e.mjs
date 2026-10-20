@@ -167,4 +167,58 @@ assert.equal(md.cells, 81);
 assert.equal(md.rows, 9);
 assert.deepEqual([...new Set(md.links)], ["n1.html"]);
 assert.equal(md.theme, "主題");
-console.log("site_views E2E OK (ナビ・グラフ・検索・曼荼羅を実ブラウザで操作)");
+// 5. カード・テーブル・タイムライン: 絞り込み・並べ替え・ピン留め（このブラウザだけ）・非公開は出ない
+const cv = run("views", `
+module.exports = async (p) => {
+  const out = {};
+  const titles = () => p.eval("Array.from(document.querySelectorAll('#cards h3')).map(e => e.textContent)");
+  await p.open("cards.html");
+  out.cards = await titles();
+  out.count = await p.eval("document.getElementById('count').textContent");
+  await p.eval("(function(){var q=document.getElementById('q');q.value='ローズ';q.dispatchEvent(new Event('input'))})()");
+  out.filtered = await titles();
+  await p.eval("(function(){var q=document.getElementById('q');q.value='-ローズ';q.dispatchEvent(new Event('input'))})()");
+  out.excluded = await titles();
+  await p.eval("(function(){var q=document.getElementById('q');q.value='';q.dispatchEvent(new Event('input'));var s=document.getElementById('sort');s.value='title';s.dispatchEvent(new Event('change'))})()");
+  await p.click("#dir");            // 降順 → 昇順
+  out.byTitleAsc = await titles();
+  // ピン留め: 最後のカードを押すと先頭へ。ページを開き直しても覚えている
+  await p.eval("(function(){var b=document.querySelectorAll('#cards .pin');b[b.length-1].click()})()");
+  out.pinned = (await titles())[0];
+  out.pinnedClass = await p.eval("document.querySelectorAll('#cards .card.pinned').length");
+  await p.open("cards.html");
+  out.afterReload = (await titles())[0];
+  await p.open("table.html");
+  const col = (i) => p.eval("Array.from(document.querySelectorAll('#tbl tbody tr')).map(r => r.children[" + i + "].textContent)");
+  out.tableTitles = await col(1);
+  await p.eval("Array.from(document.querySelectorAll('#tbl th button')).find(b => b.textContent.startsWith('番号')).click()");
+  out.byFz = await col(0);
+  await p.eval("Array.from(document.querySelectorAll('#tbl th button')).find(b => b.textContent.startsWith('番号')).click()");
+  out.byFzDesc = await col(0);
+  out.ariaSort = await p.eval("document.querySelector('#tbl th[aria-sort=descending]') ? 1 : 0");
+  await p.open("timeline.html");
+  out.groups = await p.eval("Array.from(document.querySelectorAll('#tl h2')).map(e => e.textContent)");
+  out.tlLinks = await p.eval("document.querySelectorAll('#tl a').length");
+  out.secretAnywhere = await p.eval("document.documentElement.innerHTML.includes('秘密')");
+  return out;
+};`);
+assert.ok(!cv.cards.includes("秘密"));
+assert.equal(cv.cards.length, 9);                       // 通常ノート 8 件 + 曼荼羅 1 件（非公開の「秘密」は含まない）
+assert.match(cv.count, /^9 \/ 9/);
+assert.deepEqual(cv.filtered, ["栽培"]);
+assert.ok(!cv.excluded.includes("栽培") && cv.excluded.length === 8);
+assert.deepEqual(cv.byTitleAsc, [...cv.byTitleAsc].sort((a, b) => a.localeCompare(b, "ja")));
+assert.equal(cv.pinned, cv.byTitleAsc[cv.byTitleAsc.length - 1]);          // 最後のカードが先頭に来る
+assert.equal(cv.pinnedClass, 1);
+assert.equal(cv.afterReload, cv.pinned);                                   // 開き直しても覚えている（localStorage。このブラウザだけ）
+assert.equal(cv.tableTitles.length, 9);
+assert.deepEqual(cv.byFz.slice(0, 7), ["1", "1a", "1a1", "1a2", "1b", "1c", "2"]);   // 番号の自然順
+assert.equal(cv.byFz[7], "3a1");
+assert.equal(cv.byFz[8], "");                                              // 番号の無い曼荼羅は最後
+assert.equal(cv.ariaSort, 1);
+assert.equal(cv.byFzDesc[8], "");                                          // 降順でも番号なしは最後
+assert.deepEqual(cv.byFzDesc.slice(0, 2), ["3a1", "2"]);
+assert.ok(cv.groups.includes("2026-01-01"));
+assert.equal(cv.tlLinks, 9);
+assert.equal(cv.secretAnywhere, false);
+console.log("site_views E2E OK (ナビ・グラフ・検索・曼荼羅・カード・テーブル・タイムラインを実ブラウザで操作)");

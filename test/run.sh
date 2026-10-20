@@ -39,6 +39,7 @@ python3 "$REPO/python/test_mandala.py"
 if command -v node >/dev/null 2>&1; then
   node "$REPO/python/test_graphcore.mjs"
   node "$REPO/python/test_fznav.mjs"
+  node "$REPO/python/test_viewscore.mjs"
 else echo "graphcore / fznav: node が無いので省略"; fi
 python3 "$REPO/python/test_export_site.py"
 python3 "$REPO/python/test_merge_notes.py"

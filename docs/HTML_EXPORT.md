@@ -12,6 +12,8 @@
 
 - **Folgezettel ナビ** `fznav.html`（各ノートに「番号ナビで見る」。`fznav.html#id=1a`）: 左にツリー（開閉・「すべて開く」）、右に今の番号・パンくず・ボタン（親・最初の子・前後の兄弟・番号順の前後・最初・最後）・親／兄弟／子・「たどった順」（履歴。構造上の親子とは別）・本文プレビュー。キー: ↑親 ↓最初の子 ←→兄弟 [ ] 番号順 Home/End Alt+←→履歴。存在しない番号（抜けた祖先）は破線の「空き」で、選んでもノートは作らない。核（`fznav-core.js`）は Python の自然順・親判定と同一であることを言語間で照合。
 
+- **カード** `cards.html` / **テーブル** `table.html` / **タイムライン** `timeline.html`: ノート一覧データ（`notes-data.js`: 題・番号・作成日・更新日・抜粋・最初の画像・出入りのリンク数・サイズ・未完了タスク数）から作る。絞り込み（空白区切りの語が全部含まれる・`-語` で除外・`#q=語` で検索つきリンク）、並べ替え（番号は自然順。番号・作成日が無いノートは昇順でも降順でも最後）。カードのピン留めはそのブラウザの localStorage にだけ覚える（書き出し物や vault は変えない）。描画は textContent のみ（innerHTML を使わない）。
+
 ## 安全（試験済み: `python/test_md_html.py` `python/test_export_site.py` `test/export_site_net.sh`）
 - 本文は全部エスケープ。生の HTML・`<script>` は通さない。リンク・画像の URL は http / https / mailto / 相対だけ。`javascript:` `data:` `file:` `//` は無効。タグに任意の属性は付かない。
 - 各 HTML に CSP（`default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'`）。表示専用で、編集・ローカルファイル読み出しの仕組みは無い。
