@@ -753,21 +753,21 @@ def test_group_notes_format() -> None:
         fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8").split("\n")
         check("attribute: group" in fi[:6], "Folgezettel-Index も attribute: group")
         body = fi[fi.index("# Folgezettel-Index"):]
-        links = [ln for ln in body[2:] if ln.startswith("[")]
-        check(body[1] == "" and [l.split("]")[0] for l in links[:4]] == ["[日記", "[1", "[2", "[10"], f"Folgezettel-Index は 日記, 1, 2, 10 の順（自然順）: {links}")
-        check("" not in body[2:body.index("### Group")] and body[body.index("### Group") + 1].startswith("[Paper-Zettelkasten-Index]"),
-              "リンクと ### Group の間に空行なし。Group は Paper-Zettelkasten-Index")
+        # Group: は先頭の関係ブロック（表示名つき）。続けて空行 1 つ、その後にキーワードのリンク
+        links = [ln for ln in body[5:] if ln.startswith("[")]
+        check(body[1] == "" and body[2] == "Group:" and body[3].startswith("[Paper-Zettelkasten-Index") and body[4] == ""
+              and [l.split("]")[0] for l in links[:4]] == ["[日記", "[1", "[2", "[10"], f"Folgezettel-Index は Group: の後に 日記, 1, 2, 10 の順（自然順）: {body}")
         check(not any("[diary](" in ln for ln in fi), "[diary] 表記は無い")
         top = pp.find_diary_group(root, idx)
         tt = top.read_text(encoding="utf-8").split("\n")
         check("title: 日記" in tt and "attribute: group" in tt and "紙の日記" not in "".join(tt), "日記グループの題は「日記」")
-        gi = tt.index("### Group")
-        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:]) and any("Folgezettel-Index" in ln for ln in tt[gi:]), "日記グループの Group に Paper-Zettelkasten-Index と Folgezettel-Index")
+        gi = tt.index("Group:")
+        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]) and any("Folgezettel-Index" in ln for ln in tt[gi:gi + 4]), "日記グループの Group: に Paper-Zettelkasten-Index と Folgezettel-Index")
         month = _month(root, "2026-10").read_text(encoding="utf-8").split("\n")
         i = month.index("# 2026-10")
         check(month[:5] == ["---", month[1], "title: 2026-10", "attribute: group", "---"] and month[5] == "" and i == 6 and month[7] == ""
-              and month[8].startswith("[2026-10-13-TU](") and month[9] == "### Group" and month[10].startswith("[日記]("),
-              f"月グループ: --- / 空行 / # / 空行 / リンク / ### Group（空行はその2か所だけ）: {month}")
+              and month[8] == "Group:" and month[9].startswith("[日記:2026-10](") and month[10] == "" and month[11].startswith("[2026-10-13-TU]("),
+              f"月グループ: --- / 空行 / # / 空行 / Group: / 所属 / 空行 / リンク: {month}")
 
 
 def test_digital_diary_not_confused() -> None:
