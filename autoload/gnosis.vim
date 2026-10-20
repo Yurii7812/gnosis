@@ -8054,6 +8054,47 @@ function! gnosis#bulk_list() abort
   call s:ga_show(l:root, split(s:bulk_run(l:root, ['list'], 1), "\n", 1), {})
 endfunction
 
+" 本文の重複(ED07)。  :GnosisDedupe[!] [scan | ノート]
+"   引数なし/ノート: そのノートの中で繰り返された段落を見せる。! を付けると 2 回目以降を除く(除く前の内容は :GnosisVersions で戻せる)。
+"   scan: vault 全体で、本文が同じノートと、複数のノートにある同じ段落を報告する(何も変えない)。
+function! gnosis#dedupe(bang, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:arg = a:0 > 0 ? a:1 : ''
+  let l:args = l:arg ==# 'scan' ? ['scan'] : ['inner', empty(l:arg) ? s:nt_rel(l:root) : l:arg] + (a:bang ? ['--apply'] : [])
+  if l:arg ==# 'scan' && a:bang
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('scan は報告だけです（! は使えません）') | echohl NONE
+    return
+  endif
+  if l:args[0] ==# 'inner' && empty(l:args[1])
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('ノートを開くか、ノートを指定してください') | echohl NONE
+    return
+  endif
+  if a:bang && (s:nt_modified() || &modified)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/dedupe.py', l:root] + l:args + ['--md'], 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+  if a:bang
+    silent! checktime
+  endif
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

@@ -102,6 +102,7 @@ gnosis#current_file
 gnosis#current_title
 gnosis#day_record
 gnosis#debate
+gnosis#dedupe
 gnosis#diary_adopt
 gnosis#diary_on_save
 gnosis#diary_test_add

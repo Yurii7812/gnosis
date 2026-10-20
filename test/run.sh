@@ -156,6 +156,8 @@ python3 "$REPO/python/test_versions.py"
 sh "$REPO/test/versions_net.sh"
 python3 "$REPO/python/test_bulk.py"
 sh "$REPO/test/bulk_net.sh"
+python3 "$REPO/python/test_dedupe.py"
+sh "$REPO/test/dedupe_net.sh"
 python3 "$REPO/python/test_agenda_push.py"
 python3 "$REPO/python/test_agenda_pull.py"
 # Android アプリの純粋なロジック（メモ・予定）の単体試験。JDK と SDK があるときだけ（実機・通知・ウィジェットの実表示は対象外）
