@@ -500,6 +500,8 @@ gnosis#vault#select
 gnosis#vault_locked_buffer_hint
 gnosis#vault_locked_flag
 gnosis#vault_mounted
+gnosis#versions
+gnosis#versions_auto
 gnosis#visual_new_prefix_note
 gnosis#visual_new_quick_no_title
 gnosis#write_at_bottom

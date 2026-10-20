@@ -7903,6 +7903,62 @@ function! gnosis#pdf(kind, ...) abort
   endif
 endfunction
 
+" ノート単位の版の履歴（ED10）。  :GnosisVersions [save | list | diff N | restore N]（既定は list）。今のノートが対象
+"   save は今の内容を 1 版として残す。restore N は版 N に戻す（戻す前の内容も 1 版として残るので、戻しすぎても戻せる）。
+"   g:gnosis_auto_versions=1 にすると、保存のたびに版を残す（既定は無効。.gnosis/versions/ に増える。1 ノート 50 版まで）
+function! s:ver_run(root, args) abort
+  let l:cmd = [gnosis#python_cmd(), s:note_root . '/python/versions.py', a:root, a:args[0], s:nt_rel(a:root)] + a:args[1:]
+  return system(join(map(l:cmd, 'shellescape(v:val)'), ' '))
+endfunction
+
+function! gnosis#versions(...) abort
+  let l:root = s:nt_root()
+  if empty(l:root) || empty(s:nt_rel(l:root))
+    return
+  endif
+  let l:act = a:0 > 0 ? a:1 : 'list'
+  if index(['save', 'list', 'diff', 'restore'], l:act) < 0 || (index(['diff', 'restore'], l:act) >= 0 && (a:0 < 2 || a:2 !~# '^[0-9]\+$'))
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('save / list / diff 番号 / restore 番号 のどれかを指定してください') | echohl NONE
+    return
+  endif
+  if l:act ==# 'restore' && (s:nt_modified() || &modified)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  if l:act ==# 'save' && &modified
+    silent! write
+  endif
+  let l:out = s:ver_run(l:root, [l:act] + (a:0 > 1 ? [a:2] : []) + (index(['list', 'diff'], l:act) >= 0 ? ['--md'] : []))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  if index(['list', 'diff'], l:act) >= 0
+    call s:ga_show(l:root, split(l:out, "\n", 1), {})
+    return
+  endif
+  let l:r = json_decode(l:out)
+  if l:act ==# 'save'
+    echo 'Gnosis: ' . (get(l:r, 'saved', 0) ? printf(gnosis#i18n#tr('版を残しました（%d 版）'), l:r.count) : gnosis#i18n#tr(l:r.reason))
+  elseif get(l:r, 'restored', 0)
+    silent! edit!
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('版 %d に戻しました（戻す前の内容は版 1 に残っています）'), l:r.from_n)
+  else
+    echo 'Gnosis: ' . gnosis#i18n#tr(l:r.reason)
+  endif
+endfunction
+
+function! gnosis#versions_auto() abort
+  if !get(g:, 'gnosis_auto_versions', 0)
+    return
+  endif
+  let l:root = s:nt_root()
+  if empty(l:root) || empty(s:nt_rel(l:root)) || expand('%:e') !=# 'md'
+    return
+  endif
+  call s:ver_run(l:root, ['save'])
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

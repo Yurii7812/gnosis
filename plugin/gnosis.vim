@@ -587,6 +587,11 @@ command! -nargs=? GnosisSplit call gnosis#split(<f-args>)
 command! -bang GnosisSplitUndo call gnosis#split_undo(<bang>0)
 command! -bang -nargs=? GnosisStats call gnosis#stats(<bang>0, <f-args>)
 command! -nargs=? GnosisActivity call gnosis#activity(<f-args>)
+command! -nargs=* GnosisVersions call gnosis#versions(<f-args>)
+augroup GnosisVersions
+  autocmd!
+  autocmd BufWritePost *.md call gnosis#versions_auto()
+augroup END
 command! -nargs=1 GnosisDiff call gnosis#note_diff(<f-args>)
 command! -bang -nargs=+ GnosisTimerStart call gnosis#timer_start(<bang>0, <f-args>)
 command! GnosisTimerStatus call gnosis#timer_status()
