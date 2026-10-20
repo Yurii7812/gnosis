@@ -296,6 +296,11 @@ def plan(outdir: str, root: str) -> dict:
         # 前回の本文（base）が残っている記録と、ノートの実ファイルがあるものだけ。日記・トピック・記録への追記は対象外
         merge = (exists and previous is not None and "text" in previous and not appended and not same and not metadata_only
                  and bool(target) and target.endswith(".md"))
+        # 日記に埋め込んだメモも同じ: 前回入れた行（時刻つき）を base にして日記ノートの該当行だけ更新する。トピックを変えた場合は対象外
+        diary_merge = (exists and previous is not None and "text" in previous and target.startswith("(diary:")
+                       and not same and normalize_topic(previous.get("topic") or "") == topic == "日記"
+                       and (previous.get("text"), previous.get("images")) != (e.get("text"), e.get("images")))
+        merge = merge or diary_merge
         missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
         if not done and missing:
             raise ValueError("画像がありません（取り込み済みにはしません）: " + ", ".join(missing))
@@ -340,17 +345,31 @@ def apply_merges(outdir: str, root: str) -> dict:
     rp = Path(root)
     st = load_state(rp)
     out = {}
+    entries = json.loads((Path(outdir) / "capture.json").read_text(encoding="utf-8"))["entries"]
     for it in plan(outdir, root)["items"]:
         if not it["merge"]:
             continue
         prev = st["entries"][it["id"]]
-        entries = json.loads((Path(outdir) / "capture.json").read_text(encoding="utf-8"))["entries"]
         remote = next(e for e in entries if e["id"] == it["id"])
+        target = st["ids"].get(it["id"], "")
+        if target.startswith("(diary:"):
+            days = json.loads((rp / ".state/diary_days.json").read_text(encoding="utf-8"))["days"]
+            out[it["id"]] = cm.apply_note(rp, it["id"], days[target[len("(diary:"):-1]],
+                                          diary_lines(prev), diary_lines(remote))
+            continue
         out[it["id"]] = cm.apply_note(
             rp, it["id"], it["file"],
             cm.body_lines(prev.get("text") or "", prev.get("images") or []),
             cm.body_lines(remote.get("text") or "", remote.get("images") or []))
     return out
+
+
+def diary_lines(e: dict) -> list[str]:
+    """日記の本文に入れる行（gnosis#capture_import の日記の分岐と同じ形: 先頭に HH:MM、続けて画像の行）。"""
+    lines = (e.get("text") or "").split("\n")
+    if not e.get("notime"):
+        lines[0] = dt.datetime.fromtimestamp(e.get("created", 0) / 1000).strftime("%H:%M") + " " + lines[0]
+    return lines + [f"![](capture-images/{n})" for n in e.get("images") or []]
 
 
 def record(root: str, pairs: list[tuple[str, str]], outdir: str = "") -> None:

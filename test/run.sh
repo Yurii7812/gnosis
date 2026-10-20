@@ -82,6 +82,7 @@ sh "$REPO/test/checkbox_net.sh"
 # スマホのメモの取り込み
 sh "$REPO/test/capture_import_net.sh"
 sh "$REPO/test/capture_merge_net.sh"
+sh "$REPO/test/capture_diary_net.sh"
 sh "$REPO/test/capture_topics_net.sh"
 
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）

@@ -5601,6 +5601,11 @@ function! gnosis#capture_import(...) abort
         call add(l:conflicts, l:it.title . ' (' . l:it.file . ')')
         continue
       endif
+      " 日記に埋め込んだメモは、日記ノートの該当行を python が更新済み。行き先の記録（日記）だけ残して次へ
+      if l:it.file =~# '^(diary:' || empty(l:it.file)
+        call add(l:made, [l:it.id, '(diary:' . l:it.date . ')'])
+        continue
+      endif
       let l:it.update = 1
     endif
     if l:it.update
