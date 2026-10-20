@@ -88,6 +88,7 @@ sh "$REPO/test/capture_merge_net.sh"
 sh "$REPO/test/capture_diary_net.sh"
 sh "$REPO/test/capture_embed_net.sh"
 sh "$REPO/test/agenda_net.sh"
+sh "$REPO/test/check_vault_net.sh"
 sh "$REPO/test/capture_topics_net.sh"
 
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）

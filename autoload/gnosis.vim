@@ -5963,6 +5963,62 @@ function! s:agenda_reload() abort
   call cursor(min([l:at, line('$')]), 1)
 endfunction
 
+" vault の整合性検査（読み取り専用）: 壊れたリンク・Folgezettel の重複／抜け・孤立ノート。Enter でその行／ノートへ: :GnosisCheck
+function! gnosis#check_vault() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/gnosis_graph.py', 'check', l:root], 'shellescape(v:val)'), ' ')
+  let l:r = json_decode(system(l:cmd))
+  let l:lines = ['# ' . gnosis#i18n#tr('vault の検査'), '',
+        \ printf(gnosis#i18n#tr('ノート %d・関係 %d・壊れたリンク %d'), l:r.counts.notes, l:r.counts.edges, l:r.counts.broken), '']
+  let l:open = {}
+  call add(l:lines, '## ' . gnosis#i18n#tr('壊れたリンク') . ' (' . len(l:r.broken_links) . ')')
+  for l:b in l:r.broken_links
+    call add(l:lines, l:b.src . ' → ' . l:b.target . '  [' . l:b.kind . ']')
+    let l:open[len(l:lines)] = l:b.src
+  endfor
+  let l:fz = l:r.folgezettel
+  call add(l:lines, '')
+  call add(l:lines, '## ' . gnosis#i18n#tr('Folgezettel: 重複した番号') . ' (' . len(l:fz.duplicate_ids) . ')')
+  for [l:id, l:files] in items(l:fz.duplicate_ids)
+    for l:f in l:files
+      call add(l:lines, l:id . '  ' . l:f)
+      let l:open[len(l:lines)] = l:f
+    endfor
+  endfor
+  call add(l:lines, '')
+  call add(l:lines, '## ' . gnosis#i18n#tr('Folgezettel: 抜けている親の番号') . ' (' . len(l:fz.missing_parents) . ')')
+  if !empty(l:fz.missing_parents)
+    call add(l:lines, join(l:fz.missing_parents, ' '))
+  endif
+  call add(l:lines, '')
+  call add(l:lines, '## ' . gnosis#i18n#tr('孤立したノート（関係が1本も無い）') . ' (' . len(l:r.orphans) . ')')
+  for l:o in l:r.orphans
+    call add(l:lines, l:o)
+    let l:open[len(l:lines)] = l:o
+  endfor
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+  let b:gnosis_check = {'root': l:root, 'open': l:open}
+  nnoremap <buffer> <silent> <CR> :call <SID>check_jump()<CR>
+  nnoremap <buffer> <silent> q :close<CR>
+endfunction
+
+function! s:check_jump() abort
+  let l:f = get(b:gnosis_check.open, line('.'), '')
+  if empty(l:f)
+    return
+  endif
+  let l:root = b:gnosis_check.root
+  close
+  execute 'edit ' . fnameescape(l:root . '/' . l:f)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

@@ -41,6 +41,7 @@ gnosis#capture_import
 gnosis#capture_resolve
 gnosis#check_missing_prefix_in_current_dir
 gnosis#check_missing_prefix_in_current_dir_once
+gnosis#check_vault
 gnosis#choose_index_root
 gnosis#cipher_dir
 gnosis#cleanup_stale_locks

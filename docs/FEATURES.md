@@ -156,8 +156,8 @@
 | XP14 | 知識探索ゲーム（指定ノートへのリンク経路 | 知識探索ゲーム（指定ノートへのリンク経路を辿る）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP15 | アイデア合成器（無関係な概念の組合せ）。 | アイデア合成器（無関係な概念の組合せ）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP16 | Memex型連想トレイル（閲覧順・思考経 | Memex型連想トレイル（閲覧順・思考経路を別オブジェクトとして保存／再生／共有）。 | `\A` | 未実装 | 9 |  | P3 |
-| UT01 | 壊れたリンクの検査。 | 壊れたリンクの検査。 | Vim + API | 要確認 | 1 | リンク検査（要調査） | - |
-| UT02 | Index / Topic Index  | Index / Topic Index / GroupBranchの整合性検査。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisBranchCheck`（Branch の整合性検査のみ。Index/Topic Index/GroupBranch 全体は未実装） | - |
+| UT01 | 壊れたリンクの検査。 | 壊れたリンクの検査。 | Vim + API | 動作検証中（:GnosisCheck で検出のみ。修復・リネーム時の自動更新は未実装） | 1 | `python/gnosis_graph.py` `test/check_vault_net.sh` | - |
+| UT02 | Index / Topic Index  | Index / Topic Index / GroupBranchの整合性検査。 | Vim + API | 一部（Branch 検査 + 重複／抜け Folgezettel。Index→First Note→GroupBranch→Topic Index の到達性検査は未実装） | 1 | `:GnosisBranchCheck` `:GnosisCheck` | - |
 | UT03 | リネーム時の安全な参照更新。 | リネーム時の安全な参照更新。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisRename`（ファイル名変更。参照更新の範囲は要調査） | - |
 | UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisBackup`（暗号化 vault の 7z。復元の検証・自動バックアップは未実装） | - |
 | UT05 | Git連携、差分表示、バックアップ対象選 | Git連携、差分表示、バックアップ対象選別。 | Vim + API | 要確認 | 1 | Git 連携（要調査） | - |
@@ -177,7 +177,7 @@
 | FZ01 | Folgezettel 番号ナビ: 深掘り 1→1a→1a1 | `\A` | 未実装 | 2 | 原本 §3。VW21 と同一実装 |
 | FZ02 | 兄弟移動 1a→1b→1c、1→2（親子と履歴経路を区別） | `\A` | 未実装 | 2 | 同上 |
 | FZ03 | 自然順の番号列・ツリー・パンくず・前後・親・最初最後・折りたたみ・本文プレビュー | `\A` | 未実装 | 2 | 同上 |
-| FZ04 | 空き番号／リンク切れの区別、ID 検証（重複・抜け・循環） | `\A` + API | 要確認 | 2 | `python/folgezettel.py` `folgezettel_scan.py` |
+| FZ04 | 空き番号／リンク切れの区別、ID 検証（重複・抜け・循環） | `\A` + API | 動作検証中（重複・抜けの検出まで。循環・ID 変更の影響検査は未実装） | 2 | `python/folgezettel.py` `folgezettel_scan.py` |
 | FZ05 | 紙スキャン／番号付け GUI との統合、索引⇄番号ビュー往復 | `\A` | 未実装 | 2 | `python/paper_pkm.py` |
 | MD01 | `\A` 3 モード（Real Vim／GUI 編集／閲覧専用） | `\A` | 一部（Alt+V 閲覧のみ） | 2 | `web/src/app.js` VIEW_PASS |
 | MD02 | タブ・分割ペイン・レイアウト保存・全機能の GUI 操作経路・コマンドパレット | `\A` | 未実装 | 2 | |
