@@ -6469,6 +6469,80 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" 時間の記録・ポモドーロ・習慣・ライフログ（TM06〜TM08・TM11）。原本はノートの行（⏱ / 🌱 / 📋）。コマンドが書くのは記録用ノート（既定 記録.md）への追記だけ。
+"   :GnosisTimerStart[!] 名前（! でポモドーロ）  :GnosisTimerStatus  :GnosisTimerStop  :GnosisTimeReport [日|週|月|年]  :GnosisHabit 名前  :GnosisHabitStats [名前]  :GnosisLog 本文  :GnosisDayRecord [YYYY-MM-DD]
+function! s:tr_run(args, show) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return ''
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/tracker.py', l:root] + a:args + (a:show ? ['--md'] : []), 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return ''
+  endif
+  return l:out
+endfunction
+
+function! s:tr_show(args) abort
+  let l:out = s:tr_run(a:args, 1)
+  if empty(l:out)
+    return
+  endif
+  let l:root = substitute(fnamemodify(s:get_pkm_root(), ':p'), '/$', '', '')
+  call s:ga_show(l:root, split(l:out, "\n", 1), {})
+endfunction
+
+function! gnosis#timer_start(bang, ...) abort
+  let l:out = s:tr_run(['start', join(a:000, ' ')] + (a:bang ? ['--pomodoro'] : []), 0)
+  if !empty(l:out)
+    echo 'Gnosis: ' . gnosis#i18n#tr('計測を始めました: ') . join(a:000, ' ') . (a:bang ? ' 🍅' : '')
+  endif
+endfunction
+
+function! gnosis#timer_status() abort
+  call s:tr_show(['status'])
+endfunction
+
+function! gnosis#timer_stop() abort
+  let l:out = s:tr_run(['stop'], 0)
+  if empty(l:out)
+    return
+  endif
+  let l:r = json_decode(l:out)
+  echo 'Gnosis: ' . (get(l:r, 'logged', 0) ? printf(gnosis#i18n#tr('記録しました（%d 分）: %s'), l:r.minutes, l:r.file) : get(l:r, 'reason', ''))
+endfunction
+
+function! gnosis#time_report(...) abort
+  call s:tr_show(['report', a:0 > 0 ? a:1 : '週'])
+endfunction
+
+function! gnosis#habit(name) abort
+  let l:out = s:tr_run(['habit', 'check', a:name], 0)
+  if empty(l:out)
+    return
+  endif
+  let l:r = json_decode(l:out)
+  echo 'Gnosis: ' . (get(l:r, 'added', 0) ? printf(gnosis#i18n#tr('記録しました: %s'), a:name) : get(l:r, 'reason', ''))
+endfunction
+
+function! gnosis#habit_stats(...) abort
+  call s:tr_show(['habit', 'stats'] + (a:0 > 0 && !empty(a:1) ? [a:1] : []))
+endfunction
+
+function! gnosis#life_log(text) abort
+  let l:out = s:tr_run(['log', a:text], 0)
+  if !empty(l:out)
+    echo 'Gnosis: ' . gnosis#i18n#tr('ライフログに追記しました')
+  endif
+endfunction
+
+function! gnosis#day_record(...) abort
+  call s:tr_show(['day', a:0 > 0 ? a:1 : strftime('%Y-%m-%d')])
+endfunction
+
 " リマインダー（TM03・TM05・TM14）。ノートの `⏰ 2026-10-25 09:30` を読む。ノートは書き換えない（扱い済み・スヌーズ・履歴は <vault>/.state/reminders.json）。
 "   :GnosisReminders  :GnosisRemindFire[!]（時刻が来たものを記録して表示。! でデスクトップ通知も）  :GnosisRemindAck ID  :GnosisRemindSnooze ID [分]  :GnosisNotifyHistory
 function! s:rem_root() abort

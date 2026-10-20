@@ -88,6 +88,7 @@ gnosis#csv_to_table
 gnosis#csv_to_table_current
 gnosis#current_file
 gnosis#current_title
+gnosis#day_record
 gnosis#diary_adopt
 gnosis#diary_on_save
 gnosis#diary_test_add
@@ -113,6 +114,8 @@ gnosis#graph_report
 gnosis#group_review_check
 gnosis#group_review_snapshot
 gnosis#guard_vault_write
+gnosis#habit
+gnosis#habit_stats
 gnosis#has_python
 gnosis#heading_links_after
 gnosis#heading_links_before
@@ -154,6 +157,7 @@ gnosis#jump_relation_link
 gnosis#jump_section_header
 gnosis#jump_up
 gnosis#jump_up_cursor
+gnosis#life_log
 gnosis#link_highlight
 gnosis#link_syntax
 gnosis#link_to_outline
@@ -381,7 +385,11 @@ gnosis#time_char_pre
 gnosis#time_mode_on_enter
 gnosis#time_mode_on_leave
 gnosis#time_mode_toggle
+gnosis#time_report
 gnosis#time_stamp
+gnosis#timer_start
+gnosis#timer_status
+gnosis#timer_stop
 gnosis#timestamp_filename
 gnosis#timestamp_yaml
 gnosis#title_body_lines

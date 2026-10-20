@@ -74,12 +74,12 @@
 | TM03 | 指定日時のリマインダー。 | 指定日時のリマインダー。 | Vim + `\A` + Android | 一部（PC 側: `⏰` の印を読む・時刻が来たら記録／`!` でデスクトップ通知・二重通知しない・完了タスクは鳴らさない。Android の通知は未（Kotlin 側）。実際の `notify-send` の表示は未確認） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
 | TM04 | 繰り返しタスク／通知、定期予定。 | 繰り返しタスク／通知、定期予定。 | Vim + `\A` + Android | 一部（Markdown の繰り返し規則と次の回の生成は試験済み。通知側・Android は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
 | TM05 | スヌーズ・再通知。 | スヌーズ・再通知。 | Vim + `\A` + Android | 動作検証中（扱い済みまで 30 分ごと最大 4 回再通知・スヌーズで回数を数え直す。PC 側） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
-| TM06 | タイムトラッキング。 | タイムトラッキング。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
-| TM07 | ポモドーロ・集中タイマー。 | ポモドーロ・集中タイマー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
-| TM08 | 習慣トラッカー。 | 習慣トラッカー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
+| TM06 | タイムトラッキング。 | タイムトラッキング。 | Vim + `\A` + Android | 一部（PC 側: `⏱` 行・タイマー・名前/タグ別集計・日またぎ・1 分未満は記録しない。Android・`\A` の画面は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
+| TM07 | ポモドーロ・集中タイマー。 | ポモドーロ・集中タイマー。 | Vim + `\A` + Android | 一部（PC 側: 25/5・4 回ごとに 15 分の局面計算を境界値で試験。音・通知での局面切替の知らせは未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
+| TM08 | 習慣トラッカー。 | 習慣トラッカー。 | Vim + `\A` + Android | 一部（PC 側: `🌱` 行・二重記録しない・連続日数/最長/達成率/28 日。Android・`\A` の画面は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
 | TM09 | タスク依存関係、ブロッカー。 | タスク依存関係、ブロッカー。 | Vim + `\A` + Android | 動作検証中（`id:`/`after:` でブロック中を判定し Agenda で分ける。UI での編集は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
 | TM10 | 日／週／月／年のレビュー。 | 日／週／月／年のレビュー。 | Vim + `\A` + Android | 動作検証中（日/週/月/年。年またぎの週も試験。レビューは `:GnosisPeriodReviewWrite` で新しいノートとして残せる。上書きしない・vault 外/ドット始まりへは書かない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
-| TM11 | ライフログ（記録用データと日記への接続） | ライフログ（記録用データと日記への接続）。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
+| TM11 | ライフログ（記録用データと日記への接続） | ライフログ（記録用データと日記への接続）。 | Vim + `\A` + Android | 一部（PC 側: `📋` 行と、日ごとに時間・習慣・ライフログをまとめる Markdown。日記ノートへの自動接続は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
 | TM12 | 過去の今日（On This Day）。 | 過去の今日（On This Day）。 | Vim + `\A` + Android | 動作検証中（過去の年の同じ月日に作ったノート・終えたタスク。今年は含めない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM13 | 前回セッションの復元。 | 前回セッションの復元。 | Vim + `\A` + Android | 要確認 | 2 | `test/session_*`（要調査） | P1 共通ID |
 | TM14 | 通知履歴・未処理タスク。 | 通知履歴・未処理タスク。 | Vim + `\A` + Android | 一部（通知の履歴と「通知したのに未処理」。Android 側・アプリ内の履歴画面は未） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
