@@ -42,8 +42,8 @@
 | SR01 | 高速ファジー検索。 | 高速ファジー検索。 | Vim + `\A` | 一部（`vault_index.py fuzzy` で題・番号・ファイル名。Vim/`\A` の画面は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR02 | 高速全文検索、本文・見出し・関連ファイル | 高速全文検索、本文・見出し・関連ファイル。 | Vim + `\A` | 動作検証中（SQLite FTS5 trigram＋短い語は部分一致。1 万ノートで初回 2.4 秒・差分 0.25 秒・検索 0.3 秒以下） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR03 | 正規表現検索。 | 正規表現検索。 | Vim + `\A` | 動作検証中（`/正規表現/`。不正な式はエラー） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
-| SR04 | 意味検索（必要ならローカル埋め込みモデル | 意味検索（必要ならローカル埋め込みモデル等、オフライン対応を優先）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| SR05 | 全文・意味検索のハイブリッド順位付け。 | 全文・意味検索のハイブリッド順位付け。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
+| SR04 | 意味検索（必要ならローカル埋め込みモデル | 意味検索（必要ならローカル埋め込みモデル等、オフライン対応を優先）。 | Vim + `\A` | 一部（ローカルの近似: 文字 n-gram の TF-IDF＋擬似適合フィードバック。ニューラルの埋め込みではない） | 3 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P2 View API |
+| SR05 | 全文・意味検索のハイブリッド順位付け。 | 全文・意味検索のハイブリッド順位付け。 | Vim + `\A` | 動作検証中（全文と意味を順位の逆数で混ぜる） | 3 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P2 View API |
 | SR06 | AND/OR/NOT、日付、ノート種別、 | AND/OR/NOT、日付、ノート種別、リンク数、索引／Branch、添付種別の複合条件検索。 | Vim + `\A` | 動作検証中（AND/OR/NOT・date/before/after・type・has・links/backlinks・fz・title） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR07 | 保存検索、再実行、共有可能な検索定義。 | 保存検索、再実行、共有可能な検索定義。 | Vim + `\A` | 動作検証中（`<vault>/.gnosis/searches.json`。共有できる素の JSON） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR08 | 動的索引（検索結果の読み取り専用表示、昇 | 動的索引（検索結果の読み取り専用表示、昇格は明示的操作）。 | Vim + `\A` | 動作検証中（結果は読み取り専用の Markdown。`:GnosisQueryPromote` を明示したときだけ新規ノート） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
@@ -125,21 +125,21 @@
 | GR12 | エッジの関係種別（支持・反論・派生・参考 | エッジの関係種別（支持・反論・派生・参考・文脈・関連等）。 | `\A` + API | 動作検証中（種類の内訳・複数の種類で結ばれた組）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | GR13 | 構造化グラフクエリ／パターン探索。 | 構造化グラフクエリ／パターン探索。 | `\A` + API | 動作検証中（`?a -[種類]-> ?b{条件}` の連なり・向き・固定ノート。`:GnosisGraphQuery`）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | GR14 | 二点間に存在する複数の異種経路表示。 | 二点間に存在する複数の異種経路表示。 | `\A` + API | 動作検証中（Yen 法で重ならない複数経路・辺の種類つき）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
-| AI01 | 類似・重複ノートの検出。 | 類似・重複ノートの検出。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI02 | 追加リンク候補の提案。 | 追加リンク候補の提案。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI03 | 索引追加の候補（自動で元Indexを書き | 索引追加の候補（自動で元Indexを書き換えない）。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI04 | 長文要約。 | 長文要約。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI05 | 複数ノート横断の要約・共通点抽出。 | 複数ノート横断の要約・共通点抽出。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI06 | 記述矛盾の疑い検出（根拠行・確信度を示し | 記述矛盾の疑い検出（根拠行・確信度を示し断定しない）。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI07 | 古い情報の更新確認・期限付き再検証。 | 古い情報の更新確認・期限付き再検証。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI08 | キーワード抽出・索引語の候補。 | キーワード抽出・索引語の候補。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI09 | 問題・質問の自動生成。 | 問題・質問の自動生成。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI10 | 自分のノートに根拠を持つ対話・RAG。 | 自分のノートに根拠を持つ対話・RAG。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
+| AI01 | 類似・重複ノートの検出。 | 類似・重複ノートの検出。 | API + `\A` | 動作検証中（TF-IDF の近さ・重複の疑い（0.7 以上）・共有語を根拠に） ローカル完結（クラウド・外部通信なし）。ノート・索引は書き換えない。 | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI02 | 追加リンク候補の提案。 | 追加リンク候補の提案。 | API + `\A` | 動作検証中（近いがリンクしていないノート・本文に題が出ているが未リンクの言及） ローカル完結（クラウド・外部通信なし）。ノート・索引は書き換えない。 | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI03 | 索引追加の候補（自動で元Indexを書き | 索引追加の候補（自動で元Indexを書き換えない）。 | API + `\A` | 動作検証中（索引ごとの重心との近さで候補だけ。索引は書き換えない） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI04 | 長文要約。 | 長文要約。 | API + `\A` | 動作検証中（抜き出しの要約。言い換えはしない） ローカル完結（クラウド・外部通信なし）。ノート・索引は書き換えない。 | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI05 | 複数ノート横断の要約・共通点抽出。 | 複数ノート横断の要約・共通点抽出。 | API + `\A` | 動作検証中（共通語・多数に出る語・各ノートの要点） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI06 | 記述矛盾の疑い検出（根拠行・確信度を示し | 記述矛盾の疑い検出（根拠行・確信度を示し断定しない）。 | API + `\A` | 動作検証中（数字・肯定否定の食い違いの「疑い」。根拠の行・確信度つき。断定しない） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI07 | 古い情報の更新確認・期限付き再検証。 | 古い情報の更新確認・期限付き再検証。 | API + `\A` | 動作検証中（時点依存の語・古い年・`reverify:` 期限） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI08 | キーワード抽出・索引語の候補。 | キーワード抽出・索引語の候補。 | API + `\A` | 動作検証中（つながった語句を索引語の候補に） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI09 | 問題・質問の自動生成。 | 問題・質問の自動生成。 | API + `\A` | 動作検証中（定義文の Q:/A:・穴埋め・説明課題。SRS にそのまま使える形。ノートには書かない） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI10 | 自分のノートに根拠を持つ対話・RAG。 | 自分のノートに根拠を持つ対話・RAG。 | API + `\A` | 一部（取り出し側のみ: 自分のノートからの抜き出し・出典の行つき・根拠が無ければ「見つからない」。LLM による生成・対話は未） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
 | AI11 | 外部情報の定期収集エージェント（利用者の | 外部情報の定期収集エージェント（利用者の明示的許可・ネット権限必須）。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI12 | ローカル／明示選択クラウド音声文字起こし | ローカル／明示選択クラウド音声文字起こし。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI13 | 自然言語による検索条件生成。 | 自然言語による検索条件生成。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI14 | 週・月の活動と知識変化のレポート。 | 週・月の活動と知識変化のレポート。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
-| AI15 | 保存済み検索条件を巡回するAgent（対 | 保存済み検索条件を巡回するAgent（対象ノートを移動せず結果ビューへ）。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
+| AI12 | ローカル／明示選択クラウド音声文字起こし | ローカル／明示選択クラウド音声文字起こし。 | API + `\A` | 阻害中（この環境に音声認識エンジン（whisper・vosk など）が無い。ffmpeg だけある。エンジンを入れたら呼ぶアダプタを作る） | 8 |  | P7 グラフ層 |
+| AI13 | 自然言語による検索条件生成。 | 自然言語による検索条件生成。 | API + `\A` | 一部（ルールで読む: 日付範囲・タスク・画像・日記・番号・引用語。読み方を併記。機械学習ではない） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI14 | 週・月の活動と知識変化のレポート。 | 週・月の活動と知識変化のレポート。 | API + `\A` | 動作検証中（作成・更新の件数・前期間との比較・新しいノートの語句） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
+| AI15 | 保存済み検索条件を巡回するAgent（対 | 保存済み検索条件を巡回するAgent（対象ノートを移動せず結果ビューへ）。 | API + `\A` | 動作検証中（保存検索を巡回し前回との差を出す。ノートは動かさない。状態 `.gnosis/patrol.json`） | 8 | `python/local_ai.py` `test_local_ai.py` `test/ai_net.sh` | P7 グラフ層 |
 | XP01 | ランダムウォーク。 | ランダムウォーク。 | `\A` | 未実装 | 9 |  | P3 |
 | XP02 | セレンディピティ推薦（普段見ない意外なノ | セレンディピティ推薦（普段見ない意外なノートとの遭遇）。 | `\A` | 未実装 | 9 |  | P3 |
 | XP03 | 知識考古学（古い記述の再発掘と比較）。 | 知識考古学（古い記述の再発掘と比較）。 | `\A` | 未実装 | 9 |  | P3 |

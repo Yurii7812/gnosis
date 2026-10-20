@@ -178,6 +178,8 @@
     "スマホへ入れられませんでした": "Could not install on the phone",
     "Gnosis: スマホに入れました。アプリを開いて確認してください": "Gnosis: installed on the phone. Open the app to check",
     "Gnosis: スマホから読み込んでいます…": "Gnosis: reading from the phone…",
+    "種類は次のどれかです: ": "Kind must be one of: ",
+    "Gnosis: vault のノートを開いて実行してください": "Gnosis: open a note in the vault first",
     "パターン": "Pattern",
     "%d 件（Enter でその行の最初のノートを開く）": "%d result(s) (Enter opens the first note on the line)",
     "Gnosis: つながる経路がありません": "Gnosis: no path connects them",
