@@ -120,6 +120,8 @@
 
 - **PDF 注釈（LR08）**: `pdf_notes.py`（`:GnosisPdf`）。外部ライブラリ無しで PDF の注釈を読む（圧縮オブジェクトストリーム・xref ストリーム対応）。試験は手書き PDF と Chromium 製 PDF。実ビューアの注釈・暗号化/スキャン PDF は未確認・未対応。
 
+- **全体回帰 run10**: `sh test/run.sh`（`GNOSIS_RUN_WEB_E2E=1`、Electron の `\A` E2E を含む）が編集なしで `exit=0`（コミット時点は英語カタログの重複キー修正の直後）。実機（Android/Windows/macOS）は未確認。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。
