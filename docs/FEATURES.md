@@ -6,7 +6,7 @@
 | ID | 機能 | 説明 | 対象 | 状態 | Phase | 実体・根拠 | 依存 |
 |---|---|---|---|---|---|---|---|
 | KM01 | PARA | Projects / Areas / Resources / Archives を**仮想ビュー**として提供。既存ノートの物理移動・強制分類をしない。 | `\A` HTML + Markdown | 動作検証中（仮想ビュー。根拠つき。移動・強制分類なし。`para:` 指定が最優先）。`:GnosisPara` | 6 | `python/para_moc.py` `test_para_moc.py` `test/para_net.sh` | P2 View API |
-| KM02 | Zettelkasten | 原子的ノート、リンク、Folgezettelの作成・成長、紙との連携。 | `\A` HTML + Markdown | 要確認 | 6 | `zn`/`zk`・Folgezettel（python/folgezettel*.py） | P2 View API |
+| KM02 | Zettelkasten | 原子的ノート、リンク、Folgezettelの作成・成長、紙との連携。 | `\A` HTML + Markdown | 動作検証中（既存の `zn`/`zk` と Folgezettel の作成・成長・番号ナビ・紙との連携は `python/test_folgezettel.py` `test_paper_pkm.py` `context_pty_check.py` ほかで確認済み。原子的ノートの「大きさの目安」の警告は未。`:GnosisStats` で文字数を見られる） | 6 | `python/folgezettel*.py` `test_folgezettel.py` `test_paper_pkm.py` `test/context_pty_check.py` | P2 View API |
 | KM03 | MOC/索引案 | Map of Contentの表示、ノート群から索引案生成（既存索引は勝手に改変しない）。 | `\A` HTML + Markdown | 動作検証中（グループの小グループ別表示・語から索引の草稿。既存の索引は変えず、`--write` のときだけ新規ノート・上書きなし）。`:GnosisMoc` `:GnosisMocPropose` | 6 | `python/para_moc.py` `test_para_moc.py` `test/para_net.sh` | P2 View API |
 | KM04 | 曼荼羅ノート | 9×9=81マスの思考展開。各マスからMarkdownノートや別の81マス曼荼羅を開く。曼荼羅そのものの表示はHTML中心、ノートは実際のMarkdownを開く。81マスの構造デー | `\A` HTML + Markdown | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | KM05 | Cornell Notes | ノート本文、質問欄、要約欄の編集・出力。 | `\A` HTML + Markdown | 動作検証中（Cornell: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
@@ -54,7 +54,7 @@
 | SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 一部（最近更新した／作ったノート。最近「閲覧」したものは履歴で代用、取り込みしたものの一覧は未）。`:GnosisRecent` | 2 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 共通ID |
 | SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 動作検証中（`:GnosisPaths`・`\A` の分析ビューは別。種類を絞った経路の指定は gnosis_graph の API のみ） | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
-| SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
+| SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 動作検証中（検索→番号で選ぶ→索引案の新規ノート／対象の `Related:` へ追記。**既定は試走**で `!` のときだけ書く。related は控えを取って取り消し可・重複と自分自身は足さない・コードブロック内の `Related:` は見ない。`:GnosisChain` `:GnosisChainUndo`）。**未了**: 他の操作（タグ付け・移動など）への拡張、`\A` の画面 | 3 | `python/chain.py` `test_chain.py` `test/chain_net.sh` | P2 View API |
 | LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 一部（ハイライトを間隔をあけて見返す: 初回/again 1 日/good 3→6…/easy 7→×3.5 日。抜き出し自体はハイライト `==…==` のみ。`\A` の画面は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR02 | 間隔反復（Spaced Repetiti | 間隔反復（Spaced Repetition）。 | `\A` + Markdown | 動作検証中（SM-2。記録は `.gnosis/srs.json`。`\A`・Android は未） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR03 | フラッシュカード。 | フラッシュカード。 | `\A` + Markdown | 動作検証中（`Q:`/`A:` のカード。複数行可） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |

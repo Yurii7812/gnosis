@@ -7655,6 +7655,73 @@ function! gnosis#session_autorestore() abort
   endif
 endfunction
 
+" 検索 → 選ぶ → 索引案／リンク作成のコマンドチェーン（SR16）。  :GnosisChain[!] index|related 対象 [#1,3-5] 検索語…   :GnosisChainUndo[!]
+"   ! なしは試走（何を書くかを見せるだけ）。! を付けたときだけ書く。related は対象の Related: の最後に足すだけで、取り消せる
+function! gnosis#chain(bang, kind, target, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if index(['index', 'related'], a:kind) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('index か related を指定してください') | echohl NONE
+    return
+  endif
+  let l:words = copy(a:000)
+  let l:args = []
+  if !empty(l:words) && l:words[0] =~# '^#[0-9][0-9,-]*$'
+    let l:args += ['--pick', strpart(remove(l:words, 0), 1)]
+  endif
+  if empty(l:words)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('検索の語を指定してください') | echohl NONE
+    return
+  endif
+  if a:bang && s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:cmd = [gnosis#python_cmd(), s:note_root . '/python/chain.py', l:root, a:kind, join(l:words, ' '), a:target] + l:args + (a:bang ? ['--apply'] : []) + ['--md']
+  let l:out = system(join(map(l:cmd, 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+  if a:bang
+    silent! checktime
+  endif
+endfunction
+
+function! gnosis#chain_undo(bang) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/chain.py', l:root, 'undo'] + (a:bang ? ['--force'] : []), 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'ok': 0, 'error': l:out}
+  endtry
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  silent! checktime
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('取り消しました: %s'), l:r.restored)
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

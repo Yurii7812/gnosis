@@ -513,6 +513,8 @@ command! GnosisCheck call gnosis#check_vault()
 command! GnosisGraphReport call gnosis#graph_report()
 command! -nargs=+ -complete=custom,gnosis#ai_complete GnosisAi call gnosis#ai(<f-args>)
 command! GnosisBacklinks call gnosis#backlinks()
+command! -bang -nargs=+ GnosisChain call gnosis#chain(<bang>0, <f-args>)
+command! -bang GnosisChainUndo call gnosis#chain_undo(<bang>0)
 command! GnosisRestore call gnosis#session_restore()
 augroup gnosis_session
   autocmd!
