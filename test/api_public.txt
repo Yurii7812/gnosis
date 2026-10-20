@@ -303,6 +303,9 @@ gnosis#session#others
 gnosis#session#register
 gnosis#session#release
 gnosis#session#unregister
+gnosis#session_autorestore
+gnosis#session_restore
+gnosis#session_save
 gnosis#set_password
 gnosis#set_yomi
 gnosis#settings#activate

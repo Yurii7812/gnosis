@@ -31,7 +31,7 @@
 | ED08 | マルチカーソル／複数範囲編集（VimとG | マルチカーソル／複数範囲編集（VimとGUIの適切な方式）。 | Vim + `\A` | 一部（Vim 向けの方式: 同じ語に印→まとめて書き換え→`u` 1 回で戻る。`\A` の GUI 複数カーソルは未）。`:GnosisMulti` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | ED09 | 2ノート比較・差分ビュー。 | 2ノート比較・差分ビュー。 | Vim + `\A` | 動作検証中（行ごとの unified diff・近さ・共通/片方のみの行数）。`:GnosisDiff` | 2 | `python/note_tools.py` `test_note_tools.py` `test/split_net.sh` | P1 共通ID |
 | ED10 | 変更履歴、差分、Undo/Redo、バー | 変更履歴、差分、Undo/Redo、バージョン復元。 | Vim + `\A` | 一部（存在確認のみ・未検証） | 1 | Vim の undo とバッファ保存のみ。ノート単位の履歴・復元は未実装 | - |
-| ED11 | クイックキャプチャ、未整理のメモ、日記へ | クイックキャプチャ、未整理のメモ、日記への自然な接続。 | Vim + `\A` | 要確認 | 1 | `\n` `:GnosisQuick`・`\N`（docs/11） | - |
+| ED11 | クイックキャプチャ、未整理のメモ、日記へ | クイックキャプチャ、未整理のメモ、日記への自然な接続。 | Vim + `\A` | 動作検証中（`:GnosisQuick`/`\n`: 何も聞かずに新しいノートを作って書き始める。関係のブロックは付けない。つなぐのは後（`\N` で未整理）。`\A` と Android のクイックキャプチャは別） | 1 | `autoload/gnosis.vim` `test/restore_net.sh`（`python/test_orphans.py`） | - |
 | ED12 | クリップボード履歴（許可された範囲、個人 | クリップボード履歴（許可された範囲、個人情報の扱いに注意）。 | Vim + `\A` | 一部（既定は無効・メモリの中だけ・パスワード/長い鍵らしきものは記録しない・2000 文字まで）。OS のクリップボード全体の監視はしない（個人情報への配慮）。`:GnosisClip` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | ED13 | ノートテンプレート、挿入メニュー。 | ノートテンプレート、挿入メニュー。 | Vim + `\A` | 動作検証中（`テンプレート/` の .md・`{{date}}` 等の文字の置き換えだけ（式は実行しない）・新規ノート作成は上書きなし・フォルダ外への参照を拒否）。`:GnosisTemplate*` | 2 | `python/templates.py` `test_templates.py` `test/edit_net.sh` | P1 共通ID |
 | ED14 | インライン式・計算（安全な評価器を使用。 | インライン式・計算（安全な評価器を使用。シェル実行と分離）。 | Vim + `\A` | 動作検証中（`eval` を使わない構文木の評価。四則・べき乗・関数・定数のみ。名前/属性/文字列/ラムダ等は拒否・べき乗と長さと深さに上限）。`:GnosisCalc` | 2 | `python/calc.py` `test_calc.py` `test/edit_net.sh` | P1 共通ID |
@@ -81,7 +81,7 @@
 | TM10 | 日／週／月／年のレビュー。 | 日／週／月／年のレビュー。 | Vim + `\A` + Android | 動作検証中（日/週/月/年。年またぎの週も試験。レビューは `:GnosisPeriodReviewWrite` で新しいノートとして残せる。上書きしない・vault 外/ドット始まりへは書かない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM11 | ライフログ（記録用データと日記への接続） | ライフログ（記録用データと日記への接続）。 | Vim + `\A` + Android | 一部（PC 側: `📋` 行と、日ごとに時間・習慣・ライフログをまとめる Markdown。日記ノートへの自動接続は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
 | TM12 | 過去の今日（On This Day）。 | 過去の今日（On This Day）。 | Vim + `\A` + Android | 動作検証中（過去の年の同じ月日に作ったノート・終えたタスク。今年は含めない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
-| TM13 | 前回セッションの復元。 | 前回セッションの復元。 | Vim + `\A` + Android | 要確認 | 2 | `test/session_*`（要調査） | P1 共通ID |
+| TM13 | 前回セッションの復元。 | 前回セッションの復元。 | Vim + `\A` + Android | 一部（Vim: 終了時に開いていたノート（最大 20）とカーソル位置を `.state/session.json` に保存し、`:GnosisRestore` で今のノートを最初に・残りをタブで復元。消えたノートは飛ばす。`g:gnosis_restore_last=1` で引数なし起動時に自動復元（既定は無効）。`\A` は既存の workspace.json でタブ・分割を復元。Android は未） | 2 | `autoload/gnosis.vim` `test/restore_net.sh` | P1 共通ID |
 | TM14 | 通知履歴・未処理タスク。 | 通知履歴・未処理タスク。 | Vim + `\A` + Android | 一部（通知の履歴と「通知したのに未処理」。Android 側・アプリ内の履歴画面は未） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
 | TM15 | 知識リマインダー（以前のノート、未完了の | 知識リマインダー（以前のノート、未完了の問い、古い仮説などを再提示）。 | Vim + `\A` + Android | 一部（PC 側: 未解決の問い `? …`・90 日以上たった仮説・今日の問い・カプセルの再提示。Android の通知は未）。`:GnosisKnowledge` | 5 | `python/nav.py` `test_nav.py` `test/nav_net.sh` | P1 タスクエンジン |
 | TM16 | Androidホーム画面ウィジェット、ク | Androidホーム画面ウィジェット、クイックタスク追加。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |

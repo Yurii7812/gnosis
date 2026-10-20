@@ -7576,6 +7576,85 @@ function! gnosis#git(action, ...) abort
   call s:ed_show('gitops.py', [a:action] + l:args)
 endfunction
 
+" 前回セッションの復元（TM13）。終了時に、開いていた vault のノートとカーソル位置を <vault>/.state/session.json に保存し、:GnosisRestore で開き直す。
+"   g:gnosis_restore_last = 1 のとき、ファイルを指定せずに起動すると自動で復元する（既定は 0 = 自動では復元しない）
+function! gnosis#session_save() abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:files = []
+  let l:pos = {}
+  for l:b in getbufinfo({'buflisted': 1})
+    if empty(l:b.name) || l:b.name !~# '\.md$' || stridx(l:b.name, l:root . '/') != 0 || getbufvar(l:b.bufnr, '&buftype') !=# ''
+      continue
+    endif
+    let l:rel = strpart(l:b.name, len(l:root) + 1)
+    if l:rel =~# '^\.'
+      continue
+    endif
+    call add(l:files, l:rel)
+    let l:pos[l:rel] = [l:b.lnum, 1]
+  endfor
+  if empty(l:files)
+    return
+  endif
+  let l:cur = s:nt_rel(l:root)
+  try
+    call mkdir(l:root . '/.state', 'p')
+    call writefile([json_encode({'files': l:files[: 19], 'current': l:cur, 'pos': l:pos, 'saved': strftime('%Y-%m-%d %H:%M:%S')})], l:root . '/.state/session.json')
+  catch
+  endtry
+endfunction
+
+function! gnosis#session_restore() abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return 0
+  endif
+  let l:f = l:root . '/.state/session.json'
+  if !filereadable(l:f)
+    echo 'Gnosis: ' . gnosis#i18n#tr('前回のセッションの記録がありません')
+    return 0
+  endif
+  try
+    let l:d = json_decode(join(readfile(l:f), "\n"))
+    let l:files = filter(copy(get(l:d, 'files', [])), 'type(v:val) == v:t_string && v:val !~# "^\\." && v:val !~# "\\.\\./" && filereadable(l:root . "/" . v:val)')
+  catch
+    echo 'Gnosis: ' . gnosis#i18n#tr('前回のセッションの記録を読めませんでした')
+    return 0
+  endtry
+  if empty(l:files)
+    echo 'Gnosis: ' . gnosis#i18n#tr('開き直せるノートがありません')
+    return 0
+  endif
+  let l:cur = get(l:d, 'current', '')
+  let l:order = filter(copy(l:files), 'v:val !=# l:cur')
+  if index(l:files, l:cur) >= 0
+    call insert(l:order, l:cur, 0)
+  endif
+  let l:n = 0
+  for l:rel in l:order
+    execute (l:n == 0 ? 'edit ' : 'tabedit ') . fnameescape(l:root . '/' . l:rel)
+    let l:p = get(get(l:d, 'pos', {}), l:rel, [])
+    if type(l:p) == v:t_list && len(l:p) >= 1
+      call cursor(min([max([1, l:p[0]]), line('$')]), 1)
+    endif
+    let l:n += 1
+  endfor
+  if index(l:files, l:cur) >= 0
+    tabfirst
+  endif
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('前回のノート %d 件を開きました'), l:n)
+  return l:n
+endfunction
+
+function! gnosis#session_autorestore() abort
+  if get(g:, 'gnosis_restore_last', 0) && argc() == 0 && !empty(s:nt_root())
+    call gnosis#session_restore()
+  endif
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()
