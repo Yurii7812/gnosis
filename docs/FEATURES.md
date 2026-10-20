@@ -161,10 +161,10 @@
 | UT03 | リネーム時の安全な参照更新。 | リネーム時の安全な参照更新。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisRename`（ファイル名変更。参照更新の範囲は要調査） | - |
 | UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisBackup`（暗号化 vault の 7z。復元の検証・自動バックアップは未実装） | - |
 | UT05 | Git連携、差分表示、バックアップ対象選 | Git連携、差分表示、バックアップ対象選別。 | Vim + API | 要確認 | 1 | Git 連携（要調査） | - |
-| UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 要確認 | 3 | `web/` は表示用で HTML 書き出しではない | P2 View API |
+| UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 動作検証中（静的 HTML・検索・番号表。EXIF 除去・分割出力・ブラウザ実表示は未） | 3 | `python/export_site.py` `md_html.py` `docs/HTML_EXPORT.md` | P2 View API |
 | UT07 | PDF・EPUBへのエクスポート。 | PDF・EPUBへのエクスポート。 | Vim + API | 未実装 | 3 |  | P2 View API |
 | UT08 | Markdown互換性検査。 | Markdown互換性検査。 | Vim + API | 未実装 | 3 |  | P2 View API |
-| UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 未実装 | 3 |  | P2 View API |
+| UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 一部（書き出しサイト内の検索のみ。vault 全体のオフライン FTS は未） | 3 | `search.js` `search-index.json` | P2 View API |
 | UT10 | 設定プロファイル、vaultごとの設定。 | 設定プロファイル、vaultごとの設定。 | Vim + API | 要確認 | 1 | vault ごとの設定 `.gnosis/settings.json` | - |
 | UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 未実装 | 2 |  | P1 共通ID |
 | UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 未実装 | 1 |  | - |
@@ -194,7 +194,7 @@
 | M04 | 画像添付 hash 管理・関係(Branch/Context)の差分反映・トピック変更 | Vim/Python | 一部（トピック変更反映あり） | 1 | |
 | M05 | Idempotency／ジャーナル／原子的書込／✓ は永続化後のみ | Python | 未実装 | 1 | |
 | M06 | 重複候補の診断・統合ツール（自動削除しない）・履歴・取り消し | Vim/`\A` | 未実装 | 1 | |
-| HT01 | Markdown 表示索引（views 目次）・静的 Markdown 出力・HTML エクスポート（オフライン） | API | 未実装 | 3 | |
+| HT01 | Markdown 表示索引（views 目次）・静的 Markdown 出力・HTML エクスポート（オフライン） | API | 一部（Folgezettel 番号表 MD/HTML・静的サイト出力は動作検証中。views 目次の他のビューは未） | 3 | |
 | BG01 | 回帰: リンク末尾の余計な空白（261019222455.md） | Vim | 要確認 | 1 | 直近コミットで修正の記述あり。再現テスト未確認 |
 | BG02 | 回帰: チェックボックス行のリンクを Enter で開く | Vim | 要確認 | 1 | `test/checkbox_net.sh` |
 | BG03 | 回帰: `^[[1;5C` の混入・キー遅延 | Vim | 要確認 | 1 | 直近コミットで「job で待つ」修正の記述 |

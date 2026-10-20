@@ -33,6 +33,9 @@
 
 - `python/tasks.py` + `:GnosisAgenda`: Markdown タスクの解析・集約・完了（繰り返し・依存・開始日）。試験 `test_tasks.py` `test/agenda_net.sh`。書式は DECISIONS D004。Android 側（Kotlin）はまだ共有していない（同じ書式をアプリで解析するのは Phase 5）。
 
+- `python/md_html.py` + `python/export_site.py` + `:GnosisExportSite`: 静的サイト／Markdown 番号表の書き出し（詳細 `docs/HTML_EXPORT.md`）。書き出し試験でプライバシーの実バグ（非公開ノートへのリンクが残る）を見つけて修正済み。
+- `:GnosisCheck`（UT01 の検出）・`:GnosisAgenda`（TM01）。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

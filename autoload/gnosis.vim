@@ -6019,6 +6019,27 @@ function! s:check_jump() abort
   execute 'edit ' . fnameescape(l:root . '/' . l:f)
 endfunction
 
+" 静的サイト(HTML)と Markdown の番号表を書き出す: :GnosisExportSite[!] [出力先]
+"   既定の出力先は <vault>/.site（ドット始まり）。! を付けると private: true のノートも含める。
+"   出力先が空でなく前回の書き出しでもないときは何も書かない。vault のノートは変えない。
+function! gnosis#export_site(bang, ...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:out = a:0 && !empty(a:1) ? fnamemodify(expand(a:1), ':p') : l:root . '/.site'
+  let l:out = substitute(l:out, '/$', '', '')
+  call gnosis#save_current_note()
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/export_site.py', l:root, l:out] + (a:bang ? ['--include-private'] : []), 'shellescape(v:val)'), ' ')
+  let l:r = json_decode(system(l:cmd))
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートを書き出しました（非公開で除外 %d・添付 %d）: %s'), l:r.notes, len(l:r.skipped_private), l:r.assets, l:r.out)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)
