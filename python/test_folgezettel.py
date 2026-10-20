@@ -50,6 +50,36 @@ class FolgezettelTest(unittest.TestCase):
         nf.simple_sync(self.root)
         self.assertEqual(before, {p: p.read_text() for p in before})
 
+    def test_branch_group_takes_parent_id(self):
+        # ブランチで作られたグループ（親の BranchGroup: にある）は、親ノートと同じ ID を持つ
+        self.note('index', body='[a](a.md)')
+        self.note('a', body='BranchGroup:\n[bg](bg.md)\n\nhello')
+        bg = self.note('bg', body='ParentBranch:\n[a](a.md)')
+        bg.write_text(bg.read_text().replace('title: bg\n', 'title: bg\nattribute: group\n'))
+        other = self.note('other', '7')
+        other.write_text(other.read_text().replace('title: other\n', 'title: other\nattribute: group\n'))
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(self.root / 'a.md'), '1')
+        self.assertEqual(self.ident(bg), '1')
+        self.assertEqual(self.ident(other), '')
+        before = {p: p.read_text() for p in self.root.glob('*.md')}
+        nf.simple_sync(self.root)
+        self.assertEqual(before, {p: p.read_text() for p in before})
+        self.assertEqual(fz.navigate(self.root, self.root / 'a.md', 'up')['ok'], False)
+
+    def test_one_blank_line_before_sections(self):
+        # 本文の最後と ChildBranch: などのあいだの空行は、多くても少なくても 1 つにそろう
+        self.note('index', body='[a](a.md)\n[b](b.md)')
+        a = self.note('a', body='本文\n\n\n\nChildBranch:\n[b](b.md)')
+        b = self.note('b', body='文\nChildBranch:\n[c](c.md)')
+        self.note('c')
+        nf.simple_sync(self.root)
+        for p in (a, b):
+            lines = p.read_text().split('\n')
+            i = lines.index('ChildBranch:')
+            self.assertEqual(lines[i - 1], '', p.name)
+            self.assertNotEqual(lines[i - 2], '', p.name)
+
     def test_reparent_renumbers_subtree(self):
         # 親が変わったら、そのノートと子孫の番号を新しい親の下に振り直す（年ができて月が入る、など）
         self.note('index', body='[d](d.md)')

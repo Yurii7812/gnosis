@@ -104,12 +104,10 @@ class Vault:
                     if rp is not None and rp not in out:
                         out.append(rp)
                 store[p] = out
-        # 本文（BranchGroup: は除く）にリンクがあるノート。本文にある子は ChildBranch: に書かない
+        # 本文（BranchGroup: の中も含む）にリンクがあるノート。本文にある子は ChildBranch: に書かない
         self.body_links: dict[Path, set[Path]] = {}
         for p, n in self.parsed.items():
             body = n["body"]
-            if nf.BRANCH_GROUP_HEAD in body:
-                body = body[:body.index(nf.BRANCH_GROUP_HEAD)]
             self.body_links[p] = {rp for _d, tg in nf._links_from(body)
                                   for rp in [_resolve(tg, p.parent, known)] if rp is not None}
 

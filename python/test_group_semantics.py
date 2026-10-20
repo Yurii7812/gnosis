@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as d:
     check("[M2](m2.md)" in r.split("\nGroup:")[1], "本文のリンクは本文に残る")
 
 
-# ChildBranch: は、本文にリンクがある子を書かない（BranchGroup: の子は書く）
+# ChildBranch: は、本文にリンクがある子を書かない（BranchGroup: の子も書かない）
 with tempfile.TemporaryDirectory() as d:
     root = Path(d)
     note(root, "index.md", "Index", ["[P](p.md)"], group=True)
@@ -97,8 +97,8 @@ with tempfile.TemporaryDirectory() as d:
     p_ = read(root, "p.md")
     i = p_.index("ChildBranch:")
     cb = p_[i + 1:p_.index("BackLink:") if "BackLink:" in p_ else len(p_)]
-    # 本文にリンクがある子（B）は ChildBranch: に書かない。BranchGroup: の G は書く
-    check(cb[:3] == ["[A](a.md)", "[C](c.md)", "[G](g.md)"] and "[B](b.md)" not in cb,
+    # 本文にリンクがある子（B）も BranchGroup: の G も ChildBranch: に書かない
+    check(cb[:2] == ["[A](a.md)", "[C](c.md)"] and "[B](b.md)" not in cb and "[G](g.md)" not in cb,
           f"ChildBranch: 本文にある子は書かない（ほかは元の並びのまま）: {cb}")
     # 本文からリンクを消すと、子の ParentBranch: をもとに ChildBranch: に戻る
     note(root, "b.md", "B", ["ParentBranch:", "[P](p.md)", "", "x"])

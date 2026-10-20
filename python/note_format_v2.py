@@ -814,11 +814,14 @@ EXPAND_TMP_DIR = "_tmp"  # 旧 \e 出力（2026-10-06 以前）。今は \e/\se 
 
 
 def _iter_md(root: Path):
-    for p in sorted(root.rglob("*.md")):
-        parts = p.relative_to(root).parts
-        if any(part.startswith(".") for part in parts) or EXPAND_TMP_DIR in parts:
-            continue
-        yield p
+    # ドット始まり（.git・.undo・.trash・.crypt など）の中は降りない。暗号化 vault では、そこを数えるだけで遅くなる
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != EXPAND_TMP_DIR]
+        for name in filenames:
+            if name.endswith(".md") and not name.startswith("."):
+                found.append(Path(dirpath) / name)
+    yield from sorted(found)
 
 
 def _index(root: Path) -> dict[str, list[Path]]:
@@ -1894,7 +1897,7 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
                         ctx_kids: set | None = None, pb_kids: set | None = None,
                         titles: dict | None = None) -> list[str]:
-    """ChildBranch: に書く子。本文（BranchGroup: は除く）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
+    """ChildBranch: に書く子。本文（BranchGroup: の中も含む）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
     子の側の ParentBranch: にこのノートがあるのに ChildBranch: にも本文にも無い子は足す（本文から消したときに戻す）。
     並び: 上にこのノートを Context にしている子、空行、下にただの子（それぞれの中の並びは元のまま）。"""
     def key(tg: str) -> str:
@@ -1912,9 +1915,6 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
-    # BranchGroup:（zk の分岐グループ）は本文に数えない。そこにある子は ChildBranch: にも書く
-    if BRANCH_GROUP_HEAD in body:
-        body = body[:body.index(BRANCH_GROUP_HEAD)]
     shown = {resolved(key(tg)) for _d, tg in _links_from(body)} - {None}
     kids = ctx_kids or set()
     entries: list[tuple[str, list]] = []
@@ -1977,14 +1977,10 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         have = len(lines) - len(_rstrip_blank(lines))
         lines += [""] * max(0, int(n.get("tail_blanks", 0)) - have)
         return "\n".join(lines) + "\n"
-    # 本文末の空行（リンク行と節の間）は残す。本文の余白はそのまま。
-    # 節が無かったノートの末尾の空行（画像のあとの空行など）も、最初の節の手前に残す。
-    lines += [""] * int(n.get("tail_blanks", 0))
-    last = next((ln for ln in reversed(lines) if ln.strip() != ""), None)
-    if last is not None and re.match(r"^#\s", last):
-        # 本文が見出しだけのときはテンプレート通り書くための余白を置く
-        if len(lines) == lines.index(last) + 1:
-            lines += ["", ""]
+    # 本文の最後と、その下の節（ChildBranch: など）のあいだの空行は、いつも 1 つだけ
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    lines.append("")
     for mark, ls in sections:
         lines.append(mark)
         lines += ls

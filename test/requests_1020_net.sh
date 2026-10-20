@@ -25,7 +25,7 @@ inline-saved 1
 L-b 1 1 1
 L-c 1 1
 L-esc 1 a.md
-join 1 2 1
+join 1 1 1
 sorted ['[A](a.md)', '', '[アヒル](h.md)', '[えー](a.md)', '[ゼブラ](z.md)']
 empty-za ['ParentBranch:', '[A](a.md)', '', '[ゼブラ](z.md)']
 empty-g ['ParentBranch:', '[A](a.md)', '', '[E2-A](a.md)']

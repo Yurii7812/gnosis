@@ -1249,6 +1249,12 @@ function! s:guide_merge(old, new) abort
       call extend(l:tail, l:group, 0)
     endif
   endif
+  if !empty(l:tail)
+    while !empty(l:out) && trim(l:out[-1]) ==# ''
+      call remove(l:out, -1)
+    endwhile
+    call add(l:out, '')
+  endif
   return l:out + l:tail
 endfunction
 

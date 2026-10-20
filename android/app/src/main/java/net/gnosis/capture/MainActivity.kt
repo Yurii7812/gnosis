@@ -177,6 +177,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var pickingImage by remember { mutableStateOf(false) }
     var deleteSelectedOpen by remember { mutableStateOf(false) }
     var cleanImportedOpen by remember { mutableStateOf(false) }
+    var cleanShownOpen by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Alarm.notificationsEnabled(ctx)) }
     var exactEnabled by remember { mutableStateOf(Alarm.canScheduleExact(ctx)) }
     var nextAlarm by remember { mutableStateOf(Alarm.scheduledTime(ctx)) }
@@ -442,7 +443,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     } else Column {
                         Text(if (selecting) "${selected.size} 件選択" else topicLabel(topic), fontWeight = FontWeight.Bold,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (n == 0) "すべて取り込み済み" else "未取り込み $n 件", fontSize = 12.sp,
+                        val bdSub = backdate?.let { "　日付: " + SimpleDateFormat("M月d日", Locale.JAPAN).format(Date(it)) } ?: ""
+                        Text((if (n == 0) "すべて取り込み済み" else "未取り込み $n 件") + bdSub, fontSize = 12.sp,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
@@ -482,6 +484,20 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     else if (search == null) Box {
                         IconButton(onClick = { moreMenu = true }) { Icon(Icons.Filled.MoreVert, "そのほか") }
                         DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                            if (topic == DIARY || settings.topicModes[topic]?.record == true) {
+                                DropdownMenuItem(text = { Text(backdate?.let { "日付: " + SimpleDateFormat("M月d日（E）", Locale.JAPAN).format(Date(it)) } ?: "日付を指定して書く（今日）") },
+                                    leadingIcon = { Icon(Icons.Filled.Event, null) }, onClick = { moreMenu = false; pickDate = true })
+                                if (backdate != null) {
+                                    DropdownMenuItem(text = { Text(if (settings.writtenStamp) "今の時刻を入れる（オン）" else "今の時刻を入れる（オフ）") },
+                                        leadingIcon = { Icon(if (settings.writtenStamp) Icons.Filled.Check else Icons.Filled.Schedule, null) }, onClick = {
+                                        settings = settings.copy(writtenStamp = !settings.writtenStamp); store.saveSettings(settings)
+                                    })
+                                    DropdownMenuItem(text = { Text("日付を今日に戻す") }, leadingIcon = { Icon(Icons.Filled.Close, null) }, onClick = { moreMenu = false; backdate = null })
+                                }
+                            }
+                            if (topic !in listOf(ALL, UNASSIGNED, DIARY)) {
+                                DropdownMenuItem(text = { Text("このトピックの取り込み方") }, leadingIcon = { Icon(Icons.Filled.Settings, null) }, onClick = { moreMenu = false; modeFor = topic })
+                            }
                             DropdownMenuItem(text = { Text("複数選択") }, leadingIcon = { Icon(Icons.Filled.Checklist, null) }, onClick = {
                                 moreMenu = false; selecting = true; selected.clear(); rangeAnchor = null; rangeMode = false; contextFor = null; keyboard?.hide()
                             })
@@ -499,25 +515,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 },
             )
-            // 日記・時系列記録では、日付を指定して書ける（その日のノートになる）。上に出す（下のトピックのボタンとは分ける）
-            if (search == null && !selecting && (topic == DIARY || settings.topicModes[topic]?.record == true)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val bd = backdate
-                    AssistChip(onClick = { pickDate = true },
-                        label = { Text(if (bd == null) "日付: 今日" else "日付: " + SimpleDateFormat("M月d日（E）", Locale.JAPAN).format(Date(bd))) },
-                        leadingIcon = { Icon(Icons.Filled.Event, null, Modifier.size(16.dp)) },
-                        colors = if (bd != null) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else AssistChipDefaults.assistChipColors())
-                    if (bd != null) {
-                        // 書いている時刻を入れるか（入れると、本文の最初に書いた日も入る）
-                        FilterChip(selected = settings.writtenStamp, onClick = {
-                            settings = settings.copy(writtenStamp = !settings.writtenStamp); store.saveSettings(settings)
-                        }, label = { Text("今の時刻を入れる") },
-                            leadingIcon = if (settings.writtenStamp) ({ Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) }) else null)
-                        IconButton(onClick = { backdate = null }) { Icon(Icons.Filled.Close, "今日に戻す") }
-                    }
-                }
-            }
         } },
         bottomBar = {
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -571,13 +568,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     FilterChip(selected = other, onClick = { topicListOpen = true },
                         label = { Text(if (other) topic else "その他", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(18.dp)) })
-                }
-                // いまのトピックの取り込み方（押すと変えられる）
-                settings.topicModes[topic]?.takeIf { (it.single || it.record) && topic !in listOf(ALL, UNASSIGNED, DIARY) }?.let { m ->
-                    Text((if (m.record) "時系列記録: PC ではその日の「…-$topic」のノートに時刻つきで入ります"
-                        else "1 つのノートにまとめる: PC では「$topic」のノートに追記します" + if (m.stamp) "（時刻あり）" else "") + "（押して変更）",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().clickable { modeFor = topic }.padding(horizontal = 4.dp, vertical = 2.dp))
                 }
                 if (pendingImages.isNotEmpty()) {
                     LazyRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -970,8 +960,11 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     if (cleanImportedOpen) {
         val gone = entries.filter { it.id in imported }.map { it.id }.toSet()
         AlertDialog(onDismissRequest = { cleanImportedOpen = false }, title = { Text("取り込み済みのメモを消す") },
-            text = { Text(if (gone.isEmpty()) "PC に取り込み済みのメモはありません。"
-                else "PC に取り込み済み（✓）の ${gone.size} 件をスマホから消します。取り込んだ vault にメモが残っていることを確認してください。テスト用 vault に取り込んだだけなら消さないでください。空になったトピックも消します（日記・時系列記録は残します）。画像も消え、元に戻せません。") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (gone.isEmpty()) "✓ の付いた（PC に取り込み済みと確認できる）メモはありません。取り込んだはずなのに ✓ が付かないときは、下の「このトピックのメモを全部消す」で消せます。"
+                else "PC に取り込み済み（✓）の ${gone.size} 件をスマホから消します。取り込んだ vault にメモが残っていることを確認してください。テスト用 vault に取り込んだだけなら消さないでください。空になったトピックも消します（日記・時系列記録は残します）。画像も消え、元に戻せません。")
+                OutlinedButton(onClick = { cleanImportedOpen = false; cleanShownOpen = true }) { Text("このトピックのメモを全部消す（✓ に関係なく）") }
+            } },
             confirmButton = { TextButton(enabled = gone.isNotEmpty(), onClick = {
                 val cleaned = settingsAfterImportedRemoval(entries.toList(), settings, gone, pcRecords.toSet())
                 deleteEntries(gone)
@@ -980,6 +973,21 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 cleanImportedOpen = false
             }) { Text("消す") } },
             dismissButton = { TextButton(onClick = { cleanImportedOpen = false }) { Text("やめる") } })
+    }
+
+    if (cleanShownOpen) {
+        val all = visibleEntries(entries.toList(), topic).map { it.id }.toSet()
+        val notYet = all.count { it !in imported }
+        AlertDialog(onDismissRequest = { cleanShownOpen = false }, title = { Text("「${topicLabel(topic)}」のメモを全部消す") },
+            text = { Text("${all.size} 件を消します（うち ✓ の付いていない ${notYet} 件は、PC に取り込んだか確かめられません）。PC に取り込んだ記録（二重に取り込まない印）は PC 側に残るので、取り込み済みのものがまた取り込まれることはありません。画像も消え、元に戻せません。") },
+            confirmButton = { TextButton(enabled = all.isNotEmpty(), onClick = {
+                val cleaned = settingsAfterImportedRemoval(entries.toList(), settings, all, pcRecords.toSet())
+                deleteEntries(all)
+                settings = cleaned; store.saveSettings(settings)
+                if (topic != ALL && topic != UNASSIGNED && topic !in settings.topics && entries.none { it.topic == topic } && topic !in pcRecords) setTopic(ALL)
+                cleanShownOpen = false
+            }) { Text("全部消す") } },
+            dismissButton = { TextButton(onClick = { cleanShownOpen = false }) { Text("やめる") } })
     }
 
     if (deleteSelectedOpen) {

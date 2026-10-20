@@ -1037,6 +1037,7 @@ augroup END
 
 autocmd BufReadPre,BufNewFile *.md if gnosis#is_vault_path(expand('<afile>:p')) | setlocal noswapfile | endif
 " ハブも swap を作らない（vault 外なので上記が効かず、残骸 .swp から E325 と読専化が出る）。
+autocmd BufReadPre,BufNewFile */.state/hubs/*.md setlocal noswapfile noundofile
 execute 'autocmd BufReadPre,BufNewFile ' . escape(printf('%s/hubs/*.md', gnosis#state_dir()), '\\ ') . ' setlocal noswapfile noundofile'
 " vault を切り替えても効くよう、場所は決め打ちしない（.state/hubs/review-*.md）
 autocmd BufEnter */.state/hubs/review-*.md call gnosis#review_setup()

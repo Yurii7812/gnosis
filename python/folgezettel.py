@@ -172,8 +172,10 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 children[p].append(c)
     ids = {p: value('\n'.join(n['fm'])) for p, n in notes.items()}
     plan = {}
-    # グループは Folgezettel ID を持たない（2026-10-20 決定）。付いていれば外す（'' は「消す」）。
+    # グループは Folgezettel ID を持たない。付いていれば外す（'' は「消す」）。
+    # 例外（2026-10-20）: ブランチで作られたグループ（親ノートの BranchGroup: にあるグループ）は、親ノートと同じ ID を持つ（最後に振る）。
     # 紙の PKM の番号（題が番号）は別物なので触らない
+    stored = dict(ids)
     for p, n in notes.items():
         if ids[p] and is_group(n) and not is_paper(n) and not nf._editor_has_unsaved_changes(p):
             plan[p] = ''
@@ -220,19 +222,35 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 seen.discard(c)
             if ID_RE.fullmatch(ids[c]):
                 queue.append(c)
+    for p, n in notes.items():
+        if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
+            continue
+        for g in targets(nf._take_branch_group_block(n['body'])[0], p.parent):
+            if not is_group(notes[g]) or is_paper(notes[g]) or nf._editor_has_unsaved_changes(g):
+                continue
+            if stored[g] == ids[p]:
+                plan.pop(g, None)
+            else:
+                plan[g] = ids[p]
     return plan
 
 
 def navigate(root: Path, current: Path, direction: str) -> dict:
     by_id = {}
+    groups = {}
     current = current.resolve()
     ident = ''
     for p in nf._iter_md(root):
-        i = value(p.read_text(encoding='utf-8'))
+        text = p.read_text(encoding='utf-8')
+        i = value(text)
         if p.resolve() == current:
             ident = i
         if ID_RE.fullmatch(i):
-            by_id.setdefault(i, []).append(p.resolve())
+            fm, _ = nf._split_front_matter(text.splitlines())
+            (groups if nf._GROUP_ATTR_RE.search('\n'.join(fm)) else by_id).setdefault(i, []).append(p.resolve())
+    # ブランチで作られたグループは親ノートと同じ ID を持つので、同じ ID のノートがあればそちらを優先する
+    for i, ps in groups.items():
+        by_id.setdefault(i, ps)
     if not ID_RE.fullmatch(ident):
         return {'ok': False, 'error': 'このノートにはfolgezettelがありません'}
     if direction == 'up':
