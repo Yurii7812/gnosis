@@ -7007,10 +7007,11 @@ function! gnosis#review_write(period, date, file) abort
   execute 'edit ' . fnameescape(l:root . '/' . a:file)
 endfunction
 
-" vault のバックアップ・検証・復元（UT04）。  :GnosisBackup [出力先]  :GnosisBackupVerify アーカイブ  :GnosisBackupRestore アーカイブ 新しい空のフォルダ  :GnosisBackupList [出力先]
+" vault のスナップショット（tar.gz + manifest）の作成・検証・復元（UT04）。  :GnosisSnapshot [出力先]  :GnosisSnapshotVerify アーカイブ  :GnosisSnapshotRestore アーカイブ 新しい空のフォルダ  :GnosisSnapshotList [出力先]
+" （:GnosisBackup は別機能: 暗号化 vault の 7z。そちらは変えない）
 " バックアップは tar.gz + manifest（SHA-256）で、元の vault は読むだけ。復元は新しい空のフォルダにだけ行い、既存の vault は上書きしない。
 " 出力先の既定は <vault>/../gnosis-backups（vault の外）。
-function! s:backup_run(args) abort
+function! s:snapshot_run(args) abort
   let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/vault_backup.py'] + a:args, 'shellescape(v:val)'), ' ')
   let l:out = system(l:cmd)
   try
@@ -7020,22 +7021,22 @@ function! s:backup_run(args) abort
   endtry
 endfunction
 
-function! s:backup_default_dir(root) abort
+function! s:snapshot_default_dir(root) abort
   return fnamemodify(a:root, ':h') . '/gnosis-backups'
 endfunction
 
-function! gnosis#backup(...) abort
+function! gnosis#snapshot(...) abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
     return
   endif
   let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
-  let l:out = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:backup_default_dir(l:root)
+  let l:out = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:snapshot_default_dir(l:root)
   if stridx(l:out . '/', l:root . '/') == 0
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('バックアップ先は vault の外にしてください') | echohl NONE
     return
   endif
-  let l:r = s:backup_run([l:root, 'backup', l:out])
+  let l:r = s:snapshot_run([l:root, 'backup', l:out])
   if has_key(l:r, 'error')
     echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
     return
@@ -7043,8 +7044,8 @@ function! gnosis#backup(...) abort
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('バックアップしました（%d ファイル・検証 %s）: %s'), get(l:r, 'files', 0), get(l:r, 'verified', 0) ? 'OK' : 'NG', get(l:r, 'archive', ''))
 endfunction
 
-function! gnosis#backup_verify(archive) abort
-  let l:r = s:backup_run(['verify', fnamemodify(a:archive, ':p')])
+function! gnosis#snapshot_verify(archive) abort
+  let l:r = s:snapshot_run(['verify', fnamemodify(a:archive, ':p')])
   if has_key(l:r, 'error')
     echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
     return
@@ -7052,8 +7053,8 @@ function! gnosis#backup_verify(archive) abort
   echo 'Gnosis: ' . (get(l:r, 'ok', 0) ? printf(gnosis#i18n#tr('検証 OK（%d ファイル）'), get(l:r, 'files', 0)) : printf(gnosis#i18n#tr('検証 NG（問題 %d 件）'), len(get(l:r, 'problems', []))))
 endfunction
 
-function! gnosis#backup_restore(archive, newdir) abort
-  let l:r = s:backup_run(['restore', fnamemodify(a:archive, ':p'), fnamemodify(a:newdir, ':p')])
+function! gnosis#snapshot_restore(archive, newdir) abort
+  let l:r = s:snapshot_run(['restore', fnamemodify(a:archive, ':p'), fnamemodify(a:newdir, ':p')])
   if has_key(l:r, 'error')
     echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
     return
@@ -7061,13 +7062,13 @@ function! gnosis#backup_restore(archive, newdir) abort
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('復元しました（%d ファイル・検証 %s）: %s'), get(l:r, 'restored', 0), get(l:r, 'verified', 0) ? 'OK' : 'NG', a:newdir)
 endfunction
 
-function! gnosis#backup_list(...) abort
+function! gnosis#snapshot_list(...) abort
   let l:root = s:get_pkm_root()
   if empty(l:root) && a:0 == 0
     return
   endif
-  let l:dir = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:backup_default_dir(substitute(fnamemodify(l:root, ':p'), '/$', '', ''))
-  let l:r = s:backup_run(['list', l:dir])
+  let l:dir = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : s:snapshot_default_dir(substitute(fnamemodify(l:root, ':p'), '/$', '', ''))
+  let l:r = s:snapshot_run(['list', l:dir])
   if type(l:r) == v:t_dict
     echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
     return

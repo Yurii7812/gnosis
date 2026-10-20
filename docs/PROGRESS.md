@@ -67,7 +67,7 @@
 
 - **バックリンク（`python/backlinks.py`・`:GnosisBacklinks`）**: ED01・ED02。試験の行番号期待値の誤り（実ファイルで確認）を直した。
 
-- **バックアップの Vim コマンド化（UT04）**: `:GnosisBackup` ほか。試験の壊し方が弱く（末尾追記では中身のハッシュが合うので検証 OK が正しい）、中ほどのバイト反転に直した。自動実行は未。
+- **スナップショットの Vim コマンド化（UT04）**: `:GnosisSnapshot` ほか（当初 `:GnosisBackup` と名付けて、既存の暗号 vault 7z バックアップ `:GnosisBackup` を上書きしてしまう退行を起こし、のちに改名して修正）。試験の壊し方が弱く（末尾追記では中身のハッシュが合うので検証 OK が正しい）、中ほどのバイト反転に直した。自動実行は未。
 
 - **時間軸（`python/chrono.py`・`:GnosisCalendar/Day/OnThisDay/PeriodReview/PeriodReviewWrite`）**: TM02・TM10・TM12。既存の `:GnosisReview`（review_reopen）と名前が衝突して上書きしていたのを試験で発見し、`GnosisPeriodReview` に改名した。
 
@@ -83,6 +83,8 @@
 - **分割・統計・比較（`split_notes.py` `note_tools.py`）**: ED06/09/17。試験で実バグを 3 件発見・修正（取り消し済みの控え `.done` を再び取り消せてしまう／タスクの `[x]` が語に数えられる／題だけのノートが空と判定されない）。
 
 - **読書・学習（`python/reading.py`）**: LR01/07/09/10/11/12/13/14。試験で Vim 側の不具合を 1 件発見・修正（`-nargs=?` に `<q-args>` を渡すと引数なしでも空文字が 1 つ入り、一覧のつもりが使い方エラーになる）。LR08（PDF 注釈）は未。
+
+- **退行の修正**: 先に追加した `:GnosisBackup`（tar.gz スナップショット）が、既存の `:GnosisBackup`（暗号化 vault の 7z バックアップ）を上書きしていた。`:GnosisSnapshot` 系に改名して既存を復元。同じ種類の衝突（`:GnosisReview`）は既に 1 回起きていたため、`test/check_commands.py`（plugin 全体のコマンド名の重複検査）を回帰に追加。既存の暗号 vault バックアップ自体の試験は元から無い（未）。
 
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
