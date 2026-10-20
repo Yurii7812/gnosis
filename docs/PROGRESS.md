@@ -102,6 +102,8 @@
 
 - **本への書き出し（`python/export_doc.py`・`:GnosisExportBook`）**: UT07。EPUB・単一 HTML・PDF。試験で実バグを 1 件発見・修正（章の見出しと本文先頭の `# 題` が二重に出る）。EPUB は実リーダ・EPUBCheck では未確認（構造と XML の妥当性までを自前で確認）。
 
+- **全体回帰 run8（`sh test/run.sh`）は exit=0**（2026-10-21。ビュー 23 ページ・本の書き出し・`md_html` の修正を含む。Electron の `\A` E2E は未実行）。`docs/MIGRATION.md` を追加。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。
