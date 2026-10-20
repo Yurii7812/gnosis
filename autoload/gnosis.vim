@@ -8279,8 +8279,8 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name})
     return
   endif
-  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
-        \ gnosis#i18n#tr('Enter=末 o=孤立 b=子 p=親 t=節 h=下 c=Context r=Related (Esc)'))
+  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / i=カーソルの位置 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
+        \ gnosis#i18n#tr('Enter=末 o=孤立 b=子 p=親 t=節 h=下 i=位置 c=Context r=Related (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
@@ -8316,8 +8316,8 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, 'p', 0)
     return
   endif
-  if l:ch !=# 'r' && l:ch !=# 'h' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / c / b / p / o / r のどれか）') | return
+  if l:ch !=# 'r' && l:ch !=# 'h' && l:ch !=# 'i' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / i / c / b / p / o / r のどれか）') | return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
@@ -8453,9 +8453,10 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:file = s:join_path(l:dir, l:ts . '.md')
   let l:place = get(l:opt, 'place', {})
   let l:is_enter = l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+  let l:cursor_pos = getpos('.')
 
   let l:auto_branch = empty(a:attr) && !l:grp_src && fnamemodify(l:cur, ':t') !=# 'index.md'
-        \ && (index(['h', 't', 'c'], l:ch) >= 0 || l:is_enter)
+        \ && (index(['h', 'i', 't', 'c'], l:ch) >= 0 || l:is_enter)
   let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
   if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
     return
@@ -8514,6 +8515,13 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
     let [l:at, l:blank] = s:h_insert_at()
     call append(l:at, l:blank ? ['', l:link] : [l:link])
+    let l:added = 1
+  elseif l:ch ==# 'i'
+    " カーソルの文字のすぐ後ろ（空の行なら行頭）。\l の i と同じ位置
+    call cursor(l:cursor_pos[1], l:cursor_pos[2])
+    let l:cur_line = getline('.')
+    let l:icol = empty(l:cur_line) ? 0 : col('.') - 1 + len(matchstr(l:cur_line[col('.') - 1 :], '^.'))
+    call setline('.', strpart(l:cur_line, 0, l:icol) . l:link . strpart(l:cur_line, l:icol))
     let l:added = 1
   elseif l:ch ==# 't'
     call s:insert_link_under_heading(a:head_lnum, l:link)  " 見出しの本文の最後
