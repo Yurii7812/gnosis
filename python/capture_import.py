@@ -296,11 +296,14 @@ def plan(outdir: str, root: str) -> dict:
         # 前回の本文（base）が残っている記録と、ノートの実ファイルがあるものだけ。日記・トピック・記録への追記は対象外
         merge = (exists and previous is not None and "text" in previous and not appended and not same and not metadata_only
                  and bool(target) and target.endswith(".md"))
-        # 日記に埋め込んだメモも同じ: 前回入れた行（時刻つき）を base にして日記ノートの該当行だけ更新する。トピックを変えた場合は対象外
-        diary_merge = (exists and previous is not None and "text" in previous and target.startswith("(diary:")
-                       and not same and normalize_topic(previous.get("topic") or "") == topic == "日記"
-                       and (previous.get("text"), previous.get("images")) != (e.get("text"), e.get("images")))
-        merge = merge or diary_merge
+        # 日記・時系列記録・まとめるトピック（節も）に埋め込んだメモも同じ: 前回入れた行を base にして、そのノートの該当行だけ更新する。
+        # トピックを変えた場合は対象外（既存の移動の扱いのまま）
+        embedded = (exists and previous is not None and "text" in previous and appended and not same
+                    and normalize_topic(previous.get("topic") or "") == topic
+                    and (target.startswith(("(diary:", "(record:")) and (topic == "日記" or record)
+                         or (target.startswith("(topic:") or "#" in target) and single)
+                    and (previous.get("text"), previous.get("images")) != (e.get("text"), e.get("images")))
+        merge = merge or embedded
         missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
         if not done and missing:
             raise ValueError("画像がありません（取り込み済みにはしません）: " + ", ".join(missing))
@@ -339,8 +342,37 @@ def plan(outdir: str, root: str) -> dict:
     return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"]), "titles": titles}
 
 
+def _hm(e: dict) -> str:
+    return "" if e.get("notime") else dt.datetime.fromtimestamp(e.get("created", 0) / 1000).strftime("%H:%M")
+
+
+def embedded_lines(e: dict, target: str, stamp: bool) -> list[str]:
+    """取り込みが日記・時系列記録・まとめるトピックのノートへ入れる行を、gnosis#capture_import と同じ形に作り直す
+    （先頭に HH:MM。トピックは stamp のときだけ。つながりの行と画像はトピックでは対象外）。"""
+    lines = (e.get("text") or "").split("\n")
+    imgs = [f"![](capture-images/{n})" for n in e.get("images") or []]
+    hm = _hm(e)
+    if target.startswith("(diary:"):
+        return ([hm + " " + lines[0]] if hm else [lines[0]]) + lines[1:] + imgs
+    if target.startswith("(record:"):
+        return ([hm + " " + lines[0]] if hm else [lines[0]]) + lines[1:] + ([""] + imgs if imgs else [])
+    if stamp and hm:
+        lines = [hm + " " + lines[0]] + lines[1:]
+    return lines
+
+
+def embedded_file(root: Path, target: str, topic: str, date: str) -> str:
+    """埋め込み先のノート（vault 内の相対パス）。見つからなければ ''。"""
+    if target.startswith("(diary:"):
+        days = json.loads((root / ".state/diary_days.json").read_text(encoding="utf-8"))["days"]
+        return days.get(target[len("(diary:"):-1], "")
+    if target.startswith("(record:"):
+        return record_note(root, topic, date)
+    return topic_note(root, topic)
+
+
 def apply_merges(outdir: str, root: str) -> dict:
-    """plan で merge になったメモを、PC のノートへ差分だけ当てる。{id: {status, file, count}}。競合はノートを変えない。"""
+    """plan で merge になったメモを、PC のノートへ差分だけ当てる。{id: {status, file, target, embedded}}。競合はノートを変えない。"""
     import capture_merge as cm
     rp = Path(root)
     st = load_state(rp)
@@ -352,24 +384,22 @@ def apply_merges(outdir: str, root: str) -> dict:
         prev = st["entries"][it["id"]]
         remote = next(e for e in entries if e["id"] == it["id"])
         target = st["ids"].get(it["id"], "")
-        if target.startswith("(diary:"):
-            days = json.loads((rp / ".state/diary_days.json").read_text(encoding="utf-8"))["days"]
-            out[it["id"]] = cm.apply_note(rp, it["id"], days[target[len("(diary:"):-1]],
-                                          diary_lines(prev), diary_lines(remote))
+        if target.startswith("(") or "#" in target:
+            date = dt.datetime.fromtimestamp(prev.get("created", 0) / 1000).strftime("%Y-%m-%d")
+            rel = embedded_file(rp, target, it["topic"], date)
+            if not rel:
+                out[it["id"]] = {"id": it["id"], "status": "conflict", "file": "", "count": 0}
+            else:
+                res = cm.apply_note(rp, it["id"], rel, embedded_lines(prev, target, it["stamp"]),
+                                    embedded_lines(remote, target, it["stamp"]))
+                res["target"], res["embedded"] = target, True
+                out[it["id"]] = res
             continue
         out[it["id"]] = cm.apply_note(
             rp, it["id"], it["file"],
             cm.body_lines(prev.get("text") or "", prev.get("images") or []),
             cm.body_lines(remote.get("text") or "", remote.get("images") or []))
     return out
-
-
-def diary_lines(e: dict) -> list[str]:
-    """日記の本文に入れる行（gnosis#capture_import の日記の分岐と同じ形: 先頭に HH:MM、続けて画像の行）。"""
-    lines = (e.get("text") or "").split("\n")
-    if not e.get("notime"):
-        lines[0] = dt.datetime.fromtimestamp(e.get("created", 0) / 1000).strftime("%H:%M") + " " + lines[0]
-    return lines + [f"![](capture-images/{n})" for n in e.get("images") or []]
 
 
 def record(root: str, pairs: list[tuple[str, str]], outdir: str = "") -> None:

@@ -39,6 +39,7 @@ jobs:
           sh test/capture_import_net.sh
           sh test/capture_merge_net.sh
           sh test/capture_diary_net.sh
+          sh test/capture_embed_net.sh
           sh test/capture_topics_net.sh
       - name: Test Python note relationship synchronization
         run: |

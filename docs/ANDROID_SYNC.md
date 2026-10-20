@@ -23,7 +23,7 @@
 | 5 | base/local/remote の 3 方向マージ・競合表示 | マージは実装・試験済み。競合の**差分画面・解決操作は未実装**（記録と警告のみ） |
 | 6 | トピックだけの変更 | 既存どおり同一ノート（試験あり） |
 | 7 | 日記の埋め込み境界 | **実装・試験済み**（前回入れた行＝時刻つきの本文＋画像行を base に、日記ノートの該当行だけ更新。10 回取り込んでも 1 件。PC の他の文章は残る。同じ行を PC も変えていたら競合。トピックを日記から変えた場合は未対応） |
-| 8 | 画像の hash 管理 | 一部（本文の画像行のみ。hash 重複排除は未実装） |
+| 8 | 画像の hash 管理 | 一部（標準のノート・日記・時系列記録は本文の画像行として差分反映。まとめるトピックの画像変更は未対応。hash 重複排除は未実装） |
 | 9 | Branch／Context の差分反映 | 未実装（初回のみ） |
 | 10 | 冪等・クラッシュ復旧・ジャーナル | 一部（merge は冪等・原子的書込。取り込み全体のジャーナルは未実装） |
 | 11 | ✓ は永続化後のみ | 既存（record 成功後に adbmark） |
@@ -32,4 +32,4 @@
 | 14 | プレビュー／競合解決／履歴／取り消し | 未実装 |
 
 ## 試験
-`python/test_capture_merge.py`（merge の単体）、`python/test_capture_import.py`（plan）、`test/capture_diary_net.sh`（日記の 10 回取り込み・編集・競合）、`test/capture_merge_net.sh`（実 Vim: リネーム追跡も含む。 再実行で増えない／mtime 不変／PC 追記とスマホ別行編集／冪等／同一行競合）、`test/capture_topics_net.sh`。必須 E2E のうち未着手: クラッシュ後の再実行、旧 state 移行、新旧 APK（実機）、スマホのトピック移動・関係編集との組合せ。
+`python/test_capture_merge.py`（merge の単体）、`python/test_capture_import.py`（plan）、`test/capture_embed_net.sh`（まとめるトピック・時系列記録の編集・競合。つながりの行と画像の変更は対象外）、`test/capture_diary_net.sh`（日記の 10 回取り込み・編集・競合）、`test/capture_merge_net.sh`（実 Vim: リネーム追跡も含む。 再実行で増えない／mtime 不変／PC 追記とスマホ別行編集／冪等／同一行競合）、`test/capture_topics_net.sh`。必須 E2E のうち未着手: クラッシュ後の再実行、旧 state 移行、新旧 APK（実機）、スマホのトピック移動・関係編集との組合せ。
