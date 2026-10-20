@@ -11337,8 +11337,8 @@ ${h3.join(`
     for (let i = 1; i < specs.length; i++) {
       if (specs[i].filter === false)
         filter = false;
-      let seq = !!specs[i].sequential;
-      s15 = mergeTransaction(s15, resolveTransactionInner(state, specs[i], seq ? s15.changes.newLength : state.doc.length), seq);
+      let seq2 = !!specs[i].sequential;
+      s15 = mergeTransaction(s15, resolveTransactionInner(state, specs[i], seq2 ? s15.changes.newLength : state.doc.length), seq2);
     }
     let tr2 = Transaction.create(state, s15.changes, s15.selection, s15.effects, s15.annotations, s15.scrollIntoView);
     return extendTransaction(filter ? filterTransaction(tr2) : tr2);
@@ -12258,11 +12258,11 @@ ${h3.join(`
     return shared;
   }
   var LayerCursor = class {
-    constructor(layer, skip, minPoint, rank = 0) {
+    constructor(layer, skip, minPoint, rank2 = 0) {
       this.layer = layer;
       this.skip = skip;
       this.minPoint = minPoint;
-      this.rank = rank;
+      this.rank = rank2;
     }
     get startSide() {
       return this.value ? this.value.startSide : 0;
@@ -12437,12 +12437,12 @@ ${h3.join(`
       this.minActive = findMinIndex(this.active, this.activeTo);
     }
     addActive(trackOpen) {
-      let i = 0, { value, to, rank } = this.cursor;
-      while (i < this.activeRank.length && (rank - this.activeRank[i] || to - this.activeTo[i]) > 0)
+      let i = 0, { value, to, rank: rank2 } = this.cursor;
+      while (i < this.activeRank.length && (rank2 - this.activeRank[i] || to - this.activeTo[i]) > 0)
         i++;
       insert(this.active, i, value);
       insert(this.activeTo, i, to);
-      insert(this.activeRank, i, rank);
+      insert(this.activeRank, i, rank2);
       if (trackOpen)
         insert(trackOpen, i, this.cursor.from);
       this.minActive = findMinIndex(this.active, this.activeTo);
@@ -13188,11 +13188,11 @@ ${h3.join(`
       ranges.push(from, to);
   }
   var BlockWrapper = class _BlockWrapper extends RangeValue {
-    constructor(tagName, attributes, rank) {
+    constructor(tagName, attributes, rank2) {
       super();
       this.tagName = tagName;
       this.attributes = attributes;
-      this.rank = rank;
+      this.rank = rank2;
     }
     eq(other) {
       return other == this || other instanceof _BlockWrapper && this.tagName == other.tagName && attrsEq(this.attributes, other.attributes);
@@ -14870,11 +14870,11 @@ ${h3.join(`
     }
   };
   var OpenWrapper = class {
-    constructor(from, to, wrapper, rank) {
+    constructor(from, to, wrapper, rank2) {
       this.from = from;
       this.to = to;
       this.wrapper = wrapper;
-      this.rank = rank;
+      this.rank = rank2;
     }
   };
   var TileBuilder = class {
@@ -15057,8 +15057,8 @@ ${h3.join(`
           this.wrappers.splice(i, 1);
       for (let cur = this.blockWrappers; cur.value && cur.from <= this.pos; cur.next())
         if (cur.to >= this.pos) {
-          let rank = cur.rank * 102 + cur.value.rank;
-          let wrap = new OpenWrapper(cur.from, cur.to, cur.value, rank), i = this.wrappers.length;
+          let rank2 = cur.rank * 102 + cur.value.rank;
+          let wrap = new OpenWrapper(cur.from, cur.to, cur.value, rank2), i = this.wrappers.length;
           while (i > 0 && (this.wrappers[i - 1].rank - wrap.rank || this.wrappers[i - 1].to - wrap.to) < 0)
             i--;
           this.wrappers.splice(i, 0, wrap);
@@ -25325,19 +25325,19 @@ ${h3.join(`
       let lines = [], positions = [], m;
       for (let line of template.split(/\r\n?|\n/)) {
         while (m = /[#$]\{(?:(\d+)(?::([^{}]*))?|((?:\\[{}]|[^{}])*))\}/.exec(line)) {
-          let seq = m[1] ? +m[1] : null, rawName = m[2] || m[3] || "", found = -1;
-          if (seq === 0)
-            seq = 1e9;
+          let seq2 = m[1] ? +m[1] : null, rawName = m[2] || m[3] || "", found = -1;
+          if (seq2 === 0)
+            seq2 = 1e9;
           let name2 = rawName.replace(/\\[{}]/g, (m2) => m2[1]);
           for (let i = 0; i < fields.length; i++) {
-            if (seq != null ? fields[i].seq == seq : name2 ? fields[i].name == name2 : false)
+            if (seq2 != null ? fields[i].seq == seq2 : name2 ? fields[i].name == name2 : false)
               found = i;
           }
           if (found < 0) {
             let i = 0;
-            while (i < fields.length && (seq == null || fields[i].seq != null && fields[i].seq < seq))
+            while (i < fields.length && (seq2 == null || fields[i].seq != null && fields[i].seq < seq2))
               i++;
-            fields.splice(i, 0, { seq, name: name2 });
+            fields.splice(i, 0, { seq: seq2, name: name2 });
             found = i;
             for (let pos of positions)
               if (pos.field >= found)
@@ -27572,13 +27572,13 @@ ${h3.join(`
     /**
     @internal
     */
-    constructor(p, stack, state, reducePos, pos, score, buffer, bufferBase, curContext, lookAhead = 0, parent) {
+    constructor(p, stack, state, reducePos, pos, score2, buffer, bufferBase, curContext, lookAhead = 0, parent) {
       this.p = p;
       this.stack = stack;
       this.state = state;
       this.reducePos = reducePos;
       this.pos = pos;
-      this.score = score;
+      this.score = score2;
       this.buffer = buffer;
       this.bufferBase = bufferBase;
       this.curContext = curContext;
@@ -34334,6 +34334,731 @@ ${h3.join(`
     return { enter, leave, isOn: () => on2, onVimState, onUserChange, openAt, run, commands, save, state: () => ({ on: on2, file, hash: hash2, dirty, saving, paused }) };
   }
 
+  // src/layout.js
+  var seq = 0;
+  var nid = (p) => `${p}${++seq}`;
+  function newTab(kind, { title = "", params = {}, pinned = false } = {}) {
+    return { id: nid("t"), kind, title: title || kind, params, pinned };
+  }
+  function newLayout() {
+    const vim = newTab("vim", { title: "Vim" });
+    return { type: "tabs", id: nid("p"), tabs: [vim], active: vim.id };
+  }
+  function walk(node, fn2) {
+    fn2(node);
+    if (node.type === "split") {
+      walk(node.a, fn2);
+      walk(node.b, fn2);
+    }
+  }
+  function panes(layout) {
+    const out = [];
+    walk(layout, (n) => {
+      if (n.type === "tabs") out.push(n);
+    });
+    return out;
+  }
+  function findTab(layout, tabId) {
+    for (const p of panes(layout)) {
+      const i = p.tabs.findIndex((t3) => t3.id === tabId);
+      if (i >= 0) return { pane: p, index: i, tab: p.tabs[i] };
+    }
+    return null;
+  }
+  function findPane(layout, paneId) {
+    return panes(layout).find((p) => p.id === paneId) || null;
+  }
+  function vimTab(layout) {
+    for (const p of panes(layout)) {
+      const t3 = p.tabs.find((x) => x.kind === "vim");
+      if (t3) return t3;
+    }
+    return null;
+  }
+  function mapNode(node, id2, f) {
+    if (node.id === id2) return f(node);
+    if (node.type !== "split") return node;
+    const a = mapNode(node.a, id2, f), b2 = mapNode(node.b, id2, f);
+    if (a === null) return b2;
+    if (b2 === null) return a;
+    return a === node.a && b2 === node.b ? node : { ...node, a, b: b2 };
+  }
+  function openTab(layout, paneId, tab) {
+    const pane = findPane(layout, paneId) || panes(layout)[0];
+    const same = pane.tabs.find((t3) => t3.kind === tab.kind && JSON.stringify(t3.params) === JSON.stringify(tab.params) && tab.kind !== "vim");
+    if (same) return mapNode(layout, pane.id, (n) => ({ ...n, active: same.id }));
+    return mapNode(layout, pane.id, (n) => ({ ...n, tabs: [...n.tabs, tab], active: tab.id }));
+  }
+  function activateTab(layout, tabId) {
+    const f = findTab(layout, tabId);
+    return f ? mapNode(layout, f.pane.id, (n) => ({ ...n, active: tabId })) : layout;
+  }
+  function closeTab(layout, tabId, { force = false } = {}) {
+    const f = findTab(layout, tabId);
+    if (!f || f.tab.kind === "vim" || f.tab.pinned && !force) return { layout, closed: null };
+    const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
+    const closed = { tab: f.tab, index: f.index, paneId: f.pane.id };
+    if (rest.length === 0) return { layout: mapNode(layout, f.pane.id, () => null), closed };
+    const active = f.pane.active === tabId ? rest[Math.min(f.index, rest.length - 1)].id : f.pane.active;
+    return { layout: mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: rest, active })), closed };
+  }
+  function setPinned(layout, tabId, pinned) {
+    const f = findTab(layout, tabId);
+    if (!f) return layout;
+    return mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: n.tabs.map((t3) => t3.id === tabId ? { ...t3, pinned: !!pinned } : t3) }));
+  }
+  function moveTab(layout, tabId, toPaneId, index) {
+    const f = findTab(layout, tabId);
+    const dest = findPane(layout, toPaneId);
+    if (!f || !dest) return layout;
+    if (f.pane.id === dest.id) {
+      const tabs2 = f.pane.tabs.filter((t3) => t3.id !== tabId);
+      const i = index == null ? tabs2.length : Math.max(0, Math.min(index, tabs2.length));
+      tabs2.splice(i, 0, f.tab);
+      return mapNode(layout, dest.id, (n) => ({ ...n, tabs: pinFirst(tabs2) }));
+    }
+    const removed = closeTab(layout, tabId, { force: true });
+    if (!removed.closed && f.tab.kind === "vim") {
+      const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
+      let lay = rest.length ? mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: rest, active: n.active === tabId ? rest[0].id : n.active })) : mapNode(layout, f.pane.id, () => null);
+      const d2 = findPane(lay, toPaneId);
+      const tabs2 = [...d2.tabs];
+      tabs2.splice(index == null ? tabs2.length : index, 0, f.tab);
+      return mapNode(lay, d2.id, (n) => ({ ...n, tabs: pinFirst(tabs2), active: tabId }));
+    }
+    const d = findPane(removed.layout, toPaneId);
+    if (!d) return layout;
+    const tabs = [...d.tabs];
+    tabs.splice(index == null ? tabs.length : Math.max(0, Math.min(index, tabs.length)), 0, f.tab);
+    return mapNode(removed.layout, d.id, (n) => ({ ...n, tabs: pinFirst(tabs), active: tabId }));
+  }
+  function pinFirst(tabs) {
+    return [...tabs.filter((t3) => t3.pinned), ...tabs.filter((t3) => !t3.pinned)];
+  }
+  function splitPane(layout, paneId, dir, tab, side = "after") {
+    const pane = findPane(layout, paneId);
+    if (!pane || !tab) return layout;
+    const fresh = { type: "tabs", id: nid("p"), tabs: [tab], active: tab.id };
+    return mapNode(layout, pane.id, (n) => ({ type: "split", id: nid("s"), dir, ratio: 0.5, a: side === "before" ? fresh : n, b: side === "before" ? n : fresh }));
+  }
+  function splitWithTab(layout, paneId, dir, tabId, side = "after") {
+    const f = findTab(layout, tabId);
+    if (!f) return layout;
+    if (f.pane.id === paneId && f.pane.tabs.length === 1) return layout;
+    let lay = layout;
+    if (f.tab.kind === "vim") {
+      const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
+      lay = rest.length ? mapNode(lay, f.pane.id, (n) => ({ ...n, tabs: rest, active: n.active === tabId ? rest[0].id : n.active })) : mapNode(lay, f.pane.id, () => null);
+    } else {
+      lay = closeTab(lay, tabId, { force: true }).layout;
+    }
+    const target = findPane(lay, paneId) || panes(lay)[0];
+    return splitPane(lay, target.id, dir, f.tab, side);
+  }
+  function setRatio(layout, splitId, ratio) {
+    const r = Math.max(0.1, Math.min(0.9, Number(ratio) || 0.5));
+    return mapNode(layout, splitId, (n) => n.type === "split" ? { ...n, ratio: r } : n);
+  }
+  function unsplit(layout, paneId) {
+    const p = findPane(layout, paneId);
+    if (!p || p.id === layout.id) return layout;
+    const all = panes(layout);
+    const other = all.find((x) => x.id !== paneId);
+    if (!other) return layout;
+    const moved = p.tabs;
+    let lay = mapNode(layout, p.id, () => null);
+    const sib = panes(lay).find((x) => x.id === other.id) || panes(lay)[0];
+    return mapNode(lay, sib.id, (n) => ({ ...n, tabs: pinFirst([...n.tabs, ...moved.filter((t3) => !n.tabs.some((u) => u.kind === t3.kind && u.kind !== "vim" && JSON.stringify(u.params) === JSON.stringify(t3.params)))]), active: n.active }));
+  }
+  function createClosedStack(limit = 20) {
+    const st3 = [];
+    return {
+      push(c) {
+        if (c && c.tab && c.tab.kind !== "vim") {
+          st3.push(c);
+          if (st3.length > limit) st3.shift();
+        }
+      },
+      pop() {
+        return st3.pop() || null;
+      },
+      size: () => st3.length,
+      toJSON: () => st3.map((c) => ({ tab: c.tab })),
+      load(list) {
+        st3.length = 0;
+        for (const c of Array.isArray(list) ? list : []) if (c && c.tab && typeof c.tab.kind === "string") st3.push({ tab: c.tab });
+      }
+    };
+  }
+  function reopen(layout, closed, paneId) {
+    if (!closed) return layout;
+    const tab = { ...closed.tab, id: nid("t") };
+    return openTab(layout, paneId || panes(layout)[0].id, tab);
+  }
+  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "cards", "table", "timeline", "graph", "fznav", "search", "note"]);
+  function restore(text) {
+    let raw;
+    try {
+      raw = typeof text === "string" ? JSON.parse(text) : text;
+    } catch {
+      return newLayout();
+    }
+    const fix = (n) => {
+      if (!n || typeof n !== "object") return null;
+      if (n.type === "tabs") {
+        const tabs = (Array.isArray(n.tabs) ? n.tabs : []).filter((t3) => t3 && typeof t3.kind === "string" && KINDS.has(t3.kind)).map((t3) => ({ id: typeof t3.id === "string" ? t3.id : nid("t"), kind: t3.kind, title: String(t3.title || t3.kind), params: t3.params && typeof t3.params === "object" ? t3.params : {}, pinned: !!t3.pinned }));
+        if (!tabs.length) return null;
+        return { type: "tabs", id: typeof n.id === "string" ? n.id : nid("p"), tabs, active: tabs.some((t3) => t3.id === n.active) ? n.active : tabs[0].id };
+      }
+      if (n.type === "split") {
+        const a = fix(n.a), b2 = fix(n.b);
+        if (!a) return b2;
+        if (!b2) return a;
+        return { type: "split", id: typeof n.id === "string" ? n.id : nid("s"), dir: n.dir === "col" ? "col" : "row", ratio: Math.max(0.1, Math.min(0.9, Number(n.ratio) || 0.5)), a, b: b2 };
+      }
+      return null;
+    };
+    let lay = fix(raw);
+    if (!lay) return newLayout();
+    let seen = false;
+    const dedup = (n) => {
+      if (n.type === "split") return { ...n, a: dedup(n.a), b: dedup(n.b) };
+      const tabs = n.tabs.filter((t3) => {
+        if (t3.kind !== "vim") return true;
+        if (seen) return false;
+        seen = true;
+        return true;
+      });
+      return { ...n, tabs, active: tabs.some((t3) => t3.id === n.active) ? n.active : tabs[0] ? tabs[0].id : "" };
+    };
+    lay = dedup(lay);
+    const prune = (n) => {
+      if (n.type === "split") {
+        const a = prune(n.a), b2 = prune(n.b);
+        if (!a) return b2;
+        if (!b2) return a;
+        return { ...n, a, b: b2 };
+      }
+      return n.tabs.length ? n : null;
+    };
+    lay = prune(lay) || newLayout();
+    if (!vimTab(lay)) {
+      const first = panes(lay)[0];
+      lay = mapNode(lay, first.id, (n) => {
+        const v2 = newTab("vim", { title: "Vim" });
+        return { ...n, tabs: [v2, ...n.tabs], active: v2.id };
+      });
+    }
+    walk(lay, (n) => {
+      const m = /^[tps](\d+)$/.exec(n.id || "");
+      if (m) seq = Math.max(seq, Number(m[1]));
+      if (n.type === "tabs") for (const t3 of n.tabs) {
+        const k = /^t(\d+)$/.exec(t3.id);
+        if (k) seq = Math.max(seq, Number(k[1]));
+      }
+    });
+    return lay;
+  }
+
+  // src/panes.js
+  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8" };
+  var PAGES = { index: "index.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
+  var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "search", "index"];
+  function pageFor(tab) {
+    const p = tab.params || {};
+    if (tab.kind === "note") return (p.rel || "index.md").replace(/\.md$/i, ".html").split("/").map(encodeURIComponent).join("/");
+    const base2 = PAGES[tab.kind] || "index.html";
+    if (tab.kind === "graph" && p.n) return `${base2}#n=${encodeURIComponent(p.n)}&depth=${p.depth || 1}`;
+    if (tab.kind === "fznav" && p.id) return `${base2}#id=${encodeURIComponent(p.id)}`;
+    if (tab.kind === "search" && p.q) return `${base2}#q=${encodeURIComponent(p.q)}`;
+    return base2;
+  }
+  function createPanes({ root, stageEl, gui: gui2, onNote, onResize, onChange }) {
+    let layout = newLayout();
+    const closed = createClosedStack();
+    let focusPane = panes(layout)[0].id;
+    let siteUrl = "";
+    let sig = "";
+    let saveTimer = null;
+    const els = /* @__PURE__ */ new Map();
+    const paneEls = /* @__PURE__ */ new Map();
+    const splitEls = /* @__PURE__ */ new Map();
+    const h3 = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    function save() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        gui2.saveWorkspace(JSON.stringify({ version: 1, layout, closed: closed.toJSON() }));
+      }, 500);
+    }
+    function changed() {
+      render2();
+      save();
+      onChange && onChange(layout);
+    }
+    async function ensureSite(force) {
+      const r = await gui2.viewSite(!!force);
+      if (!r.ok) throw new Error(r.error || "\u30D3\u30E5\u30FC\u306E\u5143\u306B\u306A\u308B\u30B5\u30A4\u30C8\u3092\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F");
+      siteUrl = r.url;
+      return siteUrl;
+    }
+    function makeEl(tab) {
+      if (tab.kind === "vim") return { el: stageEl, loaded: true };
+      const el2 = h3("div", "viewbox");
+      const strip = h3("div", "viewstrip");
+      const refresh2 = h3("button", "", "\u66F4\u65B0");
+      refresh2.type = "button";
+      refresh2.title = "\u30CE\u30FC\u30C8\u306E\u6700\u65B0\u306E\u72B6\u614B\u3067\u30D3\u30E5\u30FC\u3092\u4F5C\u308A\u76F4\u3059";
+      refresh2.addEventListener("click", async () => {
+        try {
+          await ensureSite(true);
+          reloadAll();
+        } catch (e) {
+          setMsg(entry, String(e.message || e));
+        }
+      });
+      strip.appendChild(refresh2);
+      if (tab.kind === "note") {
+        const edit = h3("button", "", "\u7DE8\u96C6\uFF08Vim\uFF09\u3067\u958B\u304F");
+        edit.type = "button";
+        edit.addEventListener("click", () => onNote && onNote((tab.params.rel || "").replace(/\.html$/i, ".md")));
+        strip.appendChild(edit);
+      }
+      const msg = h3("div", "viewmsg", "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026");
+      const frame = document.createElement("iframe");
+      frame.className = "viewframe";
+      frame.name = tab.kind === "note" ? "gnosis:read" : "gnosis:open";
+      frame.setAttribute("title", KIND_LABEL[tab.kind] || tab.kind);
+      el2.append(strip, msg, frame);
+      const entry = { el: el2, frame, msg, loaded: false, tab };
+      return entry;
+    }
+    function setMsg(entry, text) {
+      entry.msg.textContent = text;
+      entry.msg.hidden = !text;
+    }
+    async function load(tab) {
+      const entry = els.get(tab.id);
+      if (!entry || entry.loaded || tab.kind === "vim") return;
+      entry.loaded = true;
+      try {
+        const base2 = await ensureSite(false);
+        entry.frame.src = base2 + pageFor(tab);
+        entry.frame.addEventListener("load", () => setMsg(entry, ""), { once: true });
+      } catch (e) {
+        entry.loaded = false;
+        setMsg(entry, "\u30D3\u30E5\u30FC\u3092\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e));
+      }
+    }
+    function reloadAll() {
+      for (const [id2, e] of els) {
+        if (e.frame && e.loaded) {
+          const f = findTab(layout, id2);
+          if (f) e.frame.src = siteUrl + pageFor(f.tab);
+        }
+      }
+    }
+    window.addEventListener("message", (e) => {
+      const d = e.data;
+      if (!d || d.gnosis !== "open" || typeof d.url !== "string") return;
+      let ok = false;
+      for (const [, v2] of els) if (v2.frame && v2.frame.contentWindow === e.source) ok = true;
+      if (!ok || !siteUrl || !d.url.startsWith(siteUrl)) return;
+      const rel = decodeURIComponent(d.url.slice(siteUrl.length).split("#")[0]).replace(/\.html$/i, ".md");
+      if (rel && !rel.includes("..")) onNote && onNote(rel);
+    });
+    const structureSig = (n) => n.type === "split" ? `S${n.id}${n.dir}(${structureSig(n.a)}|${structureSig(n.b)})` : `P${n.id}`;
+    function rebuild() {
+      for (const [, e] of els) if (e.el.parentNode) e.el.parentNode.removeChild(e.el);
+      root.textContent = "";
+      paneEls.clear();
+      splitEls.clear();
+      root.appendChild(build(layout));
+    }
+    function build(n) {
+      if (n.type === "tabs") {
+        const pane = h3("div", "pane");
+        pane.dataset.paneId = n.id;
+        const bar = h3("div", "tabbar");
+        const body = h3("div", "panebody");
+        const zone = h3("div", "dropzone");
+        zone.hidden = true;
+        body.appendChild(zone);
+        pane.append(bar, body);
+        paneEls.set(n.id, { pane, bar, body, zone });
+        pane.addEventListener("mousedown", () => {
+          focusPane = n.id;
+          markFocus();
+        }, true);
+        wireDrop(n.id, bar, body, zone);
+        return pane;
+      }
+      const split = h3("div", "split " + n.dir);
+      const a = build(n.a), b2 = build(n.b);
+      const splitter = h3("div", "splitter " + n.dir);
+      splitter.dataset.splitId = n.id;
+      split.append(a, splitter, b2);
+      splitEls.set(n.id, { split, a, b: b2, splitter });
+      wireSplitter(n, split, splitter);
+      return split;
+    }
+    function markFocus() {
+      for (const [id2, p] of paneEls) p.pane.classList.toggle("focus", id2 === focusPane && paneEls.size > 1);
+    }
+    function render2() {
+      const s15 = structureSig(layout);
+      if (s15 !== sig) {
+        rebuild();
+        sig = s15;
+      }
+      if (!paneEls.has(focusPane)) focusPane = panes(layout)[0].id;
+      const solo = paneEls.size === 1 && panes(layout)[0].tabs.length === 1;
+      root.classList.toggle("solo", solo);
+      walk(layout, (n) => {
+        if (n.type !== "split") return;
+        const e = splitEls.get(n.id);
+        if (!e) return;
+        e.a.style.flex = `0 0 calc(${n.ratio * 100}% - 3px)`;
+        e.b.style.flex = "1 1 0";
+      });
+      for (const pane of panes(layout)) {
+        const pe2 = paneEls.get(pane.id);
+        renderBar(pane, pe2);
+        for (const tab of pane.tabs) {
+          let ent = els.get(tab.id);
+          if (!ent) {
+            ent = makeEl(tab);
+            els.set(tab.id, ent);
+          }
+          if (ent.el.parentNode !== pe2.body) pe2.body.appendChild(ent.el);
+          const visible = pane.active === tab.id;
+          ent.el.style.display = visible ? "" : "none";
+          if (tab.kind === "vim") {
+            ent.el.classList.toggle("hidden-tab", !visible);
+          }
+          if (visible) load(tab);
+        }
+      }
+      const live = new Set(panes(layout).flatMap((p) => p.tabs.map((t3) => t3.id)));
+      for (const [id2, e] of els) if (!live.has(id2)) {
+        if (e.el !== stageEl && e.el.parentNode) e.el.parentNode.removeChild(e.el);
+        if (e.el !== stageEl) els.delete(id2);
+      }
+      markFocus();
+      onResize && requestAnimationFrame(() => onResize());
+    }
+    function renderBar(pane, pe2) {
+      pe2.bar.textContent = "";
+      for (const tab of pane.tabs) {
+        const t3 = h3("div", "tab" + (pane.active === tab.id ? " active" : "") + (tab.pinned ? " pinned" : ""));
+        t3.draggable = true;
+        t3.dataset.tabId = tab.id;
+        t3.title = KIND_LABEL[tab.kind] || tab.kind;
+        t3.appendChild(h3("span", "tabtitle", (tab.pinned ? "\u{1F4CC} " : "") + (tab.title || KIND_LABEL[tab.kind] || tab.kind)));
+        if (tab.kind !== "vim") {
+          const x = h3("button", "tabclose", "\xD7");
+          x.type = "button";
+          x.title = tab.pinned ? "\u56FA\u5B9A\u3055\u308C\u3066\u3044\u307E\u3059\uFF08\u53F3\u30AF\u30EA\u30C3\u30AF\u3067\u89E3\u9664\uFF09" : "\u9589\u3058\u308B";
+          x.disabled = !!tab.pinned;
+          x.addEventListener("click", (e) => {
+            e.stopPropagation();
+            closeTab2(tab.id);
+          });
+          t3.appendChild(x);
+        }
+        t3.addEventListener("click", () => {
+          focusPane = pane.id;
+          layout = activateTab(layout, tab.id);
+          changed();
+        });
+        t3.addEventListener("auxclick", (e) => {
+          if (e.button === 1) closeTab2(tab.id);
+        });
+        t3.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          menu(e.clientX, e.clientY, tabMenu(tab, pane));
+        });
+        t3.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/gnosis-tab", tab.id);
+          e.dataTransfer.effectAllowed = "move";
+        });
+        pe2.bar.appendChild(t3);
+      }
+      const plus2 = h3("button", "tabplus", "\uFF0B");
+      plus2.type = "button";
+      plus2.title = "\u30D3\u30E5\u30FC\u3092\u958B\u304F";
+      plus2.addEventListener("click", (e) => {
+        const r = plus2.getBoundingClientRect();
+        menu(r.left, r.bottom, VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
+          focusPane = pane.id;
+          openView(k);
+        } })));
+        e.stopPropagation();
+      });
+      pe2.bar.appendChild(plus2);
+    }
+    function menu(x, y, items) {
+      document.querySelectorAll(".ctxmenu").forEach((m2) => m2.remove());
+      const m = h3("div", "ctxmenu");
+      m.style.left = x + "px";
+      m.style.top = y + "px";
+      for (const it of items) {
+        if (it === "-") {
+          m.appendChild(h3("div", "sep"));
+          continue;
+        }
+        const b2 = h3("button", "", it.label);
+        b2.type = "button";
+        b2.disabled = !!it.disabled;
+        b2.addEventListener("click", () => {
+          m.remove();
+          it.run();
+        });
+        m.appendChild(b2);
+      }
+      document.body.appendChild(m);
+      const away = (e) => {
+        if (!m.contains(e.target)) {
+          m.remove();
+          document.removeEventListener("mousedown", away, true);
+        }
+      };
+      setTimeout(() => document.addEventListener("mousedown", away, true), 0);
+    }
+    function tabMenu(tab, pane) {
+      const others = panes(layout).filter((p) => p.id !== pane.id);
+      return [
+        { label: tab.pinned ? "\u56FA\u5B9A\u3092\u89E3\u9664" : "\u30BF\u30D6\u3092\u56FA\u5B9A", run: () => {
+          layout = setPinned(layout, tab.id, !tab.pinned);
+          changed();
+        } },
+        { label: "\u9589\u3058\u308B", disabled: tab.kind === "vim" || tab.pinned, run: () => closeTab2(tab.id) },
+        "-",
+        { label: "\u53F3\u306B\u5206\u5272", disabled: pane.tabs.length < 2, run: () => {
+          layout = splitWithTab(layout, pane.id, "row", tab.id);
+          changed();
+        } },
+        { label: "\u4E0B\u306B\u5206\u5272", disabled: pane.tabs.length < 2, run: () => {
+          layout = splitWithTab(layout, pane.id, "col", tab.id);
+          changed();
+        } },
+        ...others.map((p, i) => ({ label: `\u30DA\u30A4\u30F3 ${panes(layout).findIndex((q2) => q2.id === p.id) + 1} \u3078\u79FB\u3059`, run: () => {
+          layout = moveTab(layout, tab.id, p.id);
+          changed();
+        } }))
+      ];
+    }
+    function dropZone(e, body) {
+      const r = body.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      if (x < 0.25) return "left";
+      if (x > 0.75) return "right";
+      if (y < 0.25) return "top";
+      if (y > 0.75) return "bottom";
+      return "center";
+    }
+    function wireDrop(paneId, bar, body, zone) {
+      const isTab = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("text/gnosis-tab");
+      bar.addEventListener("dragover", (e) => {
+        if (isTab(e)) e.preventDefault();
+      });
+      bar.addEventListener("drop", (e) => {
+        if (!isTab(e)) return;
+        e.preventDefault();
+        const id2 = e.dataTransfer.getData("text/gnosis-tab");
+        const tabs = [...bar.querySelectorAll(".tab")];
+        let index = tabs.length;
+        for (let i = 0; i < tabs.length; i++) {
+          const r = tabs[i].getBoundingClientRect();
+          if (e.clientX < r.left + r.width / 2) {
+            index = i;
+            break;
+          }
+        }
+        layout = moveTab(layout, id2, paneId, index);
+        changed();
+      });
+      body.addEventListener("dragover", (e) => {
+        if (!isTab(e)) return;
+        e.preventDefault();
+        const z2 = dropZone(e, body);
+        zone.hidden = false;
+        zone.dataset.zone = z2;
+      });
+      body.addEventListener("dragleave", (e) => {
+        if (!body.contains(e.relatedTarget)) zone.hidden = true;
+      });
+      body.addEventListener("drop", (e) => {
+        if (!isTab(e)) return;
+        e.preventDefault();
+        zone.hidden = true;
+        const id2 = e.dataTransfer.getData("text/gnosis-tab");
+        const z2 = dropZone(e, body);
+        if (z2 === "center") layout = moveTab(layout, id2, paneId);
+        else layout = splitWithTab(layout, paneId, z2 === "left" || z2 === "right" ? "row" : "col", id2, z2 === "left" || z2 === "top" ? "before" : "after");
+        changed();
+      });
+    }
+    function wireSplitter(n, split, splitter) {
+      splitter.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const r = split.getBoundingClientRect();
+        const move = (ev) => {
+          const ratio = n.dir === "row" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+          layout = setRatio(layout, n.id, ratio);
+          const cur = splitEls.get(n.id);
+          const rr2 = setRatio(layout, n.id, ratio);
+          let val = ratio;
+          walk(rr2, (x) => {
+            if (x.id === n.id) val = x.ratio;
+          });
+          cur.a.style.flex = `0 0 calc(${val * 100}% - 3px)`;
+        };
+        const up = () => {
+          document.removeEventListener("mousemove", move, true);
+          document.removeEventListener("mouseup", up, true);
+          save();
+          onResize && onResize();
+        };
+        document.addEventListener("mousemove", move, true);
+        document.addEventListener("mouseup", up, true);
+      });
+    }
+    function openView(kind, params = {}, title = "") {
+      layout = openTab(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[0].id, newTab(kind, { title: title || KIND_LABEL[kind] || kind, params }));
+      changed();
+    }
+    function closeTab2(id2) {
+      const r = closeTab(layout, id2);
+      if (!r.closed) return false;
+      layout = r.layout;
+      closed.push(r.closed);
+      changed();
+      return true;
+    }
+    function reopenClosed() {
+      const c = closed.pop();
+      if (!c) return false;
+      layout = reopen(layout, c, paneEls.has(focusPane) ? focusPane : void 0);
+      changed();
+      return true;
+    }
+    function splitFocused(dir, kind = "cards") {
+      const pane = findPane(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[0].id);
+      layout = splitPane(layout, pane.id, dir, newTab(kind, { title: KIND_LABEL[kind] || kind }));
+      changed();
+    }
+    function unsplitFocused() {
+      if (panes(layout).length < 2) return false;
+      layout = unsplit(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[1].id);
+      changed();
+      return true;
+    }
+    function cycle(dir) {
+      const pane = findPane(layout, focusPane) || panes(layout)[0];
+      const i = pane.tabs.findIndex((t3) => t3.id === pane.active);
+      const next = pane.tabs[(i + dir + pane.tabs.length) % pane.tabs.length];
+      layout = activateTab(layout, next.id);
+      changed();
+    }
+    function showVim() {
+      const v2 = vimTab(layout);
+      if (v2) {
+        focusPane = findTab(layout, v2.id).pane.id;
+        layout = activateTab(layout, v2.id);
+        changed();
+      }
+    }
+    function setNoteTab(rel) {
+      openView("note", { rel }, rel.replace(/\.md$/i, "").split("/").pop());
+    }
+    async function restore2() {
+      try {
+        const text = await gui2.loadWorkspace();
+        if (text) {
+          const o2 = JSON.parse(text);
+          layout = restore(o2.layout);
+          closed.load(o2.closed);
+        }
+      } catch {
+        layout = newLayout();
+      }
+      focusPane = panes(layout)[0].id;
+      render2();
+    }
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => {
+      onResize && onResize();
+    }).observe(root);
+    render2();
+    return {
+      getLayout: () => layout,
+      panesCount: () => paneEls.size,
+      closedCount: () => closed.size(),
+      openView,
+      closeTab: closeTab2,
+      reopenClosed,
+      splitFocused,
+      unsplitFocused,
+      cycle,
+      showVim,
+      setNoteTab,
+      restore: restore2,
+      save,
+      activeKind: () => {
+        const p = findPane(layout, focusPane) || panes(layout)[0];
+        return (findTab(layout, p.active) || {}).tab?.kind || "";
+      },
+      focusPaneId: () => focusPane,
+      activateTab: (id2) => {
+        layout = activateTab(layout, id2);
+        changed();
+      },
+      reloadViews: async () => {
+        await ensureSite(true);
+        reloadAll();
+      }
+    };
+  }
+
+  // src/palette-core.js
+  function score(query, text) {
+    const q2 = query.toLowerCase(), s15 = text.toLowerCase();
+    if (!q2) return 0;
+    let pos = 0, total = 0, prev = -2;
+    for (const ch of q2) {
+      const k = s15.indexOf(ch, pos);
+      if (k < 0) return -1;
+      total += 10 + (k === prev + 1 ? 15 : 0) + (k === 0 || /[\s:_\-/（(]/.test(s15[k - 1]) ? 10 : 0);
+      prev = k;
+      pos = k + 1;
+    }
+    return total - Math.floor(s15.length / 4);
+  }
+  function rank(items, query, limit = 60) {
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    if (!terms.length) return items.slice(0, limit);
+    const out = [];
+    items.forEach((it, i) => {
+      const hay = it.label + " " + (it.keywords || "") + " " + (it.group || "");
+      let sum = 0;
+      for (const t3 of terms) {
+        const a = score(t3, it.label), b2 = score(t3, hay);
+        const best = Math.max(a >= 0 ? a + 20 : -1, b2);
+        if (best < 0) {
+          sum = -1;
+          break;
+        }
+        sum += best;
+      }
+      if (sum >= 0) out.push({ it, sum, i });
+    });
+    return out.sort((x, y) => y.sum - x.sum || x.i - y.i).slice(0, limit).map((o2) => o2.it);
+  }
+
   // src/app.js
   var gui = window.gui;
   var $3 = (id2) => document.getElementById(id2);
@@ -34342,6 +35067,7 @@ ${h3.join(`
   var fit = null;
   var view2 = null;
   var guiEdit = null;
+  var panes2 = null;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
   var expanded = false;
@@ -34499,6 +35225,160 @@ ${h3.join(`
       view2.revealCursor();
     }
   }
+  var fitTimer = null;
+  function scheduleFit() {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(() => {
+      const st3 = $3("stage");
+      if (!term || !st3 || st3.offsetWidth < 50 || st3.offsetHeight < 50 || st3.closest(".hidden-tab")) return;
+      const d = fitTerm();
+      gui.resize(d.cols, d.rows);
+      view2?.refresh?.();
+    }, 60);
+  }
+  var vimCmds = null;
+  function paletteItems() {
+    const items = [];
+    const add = (group, label, keywords2, run) => items.push({ group, label, keywords: keywords2, run });
+    add("\u30E2\u30FC\u30C9", "Real Vim \u3067\u7DE8\u96C6", "vim mode \u672C\u7269", () => setMode("vim"));
+    add("\u30E2\u30FC\u30C9", "GUI \u7DE8\u96C6\u30E2\u30FC\u30C9\uFF08Vim \u3092\u4F7F\u308F\u306A\u3044\uFF09", "gui edit editor \u7DE8\u96C6", () => setMode("gui"));
+    add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
+    for (const k of VIEW_KINDS) add("\u30D3\u30E5\u30FC", `${KIND_LABEL[k]}\u3092\u958B\u304F`, `${k} view`, () => panes2.openView(k));
+    add("\u30D3\u30E5\u30FC", "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", "refresh reload \u66F4\u65B0", () => panes2.reloadViews());
+    add("\u30BF\u30D6", "Vim \u306E\u30BF\u30D6\u3078\u79FB\u308B", "vim tab", () => panes2.showVim());
+    add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));
+    add("\u30BF\u30D6", "\u524D\u306E\u30BF\u30D6", "previous tab", () => panes2.cycle(-1));
+    add("\u30BF\u30D6", "\u9589\u3058\u305F\u30BF\u30D6\u3092\u958B\u304F", "reopen closed tab \u518D\u958B", () => panes2.reopenClosed());
+    add("\u5206\u5272", "\u53F3\u306B\u5206\u5272", "split right row \u5DE6\u53F3", () => panes2.splitFocused("row"));
+    add("\u5206\u5272", "\u4E0B\u306B\u5206\u5272", "split down col \u4E0A\u4E0B", () => panes2.splitFocused("col"));
+    add("\u5206\u5272", "\u5206\u5272\u3092\u89E3\u9664", "unsplit join", () => panes2.unsplitFocused());
+    if (guiEdit.isOn()) {
+      for (const [id2, label, kw] of [
+        ["bold", "\u592A\u5B57", "bold"],
+        ["italic", "\u659C\u4F53", "italic"],
+        ["strike", "\u53D6\u308A\u6D88\u3057\u7DDA", "strike"],
+        ["code", "\u30B3\u30FC\u30C9", "code"],
+        ["h1", "\u898B\u51FA\u3057 1", "heading"],
+        ["h2", "\u898B\u51FA\u3057 2", "heading"],
+        ["h3", "\u898B\u51FA\u3057 3", "heading"],
+        ["bullet", "\u7B87\u6761\u66F8\u304D", "list"],
+        ["number", "\u756A\u53F7\u3064\u304D\u30EA\u30B9\u30C8", "list"],
+        ["task", "\u30C1\u30A7\u30C3\u30AF\u30DC\u30C3\u30AF\u30B9\u306E\u884C", "task"],
+        ["checkbox", "\u30C1\u30A7\u30C3\u30AF\u306E\u5207\u308A\u66FF\u3048", "check"],
+        ["quote", "\u5F15\u7528", "quote"],
+        ["link", "\u30EA\u30F3\u30AF\u3092\u5165\u308C\u308B", "link"],
+        ["openLink", "\u30AB\u30FC\u30BD\u30EB\u306E\u30EA\u30F3\u30AF\u3092\u958B\u304F", "open link"],
+        ["undo", "\u5143\u306B\u623B\u3059", "undo"],
+        ["redo", "\u3084\u308A\u76F4\u3059", "redo"],
+        ["save", "\u4FDD\u5B58", "save"]
+      ]) add("\u7DE8\u96C6", label, kw, () => guiEdit.run(id2));
+    }
+    for (const c of vimCmds || []) {
+      items.push({ group: "Vim", label: ":" + c.name, keywords: "vim \u30B3\u30DE\u30F3\u30C9", run: async () => {
+        await setMode("vim");
+        panes2.showVim();
+        await sendVimCommand(c.name, c.nargs === "0");
+      } });
+    }
+    return items;
+  }
+  async function sendVimCommand(name2, run) {
+    gui.write("\x1B");
+    await new Promise((r) => setTimeout(r, 80));
+    gui.write(":" + name2 + (run ? "\r" : " "));
+  }
+  var palSel = 0;
+  var palItems = [];
+  async function openPalette() {
+    const box = $3("palette"), input = $3("palette-input");
+    if (!vimCmds) {
+      try {
+        vimCmds = await gui.vimCommands();
+      } catch {
+        vimCmds = [];
+      }
+    }
+    box.hidden = false;
+    input.value = "";
+    palSel = 0;
+    drawPalette();
+    input.focus();
+  }
+  function closePalette() {
+    $3("palette").hidden = true;
+    if (guiEdit.isOn()) view2.focus();
+    else term.focus();
+  }
+  function drawPalette() {
+    const all = paletteItems();
+    palItems = rank(all, $3("palette-input").value);
+    palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    const ul2 = $3("palette-list");
+    ul2.textContent = "";
+    palItems.forEach((it, i) => {
+      const li2 = document.createElement("li");
+      li2.className = i === palSel ? "sel" : "";
+      li2.setAttribute("role", "option");
+      const l = document.createElement("span");
+      l.textContent = it.label;
+      const g = document.createElement("span");
+      g.className = "grp";
+      g.textContent = it.group;
+      li2.append(l, g);
+      li2.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        runPalette(i);
+      });
+      ul2.appendChild(li2);
+    });
+    const sel2 = ul2.querySelector(".sel");
+    if (sel2) sel2.scrollIntoView({ block: "nearest" });
+  }
+  async function runPalette(i) {
+    const it = palItems[i];
+    if (!it) return;
+    $3("palette").hidden = true;
+    try {
+      await it.run();
+    } catch (e) {
+      showError(e && e.message || e);
+    }
+  }
+  function initPalette() {
+    const input = $3("palette-input");
+    input.addEventListener("input", () => {
+      palSel = 0;
+      drawPalette();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        palSel = Math.min(palSel + 1, palItems.length - 1);
+        drawPalette();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        palSel = Math.max(palSel - 1, 0);
+        drawPalette();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        runPalette(palSel);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closePalette();
+      }
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (!$3("palette").hidden && document.activeElement !== input) $3("palette").hidden = true;
+      }, 150);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") {
+        e.preventDefault();
+        openPalette();
+      }
+    }, true);
+  }
   function currentMode() {
     return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim";
   }
@@ -34539,6 +35419,18 @@ ${h3.join(`
         guiEdit.run(b2.dataset.cmd);
       });
     }
+    for (const b2 of document.querySelectorAll("#view-tools [data-open]")) b2.addEventListener("click", () => panes2.openView(b2.dataset.open));
+    for (const b2 of document.querySelectorAll("#view-tools [data-pane]")) {
+      b2.addEventListener("click", () => {
+        const a = b2.dataset.pane;
+        if (a === "split-row") panes2.splitFocused("row");
+        else if (a === "split-col") panes2.splitFocused("col");
+        else if (a === "unsplit") panes2.unsplitFocused();
+        else if (a === "reopen") panes2.reopenClosed();
+        else if (a === "palette") openPalette();
+      });
+    }
+    initPalette();
     refreshModeUI();
   }
   var imgCache = /* @__PURE__ */ new Map();
@@ -34808,6 +35700,17 @@ ${h3.join(`
       onUserChange: (u) => guiEdit && guiEdit.onUserChange(u)
     });
     guiEdit = createGuiEdit({ view: view2, gui, $: $3, getLast: () => last2, showError, onChange: () => refreshModeUI() });
+    panes2 = createPanes({
+      root: $3("workspace"),
+      stageEl: $3("stage"),
+      gui,
+      onNote: async (rel) => {
+        const r = await gui.openNote(rel);
+        if (!r.ok) showError(r.error || "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F");
+        else panes2.showVim();
+      },
+      onResize: () => scheduleFit()
+    });
     initToolbar();
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -34844,6 +35747,17 @@ ${h3.join(`
         setMode("gui");
         return false;
       }
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "BracketRight" || e.code === "BracketLeft")) {
+        e.preventDefault();
+        swallowed = true;
+        panes2.cycle(e.code === "BracketRight" ? 1 : -1);
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.code === "KeyP") {
+        e.preventDefault();
+        swallowed = true;
+        return false;
+      }
       if (viewBlocks()) {
         swallowed = true;
         viewOnlyKey(e);
@@ -34872,10 +35786,10 @@ ${h3.join(`
       const { cols, rows } = fitTerm();
       gui.start(cols, rows, vaultPath);
       term.focus();
+      panes2.restore().then(() => scheduleFit());
     });
     window.addEventListener("resize", () => {
-      const d = fitTerm();
-      gui.resize(d.cols, d.rows);
+      scheduleFit();
     });
     const backToInput = () => {
       if (document.getElementById("launcher").hidden) {
@@ -34907,6 +35821,8 @@ ${h3.join(`
       setMode,
       currentMode,
       guiEdit: () => guiEdit,
+      panes: () => panes2,
+      openPalette,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];

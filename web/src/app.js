@@ -4,6 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
 import { createGuiEdit } from "./guiedit.js";
+import { createPanes, KIND_LABEL, VIEW_KINDS } from "./panes.js";
+import { rank } from "./palette-core.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -13,6 +15,7 @@ let term = null;
 let fit = null;
 let view = null;
 let guiEdit = null; // GUI 編集モード（src/guiedit.js）
+let panes = null;   // タブ・分割ペイン（src/panes.js）
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
@@ -186,6 +189,98 @@ function applyState(s) {
   }
 }
 
+// ペインの大きさが変わったら、Vim の端末の大きさを合わせ直す（Vim のタブが見えているときだけ）
+let fitTimer = null;
+function scheduleFit() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => {
+    const st = $("stage");
+    if (!term || !st || st.offsetWidth < 50 || st.offsetHeight < 50 || st.closest(".hidden-tab")) return;
+    const d = fitTerm();
+    gui.resize(d.cols, d.rows);
+    view?.refresh?.();
+  }, 60);
+}
+
+// ---------------------------------------------------------------- コマンドパレット（全部の機能の入口。ボタン・キーと同じ操作を呼ぶ）
+let vimCmds = null;
+function paletteItems() {
+  const items = [];
+  const add = (group, label, keywords, run) => items.push({ group, label, keywords, run });
+  add("モード", "Real Vim で編集", "vim mode 本物", () => setMode("vim"));
+  add("モード", "GUI 編集モード（Vim を使わない）", "gui edit editor 編集", () => setMode("gui"));
+  add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
+  for (const k of VIEW_KINDS) add("ビュー", `${KIND_LABEL[k]}を開く`, `${k} view`, () => panes.openView(k));
+  add("ビュー", "ビューを最新の状態に更新", "refresh reload 更新", () => panes.reloadViews());
+  add("タブ", "Vim のタブへ移る", "vim tab", () => panes.showVim());
+  add("タブ", "次のタブ", "next tab", () => panes.cycle(1));
+  add("タブ", "前のタブ", "previous tab", () => panes.cycle(-1));
+  add("タブ", "閉じたタブを開く", "reopen closed tab 再開", () => panes.reopenClosed());
+  add("分割", "右に分割", "split right row 左右", () => panes.splitFocused("row"));
+  add("分割", "下に分割", "split down col 上下", () => panes.splitFocused("col"));
+  add("分割", "分割を解除", "unsplit join", () => panes.unsplitFocused());
+  if (guiEdit.isOn()) {
+    for (const [id, label, kw] of [["bold", "太字", "bold"], ["italic", "斜体", "italic"], ["strike", "取り消し線", "strike"], ["code", "コード", "code"], ["h1", "見出し 1", "heading"], ["h2", "見出し 2", "heading"], ["h3", "見出し 3", "heading"],
+      ["bullet", "箇条書き", "list"], ["number", "番号つきリスト", "list"], ["task", "チェックボックスの行", "task"], ["checkbox", "チェックの切り替え", "check"], ["quote", "引用", "quote"], ["link", "リンクを入れる", "link"], ["openLink", "カーソルのリンクを開く", "open link"], ["undo", "元に戻す", "undo"], ["redo", "やり直す", "redo"], ["save", "保存", "save"]]) add("編集", label, kw, () => guiEdit.run(id));
+  }
+  for (const c of vimCmds || []) {
+    items.push({ group: "Vim", label: ":" + c.name, keywords: "vim コマンド", run: async () => { await setMode("vim"); panes.showVim(); await sendVimCommand(c.name, c.nargs === "0"); } });
+  }
+  return items;
+}
+
+// Vim にコマンドを打つ。ESC と ":" を続けて送ると、Vim は Meta キー（Alt+:）と読むことがある（ttimeoutlen が短いため）。
+// 文字がノーマルモードのコマンドとして流れ込まないよう、ESC のあと少し置いてから送る。
+async function sendVimCommand(name, run) {
+  gui.write("\x1b");
+  await new Promise((r) => setTimeout(r, 80));
+  gui.write(":" + name + (run ? "\r" : " "));
+}
+
+let palSel = 0, palItems = [];
+async function openPalette() {
+  const box = $("palette"), input = $("palette-input");
+  if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } }
+  box.hidden = false; input.value = ""; palSel = 0;
+  drawPalette();
+  input.focus();
+}
+function closePalette() { $("palette").hidden = true; if (guiEdit.isOn()) view.focus(); else term.focus(); }
+function drawPalette() {
+  const all = paletteItems();
+  palItems = rank(all, $("palette-input").value);
+  palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+  const ul = $("palette-list"); ul.textContent = "";
+  palItems.forEach((it, i) => {
+    const li = document.createElement("li"); li.className = i === palSel ? "sel" : ""; li.setAttribute("role", "option");
+    const l = document.createElement("span"); l.textContent = it.label;
+    const g = document.createElement("span"); g.className = "grp"; g.textContent = it.group;
+    li.append(l, g);
+    li.addEventListener("mousedown", (e) => { e.preventDefault(); runPalette(i); });
+    ul.appendChild(li);
+  });
+  const sel = ul.querySelector(".sel"); if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+async function runPalette(i) {
+  const it = palItems[i];
+  if (!it) return;
+  $("palette").hidden = true;
+  try { await it.run(); } catch (e) { showError(e && e.message || e); }
+}
+function initPalette() {
+  const input = $("palette-input");
+  input.addEventListener("input", () => { palSel = 0; drawPalette(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); palSel = Math.min(palSel + 1, palItems.length - 1); drawPalette(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); palSel = Math.max(palSel - 1, 0); drawPalette(); }
+    else if (e.key === "Enter") { e.preventDefault(); runPalette(palSel); }
+    else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+  });
+  input.addEventListener("blur", () => { setTimeout(() => { if (!$("palette").hidden && document.activeElement !== input) $("palette").hidden = true; }, 150); });
+  // どこからでも Ctrl+Shift+P（Vim の画面にフォーカスがあるときは xterm の処理の前に捕まえる）
+  document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") { e.preventDefault(); openPalette(); } }, true);
+}
+
 // ---------------------------------------------------------------- モード（Real Vim / GUI 編集 / 閲覧専用）と、ツールバー
 // 排他。GUI 編集から出るときは、保存して Vim に読み直させる。保存できない（競合の確認待ちなど）ときは移らない。
 function currentMode() { return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim"; }
@@ -215,6 +310,15 @@ function initToolbar() {
     b.addEventListener("mousedown", (e) => e.preventDefault());
     b.addEventListener("click", () => { guiEdit.run(b.dataset.cmd); });
   }
+  for (const b of document.querySelectorAll("#view-tools [data-open]")) b.addEventListener("click", () => panes.openView(b.dataset.open));
+  for (const b of document.querySelectorAll("#view-tools [data-pane]")) {
+    b.addEventListener("click", () => {
+      const a = b.dataset.pane;
+      if (a === "split-row") panes.splitFocused("row"); else if (a === "split-col") panes.splitFocused("col");
+      else if (a === "unsplit") panes.unsplitFocused(); else if (a === "reopen") panes.reopenClosed(); else if (a === "palette") openPalette();
+    });
+  }
+  initPalette();
   refreshModeUI();
 }
 
@@ -442,6 +546,11 @@ async function boot() {
     onUserChange: (u) => guiEdit && guiEdit.onUserChange(u),
   });
   guiEdit = createGuiEdit({ view, gui, $, getLast: () => last, showError, onChange: () => refreshModeUI() });
+  panes = createPanes({
+    root: $("workspace"), stageEl: $("stage"), gui,
+    onNote: async (rel) => { const r = await gui.openNote(rel); if (!r.ok) showError(r.error || "開けませんでした"); else panes.showVim(); },
+    onResize: () => scheduleFit(),
+  });
   initToolbar();
 
   term = new Terminal({
@@ -469,6 +578,8 @@ async function boot() {
     swallowed = false;
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setMode(viewOnly ? "vim" : "view"); return false; }
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") { e.preventDefault(); swallowed = true; setMode("gui"); return false; }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "BracketRight" || e.code === "BracketLeft")) { e.preventDefault(); swallowed = true; panes.cycle(e.code === "BracketRight" ? 1 : -1); return false; }
+    if (e.ctrlKey && e.shiftKey && e.code === "KeyP") { e.preventDefault(); swallowed = true; return false; }   // パレットは document 側で開く
     if (viewBlocks()) { swallowed = true; viewOnlyKey(e); return false; }
     return true;
   });
@@ -483,12 +594,10 @@ async function boot() {
     const { cols, rows } = fitTerm();
     gui.start(cols, rows, vaultPath);
     term.focus();
+    panes.restore().then(() => scheduleFit());
   });
 
-  window.addEventListener("resize", () => {
-    const d = fitTerm();
-    gui.resize(d.cols, d.rows);
-  });
+  window.addEventListener("resize", () => { scheduleFit(); });
   // どこを押しても、キー入力は端末（Vim）へ戻す。GUI 編集中は編集欄に戻す
   const backToInput = () => { if (document.getElementById("launcher").hidden) { if (guiEdit.isOn()) { if (!document.activeElement || document.activeElement === document.body) view.focus(); } else term.focus(); } };
   document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
@@ -508,7 +617,7 @@ async function boot() {
     isExpanded: () => expanded,
     isViewOnly: () => viewOnly,
     setViewOnly,
-    setMode, currentMode, guiEdit: () => guiEdit,
+    setMode, currentMode, guiEdit: () => guiEdit, panes: () => panes, openPalette,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

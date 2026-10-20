@@ -40,6 +40,20 @@
       <button type="button" data-cmd="redo" title="やり直す（Ctrl+Y）">↷ やり直す</button>
       <button type="button" data-cmd="save" title="保存（Ctrl+S。自動でも保存します）">保存</button>
     </span>
+    <span class="grp" id="view-tools" title="表示専用のビュー（書き込みません）。タブや分割ペインで並べて開けます">
+      <button type="button" data-open="cards" title="カード">カード</button>
+      <button type="button" data-open="table" title="テーブル">テーブル</button>
+      <button type="button" data-open="timeline" title="タイムライン">時系列</button>
+      <button type="button" data-open="graph" title="グラフ">グラフ</button>
+      <button type="button" data-open="fznav" title="Folgezettel 番号ナビ">番号</button>
+      <button type="button" data-open="search" title="検索">検索</button>
+      <span class="sep"></span>
+      <button type="button" data-pane="split-row" title="右に分割">▥ 右に</button>
+      <button type="button" data-pane="split-col" title="下に分割">▤ 下に</button>
+      <button type="button" data-pane="unsplit" title="分割を解除">解除</button>
+      <button type="button" data-pane="reopen" title="閉じたタブを開く">↺ 再開</button>
+      <button type="button" data-pane="palette" title="コマンドパレット（Ctrl+Shift+P）">⌘ コマンド</button>
+    </span>
     <span id="save-state" class="save-state"></span>
   </div>
   <!-- 競合: 編集中に別のもの（別の Vim・スマホ取り込み）がファイルを書き換えた -->
@@ -53,11 +67,19 @@
   <div id="ask" role="dialog" hidden>
     <label></label> <input type="text" size="40"> <button type="button" data-act="ok">OK</button> <button type="button" data-act="cancel">やめる</button>
   </div>
-  <div id="stage">
-    <div id="view" class="view"></div>
-    <div id="termwrap" class="strip">
-      <div id="term"></div>
+  <!-- ワークスペース: タブと分割ペイン（src/panes.js）。最初は Vim の画面（#stage）だけが入っている -->
+  <div id="workspace" class="solo">
+    <div id="stage">
+      <div id="view" class="view"></div>
+      <div id="termwrap" class="strip">
+        <div id="term"></div>
+      </div>
     </div>
+  </div>
+  <!-- コマンドパレット（Ctrl+Shift+P）。全部の機能をここから検索して実行できる -->
+  <div id="palette" role="dialog" aria-label="コマンドパレット" hidden>
+    <input type="text" id="palette-input" placeholder="コマンドを検索（例: グラフ / 分割 / スマホ）" autocomplete="off" spellcheck="false">
+    <ul id="palette-list" role="listbox"></ul>
   </div>
   <div id="statusbar">
     <span id="mode" class="mode normal">NORMAL</span>

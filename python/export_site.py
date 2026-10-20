@@ -10,7 +10,7 @@
 - 本文が参照するローカルの添付（画像・PDF など）は、vault の中にあるものだけをコピーする（.. やシンボリックリンクで外へ出ない）。
 - 出力先は、無い／空／前回の書き出し（.gnosis-export がある）のときだけ。それ以外は何も書かずに止まる。
 - 本物の索引・ノートは書き換えない。派生物なので、いつでも作り直せる。
-出力: ノートごとの HTML・index.html（一覧）・folgezettel.html と FOLGEZETTEL.md（番号表）・search.html + search.js +
+出力: ノートごとの HTML・index.html（一覧）・folgezettel.html と FOLGEZETTEL.md（番号表）・search.html + search.js + bridge.js（`\\A` に埋め込まれたときだけ働く）+
 search-index.js・style.css。
 """
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _page(title: str, body: str, css_prefix: str = "", extra_head: str = "", csp
     return ("<!doctype html>\n<html lang=\"ja\"><head><meta charset=\"utf-8\">"
             f"<meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            f"<title>{html.escape(title)}</title><link rel=\"stylesheet\" href=\"{css_prefix}style.css\">{extra_head}"
+            f"<title>{html.escape(title)}</title><link rel=\"stylesheet\" href=\"{css_prefix}style.css\"><script src=\"{css_prefix}bridge.js\"></script>{extra_head}"
             f"</head><body{f' class=\"{body_class}\"' if body_class else ''}{f' {body_attrs}' if body_attrs else ''}>{body}</body></html>\n")
 
 
@@ -267,6 +267,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     (out / "table.html").write_text(_page("テーブル", nav + "<h1>テーブル</h1>" + tools.format(extra="") + '<table id="tbl" class="t"></table>' + scripts, body_class="views", body_attrs='data-view="table"'), encoding="utf-8")
     (out / "timeline.html").write_text(_page("タイムライン", nav + "<h1>タイムライン</h1>" + tools.format(extra="") + '<div id="tl"></div>' + scripts, body_class="views", body_attrs='data-view="timeline"'), encoding="utf-8")
     # グラフ表示（全体・ローカル）。書き出したノートだけを節点・辺にする（非公開ノートは節点にも辺にも出さない）
+    shutil.copyfile(assets / "bridge.js", out / "bridge.js")
     for name in ("graphcore.js", "graph.js"):
         shutil.copyfile(assets / name, out / name)
     gdata = {"nodes": [{"id": r, "title": g.nodes[r].title, "fz": g.nodes[r].fz, "href": _out_name(r), "group": g.nodes[r].is_group} for r in notes],

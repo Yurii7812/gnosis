@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld("gui", {
   resolveLink: (file, href) => ipcRenderer.invoke("note:resolve", file, href),
   asideNote: (file, text) => ipcRenderer.invoke("note:aside", file, text),
   openNote: (file) => ipcRenderer.invoke("note:open", file),
+  // ワークスペース（タブ・分割）・表示専用ビューの元サイト・コマンドパレット
+  loadWorkspace: () => ipcRenderer.invoke("workspace:load"),
+  saveWorkspace: (text) => ipcRenderer.invoke("workspace:save", text),
+  viewSite: (force) => ipcRenderer.invoke("view:site", !!force),
+  vimCommands: () => ipcRenderer.invoke("cmds:vim"),
 });
 
 // 起動画面・vault の選択と管理・設定

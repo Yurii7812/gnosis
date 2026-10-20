@@ -23,7 +23,9 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg-dim) 45%, transparent) transparent; }
 
 html { --strip-h: 54px; }
-#stage { position: relative; height: calc(100vh - 24px - var(--toolbar-h, 36px)); overflow: hidden; }
+#workspace { position: relative; height: calc(100vh - 24px - var(--toolbar-h, 36px)); overflow: hidden; }
+#workspace > .pane, #workspace > .split { position: absolute; inset: 0; }
+#stage { position: absolute; inset: 0; overflow: hidden; }
 .view { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); overflow: hidden; }
 .view .cm-editor { height: 100%; }
 
@@ -53,9 +55,58 @@ html { --strip-h: 54px; }
 /* GUI 編集中: 端末（Vim）は隠す。Vim 風のカーソル表示は出さず、ブラウザの文字カーソルを使う */
 .gui-edit #termwrap { display: none; }
 .gui-edit .view { bottom: 0; }
+#toolbar #view-tools { margin-left: 12px; }
 .gui-edit span.cm-vim-bar, .gui-edit span.cm-vim-block, .gui-edit .cm-vim-block, .gui-edit span.cm-vim-under { display: none; background: transparent; }
 .gui-edit .cm-content { caret-color: var(--fg); cursor: text; }
 .gui-edit .cm-line ::selection, .gui-edit .cm-content ::selection { background: var(--selection); }
+
+/* ---- タブと分割ペイン ---- */
+.split { display: flex; min-width: 0; min-height: 0; }
+.split.row { flex-direction: row; }
+.split.col { flex-direction: column; }
+.split > .pane, .split > .split { min-width: 0; min-height: 0; }
+.split.row > .pane, .split.row > .split { height: 100%; }
+.split.col > .pane, .split.col > .split { width: 100%; }
+.splitter { flex: 0 0 6px; background: var(--line); }
+.splitter.row { cursor: col-resize; }
+.splitter.col { cursor: row-resize; }
+.splitter:hover { background: var(--accent); }
+.pane { display: flex; flex-direction: column; overflow: hidden; }
+.pane.focus { box-shadow: inset 0 2px 0 var(--accent); }
+.tabbar { display: flex; align-items: stretch; gap: 1px; height: 30px; flex: 0 0 30px; background: var(--bg-2); border-bottom: 1px solid var(--line); overflow-x: auto; }
+#workspace.solo .tabbar { display: none; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer; border-right: 1px solid var(--line); white-space: nowrap; user-select: none; }
+.tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab.pinned .tabtitle { font-weight: 700; }
+.tabclose { border: 0; background: none; color: inherit; font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 4px; cursor: pointer; }
+.tabclose:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 15%, transparent); }
+.tabclose:disabled { opacity: .3; cursor: default; }
+.tabplus { border: 0; background: none; color: var(--fg-dim); font-size: 14px; padding: 0 10px; cursor: pointer; }
+.panebody { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.dropzone { position: absolute; z-index: 20; background: color-mix(in srgb, var(--accent) 22%, transparent); border: 2px solid var(--accent); pointer-events: none; }
+.dropzone[data-zone="center"] { inset: 0; }
+.dropzone[data-zone="left"] { left: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone[data-zone="right"] { right: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone[data-zone="top"] { left: 0; right: 0; top: 0; height: 50%; }
+.dropzone[data-zone="bottom"] { left: 0; right: 0; bottom: 0; height: 50%; }
+.viewbox { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.viewstrip { display: flex; gap: 6px; padding: 3px 8px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 12px; }
+.viewstrip button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 1px 9px; cursor: pointer; }
+.viewmsg { padding: 12px 16px; color: var(--fg-dim); font-size: 13px; }
+.viewframe { flex: 1 1 0; border: 0; width: 100%; background: var(--bg); }
+#stage.hidden-tab, .hidden-tab { visibility: hidden; }
+.ctxmenu { position: fixed; z-index: 60; min-width: 180px; padding: 4px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+.ctxmenu button { text-align: left; font: inherit; color: var(--fg); background: none; border: 0; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+.ctxmenu button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ctxmenu button:disabled { opacity: .4; cursor: default; }
+.ctxmenu .sep { height: 1px; background: var(--line); margin: 4px 2px; }
+/* コマンドパレット */
+#palette { position: fixed; left: 50%; top: 14vh; transform: translateX(-50%); width: min(640px, 92vw); z-index: 70; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.35); overflow: hidden; }
+#palette-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--fg); background: var(--bg); border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; outline: none; }
+#palette-list { list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow-y: auto; }
+#palette-list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13.5px; }
+#palette-list li.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+#palette-list li .grp { color: var(--fg-dim); font-size: 11.5px; white-space: nowrap; }
 
 /* ---- ステータスバー（モード表示） ---- */
 #statusbar {

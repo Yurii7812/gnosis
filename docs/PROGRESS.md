@@ -59,6 +59,8 @@
 - **`\A` の GUI 編集モード（MD01）**: モード切替（ボタン・Alt+E／Alt+V）・書式ボタン（太字・見出し・リスト・チェック・引用・リンク）・元に戻す／やり直す・Enter でのリスト継続・自動保存（Vim の `:write` 経由で保存時の処理が全部走る）・競合（外が書き換えたら上書きせず確認。捨てる側は `.state/conflicts` に退避）・リンクのクリックで開く。実 Electron + 本物の Vim の E2E（`web/test/gui_edit_e2e.mjs`）で、競合検出を無効にすると落ちることも確認。設計は DECISIONS D006（ユーザー指示で簡素化）。
 - 未了（MD01 の完了条件）: Vim の状態表示との細かな差（GUI 編集中の Vim の画面は隠す）・複数カーソル・補完。
 
+- **`\A` のタブ・分割・コマンドパレット（MD02・SR10）**: レイアウトの木（`web/src/layout.js`・純関数・単体試験）、画面（`panes.js`）、パレット（`palette-core.js`）、main の IPC（workspace 保存・ビュー用サイトの書き出し `.gnosis/cache/site`・Vim コマンド一覧）、iframe 用の橋 `python/site_assets/bridge.js`。実 Electron の E2E（`web/test/panes_e2e.mjs`）と、橋の実ブラウザ試験を追加。E2E 中に、Vim へ `ESC` と `:` を続けて送ると Meta キーと読まれる問題に気づき、間を置いて送るよう修正（ノーマルモードへの文字の流れ込みを防ぐ）。`web` の既存 E2E は全件通過。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

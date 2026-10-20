@@ -142,6 +142,10 @@ const vimStr = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 
 async function startVim(cols, rows, vaultPath) {
   if (bridge) return;
+  { // ワークスペースの読み込みなどが先に来ても vault の場所が分かるように、最初に決めておく
+    const v = vaultPath || EXPLICIT_ROOT;
+    if (v) noteRootDir = EXPLICIT_ROOT && !vaultPath ? EXPLICIT_ROOT : cfg.noteRoot(v);
+  }
   const port = await startServer();
   const vimCmd = env("VIM") || "vim";
   const args = ["-u", vimrcPath(), "--cmd", "let g:gnosis_start_screen = 0"];
@@ -387,7 +391,65 @@ ipcMain.handle("note:commit", async (_e, file, text, expectedHash, force) => {
 ipcMain.handle("note:aside", (_e, file, text) => { try { noteio.inside(noteRootDir, file); return { ok: true, path: noteio.saveAside(noteRootDir, file, String(text), "mine") }; } catch (e) { return noteErr(e); } });
 ipcMain.handle("note:resolve", (_e, file, href) => { try { return { ok: true, ...noteio.resolveLink(noteRootDir, file, href) }; } catch (e) { return noteErr(e); } });
 // ノートを開く（Vim のバッファとして。GUI 編集モードの画面は、そのあとの Vim の状態で入れ替わる）
-ipcMain.handle("note:open", async (_e, file) => { const r = await vimCall({ type: "open", file }); return { ok: !!r.ok, file: r.file || "", error: r.error || "" }; });
+ipcMain.handle("note:open", async (_e, file) => { const abs = path.isAbsolute(file) ? file : path.join(noteRootDir, file); try { noteio.inside(noteRootDir, abs); } catch (e) { return noteErr(e); } const r = await vimCall({ type: "open", file: abs }); return { ok: !!r.ok, file: r.file || "", error: r.error || "" }; });
+// ---- ワークスペース（タブ・分割のレイアウト）の保存。vault ごとの利用者設定で、ノートの原本ではない ----
+const workspaceFile = () => path.join(noteRootDir, ".gnosis", "workspace.json");
+ipcMain.handle("workspace:load", () => {
+  try { return noteRootDir ? fs.readFileSync(workspaceFile(), "utf8") : ""; } catch { return ""; }
+});
+ipcMain.handle("workspace:save", (_e, text) => {
+  try {
+    if (!noteRootDir || typeof text !== "string" || text.length > 200000) return { ok: false };
+    const f = workspaceFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    const tmp = f + ".tmp-" + process.pid;
+    fs.writeFileSync(tmp, text, "utf8");
+    fs.renameSync(tmp, f);
+    return { ok: true };
+  } catch (e) { return noteErr(e); }
+});
+
+// ---- 表示専用ビューの元になる静的サイト（カード・テーブル・グラフ・番号ナビ・検索…）。派生物なので <vault>/.gnosis/cache/site に作る ----
+let siteJob = null;
+function siteDir() { return path.join(noteRootDir, ".gnosis", "cache", "site"); }
+function buildSite() {
+  if (siteJob) return siteJob;
+  siteJob = new Promise((resolve) => {
+    const out = siteDir();
+    const py = process.platform === "win32" ? "python" : "python3";
+    const child = spawn(py, [path.join(REPO, "python", "export_site.py"), noteRootDir, out], { stdio: ["ignore", "pipe", "pipe"] });
+    let so = "", se = "";
+    child.stdout.on("data", (d) => { so += d; });
+    child.stderr.on("data", (d) => { se += d; });
+    child.on("error", (e) => resolve({ ok: false, error: String(e) }));
+    child.on("exit", (code) => {
+      if (code === 0) resolve({ ok: true, dir: out, url: require("url").pathToFileURL(out).href + "/" });
+      else { let msg = se || so; try { msg = JSON.parse(so).error || msg; } catch { /* そのまま */ } resolve({ ok: false, error: String(msg).slice(0, 300) }); }
+    });
+  }).finally(() => { siteJob = null; });
+  return siteJob;
+}
+// force=false で、すでにあれば作り直さない（タブを開くたびに待たない）。更新ボタンは force=true
+ipcMain.handle("view:site", async (_e, force) => {
+  if (!noteRootDir) return { ok: false, error: "vault が開かれていません" };
+  if (!force && fs.existsSync(path.join(siteDir(), "index.html"))) return { ok: true, dir: siteDir(), url: require("url").pathToFileURL(siteDir()).href + "/" };
+  return buildSite();
+});
+
+// ---- コマンドパレット: Vim の Gnosis コマンドの一覧（plugin/gnosis.vim の command! から）----
+ipcMain.handle("cmds:vim", () => {
+  try {
+    const names = new Map();
+    for (const f of [path.join(REPO, "plugin", "gnosis.vim")]) {
+      for (const line of fs.readFileSync(f, "utf8").split("\n")) {
+        const m = /^command!\s+((?:-\S+\s+)*)(Gnosis\w+)\b/.exec(line);
+        if (m) { const n = /-nargs=(\S+)/.exec(m[1]); names.set(m[2], n ? n[1] : "0"); }
+      }
+    }
+    return [...names].map(([name, nargs]) => ({ name, nargs })).sort((a, b) => (a.name < b.name ? -1 : 1));
+  } catch { return []; }
+});
+
 // GUI 編集から Vim に戻る: 外で変わったファイルを Vim に読み直させる
 ipcMain.handle("gui:leave", async () => { const r = await vimCall({ type: "reload" }); return { ok: !!r.ok, error: r.error || "" }; });
 

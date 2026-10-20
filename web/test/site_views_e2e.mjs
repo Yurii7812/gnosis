@@ -221,4 +221,46 @@ assert.deepEqual(cv.byFzDesc.slice(0, 2), ["3a1", "2"]);
 assert.ok(cv.groups.includes("2026-01-01"));
 assert.equal(cv.tlLinks, 9);
 assert.equal(cv.secretAnywhere, false);
-console.log("site_views E2E OK (ナビ・グラフ・検索・曼荼羅・カード・テーブル・タイムラインを実ブラウザで操作)");
+// 6. ブリッジ（bridge.js）: `\A` に埋め込まれた iframe（name="gnosis:open"）の中で、ノートのページへのリンクは親へ知らせて移動を止める。
+//    ビューどうしのリンク・読み取り専用（name="gnosis:read"）・単独で開いたときは、ふつうに移動する。
+fs.writeFileSync(path.join(site, "wrap.html"), `<!doctype html><html><body>
+<iframe id="o" name="gnosis:open" src="fznav.html#id=1a" width="800" height="500"></iframe>
+<iframe id="r" name="gnosis:read" src="fznav.html#id=1a" width="800" height="500"></iframe>
+<script>window.__msgs = []; window.addEventListener("message", function (e) { window.__msgs.push(e.data); });</script>
+</body></html>`);
+const br = run("bridge", `
+module.exports = async (p) => {
+  await p.open("wrap.html");
+  // ページの中で実行する（この関数は文字列にして渡す。外の変数は使えない）
+  const inPage = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    await sleep(1200);
+    const doc = (id) => document.getElementById(id).contentDocument;
+    const out = {};
+    doc("o").getElementById("open").click();                       // 埋め込み（open）: ノートのリンクは親へ。iframe は動かない
+    await sleep(300);
+    out.msgs = JSON.parse(JSON.stringify(window.__msgs));
+    out.openStays = document.getElementById("o").contentWindow.location.pathname.endsWith("fznav.html");
+    const viewLink = [...doc("o").querySelectorAll("a")].find((a) => a.getAttribute("href") === "index.html");
+    viewLink.click();                                              // ビューどうしのリンクは普通に移動（親へは知らせない）
+    await sleep(800);
+    out.viewNavigated = document.getElementById("o").contentWindow.location.pathname.endsWith("index.html");
+    out.msgsAfterView = window.__msgs.length;
+    const before = window.__msgs.length;
+    doc("r").getElementById("open").click();                       // 読み取り専用（read）: ノートのリンクも普通に移動
+    await sleep(800);
+    out.readNavigated = document.getElementById("r").contentWindow.location.pathname.endsWith("n1a.html");
+    out.readNoMsg = window.__msgs.length === before;
+    return out;
+  };
+  return await p.eval("(" + inPage.toString() + ")()");
+};`);
+assert.equal(br.msgs.length, 1);
+assert.equal(br.msgs[0].gnosis, "open");
+assert.match(br.msgs[0].url, /^file:\/\/.*\/n1a\.html$/);
+assert.equal(br.openStays, true);
+assert.equal(br.viewNavigated, true);
+assert.equal(br.msgsAfterView, 1);
+assert.equal(br.readNavigated, true);
+assert.equal(br.readNoMsg, true);
+console.log("site_views E2E OK (ナビ・グラフ・検索・曼荼羅・カード・テーブル・タイムライン・`\\A` 埋め込み用のブリッジを実ブラウザで操作)");

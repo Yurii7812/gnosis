@@ -77,7 +77,7 @@ class ExportTest(unittest.TestCase):
             self.assertIn("Content-Security-Policy", t)
             self.assertIn("default-src 'none'", t)
             self.assertNotRegex(t, r"(?i)(src|href)=\"https?://")   # 外部 CDN を読まない
-            self.assertNotRegex(re.sub(r'<script src="[\w.-]+\.js"></script>', "", t), r"<script")   # インラインのスクリプトは無い（自前の .js だけ）
+            self.assertNotRegex(re.sub(r'<script src="[\w./-]+\.js"></script>', "", t), r"<script")   # インラインのスクリプトは無い（自前の .js だけ）
             self.assertNotIn("fetch(", t)
         copied = sorted(p.relative_to(o).as_posix() for p in o.rglob("*") if p.is_file())
         self.assertIn("pic.png", copied)
@@ -118,7 +118,7 @@ class ExportTest(unittest.TestCase):
         self.assertEqual((h["title"], h["fz"], h["href"], h["time"]), ("ハーブ", "1", "herb.html", "2026-01-01 00:00:00"))
         self.assertEqual(h["image"], "pic.png")                    # 最初の画像（コピー済みのもの）がカードの絵になる
         # 本文のタグ風の文字は抜粋に文字として残るが、描画側は textContent だけを使う（innerHTML を使わない）
-        for js in ("views.js", "graph.js", "fznav.js"):
+        for js in ("views.js", "graph.js", "fznav.js", "bridge.js"):
             self.assertNotIn("innerHTML", (self.out / js).read_text(encoding="utf-8"), js)
             self.assertNotIn("document.write", (self.out / js).read_text(encoding="utf-8"), js)
         self.assertNotIn("](", h["excerpt"])                       # リンクの書き方は外す
@@ -137,6 +137,18 @@ class ExportTest(unittest.TestCase):
         e = ex._excerpt(["# 見出し", "", "本文 **強調** と [リンク](x.md) と ![図](a.png)", "- [ ] 項目", "```", "コード", "```", "BranchGroup:", "[子](c.md)"])
         self.assertEqual(e, "本文 強調 と リンク と 項目 子")
         self.assertEqual(len(ex._excerpt(["あ" * 500])), 180)
+
+    def test_bridge_is_loaded_everywhere_and_only_posts_open(self):
+        self.run_export()
+        for p in self.out.rglob("*.html"):
+            rel = p.relative_to(self.out).as_posix()
+            self.assertIn('bridge.js"></script>', p.read_text(encoding="utf-8"), rel)
+        self.assertIn('src="../bridge.js"', (self.out / "sub/deep.html").read_text(encoding="utf-8"))
+        js = (self.out / "bridge.js").read_text(encoding="utf-8")
+        self.assertIn('window.name !== "gnosis:open"', js)       # 埋め込まれたときだけ
+        self.assertIn('postMessage({ gnosis: "open"', js)
+        for bad in ("eval(", "fetch(", "XMLHttpRequest", "innerHTML", "document.write"):
+            self.assertNotIn(bad, js)
 
     def test_include_private_and_search_index(self):
         self.run_export(include_private=True)

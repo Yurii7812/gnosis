@@ -48,7 +48,7 @@
 | SR07 | 保存検索、再実行、共有可能な検索定義。 | 保存検索、再実行、共有可能な検索定義。 | Vim + `\A` | 動作検証中（`<vault>/.gnosis/searches.json`。共有できる素の JSON） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR08 | 動的索引（検索結果の読み取り専用表示、昇 | 動的索引（検索結果の読み取り専用表示、昇格は明示的操作）。 | Vim + `\A` | 動作検証中（結果は読み取り専用の Markdown。`:GnosisQueryPromote` を明示したときだけ新規ノート） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR09 | Global Index／Topic I | Global Index／Topic Indexの特定範囲で検索。実際の到達可能性に基づく。 | Vim + `\A` | 動作検証中（`in:索引.md` = 実際の到達可能性。Index→最初のノート→GroupBranch の向きで辿る） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
-| SR10 | コマンドパレット、GUIから全機能検索・ | コマンドパレット、GUIから全機能検索・起動。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
+| SR10 | コマンドパレット、GUIから全機能検索・ | コマンドパレット、GUIから全機能検索・起動。 | Vim + `\A` | 動作検証中（Ctrl+Shift+P。ラベル・キーワードのあいまい検索、Vim の `:Gnosis*` 全コマンドを一覧して実行（引数なしは即実行）。`\A` 内。ノート名の検索結果は未） | 2 | `web/src/app.js` `palette-core.js` `panes_e2e.mjs` | P1 共通ID |
 | SR11 | ジャンプ履歴、戻る／進む、履歴トグル。 | ジャンプ履歴、戻る／進む、履歴トグル。 | Vim + `\A` | 要確認 | 2 | ジャンプ履歴（要調査） | P1 共通ID |
 | SR12 | ブックマーク、ハブ固定キー、ピン留め。 | ブックマーク、ハブ固定キー、ピン留め。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 要確認 | 2 | 最近のノート（要調査） | P1 共通ID |
@@ -87,14 +87,14 @@
 | TM16 | Androidホーム画面ウィジェット、ク | Androidホーム画面ウィジェット、クイックタスク追加。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM17 | 通知タップで対象ノートを開く、通知から完 | 通知タップで対象ノートを開く、通知から完了・スヌーズする。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM18 | 朝のAgenda通知、期限超過・週次レビ | 朝のAgenda通知、期限超過・週次レビュー通知、通知の集中設定。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
-| VW01 | グローバルグラフ（全体／選択した索引から | グローバルグラフ（全体／選択した索引から到達できる範囲）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` 内の表示・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
-| VW02 | ローカルグラフ（深さ1〜任意N、方向・関 | ローカルグラフ（深さ1〜任意N、方向・関係の絞り込み）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` 内の表示・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
-| VW03 | Google Keep風のMasonry | Google Keep風のMasonryカード（本文プレビュー、画像、選択、ピン留め、フィルタ）。 | `\A` HTML | 動作検証中（静的サイトのカード: 段組み・画像・番号・リンク数・絞り込み・並べ替え・ピン留め（ブラウザ内のみ）。`\A` 内・選択・フィルタの保存は未） | 3 | `python/site_assets/views.js` `viewscore.js` `test_viewscore.mjs` `web/test/site_views_e2e.mjs` | P2 View API |
+| VW01 | グローバルグラフ（全体／選択した索引から | グローバルグラフ（全体／選択した索引から到達できる範囲）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` のタブで表示（iframe・実 Electron 済み）・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
+| VW02 | ローカルグラフ（深さ1〜任意N、方向・関 | ローカルグラフ（深さ1〜任意N、方向・関係の絞り込み）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` のタブで表示（iframe・実 Electron 済み）・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
+| VW03 | Google Keep風のMasonry | Google Keep風のMasonryカード（本文プレビュー、画像、選択、ピン留め、フィルタ）。 | `\A` HTML | 動作検証中（静的サイトのカード: 段組み・画像・番号・リンク数・絞り込み・並べ替え・ピン留め（ブラウザ内のみ）。選択・フィルタの保存は未） | 3 | `python/site_assets/views.js` `viewscore.js` `test_viewscore.mjs` `web/test/site_views_e2e.mjs` | P2 View API |
 | VW04 | 9×9曼荼羅HTMLビュー。セルからノー | 9×9曼荼羅HTMLビュー。セルからノート／別曼荼羅へ。 | `\A` HTML | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | VW05 | マインドマップ。 | マインドマップ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW06 | 意味付きコンセプトマップ。 | 意味付きコンセプトマップ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW07 | 階層ツリー（Folder Treeではな | 階層ツリー（Folder Treeではなく索引／Branch／Folgezettelの関係）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
-| VW08 | テーブルビュー（カラム／ソート／フィルタ | テーブルビュー（カラム／ソート／フィルタ）。 | `\A` HTML | 動作検証中（静的サイトのテーブル: 番号・題・作成・更新・出入りのリンク・サイズ・タスク、列で並べ替え・絞り込み。列の表示切替・`\A` 内は未） | 3 | `python/site_assets/views.js` `viewscore.js` `test_viewscore.mjs` `web/test/site_views_e2e.mjs` | P2 View API |
+| VW08 | テーブルビュー（カラム／ソート／フィルタ | テーブルビュー（カラム／ソート／フィルタ）。 | `\A` HTML | 動作検証中（静的サイトのテーブル: 番号・題・作成・更新・出入りのリンク・サイズ・タスク、列で並べ替え・絞り込み。列の表示切替・`\A` のタブで表示（実 Electron 済み）） | 3 | `python/site_assets/views.js` `viewscore.js` `test_viewscore.mjs` `web/test/site_views_e2e.mjs` | P2 View API |
 | VW09 | カンバン（Markdownタスク・プロジ | カンバン（Markdownタスク・プロジェクト状態から構成）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW10 | タイムライン。 | タイムライン。 | `\A` HTML | 動作検証中（静的サイトのタイムライン: 作成日ごと。更新履歴・期間の絞り込みは未） | 3 | `python/site_assets/views.js` `viewscore.js` `test_viewscore.mjs` `web/test/site_views_e2e.mjs` | P2 View API |
 | VW11 | 画像／添付ギャラリー。 | 画像／添付ギャラリー。 | `\A` HTML | 要確認 | 4 | `python/gallery.py`（要調査） | P1 資産モデル |
@@ -107,7 +107,7 @@
 | VW18 | ストーリーリバー（連続読み物）。 | ストーリーリバー（連続読み物）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW19 | スライドビュー（Markdown→HTM | スライドビュー（Markdown→HTMLスライド／PDF等）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW20 | 3Dグラフ（オプション。使えない環境でも | 3Dグラフ（オプション。使えない環境でも2Dへフォールバック）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
-| VW21 | Folgezettel番号ナビゲーター（ | Folgezettel番号ナビゲーター（3章のすべて）。 | `\A` HTML | 動作検証中（静的サイトの番号ナビ: ツリー・見取り図・ボタン／キー・履歴・空き番号・本文プレビュー。実ブラウザ E2E 済み。`\A` 内への組み込み・Vim/GUI 編集/閲覧の 3 モード連動は未） | 2 | `python/site_assets/fznav*.js` `test_fznav.mjs` `web/test/site_views_e2e.mjs` | P1 共通ID |
+| VW21 | Folgezettel番号ナビゲーター（ | Folgezettel番号ナビゲーター（3章のすべて）。 | `\A` HTML | 動作検証中（静的サイトの番号ナビ: ツリー・見取り図・ボタン／キー・履歴・空き番号・本文プレビュー。実ブラウザ E2E 済み。`\A` のタブで表示（実 Electron 済み）。3 モードとの連動は未） | 2 | `python/site_assets/fznav*.js` `test_fznav.mjs` `web/test/site_views_e2e.mjs` | P1 共通ID |
 | VW22 | 思考の系譜・成長グラフ（Folgezet | 思考の系譜・成長グラフ（Folgezettel、Branchを区別）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW23 | 比較ビュー（ノート・索引・資料の横並び） | 比較ビュー（ノート・索引・資料の横並び）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW24 | 孤立・未参照・未索引ノートビュー。 | 孤立・未参照・未索引ノートビュー。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
@@ -166,7 +166,7 @@
 | UT08 | Markdown互換性検査。 | Markdown互換性検査。 | Vim + API | 未実装 | 3 |  | P2 View API |
 | UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 動作検証中（派生 SQLite。消しても作り直せる。書き出しサイト内の検索も別にある） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | UT10 | 設定プロファイル、vaultごとの設定。 | 設定プロファイル、vaultごとの設定。 | Vim + API | 要確認 | 1 | vault ごとの設定 `.gnosis/settings.json` | - |
-| UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 未実装 | 2 |  | P1 共通ID |
+| UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 一部（表示専用ビューの種類を layout.js の KINDS と panes.js の PAGES に登録する形。外部プラグインが登録する公開 API・Vim 側のプラグイン API は未） | 2 |  | P1 共通ID |
 | UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 未実装 | 1 |  | - |
 | UT13 | Undo可能な一括変更、ゴミ箱、復元、d | Undo可能な一括変更、ゴミ箱、復元、dry-run。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisTrash*`（ゴミ箱の送り・一覧・空に・復元あり）。dry-run・一括変更の Undo は無い | - |
 | UT14 | インポート・エクスポート・移行の再開／検 | インポート・エクスポート・移行の再開／検証。 | Vim + API | 未実装 | 1 |  | - |
@@ -180,7 +180,7 @@
 | FZ04 | 空き番号／リンク切れの区別、ID 検証（重複・抜け・循環） | `\A` + API | 動作検証中（重複・抜けの検出まで。循環・ID 変更の影響検査は未実装） | 2 | `python/folgezettel.py` `folgezettel_scan.py` |
 | FZ05 | 紙スキャン／番号付け GUI との統合、索引⇄番号ビュー往復 | `\A` | 一部（番号⇄ノート本文のプレビュー・番号表 MD。索引⇄番号の往復・紙スキャンの統合は未） | 2 | `python/paper_pkm.py` |
 | MD01 | `\A` 3 モード（Real Vim／GUI 編集／閲覧専用） | `\A` | 動作検証中（Real Vim／GUI 編集／閲覧専用の 3 モードを切替ボタンと Alt+E／Alt+V で。実 Electron の E2E 済み。GUI 編集の保存は Vim の :write 経由で競合は退避つき） | 2 | `web/src/guiedit.js` `editcmds.js` `history.js` `electron/noteio.cjs` `vim/gui.vim` `web/test/gui_edit_e2e.mjs`
-| MD02 | タブ・分割ペイン・レイアウト保存・全機能の GUI 操作経路・コマンドパレット | `\A` | 未実装 | 2 | |
+| MD02 | タブ・分割ペイン・レイアウト保存・全機能の GUI 操作経路・コマンドパレット | `\A` | 動作検証中（タブ・右／下の分割・ドラッグで並べ替え／移動／端で分割・固定・閉じて再開・分割線リサイズ・vault ごとの保存と復元・Ctrl+Shift+P のコマンドパレット（モード・ビュー・タブ・Vim の全 Gnosis コマンド・GUI 編集の操作）。ビューは表示専用で iframe。ペインごとの履歴・タブの大量時の遅延読み込みの最適化・タッチ操作は未） | 2 | `web/src/layout.js` `panes.js` `palette-core.js` `web/test/layout_test.mjs` `palette_test.mjs` `panes_e2e.mjs`
 | PD01 | vault への資産取り込み（コピー／移動／外部参照）・メタデータ・逆リンク | API | 未実装 | 4 | |
 | PD02 | 写真 GUI（グリッド・拡大・EXIF・XMP サイドカー・アルバム・一括タグ） | `\A` | 要確認 | 4 | `python/gallery.py`（中身未監査） |
 | PD03 | PDF／動画／音声／Office／コードのプレビュー・全文索引・キャッシュ上限 | `\A` | 未実装 | 4 | |

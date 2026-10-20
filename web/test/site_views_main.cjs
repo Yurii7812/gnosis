@@ -8,7 +8,7 @@ app.disableHardwareAcceleration();
 const site = process.argv[process.argv.length - 2];
 const scenario = require(path.resolve(process.argv[process.argv.length - 1]));
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, sandbox: true } });
+  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { contextIsolation: true, sandbox: true, webSecurity: false } /* 試験用: file:// の iframe の中身を調べられるように */ });
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const page = {
     async open(rel) { await win.loadURL("about:blank"); await win.loadFile(path.join(site, rel.split("#")[0]), { hash: rel.includes("#") ? rel.split("#")[1] : "" }); await wait(300); },
