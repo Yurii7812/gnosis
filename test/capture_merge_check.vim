@@ -44,11 +44,23 @@ call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))
 " 3. 同じ変更をもう一度取り込んでも変わらない（冪等）
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:now, readfile(s:n))
+" 3b. PC でノートのファイル名を変えても、同じノートとして追跡する（新しいノートを作らない）
+call assert_true(index(readfile(s:n), 'capture_id: 261019100000') >= 0)
+call assert_equal(0, rename(s:n, $D . '/v/renamed-by-user.md'))
+let s:n = $D . '/v/renamed-by-user.md'
+let s:count0 = len(glob($D . '/v/*.md', 0, 1))
+call s:phone("一行目(スマホ)\n二行目\n三行目\nリネーム後の追記")
+call gnosis#capture_import($D . '/pack')
+call assert_true(index(readfile(s:n), 'リネーム後の追記') >= 0)
+call assert_false(filereadable($D . '/v/261019100000.md'))
+call assert_false(filereadable($D . '/v/261019100000-2.md'))
+call assert_equal(s:count0, len(glob($D . '/v/*.md', 0, 1)))
+call assert_true(index(readfile(s:n), 'PC の追記') >= 0)
 " 4. 同じ行を PC とスマホが別々に変更 → ノートは変えず、新しいノートも作らず、競合の記録が残る
 let s:body = readfile(s:n)
 let s:body[index(s:body, '二行目')] = '二行目(PC)'
 call writefile(s:body, s:n)
-call s:phone("一行目(スマホ)\n二行目(スマホ)\n三行目")
+call s:phone("一行目(スマホ)\n二行目(スマホ)\n三行目\nリネーム後の追記")
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:body, readfile(s:n))
 call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))

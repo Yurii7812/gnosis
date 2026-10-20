@@ -27,7 +27,7 @@
 - **`\M` 差分更新（M01/M02 の一部）**: `python/capture_merge.py`（3-way merge・競合は記録のみ）、`capture_import.py` の `plan` に `merge`、`merge` CLI、`gnosis#capture_import` の分岐、i18n。試験: `test_capture_merge.py` `test_capture_import.py`（旧「別版を作る」を新仕様に変更）`capture_merge_net.sh` `capture_topics_check.vim`（同）。詳細・未実装は `docs/ANDROID_SYNC.md`。
 
 ## 次の具体的タスク
-1. ノート側の不変 source ID: 新規ノートに front matter `capture_id: <id>` を書き、state の行き先が消えた（リネーム）ときは vault を `capture_id` で探して同じノートとして扱う（重複ノートを作らない）。試験: リネーム後の再取り込み。
+1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. 日記埋め込み（#7）: 日記の行に source ID を持たせて、再取り込みで編集を反映・二重挿入しない。
 3. 競合の解決操作（`:GnosisCaptureConflicts` の一覧／差分／どちらを採るか）。
 4. 取り込みのジャーナル（クラッシュ後の再実行）、画像 hash。

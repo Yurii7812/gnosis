@@ -67,6 +67,23 @@ class CaptureImportTest(unittest.TestCase):
         self.assertTrue(item['merge'])
         self.assertEqual(dest.read_text(), original)
 
+    def test_renamed_note_is_found_by_capture_id(self):
+        dest = self.record()
+        dest.write_text('---\ncapture_id: ' + self.entry['id'] + '\n---\n\n# PCの原本\n')
+        sub = self.root / 'sub'; sub.mkdir()
+        moved = sub / 'renamed.md'
+        dest.rename(moved)  # PC で名前を変え、フォルダも移した
+        item = self.plan()
+        self.assertTrue(item['done'])
+        self.assertEqual(item['file'], 'sub/renamed.md')
+        # 記録（state）を失っても、ノートが実在すれば取り込み済み（重複ノートを作らない）
+        (self.root / '.state' / ci.STATE_NAME).unlink()
+        self.assertTrue(self.plan()['done'])
+        # ドット始まりのフォルダ（ゴミ箱など）の中は探さない
+        hidden = self.root / '.trash'; hidden.mkdir()
+        moved.rename(hidden / 'x.md')
+        self.assertFalse(self.plan()['done'])
+
     def test_export_flags_do_not_duplicate(self):
         self.record()
         self.entry['exported'] = True; self.entry['edited'] = 123; self.write_pack()

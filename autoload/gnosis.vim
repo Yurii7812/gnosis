@@ -5639,7 +5639,7 @@ function! gnosis#capture_import(...) abort
       " 親・文脈がまとめるトピックの中の節なら、本文の下にその見出しへのリンクの行を置く
       let l:body = split(l:it.text, "\n", 1) + s:capture_rel_lines(l:it, l:titles, extend(copy(l:sections), map(copy(l:anchors), '1')))
       " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
-      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
+      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'capture_id: ' . l:it.id, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
       try
         if filereadable(l:root . '/' . l:name)
