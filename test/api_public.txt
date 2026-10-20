@@ -99,6 +99,7 @@ gnosis#dirty_guard_release
 gnosis#ensure_root_and_index
 gnosis#exit_cleanup
 gnosis#expand_s_under_cursor
+gnosis#explain
 gnosis#explore
 gnosis#explore_complete
 gnosis#export_site
@@ -119,6 +120,8 @@ gnosis#habit_stats
 gnosis#has_python
 gnosis#heading_links_after
 gnosis#heading_links_before
+gnosis#highlight_digest
+gnosis#highlights
 gnosis#hint_goto
 gnosis#home#dir
 gnosis#home#ensure_fzf_path
@@ -145,6 +148,8 @@ gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
 gnosis#insert_prompt_text
+gnosis#ir_next
+gnosis#ir_rate
 gnosis#is_autosave_target
 gnosis#is_vault_note
 gnosis#is_vault_path
@@ -157,6 +162,7 @@ gnosis#jump_relation_link
 gnosis#jump_section_header
 gnosis#jump_up
 gnosis#jump_up_cursor
+gnosis#learn_path
 gnosis#life_log
 gnosis#link_highlight
 gnosis#link_syntax
@@ -172,6 +178,8 @@ gnosis#make_link
 gnosis#mandala_cell
 gnosis#mandala_new
 gnosis#mandala_sync
+gnosis#maturity
+gnosis#maturity_set
 gnosis#maybe_mount_interactive
 gnosis#merge#pick
 gnosis#merge#undo
@@ -219,6 +227,7 @@ gnosis#query_run
 gnosis#query_save
 gnosis#quick_note
 gnosis#quit_unmount
+gnosis#read_progress
 gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
 gnosis#recent_map
@@ -291,6 +300,7 @@ gnosis#shell_job
 gnosis#sort_selection
 gnosis#sort_time
 gnosis#sort_yomi
+gnosis#sources
 gnosis#split
 gnosis#split_undo
 gnosis#srs_review

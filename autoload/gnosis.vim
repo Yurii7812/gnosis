@@ -6469,6 +6469,149 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" 読書・学習（LR01・LR07・LR09〜LR14）。原本はノートの記述（==ハイライト== (p.12)・📖 書名 120/300 日付・maturity:・requires:・source:）。
+"   :GnosisHighlights [ノート]  :GnosisHighlightDigest [新しいファイル]  :GnosisReadProgress [書名 ページ [全ページ]]  :GnosisMaturity [seed|growing|evergreen]  :GnosisMaturitySet レベル
+"   :GnosisLearnPath [ノート]  :GnosisSources  :GnosisExplain [自分の説明]  :GnosisIrNext  :GnosisIrRate ID again|good|easy
+function! s:rd_root() abort
+  let l:root = s:get_pkm_root()
+  return empty(l:root) ? '' : substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+endfunction
+
+function! s:rd_cur(root) abort
+  let l:cur = expand('%:p')
+  return stridx(l:cur, a:root . '/') == 0 ? strpart(l:cur, len(a:root) + 1) : ''
+endfunction
+
+function! s:rd_run(args, show) abort
+  let l:root = s:rd_root()
+  if empty(l:root)
+    return ''
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/reading.py', l:root] + a:args + (a:show ? ['--md'] : []), 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return ''
+  endif
+  return l:out
+endfunction
+
+function! s:rd_show(args) abort
+  let l:out = s:rd_run(a:args, 1)
+  if empty(l:out)
+    return
+  endif
+  let l:root = s:rd_root()
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! s:rd_need_note() abort
+  let l:root = s:rd_root()
+  let l:rel = empty(l:root) ? '' : s:rd_cur(l:root)
+  if empty(l:rel)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+  endif
+  return l:rel
+endfunction
+
+function! gnosis#highlights(...) abort
+  call s:rd_show(['highlights'] + (a:0 > 0 && !empty(a:1) ? [a:1] : []))
+endfunction
+
+function! gnosis#highlight_digest(...) abort
+  let l:rel = s:rd_need_note()
+  if empty(l:rel)
+    return
+  endif
+  if a:0 == 0 || empty(a:1)
+    call s:rd_show(['digest', l:rel])
+    return
+  endif
+  if !empty(s:rd_run(['digest', l:rel, '--write', a:1], 0))
+    execute 'edit ' . fnameescape(s:rd_root() . '/' . a:1)
+  endif
+endfunction
+
+function! gnosis#read_progress(...) abort
+  if a:0 == 0 || empty(a:1)
+    call s:rd_show(['progress'])
+    return
+  endif
+  let l:parts = split(a:1, ' ')
+  if len(l:parts) < 2
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('使い方: :GnosisReadProgress 書名 ページ [全ページ]') | echohl NONE
+    return
+  endif
+  let l:nums = []
+  while len(l:parts) > 1 && l:parts[-1] =~# '^\d\+$' && len(l:nums) < 2
+    call insert(l:nums, remove(l:parts, -1))
+  endwhile
+  if empty(l:nums)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('使い方: :GnosisReadProgress 書名 ページ [全ページ]') | echohl NONE
+    return
+  endif
+  if !empty(s:rd_run(['progress-set', join(l:parts, ' ')] + l:nums, 0))
+    echo 'Gnosis: ' . gnosis#i18n#tr('進捗を記録しました')
+  endif
+endfunction
+
+function! gnosis#maturity(...) abort
+  call s:rd_show(['maturity'] + (a:0 > 0 && !empty(a:1) ? [a:1] : []))
+endfunction
+
+function! gnosis#maturity_set(level) abort
+  let l:rel = s:rd_need_note()
+  if empty(l:rel)
+    return
+  endif
+  if &modified
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  if !empty(s:rd_run(['maturity-set', l:rel, a:level], 0))
+    silent! edit!
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('成熟度を %s にしました'), a:level)
+  endif
+endfunction
+
+function! gnosis#learn_path(...) abort
+  let l:note = a:0 > 0 && !empty(a:1) ? a:1 : s:rd_need_note()
+  if !empty(l:note)
+    call s:rd_show(['path', l:note])
+  endif
+endfunction
+
+function! gnosis#sources() abort
+  call s:rd_show(['sources'])
+endfunction
+
+function! gnosis#explain(...) abort
+  let l:rel = s:rd_need_note()
+  if empty(l:rel)
+    return
+  endif
+  call s:rd_show(['explain', l:rel] + (a:0 > 0 && !empty(a:1) ? [a:1] : []))
+endfunction
+
+function! gnosis#ir_next() abort
+  call s:rd_show(['ir-next'])
+endfunction
+
+function! gnosis#ir_rate(id, grade) abort
+  let l:out = s:rd_run(['ir-rate', a:id, a:grade], 0)
+  if !empty(l:out)
+    let l:r = json_decode(l:out)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('次は %s（%d 日後）'), l:r.due, l:r.interval_days)
+  endif
+endfunction
+
 " ノートの分割（ED06）・統計（ED17）・比較（ED09）。
 "   :GnosisSplit [新しいファイル名]  カーソルがある節(見出し)を、同じフォルダの新しいノートに切り出す。元には → リンクを残し、新しい側に Related: で元を記録。:GnosisSplitUndo で戻す
 "   :GnosisStats [ノート]  :GnosisDiff 相手のノート（今のノートと比べる）

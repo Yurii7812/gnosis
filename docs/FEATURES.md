@@ -55,20 +55,20 @@
 | SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 動作検証中（`:GnosisPaths`・`\A` の分析ビューは別。種類を絞った経路の指定は gnosis_graph の API のみ） | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
+| LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 一部（ハイライトを間隔をあけて見返す: 初回/again 1 日/good 3→6…/easy 7→×3.5 日。抜き出し自体はハイライト `==…==` のみ。`\A` の画面は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR02 | 間隔反復（Spaced Repetiti | 間隔反復（Spaced Repetition）。 | `\A` + Markdown | 動作検証中（SM-2。記録は `.gnosis/srs.json`。`\A`・Android は未） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR03 | フラッシュカード。 | フラッシュカード。 | `\A` + Markdown | 動作検証中（`Q:`/`A:` のカード。複数行可） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR04 | Cloze穴埋め。 | Cloze穴埋め。 | `\A` + Markdown | 動作検証中（`{{穴埋め}}`・`{{c1::語}}`・ヒント） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR05 | ランダム復習。 | ランダム復習。 | `\A` + Markdown | 動作検証中（`:GnosisSrs random`。記録しない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR06 | Active Recall、答えを見る前 | Active Recall、答えを見る前の想起。 | `\A` + Markdown | 動作検証中（答えを見る前の採点を受け付けない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
-| LR07 | 読書ハイライトの取得・ノート接続。 | 読書ハイライトの取得・ノート接続。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
+| LR07 | 読書ハイライトの取得・ノート接続。 | 読書ハイライトの取得・ノート接続。 | `\A` + Markdown | 一部（ノート内の `==…== (p.12)` の取得・一覧。外部の電子書籍/Kindle 等からの取り込みは未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR08 | PDF注釈、選択テキスト、ページリンク。 | PDF注釈、選択テキスト、ページリンク。 | `\A` + Markdown | 要確認 | 4 | 未実装の疑い | P1 資産モデル |
-| LR09 | 読書進捗・中断位置・再開。 | 読書進捗・中断位置・再開。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR10 | 理解度・成熟度（ユーザー任意の属性として | 理解度・成熟度（ユーザー任意の属性として、ノート分類を置換しない）。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR11 | 段階的学習経路・順序づけ。 | 段階的学習経路・順序づけ。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR12 | 自己説明テスト。 | 自己説明テスト。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR13 | 書籍・論文・Webの出典／引用元の追跡、 | 書籍・論文・Webの出典／引用元の追跡、該当箇所への戻りリンク。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR14 | ハイライト・注釈からMarkdownノー | ハイライト・注釈からMarkdownノート／索引リンク作成。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
+| LR09 | 読書進捗・中断位置・再開。 | 読書進捗・中断位置・再開。 | `\A` + Markdown | 動作検証中（`📖 書名 現在/全 日付`・最新が現在地・同日は後の行・再開ページ） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR10 | 理解度・成熟度（ユーザー任意の属性として | 理解度・成熟度（ユーザー任意の属性として、ノート分類を置換しない）。 | `\A` + Markdown | 動作検証中（利用者が付ける `maturity:` 属性。引き上げは提案だけで自動では書かない。分類は置き換えない） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR11 | 段階的学習経路・順序づけ。 | 段階的学習経路・順序づけ。 | `\A` + Markdown | 動作検証中（`requires:` から前に読む順序。循環・欠落は報告） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR12 | 自己説明テスト。 | 自己説明テスト。 | `\A` + Markdown | 一部（説明を促す問いと、要点語の網羅の目安。採点・言い換えの理解判定はしない） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR13 | 書籍・論文・Webの出典／引用元の追跡、 | 書籍・論文・Webの出典／引用元の追跡、該当箇所への戻りリンク。 | `\A` + Markdown | 動作検証中（`source:` のノートと、引用しているノートへの戻り行。書誌の整形は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR14 | ハイライト・注釈からMarkdownノー | ハイライト・注釈からMarkdownノート／索引リンク作成。 | `\A` + Markdown | 動作検証中（ハイライトから読書メモの草稿。新規ノートのみ・上書きしない・索引リンクの自動作成は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | TM01 | 統合Agenda: ノートと日記内のタス | 統合Agenda: ノートと日記内のタスクを収集。 | Vim + `\A` + Android | 動作検証中（Vim の :GnosisAgenda のみ。`\A`・APK は未実装） | 5 | `python/tasks.py` `test_tasks.py` `test/agenda_net.sh` | P1 タスクエンジン |
 | TM02 | カレンダー: 日記、期限、作成・更新日、 | カレンダー: 日記、期限、作成・更新日、予定を表示。 | Vim + `\A` + Android | 動作検証中（月カレンダー・日の一覧。日ごとの作成📝・期限📅・完了✅。うるう年・月末を試験。Agenda とは別に読み取り専用） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM03 | 指定日時のリマインダー。 | 指定日時のリマインダー。 | Vim + `\A` + Android | 一部（PC 側: `⏰` の印を読む・時刻が来たら記録／`!` でデスクトップ通知・二重通知しない・完了タスクは鳴らさない。Android の通知は未（Kotlin 側）。実際の `notify-send` の表示は未確認） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
