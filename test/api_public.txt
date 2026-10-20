@@ -42,6 +42,9 @@ gnosis#branch#context_parent
 gnosis#branch#message
 gnosis#branch#run
 gnosis#branch#warn
+gnosis#bulk
+gnosis#bulk_list
+gnosis#bulk_undo
 gnosis#calc
 gnosis#capture_backfill
 gnosis#capture_conflicts

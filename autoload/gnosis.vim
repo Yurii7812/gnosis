@@ -7959,6 +7959,101 @@ function! gnosis#versions_auto() abort
   call s:ver_run(l:root, ['save'])
 endfunction
 
+" 一括変更の取引(UT13)。  :GnosisBulk[!] 実行したい Ex コマンド   :GnosisBulkUndo[!]   :GnosisBulkList
+"   既存のコマンド(例: :GnosisBulk GnosisUpdateAll)を、前後でノートの内容を記録して実行する。終わると変わったファイルを見せ、
+"   残すか戻すかを聞く(! を付けると聞かずに残す。あとで :GnosisBulkUndo で戻せる)。ノートの総量が 200 MB を超えると断る。
+function! s:bulk_run(root, args, ...) abort
+  let l:cmd = [gnosis#python_cmd(), s:note_root . '/python/bulk.py', a:root] + a:args + (a:0 ? ['--md'] : [])
+  return system(join(map(l:cmd, 'shellescape(v:val)'), ' '))
+endfunction
+
+function! s:bulk_reload() abort
+  let l:save = &autoread
+  set autoread
+  silent! checktime
+  let &autoread = l:save
+endfunction
+
+function! s:bulk_err(out) abort
+  if a:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(a:out), 'error', '') | echohl NONE
+    return 1
+  endif
+  return 0
+endfunction
+
+function! gnosis#bulk(bang, cmd) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if empty(a:cmd)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('実行するコマンドを指定してください（例: :GnosisBulk GnosisUpdateAll）') | echohl NONE
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:b = s:bulk_run(l:root, ['begin', a:cmd])
+  if s:bulk_err(l:b)
+    return
+  endif
+  let l:id = json_decode(l:b).id
+  try
+    execute a:cmd
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . v:exception | echohl NONE
+  endtry
+  silent! wall
+  let l:e = json_decode(s:bulk_run(l:root, ['end', l:id]))
+  call s:bulk_reload()
+  if l:e.modified + l:e.added + l:e.deleted == 0
+    echo 'Gnosis: ' . gnosis#i18n#tr('変更はありませんでした')
+    return
+  endif
+  call s:ga_show(l:root, split(s:bulk_run(l:root, ['status', l:id], 1), "\n", 1), {})
+  let l:ans = a:bang ? 1 : get(g:, 'gnosis_bulk_answer', 0)
+  if l:ans == 0
+    let l:ans = confirm(printf(gnosis#i18n#tr('変更 %d 件を残しますか？'), l:e.modified + l:e.added + l:e.deleted), "&残す\n&戻す", 1)
+  endif
+  if l:ans == 2
+    call gnosis#bulk_undo(0)
+  else
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('残しました（戻すなら :GnosisBulkUndo）: 変更 %d・追加 %d・削除 %d'), l:e.modified, l:e.added, l:e.deleted)
+  endif
+endfunction
+
+function! gnosis#bulk_undo(bang) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:out = s:bulk_run(l:root, ['undo'] + (a:bang ? ['--force'] : []))
+  if s:bulk_err(l:out)
+    return
+  endif
+  let l:r = json_decode(l:out)
+  if !l:r.undone
+    echohl WarningMsg | echo 'Gnosis: ' . printf(gnosis#i18n#tr('取引のあとに変えたファイルがあるので戻しません（! で上書き）: %s'), join(l:r.conflicts, ', ')) | echohl NONE
+    return
+  endif
+  call s:bulk_reload()
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('戻しました: 復元 %d・削除 %d'), l:r.restored, l:r.removed)
+endfunction
+
+function! gnosis#bulk_list() abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  call s:ga_show(l:root, split(s:bulk_run(l:root, ['list'], 1), "\n", 1), {})
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

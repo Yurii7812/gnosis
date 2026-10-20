@@ -588,6 +588,9 @@ command! -bang GnosisSplitUndo call gnosis#split_undo(<bang>0)
 command! -bang -nargs=? GnosisStats call gnosis#stats(<bang>0, <f-args>)
 command! -nargs=? GnosisActivity call gnosis#activity(<f-args>)
 command! -nargs=* GnosisVersions call gnosis#versions(<f-args>)
+command! -bang -nargs=+ -complete=command GnosisBulk call gnosis#bulk(<bang>0, <q-args>)
+command! -bang GnosisBulkUndo call gnosis#bulk_undo(<bang>0)
+command! GnosisBulkList call gnosis#bulk_list()
 augroup GnosisVersions
   autocmd!
   autocmd BufWritePost *.md call gnosis#versions_auto()
