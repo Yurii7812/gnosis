@@ -348,7 +348,140 @@
     }).sort(function (a, b) { return cmpStr(a.name, b.name); });
   }
 
-  var api = { hierarchy: hierarchy, countTree: countTree, depthOf: depthOf, orphans: orphans, matrix: matrix, squarify: squarify, treemap: treemap, sunburst: sunburst, arcPath: arcPath, polar: polar,
+  // ---- 実験ビューの核 ----
+  // 種から決まる擬似乱数（mulberry32）。同じ種なら同じ並び（試験と共有リンクの再現のため）
+  function rng(seed) {
+    var a = (seed >>> 0) || 1;
+    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function seedOf(str) { var h = 2166136261; String(str || "").split("").forEach(function (c) { h = Math.imul(h ^ c.charCodeAt(0), 16777619); }); return h >>> 0; }
+
+  // 知識の博物館: 番号の最上位ごとの「展示室」に、番号順でノートを「展示」する。順路は 1 本の列
+  function museum(notes) {
+    var rooms = {}, order = [];
+    notes.forEach(function (n) { var k = topFz(n.fz) || "（番号なし）"; if (!rooms[k]) { rooms[k] = []; order.push(k); } rooms[k].push(n); });
+    order.sort(function (a, b) { return a === "（番号なし）" ? 1 : b === "（番号なし）" ? -1 : fzCmp(a, b); });
+    var tour = [];
+    var list = order.map(function (k) {
+      var items = rooms[k].slice().sort(function (a, b) { return (a.fz ? 0 : 1) - (b.fz ? 0 : 1) || fzCmp(a.fz, b.fz) || cmpStr(a.title, b.title); });
+      var head = items.filter(function (n) { return n.fz === k; })[0];
+      var room = { key: k, label: head ? k + " " + head.title : k, exhibits: items };
+      items.forEach(function (n) { tour.push({ room: k, roomLabel: room.label, note: n }); });
+      return room;
+    });
+    return { rooms: list, tour: tour };
+  }
+
+  // リンクだけを辿るゲーム。ノートの中から出られるのは、そのノートに書かれた関係（派生の backlink・番号の親子は含めない）
+  var FOLLOW = ["link", "context", "related", "parent_branch", "group", "branch_group", "child_branch"];
+  function outLinks(graph) {
+    var out = {}; graph.nodes.forEach(function (n) { out[n.id] = []; });
+    graph.edges.forEach(function (e) { if (FOLLOW.indexOf(e.k) >= 0 && e.s !== e.d && out[e.s] && out[e.d] !== undefined && out[e.s].indexOf(e.d) < 0) out[e.s].push(e.d); });
+    return out;
+  }
+  function shortest(out, a, b) {
+    if (a === b) return [a];
+    var prev = {}, q = [a]; prev[a] = null;
+    for (var i = 0; i < q.length; i++) {
+      var cur = q[i];
+      for (var j = 0; j < (out[cur] || []).length; j++) {
+        var nx = out[cur][j];
+        if (nx in prev) continue;
+        prev[nx] = cur;
+        if (nx === b) { var path = [b]; for (var c = prev[b]; c !== null; c = prev[c]) path.unshift(c); return path; }
+        q.push(nx);
+      }
+    }
+    return null;
+  }
+  // 出発と目標を決める。最短で minPar 手以上かかる組を、種から決まる順で探す（無ければ null）
+  function mazePick(graph, seed, minPar) {
+    var out = outLinks(graph), ids = graph.nodes.map(function (n) { return n.id; }).sort(), rand = rng(seed), need = minPar || 3;
+    if (ids.length < 2) return null;
+    for (var tries = 0; tries < 400; tries++) {
+      var a = ids[Math.floor(rand() * ids.length)], b = ids[Math.floor(rand() * ids.length)];
+      if (a === b) continue;
+      var p = shortest(out, a, b);
+      if (p && p.length - 1 >= need) return { start: a, goal: b, par: p.length - 1, path: p };
+    }
+    // 全探索（ランダムで当たらなかったとき）
+    for (var i = 0; i < ids.length; i++) for (var j = 0; j < ids.length; j++) { if (i === j) continue; var q = shortest(out, ids[i], ids[j]); if (q && q.length - 1 >= need) return { start: ids[i], goal: ids[j], par: q.length - 1, path: q }; }
+    return null;
+  }
+  function gameStart(graph, start, goal) {
+    var out = outLinks(graph), p = shortest(out, start, goal);
+    return { start: start, goal: goal, at: start, path: [start], moves: 0, done: start === goal, par: p ? p.length - 1 : null, solvable: !!p };
+  }
+  // 1 手進める。いまのノートから出ているリンクの先にだけ進める。目標に着いたら終わり
+  function gameMove(graph, st, to) {
+    var out = outLinks(graph);
+    if (st.done || (out[st.at] || []).indexOf(to) < 0) return { ok: false, state: st };
+    var next = { start: st.start, goal: st.goal, at: to, path: st.path.concat([to]), moves: st.moves + 1, done: to === st.goal, par: st.par, solvable: st.solvable };
+    return { ok: true, state: next };
+  }
+  function gameScore(st) { return st.done && st.par != null && st.moves > 0 ? Math.min(1, st.par / st.moves) : (st.done ? 1 : 0); }
+
+  // 記憶の宮殿: 部屋に置いたノートを思い出す練習。置いた場所（部屋）から、ノートの名前を 4 択で答える
+  // 問いの対象は「部屋に置いたノート」。まちがいの選択肢は pool（全ノート。省略なら置いたノートだけ）から選ぶ
+  function recallQuiz(placed, seed, n, pool) {
+    var ids = Object.keys(placed).sort(), rand = rng(seed), qs = [];
+    if (ids.length < 2) return qs;
+    var all = pool ? pool.slice().sort() : ids;
+    var pool = ids.slice();
+    for (var k = pool.length - 1; k > 0; k--) { var j = Math.floor(rand() * (k + 1)); var t = pool[k]; pool[k] = pool[j]; pool[j] = t; }
+    pool.slice(0, n || 5).forEach(function (id) {
+      var others = all.filter(function (x) { return x !== id; }), opts = [id];
+      while (opts.length < Math.min(4, all.length) && others.length) { opts.push(others.splice(Math.floor(rand() * others.length), 1)[0]); }
+      for (var m = opts.length - 1; m > 0; m--) { var r = Math.floor(rand() * (m + 1)); var tmp = opts[m]; opts[m] = opts[r]; opts[r] = tmp; }
+      qs.push({ id: id, room: placed[id].room, options: opts, answer: id });
+    });
+    return qs;
+  }
+  function roomRects(names, w, h, cols) {
+    var n = names.length, c = cols || Math.max(1, Math.ceil(Math.sqrt(n))), rows = Math.ceil(n / c), cw = w / c, ch = h / rows, out = {};
+    names.forEach(function (nm, i) { out[nm] = { x: (i % c) * cw, y: Math.floor(i / c) * ch, w: cw, h: ch }; });
+    return out;
+  }
+
+  // 知識成長アニメーション: 作成月ごとのコマ。ノートは作成月に現れ、辺は両端が現れたときに現れる。作成日の無いノートは最後のコマ
+  function timelapse(notes, graph) {
+    var g = growth(notes), months = g.months.map(function (m) { return m.month; }), appear = {}, undated = [];
+    notes.forEach(function (n) { var m = monthOf(n); if (m) appear[n.id] = months.indexOf(m); else { undated.push(n.id); } });
+    var frames = months.length + (undated.length ? 1 : 0);
+    undated.forEach(function (id) { appear[id] = months.length; });
+    return { months: months.concat(undated.length ? ["日付なし"] : []), appear: appear, frames: frames, undated: undated.length };
+  }
+  function visibleAt(tl, graph, frame) {
+    var nodes = graph.nodes.filter(function (n) { return (n.id in tl.appear) && tl.appear[n.id] <= frame; }), set = {};
+    nodes.forEach(function (n) { set[n.id] = true; });
+    return { nodes: nodes, edges: graph.edges.filter(function (e) { return set[e.s] && set[e.d] && e.s !== e.d; }) };
+  }
+
+  // アイデア合成器: つながりの遠い（または無い）2 つのノートを、種から決まる順で選ぶ
+  function distances(graph, a) {
+    var adj = {}; graph.nodes.forEach(function (n) { adj[n.id] = []; });
+    graph.edges.forEach(function (e) { if (FOLLOW.indexOf(e.k) >= 0 && adj[e.s] && adj[e.d] && e.s !== e.d) { adj[e.s].push(e.d); adj[e.d].push(e.s); } });
+    var d = {}; d[a] = 0; var q = [a];
+    for (var i = 0; i < q.length; i++) adj[q[i]].forEach(function (x) { if (!(x in d)) { d[x] = d[q[i]] + 1; q.push(x); } });
+    return d;
+  }
+  function ideaPair(graph, seed, minDist) {
+    var ids = graph.nodes.map(function (n) { return n.id; }).sort(), rand = rng(seed), need = minDist == null ? 3 : minDist;
+    if (ids.length < 2) return null;
+    for (var tries = 0; tries < 60; tries++) {
+      var a = ids[Math.floor(rand() * ids.length)], d = distances(graph, a);
+      var far = ids.filter(function (x) { return x !== a && (!(x in d) || d[x] >= need); });
+      if (far.length) { var b = far[Math.floor(rand() * far.length)]; return { a: a, b: b, distance: b in d ? d[b] : null }; }
+    }
+    return null;
+  }
+  function ideaPrompts(a, b) {
+    return ["「" + a + "」と「" + b + "」を 1 つにまとめたら、何ができますか？", "「" + a + "」の考え方で、「" + b + "」の問題を解くとしたら？", "「" + b + "」の考え方で、「" + a + "」を作り直すとしたら？",
+            "この 2 つに共通する原則を、1 文で言うと？", "この 2 つが対立するとしたら、どこで？"];
+  }
+
+  var api = { rng: rng, seedOf: seedOf, museum: museum, outLinks: outLinks, shortest: shortest, mazePick: mazePick, gameStart: gameStart, gameMove: gameMove, gameScore: gameScore, recallQuiz: recallQuiz, roomRects: roomRects,
+              timelapse: timelapse, visibleAt: visibleAt, distances: distances, ideaPair: ideaPair, ideaPrompts: ideaPrompts, hierarchy: hierarchy, countTree: countTree, depthOf: depthOf, orphans: orphans, matrix: matrix, squarify: squarify, treemap: treemap, sunburst: sunburst, arcPath: arcPath, polar: polar,
               mindmap: mindmap, kanban: kanban, addDays: addDays, growth: growth, river: river, compare: compare, sankey: sankey, parseLoc: parseLoc, mapPoints: mapPoints, layout3d: layout3d,
               project3d: project3d, snap: snap, clampPos: clampPos, autoPlace: autoPlace, fileType: fileType, gallery: gallery, topFz: topFz };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Views2Core = api;

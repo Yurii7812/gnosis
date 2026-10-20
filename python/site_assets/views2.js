@@ -344,7 +344,210 @@
     if (!files.length) empty("コピーされた添付がありません。");
   }
 
+  // ---- 知識の博物館 ----
+  function drawMuseum() {
+    var m = C.museum(notes);
+    if (!m.tour.length) { empty("ノートがありません。"); return; }
+    var i = Math.max(0, Math.min(m.tour.length - 1, parseInt(hashParam("i"), 10) || 0));
+    var bar = h("div", { class: "bar" }), prev = h("button", { type: "button", class: "chip", id: "mu-prev" }, "◀ 前の展示"), next = h("button", { type: "button", class: "chip", id: "mu-next" }, "次の展示 ▶"), pos = h("span", { id: "mu-pos" });
+    var rooms = h("select", { id: "mu-room" });
+    m.rooms.forEach(function (r) { rooms.appendChild(h("option", { value: r.key }, r.label + "（" + r.exhibits.length + "）")); });
+    [prev, next, rooms, pos].forEach(function (e) { bar.appendChild(e); }); box.appendChild(bar);
+    var hall = h("div", { id: "hall", tabindex: "0", "aria-live": "polite" }); box.appendChild(hall);
+    function show() {
+      var t = m.tour[i], n = t.note; hall.textContent = "";
+      hall.appendChild(h("div", { class: "note" }, "展示室 " + t.roomLabel));
+      var frame = h("article", { class: "exhibit" });
+      if (n.image) frame.appendChild(h("img", { src: n.image, alt: "" }));
+      var ti = h("h2", {}); ti.appendChild(link(n.href, (n.fz ? n.fz + " " : "") + n.title)); frame.appendChild(ti);
+      if (n.excerpt) frame.appendChild(h("p", {}, n.excerpt));
+      frame.appendChild(h("p", { class: "note" }, (n.time || "").slice(0, 10) + "・→ " + (n.out || 0) + "・← " + (n["in"] || 0)));
+      hall.appendChild(frame); pos.textContent = (i + 1) + " / " + m.tour.length; prev.disabled = i === 0; next.disabled = i === m.tour.length - 1; rooms.value = t.room;
+    }
+    prev.addEventListener("click", function () { i--; show(); }); next.addEventListener("click", function () { i++; show(); });
+    rooms.addEventListener("change", function () { i = m.tour.findIndex(function (t) { return t.room === rooms.value; }); show(); });
+    document.addEventListener("keydown", function (e) { if (e.target && /^(SELECT|INPUT)$/.test(e.target.tagName)) return; if (e.key === "ArrowRight") { i = Math.min(m.tour.length - 1, i + 1); show(); } else if (e.key === "ArrowLeft") { i = Math.max(0, i - 1); show(); } });
+    show();
+  }
+
+  // ---- 記憶の宮殿（部屋にノートを置き、場所から思い出す練習）----
+  function drawPalace() {
+    var W = 1000, ROOM_H = 380, H = 520, KEY = "gnosis-palace", saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
+    var names = C.museum(notes).rooms.map(function (r) { return r.key; }), rects = C.roomRects(names, W, ROOM_H, Math.min(3, names.length));
+    var byId = {}; notes.forEach(function (n) { byId[n.id] = n; });
+    var bar = h("div", { class: "bar" }), quiz = h("button", { type: "button", class: "chip", id: "pa-quiz" }, "思い出す練習"), reset = h("button", { type: "button", class: "chip", id: "pa-reset" }, "置き場所を忘れる");
+    bar.appendChild(quiz); bar.appendChild(reset); bar.appendChild(h("span", { class: "note", id: "pa-info" })); box.appendChild(bar);
+    var stage = h("div", { id: "stage", class: "palace" }); box.appendChild(stage);
+    var q = h("div", { id: "pa-q" }); box.appendChild(q);
+    names.forEach(function (nm) { var r = rects[nm], d = h("div", { class: "room", "data-room": nm }); d.style.left = r.x + "px"; d.style.top = r.y + "px"; d.style.width = r.w + "px"; d.style.height = r.h + "px"; d.appendChild(h("span", { class: "rname" }, "部屋 " + nm)); stage.appendChild(d); });
+    var chips = {};
+    function roomAt(x, y) { for (var k = 0; k < names.length; k++) { var r = rects[names[k]]; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return names[k]; } return ""; }
+    function pos(id) { var p = saved[id]; if (p) return { x: p.x, y: p.y }; var i = Object.keys(chips).indexOf(id); return { x: 10 + (i % 5) * 190, y: ROOM_H + 20 + Math.floor(i / 5) * 40 }; }
+    function place(id) {
+      var p = pos(id), c = chips[id]; c.style.left = p.x + "px"; c.style.top = p.y + "px"; c.setAttribute("data-x", String(p.x)); c.setAttribute("data-y", String(p.y));
+      var room = roomAt(p.x + 80, p.y + 15); c.setAttribute("data-room", room); if (saved[id]) saved[id].room = room;
+      c.classList.toggle("placed", !!room);
+    }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} info(); }
+    function placedMap() { var o = {}; Object.keys(saved).forEach(function (id) { if (saved[id].room && byId[id]) o[id] = { room: saved[id].room }; }); return o; }
+    function info() { var n = Object.keys(placedMap()).length; document.getElementById("pa-info").textContent = "部屋に置いたノート " + n + " 件。カードをドラッグ（または矢印キー）で部屋の中へ。位置はこのブラウザだけに覚えます。"; }
+    notes.forEach(function (n) {
+      var c = h("div", { class: "wcard", "data-id": n.id, tabindex: "0" }, n.title); stage.appendChild(c); chips[n.id] = c; place(n.id);
+      var drag = null;
+      c.addEventListener("pointerdown", function (e) { var p = pos(n.id); drag = { x: e.clientX, y: e.clientY, px: p.x, py: p.y }; c.classList.add("drag"); c.setPointerCapture(e.pointerId); });
+      c.addEventListener("pointermove", function (e) { if (!drag) return; var np = C.clampPos({ x: drag.px + e.clientX - drag.x, y: drag.py + e.clientY - drag.y }, W, H, 160, 30); saved[n.id] = { x: np.x, y: np.y, room: "" }; place(n.id); });
+      c.addEventListener("pointerup", function () { if (drag) { drag = null; c.classList.remove("drag"); save(); } });
+      c.addEventListener("keydown", function (e) {
+        var d = e.shiftKey ? 80 : 16, p = pos(n.id), np = null;
+        if (e.key === "ArrowLeft") np = { x: p.x - d, y: p.y }; else if (e.key === "ArrowRight") np = { x: p.x + d, y: p.y }; else if (e.key === "ArrowUp") np = { x: p.x, y: p.y - d }; else if (e.key === "ArrowDown") np = { x: p.x, y: p.y + d };
+        if (np) { var cl = C.clampPos(np, W, H, 160, 30); saved[n.id] = { x: cl.x, y: cl.y, room: "" }; place(n.id); save(); e.preventDefault(); }
+      });
+    });
+    info();
+    reset.addEventListener("click", function () { saved = {}; try { localStorage.removeItem(KEY); } catch (e) {} Object.keys(chips).forEach(place); q.textContent = ""; info(); });
+    quiz.addEventListener("click", function () {
+      q.textContent = ""; var qs = C.recallQuiz(placedMap(), Date.now() % 100000 + (parseInt(hashParam("s"), 10) || 0), 5, notes.map(function (x) { return x.id; }));
+      if (!qs.length) { q.appendChild(h("p", { class: "note", id: "pa-none" }, "2 件以上を部屋に置くと、練習できます。")); return; }
+      var right = 0, answered = 0, score = h("p", { id: "pa-score" }, "0 / " + qs.length); q.appendChild(score);
+      qs.forEach(function (qq, k) {
+        var card = h("div", { class: "kcard", "data-q": String(k) }); card.appendChild(h("div", {}, "部屋 " + qq.room + " に置いたのは、どのノート？"));
+        qq.options.forEach(function (id) {
+          var b = h("button", { type: "button", class: "chip opt", "data-id": id }, byId[id].title);
+          b.addEventListener("click", function () {
+            if (card.getAttribute("data-done")) return; card.setAttribute("data-done", "1"); answered++;
+            if (id === qq.answer) { right++; b.classList.add("ok"); } else { b.classList.add("ng"); card.appendChild(h("div", { class: "note" }, "正解: " + byId[qq.answer].title)); }
+            score.textContent = right + " / " + qs.length + (answered === qs.length ? "（おわり）" : "");
+          });
+          card.appendChild(b);
+        });
+        q.appendChild(card);
+      });
+    });
+  }
+
+  // ---- 迷路・探索ゲーム ----
+  function drawMaze() {
+    var byId = {}; graph.nodes.forEach(function (n) { byId[n.id] = n; });
+    var seed = parseInt(hashParam("s"), 10) || 1, start = hashParam("a"), goal = hashParam("b"), st = null;
+    var bar = h("div", { class: "bar" }), sa = h("select", { id: "mz-a" }), sb = h("select", { id: "mz-b" }), go = h("button", { type: "button", class: "chip", id: "mz-go" }, "この組で始める"), rnd = h("button", { type: "button", class: "chip", id: "mz-rand" }, "おまかせで始める");
+    var sorted = graph.nodes.slice().sort(function (x, y) { return String(x.title).localeCompare(String(y.title), "ja"); });
+    sorted.forEach(function (n) { [sa, sb].forEach(function (sel) { sel.appendChild(h("option", { value: n.id }, (n.fz ? n.fz + " " : "") + n.title)); }); });
+    bar.appendChild(h("label", {}, "出発 ")); bar.lastChild.appendChild(sa); bar.appendChild(h("label", {}, "目標 ")); bar.lastChild.appendChild(sb); bar.appendChild(go); bar.appendChild(rnd); box.appendChild(bar);
+    var stage = h("div", { id: "maze" }); box.appendChild(stage);
+    function begin(a, b) { st = C.gameStart(graph, a, b); sa.value = a; sb.value = b; render(); }
+    function render() {
+      stage.textContent = "";
+      if (!st) { stage.appendChild(h("p", { class: "note", id: "mz-intro" }, "ノートに書かれたリンクだけをたどって、目標のノートに着くゲームです。いまのノートから出ているリンクの先にだけ進めます。")); return; }
+      var cur = byId[st.at], tgt = byId[st.goal];
+      stage.appendChild(h("p", { id: "mz-status" }, "目標：" + tgt.title + "　／　手数 " + st.moves + (st.par != null ? "（最短 " + st.par + " 手）" : "（この出発点からは行けません）")));
+      stage.appendChild(h("p", { id: "mz-path", class: "note" }, "たどった道：" + st.path.map(function (id) { return byId[id].title; }).join(" → ")));
+      if (st.done) { stage.appendChild(h("p", { id: "mz-done" }, "着きました！　" + st.moves + " 手・得点 " + Math.round(C.gameScore(st) * 100) + " / 100")); return; }
+      var here = h("h2", {}); here.appendChild(link(cur.href, cur.title)); stage.appendChild(here);
+      var out = C.outLinks(graph)[st.at] || [], ul = h("div", { id: "mz-choices" });
+      out.forEach(function (id) { var b = h("button", { type: "button", class: "chip step", "data-id": id }, "→ " + byId[id].title); b.addEventListener("click", function () { var r = C.gameMove(graph, st, id); if (r.ok) { st = r.state; render(); } }); ul.appendChild(b); });
+      if (!out.length) ul.appendChild(h("p", { class: "note", id: "mz-stuck" }, "行き止まりです。「この組で始める」でやり直せます。"));
+      stage.appendChild(ul);
+    }
+    go.addEventListener("click", function () { if (sa.value === sb.value) { stage.textContent = ""; stage.appendChild(h("p", { class: "note", id: "mz-same" }, "出発と目標は別のノートにしてください。")); return; } begin(sa.value, sb.value); });
+    rnd.addEventListener("click", function () { seed += 1; var p = C.mazePick(graph, seed, 3) || C.mazePick(graph, seed, 1); if (!p) { stage.textContent = ""; stage.appendChild(h("p", { class: "note" }, "遊べる組がありません（リンクが足りません）。")); return; } begin(p.start, p.goal); });
+    if (start && goal && byId[start] && byId[goal]) begin(start, goal); else render();
+    if (!graph.nodes.length) empty("ノートがありません。");
+  }
+
+  // ---- 知識成長アニメーション ----
+  function drawTimelapse() {
+    var tl = C.timelapse(notes, graph), W = 900, H = 600;
+    if (!tl.frames) { empty("作成日（time:）のあるノートがありません。"); return; }
+    var pos = window.GraphCore ? window.GraphCore.layout(graph.nodes, graph.edges.filter(function (e) { return e.k !== "backlink"; }), W, H, graph.nodes.length > 200 ? 120 : 300, "") : {};
+    var bar = h("div", { class: "bar" }), play = h("button", { type: "button", class: "chip", id: "tl-play" }, "▶ 再生"), rng_ = h("input", { type: "range", id: "tl-range", min: "0", max: String(tl.frames - 1), value: "0" }), lab = h("span", { id: "tl-label" });
+    [play, rng_, lab].forEach(function (e) { bar.appendChild(e); }); box.appendChild(bar);
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "知識の成長", id: "tlg" }); box.appendChild(svg);
+    function frame(i) {
+      var v = C.visibleAt(tl, graph, i); svg.textContent = "";
+      v.edges.forEach(function (e) { var a = pos[e.s], b = pos[e.d]; if (a && b) svg.appendChild(s("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: "#8886" })); });
+      v.nodes.forEach(function (n) {
+        var p = pos[n.id] || [W / 2, H / 2], a = s("a", { href: n.href, class: "node", "data-id": n.id }), isNew = tl.appear[n.id] === i;
+        a.appendChild(s("circle", { cx: p[0], cy: p[1], r: isNew ? 9 : 5, fill: isNew ? "#e0a800" : "#4a90d9", stroke: "#fff" })); a.appendChild(s("text", { x: p[0] + 8, y: p[1] + 4, "font-size": "10", fill: "currentColor" }, clip(n.title, 12))); svg.appendChild(a);
+      });
+      lab.textContent = tl.months[i] + "（ノート " + v.nodes.length + " 件・関係 " + v.edges.length + " 本）"; rng_.value = String(i); svg.setAttribute("data-frame", String(i));
+    }
+    var timer = null;
+    function stop() { if (timer) { clearInterval(timer); timer = null; } play.textContent = "▶ 再生"; }
+    play.addEventListener("click", function () {
+      if (timer) { stop(); return; } if (+rng_.value >= tl.frames - 1) rng_.value = "0"; play.textContent = "⏸ 止める"; frame(+rng_.value);
+      timer = setInterval(function () { var n = +rng_.value + 1; if (n >= tl.frames) { stop(); return; } frame(n); }, 700);
+    });
+    rng_.addEventListener("input", function () { stop(); frame(+rng_.value); });
+    frame(0);
+  }
+
+  // ---- アイデア合成器 ----
+  function drawIdeas() {
+    var seed = parseInt(hashParam("s"), 10) || 1, byId = {}; graph.nodes.forEach(function (n) { byId[n.id] = n; });
+    var nm = {}; notes.forEach(function (n) { nm[n.id] = n; });
+    var bar = h("div", { class: "bar" }), again = h("button", { type: "button", class: "chip", id: "id-again" }, "別の組み合わせ"); bar.appendChild(again); bar.appendChild(h("span", { class: "note" }, "つながりの遠い（または無い）2 つのノートを引きます。")); box.appendChild(bar);
+    var out = h("div", { id: "ideas" }); box.appendChild(out);
+    function render() {
+      out.textContent = ""; var p = C.ideaPair(graph, seed, 3) || C.ideaPair(graph, seed, 1);
+      if (!p) { out.appendChild(h("p", { class: "note", id: "id-none" }, "組み合わせられるノートが足りません。")); return; }
+      var wrap = h("div", { class: "lists" });
+      [p.a, p.b].forEach(function (id, k) {
+        var n = nm[id] || byId[id], card = h("section", { class: "col", id: "id-" + (k ? "b" : "a") }); var t = h("h2", {}); t.appendChild(link(byId[id].href, byId[id].title)); card.appendChild(t);
+        card.appendChild(h("p", {}, (nm[id] && nm[id].excerpt) || "")); wrap.appendChild(card);
+      });
+      out.appendChild(wrap); out.appendChild(h("p", { id: "id-dist", class: "note" }, p.distance == null ? "この 2 つはつながっていません。" : "この 2 つはリンクで " + p.distance + " 歩離れています。"));
+      var ul = h("ul", { id: "id-prompts" }); C.ideaPrompts(byId[p.a].title, byId[p.b].title).forEach(function (t) { ul.appendChild(h("li", {}, t)); }); out.appendChild(ul);
+    }
+    again.addEventListener("click", function () { seed++; setHash({ s: String(seed) }); render(); }); render();
+  }
+
+  // ---- 仮説実験室 ----
+  var HYP = window.GNOSIS_HYP || [];
+  function pill(status) { return h("span", { class: "chip st-" + (status || "none") }, status || "未設定"); }
+  function drawHypotheses() {
+    var bar = h("div", { class: "bar" }), sel = h("select", { id: "hy-status" });
+    [["", "すべて"], ["検証中", "検証中"], ["支持", "支持"], ["棄却", "棄却"], ["保留", "保留"], ["未設定", "未設定"]].forEach(function (o) { sel.appendChild(h("option", { value: o[0] }, o[1])); });
+    bar.appendChild(sel); var cnt = h("span", { id: "count" }); bar.appendChild(cnt); box.appendChild(bar);
+    bar.appendChild(h("span", { class: "note" }, "ノートの「仮説:」ブロックを読んでいます。目安は数を数えただけで、決めるのは自分です。")); var list = h("div", { id: "hy" }); box.appendChild(list);
+    function render() {
+      list.textContent = ""; var shown = HYP.filter(function (x) { return !sel.value || (x.status || "未設定") === sel.value; });
+      shown.forEach(function (x) {
+        var card = h("article", { class: "kcard hyp", "data-id": x.id }), t = h("h3", {}); t.appendChild(link(x.href, x.claim)); card.appendChild(t); card.appendChild(pill(x.status));
+        card.appendChild(h("div", { class: "meta" }, "証拠 " + x.pro + "・反証 " + x.con + "　目安：" + x.suggest_status + "（" + x.suggest_why + "）"));
+        var ul = h("ul", {}); x.evidence.forEach(function (e) { ul.appendChild(h("li", {}, "＋ " + e)); }); x.counter.forEach(function (e) { ul.appendChild(h("li", {}, "－ " + e)); }); card.appendChild(ul);
+        if (x.conclusion) card.appendChild(h("p", {}, "結論：" + x.conclusion));
+        if (x.history.length) card.appendChild(h("div", { class: "meta" }, "履歴：" + x.history.map(function (y) { return y.date + " " + y.status; }).join(" → ")));
+        list.appendChild(card);
+      });
+      cnt.textContent = shown.length + " / " + HYP.length + " 件"; if (!shown.length) list.appendChild(h("p", { class: "note" }, "仮説がありません。"));
+    }
+    sel.addEventListener("change", render); render();
+  }
+  function drawDebate() {
+    if (HYP.length < 2) { empty("仮説が 2 件以上あると比べられます。"); return; }
+    var bar = h("div", { class: "bar" }), a = h("select", { id: "db-a" }), b = h("select", { id: "db-b" });
+    HYP.forEach(function (x, i) { [a, b].forEach(function (sel, k) { var o = h("option", { value: x.id }, x.claim); if (i === (k ? 1 : 0)) o.setAttribute("selected", ""); sel.appendChild(o); }); });
+    bar.appendChild(h("label", {}, "A ")); bar.lastChild.appendChild(a); bar.appendChild(h("label", {}, "B ")); bar.lastChild.appendChild(b); box.appendChild(bar);
+    var out = h("div", { id: "debate" }); box.appendChild(out);
+    function by(id) { return HYP.filter(function (x) { return x.id === id; })[0]; }
+    function render() {
+      out.textContent = ""; var A = by(a.value), B = by(b.value);
+      if (A.id === B.id) { out.appendChild(h("p", { class: "note", id: "db-same" }, "別々の仮説を選んでください。")); return; }
+      var tb = h("table", { class: "t", id: "db-table" });
+      [["主張", A.claim, B.claim], ["状態", A.status || "未設定", B.status || "未設定"], ["証拠", String(A.pro), String(B.pro)], ["反証", String(A.con), String(B.con)], ["目安", A.suggest_status, B.suggest_status]].forEach(function (r) {
+        var tr = h("tr", {}); tr.appendChild(h("th", { scope: "row" }, r[0])); tr.appendChild(h("td", {}, r[1])); tr.appendChild(h("td", {}, r[2])); tb.appendChild(tr);
+      });
+      out.appendChild(tb);
+      var da = A.pro - A.con, db = B.pro - B.con;
+      out.appendChild(h("p", { id: "db-lead" }, "優勢：" + (da === db ? "拮抗" : da > db ? "A" : "B") + "（証拠 − 反証の差で比べました。内容の正しさは判断していません）"));
+      var shared = A.sources.filter(function (t) { return B.sources.indexOf(t) >= 0; });
+      out.appendChild(h("p", { class: "note", id: "db-shared" }, "共通の出典：" + (shared.length ? shared.join("、") : "なし")));
+    }
+    a.addEventListener("change", render); b.addEventListener("change", render); render();
+  }
+
   var VIEWS = { tree: drawTree, orphans: drawOrphans, matrix: drawMatrix, treemap: drawTreemap, sunburst: drawSunburst, kanban: drawKanban, mindmap: drawMindmap, growth: drawGrowth, river: drawRiver,
-                compare: drawCompare, sankey: drawSankey, map: drawMap, graph3d: draw3d, slides: drawSlides, whiteboard: drawWhiteboard, gallery: drawGallery };
+                compare: drawCompare, sankey: drawSankey, map: drawMap, graph3d: draw3d, slides: drawSlides, whiteboard: drawWhiteboard, gallery: drawGallery, museum: drawMuseum, palace: drawPalace, maze: drawMaze, timelapse: drawTimelapse, ideas: drawIdeas, hypotheses: drawHypotheses, debate: drawDebate };
   if (VIEWS[view] && box) VIEWS[view]();
 })();

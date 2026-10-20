@@ -7357,6 +7357,25 @@ function! gnosis#multi_clear() abort
   unlet! b:gnosis_multi_word
 endfunction
 
+" 仮説実験室（XP10）と思考の対戦（XP11）。ノートの「仮説:」ブロックを読む。読み取り専用。  :GnosisHypotheses [状態]  :GnosisHypothesis [ノート [N]]  :GnosisDebate A B
+function! gnosis#hypotheses(...) abort
+  call s:ed_show('hypotheses.py', ['list'] + (a:0 > 0 && !empty(a:1) ? ['--status', a:1] : []))
+endfunction
+
+function! gnosis#hypothesis(...) abort
+  let l:root = s:nt_root()
+  let l:note = a:0 > 0 && !empty(a:1) ? a:1 : (empty(l:root) ? '' : s:nt_rel(l:root))
+  if empty(l:note)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  call s:ed_show('hypotheses.py', ['show', l:note] + (a:0 > 1 ? [a:2] : []))
+endfunction
+
+function! gnosis#debate(a, b) abort
+  call s:ed_show('hypotheses.py', ['debate', a:a, a:b])
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

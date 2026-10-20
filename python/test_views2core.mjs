@@ -252,4 +252,132 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} ≈ $
   assert.deepEqual(C.gallery(files, "all", "png 料理").map((f) => f.name), ["c.png"]);
 }
 
+// ---- 乱数 ----
+{
+  const a = C.rng(42), b = C.rng(42), c = C.rng(43);
+  const sa = Array.from({ length: 5 }, a), sb = Array.from({ length: 5 }, b), sc = Array.from({ length: 5 }, c);
+  assert.deepEqual(sa, sb);                                                       // 同じ種なら同じ列
+  assert.notDeepEqual(sa, sc);
+  sa.forEach((v) => assert.ok(v >= 0 && v < 1));
+  assert.equal(C.seedOf("abc"), C.seedOf("abc"));
+  assert.notEqual(C.seedOf("abc"), C.seedOf("abd"));
+  assert.ok(Array.from({ length: 1000 }, C.rng(0)).every((v) => v >= 0 && v < 1));   // 種 0 でも落ちない
+}
+
+// ---- 博物館 ----
+{
+  const notes = [N("c.md", "料理", "2"), N("a1.md", "水", "1a1"), N("a.md", "栽培", "1a"), N("r.md", "ハーブ", "1"), N("x.md", "番号なし"), N("b.md", "二番", "10")];
+  const m = C.museum(notes);
+  assert.deepEqual(m.rooms.map((r) => r.key), ["1", "2", "10", "（番号なし）"]);       // 部屋は番号順(1<2<10)・番号なしは最後
+  assert.equal(m.rooms[0].label, "1 ハーブ");                                       // 部屋の名前は最上位の番号のノートの題
+  assert.deepEqual(m.rooms[0].exhibits.map((n) => n.id), ["r.md", "a.md", "a1.md"]);   // 部屋の中も番号順
+  assert.equal(m.tour.length, 6);
+  assert.deepEqual(m.tour.map((t) => t.note.id), ["r.md", "a.md", "a1.md", "c.md", "b.md", "x.md"]);   // 順路は部屋の順に 1 本
+  assert.equal(m.tour[3].room, "2");
+  assert.deepEqual(C.museum([]).tour, []);
+}
+
+// ---- 迷路・探索ゲーム ----
+{
+  const g = { nodes: ["a", "b", "c", "d", "e", "iso"].map((x) => N(x + ".md", x)),
+              edges: [E("a.md", "b.md", "link"), E("b.md", "c.md", "link"), E("c.md", "d.md", "link"), E("a.md", "d.md", "related"), E("d.md", "e.md", "link"), E("e.md", "a.md", "backlink"), E("b.md", "b.md", "link"), E("e.md", "iso.md", "folgezettel")] };
+  const out = C.outLinks(g);
+  assert.deepEqual(out["a.md"].sort(), ["b.md", "d.md"]);                          // ノートに書かれた関係だけ。backlink・番号の親子・自己リンクは辿れない
+  assert.deepEqual(out["e.md"], []);
+  assert.deepEqual(out["iso.md"], []);
+  assert.deepEqual(C.shortest(out, "a.md", "e.md"), ["a.md", "d.md", "e.md"]);
+  assert.equal(C.shortest(out, "e.md", "a.md"), null);                              // 向きがあるので戻れない
+  assert.deepEqual(C.shortest(out, "a.md", "a.md"), ["a.md"]);
+  let st = C.gameStart(g, "a.md", "e.md");
+  assert.deepEqual([st.par, st.solvable, st.done, st.moves], [2, true, false, 0]);
+  let r = C.gameMove(g, st, "c.md");
+  assert.equal(r.ok, false, "リンクの無い先へは進めない");
+  assert.equal(r.state, st);
+  r = C.gameMove(g, st, "b.md"); assert.ok(r.ok); st = r.state;
+  r = C.gameMove(g, st, "c.md"); st = r.state;
+  r = C.gameMove(g, st, "d.md"); st = r.state;
+  r = C.gameMove(g, st, "e.md"); st = r.state;
+  assert.deepEqual([st.done, st.moves, st.path.join(">")], [true, 4, "a.md>b.md>c.md>d.md>e.md"]);
+  near(C.gameScore(st), 0.5);                                                       // 最短 2 手のところ 4 手 → 0.5
+  assert.equal(C.gameMove(g, st, "a.md").ok, false, "着いたあとは進めない");
+  const direct = C.gameMove(g, C.gameMove(g, C.gameStart(g, "a.md", "e.md"), "d.md").state, "e.md").state;
+  assert.equal(C.gameScore(direct), 1);                                             // 最短なら満点
+  const unsolvable = C.gameStart(g, "e.md", "a.md");
+  assert.equal(unsolvable.solvable, false);
+  assert.equal(unsolvable.par, null);
+  assert.equal(C.gameScore(C.gameStart(g, "a.md", "a.md")), 1);
+  // 出発と目標を決める
+  const p1 = C.mazePick(g, 7, 2), p2 = C.mazePick(g, 7, 2);
+  assert.deepEqual(p1, p2);                                                         // 同じ種なら同じ問題
+  assert.ok(p1.par >= 2);
+  assert.equal(p1.path.length - 1, p1.par);
+  assert.equal(C.mazePick(g, 1, 9), null);                                          // 長すぎる経路は無い
+  assert.equal(C.mazePick({ nodes: [N("a.md", "a")], edges: [] }, 1, 1), null);
+}
+
+// ---- 記憶の宮殿 ----
+{
+  const placed = { "a": { room: "R1" }, "b": { room: "R1" }, "c": { room: "R2" }, "d": { room: "R2" }, "e": { room: "R3" } };
+  const qs = C.recallQuiz(placed, 5, 3);
+  assert.equal(qs.length, 3);
+  qs.forEach((q) => {
+    assert.equal(q.options.length, 4);
+    assert.equal(new Set(q.options).size, 4);                                       // 選択肢は重複しない
+    assert.ok(q.options.includes(q.answer));                                        // 正解が必ず入る
+    assert.equal(q.room, placed[q.answer].room);
+  });
+  assert.deepEqual(C.recallQuiz(placed, 5, 3), qs);                                 // 同じ種なら同じ問題
+  assert.equal(new Set(qs.map((q) => q.id)).size, 3);                               // 同じノートを 2 回出さない
+  assert.deepEqual(C.recallQuiz({ a: { room: "x" } }, 1, 3), []);                   // 1 つだけでは出題しない
+  assert.equal(C.recallQuiz({ a: {}, b: {} }, 1, 5)[0].options.length, 2);          // 置いたノートだけだと少ない選択肢
+  const wide = C.recallQuiz({ a: { room: "x" }, b: { room: "y" } }, 1, 5, ["a", "b", "c", "d", "e", "f"]);
+  assert.equal(wide.length, 2);                                                     // 問いの対象は置いたノートだけ
+  wide.forEach((q) => { assert.equal(q.options.length, 4); assert.ok(q.options.includes(q.answer)); assert.equal(new Set(q.options).size, 4); });
+  assert.ok(wide.some((q) => q.options.some((o) => !["a", "b"].includes(o))), "置いていないノートも選択肢に出る");
+  const rr = C.roomRects(["a", "b", "c", "d", "e"], 600, 400);
+  assert.equal(Object.keys(rr).length, 5);
+  Object.values(rr).forEach((r) => assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= 600 + 1e-9 && r.y + r.h <= 400 + 1e-9));
+  assert.deepEqual(C.roomRects([], 100, 100), {});
+}
+
+// ---- 成長アニメーション ----
+{
+  const notes = [N("a", "A", "", { time: "2026-01-05 10:00:00" }), N("b", "B", "", { time: "2026-03-02 10:00:00" }), N("c", "C", "", { time: "" }), N("d", "D", "", { time: "2026-03-20 10:00:00" })];
+  const g = { nodes: notes.map((n) => ({ id: n.id, title: n.title, href: n.href })), edges: [E("a", "b", "link"), E("b", "d", "link"), E("a", "c", "link"), E("b", "b", "link")] };
+  const tl = C.timelapse(notes, g);
+  assert.deepEqual(tl.months, ["2026-01", "2026-02", "2026-03", "日付なし"]);          // 空の月も 1 コマ・日付なしは最後
+  assert.equal(tl.frames, 4);
+  assert.deepEqual([tl.appear.a, tl.appear.b, tl.appear.d, tl.appear.c], [0, 2, 2, 3]);
+  const f0 = C.visibleAt(tl, g, 0);
+  assert.deepEqual(f0.nodes.map((n) => n.id), ["a"]);
+  assert.equal(f0.edges.length, 0);
+  const f2 = C.visibleAt(tl, g, 2);
+  assert.deepEqual(f2.nodes.map((n) => n.id).sort(), ["a", "b", "d"]);
+  assert.equal(f2.edges.length, 2);                                                 // a-b と b-d。c は未登場、自己リンクは数えない
+  assert.equal(C.visibleAt(tl, g, 3).edges.length, 3);
+  assert.equal(C.timelapse([N("x", "X")], { nodes: [], edges: [] }).frames, 1);       // 日付なしだけでも 1 コマ
+  assert.equal(C.timelapse([], { nodes: [], edges: [] }).frames, 0);
+}
+
+// ---- アイデア合成器 ----
+{
+  const g = { nodes: ["a", "b", "c", "d", "far", "iso"].map((x) => N(x + ".md", x)),
+              edges: [E("a.md", "b.md", "link"), E("b.md", "c.md", "link"), E("c.md", "d.md", "link"), E("d.md", "far.md", "link")] };
+  const d = C.distances(g, "a.md");
+  assert.deepEqual([d["b.md"], d["d.md"], d["far.md"], "iso.md" in d], [1, 3, 4, false]);   // 向きは無視・つながっていないものは入らない
+  const p = C.ideaPair(g, 3, 3), p2 = C.ideaPair(g, 3, 3);
+  assert.deepEqual(p, p2);
+  assert.notEqual(p.a, p.b);
+  const dd = C.distances(g, p.a);
+  assert.ok(!(p.b in dd) || dd[p.b] >= 3, "選ばれた組は遠い(または無関係)");
+  assert.equal(p.distance, p.b in dd ? dd[p.b] : null);
+  const tiny = { nodes: [N("a.md", "a"), N("b.md", "b")], edges: [E("a.md", "b.md", "link")] };
+  assert.equal(C.ideaPair(tiny, 1, 3), null);                                       // 近い組しか無ければ出さない
+  assert.notEqual(C.ideaPair(tiny, 1, 1), null);
+  assert.equal(C.ideaPair({ nodes: [N("a.md", "a")], edges: [] }, 1), null);
+  const prompts = C.ideaPrompts("栽培", "料理");
+  assert.equal(prompts.length, 5);
+  assert.ok(prompts[0].includes("栽培") && prompts[0].includes("料理"));
+}
+
 console.log("views2core OK");

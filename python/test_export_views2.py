@@ -62,6 +62,9 @@ class ExportViews2Test(unittest.TestCase):
         note(r, "slides.md", "発表", "# 表紙\n\n導入\n\n---\n\n## 第一章\n\n本文\n\n<script>alert(1)</script>", "slides: true\n")
         note(r, "plain.md", "ふつう", "---\n\nスライドにしない", "")
         note(r, "secret.md", "TOPSECRET-TITLE", "TOPSECRET-BODY ![秘](img/secret.png)\n- [ ] TOPSECRET-TASK 📅 2026-10-01", "private: true\nlocation: 1.0, 2.0\nslides: true\n")
+        note(r, "hyp.md", "仮説ノート", "仮説: 水やりは控えめがよい\n状態: 検証中\n+ 証拠: 乾燥に強い [図鑑](a.md)\n- 反証: [秘密の実験](secret.md) で枯れた\n結論: 暫定\n履歴: 2026-10-01 検証中\n")
+        note(r, "hyp2.md", "別の仮説", "仮説: 水は多いほどよい\n+ 証拠: [図鑑](a.md)\n")
+        (r / "secret.md").write_text((r / "secret.md").read_text(encoding="utf-8") + "\n仮説: TOPSECRET-HYPOTHESIS\n+ 証拠: TOPSECRET-EVIDENCE\n", encoding="utf-8")
         self.res = export_site.export(self.root, self.out)
 
     def all_text(self):
@@ -134,6 +137,17 @@ class ExportViews2Test(unittest.TestCase):
         self.assertIn('src="sub/p.png"', deck["slides"][0])
         self.assertIn('href="sub/other.html"', deck["slides"][1])
         self.assertTrue((self.out / "sub" / "p.png").is_file() and (self.out / "sub" / "other.html").is_file())   # 補正した先に実際にある
+
+    def test_hypotheses_data_exported_notes_only_without_link_targets(self):
+        hs = {h["claim"]: h for h in js_data(self.out / "hypotheses-data.js")}
+        self.assertEqual(set(hs), {"水やりは控えめがよい", "水は多いほどよい"})            # 非公開ノートの仮説は含めない
+        h = hs["水やりは控えめがよい"]
+        self.assertEqual((h["status"], h["pro"], h["con"], h["conclusion"], h["href"]), ("検証中", 1, 1, "暫定", "hyp.html"))
+        self.assertEqual(h["evidence"], ["乾燥に強い 図鑑"])                              # [図鑑](a.md) の a.md は出さず、表示用の文字だけ
+        self.assertEqual(h["counter"], ["秘密の実験 で枯れた"])                          # 非公開ノートへのリンク先(secret.md)は出ない
+        self.assertEqual(h["sources"], ["ハーブ"])                                       # 書き出したノートだけを出典として挙げる
+        self.assertEqual(h["history"], [{"date": "2026-10-01", "status": "検証中"}])
+        self.assertNotIn("secret.md", json.dumps(hs, ensure_ascii=False))
 
     def test_location_in_notes_data(self):
         notes = {n["id"]: n for n in js_data(self.out / "notes-data.js")}

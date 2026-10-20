@@ -21,6 +21,7 @@ import re
 import shutil
 from pathlib import Path
 
+import hypotheses as hypmod
 import md_html
 import tasks as taskmod
 
@@ -41,6 +42,13 @@ VIEWS = [
     ("slides", "スライド", "front matter に slides: true を書いたノートを 1 枚ずつ", "slides"),
     ("whiteboard", "ホワイトボード", "ノートのカードを自由に並べる（位置はこのブラウザだけに覚える）", "whiteboard"),
     ("gallery", "ギャラリー", "画像・PDF などの添付と、それを参照しているノート", "gallery"),
+    ("museum", "知識の博物館", "ノートを展示室ごとに、順路に沿って 1 点ずつ見る", "museum"),
+    ("palace", "記憶の宮殿", "部屋にノートを置き、置いた場所から思い出す練習をする（位置はこのブラウザだけに覚える）", "palace"),
+    ("maze", "思考の迷路", "ノートに書かれたリンクだけをたどって、目標のノートに着くゲーム", "maze"),
+    ("timelapse", "成長アニメーション", "作成月ごとにノートと関係が増えていくようす", "timelapse"),
+    ("ideas", "アイデア合成器", "つながりの遠い 2 つのノートを引き、組み合わせの問いを出す", "ideas"),
+    ("hypotheses", "仮説実験室", "ノートの「仮説:」ブロックの状態・証拠・反証・結論・履歴", "hypotheses"),
+    ("debate", "思考の対戦", "2 つの仮説を、証拠と反証の数で並べて比べる", "debate"),
 ]
 NAV_LINKS = " ・ ".join(f'<a href="{v[0]}.html">{html.escape(v[1])}</a>' for v in VIEWS)
 
@@ -57,6 +65,10 @@ STYLE = """body.v2{max-width:84rem}.v2 .bar{display:flex;gap:.6rem;flex-wrap:wra
 .v2 .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.8rem}.v2 .gitem{border:1px solid #8886;border-radius:8px;padding:.4rem;font-size:.8rem;overflow:hidden}.v2 .gitem img{width:100%;height:7rem;object-fit:cover;border-radius:4px}
 .v2 .gitem .ico{display:flex;align-items:center;justify-content:center;height:7rem;font-size:2rem;opacity:.7}.v2 .legend span{display:inline-block;margin-right:.8rem;font-size:.8rem}.v2 .legend i{display:inline-block;width:.8rem;height:.8rem;margin-right:.25rem;vertical-align:middle;border-radius:2px}
 .v2 a.node text{cursor:pointer}.v2 .note{font-size:.85rem;opacity:.75}
+.v2 .exhibit{border:6px double #8886;border-radius:4px;padding:1rem 1.5rem;margin:.6rem 0;background:#8881;max-width:44rem}.v2 .exhibit img{max-width:100%;max-height:18rem;display:block;margin-bottom:.5rem}
+.v2 #stage.palace{height:560px}.v2 .room{position:absolute;border:2px dashed #8887;box-sizing:border-box;background:#4a90d90d}.v2 .room .rname{position:absolute;top:.2rem;left:.4rem;font-size:.8rem;opacity:.7}
+.v2 .wcard.placed{background:#dfd}.v2 .opt{margin:.2rem}.v2 .opt.ok{background:#5cb85c88}.v2 .opt.ng{background:#d9534f88}.v2 .step{display:block;margin:.3rem 0}
+.v2 .st-検証中{background:#e0a80055}.v2 .st-支持{background:#5cb85c55}.v2 .st-棄却{background:#d9534f55}.v2 .st-保留{background:#8885}
 """
 
 
@@ -179,9 +191,26 @@ def write(out: Path, root: Path, g, notes: dict, copied: set, assets: Path, page
         slides.append({"id": rel, "title": g.nodes[rel].title, "href": out_name(rel), "slides": [rebase_html(md_html.render(p), rel) for p in pieces]})
     w("slides-data.js", "window.GNOSIS_SLIDES=" + json.dumps(slides, ensure_ascii=False) + ";\n")
 
+    # --- 仮説（書き出したノートの分だけ。証拠の文章からリンク先は外し、表示用の文字だけにする）---
+    plain = lambda t: re.sub(r"\[((?:\\.|[^\]\\])*)\]\([^)]*\)", r"\1", t)
+    hyps = []
+    for h in hypmod.collect(root):
+        if h["file"] not in notes:
+            continue
+        srcs = sorted({x["target"] for e in h["evidence"] + h["counter"] for x in e["links"]})
+        norm = []
+        for t in srcs:
+            tgt = os.path.normpath(os.path.join(os.path.dirname(h["file"]), t)).replace(os.sep, "/")
+            if tgt in notes:
+                norm.append(g.nodes[tgt].title)
+        hyps.append({"id": h["id"], "href": out_name(h["file"]), "note_title": h["note_title"], "claim": h["claim"], "status": h["status"], "pro": h["pro"], "con": h["con"],
+                     "evidence": [plain(e["text"]) for e in h["evidence"]], "counter": [plain(e["text"]) for e in h["counter"]], "conclusion": plain(h["conclusion"]),
+                     "history": h["history"], "suggest_status": h["suggest"]["status"], "suggest_why": h["suggest"]["why"], "sources": norm})
+    w("hypotheses-data.js", "window.GNOSIS_HYP=" + json.dumps(hyps, ensure_ascii=False) + ";\n")
+
     # --- ページ ---
     scripts = ('<script src="notes-data.js"></script><script src="graph-data.js"></script><script src="tasks-data.js"></script><script src="files-data.js"></script>'
-               '<script src="slides-data.js"></script><script src="fznav-core.js"></script><script src="views2core.js"></script><script src="views2.js"></script>')
+               '<script src="slides-data.js"></script><script src="hypotheses-data.js"></script><script src="fznav-core.js"></script><script src="graphcore.js"></script><script src="views2core.js"></script><script src="views2.js"></script>')
     for key, title, desc, view in VIEWS:
         nav = f'<p class="crumb"><a href="index.html">一覧</a> ・ <a href="views.html">ビュー一覧</a></p>'
         body = f'{nav}<h1>{html.escape(title)}</h1><p class="note">{html.escape(desc)}</p><div id="v2"></div><noscript>このビューには JavaScript が必要です。</noscript>{scripts}'

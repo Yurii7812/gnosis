@@ -94,6 +94,7 @@ gnosis#csv_to_table_current
 gnosis#current_file
 gnosis#current_title
 gnosis#day_record
+gnosis#debate
 gnosis#diary_adopt
 gnosis#diary_on_save
 gnosis#diary_test_add
@@ -150,6 +151,8 @@ gnosis#hub_list
 gnosis#hub_map
 gnosis#hub_open
 gnosis#hub_set
+gnosis#hypotheses
+gnosis#hypothesis
 gnosis#i18n#lang
 gnosis#i18n#reload
 gnosis#i18n#set_lang
