@@ -155,6 +155,26 @@ class ReadingTest(unittest.TestCase):
         self.assertEqual(none["covered"], [])
         self.assertIn("目安", full["note_text"])
 
+    def test_explain_partial_unaddressed_and_record(self):
+        note(self.root, "cook.md", "料理", "ローズマリーを使ったチキンの料理。オーブンで焼いて、塩と胡椒で味を整える。最後にレモンを絞って仕上げる工程がとても大切です。")
+        e = rd.explain(self.root, "cook.md", "ローズマリーのチキンをオーブンで焼きます", today="2026-10-20")
+        self.assertIn("ローズマリー", "".join(e["covered"] + e["partial"]))
+        self.assertGreaterEqual(e["coverage_loose"], e["coverage"])
+        self.assertTrue(any("レモン" in x for x in e["unaddressed"]))                 # 触れていない文
+        self.assertFalse(any("オーブン" in x for x in e["unaddressed"]))              # 触れた文は出ない
+        self.assertNotIn("recorded", e)
+        self.assertFalse((self.root / ".state" / "explain.json").exists())             # 記録しない限り何も書かない
+        r1 = rd.explain(self.root, "cook.md", "全然関係ない話", record=True, today="2026-10-20")
+        self.assertTrue(r1["recorded"] and r1["previous"] is None)
+        r2 = rd.explain(self.root, "cook.md", "ローズマリーを使ったチキンの料理。オーブンで焼いて、塩と胡椒で味を整える。レモンを絞る。", record=True, today="2026-10-21")
+        self.assertEqual(r2["previous"]["date"], "2026-10-20")
+        self.assertGreater(r2["delta"], 0)
+        md = rd.to_md("explain", r2)
+        self.assertIn("前回（2026-10-20）", md)
+        self.assertIn("採点でも", md)
+        (self.root / ".state" / "explain.json").write_text("壊れた", encoding="utf-8")
+        self.assertTrue(rd.explain(self.root, "cook.md", "x", record=True)["recorded"])   # 壊れた記録があっても落ちない
+
     def test_incremental_reading_schedule(self):
         n = rd.ir_next(self.root, "2026-10-21")
         self.assertEqual((n["item"]["state"], n["unseen"]), ("初回", 2))

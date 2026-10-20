@@ -221,6 +221,7 @@
     "%d か所を書き換えました（u で元に戻せます）": "Rewrote %d places (undo with u)",
     "使い方: :GnosisReadProgress 書名 ページ [全ページ]": "Usage: :GnosisReadProgress title page [total]",
     "進捗を記録しました": "Progress recorded",
+    "! は説明を渡したときだけ使えます（記録するのは説明の結果です）": "! can be used only with an explanation (the result of the explanation is what gets recorded)",
     "scan は報告だけです（! は使えません）": "scan only reports (! cannot be used)",
     "ノートを開くか、ノートを指定してください": "Open a note or give a note name",
     "実行するコマンドを指定してください（例: :GnosisBulk GnosisUpdateAll）": "Give a command to run (e.g. :GnosisBulk GnosisUpdateAll)",

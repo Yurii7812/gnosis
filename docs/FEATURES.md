@@ -66,7 +66,7 @@
 | LR09 | 読書進捗・中断位置・再開。 | 読書進捗・中断位置・再開。 | `\A` + Markdown | 動作検証中（`📖 書名 現在/全 日付`・最新が現在地・同日は後の行・再開ページ） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR10 | 理解度・成熟度（ユーザー任意の属性として | 理解度・成熟度（ユーザー任意の属性として、ノート分類を置換しない）。 | `\A` + Markdown | 動作検証中（利用者が付ける `maturity:` 属性。引き上げは提案だけで自動では書かない。分類は置き換えない） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR11 | 段階的学習経路・順序づけ。 | 段階的学習経路・順序づけ。 | `\A` + Markdown | 動作検証中（`requires:` から前に読む順序。循環・欠落は報告） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
-| LR12 | 自己説明テスト。 | 自己説明テスト。 | `\A` + Markdown | 一部（説明を促す問いと、要点語の網羅の目安。採点・言い換えの理解判定はしない） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
+| LR12 | 自己説明テスト。 | 自己説明テスト。 | `\A` + Markdown | 一部（説明を促す問い。説明を渡すと、要点語を「そのまま入っていた／一部合う（文字の連なり。言い換え・活用の手がかり）／入っていない」に分け、答えに触れていないノートの文（最大 5）を示す。`:GnosisExplain!` で `.state/explain.json` に記録し前回と比べる。**文字の重なりを見る目安で、言い換えの理解や正しさの採点はしない**（LLM は使っていない）。未: 意味を理解した上での採点・誤りの指摘） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR13 | 書籍・論文・Webの出典／引用元の追跡、 | 書籍・論文・Webの出典／引用元の追跡、該当箇所への戻りリンク。 | `\A` + Markdown | 動作検証中（`source:` のノートと、引用しているノートへの戻り行。書誌の整形は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR14 | ハイライト・注釈からMarkdownノー | ハイライト・注釈からMarkdownノート／索引リンク作成。 | `\A` + Markdown | 動作検証中（ハイライトから読書メモの草稿。新規ノートのみ・上書きしない・索引リンクの自動作成は未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | TM01 | 統合Agenda: ノートと日記内のタス | 統合Agenda: ノートと日記内のタスクを収集。 | Vim + `\A` + Android | 動作検証中（Vim の :GnosisAgenda のみ。`\A`・APK は未実装） | 5 | `python/tasks.py` `test_tasks.py` `test/agenda_net.sh` | P1 タスクエンジン |

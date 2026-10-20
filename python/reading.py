@@ -19,7 +19,7 @@ CLI（JSON。--md なら Markdown）:
   reading.py ROOT maturity-set NOTE LEVEL        成熟度を front matter に書く
   reading.py ROOT path NOTE                      そのノートの前に読むべきノートの順序（循環は報告）
   reading.py ROOT sources                        出典ノートと、それを引用しているノート（戻りリンクつき）
-  reading.py ROOT explain NOTE ['自分の説明']     説明を促す問い。説明を渡すと、ノートの要点語をどれだけ含むかを調べる
+  reading.py ROOT explain NOTE ['自分の説明'] [--record]   説明を促す問い。説明を渡すと、要点語(そのまま/一部合う)と触れていない文を調べる。--record で記録して前回と比べる
   reading.py ROOT ir-next [YYYY-MM-DD]           インクリメンタルリーディング: 次に見るハイライト
   reading.py ROOT ir-rate ID again|good|easy [YYYY-MM-DD]
 """
@@ -31,6 +31,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -286,22 +287,75 @@ def sources(root: str | Path) -> dict:
 
 
 # ---- 自己説明 ----
-def explain(root: str | Path, note: str, answer: str | None = None) -> dict:
+def _bigrams(t: str) -> set[str]:
+    t = re.sub(r"\s+", "", unicodedata.normalize("NFKC", t).lower())
+    return {t[i:i + 2] for i in range(len(t) - 1)} if len(t) > 1 else set()
+
+
+def _contain(part: str, whole: set[str]) -> float:
+    """part の 2 文字の連なりのうち、whole に入っている割合。言い換えや活用の違いで一部だけ合うものを拾う目安。"""
+    g = _bigrams(part)
+    return len(g & whole) / len(g) if g else 0.0
+
+
+def _ex_path(root: Path) -> Path:
+    return root / ".state" / "explain.json"
+
+
+def explain(root: str | Path, note: str, answer: str | None = None, record: bool = False, today: str | None = None) -> dict:
+    """自己説明の見直しの手がかり。**採点でも理解の判定でもない**(文字の連なりの重なりを見るだけ)。
+
+    covered: 要点語がそのまま入っている／partial: 一部の文字の連なりが合う(言い換え・活用の可能性)／missing: 合わない。
+    unaddressed: ノートの文のうち、答えに触れていないように見えるもの(最大 5)。record=True で `.state/explain.json` に残し、前回と比べる。"""
     root = Path(root).resolve()
     rel = _resolve(root, note)
     c = ai.Corpus.build(root)
     key = ai.phrases(c, rel, 12)
     title = c.docs[rel]["title"]
     out = {"note": rel, "title": title, "prompts": [f"「{title}」を、初めて聞く人に説明するつもりで書いてください。", "なぜそうなるのか（理由）を 1 つ、具体例を 1 つ入れてください。"]}
-    if answer is not None:
-        low = answer.lower()
-        hit = [k for k in key if k.lower() in low]
-        miss = [k for k in key if k.lower() not in low]
-        out.update({"answer_chars": len(re.sub(r"\s", "", answer)), "covered": hit, "missing": miss, "coverage": round(len(hit) / len(key), 2) if key else None,
-                    "note_text": "ノートの要点語（文字の連なりの重み）がどれだけ入っているかの目安です。言い換えは拾えません。採点ではなく、見直しの手がかりです。"})
-    else:
+    if answer is None:
         out["key_terms_hidden"] = len(key)
+        return out
+    low = answer.lower()
+    ag = _bigrams(answer)
+    hit = [k for k in key if k.lower() in low]
+    rest = [k for k in key if k.lower() not in low]
+    partial = [k for k in rest if len(k) >= 3 and _contain(k, ag) >= 0.6]
+    miss = [k for k in rest if k not in partial]
+    text = _notes_text(root, rel)
+    sents = [x.strip() for x in re.split(r"[。！？!?\n]+", text) if len(re.sub(r"\s", "", x)) >= 12]
+    un = [x[:100] for x in sents if _contain(x, ag) < 0.25][:5]
+    out.update({"answer_chars": len(re.sub(r"\s", "", answer)), "covered": hit, "partial": partial, "missing": miss, "coverage": round(len(hit) / len(key), 2) if key else None,
+                "coverage_loose": round((len(hit) + len(partial)) / len(key), 2) if key else None, "unaddressed": un,
+                "note_text": "ノートの要点語と文を、文字の連なりの重なりで見た目安です。言い換えを完全には拾えず、理解の採点でもありません。見直しの手がかりです。"})
+    if record:
+        day = today or dt.date.today().isoformat()
+        st = _json_load(_ex_path(root))
+        hist = st.get(rel, [])
+        out["previous"] = hist[-1] if hist else None
+        out["delta"] = round(out["coverage"] - hist[-1]["coverage"], 2) if hist and hist[-1].get("coverage") is not None and out["coverage"] is not None else None
+        hist.append({"date": day, "coverage": out["coverage"], "loose": out["coverage_loose"], "chars": out["answer_chars"]})
+        st[rel] = hist[-30:]
+        p = _ex_path(root)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, p)
+        out["recorded"] = True
     return out
+
+
+def _json_load(p: Path) -> dict:
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _notes_text(root: Path, rel: str) -> str:
+    d = nf._simple_parse_text(root / rel, (root / rel).read_text(encoding="utf-8"))
+    return "\n".join(x for x in d["body"] if not x.lstrip().startswith("#") and x.strip() not in ("ParentBranch:", "ChildBranch:", "Related:", "BackLink:", "Context:") and not re.match(r"^\s*[-*+]?\s*\[[^\]]*\]\([^)]*\)\s*$", x))
 
 
 # ---- インクリメンタルリーディング ----
@@ -395,7 +449,14 @@ def to_md(kind: str, r: dict) -> str:
     elif kind == "explain":
         L = [f"# 自己説明: {r['title']}", ""] + [f"- {p}" for p in r["prompts"]]
         if "coverage" in r:
-            L += ["", f"## 見直しの手がかり（要点語の網羅 {int((r['coverage'] or 0) * 100)}%）", "", "入っていた: " + ("・".join(r["covered"]) or "なし"), "", "入っていなかった: " + ("・".join(r["missing"]) or "なし"), "", r["note_text"]]
+            L += ["", f"## 見直しの手がかり（要点語がそのまま入っていた割合 {int((r['coverage'] or 0) * 100)}%・一部合うものを含めて {int((r['coverage_loose'] or 0) * 100)}%）", "", "入っていた: " + ("・".join(r["covered"]) or "なし"),
+                  "", "一部合う（言い換えかもしれません）: " + ("・".join(r["partial"]) or "なし"), "", "入っていなかった: " + ("・".join(r["missing"]) or "なし")]
+            if r["unaddressed"]:
+                L += ["", "答えに触れていないように見えるノートの文:"] + [f"- {x}" for x in r["unaddressed"]]
+            if r.get("recorded"):
+                pv = r.get("previous")
+                L += ["", "記録しました。" + (f"前回（{pv['date']}）は {int((pv['coverage'] or 0) * 100)}%" + (f"、{'+' if r['delta'] >= 0 else ''}{int(r['delta'] * 100)} ポイント。" if r.get("delta") is not None else "。") if pv else "初めての記録です。")]
+            L += ["", r["note_text"]]
     elif kind == "ir-next":
         it = r["item"]
         L = ["# インクリメンタルリーディング", ""]
@@ -411,7 +472,7 @@ def main(argv: list[str]) -> int:
         md = "--md" in argv
         write = None
         a = []
-        it = iter([x for x in argv if x != "--md"])
+        it = iter([x for x in argv if x not in ("--md", "--record")])
         for x in it:
             if x == "--write":
                 write = next(it)
@@ -435,7 +496,7 @@ def main(argv: list[str]) -> int:
         elif cmd == "sources":
             r = sources(root)
         elif cmd == "explain":
-            r = explain(root, rest[0], rest[1] if len(rest) > 1 else None)
+            r = explain(root, rest[0], rest[1] if len(rest) > 1 else None, record="--record" in argv)
         elif cmd == "ir-next":
             r = ir_next(root, rest[0] if rest else None)
         elif cmd == "ir-rate":

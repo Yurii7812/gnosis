@@ -6686,7 +6686,7 @@ endfunction
 
 " 読書・学習（LR01・LR07・LR09〜LR14）。原本はノートの記述（==ハイライト== (p.12)・📖 書名 120/300 日付・maturity:・requires:・source:）。
 "   :GnosisHighlights [ノート]  :GnosisHighlightDigest [新しいファイル]  :GnosisReadProgress [書名 ページ [全ページ]]  :GnosisMaturity [seed|growing|evergreen]  :GnosisMaturitySet レベル
-"   :GnosisLearnPath [ノート]  :GnosisSources  :GnosisExplain [自分の説明]  :GnosisIrNext  :GnosisIrRate ID again|good|easy
+"   :GnosisLearnPath [ノート]  :GnosisSources  :GnosisExplain[!] [自分の説明]  :GnosisIrNext  :GnosisIrRate ID again|good|easy
 function! s:rd_root() abort
   let l:root = s:get_pkm_root()
   return empty(l:root) ? '' : substitute(fnamemodify(l:root, ':p'), '/$', '', '')
@@ -6807,12 +6807,17 @@ function! gnosis#sources() abort
   call s:rd_show(['sources'])
 endfunction
 
-function! gnosis#explain(...) abort
+function! gnosis#explain(bang, ...) abort
   let l:rel = s:rd_need_note()
   if empty(l:rel)
     return
   endif
-  call s:rd_show(['explain', l:rel] + (a:0 > 0 && !empty(a:1) ? [a:1] : []))
+  let l:ans = a:0 > 0 ? a:1 : ''
+  if a:bang && empty(l:ans)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('! は説明を渡したときだけ使えます（記録するのは説明の結果です）') | echohl NONE
+    return
+  endif
+  call s:rd_show(['explain', l:rel] + (empty(l:ans) ? [] : [l:ans]) + (a:bang ? ['--record'] : []))
 endfunction
 
 function! gnosis#ir_next() abort

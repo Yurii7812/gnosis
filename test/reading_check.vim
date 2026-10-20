@@ -51,6 +51,13 @@ execute 'edit ' . fnameescape($D . '/v/book.md')
 GnosisExplain
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "初めて聞く人に説明"')))
 close
+" ! は説明を渡したときだけ(記録は説明の結果)
+GnosisExplain!
+call assert_false(filereadable($D . '/v/.state/explain.json'))
+GnosisExplain! 知識は力だと思います
+call assert_true(filereadable($D . '/v/.state/explain.json'))
+call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "記録しました"')))
+close
 GnosisIrNext
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "初回"')))
 let s:id = matchstr(join(getline(1, '$'), "\n"), 'ID `\zs[0-9a-f]\{10}\ze`')
