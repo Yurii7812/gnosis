@@ -6469,6 +6469,129 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" ノートの分割（ED06）・統計（ED17）・比較（ED09）。
+"   :GnosisSplit [新しいファイル名]  カーソルがある節(見出し)を、同じフォルダの新しいノートに切り出す。元には → リンクを残し、新しい側に Related: で元を記録。:GnosisSplitUndo で戻す
+"   :GnosisStats [ノート]  :GnosisDiff 相手のノート（今のノートと比べる）
+function! s:nt_root() abort
+  let l:root = s:get_pkm_root()
+  return empty(l:root) ? '' : substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+endfunction
+
+function! s:nt_rel(root) abort
+  let l:cur = expand('%:p')
+  return stridx(l:cur, a:root . '/') == 0 ? strpart(l:cur, len(a:root) + 1) : ''
+endfunction
+
+function! s:nt_modified() abort
+  return !empty(filter(getbufinfo({'buflisted': 1}), 'v:val.changed'))
+endfunction
+
+function! gnosis#split(...) abort
+  let l:root = s:nt_root()
+  let l:rel = empty(l:root) ? '' : s:nt_rel(l:root)
+  if empty(l:rel)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:lnum = line('.')
+  let l:heading = ''
+  while l:lnum >= 1
+    let l:m = matchlist(getline(l:lnum), '^#\{1,6}\s\+\(.\{-}\)\s*#*\s*$')
+    if !empty(l:m)
+      let l:heading = l:m[1]
+      break
+    endif
+    let l:lnum -= 1
+  endwhile
+  if empty(l:heading)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('カーソルが見出しの節の中にありません') | echohl NONE
+    return
+  endif
+  let l:name = a:0 > 0 && !empty(a:1) ? a:1 : substitute(l:heading, '[/\\:*?"<>|[:space:]]\+', '_', 'g')
+  if l:name !~# '\.md$'
+    let l:name .= '.md'
+  endif
+  let l:dir = fnamemodify(l:rel, ':h')
+  let l:new = l:dir ==# '.' ? l:name : l:dir . '/' . l:name
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/split_notes.py', 'split', l:root, l:rel, l:heading, l:new], 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'ok': 0, 'error': l:out}
+  endtry
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  silent! checktime
+  silent! edit!
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('分割しました: %s → %s（戻すには :GnosisSplitUndo）'), l:heading, l:new)
+endfunction
+
+function! gnosis#split_undo(bang) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/split_notes.py', 'undo', l:root] + (a:bang ? ['--force'] : []), 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'ok': 0, 'error': l:out}
+  endtry
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') . (has_key(l:r, 'changed') ? ' ' . join(l:r.changed, ', ') : '') | echohl NONE
+    return
+  endif
+  silent! edit!
+  echo 'Gnosis: ' . gnosis#i18n#tr('分割を取り消しました')
+endfunction
+
+function! s:nt_show(args) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/note_tools.py', l:root] + a:args + ['--md'], 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#stats(bang, ...) abort
+  let l:root = s:nt_root()
+  let l:note = a:bang ? '' : (a:0 > 0 && !empty(a:1) ? a:1 : (empty(l:root) ? '' : s:nt_rel(l:root)))
+  call s:nt_show(['stats'] + (empty(l:note) ? [] : [l:note]))
+endfunction
+
+function! gnosis#note_diff(other) abort
+  let l:root = s:nt_root()
+  let l:rel = empty(l:root) ? '' : s:nt_rel(l:root)
+  if empty(l:rel)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  call s:nt_show(['diff', l:rel, a:other])
+endfunction
+
 " 時間の記録・ポモドーロ・習慣・ライフログ（TM06〜TM08・TM11）。原本はノートの行（⏱ / 🌱 / 📋）。コマンドが書くのは記録用ノート（既定 記録.md）への追記だけ。
 "   :GnosisTimerStart[!] 名前（! でポモドーロ）  :GnosisTimerStatus  :GnosisTimerStop  :GnosisTimeReport [日|週|月|年]  :GnosisHabit 名前  :GnosisHabitStats [名前]  :GnosisLog 本文  :GnosisDayRecord [YYYY-MM-DD]
 function! s:tr_run(args, show) abort

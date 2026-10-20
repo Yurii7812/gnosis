@@ -185,6 +185,7 @@ gnosis#new_here_typed
 gnosis#new_prefix_note
 gnosis#new_quick
 gnosis#new_quick_no_title
+gnosis#note_diff
 gnosis#note_navigator
 gnosis#note_search
 gnosis#note_template
@@ -290,6 +291,8 @@ gnosis#shell_job
 gnosis#sort_selection
 gnosis#sort_time
 gnosis#sort_yomi
+gnosis#split
+gnosis#split_undo
 gnosis#srs_review
 gnosis#srs_stats
 gnosis#stack_copy_delete_line
@@ -315,6 +318,7 @@ gnosis#start#squash
 gnosis#startup_restore_root
 gnosis#startup_sequence
 gnosis#state_dir
+gnosis#stats
 gnosis#strip_stray_escape
 gnosis#strip_stray_escape_all
 gnosis#switch_vault
