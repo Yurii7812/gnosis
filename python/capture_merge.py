@@ -98,7 +98,7 @@ def conflict_path(root: Path, mid: str) -> Path:
     return root / ".state" / "capture_conflicts" / (mid.replace("/", "_") + ".json")
 
 
-def apply_note(root: Path, mid: str, rel: str, base: list[str], remote: list[str]) -> dict:
+def apply_note(root: Path, mid: str, rel: str, base: list[str], remote: list[str], extra: dict | None = None) -> dict:
     """ノート rel（vault 内の相対パス）へ反映する。status: merged / unchanged / conflict。"""
     path = root / rel
     text = path.read_text(encoding="utf-8")
@@ -111,7 +111,7 @@ def apply_note(root: Path, mid: str, rel: str, base: list[str], remote: list[str
     if merged is None:
         cp.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write(cp, json.dumps({"id": mid, "file": rel, "base": base, "remote": remote,
-                                      "conflicts": conflicts}, ensure_ascii=False, indent=1))
+                                      "conflicts": conflicts, **(extra or {})}, ensure_ascii=False, indent=1))
         return {"id": mid, "status": "conflict", "file": rel, "count": len(conflicts)}
     if cp.exists():
         cp.unlink()
@@ -119,6 +119,66 @@ def apply_note(root: Path, mid: str, rel: str, base: list[str], remote: list[str
         return {"id": mid, "status": "unchanged", "file": rel}
     _atomic_write(path, "\n".join(merged) + ("\n" if trailing else ""))
     return {"id": mid, "status": "merged", "file": rel}
+
+
+def list_conflicts(root: Path) -> list[dict]:
+    d = root / ".state" / "capture_conflicts"
+    out = []
+    for p in sorted(d.glob("*.json")) if d.is_dir() else []:
+        try:
+            c = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append({"id": c.get("id", p.stem), "file": c.get("file", ""), "hunks": c.get("conflicts", [])})
+    return out
+
+
+def show(root: Path, mid: str) -> str:
+    """競合の中身を、PC のノートの今の行とスマホの行を並べた文章にする（差分の確認用）。"""
+    c = json.loads(conflict_path(root, mid).read_text(encoding="utf-8"))
+    out = [f"{c['file']}  （メモ id {mid}）", ""]
+    for n, h in enumerate(c["conflicts"], 1):
+        out += [f"--- 競合 {n}: 前回取り込んだときの行 ---"] + (h["base"] or ["(なし)"])
+        out += [f"--- 競合 {n}: スマホで書き直した行 ---"] + (h["remote"] or ["(なし)"]) + [""]
+    out += ["PC のノートの今の行は " + c["file"] + " にあります（そのまま残してあります）。"]
+    return "\n".join(out)
+
+
+_REL_HEADS = ("ChildBranch:", "Related:", "BackLink:")
+
+
+def resolve(root: Path, mid: str, how: str) -> dict:
+    """keep   … PC のノートを残し、スマホの今の版を「了解済み」にする（次回から競合にならない）。
+    append … スマホで変えた行を、引用してノートの本文の最後に足してから了解済みにする（手で統合する）。
+    どちらもスマホの原本は消さない。state の更新は取り込み記録（entries）に今の版を入れること。"""
+    cp = conflict_path(root, mid)
+    c = json.loads(cp.read_text(encoding="utf-8"))
+    entry = c.get("entry")
+    if not entry:
+        raise ValueError("この競合は古い形式で解決できません。スマホのメモを書き直して取り込み直してください")
+    if how == "append":
+        path = root / c["file"]
+        lines = path.read_text(encoding="utf-8").split("\n")
+        at = len(lines)
+        for i, ln in enumerate(lines):
+            if ln in _REL_HEADS:
+                at = i
+                break
+        while at > 0 and lines[at - 1] == "":
+            at -= 1
+        quote = ["", "> スマホで書き直した内容（手で統合してください）"]
+        for h in c["conflicts"]:
+            quote += ["> " + ln for ln in (h["remote"] or ["(削除)"])]
+        lines[at:at] = quote
+        _atomic_write(path, "\n".join(lines))
+    elif how != "keep":
+        raise ValueError("keep か append を指定してください")
+    st_path = root / ".state" / "capture_imported.json"
+    st = json.loads(st_path.read_text(encoding="utf-8"))
+    st.setdefault("entries", {})[mid] = entry
+    _atomic_write(st_path, json.dumps(st, ensure_ascii=False, indent=1))
+    cp.unlink()
+    return {"id": mid, "file": c["file"], "how": how}
 
 
 if __name__ == "__main__":

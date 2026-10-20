@@ -506,6 +506,8 @@ nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
 nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
 command! GnosisQuick call gnosis#quick_note()
 command! -nargs=? -complete=file GnosisCaptureImport call gnosis#capture_import(<q-args>)
+command! GnosisCaptureConflicts call gnosis#capture_conflicts()
+command! -nargs=+ GnosisCaptureResolve call gnosis#capture_resolve(<f-args>)
 command! GnosisApkInstall call gnosis#apk_install()
 command! -nargs=? -range GnosisTopic call gnosis#topic#assign(<line1>, <line2>, <q-args>)
 command! GnosisOrphans call gnosis#orphans_open()

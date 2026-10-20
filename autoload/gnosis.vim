@@ -5791,6 +5791,47 @@ function! gnosis#capture_import(...) abort
   endif
 endfunction
 
+" 競合（スマホと PC で同じ場所を変えたメモ）の一覧と中身を、読み取り専用の画面に出す: :GnosisCaptureConflicts
+function! gnosis#capture_conflicts() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:list = json_decode(s:capture_run(['conflicts', l:root]))
+  if empty(l:list)
+    echo gnosis#i18n#tr('Gnosis: 競合しているメモはありません')
+    return
+  endif
+  let l:lines = [gnosis#i18n#tr('スマホと PC で同じ場所を変えたメモ（ノートは変えていません）'),
+        \ gnosis#i18n#tr('解決: :GnosisCaptureResolve ID keep（PC を残す） / append（スマホの行を引用で足す）'), '']
+  for l:c in l:list
+    let l:lines += ['=== ' . l:c.id . ' ==='] + split(s:capture_run(['conflict-show', l:root, l:c.id]), "\n", 1)
+    let l:lines += [':GnosisCaptureResolve ' . l:c.id . ' keep', ':GnosisCaptureResolve ' . l:c.id . ' append', '']
+  endfor
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+endfunction
+
+" 競合を解決する: :GnosisCaptureResolve ID keep|append（keep: PC のノートを残す / append: スマホで変えた行を引用で足す）
+function! gnosis#capture_resolve(id, how) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  call gnosis#save_current_note()
+  let l:out = s:capture_run(['resolve', l:root, a:id, a:how])
+  if v:shell_error
+    echohl WarningMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
+    return
+  endif
+  silent! checktime
+  echo printf(gnosis#i18n#tr('Gnosis: 競合を解決しました（%s）。次の \M で取り込み済みになります'), a:how)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

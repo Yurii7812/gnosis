@@ -13,6 +13,9 @@ CLI:
     capture_import.py adbinstall APK                 # つながっているスマホへ APK を入れる（adb install -r）
     capture_import.py plan OUTDIR ROOT               # 取り込む内容を JSON で出す（取り込み済みの id は除く）
     capture_import.py merge OUTDIR ROOT              # スマホで書き直したメモを、取り込み済みの同じノートへ差分だけ反映（競合は記録だけ）
+    capture_import.py conflicts ROOT                 # 競合しているメモの一覧（JSON）
+    capture_import.py conflict-show ROOT ID          # 競合の中身（前回の行・スマホの行）
+    capture_import.py resolve ROOT ID keep|append    # 競合を解決（keep: PC を残す / append: スマホの行を引用で足す）
     capture_import.py whatsapp TXT OUTDIR [TOPIC]    # WhatsApp の「チャットのエクスポート」を capture.json にする
 """
 from __future__ import annotations
@@ -391,14 +394,14 @@ def apply_merges(outdir: str, root: str) -> dict:
                 out[it["id"]] = {"id": it["id"], "status": "conflict", "file": "", "count": 0}
             else:
                 res = cm.apply_note(rp, it["id"], rel, embedded_lines(prev, target, it["stamp"]),
-                                    embedded_lines(remote, target, it["stamp"]))
+                                    embedded_lines(remote, target, it["stamp"]), {"entry": remote})
                 res["target"], res["embedded"] = target, True
                 out[it["id"]] = res
             continue
         out[it["id"]] = cm.apply_note(
             rp, it["id"], it["file"],
             cm.body_lines(prev.get("text") or "", prev.get("images") or []),
-            cm.body_lines(remote.get("text") or "", remote.get("images") or []))
+            cm.body_lines(remote.get("text") or "", remote.get("images") or []), {"entry": remote})
     return out
 
 
@@ -496,6 +499,18 @@ def _main(argv: list[str]) -> int:
         except (OSError, ValueError, KeyError) as e:
             print(str(e), file=sys.stderr)
             return 2
+        return 0
+    if len(argv) == 2 and argv[0] == "conflicts":
+        import capture_merge as cm
+        print(json.dumps(cm.list_conflicts(Path(argv[1])), ensure_ascii=False))
+        return 0
+    if len(argv) == 3 and argv[0] == "conflict-show":
+        import capture_merge as cm
+        print(cm.show(Path(argv[1]), argv[2]))
+        return 0
+    if len(argv) == 4 and argv[0] == "resolve":
+        import capture_merge as cm
+        print(json.dumps(cm.resolve(Path(argv[1]), argv[2], argv[3]), ensure_ascii=False))
         return 0
     if len(argv) == 3 and argv[0] == "merge":
         print(json.dumps(apply_merges(argv[1], argv[2]), ensure_ascii=False))

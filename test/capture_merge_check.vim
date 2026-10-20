@@ -70,6 +70,28 @@ call gnosis#capture_import($D . '/pack')
 call assert_equal(s:body, readfile(s:n))
 call assert_true(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
 call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))
+" 5. 競合の解決: append でスマホの行を引用で足し、了解済みにする → 次の取り込みで競合も変更も起きない
+call gnosis#capture_resolve('261019100000', 'append')
+let s:res = readfile(s:n)
+call assert_true(index(s:res, '> 二行目(スマホ)') >= 0)
+call assert_true(index(s:res, '二行目(PC)') >= 0)
+call assert_false(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
+call gnosis#capture_import($D . '/pack')
+call assert_equal(s:res, readfile(s:n))
+call assert_false(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
+call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))
+" 6. keep: PC を残して了解済み（もう一度スマホで同じ行を変えても、了解した版からの差分で判断される）
+let s:body = readfile(s:n)
+let s:body[index(s:body, '二行目(PC)')] = '二行目(PC2)'
+call writefile(s:body, s:n)
+call s:phone("一行目(スマホ)\n二行目(スマホ2)\n三行目\nリネーム後の追記")
+call gnosis#capture_import($D . '/pack')
+call assert_true(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
+call gnosis#capture_resolve('261019100000', 'keep')
+call assert_equal(s:body, readfile(s:n))
+call gnosis#capture_import($D . '/pack')
+call assert_equal(s:body, readfile(s:n))
+call assert_false(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
 call writefile(v:errors, $D . '/errors')
 if !empty(v:errors) | cquit | endif
 qa!
