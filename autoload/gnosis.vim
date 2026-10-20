@@ -6090,6 +6090,115 @@ function! gnosis#mandala_cell(bang) abort
   execute 'edit ' . fnameescape(fnamemodify(expand('%:p'), ':h') . '/' . l:r.file)
 endfunction
 
+" 構造化検索（派生インデックス。ノートは書き換えない）: :GnosisQuery クエリ / :GnosisQuerySave 名前 クエリ / :GnosisQueryRun 名前 / :GnosisQueryList / :GnosisQueryPromote ファイル.md
+"   結果は読み取り専用の Markdown（動的索引）の画面。Enter でそのノートへ。昇格（ノートとして書く）は :GnosisQueryPromote を明示したときだけ。
+function! s:index_run(args) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return {}
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/vault_index.py', l:root] + a:args, 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  try
+    return {'root': l:root, 'data': json_decode(l:out), 'raw': l:out}
+  catch
+    return {'root': l:root, 'data': {}, 'raw': l:out}
+  endtry
+endfunction
+
+function! s:query_show(root, title, query, results) abort
+  let l:lines = ['# ' . gnosis#i18n#tr('検索') . ': ' . a:title, '',
+        \ printf(gnosis#i18n#tr('%d 件（この画面は検索結果で、ノートではありません。Enter で開く）'), len(a:results)), '']
+  let l:where = {}
+  for l:r in a:results
+    let l:text = (empty(l:r.fz) ? '' : l:r.fz . ' ') . l:r.title . (empty(l:r.snippet.text) ? '' : '  — ' . trim(l:r.snippet.text))
+    call add(l:lines, l:text)
+    let l:where[len(l:lines)] = [l:r.path, l:r.snippet.line]
+  endfor
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+  let b:gnosis_query = {'root': a:root, 'where': l:where, 'query': a:query, 'results': a:results}
+  nnoremap <buffer> <silent> <CR> :call <SID>query_jump()<CR>
+  nnoremap <buffer> <silent> q :close<CR>
+endfunction
+
+function! s:query_jump() abort
+  let l:t = get(b:gnosis_query.where, line('.'), [])
+  if empty(l:t)
+    return
+  endif
+  let l:root = b:gnosis_query.root
+  close
+  execute 'edit ' . fnameescape(l:root . '/' . l:t[0])
+  if l:t[1] > 0
+    call cursor(l:t[1], 1)
+  endif
+endfunction
+
+function! gnosis#query(query) abort
+  let l:r = s:index_run(['search', a:query])
+  if empty(l:r)
+    return
+  endif
+  if type(l:r.data) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r.data, 'error', trim(l:r.raw)) | echohl NONE
+    return
+  endif
+  call s:query_show(l:r.root, a:query, a:query, l:r.data)
+endfunction
+
+function! gnosis#query_save(name, query) abort
+  let l:r = s:index_run(['saved', 'add', a:name, a:query])
+  if !empty(l:r) && type(l:r.data) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r.data, 'error', '') | echohl NONE
+    return
+  endif
+  echo printf(gnosis#i18n#tr('Gnosis: 検索「%s」を保存しました'), a:name)
+endfunction
+
+function! gnosis#query_run(name) abort
+  let l:r = s:index_run(['saved', 'run', a:name])
+  if empty(l:r)
+    return
+  endif
+  if type(l:r.data) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r.data, 'error', '') | echohl NONE
+    return
+  endif
+  " 画面には名前を出すが、覚えるのは保存してあるクエリ（昇格のとき同じ検索をやり直すため）
+  let l:saved = s:index_run(['saved', 'list'])
+  let l:q = a:name
+  for l:s in (!empty(l:saved) && type(l:saved.data) == v:t_list ? l:saved.data : [])
+    if l:s.name ==# a:name | let l:q = l:s.query | endif
+  endfor
+  call s:query_show(l:r.root, a:name, l:q, l:r.data)
+endfunction
+
+function! gnosis#query_list() abort
+  let l:r = s:index_run(['saved', 'list'])
+  if empty(l:r) || type(l:r.data) != v:t_list
+    return
+  endif
+  echo empty(l:r.data) ? gnosis#i18n#tr('Gnosis: 保存した検索はありません') : join(map(copy(l:r.data), 'v:val.name . " = " . v:val.query'), "\n")
+endfunction
+
+" 今の検索結果の画面を、新しいノートとして書く（明示したときだけ。既存のファイルは上書きしない・索引は書き換えない）
+function! gnosis#query_promote(file) abort
+  if !exists('b:gnosis_query')
+    echo gnosis#i18n#tr('Gnosis: 検索結果の画面で実行してください')
+    return
+  endif
+  let l:r = s:index_run(['dynamic', b:gnosis_query.query, '--promote', a:file])
+  if empty(l:r) || has_key(l:r.data, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . get(get(l:r, 'data', {}), 'error', '') | echohl NONE
+    return
+  endif
+  echo printf(gnosis#i18n#tr('Gnosis: 検索結果を %s に書きました'), l:r.data.file)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

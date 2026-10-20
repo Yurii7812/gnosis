@@ -190,6 +190,11 @@ gnosis#paste_clipboard_link_here
 gnosis#perf_diag
 gnosis#push_history
 gnosis#python_cmd
+gnosis#query
+gnosis#query_list
+gnosis#query_promote
+gnosis#query_run
+gnosis#query_save
 gnosis#quick_note
 gnosis#quit_unmount
 gnosis#realtime_sync_on_text_changed

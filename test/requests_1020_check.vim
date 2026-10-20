@@ -44,6 +44,9 @@ let s:n2 = expand('%:p')
 stopinsert
 call add(g:R, 'L-c ' . (s:n2 !=# s:n1) . ' ' . len(filter(readfile(s:n2), 'v:val ==# "Context:"')))
 " Esc はやめる（ノートを作らない）
+" 直前の保存で始まった自動同期（非同期のジョブ）が a.md を書き終えるのを待ってから読み直す（待たないと、
+" 読んだあとにジョブが書き換えて、Vim の「読込んだ後にファイルに変更がありました」の確認で止まることがある）
+sleep 1100m
 execute 'edit ' . fnameescape($D . '/v/a.md')
 let s:before = len(glob($D . '/v/*.md', 0, 1))
 call setline(line('$') + 1, '修正7')

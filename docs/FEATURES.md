@@ -39,21 +39,21 @@
 | ED16 | フォーカス／集中モード。 | フォーカス／集中モード。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | ED17 | 文字数・記述量・編集履歴統計。 | 文字数・記述量・編集履歴統計。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | ED18 | ノート名・索引名・リンク先の入力補完。 | ノート名・索引名・リンク先の入力補完。 | Vim + `\A` | 要確認 | 2 | ノート名の補完（要調査） | P1 共通ID |
-| SR01 | 高速ファジー検索。 | 高速ファジー検索。 | Vim + `\A` | 要確認 | 3 | `\l` fzf 検索 | P2 View API |
-| SR02 | 高速全文検索、本文・見出し・関連ファイル | 高速全文検索、本文・見出し・関連ファイル。 | Vim + `\A` | 要確認 | 3 | `\l` 全文検索（python/note_search.py） | P2 View API |
-| SR03 | 正規表現検索。 | 正規表現検索。 | Vim + `\A` | 要確認 | 3 | 正規表現（要調査） | P2 View API |
+| SR01 | 高速ファジー検索。 | 高速ファジー検索。 | Vim + `\A` | 一部（`vault_index.py fuzzy` で題・番号・ファイル名。Vim/`\A` の画面は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
+| SR02 | 高速全文検索、本文・見出し・関連ファイル | 高速全文検索、本文・見出し・関連ファイル。 | Vim + `\A` | 動作検証中（SQLite FTS5 trigram＋短い語は部分一致。1 万ノートで初回 2.4 秒・差分 0.25 秒・検索 0.3 秒以下） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
+| SR03 | 正規表現検索。 | 正規表現検索。 | Vim + `\A` | 動作検証中（`/正規表現/`。不正な式はエラー） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR04 | 意味検索（必要ならローカル埋め込みモデル | 意味検索（必要ならローカル埋め込みモデル等、オフライン対応を優先）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | SR05 | 全文・意味検索のハイブリッド順位付け。 | 全文・意味検索のハイブリッド順位付け。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| SR06 | AND/OR/NOT、日付、ノート種別、 | AND/OR/NOT、日付、ノート種別、リンク数、索引／Branch、添付種別の複合条件検索。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| SR07 | 保存検索、再実行、共有可能な検索定義。 | 保存検索、再実行、共有可能な検索定義。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| SR08 | 動的索引（検索結果の読み取り専用表示、昇 | 動的索引（検索結果の読み取り専用表示、昇格は明示的操作）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
-| SR09 | Global Index／Topic I | Global Index／Topic Indexの特定範囲で検索。実際の到達可能性に基づく。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
+| SR06 | AND/OR/NOT、日付、ノート種別、 | AND/OR/NOT、日付、ノート種別、リンク数、索引／Branch、添付種別の複合条件検索。 | Vim + `\A` | 動作検証中（AND/OR/NOT・date/before/after・type・has・links/backlinks・fz・title） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
+| SR07 | 保存検索、再実行、共有可能な検索定義。 | 保存検索、再実行、共有可能な検索定義。 | Vim + `\A` | 動作検証中（`<vault>/.gnosis/searches.json`。共有できる素の JSON） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
+| SR08 | 動的索引（検索結果の読み取り専用表示、昇 | 動的索引（検索結果の読み取り専用表示、昇格は明示的操作）。 | Vim + `\A` | 動作検証中（結果は読み取り専用の Markdown。`:GnosisQueryPromote` を明示したときだけ新規ノート） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
+| SR09 | Global Index／Topic I | Global Index／Topic Indexの特定範囲で検索。実際の到達可能性に基づく。 | Vim + `\A` | 動作検証中（`in:索引.md` = 実際の到達可能性。Index→最初のノート→GroupBranch の向きで辿る） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR10 | コマンドパレット、GUIから全機能検索・ | コマンドパレット、GUIから全機能検索・起動。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | SR11 | ジャンプ履歴、戻る／進む、履歴トグル。 | ジャンプ履歴、戻る／進む、履歴トグル。 | Vim + `\A` | 要確認 | 2 | ジャンプ履歴（要調査） | P1 共通ID |
 | SR12 | ブックマーク、ハブ固定キー、ピン留め。 | ブックマーク、ハブ固定キー、ピン留め。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 要確認 | 2 | 最近のノート（要調査） | P1 共通ID |
 | SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 未実装 | 7 |  | P3 グラフ層 |
-| SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
+| SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
 | LR02 | 間隔反復（Spaced Repetiti | 間隔反復（Spaced Repetition）。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
@@ -164,7 +164,7 @@
 | UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 動作検証中（静的 HTML・検索・番号表。EXIF 除去・分割出力・ブラウザ実表示は未） | 3 | `python/export_site.py` `md_html.py` `docs/HTML_EXPORT.md` | P2 View API |
 | UT07 | PDF・EPUBへのエクスポート。 | PDF・EPUBへのエクスポート。 | Vim + API | 未実装 | 3 |  | P2 View API |
 | UT08 | Markdown互換性検査。 | Markdown互換性検査。 | Vim + API | 未実装 | 3 |  | P2 View API |
-| UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 一部（書き出しサイト内の検索のみ。vault 全体のオフライン FTS は未） | 3 | `search.js` `search-index.json` | P2 View API |
+| UT09 | オフライン全文検索。 | オフライン全文検索。 | Vim + API | 動作検証中（派生 SQLite。消しても作り直せる。書き出しサイト内の検索も別にある） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | UT10 | 設定プロファイル、vaultごとの設定。 | 設定プロファイル、vaultごとの設定。 | Vim + API | 要確認 | 1 | vault ごとの設定 `.gnosis/settings.json` | - |
 | UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 未実装 | 2 |  | P1 共通ID |
 | UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 未実装 | 1 |  | - |
