@@ -513,6 +513,11 @@ command! GnosisCheck call gnosis#check_vault()
 command! GnosisGraphReport call gnosis#graph_report()
 command! -nargs=+ -complete=custom,gnosis#ai_complete GnosisAi call gnosis#ai(<f-args>)
 command! GnosisBacklinks call gnosis#backlinks()
+command! -nargs=+ GnosisPreset call gnosis#preset(<f-args>)
+augroup gnosis_preset
+  autocmd!
+  autocmd VimEnter * call gnosis#preset_autoload()
+augroup END
 command! -nargs=+ -complete=file GnosisExportBook call gnosis#export_book(<f-args>)
 command! -nargs=? GnosisHypotheses call gnosis#hypotheses(<f-args>)
 command! -nargs=* GnosisHypothesis call gnosis#hypothesis(<f-args>)

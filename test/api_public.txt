@@ -243,6 +243,9 @@ gnosis#paste_clipboard_link_here
 gnosis#peek
 gnosis#peek_lines
 gnosis#perf_diag
+gnosis#preset
+gnosis#preset_autoload
+gnosis#preset_collect
 gnosis#profile
 gnosis#push_history
 gnosis#python_cmd

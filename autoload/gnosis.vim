@@ -7410,6 +7410,131 @@ function! gnosis#export_book(kind, ...) abort
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('書き出しました（%d 章・画像 %d）: %s'), l:r.chapters, l:r.images, l:r.path)
 endfunction
 
+" 設定プリセット・vault ごとの設定（UT10）。設定画面（:GnosisSettings）にない細かな動作の g:gnosis_* の数値・文字列を、<vault>/.gnosis/presets.json に名前をつけて保存・読込する
+"   :GnosisPreset save 名前 | load 名前 | list | delete 名前 | auto 名前|off（vault を開いたとき自動で読む）
+"   パスワード・鍵・トークンらしき名前の変数と、vault ごとに違う gnosis_root は保存しない。読み込むときも、gnosis_ で始まる数値・文字列だけを受け付ける
+let s:set_skip = '\c\(password\|passwd\|secret\|token\|key\|credential\)\|^gnosis_root$\|^gnosis_skip_\|^gnosis_open_index_on_startup$'
+
+function! s:set_path() abort
+  let l:root = s:nt_root()
+  return empty(l:root) ? '' : l:root . '/.gnosis/presets.json'
+endfunction
+
+function! s:set_load_file() abort
+  let l:p = s:set_path()
+  if empty(l:p) || !filereadable(l:p)
+    return {'profiles': {}, 'auto': ''}
+  endif
+  try
+    let l:d = json_decode(join(readfile(l:p), "\n"))
+    if type(l:d) != v:t_dict
+      return {'profiles': {}, 'auto': ''}
+    endif
+    return {'profiles': type(get(l:d, 'profiles', 0)) == v:t_dict ? l:d.profiles : {}, 'auto': get(l:d, 'auto', '')}
+  catch
+    return {'profiles': {}, 'auto': ''}
+  endtry
+endfunction
+
+function! s:set_save_file(d) abort
+  let l:p = s:set_path()
+  call mkdir(fnamemodify(l:p, ':h'), 'p')
+  call writefile([json_encode(a:d)], l:p . '.tmp')
+  call rename(l:p . '.tmp', l:p)
+endfunction
+
+function! gnosis#preset_collect() abort
+  let l:out = {}
+  for [l:k, l:v] in items(g:)
+    if l:k =~# '^gnosis_' && l:k !~# s:set_skip && (type(l:v) == v:t_number || type(l:v) == v:t_string)
+      let l:out[l:k] = l:v
+    endif
+  endfor
+  return l:out
+endfunction
+
+function! s:set_apply(vars) abort
+  let l:n = 0
+  for [l:k, l:v] in items(a:vars)
+    if l:k =~# '^gnosis_' && l:k !~# s:set_skip && (type(l:v) == v:t_number || type(l:v) == v:t_string)
+      let g:[l:k] = l:v
+      let l:n += 1
+    endif
+  endfor
+  return l:n
+endfunction
+
+function! gnosis#preset(action, ...) abort
+  if empty(s:set_path())
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('vault が見つかりません') | echohl NONE
+    return
+  endif
+  let l:d = s:set_load_file()
+  let l:name = a:0 > 0 ? a:1 : ''
+  if a:action ==# 'list'
+    let l:lines = ['# ' . gnosis#i18n#tr('設定プリセット'), '']
+    for l:n in sort(keys(l:d.profiles))
+      call add(l:lines, printf('- %s（%d）%s', l:n, len(l:d.profiles[l:n]), l:n ==# l:d.auto ? ' ★' . gnosis#i18n#tr('自動') : ''))
+    endfor
+    if empty(l:d.profiles)
+      call add(l:lines, gnosis#i18n#tr('なし（:GnosisPreset save 名前）'))
+    endif
+    call s:ga_show(s:nt_root(), l:lines, {})
+    return
+  endif
+  if a:action ==# 'auto' && l:name ==# 'off'
+    let l:d.auto = ''
+    call s:set_save_file(l:d)
+    echo 'Gnosis: ' . gnosis#i18n#tr('自動で読むのをやめました')
+    return
+  endif
+  if empty(l:name) || l:name !~# '^[A-Za-z0-9_\-\u3040-\u30ff\u4e00-\u9fff]\+$'
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('名前は英数字・日本語・_ - で指定してください') | echohl NONE
+    return
+  endif
+  if a:action ==# 'save'
+    let l:d.profiles[l:name] = gnosis#preset_collect()
+    call s:set_save_file(l:d)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('設定 %d 件を「%s」に保存しました'), len(l:d.profiles[l:name]), l:name)
+  elseif a:action ==# 'load'
+    if !has_key(l:d.profiles, l:name)
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('そのプリセットはありません') | echohl NONE
+      return
+    endif
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('設定 %d 件を読み込みました'), s:set_apply(l:d.profiles[l:name]))
+  elseif a:action ==# 'delete'
+    if !has_key(l:d.profiles, l:name)
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('そのプリセットはありません') | echohl NONE
+      return
+    endif
+    call remove(l:d.profiles, l:name)
+    if l:d.auto ==# l:name
+      let l:d.auto = ''
+    endif
+    call s:set_save_file(l:d)
+    echo 'Gnosis: ' . gnosis#i18n#tr('消しました')
+  elseif a:action ==# 'auto'
+    if !has_key(l:d.profiles, l:name)
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('そのプリセットはありません') | echohl NONE
+      return
+    endif
+    let l:d.auto = l:name
+    call s:set_save_file(l:d)
+    echo 'Gnosis: ' . gnosis#i18n#tr('この vault を開いたとき自動で読みます')
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('save / load / list / delete / auto のどれかです') | echohl NONE
+  endif
+endfunction
+
+" vault が決まったあと(起動時)に、自動で読む指定のプロファイルを適用する
+function! gnosis#preset_autoload() abort
+  if empty(s:set_path())
+    return 0
+  endif
+  let l:d = s:set_load_file()
+  return !empty(l:d.auto) && has_key(l:d.profiles, l:d.auto) ? s:set_apply(l:d.profiles[l:d.auto]) : 0
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

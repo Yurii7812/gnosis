@@ -104,6 +104,8 @@
 
 - **全体回帰 run8（`sh test/run.sh`）は exit=0**（2026-10-21。ビュー 23 ページ・本の書き出し・`md_html` の修正を含む。Electron の `\A` E2E は未実行）。`docs/MIGRATION.md` を追加。
 
+- **設定プリセット（`:GnosisPreset`）**: UT10。既存の `:GnosisSettings`（設定画面）と名前が衝突しかけたが、`check_commands.py` が即座に検出したので改名した。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。
