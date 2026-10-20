@@ -12,8 +12,18 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-ja = json.loads((REPO / "i18n/ja.json").read_text(encoding="utf-8"))
-en = json.loads((REPO / "i18n/en.json").read_text(encoding="utf-8"))
+dups = []
+
+
+def _strict(pairs):
+    # Vim の json_decode は重複キーでエラーになり、カタログ全体が読めなくなる（Python は黙って後勝ちにする）
+    keys = [k for k, _ in pairs]
+    dups.extend(k for k in set(keys) if keys.count(k) > 1)
+    return dict(pairs)
+
+
+ja = json.loads((REPO / "i18n/ja.json").read_text(encoding="utf-8"), object_pairs_hook=_strict)
+en = json.loads((REPO / "i18n/en.json").read_text(encoding="utf-8"), object_pairs_hook=_strict)
 files = [p for p in (REPO / "autoload").rglob("*.vim") if p.name != "i18n.vim"] + list((REPO / "plugin").glob("*.vim")) + [REPO / "web/vim/gui.vim"]
 js = list((REPO / "web/src").glob("*.js"))
 ng = 0
@@ -26,6 +36,8 @@ def bad(msg):
     ng += 1
 
 
+if dups:
+    bad("JSON に重複キーがある（Vim が読めなくなる）: " + str(sorted(dups)))
 if set(ja["msg"]) != set(en["msg"]):
     bad("ja.json と en.json の msg のキーが違う: " + str(set(ja["msg"]) ^ set(en["msg"])))
 for k in ja["msg"]:
