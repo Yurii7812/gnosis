@@ -265,7 +265,8 @@ def plan(outdir: str, root: str) -> dict:
             "id": e["id"],
             "time": t.strftime("%Y-%m-%d %H:%M:%S"),
             "date": t.strftime("%Y-%m-%d"),
-            "hm": t.strftime("%H:%M"),
+            # スマホで日付を指定し「時刻を入れない」で書いたメモ（notime）は、時刻を付けない
+            "hm": "" if e.get("notime") else t.strftime("%H:%M"),
             "topic": normalize_topic(e.get("topic") or ""),
             "text": e.get("text") or "",
             "title": _first_line_title(MEMO_LINK.sub(r"\1", e.get("text") or "")) or t.strftime("%H:%M のメモ"),

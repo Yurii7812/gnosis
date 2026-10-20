@@ -419,6 +419,86 @@ def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
     return out
 
 
+# グループ（Index を含む）のリンクが多いとき、頭文字ごとに入れる見出しの行（「あ」「か」「A」「0-9」「その他」だけの行）。
+# Gnosis が作る行なので、付け直すときはこの形の行を全部外してから入れ直す。
+KANA_HEAD_RE = re.compile(r"^(?:[ぁ-ゖ]|[A-Z]|0-9|その他)$")
+KANA_HEAD_MIN = 30
+_SMALL_KANA = str.maketrans("ぁぃぅぇぉっゃゅょゎゕゖ", "あいうえおつやゆよわかけ")
+
+
+def kana_initial(reading: str) -> str:
+    """よみの頭文字の見出し名。かなは清音の大きい字（が→か・ゃ→や）、英字は大文字、数字は 0-9、ほかは その他。"""
+    import unicodedata
+    for ch in kata2hira(reading):
+        if ch in _IGNORE or ch.isspace():
+            continue
+        base = unicodedata.normalize("NFD", ch)[0].translate(_SMALL_KANA)
+        if "ぁ" <= base <= "ゖ":
+            return base
+        if base.isascii() and base.isalpha():
+            return base.upper()
+        if base.isdigit():
+            return "0-9"
+        return "その他"
+    return "その他"
+
+
+def strip_kana_heads(lines: list[str]) -> list[str]:
+    """kana_heads が入れた見出しの行を外す（コードブロックの中は触らない）。"""
+    out: list[str] = []
+    in_fence = False
+    for ln in lines:
+        if _FENCE_RE.match(ln):
+            in_fence = not in_fence
+        if not in_fence and KANA_HEAD_RE.match(ln.strip()):
+            continue
+        out.append(ln)
+    return out
+
+
+def kana_heads(lines: list[str], base_dir, minimum: int = KANA_HEAD_MIN) -> list[str]:
+    """本文のリンクだけの行が minimum 本以上なら、頭文字が変わるところに「あ」の見出しの行を入れる。
+
+    前に入れた見出しはいったん全部外す（本数が減れば見出しは無くなる）。対象は sort_lines と同じ
+    （本文の上のブロック・コードブロック・ChildBranch: などの節より後ろは見ない）。
+    """
+    lines = strip_kana_heads(lines)
+    slots: list[int] = []
+    in_fence = False
+    in_ctx = False
+    for i, ln in enumerate(lines):
+        if _FENCE_RE.match(ln):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if ln.strip() in _TOP_BLOCK_HEADS:
+            in_ctx = True
+            continue
+        if in_ctx and _LINK_LINE_RE.match(ln):
+            continue
+        in_ctx = False
+        if _SECTION_HEAD_RE.match(ln.strip()):
+            break
+        if _LINK_LINE_RE.match(ln):
+            slots.append(i)
+    if len(slots) < minimum:
+        return lines
+    heads: dict[int, str] = {}
+    prev = None
+    for i in slots:
+        ini = kana_initial(line_reading(lines[i], base_dir))
+        if ini != prev:
+            heads[i] = ini
+            prev = ini
+    out: list[str] = []
+    for i, ln in enumerate(lines):
+        if i in heads:
+            out.append(heads[i])
+        out.append(ln)
+    return out
+
+
 def persist_readings(lines: list[str], base_dir) -> int:
     """リンクだけの行の表示名のよみが未登録なら、pykakasi で作って yomi: に書き込む。
 

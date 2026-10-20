@@ -125,8 +125,29 @@ def creation_key(path: Path, note: dict) -> tuple:
     return (datetime.max, str(path))
 
 
+# 日付の題（年「2026」・月「2026-10」・日「2026-10-19-MO-…」、時系列記録の「2026-10-夢」など）。
+# きょうだいの番号は、作った時刻ではなくこの日付の順に振る（あとから作った過去の日記も日付の位置に来る）
+DATED_TITLE_RE = re.compile(r'^(\d{4}(?:-\d{2}(?:-\d{2})?)?)(?:-|$)')
+
+
+def is_paper(note: dict) -> bool:
+    """紙の PKM のノート（題が番号）。日付の題（2026-10-19-MO-… / 2026-10 / 2026）は紙の番号ではない。"""
+    return bool(PAPER_TITLE_RE.match(note['title'])) and not DATED_TITLE_RE.match(note['title'])
+
+
+def sibling_key(path: Path, note: dict) -> tuple:
+    m = DATED_TITLE_RE.match(note['title'])
+    if m:
+        return (0, m.group(1), creation_key(path, note))
+    return (1, '', creation_key(path, note))
+
+
 def allocation(root: Path, notes: dict) -> dict[Path, str]:
-    """Plan missing IDs using the same parsed snapshot as the normal sync."""
+    """Plan missing IDs using the same parsed snapshot as the normal sync.
+
+    番号は Branch の形に合わせる（2026-10-20 決定）: 親が 1 つのノートの番号が親の番号の子でなくなったら
+    （親を付け替えた・日記の年のノートができて月がその下に入った、など）、親の下の新しい番号に振り直す。
+    その子孫も同じく振り直す。紙の PKM の番号（題が番号）は振り直さない。"""
     known = set(notes)
     def targets(lines, base):
         out = []
@@ -154,7 +175,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # グループは Folgezettel ID を持たない（2026-10-20 決定）。付いていれば外す（'' は「消す」）。
     # 紙の PKM の番号（題が番号）は別物なので触らない
     for p, n in notes.items():
-        if ids[p] and is_group(n) and not PAPER_TITLE_RE.match(n['title']) and not nf._editor_has_unsaved_changes(p):
+        if ids[p] and is_group(n) and not is_paper(n) and not nf._editor_has_unsaved_changes(p):
             plan[p] = ''
             ids[p] = ''
     # Reserve IDs across the vault, including currently disconnected notes
@@ -169,7 +190,10 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             top.append(p)
     number = max((int(i) for i in ids.values() if i.isdigit()), default=0)
     for p in sorted(top, key=lambda p: creation_key(p, notes[p])):
-        if parents[p] or ids[p] or is_group(notes[p]) or nf._editor_has_unsaved_changes(p):
+        if parents[p] or is_group(notes[p]) or nf._editor_has_unsaved_changes(p):
+            continue
+        # 最上位なのに子の番号（51a など）を持っているもの（親を外した）は、最上位の番号に振り直す
+        if ids[p] and (not ID_RE.fullmatch(ids[p]) or not parent_id(ids[p]) or is_paper(notes[p])):
             continue
         number += 1
         while str(number) in reserved:
@@ -182,14 +206,18 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         if p in seen:
             continue
         seen.add(p)
-        for c in sorted(children[p], key=lambda c: creation_key(c, notes[c])):
+        for c in sorted(children[p], key=lambda c: sibling_key(c, notes[c])):
             if len(parents[c]) != 1 or c == p or is_group(notes[c]) or nf._editor_has_unsaved_changes(c):
                 continue
-            if not ids[c]:
+            stale = (ID_RE.fullmatch(ids[c]) and parent_id(ids[c]) != ids[p]
+                     and not is_paper(notes[c]))
+            if not ids[c] or stale:
                 # All reserved IDs prevent collisions even outside this Branch.
                 ident = next_child(ids[p], [f'---\nfolgezettel: "{i}"\n---' for i in reserved])
                 ids[c] = plan[c] = ident
                 reserved.add(ident)
+                # 先に見終わっていても、新しい番号でその子をもう一度見る（子孫も同じ回で振り直す）
+                seen.discard(c)
             if ID_RE.fullmatch(ids[c]):
                 queue.append(c)
     return plan

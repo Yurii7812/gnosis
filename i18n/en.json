@@ -1,5 +1,12 @@
 {
   "ja": {
+    "今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / i=行の中 / o=置かない / w=置かずにリンク先をヤンク  (Esc で取り消し)": "Where to put the link in this note: Enter=end of body / t=under a heading / h=below cursor / i=inline / o=nowhere / w=don't place it, yank the target  (Esc cancels)",
+    "置き場所: Enter=末 t=見出し h=直下 i=行中 o=なし w=ヤンク (Esc)": "Place: Enter=end t=heading h=below i=inline o=none w=yank (Esc)",
+    "Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / a=Context(今のノートにリンク先) / r=Related(相互)": "Enter=end of body / i=inline / p=Parent / b=Branch(child) / h=below cursor / c=Context(this note into the target) / a=Context(the target into this note) / r=Related(both)",
+    "Enter=末 i=行中 p=親 b=子 h=下 c=相手Ctx a=自分Ctx r=Related": "Enter=end i=inline p=parent b=child h=below c=their Ctx a=my Ctx r=Related",
+    "今のノートの Context: に、もう入っています": "already in this note's Context:",
+    "Gnosis: コピーするものがありません": "Gnosis: nothing to copy",
+    "Gnosis: 題と本文をコピーしました（%d 行）": "Gnosis: copied the title and body (%d lines)",
     "もうこのグループに入っています": "already in this group",
     "Gnosis: グループに %d 本入れて、よみの順に並べました": "Gnosis: added %d link(s) to the group and sorted by reading",
     "Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / r=Related(相互)": "Enter=end of body / i=inline / p=Parent / b=Branch(child) / h=below cursor / c=Context(this note into the target) / r=Related(both)",
@@ -598,7 +605,7 @@
     "session.exclusive_refused": "Cannot do this while another window (%s) is using this vault. Close the other windows and try again (nothing was changed)",
     "branch.one_parent_only": "Only one note can be the parent (ParentBranch). Choose exactly one note (nothing was changed)",
     "write.unsaved": "This note has unsaved changes, so the link target was not opened (save it, then :GnosisWNext opens it)",
-    "write.opened": "Opened the link target. The file name of \"%s\" is yanked (paste with p). No link was written automatically",
+    "write.opened": "Opened the link target. A link to \"%s\" is yanked (paste with p). No link was written automatically",
     "write.more": "(%s more: open them one by one with :GnosisWNext)",
     "write.none": "No more link targets to open for w",
     "context.migrated": "Moved the Context to the new format (Context: at the top of the body) (%s links; no other line changed)",

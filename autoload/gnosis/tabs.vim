@@ -76,7 +76,7 @@ function! s:save() abort
   let l:path = s:file()
   let l:tmp = l:path . '.' . getpid() . '.tmp'
   try
-    call writefile([json_encode({'version': 1, 'tabs': s:tabs, 'active': s:active})], l:tmp)
+    call writefile([json_encode({'version': 1, 'tabs': s:tabs, 'active': s:active})], l:tmp, 'S')
     if rename(l:tmp, l:path) != 0
       call delete(l:tmp)
     endif

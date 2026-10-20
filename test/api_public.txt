@@ -51,6 +51,7 @@ gnosis#color#mix
 gnosis#color#normalize
 gnosis#color#on_note_enter
 gnosis#color#refresh
+gnosis#conceal_eol_fix
 gnosis#conflict#disk_changed
 gnosis#conflict#handle
 gnosis#conflict#mark_own_sync
@@ -241,6 +242,9 @@ gnosis#settings_ui#close
 gnosis#settings_ui#key
 gnosis#settings_ui#open
 gnosis#settings_ui#render
+gnosis#sh#error
+gnosis#sh#system
+gnosis#sh#systemlist
 gnosis#shell_job
 gnosis#sort_selection
 gnosis#sort_time
@@ -338,6 +342,7 @@ gnosis#time_mode_toggle
 gnosis#time_stamp
 gnosis#timestamp_filename
 gnosis#timestamp_yaml
+gnosis#title_body_lines
 gnosis#toggle_alternate
 gnosis#toggle_checkbox
 gnosis#toggle_link_source
@@ -385,6 +390,7 @@ gnosis#write_at_bottom
 gnosis#write_guide
 gnosis#write_next
 gnosis#yank_name
+gnosis#yank_title_body
 gnosis#yomi_review
 gnosis_search#ensure_hl_group
 gnosis_search#pick_insert_link

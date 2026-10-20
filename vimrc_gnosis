@@ -76,6 +76,12 @@ set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
 set t_ut=
 silent! colorscheme gnosis
+" 画面に入りきらない長い行（チャットの取り込みなど）も、入るところまで本文を見せる
+" （空のままだと、行が丸ごと「@」の行になる）。smoothscroll で長い行の中も画面の 1 行ずつ動ける
+set display=lastline
+if exists('+smoothscroll')
+  set smoothscroll
+endif
 
 " =========================================================
 " fcitx の自動切り替え（Linux で fcitx5-remote / fcitx-remote があるときだけ）

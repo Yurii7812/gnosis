@@ -17,7 +17,7 @@ endfunction
 
 function! s:run(args) abort
   let l:cmd = gnosis#python_cmd() . ' ' . shellescape(s:script_path) . ' ' . join(map(copy(a:args), 'shellescape(v:val)'), ' ')
-  let l:out = system(l:cmd)
+  let l:out = gnosis#sh#system(l:cmd)
   try
     return json_decode(trim(split(l:out, "\n")[-1]))
   catch
@@ -26,7 +26,7 @@ function! s:run(args) abort
 endfunction
 
 function! s:sync(root) abort
-  call system(gnosis#python_cmd() . ' ' . shellescape(s:sync_path) . ' update ' . shellescape(a:root))
+  call gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:sync_path) . ' update ' . shellescape(a:root))
 endfunction
 
 " 1 文字を読む（g:gnosis_test_keys があればそこから。試験用）

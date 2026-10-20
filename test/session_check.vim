@@ -49,6 +49,8 @@ call writefile([], s:stub . '/mounted')
 let g:gnosis_autosync = 0
 let g:gnosis_skip_interactive_mount = 1
 let g:gnosis_diary_auto = 0
+" 偽の mountpoint（PATH の先頭）で調べる（ふだんは /proc の一覧を読む）
+let g:gnosis_mount_check = 'mountpoint'
 let g:gnosis_root = s:A . '/'
 
 " ---------------------------------------------------------------- 登録簿

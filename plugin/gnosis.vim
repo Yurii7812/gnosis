@@ -488,6 +488,8 @@ nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
 " 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
 nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
+" \a … 未所属（Folgezettel ID の無い）ノートの一覧（全体を見て整理する）。\N も同じ（押しにくいので \a を足した）
+nnoremap <silent> \a       <Cmd>call gnosis#orphans_open()<CR>
 nnoremap <silent> \N       <Cmd>call gnosis#orphans_open()<CR>
 nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
 nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
@@ -658,6 +660,8 @@ nnoremap <nowait> <silent> zd  <Cmd>RenameChildLinkTitles<CR>
 vnoremap <nowait> <silent> zd  :<C-u>'<,'>RenameChildLinkTitles<CR>
 " yn: 現在のファイル名をヤンク
 nnoremap <nowait> <silent> yn  <Cmd>call gnosis#yank_name()<CR>
+" \y: 題と本文だけをコピー（YAML と関係のブロックは除く。ノートへのリンクは表示名だけ）
+nnoremap <nowait> <silent> \y  <Cmd>call gnosis#yank_title_body()<CR>
 
 " \v / \V: システムクリップボード（PCの直近のコピー / Vimでヤンクしたもの）を貼り付け。
 "   p / P は Vim 標準のまま（" レジスタ）。PC の内容は \v で貼る。
@@ -712,8 +716,8 @@ function! s:expand_s_and_open() abort
         \ shellescape(l:py),
         \ shellescape(l:file),
         \ shellescape(l:root))
-  let l:result = system(l:cmd)
-  if v:shell_error
+  let l:result = gnosis#sh#system(l:cmd)
+  if gnosis#sh#error()
     echohl ErrorMsg | echo 'expand_s failed: ' . l:result | echohl None
     return
   endif
@@ -812,6 +816,13 @@ function! s:setup_conceal() abort
     " 文字リンクのURLは Normal / Insert / Visual の各モードで隠す。
     " 編集時にURLを直接見る場合は :setlocal conceallevel=0 で切り替え可能。
     setlocal concealcursor=nvi
+    " 挿入モードで、隠したリンクで終わる行の行末にいるとき、Vim はカーソルを隠す前の位置
+    " （リンクの右に URL の長さぶん空いたところ）に描く。そこにいる間だけその行を展開する
+    augroup gnosis_conceal_eol
+      autocmd! * <buffer>
+      autocmd InsertEnter,CursorMovedI,TextChangedI <buffer> call gnosis#conceal_eol_fix()
+      autocmd InsertLeave <buffer> if &l:conceallevel > 0 | setlocal concealcursor=nvi | endif
+    augroup END
     nnoremap <buffer><silent> <Right> :<C-u>call gnosis#move_visible(1, v:count1)<CR>
     nnoremap <buffer><silent> <Left>  :<C-u>call gnosis#move_visible(0, v:count1)<CR>
     nnoremap <buffer><silent> l :<C-u>call gnosis#move_visible(1, v:count1)<CR>
@@ -891,7 +902,7 @@ function! s:dirty_guard_mark() abort
   let l:marker = l:dir . '/' . strpart(sha256(fnamemodify(l:file, ':p')), 0, 16)
         \ . '.' . getpid() . '.dirty'
   if !filereadable(l:marker)
-    call writefile([], l:marker)
+    call writefile([], l:marker, 'S')
   endif
   let b:gnosis_sync_dirty_guard = l:marker
   let s:gnosis_dirty_guard_paths[l:marker] = 1

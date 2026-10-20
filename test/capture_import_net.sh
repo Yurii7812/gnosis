@@ -42,7 +42,7 @@ EOF
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -S "$REPO/test/capture_import_check.vim" </dev/null 2>"$D/err" || true
 V="$D/v"
-diary=$(grep -l "^title: 2026-10-18-" "$V"/*.md | head -1)
+diary=$(grep -l "^title: 2026-10-18-[A-Z][A-Z]$" "$V"/*.md | head -1)
 ng=0
 chk() { if eval "$2"; then :; else echo "NG $1" >&2; ng=1; fi; }
 chk "日記の本文に時刻つきで入る" 'grep -q "^12:00 お昼はスコーン$" "$diary" && grep -q "^二切れだけ$" "$diary"'

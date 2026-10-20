@@ -152,17 +152,17 @@ function! s:spawn(cmd) abort
   if has('job') && has('channel')
     call job_start(a:cmd, {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
   else
-    call system(join(map(copy(a:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1 &')
+    call gnosis#sh#system(join(map(copy(a:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1 &')
   endif
 endfunction
 
 " 開く対象（URL / ファイル）の既定アプリの desktop ファイル名（拡張子なし）を返す。
 function! s:app_base_for(path_or_url) abort
   if a:path_or_url =~? '^https\?://'
-    let l:df = trim(system('xdg-settings get default-web-browser 2>/dev/null'))
+    let l:df = trim(gnosis#sh#system('xdg-settings get default-web-browser 2>/dev/null'))
   else
-    let l:mime = trim(system('xdg-mime query filetype ' . shellescape(a:path_or_url) . ' 2>/dev/null'))
-    let l:df = l:mime =~# '/' ? trim(system('xdg-mime query default ' . shellescape(l:mime) . ' 2>/dev/null')) : ''
+    let l:mime = trim(gnosis#sh#system('xdg-mime query filetype ' . shellescape(a:path_or_url) . ' 2>/dev/null'))
+    let l:df = l:mime =~# '/' ? trim(gnosis#sh#system('xdg-mime query default ' . shellescape(l:mime) . ' 2>/dev/null')) : ''
   endif
   return substitute(l:df, '\.desktop$', '', '')
 endfunction
@@ -192,12 +192,12 @@ function! s:activate_app_window(base) abort
         \ '}',
         \ ], l:js)
   let l:name = 'gnosis_activate'
-  call system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript ' . shellescape(l:js) . ' ' . l:name . ' >/dev/null 2>&1')
-  call system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1')
+  call gnosis#sh#system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript ' . shellescape(l:js) . ' ' . l:name . ' >/dev/null 2>&1')
+  call gnosis#sh#system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1')
   if has('timers')
-    call timer_start(600, {-> system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript ' . l:name . ' >/dev/null 2>&1')})
+    call timer_start(600, {-> gnosis#sh#system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript ' . l:name . ' >/dev/null 2>&1')})
   else
-    call system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript ' . l:name . ' >/dev/null 2>&1')
+    call gnosis#sh#system('qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript ' . l:name . ' >/dev/null 2>&1')
   endif
 endfunction
 
@@ -233,8 +233,8 @@ function! s:open_with_default_app(path) abort
       return
     endif
 
-    let l:winpath = trim(system('wslpath -w ' . shellescape(l:path)))
-    if v:shell_error != 0 || empty(l:winpath)
+    let l:winpath = trim(gnosis#sh#system('wslpath -w ' . shellescape(l:path)))
+    if gnosis#sh#error() != 0 || empty(l:winpath)
       echohl WarningMsg | echom 'open-default: failed to convert WSL path' | echohl None
       return
     endif

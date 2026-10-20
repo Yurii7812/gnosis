@@ -45,7 +45,7 @@ function! gnosis#branch#run(root, parent, children, ...) abort
   let l:cmd = gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' add ' . shellescape(a:root)
         \ . ' ' . shellescape(a:parent) . ' ' . join(map(copy(a:children), 'shellescape(v:val)'), ' ')
         \ . (a:0 && a:1 ? ' --dry-run' : '')
-  let l:out = system(l:cmd)
+  let l:out = gnosis#sh#system(l:cmd)
   try
     let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
     if type(l:r) == v:t_dict
@@ -214,7 +214,7 @@ function! gnosis#branch#check() abort
   if empty(l:root) || !gnosis#has_python()
     return {}
   endif
-  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' check ' . shellescape(l:root))
+  let l:out = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' check ' . shellescape(l:root))
   try
     let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
     return type(l:r) == v:t_dict ? l:r : {}
@@ -269,14 +269,14 @@ function! gnosis#branch#context_migrate() abort
     return
   endif
   call gnosis#save_current_note()
-  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root))
+  let l:out = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root))
   try
     let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
   catch
     echohl ErrorMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
     return
   endtry
-  call system(gnosis#python_cmd() . ' ' . shellescape(g:gnosis_python) . ' update ' . shellescape(l:root))
+  call gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(g:gnosis_python) . ' update ' . shellescape(l:root))
   call gnosis#clear_title_cache()
   silent! checktime
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('最初の Context を親（Branch）にしました: %d 件（飛ばしたもの %d 件）'), len(l:r.added), len(l:r.skipped))
@@ -289,7 +289,7 @@ function! gnosis#branch#context_parent(paths) abort
     return
   endif
   call gnosis#dirty_guard_release(a:paths)
-  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root)
+  let l:out = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:script()) . ' context-migrate ' . shellescape(l:root)
         \ . ' ' . join(map(copy(a:paths), 'shellescape(v:val)'), ' '))
   try
     let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))

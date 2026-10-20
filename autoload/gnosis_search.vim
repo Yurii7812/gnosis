@@ -118,7 +118,7 @@ function! s:build_notes(root) abort
   let l:notes = []
   let l:idx = get(g:, 'gnosis_search_index', '')
   if !empty(l:idx) && filereadable(l:idx) && gnosis#has_python()
-    for l:ln in systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(a:root))
+    for l:ln in gnosis#sh#systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(a:root))
       let l:f = split(l:ln, "\t", 1)
       if len(l:f) >= 2
         call add(l:notes, {'p': l:f[0], 't': l:f[1], 'b': get(l:f, 2, '')})
@@ -497,7 +497,7 @@ function! gnosis_search#run_legacy(...) abort
   if empty(l:root) || !isdirectory(l:root)
     let l:root = getcwd()
   endif
-  let l:raw = systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
+  let l:raw = gnosis#sh#systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
   let s:cands = []
   for l:ln in l:raw
     let l:f = split(l:ln, "\t", 1)

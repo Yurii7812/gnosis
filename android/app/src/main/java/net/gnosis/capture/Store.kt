@@ -19,6 +19,7 @@ data class Entry(
     val contexts: List<String> = emptyList(), // Context（スマホで書いたものの id）
     val exported: Boolean = false,
     val edited: Long = 0,
+    val noTime: Boolean = false, // 日付を指定して「時刻を入れない」で書いた（PC では時刻を付けずに入る）
 )
 
 data class Settings(
@@ -32,7 +33,7 @@ data class Settings(
     val ringSeconds: Int = 0,        // アラームを鳴らし続ける長さ（秒）。0 は 1 回だけ鳴らす
     val expandAll: Boolean = false,  // 長いメモを「続きを見る」を押さずに全部見せる
     val folgeView: Boolean = false,  // Folgezettel 表示（Branch の親子を木で見せる）。false は時系列
-    val writtenStamp: Boolean = false, // 日時を指定して書いたとき、書いている日時を本文の最初に入れる
+    val writtenStamp: Boolean = false, // 日付を指定して書いたとき、書いている時刻を入れる（本文の最初に書いた日も入れる）
 )
 
 /**
@@ -113,10 +114,30 @@ fun renameTopic(entries: List<Entry>, settings: Settings, from: String, to: Stri
     return es to settings.copy(topics = topics, topicModes = modes, lastTopic = if (settings.lastTopic == from) t else settings.lastTopic)
 }
 
-/** 日時を指定して書いたときの本文。writtenStamp がオンなら、書いている日時を最初の行に入れる。 */
+/**
+ * 日付を指定して書いたときの本文。writtenStamp（書いている時刻を入れる）がオンなら、PC では時刻（HH:MM）が付くが、
+ * それは書いている日の時刻なので、本文の最初に書いた日（「（2026-10-20 に記入）」）を入れる。オフなら本文のまま
+ * （時刻も付かない）。
+ */
 fun backdatedText(text: String, writtenStamp: Boolean, writtenAt: Long): String =
     if (!writtenStamp) text
-    else "（" + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.JAPAN).format(java.util.Date(writtenAt)) + " に記入）\n" + text
+    else "（" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.JAPAN).format(java.util.Date(writtenAt)) + " に記入）" + text
+
+/** 日付を指定して書くメモの日時: その日（0 時）に、書いている時刻を足す（並びとファイル名が重なりにくいように）。 */
+fun backdatedTime(day: Long, now: Long): Long {
+    val c = java.util.Calendar.getInstance().apply { timeInMillis = now }
+    val ms = ((c.get(java.util.Calendar.HOUR_OF_DAY) * 60L + c.get(java.util.Calendar.MINUTE)) * 60L + c.get(java.util.Calendar.SECOND)) * 1000L
+    return day + ms
+}
+
+/** トピックを消す。このトピックのメモは未所属へ移す（メモは消さない）。日記・全部・未所属は消せない。 */
+fun deleteTopic(entries: List<Entry>, settings: Settings, name: String): Pair<List<Entry>, Settings>? {
+    if (name == DIARY || name == UNASSIGNED || name == ALL) return null
+    val now = System.currentTimeMillis()
+    val es = entries.map { if (it.topic == name) it.copy(topic = UNASSIGNED, edited = now, exported = false) else it }
+    return es to settings.copy(topics = settings.topics.filter { it != name }, topicModes = settings.topicModes - name,
+        lastTopic = if (settings.lastTopic == name) ALL else settings.lastTopic)
+}
 
 /** 並び list の中で a から b まで（どちら向きでも）の id。範囲選択に使う。 */
 fun rangeIds(list: List<String>, a: String, b: String): List<String> {
@@ -247,6 +268,7 @@ class Store(private val ctx: Context) {
             put("id", e.id); put("created", e.created); put("topic", e.topic); put("text", e.text)
             put("images", JSONArray(e.images)); put("parent", e.parent ?: JSONObject.NULL)
             put("contexts", JSONArray(e.contexts)); put("exported", e.exported); put("edited", e.edited)
+            if (e.noTime) put("notime", true)
         }
 
         fun fromJson(o: JSONObject): Entry {
@@ -256,6 +278,7 @@ class Store(private val ctx: Context) {
                 text = o.optString("text", ""), images = strs("images"),
                 parent = if (o.isNull("parent")) null else o.optString("parent").ifEmpty { null },
                 contexts = strs("contexts"), exported = o.optBoolean("exported", false), edited = o.optLong("edited", 0),
+                noTime = o.optBoolean("notime", false),
             )
         }
     }

@@ -13,6 +13,8 @@
                                         # READING 省略時は推測。空文字で削除
     sort_yomi.py readings --base DIR    # stdin のリンク行ごとに「登録済み(1/0)<TAB>よみ」
     sort_yomi.py setmany                # stdin の「ノート<TAB>表示名<TAB>よみ」を全部登録
+    sort_yomi.py heads --base DIR       # stdin のノート全体に、頭文字の見出し（あ など）を付け直して stdout へ
+                                        # （本文のリンクが 30 本未満なら見出しを外すだけ）
 
 ソートはリンク行だけを対象にし、リンクでない行は位置ごと動かさない。
 `sort` は未登録の表示名のよみを pykakasi で `yomi:` に書き込む（`--dry-run` で抑止）。
@@ -73,6 +75,9 @@ def main(argv: list[str]) -> int:
     p_readings = sub.add_parser("readings", help="リンク行ごとの登録済みのよみ（無ければ推測）")
     p_readings.add_argument("--base", default=".")
     sub.add_parser("setmany", help="ノート・表示名・よみ（TSV）を stdin から全部登録")
+    p_heads = sub.add_parser("heads", help="頭文字の見出し（あ など）を付け直す")
+    p_heads.add_argument("--base", default=".")
+    p_heads.add_argument("--min", type=int, default=jy.KANA_HEAD_MIN)
 
     args = ap.parse_args(argv)
 
@@ -84,6 +89,15 @@ def main(argv: list[str]) -> int:
             note = jy.resolve_note(args.base, jy.link_target(line))
             got = jy.get_yomi(note, disp) if note is not None and note.is_file() else ""
             print(f"1\t{got}" if got else f"0\t{jy.reading_for(disp)}")
+        return 0
+
+    if args.mode == "heads":
+        lines = sys.stdin.read().split("\n")
+        if lines and lines[-1] == "":
+            lines.pop()
+        out = jy.kana_heads(lines, args.base, args.min)
+        if out:
+            sys.stdout.write("\n".join(out) + "\n")
         return 0
 
     if args.mode == "setmany":

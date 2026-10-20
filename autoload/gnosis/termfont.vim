@@ -50,7 +50,7 @@ function! gnosis#termfont#font_choices() abort
         \ ['Source Code Pro', ''],
         \ ['JetBrains Mono', ''],
         \ ]
-  let l:all = split(system('fc-list :spacing=mono family; fc-list :spacing=dual:lang=ja family'), "\n")
+  let l:all = split(gnosis#sh#system('fc-list :spacing=mono family; fc-list :spacing=dual:lang=ja family'), "\n")
   let l:names = {}
   for l:line in l:all
     " 「名前,別名」の形は最初の名前だけ
@@ -62,7 +62,7 @@ function! gnosis#termfont#font_choices() abort
   let l:out = []
   for [l:n, l:note] in l:rec
     " 日本語用の等幅フォントは spacing の値がまちまちなので、名前で入っているかを確かめる
-    if has_key(l:names, l:n) || !empty(trim(system('fc-list ' . shellescape(l:n) . ' family')))
+    if has_key(l:names, l:n) || !empty(trim(gnosis#sh#system('fc-list ' . shellescape(l:n) . ' family')))
       call add(l:out, {'name': l:n, 'note': l:note})
       silent! call remove(l:names, l:n)
     endif
@@ -212,8 +212,8 @@ function! s:konsole_call(method, ...) abort
   else
     let l:cmd = [l:tool, $KONSOLE_DBUS_SERVICE, $KONSOLE_DBUS_SESSION, 'org.kde.konsole.Session.' . a:method] + a:000
   endif
-  let l:out = system(join(map(l:cmd, 'shellescape(v:val)'), ' ') . ' 2>/dev/null')
-  if v:shell_error != 0
+  let l:out = gnosis#sh#system(join(map(l:cmd, 'shellescape(v:val)'), ' ') . ' 2>/dev/null')
+  if gnosis#sh#error() != 0
     return v:null
   endif
   " gdbus は ('名前',) の形で返す
@@ -245,15 +245,15 @@ function! gnosis#termfont#apply_live(d) abort
     " 切り替わったかを Konsole に聞いて確かめる（プロファイルが見えない窓では変わらない）
     return s:konsole_call('profile') ==# l:want
   elseif l:t.name ==# 'kitty'
-    silent call system('kitty @ set-font-size ' . l:size . ' 2>/dev/null')
-    if v:shell_error == 0
+    silent call gnosis#sh#system('kitty @ set-font-size ' . l:size . ' 2>/dev/null')
+    if gnosis#sh#error() == 0
       let s:restore_kitty = !l:t.own
       return 1
     endif
   elseif l:t.name ==# 'alacritty'
     let l:w = empty($ALACRITTY_WINDOW_ID) ? '' : ' -w ' . shellescape($ALACRITTY_WINDOW_ID)
-    silent call system('alacritty msg config' . l:w . ' font.size=' . l:size . ' 2>/dev/null')
-    if v:shell_error == 0
+    silent call gnosis#sh#system('alacritty msg config' . l:w . ' font.size=' . l:size . ' 2>/dev/null')
+    if gnosis#sh#error() == 0
       let s:restore_alacritty = !l:t.own
       return 1
     endif
@@ -265,8 +265,8 @@ function! gnosis#termfont#apply_live(d) abort
       let l:family = empty(a:d.fontFamily) ? 'Monospace' : a:d.fontFamily
       let l:cmd = ['python3', l:dir . '/python/gnome_font_profile.py',
             \ $GNOSIS_HOME, l:family, string(l:size)]
-      call system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1')
-      return v:shell_error == 0
+      call gnosis#sh#system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' ') . ' >/dev/null 2>&1')
+      return gnosis#sh#error() == 0
     endif
   endif
   return 0
@@ -275,11 +275,11 @@ endfunction
 " ふだんの端末の窓（Gnosis が開いていない窓）の大きさを変えたときは、終了時に元へ戻す
 function! gnosis#termfont#restore_on_exit() abort
   if get(s:, 'restore_kitty', 0)
-    silent call system('kitty @ set-font-size 0 2>/dev/null')
+    silent call gnosis#sh#system('kitty @ set-font-size 0 2>/dev/null')
   endif
   if get(s:, 'restore_alacritty', 0)
     let l:w = empty($ALACRITTY_WINDOW_ID) ? '' : ' -w ' . shellescape($ALACRITTY_WINDOW_ID)
-    silent call system('alacritty msg config --reset' . l:w . ' 2>/dev/null')
+    silent call gnosis#sh#system('alacritty msg config --reset' . l:w . ' 2>/dev/null')
   endif
 endfunction
 

@@ -44,10 +44,10 @@ function! s:pid_alive(pid) abort
     return isdirectory('/proc/' . a:pid)
   endif
   if has('win32')
-    return stridx(system('tasklist /FI "PID eq ' . a:pid . '" /NH'), string(a:pid)) >= 0
+    return stridx(gnosis#sh#system('tasklist /FI "PID eq ' . a:pid . '" /NH'), string(a:pid)) >= 0
   endif
-  call system('kill -0 ' . a:pid . ' 2>/dev/null')
-  return v:shell_error == 0
+  call gnosis#sh#system('kill -0 ' . a:pid . ' 2>/dev/null')
+  return gnosis#sh#error() == 0
 endfunction
 
 " プロセスの開始時刻（pid が使い回されていないかの照合用）。分からなければ ''。
@@ -63,7 +63,7 @@ function! s:proc_start(pid) abort
     endtry
   endif
   if !has('win32') && executable('ps')
-    return trim(system('ps -o lstart= -p ' . a:pid . ' 2>/dev/null'))
+    return trim(gnosis#sh#system('ps -o lstart= -p ' . a:pid . ' 2>/dev/null'))
   endif
   return ''
 endfunction
@@ -121,7 +121,7 @@ function! s:write_self(root) abort
   let l:e = {'pid': getpid(), 'start': s:proc_start(getpid()), 'vault': s:norm(a:root), 'time': localtime()}
   let l:f = s:file(a:root, getpid())
   let l:tmp = l:f . '.tmp'
-  call writefile([json_encode(l:e)], l:tmp)
+  call writefile([json_encode(l:e)], l:tmp, 'S')
   call rename(l:tmp, l:f)
 endfunction
 

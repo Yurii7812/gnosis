@@ -29,7 +29,7 @@ function! gnosis#folgezettel#move(direction) abort
   endif
   call gnosis#save_current_note()
   if &modified | return | endif
-  let l:out = system(gnosis#python_cmd() . ' ' . shellescape(s:script)
+  let l:out = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:script)
         \ . ' move ' . shellescape(l:root) . ' ' . shellescape(expand('%:p'))
         \ . ' ' . shellescape(a:direction))
   try

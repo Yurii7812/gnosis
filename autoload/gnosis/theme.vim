@@ -65,8 +65,8 @@ function! gnosis#theme#install(spec) abort
   if !isdirectory(l:dir)
     call gnosis#home#init()
     let l:url = 'https://github.com/' . l:repo . '.git'
-    let l:out = system('git clone --depth 1 -- ' . shellescape(l:url) . ' ' . shellescape(l:dir))
-    if v:shell_error != 0 || !isdirectory(l:dir)
+    let l:out = gnosis#sh#system('git clone --depth 1 -- ' . shellescape(l:url) . ' ' . shellescape(l:dir))
+    if gnosis#sh#error() != 0 || !isdirectory(l:dir)
       call delete(l:dir, 'rf')
       return {'ok': 0, 'repo': l:repo, 'message': gnosis#i18n#t('theme.clone_failed', l:repo, trim(l:out)), 'colorschemes': []}
     endif

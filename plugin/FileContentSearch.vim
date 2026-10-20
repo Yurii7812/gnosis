@@ -2,7 +2,7 @@ command! -nargs=+ FileContentSearch call s:file_content_search(<q-args>)
 
 function! s:file_content_search(query) abort
   let tokens = split(tolower(a:query))
-  let files = systemlist(['rg', '--files'])
+  let files = gnosis#sh#systemlist(['rg', '--files'])
   let items = []
 
   for f in files

@@ -145,7 +145,7 @@ function! s:run_sync(args_list) abort
   for a in a:args_list
     let l:cmd .= ' ' . shellescape(a)
   endfor
-  return system(l:cmd)
+  return gnosis#sh#system(l:cmd)
 endfunction
 
 " ---------------------------------------------------------------------------
@@ -418,7 +418,7 @@ function! s:outline_fzf(items, path, sink, none) abort
   let l:py = shellescape(s:note_root . '/python/outline_pick.py')
   let l:filter = gnosis#python_cmd() . ' ' . l:py . ' filter ' . shellescape(l:tsv) . ' {q}'
   call fzf#run(fzf#wrap({
-        \ 'source': systemlist(gnosis#python_cmd() . ' ' . l:py . ' filter ' . shellescape(l:tsv) . ' ""'),
+        \ 'source': gnosis#sh#systemlist(gnosis#python_cmd() . ' ' . l:py . ' filter ' . shellescape(l:tsv) . ' ""'),
         \ 'sink': a:sink,
         \ 'options': '--delimiter="\t" --with-nth=1 --no-multi --disabled --ansi'
         \   . ' --bind ' . shellescape('change:reload:' . l:filter . ' || true')
@@ -1020,14 +1020,14 @@ function! s:pid_alive(pid) abort
   if a:pid <= 0
     return 0
   endif
-  " Linux は /proc で見る。system('kill -0 …') は一瞬端末を cooked モードへ
+  " Linux は /proc で見る。gnosis#sh#system('kill -0 …') は一瞬端末を cooked モードへ
   " 戻すため、Vim 起動直後に走ると端末応答（DA2/OSC 10,11/CPR）が画面へ生
   " エコーされる（ロックの掃除は VimEnter で必ず走る）。/proc が無ければ従来通り。
   if isdirectory('/proc')
     return isdirectory('/proc/' . a:pid)
   endif
-  call system('kill -0 ' . a:pid . ' 2>/dev/null')
-  return v:shell_error == 0
+  call gnosis#sh#system('kill -0 ' . a:pid . ' 2>/dev/null')
+  return gnosis#sh#error() == 0
 endfunction
 
 function! gnosis#lock_add(path) abort
@@ -2738,6 +2738,16 @@ function! s:in_up_section(lnum) abort
   return 0
 endfunction
 
+" a:lnum が「名前:」の見出し（ParentBranch: / ChildBranch: / BranchGroup: など）の下に並んだリンクの行か。
+" そこから開いたときは、開いた先で戻りのリンクの上にカーソルを置く（- [x] の行でもリンクの先頭へ）。
+function! s:in_relation_block(lnum) abort
+  let l:l = a:lnum
+  while l:l >= 1 && getline(l:l) =~# '^\s*\[.*\](.*)\s*$'
+    let l:l -= 1
+  endwhile
+  return l:l >= 1 && l:l < a:lnum && getline(l:l) =~# '^\%(ParentBranch\|ChildBranch\|BranchGroup\|Group\|Context\|Related\|BackLink\):\s*$'
+endfunction
+
 function! s:find_reciprocal_link_pos(target_path, source_name) abort
   if !filereadable(a:target_path)
     return [0, 0]
@@ -2938,6 +2948,19 @@ function! gnosis#toggle_link_source() abort
     let b:gnosis_link_source_saved = [&l:conceallevel, &l:concealcursor]
     setlocal conceallevel=0 concealcursor=
     echo 'Gnosis: ' . gnosis#i18n#t('link.source_shown')
+  endif
+endfunction
+
+" 挿入モードで行末の直前が隠れた文字（リンクの ](…)）なら、その行だけ展開する（concealcursor から i を外す）。
+" Vim は隠れた文字の後ろの行末に、隠す前の位置でカーソルを描くため、右に空白が続いて見える。
+function! gnosis#conceal_eol_fix() abort
+  if &l:conceallevel == 0
+    return
+  endif
+  let l:c = col('.')
+  let l:want = l:c > 1 && l:c > strlen(getline('.')) && synconcealed(line('.'), l:c - 1)[0] ? 'nv' : 'nvi'
+  if &l:concealcursor !=# l:want
+    let &l:concealcursor = l:want
   endif
 endfunction
 
@@ -3681,7 +3704,7 @@ function! s:rlp_build_index() abort
   let l:idx = get(g:, 'gnosis_search_index', '')
   let s:rlp_cands = []
   if !empty(l:idx) && filereadable(l:idx) && gnosis#has_python()
-    for l:ln in systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
+    for l:ln in gnosis#sh#systemlist(gnosis#python_cmd() . ' ' . shellescape(l:idx) . ' ' . shellescape(l:root))
       let l:f = split(l:ln, "\t", 1)
       if len(l:f) >= 2
         call add(s:rlp_cands, {'p': l:f[0], 't': l:f[1], 'b': get(l:f, 2, '')})
@@ -4985,7 +5008,7 @@ endfunction
 
 function! s:run_clip_cmd(cmd) abort
   try
-    return trim(system('timeout 1 ' . join(map(copy(a:cmd), 'shellescape(v:val)'), ' ')))
+    return trim(gnosis#sh#system('timeout 1 ' . join(map(copy(a:cmd), 'shellescape(v:val)'), ' ')))
   catch
     return ''
   endtry
@@ -5569,7 +5592,7 @@ function! gnosis#capture_import(...) abort
         call add(l:made, [l:it.id, l:it.file])
         if l:it.topic ==# '日記'
           if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
-          call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:it.title) . '](' . l:it.file . ')'])
+          call add(l:diary_lines[l:it.date], [s:hm_prefix(l:it.hm) . '[' . s:md_link_text(l:it.title) . '](' . l:it.file . ')'])
         elseif get(l:it, 'record', 0)
           call add(s:capture_record_bucket(l:record_lines, l:it), {'hm': l:it.hm, 'lines': ['[' . s:md_link_text(l:it.title) . '](' . l:it.file . ')']})
         elseif get(l:it, 'single', 0)
@@ -5608,7 +5631,7 @@ function! gnosis#capture_import(...) abort
       call add(l:made, [l:it.id, l:name])
       if l:it.topic ==# '日記'
         if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
-        call add(l:diary_lines[l:it.date], [l:it.hm . ' [' . s:md_link_text(l:title) . '](' . l:name . ')'])
+        call add(l:diary_lines[l:it.date], [s:hm_prefix(l:it.hm) . '[' . s:md_link_text(l:title) . '](' . l:name . ')'])
       elseif get(l:it, 'record', 0)
         call add(s:capture_record_bucket(l:record_lines, l:it), {'hm': l:it.hm, 'lines': ['[' . s:md_link_text(l:title) . '](' . l:name . ')']})
       elseif get(l:it, 'single', 0)
@@ -5630,7 +5653,7 @@ function! gnosis#capture_import(...) abort
       call add(l:made, [l:it.id, '(topic:' . l:it.topic . ')'])
     else
       let l:body = split(l:it.text, "\n", 1)
-      let l:body[0] = l:it.hm . ' ' . l:body[0]
+      let l:body[0] = s:hm_prefix(l:it.hm) . l:body[0]
       if !has_key(l:diary_lines, l:it.date) | let l:diary_lines[l:it.date] = [] | endif
       call add(l:diary_lines[l:it.date], l:body + l:img)
       call add(l:made, [l:it.id, '(diary:' . l:it.date . ')'])
@@ -5769,6 +5792,11 @@ function! s:capture_rel_lines(it, titles, ...) abort
 endfunction
 
 " 日記（a:date）の本文の最後（「今日のノート」の節の前）に、時刻つきのブロックを足す。日記が無ければ作る。
+" 取り込んだメモの行の頭の「HH:MM 」。スマホで「時刻を入れない」で書いたもの（hm が空）は何も付けない
+function! s:hm_prefix(hm) abort
+  return empty(a:hm) ? '' : a:hm . ' '
+endfunction
+
 function! s:capture_record_bucket(lines, it) abort
   let l:k = a:it.topic . "\t" . a:it.date
   if !has_key(a:lines, l:k) | let a:lines[l:k] = [] | endif
@@ -5832,7 +5860,7 @@ function! s:capture_record_append(root, kind, date, blocks) abort
     while len(l:body) > 1 && trim(l:body[-1]) ==# ''
       call remove(l:body, -1)
     endwhile
-    let l:body[0] = l:b.hm . ' ' . l:body[0]
+    let l:body[0] = s:hm_prefix(l:b.hm) . l:body[0]
     call add(l:blocks, {'hm': l:b.hm, 'lines': l:body})
   endfor
   call s:record_insert_blocks(l:head, l:blocks)
@@ -5923,7 +5951,7 @@ function! s:capture_topic_append(root, topic, blocks) abort
         call extend(l:head, ['', l:day])
         let l:last_day = l:day
       endif
-      let l:body[0] = l:b.hm . ' ' . l:body[0]
+      let l:body[0] = s:hm_prefix(l:b.hm) . l:body[0]
     endif
     if get(l:b, 'section', 0)
       call s:capture_drop_closer(l:head)
@@ -6066,8 +6094,8 @@ function! gnosis#orphans_open() abort
     return
   endif
   let l:py = s:note_root . '/python/orphans.py'
-  let l:out = systemlist(join(map([gnosis#python_cmd(), l:py, l:root], 'shellescape(v:val)'), ' '))
-  if v:shell_error != 0
+  let l:out = gnosis#sh#systemlist(join(map([gnosis#python_cmd(), l:py, l:root], 'shellescape(v:val)'), ' '))
+  if gnosis#sh#error() != 0
     echohl WarningMsg | echo 'Gnosis: orphans: ' . join(l:out, ' ') | echohl NONE
     return
   endif
@@ -6443,7 +6471,7 @@ function! gnosis#open_link_under_cursor() abort
   endif
   let l:source_name = expand('%:t')
   let l:from_back = s:in_back_section(line('.'))
-  let l:from_up = s:in_up_section(line('.'))
+  let l:from_up = s:in_up_section(line('.')) || s:in_relation_block(line('.'))
   if get(g:, 'gnosis_sync_before_link_navigation', 0)
     call s:write_current_and_sync_now()
   elseif get(g:, 'gnosis_save_before_link_navigation', 0) && &modified && &buftype ==# '' && &modifiable
@@ -7395,8 +7423,8 @@ function! gnosis#v2_expand() abort
           \ l:st.body, l:st.context, l:st.group, l:st.br, l:st.diary]
   endif
 
-  let l:out = systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
-  if v:shell_error != 0 || empty(l:out)
+  let l:out = gnosis#sh#systemlist(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
+  if gnosis#sh#error() != 0 || empty(l:out)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 展開に失敗: ') . join(l:out, ' ') | echohl NONE
     return
   endif
@@ -7433,8 +7461,8 @@ endfunction
 
 " 詳細モードの前回設定を取得する。無ければ空 dict
 function! s:v2_expand_prefs(root, py) abort
-  let l:out = systemlist(join(map([s:python_cmd(), a:py, 'get_prefs', a:root], 'shellescape(v:val)'), ' '))
-  if v:shell_error != 0 || empty(l:out)
+  let l:out = gnosis#sh#systemlist(join(map([s:python_cmd(), a:py, 'get_prefs', a:root], 'shellescape(v:val)'), ' '))
+  if gnosis#sh#error() != 0 || empty(l:out)
     return {}
   endif
   return s:v2_expand_parse(l:out[0])
@@ -7442,9 +7470,9 @@ endfunction
 
 " プリセット一覧: [{name, st}]（名前順）
 function! s:v2_expand_presets(root, py) abort
-  let l:out = systemlist(join(map([s:python_cmd(), a:py, 'presets_list', a:root], 'shellescape(v:val)'), ' '))
+  let l:out = gnosis#sh#systemlist(join(map([s:python_cmd(), a:py, 'presets_list', a:root], 'shellescape(v:val)'), ' '))
   let l:res = []
-  if v:shell_error != 0 | return l:res | endif
+  if gnosis#sh#error() != 0 | return l:res | endif
   for l:ln in l:out
     let l:f = split(l:ln, "\t", 1)
     if len(l:f) != 2 | continue | endif
@@ -7477,8 +7505,8 @@ function! s:v2_expand_save_preset(root, py, st) abort
   if empty(l:name) | echo gnosis#i18n#tr('Gnosis: 保存しない') | return 0 | endif
   let l:base = [s:python_cmd(), a:py, 'preset_save', a:root, l:name,
         \ a:st.body, a:st.context, a:st.group, a:st.br, a:st.diary]
-  let l:out = systemlist(join(map(copy(l:base), 'shellescape(v:val)'), ' '))
-  if v:shell_error != 0
+  let l:out = gnosis#sh#systemlist(join(map(copy(l:base), 'shellescape(v:val)'), ' '))
+  if gnosis#sh#error() != 0
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: プリセットを保存できません: ') . join(l:out, ' ') | echohl NONE
     return 0
   endif
@@ -7487,7 +7515,7 @@ function! s:v2_expand_save_preset(root, py, st) abort
       echo gnosis#i18n#tr('Gnosis: 上書きしない（保存しない）')
       return 0
     endif
-    call systemlist(join(map(l:base + ['overwrite'], 'shellescape(v:val)'), ' '))
+    call gnosis#sh#systemlist(join(map(l:base + ['overwrite'], 'shellescape(v:val)'), ' '))
   endif
   echo gnosis#i18n#tr('Gnosis: プリセット「') . l:name . gnosis#i18n#tr('」を保存した')
   return 1
@@ -7543,7 +7571,7 @@ function! s:v2_expand_detail_settings(root, py) abort
       let l:p = s:v2_expand_choose_preset(gnosis#i18n#tr('削除するプリセット'), l:presets)
       if empty(l:p) | return {} | endif
       if confirm(gnosis#i18n#tr('プリセット「') . l:p.name . gnosis#i18n#tr('」を削除しますか？（ノートは消えません）'), "&Yes\n&No", 2) == 1
-        call systemlist(join(map([s:python_cmd(), a:py, 'preset_delete', a:root, l:p.name], 'shellescape(v:val)'), ' '))
+        call gnosis#sh#systemlist(join(map([s:python_cmd(), a:py, 'preset_delete', a:root, l:p.name], 'shellescape(v:val)'), ' '))
         echo gnosis#i18n#tr('Gnosis: プリセット「') . l:p.name . gnosis#i18n#tr('」を削除した')
       endif
       " メニューに戻る
@@ -8449,6 +8477,12 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ts  = get(l:opt, 'ts', '')
   if empty(l:ts)
     let l:ts = gnosis#timestamp_filename()
+    " 同じ秒の名前がもうあれば（日記を作るときは先の秒の名前も使う）、空いている次の秒にする
+    let l:k = 1
+    while filereadable(s:join_path(l:dir, l:ts . '.md')) && l:k < 600
+      let l:ts = strftime('%y%m%d%H%M%S', localtime() + l:k)
+      let l:k += 1
+    endwhile
   endif
   let l:file = s:join_path(l:dir, l:ts . '.md')
   let l:place = get(l:opt, 'place', {})
@@ -8587,8 +8621,8 @@ endfunction
 "   質問（置き場所・見出し）はすべて変更の前に行う。Esc（見出し選択の取り消しを含む）なら何も変えない。
 " ---------------------------------------------------------------------------
 function! s:c_ask_place(Cont) abort
-  echo s:fit_prompt(gnosis#i18n#tr('今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / w=置かずにリンク先をヤンク  (Esc で取り消し)'),
-        \ gnosis#i18n#tr('置き場所: Enter=末 t=見出し h=直下 w=ヤンク (Esc)'))
+  echo s:fit_prompt(gnosis#i18n#tr('今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / i=行の中 / o=置かない / w=置かずにリンク先をヤンク  (Esc で取り消し)'),
+        \ gnosis#i18n#tr('置き場所: Enter=末 t=見出し h=直下 i=行中 o=なし w=ヤンク (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
@@ -8597,6 +8631,11 @@ function! s:c_ask_place(Cont) abort
     call s:outline_pick_here(function('s:c_place_head', [a:Cont]))
   elseif l:ch ==# 'h'
     call a:Cont({'mode': 'here'})
+  elseif l:ch ==# 'i'
+    " i: \l を押したときのカーソルの文字のすぐ後ろ（za なら今のカーソル）
+    call a:Cont({'mode': 'inline', 'pos': empty(s:inline_pos) ? getpos('.') : copy(s:inline_pos)})
+  elseif l:ch ==# 'o'
+    call a:Cont({'mode': 'none'})
   elseif l:ch ==# 'w'
     call a:Cont({'mode': 'w'})
   else
@@ -8628,8 +8667,21 @@ function! s:place_link_in_a(place, links) abort
   elseif l:mode ==# 'here'
     let [l:at, l:blank] = s:h_insert_at()
     call append(l:at, (l:blank ? [''] : []) + l:links)
+  elseif l:mode ==# 'inline'
+    call s:insert_inline_at(a:place.pos, join(l:links, ' '))
+  else
+    return 0
   endif
   return 1
+endfunction
+
+" a:pos（getpos の形）の文字のすぐ後ろ（空の行なら行頭）に a:text を入れ、カーソルをその最後に置く
+function! s:insert_inline_at(pos, text) abort
+  call cursor(a:pos[1], a:pos[2])
+  let l:cur = getline('.')
+  let l:col = empty(l:cur) ? 0 : col('.') - 1 + len(matchstr(l:cur[col('.') - 1 :], '^.'))
+  call setline('.', strpart(l:cur, 0, l:col) . a:text . strpart(l:cur, l:col))
+  call cursor(line('.'), l:col + strlen(a:text))
 endfunction
 
 " yn（今のファイル名をヤンク）と同じ方法で、a:paths のファイル名をヤンクする（無名レジスタとクリップボード）。
@@ -8727,7 +8779,7 @@ function! s:save_member_yomis(plan) abort
     call add(l:tsv, l:p.abs . "\t" . l:p.name . "\t" . l:p.yomi)
   endfor
   if !empty(l:tsv)
-    call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
+    call gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
   endif
   " よみを書いたノートを開いていれば読み直す（更新時刻が同じ秒だと checktime は気づかない）
   for l:p in a:plan
@@ -9016,9 +9068,9 @@ function! s:sort_group_lines_by_yomi(lines, base_dir) abort
   let l:report = tempname()
   let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --dry-run --base ' . shellescape(a:base_dir)
         \ . ' --report-file ' . shellescape(l:report)
-  let l:out = system(l:cmd, join(l:block, "\n") . "\n")
+  let l:out = gnosis#sh#system(l:cmd, join(l:block, "\n") . "\n")
   call delete(l:report)
-  if v:shell_error != 0
+  if gnosis#sh#error() != 0
     return a:lines
   endif
   let l:new = split(l:out, "\n", 1)
@@ -9044,7 +9096,7 @@ function! gnosis#v2_migrate(...) abort
   if a:0 > 0 && a:1 !=# ''
     call add(l:args, a:1 ==# '%' ? expand('%:p') : a:1)
   endif
-  echo system(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
+  echo gnosis#sh#system(join(map(copy(l:args), 'shellescape(v:val)'), ' '))
   silent! edit
 endfunction
 
@@ -9216,7 +9268,7 @@ function! gnosis#update_md(arg) abort
     call gnosis#save_current_note()
   endif
   let l:out = s:run_sync([g:gnosis_python, 'update', l:root])
-  if v:shell_error
+  if gnosis#sh#error()
     echoerr substitute(l:out, '\n\+$', '', '')
     return
   endif
@@ -9292,11 +9344,13 @@ function! s:sort_index_async(root, ...) abort
   let l:in = tempname()
   let l:out = tempname()
   let l:rep = tempname()
-  call writefile(l:lines, l:in)
+  " 頭文字の見出し（あ など）は外して並べ、並べたあとで付け直す
+  call writefile(s:strip_kana_heads(l:lines), l:in)
   let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:script)
         \ . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
         \ . ' --report-file ' . shellescape(l:rep)
-        \ . ' < ' . shellescape(l:in) . ' > ' . shellescape(l:out)
+        \ . ' < ' . shellescape(l:in) . ' | ' . s:python_cmd() . ' ' . shellescape(l:script)
+        \ . ' heads --base ' . shellescape(fnamemodify(a:root, ':p')) . ' > ' . shellescape(l:out)
   call job_start(gnosis#shell_job(l:cmd), {
         \ 'exit_cb': function('s:sort_index_done', [l:index, l:lines, l:in, l:out, l:rep, l:notify]),
         \ 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
@@ -9328,7 +9382,7 @@ function! s:sort_index_done(index, lines, in, out, rep, notify, job, status) abo
     call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了（index に未保存の変更があるため並べ替えは省略）'))
     return
   endif
-  if len(l:new) != len(a:lines) || l:new ==# a:lines
+  if l:new ==# a:lines
     call s:ua_notify(a:notify, gnosis#i18n#tr('Gnosis: UpdateAll 完了'))
     return
   endif
@@ -9343,7 +9397,7 @@ function! s:update_all_sync(arg) abort
   let l:root = s:get_pkm_root()
   let l:paper = s:paper_pkm_script()
   if !empty(l:root) && !empty(s:paper_index_path(l:root)) && filereadable(l:paper)
-    call system(s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:paper) . ' regen ' . shellescape(l:root))
+    call gnosis#sh#system(s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:paper) . ' regen ' . shellescape(l:root))
     checktime
   endif
   if !empty(l:root)
@@ -9364,16 +9418,17 @@ function! s:sort_index_file(root) abort
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: index.md に未保存の変更があるため並べ替えを省略しました') | echohl NONE
     return
   endif
-  let l:lines = readfile(l:index)
+  let l:orig = readfile(l:index)
+  let l:lines = s:strip_kana_heads(l:orig)
   if empty(l:lines)
     return
   endif
   let l:report = tempname()
   let l:cmd = s:low_priority_prefix() . s:python_cmd() . ' ' . shellescape(l:script) . ' sort --base ' . shellescape(fnamemodify(a:root, ':p'))
         \ . ' --report-file ' . shellescape(l:report)
-  let l:out = system(l:cmd, join(l:lines, "\n") . "\n")
+  let l:out = gnosis#sh#system(l:cmd, join(l:lines, "\n") . "\n")
   call delete(l:report)
-  if v:shell_error != 0
+  if gnosis#sh#error() != 0
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: index.md のよみソートに失敗しました（pykakasi 未導入?）') | echohl NONE
     return
   endif
@@ -9381,7 +9436,11 @@ function! s:sort_index_file(root) abort
   if !empty(l:new) && l:new[-1] ==# ''
     call remove(l:new, -1)
   endif
-  if len(l:new) != len(l:lines) || l:new ==# l:lines
+  if len(l:new) != len(l:lines)
+    return
+  endif
+  let l:new = s:add_kana_heads(l:new, fnamemodify(a:root, ':p'))
+  if l:new ==# l:orig
     return
   endif
   call writefile(l:new, l:index)
@@ -9457,7 +9516,7 @@ endfunction
 " Auto-sync: BufWritePost で update_one を非同期実行
 "
 "   - 保存後に動くので編集を妨げない
-"   - job_start が使えれば完全非同期、なければ system() でフォールバック
+"   - job_start が使えれば完全非同期、なければ gnosis#sh#system() でフォールバック
 "   - 完了後 checktime で Vim バッファを更新
 " ---------------------------------------------------------------------------
 
@@ -9551,7 +9610,7 @@ function! gnosis#autosync_on_save() abort
               \ 'err_io':  'null',
               \ })
       else
-        call system(l:pcmd)
+        call gnosis#sh#system(l:pcmd)
         checktime
       endif
       return
@@ -9584,8 +9643,8 @@ function! gnosis#autosync_on_save() abort
   else
     " 同期フォールバック
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
-    let l:out = system(l:cmd)
-    if !v:shell_error
+    let l:out = gnosis#sh#system(l:cmd)
+    if !gnosis#sh#error()
       checktime
     endif
   endif
@@ -9630,8 +9689,8 @@ function! s:reparent_down_children_for_sync(new_parent_fp, old_parent_fp) abort
         \ . ' reparent_down_children ' . shellescape(a:new_parent_fp)
         \ . ' ' . shellescape(a:old_parent_fp)
         \ . ' ' . shellescape(l:root)
-  let l:out = system(l:cmd)
-  if v:shell_error
+  let l:out = gnosis#sh#system(l:cmd)
+  if gnosis#sh#error()
     echoerr substitute(l:out, '\n\+$', '', '')
     return
   endif
@@ -9648,7 +9707,7 @@ function! s:run_update_one_for(target_fp) abort
           \ 'err_io':  'null',
           \ })
   else
-    call system(l:cmd)
+    call gnosis#sh#system(l:cmd)
     checktime
   endif
 endfunction
@@ -9657,8 +9716,8 @@ function! s:run_update_one_for_sync(target_fp, ...) abort
   let l:force = a:0 > 0 ? a:1 : 0
   let l:cmd = s:update_one_command(a:target_fp, l:force)
   if empty(l:cmd) | return | endif
-  let l:out = system(l:cmd)
-  if v:shell_error
+  let l:out = gnosis#sh#system(l:cmd)
+  if gnosis#sh#error()
     echoerr substitute(l:out, '\n\+$', '', '')
     return
   endif
@@ -9737,7 +9796,7 @@ function! s:run_retitle_links_for_title_change(target_fp, old_title, new_title) 
           \ 'err_io':  'null',
           \ })
   else
-    call system(l:cmd)
+    call gnosis#sh#system(l:cmd)
     checktime
   endif
 endfunction
@@ -10867,6 +10926,16 @@ function! s:insert_links_core(links, ...) abort
           \ {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, l:Done]))
     return -1
   endif
+  if l:ch ==# 'a'
+    " a: c の逆向き。今のノート（A）の Context: に選んだノート（B）を入れる。続けて、B のどこに A へのリンクを置くかを選ぶ。
+    let l:bs = s:c_targets(l:links)
+    if empty(l:bs)
+      return 0
+    endif
+    call s:a_mode_chain(l:bs, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()},
+          \ a:0 > 0 ? a:1 : function('s:noop'))
+    return -1
+  endif
   if l:ch ==# 'g' && l:can_g
     " g: 選んだノート（グループ）に、今のノートを入れる。選んだノートの本文に今のノートへのリンクが入り、
     " 今のノートの Group: に選んだノートが出る（表示名は空欄から聞く。空 Enter = 今のノートのタイトル）。
@@ -10880,13 +10949,7 @@ function! s:insert_links_core(links, ...) abort
   if l:ch ==# 'i'
     " i: 行の中へそのまま入れる（\l を開いたときのカーソル位置。za ならいまのカーソル位置）。
     " カーソルの文字のすぐ後ろ（空の行なら行頭）に入れる。関係（Context・Branch など）は何も付けない
-    let l:pos = empty(s:inline_pos) ? getpos('.') : s:inline_pos
-    call cursor(l:pos[1], l:pos[2])
-    let l:text = join(l:links, ' ')
-    let l:cur = getline('.')
-    let l:col = empty(l:cur) ? 0 : col('.') - 1 + len(matchstr(l:cur[col('.') - 1 :], '^.'))
-    call setline('.', strpart(l:cur, 0, l:col) . l:text . strpart(l:cur, l:col))
-    call cursor(line('.'), l:col + strlen(l:text))
+    call s:insert_inline_at(empty(s:inline_pos) ? getpos('.') : s:inline_pos, join(l:links, ' '))
     return 1
   endif
   if l:ch ==# 'h'
@@ -10955,16 +11018,24 @@ function! s:c_links_apply(bs, a, Done, place) abort
   if bufnr('%') != a:a.buf && bufexists(a:a.buf)
     execute 'silent! buffer ' . a:a.buf
   endif
+  " A の未保存の変更は先に書く（このあと親を付けると A の ChildBranch: もファイルで書き換わる）
+  if &modified && &buftype ==# ''
+    call gnosis#conflict#safe_update()
+  endif
   for l:b in a:bs
     call s:simple_add_parent(l:b.path, a:a.path, a:a.title)
   endfor
   " 親（Branch）がまだ無い B は、最初の Context（グループでないノート）を親にする（スマホのメモと同じ）。親があれば何もしない
   call gnosis#branch#context_parent(map(copy(a:bs), 'v:val.path'))
+  if !&modified && s:disk_differs_from_buffer(a:a.path)
+    call s:reload_by_edit(a:a.path)
+  endif
   call s:place_link_in_a(a:place, map(copy(a:bs), 'v:val.link'))
-  if get(a:place, 'mode', '') ==# 'w'
+  let l:mode = get(a:place, 'mode', '')
+  if l:mode ==# 'w'
     " w: A には自動で置かない。B を yn と同じ方法でヤンクする（A は開いたまま）
     call s:yank_like_yn(map(copy(a:bs), 'v:val.path'))
-  else
+  elseif l:mode ==# 'end' || l:mode ==# 'head' || l:mode ==# 'here'
     call s:ensure_blank_before_up()
   endif
   call a:Done()
@@ -11108,11 +11179,11 @@ function! gnosis#insert_prompt_text(has_t, has_g, ...) abort
   let l:has_m = a:0 && a:1
   let l:full = (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=このグループに入る / ') : '')
-        \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / r=Related(相互)')
+        \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / a=Context(今のノートにリンク先) / r=Related(相互)')
         \ . (l:has_m ? gnosis#i18n#tr(' / m=マージ') : '') . '  (Esc)'
   let l:compact = (a:has_t ? gnosis#i18n#tr('t=節 ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=所属 ') : '')
-        \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=Context r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
+        \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=相手Ctx a=自分Ctx r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
 
@@ -11409,16 +11480,43 @@ function! s:group_members(path, lines) abort
 endfunction
 
 " グループのファイルを、メンバーのよみ順に並べて書き戻す（推測のよみは保存しない）。
+" グループ（Index を含む）の頭文字の見出し（「あ」「か」「A」「0-9」「その他」だけの行）。リンクが 30 本以上の
+" ときに並べ替えのあとで付け直す（python/japanese_yomi.py の kana_heads）。並べ替えの前には外しておく
+" （見出しがあるとリンクの並びが途切れ、最後のかたまりしか並べ替わらないため）
+let s:kana_head_pat = '^\%([ぁ-ゖ]\|[A-Z]\|0-9\|その他\)$'
+
+function! s:strip_kana_heads(lines) abort
+  let l:out = []
+  let l:fence = 0
+  for l:ln in a:lines
+    if l:ln =~# '^\s\{0,3}\(```\|\~\~\~\)'
+      let l:fence = !l:fence
+    endif
+    if !l:fence && trim(l:ln) =~# s:kana_head_pat
+      continue
+    endif
+    call add(l:out, l:ln)
+  endfor
+  return l:out
+endfunction
+
+function! s:add_kana_heads(lines, base_dir) abort
+  let l:out = gnosis#sh#systemlist(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' heads --base ' . shellescape(a:base_dir),
+        \ join(a:lines, "\n") . "\n")
+  return gnosis#sh#error() == 0 && !empty(l:out) ? l:out : a:lines
+endfunction
+
 function! s:sort_group_file(path) abort
-  let l:lines = readfile(a:path)
+  let l:orig = readfile(a:path)
+  let l:lines = s:strip_kana_heads(l:orig)
   if fnamemodify(a:path, ':t') ==# 'index.md'
     let l:idx = s:group_member_idx(l:lines, 1)
     let l:new = copy(l:lines)
     if len(l:idx) > 1
       let l:block = map(copy(l:idx), 'l:lines[v:val]')
       let l:cmd = s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' sort --dry-run --base ' . shellescape(fnamemodify(a:path, ':h'))
-      let l:out = split(system(l:cmd, join(l:block, "\n") . "\n"), "\n")
-      if v:shell_error == 0 && len(l:out) == len(l:block)
+      let l:out = split(gnosis#sh#system(l:cmd, join(l:block, "\n") . "\n"), "\n")
+      if gnosis#sh#error() == 0 && len(l:out) == len(l:block)
         for l:k in range(len(l:idx))
           let l:new[l:idx[l:k]] = l:out[l:k]
         endfor
@@ -11427,7 +11525,8 @@ function! s:sort_group_file(path) abort
   else
     let l:new = s:sort_group_lines_by_yomi(l:lines, fnamemodify(a:path, ':h'))
   endif
-  if l:new !=# l:lines
+  let l:new = s:add_kana_heads(l:new, fnamemodify(a:path, ':h'))
+  if l:new !=# l:orig
     call s:syn_writefile(l:new, a:path)
   endif
 endfunction
@@ -11438,8 +11537,8 @@ function! s:review_readings(group, members) abort
   endif
   let l:in = join(map(copy(a:members), '"[" . v:val.name . "](" . v:val.abs . ")"'), "\n") . "\n"
   let l:cmd = s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' readings --base ' . shellescape(fnamemodify(a:group, ':h'))
-  let l:out = split(system(l:cmd, l:in), "\n")
-  if v:shell_error != 0 || len(l:out) != len(a:members)
+  let l:out = split(gnosis#sh#system(l:cmd, l:in), "\n")
+  if gnosis#sh#error() != 0 || len(l:out) != len(a:members)
     return map(copy(a:members), '[0, v:val.name]')
   endif
   return map(l:out, '[str2nr(matchstr(v:val, "^\\d")), matchstr(v:val, "\\t\\zs.*")]')
@@ -11461,7 +11560,7 @@ function! s:ask_new_member_yomi(group, note, name) abort
   if l:r ==# "\x01" || empty(trim(l:r))
     return
   endif
-  call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany',
+  call gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany',
         \ fnamemodify(a:note, ':p') . "\t" . a:name . "\t" . trim(l:r) . "\n")
 endfunction
 
@@ -11625,7 +11724,7 @@ function! gnosis#review_commit() abort
     if bufnr('%') != l:here
       silent! execute 'buffer ' . l:here
     endif
-    call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
+    call gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
   endif
   call s:sort_group_file(l:st.group)
   call s:review_close()
@@ -11753,7 +11852,10 @@ endfunction
 
 function! s:links_added_done() abort
   call s:realtime_sync_apply()
-  silent write
+  " 保存の後の同期がこのノートを書き換えていても、確認で止まらないように（自分の同期の分は取り込んで書く）
+  if &modified && &buftype ==# ''
+    call gnosis#conflict#safe_update()
+  endif
 endfunction
 
 " zA: za と同じだが、追加前に「表示名」を 1 つ入力する（既定は za が使う表示名。
@@ -11823,52 +11925,60 @@ endfunction
 function! s:noop(...) abort
 endfunction
 
-" za / \l の c: リンクごとに相手側の入れ方を聞き（非同期の見出し選択を含む）、全部そろったら書く
-function! s:c_mode_chain(links, idx, choices, a, Done) abort
-  if a:idx >= len(a:links)
-    call s:c_mode_apply(a:links, a:choices, a:a, a:Done)
+" za / \l の a（c の逆向き）: 今のノート（A）の Context: に選んだノート（B）を入れる。B ごとに、B のどこに
+" A へのリンクを置くかを聞き（Enter=本文の最後 / t=見出しの下 / w=A へのリンクをヤンクして B を開く /
+" o=置かない。見出しの選択は非同期）、全部そろってから書く（Esc で取り消すと何も変わらない）。
+function! s:a_mode_chain(bs, idx, choices, a, Done) abort
+  if a:idx >= len(a:bs)
+    call s:a_mode_apply(a:bs, a:choices, a:a, a:Done)
     return
   endif
-  let l:lk = a:links[a:idx]
-  let l:tgt = gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
-  let l:lines = filereadable(l:tgt) ? readfile(l:tgt) : []
-  let l:is_group = filereadable(l:tgt) && s:v2_path_attr(l:tgt) ==# 'group'
-  call s:ask_back_link(l:tgt, l:lines, l:is_group, a:a.title,
-        \ function('s:c_mode_next', [a:links, a:idx, a:choices, a:a, a:Done]))
+  let l:tgt = a:bs[a:idx].path
+  call s:ask_back_link(l:tgt, readfile(l:tgt), s:v2_path_attr(l:tgt) ==# 'group', a:a.title,
+        \ function('s:a_mode_next', [a:bs, a:idx, a:choices, a:a, a:Done]))
 endfunction
 
-function! s:c_mode_next(links, idx, choices, a, Done, choice) abort
-  call s:c_mode_chain(a:links, a:idx + 1, a:choices + [a:choice], a:a, a:Done)
+function! s:a_mode_next(bs, idx, choices, a, Done, choice) abort
+  call s:a_mode_chain(a:bs, a:idx + 1, a:choices + [a:choice], a:a, a:Done)
 endfunction
 
-function! s:c_mode_apply(links, choices, a, Done) abort
+function! s:a_mode_apply(bs, choices, a, Done) abort
   if bufnr('%') != a:a.buf && bufexists(a:a.buf)
     execute 'silent! buffer ' . a:a.buf
   endif
+  let l:dir = fnamemodify(a:a.path, ':h')
+  let l:lines = getline(1, '$')
   let l:added = 0
-  for l:i in range(len(a:links))
-    let l:lk = a:links[l:i]
-    if !s:append_link_to_buffer_section('up', l:lk)
-      continue
+  for l:b in a:bs
+    let l:r = gnosis#context#add(l:lines, l:b.link, l:dir)
+    if l:r.added
+      let l:lines = l:r.lines
+      let l:added += 1
     endif
-    let l:added += 1
-    call s:realtime_sync_apply()
-    silent write
-    let l:tgt = gnosis#resolve_link(substitute(s:extract_target(l:lk), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
-    call s:apply_back_link(l:tgt, a:a.path, a:a.title, a:choices[l:i])
+  endfor
+  if l:added
+    call s:replace_buffer_lines(l:lines)
+  endif
+  call gnosis#conflict#safe_update()
+  " 親（Branch）がまだ無ければ、最初の Context（グループでないノート）を親にする（c と同じ規則）
+  call gnosis#branch#context_parent([a:a.path])
+  " 親を付けるときに外でファイルが書き換わっていたら読み直す（このあとの保存で「変更がありました」と聞かれないように）
+  if !&modified && s:disk_differs_from_buffer(a:a.path)
+    call s:reload_by_edit(a:a.path)
+  endif
+  for l:i in range(len(a:bs))
+    call s:apply_back_link(a:bs[l:i].path, a:a.path, a:a.title, a:choices[l:i])
   endfor
   if l:added == 0
-    echo 'Gnosis: ' . gnosis#i18n#tr('追加できるリンクがありません（Context に既にある or 取れなかった）')
+    echo 'Gnosis: ' . gnosis#i18n#tr('今のノートの Context: に、もう入っています')
   endif
   call a:Done()
-  " w: リンク先に自動では書かず、元のノートのファイル名をヤンクしてリンク先を開く（1 件ずつ）
+  silent! checktime
+  " w: B には自動で書かず、A へのリンクをヤンクして B を開く（1 件ずつ。残りは :GnosisWNext）
   let l:writes = []
-  for l:i in range(len(a:links))
+  for l:i in range(len(a:bs))
     if a:choices[l:i].mode ==# 'write'
-      let l:t = gnosis#resolve_link(substitute(s:extract_target(a:links[l:i]), '#.*$', '', ''), fnamemodify(a:a.path, ':h'))
-      if filereadable(l:t)
-        call add(l:writes, l:t)
-      endif
+      call add(l:writes, a:bs[l:i].path)
     endif
   endfor
   if !empty(l:writes)
@@ -11880,14 +11990,14 @@ endfunction
 " 残りは :GnosisWNext で 1 件ずつ開く（途中のリンクを黙って捨てない）。元のノートに未保存の変更が残っていれば、
 " ノートは開かない（未保存の変更を失わない）。
 let s:w_queue = []
-function! s:yank_filename(path) abort
-  let l:name = fnamemodify(a:path, ':t')
-  call setreg('"', l:name, 'v')
-  call setreg('0', l:name, 'v')
+" 元のノート（a:src）へのリンクを、開くノート（a:target）から見た相対パスで無名レジスタと 0 レジスタに入れる
+function! s:yank_src_link(src, target) abort
+  let l:link = s:make_link_from_dir(a:src, s:md_link_text(s:group_label(a:src)), fnamemodify(a:target, ':h'))
+  call setreg('"', l:link, 'v')
+  call setreg('0', l:link, 'v')
 endfunction
 
 function! s:write_mode_open(targets, src) abort
-  call s:yank_filename(a:src)
   let s:w_queue = map(copy(a:targets[1:]), {_, t -> {'path': t, 'src': a:src}})
   call s:write_mode_goto(a:targets[0], a:src)
 endfunction
@@ -11899,14 +12009,14 @@ function! s:write_mode_goto(target, src) abort
     echohl NONE
     return
   endif
-  call s:yank_filename(a:src)
+  call s:yank_src_link(a:src, a:target)
   call gnosis#push_history()
   silent execute 'edit ' . fnameescape(a:target)
   let l:more = len(s:w_queue)
-  echom 'Gnosis: ' . gnosis#i18n#t('write.opened', fnamemodify(a:src, ':t')) . (l:more ? '  ' . gnosis#i18n#t('write.more', l:more) : '')
+  echom 'Gnosis: ' . gnosis#i18n#t('write.opened', s:group_label(a:src)) . (l:more ? '  ' . gnosis#i18n#t('write.more', l:more) : '')
 endfunction
 
-" 次の w のリンク先を開く（:GnosisWNext）。そのリンク元のファイル名をもう一度ヤンクする。
+" 次の w のリンク先を開く（:GnosisWNext）。そのリンク元へのリンクをもう一度ヤンクする。
 function! gnosis#write_next() abort
   if empty(s:w_queue)
     echo 'Gnosis: ' . gnosis#i18n#t('write.none')
@@ -12470,6 +12580,80 @@ endfunction
 " :YN - Yank Note name (拡張子なし)
 " ---------------------------------------------------------------------------
 
+" \y … 題と本文だけをコピーする（YAML・関係のブロック（ParentBranch: などと ChildBranch: / BackLink: など）は除く）。
+" ノートへのリンクは表示名だけにする（ファイル名は外では意味がないため）。http などの URL のリンクはそのまま。
+let s:relation_head_pat = '^\s*\%(BranchGroup\|ThisNoteGroup\|Group\|ParentBranch\|Context\|ChildBranch\|Related\|BackLink\):\s*$'
+let s:link_only_pat = '^\s*\%(\[\%(\\.\|[^\]\\]\)*\]([^)]*)\s*\)\+$'
+
+function! gnosis#title_body_lines(lines) abort
+  let l:lines = copy(a:lines)
+  let l:title = ''
+  let l:i = 0
+  if get(l:lines, 0, '') =~# '^---\s*$'
+    let l:end = index(l:lines, '---', 1)
+    if l:end > 0
+      for l:ln in l:lines[1 : l:end - 1]
+        let l:m = matchstr(l:ln, '^title:\s*\zs.*')
+        if !empty(l:m)
+          let l:title = trim(substitute(l:m, '^\([''"]\)\(.*\)\1$', '\2', ''))
+        endif
+      endfor
+      let l:i = l:end + 1
+    endif
+  endif
+  " 先頭: 空行・H1・上のブロック（見出しとリンクの行）を飛ばす
+  let l:n = len(l:lines)
+  while l:i < l:n
+    let l:ln = l:lines[l:i]
+    if l:ln =~# '^\s*$'
+      let l:i += 1
+    elseif l:ln =~# '^#\s' && (empty(l:title) || trim(l:ln[2:]) ==# l:title)
+      if empty(l:title)
+        let l:title = trim(l:ln[2:])
+      endif
+      let l:i += 1
+    elseif l:ln =~# s:relation_head_pat
+      let l:i += 1
+      while l:i < l:n && l:lines[l:i] =~# s:link_only_pat
+        let l:i += 1
+      endwhile
+    else
+      break
+    endif
+  endwhile
+  " 末尾: 関係の節（見出しとリンクの行）と空行だけが続くところを外す
+  let l:j = l:n - 1
+  let l:cut = l:n
+  while l:j >= l:i
+    let l:ln = l:lines[l:j]
+    if l:ln =~# s:relation_head_pat
+      let l:cut = l:j
+    elseif l:ln !~# '^\s*$' && l:ln !~# s:link_only_pat
+      break
+    endif
+    let l:j -= 1
+  endwhile
+  let l:body = l:lines[l:i : l:cut - 1]
+  while !empty(l:body) && l:body[-1] =~# '^\s*$'
+    call remove(l:body, -1)
+  endwhile
+  " ノートへのリンクは表示名だけ（[名前](….md) → 名前）
+  call map(l:body, {_, v -> substitute(v, '\[\(\%(\\.\|[^\]\\]\)*\)\](\%(\a\+:\)\@![^)]*)', '\1', 'g')})
+  return (empty(l:title) ? [] : ['# ' . l:title] + (empty(l:body) ? [] : [''])) + l:body
+endfunction
+
+function! gnosis#yank_title_body() abort
+  let l:out = gnosis#title_body_lines(getline(1, '$'))
+  if empty(l:out)
+    echo gnosis#i18n#tr('Gnosis: コピーするものがありません')
+    return
+  endif
+  let l:text = join(l:out, "\n")
+  call setreg('"', l:out, 'V')
+  call gnosis#clipboard_copy(l:text)
+  echo printf(gnosis#i18n#tr('Gnosis: 題と本文をコピーしました（%d 行）'), len(l:out))
+endfunction
+
 function! gnosis#yank_name() abort
   let l:name = expand('%:t')
   let @" = l:name
@@ -12514,7 +12698,7 @@ function! gnosis#perf_diag() abort
   let l:o = []
   call add(l:o, 'clipboard=' . &clipboard . '  root=' . s:get_pkm_root())
   let l:t = reltime()
-  let l:wp = system('timeout 1 wl-paste --no-newline')
+  let l:wp = gnosis#sh#system('timeout 1 wl-paste --no-newline')
   call add(l:o, printf('wl-paste      : %7.1f ms (len=%d)', reltimefloat(reltime(l:t)) * 1000, len(l:wp)))
   let l:t = reltime()
   let l:r = getreg('+')
@@ -12673,8 +12857,8 @@ function! gnosis#paper_index() abort
     " 旧タイムスタンプ名の Index: 固定名へ移行（他のノートからのリンクも書き換える）してから開く
     let l:script0 = s:paper_pkm_script()
     if filereadable(l:script0)
-      let l:mig = systemlist(s:python_cmd() . ' ' . shellescape(l:script0) . ' migrate ' . shellescape(l:root))
-      if v:shell_error == 0 && !empty(l:mig) && filereadable(l:mig[-1])
+      let l:mig = gnosis#sh#systemlist(s:python_cmd() . ' ' . shellescape(l:script0) . ' migrate ' . shellescape(l:root))
+      if gnosis#sh#error() == 0 && !empty(l:mig) && filereadable(l:mig[-1])
         let l:existing = l:mig[-1]
         silent! checktime
       endif
@@ -12691,8 +12875,8 @@ function! gnosis#paper_index() abort
     return
   endif
   let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' create ' . shellescape(l:root)
-  let l:out = system(l:cmd)
-  if v:shell_error
+  let l:out = gnosis#sh#system(l:cmd)
+  if gnosis#sh#error()
     echohl ErrorMsg | echo substitute(l:out, '\n\+$', '', '') | echohl NONE
     return
   endif
@@ -12740,7 +12924,7 @@ function! gnosis#paper_scan() abort
           \ 'err_io':  'null',
           \ })
   else
-    call system(l:cmd)
+    call gnosis#sh#system(l:cmd)
     checktime
   endif
   echo gnosis#i18n#tr('Gnosis: フォルゲゼッテル番号付けを起動しました（GUI で番号を入力）')
@@ -12785,8 +12969,8 @@ function! s:sort_lines_by_yomi(first, last) abort
   " 1 万行の Index では数秒かかる。無反応に見えないよう先に表示する。
   echo printf(gnosis#i18n#tr('Gnosis: %d 行をよみ順に並べ替え中…'), len(l:lines))
   redraw
-  let l:out = system(l:cmd, join(l:lines, "\n") . "\n")
-  if v:shell_error != 0
+  let l:out = gnosis#sh#system(l:cmd, join(l:lines, "\n") . "\n")
+  if gnosis#sh#error() != 0
     call delete(l:report)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: よみソートに失敗しました（pykakasi 未導入?）') | echohl NONE
     return
@@ -12925,7 +13109,7 @@ endfunction
 
 " sort_yomi.py を呼ぶ小道具
 function! s:yomi_py(script, sub, extra) abort
-  return substitute(system(
+  return substitute(gnosis#sh#system(
         \ s:python_cmd() . ' ' . shellescape(a:script) . ' ' . a:sub . ' ' . a:extra),
         \ '\n*$', '', '')
 endfunction
@@ -13282,8 +13466,8 @@ function! gnosis#expand_s_under_cursor(...) abort
         \ . ' ' . shellescape(l:root)
         \ . ' ' . shellescape(string(l:depth))
 
-  let l:out = system(l:cmd)
-  if v:shell_error
+  let l:out = gnosis#sh#system(l:cmd)
+  if gnosis#sh#error()
     echoerr 'expand_s error: ' . substitute(l:out, '\n\+$', '', '')
     return
   endif
@@ -14700,8 +14884,8 @@ function! s:run_gallery_command(args, label) abort
     return
   endif
 
-  let l:result = system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' '))
-  if v:shell_error
+  let l:result = gnosis#sh#system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' '))
+  if gnosis#sh#error()
     echohl ErrorMsg | echom 'Gnosis Gallery failed: ' . l:result | echohl None
   else
     echom 'Gnosis: opening gallery for ' . a:label
@@ -14903,9 +15087,27 @@ function! gnosis#vault_mounted(...) abort
         \ && s:mounted_cache.val >= 0 && l:now - s:mounted_cache.time < 2
     return s:mounted_cache.val
   endif
-  call system('mountpoint -q ' . shellescape(l:root))
-  let s:mounted_cache = {'root': l:root, 'time': l:now, 'val': v:shell_error == 0 ? 1 : 0}
+  if filereadable('/proc/self/mounts') && get(g:, 'gnosis_mount_check', 'proc') ==# 'proc'
+    " Linux は /proc の一覧を読むだけで分かる（外部コマンドを起動しない）
+    let l:val = s:in_proc_mounts(l:root)
+  else
+    call gnosis#sh#system('mountpoint -q ' . shellescape(l:root))
+    let l:val = gnosis#sh#error() == 0 ? 1 : 0
+  endif
+  let s:mounted_cache = {'root': l:root, 'time': l:now, 'val': l:val}
   return s:mounted_cache.val
+endfunction
+
+" /proc/self/mounts のマウント先（2 列目。空白などは \040 のような 8 進で書かれる）に a:root があるか
+function! s:in_proc_mounts(root) abort
+  let l:want = substitute(resolve(fnamemodify(a:root, ':p')), '/\+$', '', '')
+  for l:ln in readfile('/proc/self/mounts')
+    let l:mp = substitute(get(split(l:ln, ' '), 1, ''), '\\\(\o\o\o\)', '\=nr2char(str2nr(submatch(1), 8))', 'g')
+    if l:mp ==# l:want
+      return 1
+    endif
+  endfor
+  return 0
 endfunction
 
 function! s:mount_cache_reset() abort
@@ -16021,10 +16223,13 @@ endfunction
 
 function! s:syn_writefile(lines, path, ...) abort
   call gnosis#guard_vault_write(a:path)
-  if a:0 == 0
-    return writefile(a:lines, a:path)
+  let l:flags = a:0 ? a:1 : ''
+  " ノート以外（ロック・履歴・状態の JSON）は fsync しない。暗号 vault では 1 回 10ms ほどかかり、
+  " ノートを開くたび・入力のたびの小さな書き込みが積もってカクつく
+  if a:path !~? '\.md$' && l:flags !~# '[sS]'
+    let l:flags .= 'S'
   endif
-  return writefile(a:lines, a:path, a:1)
+  return writefile(a:lines, a:path, l:flags)
 endfunction
 
 " ---------------------------------------------------------------------------
@@ -16079,7 +16284,8 @@ function! s:diary_head(lines) abort
   " 紙の日記かどうかは front matter の目印ではなく、本文の画像 `![](paper-diary-…)` で判定する
   " （月・年・一番上のグループは s:diary_scan がリンク先から判定する）。links は本文の .md リンク先。
   " scan: スキャン由来のノート（front matter の source: scan。紙の日記・スキャンノート・トピック）。「今日のノート」に載せない
-  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': [], 'record': ''}
+  " tree: 日記・時系列記録の木のノート（時系列記録 / 日記 / 夢 / 年 / 月。front matter の timeline: true）
+  let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': [], 'record': '', 'tree': 0}
   let l:fence = 0
   for l:ln in a:lines
     if l:ln ==# '---'
@@ -16112,6 +16318,8 @@ function! s:diary_head(lines) abort
       let l:r.paper = 1
     elseif l:ln =~# '^source:\s*scan\s*$'
       let l:r.scan = 1
+    elseif l:ln =~# '^timeline:\s*true\s*$'
+      let l:r.tree = 1
     elseif l:ln =~# '^record:'
       " 時系列記録（夢など）のその日のノート。日記の「今日のノート」ではなく、日記の上に並べる
       let l:r.record = trim(substitute(l:ln, '^record:\s*', '', ''), '" ')
@@ -16178,7 +16386,8 @@ function! s:diary_scan(root) abort
   let l:out = []
   for l:h in l:all
     if has_key(l:paper, l:h.file) || l:h.scan | continue | endif
-    call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group, 'time': l:h.time, 'record': l:h.record})
+    " 木のノート（2026-10-20 からグループではない普通のノート）も、日記の処理では入れ物（group）として扱う
+    call add(l:out, {'file': l:h.file, 'title': l:h.title, 'group': l:h.group || l:h.tree, 'tree': l:h.tree, 'time': l:h.time, 'record': l:h.record})
   endfor
   return l:out
 endfunction
@@ -16207,10 +16416,11 @@ function! s:diary_find(root, date, st, notes) abort
   return ''
 endfunction
 
+" 日記の木のノートの名前（時刻）。重なれば前の秒へずらす（先の秒にすると、そのあと同じ秒に作るノートの名前とぶつかる）
 function! s:diary_new_filename(root) abort
   let l:i = 0
   while 1
-    let l:name = strftime('%y%m%d%H%M%S', localtime() + l:i) . '.md'
+    let l:name = strftime('%y%m%d%H%M%S', localtime() - l:i) . '.md'
     if !filereadable(fnamemodify(a:root, ':p') . l:name)
       return l:name
     endif
@@ -16223,16 +16433,69 @@ function! s:diary_link(file, title) abort
 endfunction
 
 " Parent の節に親リンクを 1 本入れた新規ノートの内容
-function! s:diary_new_lines(title, is_group, parent_link, ...) abort
-  let l:lines = gnosis#note_template(a:title, a:is_group)
+" a:is_tree が真なら木のノート（時系列記録 / 日記 / 夢 / 年 / 月）: front matter に timeline: true を付け、
+" 本文の余白は 1 行（本文には子のリンクが並ぶ）。どちらも親は ParentBranch:（2026-10-20 からグループではない）
+function! s:diary_new_lines(title, is_tree, parent_link, ...) abort
+  let l:lines = gnosis#note_template(a:title, 0)
   if a:0 > 0
     call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
   endif
-  if !empty(a:parent_link)
-    " 親はすべてグループ（日記 / YYYY / YYYY-MM / Index）。
-    " 「親に属する」関係を Context ではなく ### Group に記録する。
-    let l:lines = s:lines_add_group_link(l:lines, a:parent_link)
+  if a:is_tree
+    let l:t = index(l:lines, 'title: ' . a:title)
+    call insert(l:lines, 'timeline: true', l:t >= 0 ? l:t + 1 : 1)
+    while len(l:lines) > 1 && l:lines[-1] ==# '' && l:lines[-2] ==# ''
+      call remove(l:lines, -1)
+    endwhile
   endif
+  if !empty(a:parent_link)
+    let l:lines = s:lines_set_parent_branch(l:lines, a:parent_link)
+  endif
+  if a:is_tree
+    " 本文（子のリンク）は上のブロックから空行 1 つあけて並べる
+    while len(l:lines) > 1 && l:lines[-1] ==# '' && l:lines[-2] ==# ''
+      call remove(l:lines, -1)
+    endwhile
+  endif
+  return l:lines
+endfunction
+
+" ParentBranch: を a:link の 1 本にする（親は 1 つだけ）。ブロックが無ければ BranchGroup: / Group: の下に作る
+function! s:lines_set_parent_branch(lines, link) abort
+  let l:lines = copy(a:lines)
+  let l:flags = s:fence_flags(l:lines)
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'ParentBranch:'
+      let l:j = l:i + 1
+      while l:j < len(l:lines) && l:lines[l:j] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+        let l:j += 1
+      endwhile
+      if l:j > l:i + 1
+        call remove(l:lines, l:i + 1, l:j - 1)
+      endif
+      call insert(l:lines, a:link, l:i + 1)
+      return l:lines
+    endif
+  endfor
+  let l:h1 = match(l:lines, '^#\s\+')
+  if l:h1 < 0
+    return extend(l:lines, ['ParentBranch:', a:link])
+  endif
+  let l:above = s:top_blocks_end(l:lines, l:h1, ['BranchGroup:', 'ThisNoteGroup:', 'Group:'])
+  if l:above > 0
+    call extend(l:lines, ['ParentBranch:', a:link], l:above)
+    return l:lines
+  endif
+  let l:first = l:h1 + 1
+  while l:first < len(l:lines) && trim(l:lines[l:first]) ==# '' | let l:first += 1 | endwhile
+  if l:first < len(l:lines) && trim(l:lines[l:first]) ==# 'Context:'
+    call extend(l:lines, ['ParentBranch:', a:link], l:first)
+    return l:lines
+  endif
+  let l:at = l:h1 + 1
+  while l:at < len(l:lines) && trim(l:lines[l:at]) ==# '' && l:at < len(l:lines) - 1
+    call remove(l:lines, l:at)
+  endwhile
+  call extend(l:lines, ['', 'ParentBranch:', a:link, ''], l:at)
   return l:lines
 endfunction
 
@@ -16409,12 +16672,24 @@ function! s:diary_edit_file(file, Fn) abort
     while l:pos < min([len(l:old), len(l:new)]) && l:old[l:pos] ==# l:new[l:pos]
       let l:pos += 1
     endwhile
+    let l:was_modified = getbufvar(l:nr, '&modified')
     call s:write_note_lines_for_path(a:file, l:new)
     if !empty(l:view)
       if l:view.lnum > l:pos
         let l:view.lnum = max([1, l:view.lnum + len(l:new) - len(l:old)])
       endif
       call winrestview(l:view)
+    endif
+    " 開いているノートも、すぐファイルに書く（バッファだけ変えて置いておくと、そのあとの同期の書き込みと
+    " ぶつかって保存されないことがある）。今のバッファは衝突を確かめて保存、ほかの未変更のバッファはそのまま書く
+    if l:nr == bufnr('%')
+      if &buftype ==# ''
+        call gnosis#conflict#safe_update()
+      endif
+    elseif !l:was_modified
+      call s:syn_writefile(l:new, a:file)
+      call setbufvar(l:nr, '&modified', 0)
+      call gnosis#conflict#record(l:nr)
     endif
     return 1
   endif
@@ -16443,7 +16718,7 @@ endfunction
 " 上側（### Context と ### Group）の範囲 [始まり, 終わり) を返す（0 始まりの行 index）。
 " 上側の節が無ければ [-1, -1]。
 function! s:diary_up_range(lines) abort
-  let l:up_marks = [s:v2_up_mark, s:v2_group_mark, 'Context:'] + s:v2_up_marks_legacy
+  let l:up_marks = [s:v2_up_mark, s:v2_group_mark, 'Context:', 'ParentBranch:'] + s:v2_up_marks_legacy
   let l:p = -1
   for l:i in range(0, len(a:lines) - 1)
     if index(l:up_marks, trim(a:lines[l:i])) >= 0
@@ -16454,7 +16729,7 @@ function! s:diary_up_range(lines) abort
     return [-1, -1]
   endif
   let l:end = len(a:lines)
-  let l:block = index([s:v2_group_mark, 'Context:'], trim(a:lines[l:p])) >= 0
+  let l:block = index([s:v2_group_mark, 'Context:', 'ParentBranch:'], trim(a:lines[l:p])) >= 0
   for l:j in range(l:p + 1, len(a:lines) - 1)
     if l:block
       " 先頭のブロックは、リンク行（と空行）が続く間だけ。本文や次の見出しには広げない
@@ -16472,18 +16747,26 @@ endfunction
 
 " ### Context / ### Group の中の a:old へのリンク行を a:newlink に差し替える。
 " 無ければ Context（無ければ作る）の先頭に足す。
+" 木のノート（月・年など）の親を a:newlink にする。古い親 a:old へのリンクが上のブロック（Group: /
+" ParentBranch:）にあれば外し、ParentBranch: を a:newlink の 1 本にする。
 function! s:diary_op_parent_swap(old, newlink, lines) abort
   let l:lines = copy(a:lines)
-  let [l:p, l:end] = s:diary_up_range(l:lines)
-  if l:p >= 0
-    for l:j in range(l:p + 1, l:end - 1)
-      if stridx(l:lines[l:j], '](' . a:old . ')') >= 0
-        let l:lines[l:j] = a:newlink
-        return l:lines
+  if !empty(a:old)
+    let [l:p, l:end] = s:diary_up_range(l:lines)
+    if l:p >= 0
+      for l:j in reverse(range(l:p + 1, l:end - 1))
+        if stridx(l:lines[l:j], '](' . a:old . ')') >= 0 && l:lines[l:j] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+          call remove(l:lines, l:j)
+        endif
+      endfor
+      " 中身が無くなった Group: の見出しは外す
+      let l:k = index(l:lines, 'Group:')
+      if l:k >= 0 && (l:k + 1 >= len(l:lines) || l:lines[l:k + 1] !~# '^\s*\[[^]]*\]([^)]\+)\s*$')
+        call remove(l:lines, l:k)
       endif
-    endfor
+    endif
   endif
-  return s:lines_add_group_link(l:lines, a:newlink)
+  return s:lines_set_parent_branch(l:lines, a:newlink)
 endfunction
 
 " グループ a:file の上側（### Context / ### Group）に a:tgt へのリンクがあるか
@@ -16505,13 +16788,14 @@ endfunction
 function! s:diary_new_group(root, notes, title, parent_file, parent_title, ...) abort
   let l:dir = fnamemodify(a:root, ':p')
   let l:file = s:diary_new_filename(a:root)
-  let l:plink = empty(a:parent_file) ? '' : s:diary_link(a:parent_file, a:parent_title)
+  " Index の下（時系列記録）は Index の本文に載せるだけ（Index は Branch の親にならない）
+  let l:plink = empty(a:parent_file) || a:parent_file ==# 'index.md' ? '' : s:diary_link(a:parent_file, a:parent_title)
   call s:syn_writefile(call('s:diary_new_lines', [a:title, 1, l:plink] + a:000), l:dir . l:file)
   if !empty(a:parent_file)
     call s:diary_edit_file(l:dir . a:parent_file,
           \ function('s:diary_op_add', [s:diary_link(l:file, a:title), '']))
   endif
-  call add(a:notes, {'file': l:file, 'title': a:title, 'group': 1, 'time': '', 'record': ''})
+  call add(a:notes, {'file': l:file, 'title': a:title, 'group': 1, 'tree': 1, 'time': '', 'record': ''})
   return l:file
 endfunction
 
@@ -16523,12 +16807,9 @@ function! s:record_top(root, notes, ...) abort
     return call('s:diary_new_group', [a:root, a:notes, '時系列記録', 'index.md', 'Index'] + a:000)
   endif
   let l:dir = fnamemodify(a:root, ':p')
+  " Index の本文に載っていればよい（Index は Branch の親にしない。Group: は同期が付ける）
   call s:diary_edit_file(l:dir . 'index.md',
         \ function('s:diary_op_add', [s:diary_link(l:top, '時系列記録'), '']))
-  if !s:diary_parent_has(a:root, l:top, 'index.md')
-    call s:diary_edit_file(l:dir . l:top,
-          \ function('s:diary_op_parent_swap', ['', s:diary_link('index.md', 'Index')]))
-  endif
   return l:top
 endfunction
 
@@ -16558,7 +16839,36 @@ function! s:diary_ensure_top(root, notes, ...) abort
           \ [a:root, a:notes, '日記', l:rec, '時系列記録'] + a:000)
   endif
   call s:record_move_under(a:root, l:top, '日記', 'index.md', l:rec)
+  call s:diary_tree_migrate(a:root, a:notes)
   return l:top
+endfunction
+
+" グループで作っていた古い木（時系列記録・日記・夢・年・月がグループ、その日のノートが Group: で所属）が
+" 残っていれば、普通のノート＋ParentBranch: の形に直す（python/diary_tree.py migrate）。直したら a:notes を読み直す。
+function! s:diary_tree_migrate(root, notes) abort
+  let l:legacy = filter(copy(a:notes), {_, n -> n.group && !get(n, 'tree', 0)
+        \ && n.title =~# '^\%(時系列記録\|日記\|\d\{4}\%(-\d\d\)\=\%(-.\+\)\=\)$'})
+  if empty(l:legacy) || !gnosis#has_python()
+    return
+  endif
+  let l:out = gnosis#sh#system(s:python_cmd() . ' ' . shellescape(fnamemodify(g:gnosis_python, ':h') . s:sep() . 'diary_tree.py')
+        \ . ' migrate ' . shellescape(fnamemodify(a:root, ':p')))
+  try
+    let l:r = json_decode(trim(get(split(l:out, "\n"), -1, '')))
+  catch
+    return
+  endtry
+  if empty(get(l:r, 'changed', []))
+    return
+  endif
+  for l:f in l:r.changed
+    let l:nr = bufnr(l:f)
+    if l:nr > 0 && bufloaded(l:nr) && !getbufvar(l:nr, '&modified')
+      silent! execute 'checktime ' . l:nr
+    endif
+  endfor
+  call remove(a:notes, 0, -1)
+  call extend(a:notes, s:diary_scan(a:root))
 endfunction
 
 " 旧版の \d が作った孤立月グループのみ、日記階層に再接続する。
@@ -16712,7 +17022,7 @@ function! s:diary_place(path, ...) abort
   endif
   let l:lines = a:0 > 0 ? a:1 : readfile(a:path, '', 30)
   let l:head = s:diary_head(l:lines)
-  if l:head.group || l:head.paper || l:head.scan || !empty(l:head.record)
+  if l:head.group || l:head.tree || l:head.paper || l:head.scan || !empty(l:head.record)
     return
   endif
   let l:st = s:diary_state_read()

@@ -54,7 +54,8 @@ call gnosis#linkify_selection_new_note()
 call add(g:R, 'L-esc ' . (len(glob($D . '/v/*.md', 0, 1)) == s:before) . ' ' . fnamemodify(bufname('%'), ':t'))
 
 " 4) A の BranchGroup: にあるグループ G へ、\l → g で A を入れる（表示名・よみ）。A の Group: には重ねない
-silent! write
+" 保存は自動保存と同じ方法で（保存のあとの同期がファイルを書き換えていても止まらない）
+call gnosis#conflict#safe_update()
 let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['えー']
 let g:gnosis_test_yomi = ['えー']

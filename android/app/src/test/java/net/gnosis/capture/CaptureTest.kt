@@ -110,6 +110,26 @@ class CaptureTest {
 
     @Test fun backdatedTextStamp() {
         assertEquals("本文", backdatedText("本文", false, 0))
-        assertTrue(backdatedText("本文", true, 0).endsWith(" に記入）\n本文"))
+        assertTrue(backdatedText("本文", true, 0).matches(Regex("^（\\d{4}-\\d{2}-\\d{2} に記入）本文$")))
+    }
+
+    @Test fun backdatedTimeKeepsTheDay() {
+        val day = java.util.Calendar.getInstance().apply { set(2026, 9, 17, 0, 0, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
+        val now = java.util.Calendar.getInstance().apply { set(2026, 9, 20, 14, 30, 5) }.timeInMillis
+        val t = java.util.Calendar.getInstance().apply { timeInMillis = backdatedTime(day, now) }
+        assertEquals(17, t.get(java.util.Calendar.DAY_OF_MONTH))
+        assertEquals(14, t.get(java.util.Calendar.HOUR_OF_DAY))
+        assertEquals(30, t.get(java.util.Calendar.MINUTE))
+    }
+
+    @Test fun deleteTopicMovesMemosToUnassigned() {
+        val s = Settings(topics = listOf(DIARY, "仕事"), topicModes = mapOf("仕事" to TopicMode(single = true)), lastTopic = "仕事")
+        val es = listOf(Entry("1", 1, "仕事", "a"), Entry("2", 2, DIARY, "b"))
+        val (ne, ns) = deleteTopic(es, s, "仕事")!!
+        assertEquals(listOf(UNASSIGNED, DIARY), ne.map { it.topic })
+        assertEquals(listOf(DIARY), ns.topics)
+        assertNull(ns.topicModes["仕事"])
+        assertEquals(ALL, ns.lastTopic)
+        assertNull(deleteTopic(es, s, DIARY))
     }
 }

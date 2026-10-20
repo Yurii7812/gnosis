@@ -26,6 +26,64 @@ function! gnosis#conflict#record(...) abort
   endif
   call setbufvar(l:buf, 'gnosis_disk', s:disk_state(l:p))
   call setbufvar(l:buf, 'gnosis_conflict', [])
+  " 読んだ・書いたときの中身（外の変更が同期の振った Folgezettel の番号だけかを見分けるのに使う）
+  call setbufvar(l:buf, 'gnosis_disk_lines', filereadable(l:p) && l:p =~? '\.md$' ? readfile(l:p) : [])
+endfunction
+
+let s:id_pat = '^folgezettel\s*:'
+
+" front matter の folgezettel: の行を除いた行（なければそのまま）
+function! s:without_id(lines) abort
+  return filter(copy(a:lines), {i, v -> v !~# s:id_pat})
+endfunction
+
+" 外での変更が、同期が振った Folgezettel の番号（front matter の folgezettel: の行）だけなら、その行（無ければ ''）を返す。
+" ほかも変わっていれば v:null
+function! s:id_only_change(buf) abort
+  let l:base = getbufvar(a:buf, 'gnosis_disk_lines', [])
+  let l:p = s:path_of(a:buf)
+  if empty(l:base) || !filereadable(l:p)
+    return v:null
+  endif
+  let l:disk = readfile(l:p)
+  if s:without_id(l:disk) !=# s:without_id(l:base)
+    return v:null
+  endif
+  return get(filter(copy(l:disk), {i, v -> v =~# s:id_pat}), 0, '')
+endfunction
+
+" 今のバッファの front matter の folgezettel: の行を a:line にする（'' なら外す）
+function! s:apply_id_line(lines, line) abort
+  let l:lines = copy(a:lines)
+  if get(l:lines, 0, '') !=# '---'
+    return l:lines
+  endif
+  let l:end = index(l:lines, '---', 1)
+  if l:end < 0
+    return l:lines
+  endif
+  let l:at = match(l:lines[: l:end], s:id_pat)
+  if l:at > 0
+    if empty(a:line)
+      call remove(l:lines, l:at)
+    else
+      let l:lines[l:at] = a:line
+    endif
+  elseif !empty(a:line)
+    call insert(l:lines, a:line, l:end)
+  endif
+  return l:lines
+endfunction
+
+" 外の変更を取り込んだ行で保存する（:w! でも確認が出るので、いったん読み直してからバッファの内容を戻す）
+function! s:rewrite_with(lines) abort
+  let l:view = winsaveview()
+  silent! edit!
+  silent! keepjumps %delete _
+  call setline(1, a:lines)
+  call winrestview(l:view)
+  silent! update
+  return !&modified
 endfunction
 
 " 覚えた状態から、ファイルが他のプロセスに書き換えられていたら 1
@@ -107,6 +165,14 @@ function! gnosis#conflict#safe_update() abort
       call winrestview(l:view)
       silent! update
       return !&modified
+    endif
+    " 同期が番号（folgezettel:）を振っただけなら、その行を取り込んで、こちらの変更と一緒に保存する
+    let l:id = s:id_only_change(bufnr('%'))
+    if l:id isnot v:null
+      if mode() =~# '^[iR]'
+        return 0
+      endif
+      return s:rewrite_with(s:apply_id_line(getline(1, '$'), l:id))
     endif
     call gnosis#conflict#handle()
     return 0

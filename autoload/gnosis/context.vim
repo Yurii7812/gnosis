@@ -320,13 +320,13 @@ function! s:migrate_all(apply) abort
   endif
   let l:cmd = gnosis#python_cmd() . ' ' . shellescape(s:script) . ' migrate ' . shellescape(l:root) . (a:apply ? ' --apply' : '')
   if a:apply
-    let l:dry = json_decode(trim(get(split(system(substitute(l:cmd, ' --apply$', '', '')), "\n"), -1, '')))
+    let l:dry = json_decode(trim(get(split(gnosis#sh#system(substitute(l:cmd, ' --apply$', '', '')), "\n"), -1, '')))
     if confirm(gnosis#i18n#t('context.confirm', len(l:dry.migrated)), "&Yes\n&No", 2) != 1
       return
     endif
     silent! wall
   endif
-  let l:r = json_decode(trim(get(split(system(l:cmd), "\n"), -1, '')))
+  let l:r = json_decode(trim(get(split(gnosis#sh#system(l:cmd), "\n"), -1, '')))
   if a:apply
     echo 'Gnosis: ' . gnosis#i18n#t('context.done', len(l:r.migrated), len(l:r.failed))
     silent! checktime

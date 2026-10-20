@@ -1,5 +1,5 @@
 " 日記と Group: の回帰網（test/diary_group_net.sh から呼ぶ）。
-"   Group: は本文冒頭のブロック。日記の「今日のノート」の節が、メモを足すたびに増えない。
+"   日記の親（月）は本文冒頭の ParentBranch: のブロック（2026-10-20 から月はグループではない）。日記の「今日のノート」の節が、メモを足すたびに増えない。
 "   Group: のあるノートで、Enter のリンクが Group: より上に入らない。すでに二重になった節は 1 つにまとまる。
 set nomore
 let s:work = $DIARY_WORK
@@ -24,7 +24,7 @@ stopinsert
 silent! write
 let s:d = expand('%:t')
 let s:dl = readfile(s:v . '/' . s:d)
-call s:ok('日記: Group: は H1 の直後（本文の末尾ではない）', index(s:dl, 'Group:') >= 0 && index(s:dl, 'Group:') < index(s:dl, '## 今日のノート'), string(s:dl))
+call s:ok('日記: ParentBranch:（月）は H1 の直後（本文の末尾ではない）', index(s:dl, 'ParentBranch:') >= 0 && index(s:dl, 'ParentBranch:') < index(s:dl, '## 今日のノート'), string(s:dl))
 call s:ok('日記: 「今日のノート」は 1 つ', s:count(s:dl, '^## 今日のノート$') == 1)
 
 " ノートを作る → 日記の「今日のノート」に入る。節は増えない
@@ -61,7 +61,7 @@ let s:n2 = expand('%:t')
 let s:dl = readfile(s:v . '/' . s:d)
 call s:ok('日記: ノートを 2 つ作っても「今日のノート」は 1 つ', s:count(s:dl, '^## 今日のノート$') == 1, string(s:dl))
 call s:ok('日記: 2 つとも 1 回ずつ入る', s:count(s:dl, '(' . s:n1 . ')') == 1 && s:count(s:dl, '(' . s:n2 . ')') == 1, string(s:dl))
-call s:ok('日記: Group: は先頭のまま', index(s:dl, 'Group:') >= 0 && index(s:dl, 'Group:') < index(s:dl, '## 今日のノート'))
+call s:ok('日記: ParentBranch: は先頭のまま', index(s:dl, 'ParentBranch:') >= 0 && index(s:dl, 'ParentBranch:') < index(s:dl, '## 今日のノート'))
 
 " Group: のあるノートで Enter（本文の最後）にリンクを置く → Group: の下の本文に入る（Group: より上には入らない）
 call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 仲間', '---', '', '# 仲間', '', 'Group:', '[Index](index.md)', '', '本文。'], s:v . '/mem.md')
@@ -94,16 +94,19 @@ function! s:find_title(title) abort
   endfor
   return ''
 endfunction
-let s:mf = s:find_title('2026-10')
+let s:d_month = matchstr(get(filter(readfile(s:v . '/' . s:d), 'v:val =~# "^title: "'), 0, ''), '\d\{4}-\d\d')
+let s:mf = s:find_title(s:d_month)
 let s:ml2 = filereadable(s:mf) ? readfile(s:mf) : []
-let s:gi = index(s:ml2, 'Group:')
-call s:ok('月のグループ: Group: の次に親、空行を 1 つ挟んで子（今日の日記）が本文に入る',
-      \ s:gi >= 0 && s:ml2[s:gi + 2] ==# '' && s:ml2[s:gi + 3] =~# '^\[2026-10-15-[A-Z][A-Z]\](', string(s:ml2))
-call s:ok('月のグループ: Context: を作らない', index(s:ml2, 'Context:') < 0, string(s:ml2))
+let s:gi = index(s:ml2, 'ParentBranch:')
+call s:ok('月のノート: ParentBranch: の次に親、空行を 1 つ挟んで子（今日の日記）が本文に入る',
+      \ s:gi >= 0 && s:ml2[s:gi + 2] ==# '' && s:ml2[s:gi + 3] =~# '^\[\d\{4}-\d\d-\d\d-[A-Z][A-Z]\](', string(s:ml2))
+call s:ok('月のノート: Context: を作らない', index(s:ml2, 'Context:') < 0, string(s:ml2))
 call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))
 call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))
 let s:ml3 = readfile(s:mf)
-call s:ok('同期のあとも、月のグループに Context: が出来ず、子は本文のまま', index(s:ml3, 'Context:') < 0 && s:ml3 ==# s:ml2, string(s:ml3))
+" 同期は番号（folgezettel:）を振るので、それ以外が変わらないことを見る
+call s:ok('同期のあとも、月のノートに Context: が出来ず、子は本文のまま', index(s:ml3, 'Context:') < 0
+      \ && filter(copy(s:ml3), 'v:val !~# "^folgezettel:"') ==# filter(copy(s:ml2), 'v:val !~# "^folgezettel:"'), string(s:ml3))
 
 " Group: ブロックだけ（本文なし）のノートに Enter でリンクを足す → Group: の下に空行を 1 つ挟む
 call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 本文なし', '---', '', '# 本文なし', '', 'Group:', '[Index](index.md)'], s:v . '/blk.md')

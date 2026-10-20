@@ -203,10 +203,10 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var imported by remember { mutableStateOf(store.importedIds()) }
     var deleteFor by remember { mutableStateOf<String?>(null) }
     val collapsed = remember { mutableStateListOf<String>() }      // Folgezettel 表示で折りたたんだメモ
-    var backdate by remember { mutableStateOf<Long?>(null) }       // 日時を指定して書く（日記・時系列記録）。null は今
+    var backdate by remember { mutableStateOf<Long?>(null) }       // 日付を指定して書く（日記・時系列記録）。その日の 0 時。null は今日
     var pickDate by remember { mutableStateOf(false) }
-    var pickTimeFor by remember { mutableStateOf<Long?>(null) }    // 日付を選んだあと、時刻を選んでいる（その日の 0 時）
     var renameFor by remember { mutableStateOf<String?>(null) }    // 名前を変えるトピック
+    var deleteTopicFor by remember { mutableStateOf<String?>(null) } // 消すトピック
     val prompt by promptState
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -410,10 +410,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         } else {
             val now = System.currentTimeMillis()
             // 日時を指定したときは、その日時（秒は今の秒にして、ほかのノートの名前と重なりにくくする）
-            val at = backdate?.let { it + now % 60_000 } ?: now
-            val body = if (backdate != null) backdatedText(text, settings.writtenStamp, now) else text
+            // 日付を指定したときは、その日に今の時刻を足した日時。「時刻を入れる」がオフなら PC では時刻を付けない
+            val bd = backdate
+            val at = if (bd != null) backdatedTime(bd, now) else now
+            val body = if (bd != null) backdatedText(text, settings.writtenStamp, now) else text
             entries.add(Entry(id = Store.newId(at, entries), created = at, topic = writingTopic(topic), text = body,
-                images = pendingImages.toList(), parent = replyTo ?: contextsTo.firstOrNull(), contexts = contextsTo.toList()))
+                images = pendingImages.toList(), parent = replyTo ?: contextsTo.firstOrNull(), contexts = contextsTo.toList(),
+                noTime = bd != null && !settings.writtenStamp))
             replyTo = null; contextsTo.clear()
         }
         input = ""; pendingImages.clear(); promptState.value = false
@@ -421,7 +424,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     }
 
     Scaffold(
-        topBar = {
+        topBar = { Column {
             TopAppBar(
                 title = {
                     val n = entries.count { it.id !in imported }
@@ -491,7 +494,26 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 },
             )
-        },
+            // 日記・時系列記録では、日付を指定して書ける（その日のノートになる）。上に出す（下のトピックのボタンとは分ける）
+            if (search == null && !selecting && (topic == DIARY || settings.topicModes[topic]?.record == true)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val bd = backdate
+                    AssistChip(onClick = { pickDate = true },
+                        label = { Text(if (bd == null) "日付: 今日" else "日付: " + SimpleDateFormat("M月d日（E）", Locale.JAPAN).format(Date(bd))) },
+                        leadingIcon = { Icon(Icons.Filled.Event, null, Modifier.size(16.dp)) },
+                        colors = if (bd != null) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else AssistChipDefaults.assistChipColors())
+                    if (bd != null) {
+                        // 書いている時刻を入れるか（入れると、本文の最初に書いた日も入る）
+                        FilterChip(selected = settings.writtenStamp, onClick = {
+                            settings = settings.copy(writtenStamp = !settings.writtenStamp); store.saveSettings(settings)
+                        }, label = { Text("今の時刻を入れる") },
+                            leadingIcon = if (settings.writtenStamp) ({ Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) }) else null)
+                        IconButton(onClick = { backdate = null }) { Icon(Icons.Filled.Close, "今日に戻す") }
+                    }
+                }
+            }
+        } },
         bottomBar = {
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 // つなぎ方の案内（WhatsApp の返信のように、何に続けて書いているかを見せる）
@@ -551,17 +573,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         else "1 つのノートにまとめる: PC では「$topic」のノートに追記します" + if (m.stamp) "（時刻あり）" else "") + "（押して変更）",
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().clickable { modeFor = topic }.padding(horizontal = 4.dp, vertical = 2.dp))
-                }
-                // 日記・時系列記録では、日時を指定して書ける（過去の日のノートになる）
-                if (topic == DIARY || settings.topicModes[topic]?.record == true) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val bd = backdate
-                        AssistChip(onClick = { pickDate = true },
-                            label = { Text(if (bd == null) "日時: 今" else "日時: " + SimpleDateFormat("M月d日（E）HH:mm", Locale.JAPAN).format(Date(bd))) },
-                            leadingIcon = { Icon(Icons.Filled.Event, null, Modifier.size(16.dp)) },
-                            colors = if (bd != null) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else AssistChipDefaults.assistChipColors())
-                        if (bd != null) IconButton(onClick = { backdate = null }) { Icon(Icons.Filled.Close, "今に戻す") }
-                    }
                 }
                 if (pendingImages.isNotEmpty()) {
                     LazyRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -798,6 +809,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                             Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                             // PC から届いた時系列記録の名前は変えない（PC の記録と別物になってしまう）
                             if (t !in pcRecords) IconButton(onClick = { renameFor = t }) { Icon(Icons.Filled.Edit, "名前を変える") }
+                            if (t !in pcRecords) IconButton(onClick = { deleteTopicFor = t }) { Icon(Icons.Filled.Delete, "トピックを消す") }
                             IconButton(onClick = { modeFor = t }) { Icon(Icons.Filled.Settings, "取り込み方") }
                         }
                     }
@@ -815,6 +827,21 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         AlertDialog(onDismissRequest = { modeFor = null }, title = { Text("「$t」の取り込み方") },
             text = { ModeSwitches(t, m, pcRecords, ::save) },
             confirmButton = { TextButton(onClick = { modeFor = null }) { Text("閉じる") } })
+    }
+
+    deleteTopicFor?.let { name ->
+        val n = entries.count { it.topic == name }
+        AlertDialog(onDismissRequest = { deleteTopicFor = null }, title = { Text("トピック「$name」を消す") },
+            text = { Text(if (n == 0) "このトピックのメモはありません。" else "このトピックのメモ（$n 件）は消さずに未所属へ移します。") },
+            confirmButton = { TextButton(onClick = {
+                deleteTopic(entries.toList(), settings, name)?.let { r ->
+                    entries.clear(); entries.addAll(r.first); persist()
+                    settings = r.second; store.saveSettings(settings)
+                    if (topic == name) setTopic(ALL)
+                }
+                deleteTopicFor = null
+            }) { Text("消す") } },
+            dismissButton = { TextButton(onClick = { deleteTopicFor = null }) { Text("やめる") } })
     }
 
     renameFor?.let { from ->
@@ -839,29 +866,21 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             dismissButton = { TextButton(onClick = { renameFor = null }) { Text("やめる") } })
     }
 
-    // 日時を指定して書く: 日付 → 時刻
+    // 日付を指定して書く（日付だけ。時刻は「今の時刻を入れる」で選ぶ）
     if (pickDate) {
         val st = rememberDatePickerState(initialSelectedDateMillis = (backdate ?: System.currentTimeMillis()).let { localToUtcDay(it) })
         DatePickerDialog(onDismissRequest = { pickDate = false },
             confirmButton = { TextButton(onClick = {
                 pickDate = false
-                st.selectedDateMillis?.let { pickTimeFor = utcDayToLocalMidnight(it) }
-            }) { Text("次へ（時刻）") } },
+                st.selectedDateMillis?.let {
+                    val day = utcDayToLocalMidnight(it)
+                    val today = utcDayToLocalMidnight(localToUtcDay(System.currentTimeMillis()))
+                    backdate = if (day >= today) null else day   // 今日と先の日は「今日」のまま
+                }
+            }) { Text("決定") } },
             dismissButton = { TextButton(onClick = { pickDate = false }) { Text("やめる") } }) {
             DatePicker(st)
         }
-    }
-    pickTimeFor?.let { day ->
-        val cal = java.util.Calendar.getInstance().apply { timeInMillis = backdate ?: System.currentTimeMillis() }
-        val ts = rememberTimePickerState(cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true)
-        AlertDialog(onDismissRequest = { pickTimeFor = null }, title = { Text("時刻") },
-            text = { TimePicker(ts) },
-            confirmButton = { TextButton(onClick = {
-                val t = day + (ts.hour * 60L + ts.minute) * 60_000L
-                backdate = if (t > System.currentTimeMillis()) null else t   // 先の日時にはしない
-                pickTimeFor = null
-            }) { Text("決定") } },
-            dismissButton = { TextButton(onClick = { pickTimeFor = null }) { Text("やめる") } })
     }
 
     if (addTopicOpen) {
@@ -1032,8 +1051,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 HorizontalDivider()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("書いている日時を入れる")
-                        Text("日記・時系列記録で日時を指定して書いたとき、本文の最初に「（今日の日時 に記入）」を入れます。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                        Text("日付を指定したときも今の時刻を入れる")
+                        Text("日記・時系列記録で日付を指定して書いたとき、PC では今の時刻が付き、本文の最初に「（今日の日付 に記入）」が入ります。オフなら時刻は付きません（書く画面の上でも切り替えられます）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                     }
                     Switch(stamp, { stamp = it })
                 }

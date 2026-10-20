@@ -50,6 +50,37 @@ class FolgezettelTest(unittest.TestCase):
         nf.simple_sync(self.root)
         self.assertEqual(before, {p: p.read_text() for p in before})
 
+    def test_reparent_renumbers_subtree(self):
+        # 親が変わったら、そのノートと子孫の番号を新しい親の下に振り直す（年ができて月が入る、など）
+        self.note('index', body='[d](d.md)')
+        d = self.note('d', '1', body='[2026-10](m.md)')
+        m = self.note('m', '1a', body='ParentBranch:\n[d](d.md)')
+        m.write_text(m.read_text().replace('title: m', 'title: 2026-10').replace('# m', '# 2026-10'))
+        day = self.note('day', '1a1', body='ParentBranch:\n[2026-10](m.md)')
+        day.write_text(day.read_text().replace('title: day', 'title: 2026-10-19-MO-x').replace('# day', '# 2026-10-19-MO-x'))
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(m), self.ident(day)], ['1a', '1a1'])
+        y = self.note('y', body='ParentBranch:\n[d](d.md)\n\n[2026-10](m.md)')
+        y.write_text(y.read_text().replace('title: y', 'title: 2026').replace('# y', '# 2026'))
+        m.write_text(m.read_text().replace('[d](d.md)', '[2026](y.md)'))
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(y), '1b')
+        self.assertEqual([self.ident(m), self.ident(day)], ['1b1', '1b1a'])
+        before = {p: p.read_text() for p in self.root.glob('*.md')}
+        nf.simple_sync(self.root)
+        self.assertEqual(before, {p: p.read_text() for p in before})
+
+    def test_dated_siblings_in_date_order(self):
+        # 日付の題のきょうだいは、作った時刻ではなく日付の順（あとで作った過去の日記も日付の位置）
+        self.note('index', body='[m](m.md)')
+        self.note('m', '3')
+        late = self.note('late', body='ParentBranch:\n[m](m.md)')
+        early = self.note('early', body='ParentBranch:\n[m](m.md)')
+        late.write_text(late.read_text().replace('title: late', 'title: 2026-10-02-FR').replace('---\n', '---\ntime: 2026-10-02 10:00:00\n', 1))
+        early.write_text(early.read_text().replace('title: early', 'title: 2026-10-01-TH').replace('---\n', '---\ntime: 2026-10-20 10:00:00\n', 1))
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(early), self.ident(late)], ['3a', '3b'])
+
     def test_backfill_uses_creation_time_not_index_order(self):
         index = self.note('index', body='[new](a.md)\n[old](z.md)')
         newer, older = self.note('a'), self.note('z')
