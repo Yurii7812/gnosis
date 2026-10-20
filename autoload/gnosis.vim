@@ -8100,6 +8100,102 @@ function! gnosis#dedupe(bang, ...) abort
   endif
 endfunction
 
+" 軽い封印(XP04 タイムカプセル)。  :GnosisSeal 日付(YYYY-MM-DD)   :GnosisUnseal   :GnosisSeal off
+"   front matter の sealed_until: 日付 が今日より先のノートは、Vim で開いたとき本文を見せず、封印中の表示だけにする。
+"   これは約束事を助ける軽い仕組みで、**秘密を守るものではない**: ファイルは平文のままで、他のエディタ・検索・書き出し・
+"   他のコマンドからは読める。本当に隠すなら暗号化(:GnosisSetPassword など)を使う。g:gnosis_seal_guard=0 で封印の表示を止める。
+let s:unsealed = {}
+
+function! s:seal_range() abort
+  if getline(1) !=# '---'
+    return [0, 0]
+  endif
+  let l:end = 2
+  while l:end <= min([line('$'), 60]) && getline(l:end) !=# '---'
+    let l:end += 1
+  endwhile
+  return getline(l:end) ==# '---' ? [1, l:end] : [0, 0]
+endfunction
+
+function! s:seal_date() abort
+  let [l:a, l:b] = s:seal_range()
+  if !l:b
+    return ''
+  endif
+  for l:i in range(l:a + 1, l:b - 1)
+    let l:m = matchlist(getline(l:i), '^sealed_until:\s*\(\d\{4}-\d\d-\d\d\)\s*$')
+    if !empty(l:m)
+      return l:m[1]
+    endif
+  endfor
+  return ''
+endfunction
+
+function! gnosis#seal_guard() abort
+  if !get(g:, 'gnosis_seal_guard', 1) || &buftype !=# '' || has_key(s:unsealed, expand('%:p'))
+    return
+  endif
+  let l:d = s:seal_date()
+  if empty(l:d) || l:d <= strftime('%Y-%m-%d')
+    return
+  endif
+  let l:title = ''
+  for l:ln in getline(1, min([line('$'), 30]))
+    if l:ln =~# '^title:'
+      let l:title = substitute(l:ln, '^title:\s*', '', '')
+      break
+    endif
+  endfor
+  let l:file = expand('%:p')
+  silent %delete _
+  call setline(1, [empty(l:title) ? '' : '# ' . l:title, '', printf(gnosis#i18n#tr('封印中です。%s まで開けません。'), l:d), '',
+        \ gnosis#i18n#tr('日付が来れば普通に開きます。待てないときは :GnosisUnseal（開封）。'),
+        \ gnosis#i18n#tr('これは約束事を助けるだけの軽い封印です。ファイルは平文のままで、秘密を守るものではありません。')])
+  setlocal buftype=nofile bufhidden=wipe noswapfile noundofile nomodifiable nomodified
+  let b:gnosis_sealed_file = l:file
+endfunction
+
+function! gnosis#unseal() abort
+  if !exists('b:gnosis_sealed_file')
+    echo 'Gnosis: ' . gnosis#i18n#tr('封印中のノートではありません')
+    return
+  endif
+  let l:f = b:gnosis_sealed_file
+  if get(g:, 'gnosis_seal_answer', 0) != 1 && confirm(gnosis#i18n#tr('封印の日付より前に開封しますか？'), "&開封する\n&やめる", 2) != 1
+    return
+  endif
+  let s:unsealed[l:f] = 1
+  setlocal buftype= bufhidden= modifiable swapfile
+  execute 'silent edit! ' . fnameescape(l:f)
+endfunction
+
+function! gnosis#seal(...) abort
+  let l:arg = a:0 > 0 ? a:1 : ''
+  if l:arg !~# '^\(\d\{4}-\d\d-\d\d\|off\)$'
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('封印する日付（YYYY-MM-DD）か off を指定してください') | echohl NONE
+    return
+  endif
+  if &buftype !=# '' || expand('%:e') !=# 'md'
+    return
+  endif
+  let [l:a, l:b] = s:seal_range()
+  if !l:b
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('front matter のあるノートで実行してください') | echohl NONE
+    return
+  endif
+  for l:i in range(l:b - 1, l:a + 1, -1)
+    if getline(l:i) =~# '^sealed_until:'
+      execute l:i . 'delete _'
+      let l:b -= 1
+    endif
+  endfor
+  if l:arg !=# 'off'
+    call append(l:b - 1, 'sealed_until: ' . l:arg)
+  endif
+  silent! write
+  echo 'Gnosis: ' . (l:arg ==# 'off' ? gnosis#i18n#tr('封印を外しました') : printf(gnosis#i18n#tr('%s まで封印しました（開いたときに本文を見せません）'), l:arg))
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

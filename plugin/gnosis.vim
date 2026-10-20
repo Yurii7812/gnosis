@@ -591,6 +591,12 @@ command! -nargs=* GnosisVersions call gnosis#versions(<f-args>)
 command! -bang -nargs=+ -complete=command GnosisBulk call gnosis#bulk(<bang>0, <q-args>)
 command! -bang GnosisBulkUndo call gnosis#bulk_undo(<bang>0)
 command! GnosisBulkList call gnosis#bulk_list()
+command! -nargs=? GnosisSeal call gnosis#seal(<f-args>)
+command! GnosisUnseal call gnosis#unseal()
+augroup GnosisSeal
+  autocmd!
+  autocmd BufReadPost *.md call gnosis#seal_guard()
+augroup END
 command! -bang -nargs=? GnosisDedupe call gnosis#dedupe(<bang>0, <f-args>)
 augroup GnosisVersions
   autocmd!

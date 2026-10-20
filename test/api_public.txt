@@ -308,6 +308,8 @@ gnosis#review_skip
 gnosis#review_write
 gnosis#save_before_normal_jump
 gnosis#save_current_note
+gnosis#seal
+gnosis#seal_guard
 gnosis#session#alive
 gnosis#session#dir
 gnosis#session#mine
@@ -473,6 +475,7 @@ gnosis#trash_list
 gnosis#ui#getkey
 gnosis#ui#inputlist
 gnosis#ui#statusline
+gnosis#unseal
 gnosis#update_all
 gnosis#update_current_buffer
 gnosis#update_md
