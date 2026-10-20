@@ -38,6 +38,8 @@
 
 - `python/mandala.py` + `:GnosisMandalaNew/Cell/Sync`: 9×9 曼荼羅（保存は `mandala: true` のふつうの Markdown ノートの表。DECISIONS D005）。静的サイトでは格子表示。
 
+- 静的サイトのグラフ表示（全体／ローカル）: `python/site_assets/` + `export_site.py`。`file://` で動く（データは script で読む）。実ブラウザ（Firefox headless）で目視確認、配置の純関数は node 試験。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

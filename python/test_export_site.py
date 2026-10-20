@@ -77,7 +77,7 @@ class ExportTest(unittest.TestCase):
             self.assertIn("Content-Security-Policy", t)
             self.assertIn("default-src 'none'", t)
             self.assertNotRegex(t, r"(?i)(src|href)=\"https?://")   # 外部 CDN を読まない
-            self.assertNotIn("<script>", t.replace('<script src="search-index.js"></script><script src="search.js"></script>', ""))
+            self.assertNotRegex(re.sub(r'<script src="[\w.-]+\.js"></script>', "", t), r"<script")   # インラインのスクリプトは無い（自前の .js だけ）
             self.assertNotIn("fetch(", t)
         copied = sorted(p.relative_to(o).as_posix() for p in o.rglob("*") if p.is_file())
         self.assertIn("pic.png", copied)
@@ -86,6 +86,23 @@ class ExportTest(unittest.TestCase):
         self.assertNotIn("secret.txt", copied)
         self.assertNotIn(".hidden.png", copied)
         self.assertNotIn("OUTSIDE", "".join(p.read_text(encoding="utf-8", errors="ignore") for p in o.rglob("*") if p.is_file()))
+
+    def test_graph_page_excludes_private_and_links_local_graph(self):
+        self.run_export()
+        t = (self.out / "graph-data.js").read_text(encoding="utf-8")
+        self.assertTrue(t.startswith("window.GNOSIS_GRAPH="))
+        data = json.loads(t[len("window.GNOSIS_GRAPH="):].rstrip().rstrip(";"))
+        ids = {n["id"] for n in data["nodes"]}
+        self.assertIn("herb.md", ids)
+        self.assertNotIn("priv.md", ids)
+        self.assertTrue(all(e["s"] in ids and e["d"] in ids for e in data["edges"]))   # 非公開への辺は残さない
+        self.assertNotIn("秘密", t)
+        kinds = {e["k"] for e in data["edges"]}
+        self.assertTrue({"parent_branch", "branch_group"} <= kinds)                   # 種類を持ったまま
+        for f in ("graph.html", "graph.js", "graphcore.js"):
+            self.assertTrue((self.out / f).is_file(), f)
+        self.assertIn("graph.html#n=herb.md&amp;depth=1", (self.out / "herb.html").read_text(encoding="utf-8").replace("&depth", "&amp;depth"))
+        self.assertIn("../graph.html#n=sub/deep.md", (self.out / "sub/deep.html").read_text(encoding="utf-8").replace("%2F", "/"))
 
     def test_include_private_and_search_index(self):
         self.run_export(include_private=True)

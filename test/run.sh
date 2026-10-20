@@ -36,6 +36,7 @@ python3 "$REPO/python/test_gnosis_graph.py"
 python3 "$REPO/python/test_tasks.py"
 python3 "$REPO/python/test_md_html.py"
 python3 "$REPO/python/test_mandala.py"
+if command -v node >/dev/null 2>&1; then node "$REPO/python/test_graphcore.mjs"; else echo "graphcore: node が無いので省略"; fi
 python3 "$REPO/python/test_export_site.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"

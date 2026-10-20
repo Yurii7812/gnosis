@@ -8,6 +8,8 @@
 - ノート HTML には、本文のほか Folgezettel のパンくず（親へ戻れる）、ParentBranch・Group・Context・Related・BackLink、「このノートへのリンク」を付ける（`gnosis_graph.py` から。元の索引は書き換えない）。
 - 変換は `python/md_html.py`（依存なし）。見出し・段落・箇条書き（入れ子・チェックボックス）・番号つき・引用・コードブロック・表・水平線・画像・リンク・強調・取り消し線。`.md` へのリンクは `.html` に書き換える。
 
+- **グラフ** `graph.html`: 外部ライブラリなしの SVG。全体／「中心のノート + 深さ 1〜5」（`graph.html#n=ノート.md&depth=2`。各ノートに「このノートの周りのグラフ」リンク）。辺は種類ごとの色と向き（親・子・グループ・文脈・関連・本文リンク・バックリンク・番号の親子）で、種類のオン／オフができる。400 ノードを超える全体は、中心を選ぶよう案内。非公開ノートは節点にも辺にもならない。配置の核は `site_assets/graphcore.js`（node で単体試験）。
+
 ## 安全（試験済み: `python/test_md_html.py` `python/test_export_site.py` `test/export_site_net.sh`）
 - 本文は全部エスケープ。生の HTML・`<script>` は通さない。リンク・画像の URL は http / https / mailto / 相対だけ。`javascript:` `data:` `file:` `//` は無効。タグに任意の属性は付かない。
 - 各 HTML に CSP（`default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'`）。表示専用で、編集・ローカルファイル読み出しの仕組みは無い。

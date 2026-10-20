@@ -87,8 +87,8 @@
 | TM16 | Androidホーム画面ウィジェット、ク | Androidホーム画面ウィジェット、クイックタスク追加。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM17 | 通知タップで対象ノートを開く、通知から完 | 通知タップで対象ノートを開く、通知から完了・スヌーズする。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM18 | 朝のAgenda通知、期限超過・週次レビ | 朝のAgenda通知、期限超過・週次レビュー通知、通知の集中設定。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
-| VW01 | グローバルグラフ（全体／選択した索引から | グローバルグラフ（全体／選択した索引から到達できる範囲）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
-| VW02 | ローカルグラフ（深さ1〜任意N、方向・関 | ローカルグラフ（深さ1〜任意N、方向・関係の絞り込み）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
+| VW01 | グローバルグラフ（全体／選択した索引から | グローバルグラフ（全体／選択した索引から到達できる範囲）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` 内の表示・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
+| VW02 | ローカルグラフ（深さ1〜任意N、方向・関 | ローカルグラフ（深さ1〜任意N、方向・関係の絞り込み）。 | `\A` HTML | 動作検証中（静的サイトのグラフ: 全体／中心ノート+深さ N／種類で絞り込み・向き付きの矢印。`\A` 内の表示・選択した索引から到達できる範囲・追従は未） | 3 | `python/site_assets/graphcore.js` `graph.js` `test_graphcore.mjs`（node）。Firefox headless で目視確認 | P2 View API |
 | VW03 | Google Keep風のMasonry | Google Keep風のMasonryカード（本文プレビュー、画像、選択、ピン留め、フィルタ）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW04 | 9×9曼荼羅HTMLビュー。セルからノー | 9×9曼荼羅HTMLビュー。セルからノート／別曼荼羅へ。 | `\A` HTML | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | VW05 | マインドマップ。 | マインドマップ。 | `\A` HTML | 未実装 | 3 |  | P2 View API |

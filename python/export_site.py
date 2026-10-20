@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import json
+import urllib.parse
 import os
 import re
 import shutil
@@ -38,7 +39,9 @@ nav.rel{font-size:.9rem;border-top:1px solid #8884;margin-top:2rem;padding-top:.
 nav.rel h2{font-size:.95rem;margin:.6rem 0 .2rem}nav.rel ul{margin:0;padding-left:1.2rem}
 img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #8886;padding:.2rem .5rem}
 pre{overflow:auto;padding:.6rem;background:#8882}li.task{list-style:none;margin-left:-1.2rem}
-.crumb{font-size:.85rem;opacity:.8}"""
+.crumb{font-size:.85rem;opacity:.8}
+#kinds label{display:inline-block;margin-right:.8rem;font-size:.85rem}.sw{display:inline-block;width:.8rem;height:.8rem;margin:0 .25rem;vertical-align:middle;border-radius:2px}
+svg#g{width:100%;height:auto;border:1px solid #8886;margin-top:.5rem}"""
 JS = """(function(){var q=document.getElementById('q'),r=document.getElementById('r'),d=window.GNOSIS_INDEX||[];
 function run(){var v=q.value.trim().toLowerCase();r.textContent='';if(!v)return;var n=0;
 d.forEach(function(e){if(n<200&&(e.t.toLowerCase().indexOf(v)>=0||e.x.indexOf(v)>=0)){n++;
@@ -173,7 +176,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
             main = f"<h1>{html.escape(node.title)}</h1>" + mandala.to_html(mandala.parse(body), node.title)
         else:
             main = md_html.render(body)
-        page = _page(node.title, f'<p class="crumb"><a href="{up}index.html">一覧</a></p>{crumbs}' + main + rel_nav, up)
+        page = _page(node.title, f'<p class="crumb"><a href="{up}index.html">一覧</a></p>{crumbs}' + main + rel_nav + f'<p class="crumb"><a href="{up}graph.html#n={urllib.parse.quote(rel)}&amp;depth=1">このノートの周りのグラフ</a></p>', up)
         dest = out / _out_name(rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(page, encoding="utf-8")
@@ -183,9 +186,21 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     items = "".join(f'<li><a href="{html.escape(_out_name(rel), quote=True)}">{html.escape(t)}</a>'
                     + (f' <small>({html.escape(f)})</small>' if f else "") + "</li>" for t, rel, f in index_rows)
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
-                                         f'<a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
+                                         f'<a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
                                            '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
+    # グラフ表示（全体・ローカル）。書き出したノートだけを節点・辺にする（非公開ノートは節点にも辺にも出さない）
+    assets = Path(__file__).resolve().parent / "site_assets"
+    for name in ("graphcore.js", "graph.js"):
+        shutil.copyfile(assets / name, out / name)
+    gdata = {"nodes": [{"id": r, "title": g.nodes[r].title, "fz": g.nodes[r].fz, "href": _out_name(r), "group": g.nodes[r].is_group} for r in notes],
+             "edges": [{"s": e.src, "d": e.dst, "k": e.kind} for e in g.edges if e.src in notes and e.dst in notes]}
+    (out / "graph-data.js").write_text("window.GNOSIS_GRAPH=" + json.dumps(gdata, ensure_ascii=False) + ";\n", encoding="utf-8")
+    (out / "graph.html").write_text(_page("グラフ", '<p class="crumb"><a href="index.html">一覧</a></p><h1>グラフ</h1>'
+        '<p>中心のノート: <select id="note"><option value="">（全体）</option></select> '
+        '深さ: <select id="depth"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></p>'
+        '<div id="kinds"></div><p id="info"></p><svg id="g" viewBox="0 0 900 640" role="img" aria-label="ノートの関係グラフ"></svg>'
+        '<script src="graph-data.js"></script><script src="graphcore.js"></script><script src="graph.js"></script>'), encoding="utf-8")
     # fetch() はファイルとして直接開いたとき（file://）に使えないので、索引は <script src> で読む JS にする
     (out / "search-index.js").write_text("window.GNOSIS_INDEX=" + json.dumps(search, ensure_ascii=False) + ";\n", encoding="utf-8")
 
