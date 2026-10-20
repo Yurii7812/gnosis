@@ -62,7 +62,7 @@
 | LR05 | ランダム復習。 | ランダム復習。 | `\A` + Markdown | 動作検証中（`:GnosisSrs random`。記録しない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR06 | Active Recall、答えを見る前 | Active Recall、答えを見る前の想起。 | `\A` + Markdown | 動作検証中（答えを見る前の採点を受け付けない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR07 | 読書ハイライトの取得・ノート接続。 | 読書ハイライトの取得・ノート接続。 | `\A` + Markdown | 一部（ノート内の `==…== (p.12)` の取得・一覧。外部の電子書籍/Kindle 等からの取り込みは未） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
-| LR08 | PDF注釈、選択テキスト、ページリンク。 | PDF注釈、選択テキスト、ページリンク。 | `\A` + Markdown | 要確認 | 4 | 未実装の疑い | P1 資産モデル |
+| LR08 | PDF注釈、選択テキスト、ページリンク。 | PDF注釈、選択テキスト、ページリンク。 | `\A` + Markdown | 一部（`:GnosisPdf annotations/digest/check/page`: PDF の注釈（ハイライト・下線・取り消し線・波線・メモ・自由テキスト）を自前で読み、ハイライトした文字を座標から拾う／注釈から読書メモの草稿（`#page=N` リンクつき・新規のみ）／ノートの「引用 + ページリンク」が本当にそのページにあるか検査。手書き PDF（通常・圧縮オブジェクトストリーム）と Chromium 製 PDF で試験。**未**: PDF 上での選択テキストからの引用挿入・PDF への注釈の書き込み・暗号化 PDF・スキャン PDF（OCR）・`\A` ビューアでの表示。実際の PDF ビューア（Okular 等）が作る注釈での確認は未実施） | 4 | `python/pdf_notes.py` `python/test_pdf_notes.py` `test/pdf_net.sh` | P1 資産モデル |
 | LR09 | 読書進捗・中断位置・再開。 | 読書進捗・中断位置・再開。 | `\A` + Markdown | 動作検証中（`📖 書名 現在/全 日付`・最新が現在地・同日は後の行・再開ページ） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR10 | 理解度・成熟度（ユーザー任意の属性として | 理解度・成熟度（ユーザー任意の属性として、ノート分類を置換しない）。 | `\A` + Markdown | 動作検証中（利用者が付ける `maturity:` 属性。引き上げは提案だけで自動では書かない。分類は置き換えない） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |
 | LR11 | 段階的学習経路・順序づけ。 | 段階的学習経路・順序づけ。 | `\A` + Markdown | 動作検証中（`requires:` から前に読む順序。循環・欠落は報告） | 6 | `python/reading.py` `test_reading.py` `test/reading_net.sh` | P2 View API |

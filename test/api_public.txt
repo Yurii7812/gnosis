@@ -245,6 +245,7 @@ gnosis#para
 gnosis#paste_charwise
 gnosis#paste_clipboard
 gnosis#paste_clipboard_link_here
+gnosis#pdf
 gnosis#peek
 gnosis#peek_lines
 gnosis#perf_diag

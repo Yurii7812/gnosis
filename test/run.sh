@@ -150,6 +150,8 @@ sh "$REPO/test/preset_net.sh"
 sh "$REPO/test/git_net.sh"
 sh "$REPO/test/restore_net.sh"
 sh "$REPO/test/phone_agenda_net.sh"
+python3 "$REPO/python/test_pdf_notes.py"
+sh "$REPO/test/pdf_net.sh"
 python3 "$REPO/python/test_agenda_push.py"
 python3 "$REPO/python/test_agenda_pull.py"
 # Android アプリの純粋なロジック（メモ・予定）の単体試験。JDK と SDK があるときだけ（実機・通知・ウィジェットの実表示は対象外）

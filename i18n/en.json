@@ -221,6 +221,8 @@
     "%d か所を書き換えました（u で元に戻せます）": "Rewrote %d places (undo with u)",
     "使い方: :GnosisReadProgress 書名 ページ [全ページ]": "Usage: :GnosisReadProgress title page [total]",
     "進捗を記録しました": "Progress recorded",
+    "annotations / digest / check / page のどれかを指定してください": "Use annotations, digest, check or page",
+    "PDF を指定してください": "Give a PDF",
     "スマホへ予定を送りました（%d 件 / 未完了 %d 件）": "Sent the agenda to the phone (%d tasks / %d open)",
     "スマホの完了を反映しました（%d 件。見つからなかったもの %d 件）": "Applied completions from the phone (%d; %d not found)",
     "status / enable / disable / allow / deny / run のどれかです": "Use status / enable / disable / allow / deny / run",

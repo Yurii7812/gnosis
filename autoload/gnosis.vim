@@ -7861,6 +7861,48 @@ function! gnosis#pull_done() abort
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('スマホの完了を反映しました（%d 件。見つからなかったもの %d 件）'), len(l:r.applied), len(l:r.missing))
 endfunction
 
+" PDF の注釈・引用とページリンクの検査（LR08）。  :GnosisPdf annotations|digest|check|page …
+"   annotations file.pdf        注釈（ハイライト・下線・メモ）をページ・文字・コメントつきで見る
+"   digest file.pdf [new.md]    注釈から読書メモの草稿（ページリンクつき）。new.md を渡したときだけ新規ノートを作る（上書きしない）
+"   check [note]                ノートの「引用 + [p.N](x.pdf#page=N)」が本当にそのページにあるか検査（読むだけ）
+"   page file.pdf N             そのページの本文
+function! gnosis#pdf(kind, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if index(['annotations', 'digest', 'check', 'page'], a:kind) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('annotations / digest / check / page のどれかを指定してください') | echohl NONE
+    return
+  endif
+  let l:args = copy(a:000)
+  if a:kind !=# 'check' && empty(l:args)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('PDF を指定してください') | echohl NONE
+    return
+  endif
+  if a:kind ==# 'digest' && len(l:args) > 1
+    let l:args = [l:args[0], '--write', l:args[1]]
+  endif
+  let l:cmd = [gnosis#python_cmd(), s:note_root . '/python/pdf_notes.py', l:root, a:kind] + l:args + ['--md']
+  let l:out = system(join(map(l:cmd, 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+  if a:kind ==# 'digest' && len(a:000) > 1
+    silent! checktime
+  endif
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()
