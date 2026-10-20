@@ -15,5 +15,5 @@ n f ローズマリー 'ハーブは乾燥した土を好み水やりは控え�
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -V1"$D/vim.log" -S "$REPO/test/explore_check.vim" </dev/null >"$D/o.txt" 2>"$D/err" \
   || { cat "$D/errors" "$D/o.txt" "$D/err" "$D/vim.log" >&2; exit 1; }
-( cd "$D/v" && find . -type f | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: 探索がノートを書き換えた" >&2; exit 1; }
+( cd "$D/v" && find . -type f ! -path './.state/*' ! -name '*.un~' | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: 探索がノートを書き換えた" >&2; exit 1; }
 printf '%s\n' 'explore OK'

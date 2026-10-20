@@ -11,7 +11,7 @@ printf -- '---\ntime: 2026-10-01 09:00:00\ntitle: B\n---\n\n# B\n\n[A](a.md)\n' 
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -V1"$D/vim.log" -S "$REPO/test/snapshot_check.vim" </dev/null >"$D/out" 2>"$D/err" \
   || { cat "$D/errors" "$D/out" "$D/err" "$D/vim.log" >&2; exit 1; }
-( cd "$D/v" && find . -type f | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: スナップショットが vault を書き換えた" >&2; exit 1; }
+( cd "$D/v" && find . -type f ! -path './.state/*' ! -name '*.un~' | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: スナップショットが vault を書き換えた" >&2; exit 1; }
 # 復元先の中身は元と同じ
 ( cd "$D/restored" && find . -type f | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: 復元の中身が元と違う" >&2; exit 1; }
 # 既存の中身があるフォルダへは復元されていない

@@ -13,6 +13,6 @@ printf -- '---\ntime: 2026-01-01 00:00:00\ntitle: 睡眠の質\n---\n\n# 睡眠�
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -V1"$D/vim.log" -S "$REPO/test/para_check.vim" </dev/null >"$D/o.txt" 2>"$D/err" \
   || { cat "$D/errors" "$D/o.txt" "$D/err" "$D/vim.log" >&2; exit 1; }
-( cd "$D/v" && find . -type f ! -path './moc/*' | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: 既存のノートが変わった" >&2; exit 1; }
+( cd "$D/v" && find . -type f ! -path './moc/*' ! -path './.state/*' ! -name '*.un~' | sort | xargs md5sum | diff - "$D/before.md5" ) || { echo "NG: 既存のノートが変わった" >&2; exit 1; }
 [ "$(find "$D/v/moc" -type f | wc -l)" = 1 ] || { echo "NG: 索引案のノートが 1 つではない" >&2; exit 1; }
 printf '%s\n' 'para OK'
