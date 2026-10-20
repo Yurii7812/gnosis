@@ -2,10 +2,11 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-20）
-- ブランチ `feat/master-roadmap`（worktree `~/src/gnosis-master`、`main` 570de52 から）。main へは未マージ・push 未。
-- **Phase 0 実施中**。完了: 原本の保存、CLAUDE.md、PHILOSOPHY / ARCHITECTURE / ROADMAP / DECISIONS / FEATURES（165 機能 + 追加 ID）、テスト基準線の取得。
-- 未作成の文書（必要な Phase で作る）: DATA_FORMATS / MIGRATION / USER_GUIDE / ANDROID_SYNC / HTML_EXPORT。
+## 現在地（2026-10-20 夜）
+- ブランチ `feat/master-roadmap`（worktree `~/src/gnosis-master`、`main` 570de52 から）。**main へは未マージ・push 未**（マージは利用者の指示待ち）。
+- 全体回帰 `sh test/run.sh` は `exit=0`（run5）。**試験の実行中にファイルを編集すると失敗する**（`checkbox` の試験が `autoload` の編集と重なった実例あり）ので、回している間は編集しない。`web` の Electron E2E（`GNOSIS_RUN_WEB_E2E=1`）も全件通過（別実行）。
+- Phase 0 完了。Phase 1: `\M` の差分更新（同一ノート・日記・記録・トピック・リネーム追跡・競合解決・クラッシュ後の再実行・診断）まで。Phase 2: 静的ビュー（番号ナビ・グラフ・カード・テーブル・タイムライン・曼荼羅・検索）は実ブラウザで確認済み。**`\A` 内のタブ・分割・3 モードは未着手（GUI 編集は設計の承認待ち: DECISIONS D006）**。
+- 文書: PHILOSOPHY / ARCHITECTURE / ROADMAP / DECISIONS（D001〜D006）/ FEATURES / PROGRESS / DATA_FORMATS / USER_GUIDE / ANDROID_SYNC / HTML_EXPORT。未作成: MIGRATION。
 
 ## テスト基準線
 - 2026-10-20 時点、`sh test/run.sh` が**最後まで通る**（Electron E2E・Android Gradle・Windows/macOS 実機は未実行）。
@@ -49,6 +50,9 @@
 - `test/requests_1020_net.sh` の間欠失敗（約 3/8）の原因は、試験が保存後の非同期自動同期ジョブの完了を待たない競合だった（製品側の確認ダイアログは正しい）。待ちを足して 12/12 通過。
 
 - `python/srs.py` + `:GnosisSrs`/`:GnosisSrsStats`: 間隔反復・フラッシュカード・穴埋め・ランダム復習（SM-2 は原典どおり: 3 未満で ease を変えない）。
+
+- `python/thinking.py` + `:GnosisThink`/`:GnosisThinkCheck`: 思考法 12 種（KM05〜KM16）の雛形と構造検査。MECE は重複・漏れの「疑い」だけ。日本語の語の区切りはひらがなで分ける簡易方式（試験で弱点を発見して修正）。
+- `python/vault_backup.py`: バックアップ・検証・復元（UT04 の一部）。Vim コマンド化は未。
 
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。

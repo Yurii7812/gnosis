@@ -352,6 +352,9 @@ gnosis#theme_edit#open
 gnosis#theme_edit#render
 gnosis#theme_edit#set_color
 gnosis#theme_edit#state
+gnosis#think_check
+gnosis#think_kinds
+gnosis#think_new
 gnosis#time_char_pre
 gnosis#time_mode_on_enter
 gnosis#time_mode_on_leave

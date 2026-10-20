@@ -9,18 +9,18 @@
 | KM02 | Zettelkasten | 原子的ノート、リンク、Folgezettelの作成・成長、紙との連携。 | `\A` HTML + Markdown | 要確認 | 6 | `zn`/`zk`・Folgezettel（python/folgezettel*.py） | P2 View API |
 | KM03 | MOC/索引案 | Map of Contentの表示、ノート群から索引案生成（既存索引は勝手に改変しない）。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
 | KM04 | 曼荼羅ノート | 9×9=81マスの思考展開。各マスからMarkdownノートや別の81マス曼荼羅を開く。曼荼羅そのものの表示はHTML中心、ノートは実際のMarkdownを開く。81マスの構造デー | `\A` HTML + Markdown | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
-| KM05 | Cornell Notes | ノート本文、質問欄、要約欄の編集・出力。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM06 | Feynmanモード | 自分の説明を書き、理解の抜けを発見する。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM07 | KJ法 | カードの一時的グルーピング、名称付け、関連の仮置き。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM08 | SCAMPER | 7種の発想軸に沿った質問・アイデア生成テンプレート。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM09 | Six Thinking Hats | 6つの観点を切り替えて考える。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM10 | SWOT | 強み・弱み・機会・脅威。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM11 | 5W1H | 問いからの分解。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM12 | MECE | 重複・漏れを検討する補助（機械的に正しさを断定しない）。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM13 | TRIZ | 矛盾・発明的解決を扱うテンプレートと支援。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM14 | IBIS | Issue/Position/Argument (問題・提案・支持・反論)を関係として管理。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM15 | ADR | 意思決定の選択肢・根拠・結果・変更履歴。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
-| KM16 | 概念辞書 | 用語・定義・関連概念の索引と比較。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
+| KM05 | Cornell Notes | ノート本文、質問欄、要約欄の編集・出力。 | `\A` HTML + Markdown | 動作検証中（Cornell: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM06 | Feynmanモード | 自分の説明を書き、理解の抜けを発見する。 | `\A` HTML + Markdown | 動作検証中（Feynman: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM07 | KJ法 | カードの一時的グルーピング、名称付け、関連の仮置き。 | `\A` HTML + Markdown | 動作検証中（KJ法: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM08 | SCAMPER | 7種の発想軸に沿った質問・アイデア生成テンプレート。 | `\A` HTML + Markdown | 動作検証中（SCAMPER: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM09 | Six Thinking Hats | 6つの観点を切り替えて考える。 | `\A` HTML + Markdown | 動作検証中（Six Hats: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM10 | SWOT | 強み・弱み・機会・脅威。 | `\A` HTML + Markdown | 動作検証中（SWOT: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM11 | 5W1H | 問いからの分解。 | `\A` HTML + Markdown | 動作検証中（5W1H: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM12 | MECE | 重複・漏れを検討する補助（機械的に正しさを断定しない）。 | `\A` HTML + Markdown | 動作検証中（MECE（疑いを示すだけ）: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM13 | TRIZ | 矛盾・発明的解決を扱うテンプレートと支援。 | `\A` HTML + Markdown | 動作検証中（TRIZ: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM14 | IBIS | Issue/Position/Argument (問題・提案・支持・反論)を関係として管理。 | `\A` HTML + Markdown | 動作検証中（IBIS（提案と根拠の対応検査）: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM15 | ADR | 意思決定の選択肢・根拠・結果・変更履歴。 | `\A` HTML + Markdown | 動作検証中（ADR（状態・変更履歴の検査）: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
+| KM16 | 概念辞書 | 用語・定義・関連概念の索引と比較。 | `\A` HTML + Markdown | 動作検証中（概念辞書: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
 | ED01 | バックリンク、出典ノートのプレビューと関 | バックリンク、出典ノートのプレビューと関係区分。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | ED02 | 未リンク参照検出（文字列・意味類似を分け | 未リンク参照検出（文字列・意味類似を分ける）。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | ED03 | リンクホバー／クリック前プレビュー。 | リンクホバー／クリック前プレビュー。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
@@ -159,7 +159,7 @@
 | UT01 | 壊れたリンクの検査。 | 壊れたリンクの検査。 | Vim + API | 動作検証中（:GnosisCheck で検出のみ。修復・リネーム時の自動更新は未実装） | 1 | `python/gnosis_graph.py` `test/check_vault_net.sh` | - |
 | UT02 | Index / Topic Index  | Index / Topic Index / GroupBranchの整合性検査。 | Vim + API | 一部（Branch 検査 + 重複／抜け Folgezettel。Index→First Note→GroupBranch→Topic Index の到達性検査は未実装） | 1 | `:GnosisBranchCheck` `:GnosisCheck` | - |
 | UT03 | リネーム時の安全な参照更新。 | リネーム時の安全な参照更新。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisRename`（ファイル名変更。参照更新の範囲は要調査） | - |
-| UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisBackup`（暗号化 vault の 7z。復元の検証・自動バックアップは未実装） | - |
+| UT04 | 自動バックアップ、検証可能な復元。 | 自動バックアップ、検証可能な復元。 | Vim + API | 一部（`vault_backup.py`: tar.gz＋manifest(SHA-256)・検証・新しいフォルダへの復元・巨大ファイルの扱いは試験済み。Vim コマンド・自動バックアップ・暗号化 vault は未） | 1 | `python/vault_backup.py` `test_vault_backup.py` | - |
 | UT05 | Git連携、差分表示、バックアップ対象選 | Git連携、差分表示、バックアップ対象選別。 | Vim + API | 要確認 | 1 | Git 連携（要調査） | - |
 | UT06 | HTMLサイト出力（オフラインも可）。 | HTMLサイト出力（オフラインも可）。 | Vim + API | 動作検証中（静的 HTML・検索・番号表。EXIF 除去・分割出力・ブラウザ実表示は未） | 3 | `python/export_site.py` `md_html.py` `docs/HTML_EXPORT.md` | P2 View API |
 | UT07 | PDF・EPUBへのエクスポート。 | PDF・EPUBへのエクスポート。 | Vim + API | 未実装 | 3 |  | P2 View API |

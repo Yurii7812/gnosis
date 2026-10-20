@@ -6301,6 +6301,71 @@ function! gnosis#srs_stats() abort
   echo printf(gnosis#i18n#tr('Gnosis: カード %d 枚（新規 %d・期日 %d・先 %d）。今日の復習済み %d'), l:d.cards, l:d.new, l:d.due, l:d.later, l:d.reviewed_today)
 endfunction
 
+" 思考法のノート（Cornell・Feynman・KJ・SCAMPER・Six Hats・SWOT・5W1H・MECE・TRIZ・IBIS・ADR・概念辞書）:
+"   :GnosisThink 種類 題 [引数…] で雛形のノートを作って開く / :GnosisThinkCheck で今のノートの構造を検査（疑いを示すだけ。断定しない）
+function! s:think_run(args) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/thinking.py'] + a:args, 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  try
+    return json_decode(l:out)
+  catch
+    return {'ok': 0, 'error': trim(l:out)}
+  endtry
+endfunction
+
+function! gnosis#think_kinds(A, L, P) abort
+  let l:k = s:think_run(['kinds'])
+  return type(l:k) == v:t_list ? join(map(copy(l:k), 'v:val.kind'), "\n") : ''
+endfunction
+
+function! gnosis#think_new(kind, ...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  call gnosis#save_current_note()
+  let l:title = a:0 ? a:1 : a:kind
+  let l:file = l:root . '/' . gnosis#timestamp_filename() . '.md'
+  let l:r = s:think_run(['new', a:kind, l:file, l:title] + a:000[1:])
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  execute 'edit ' . fnameescape(l:file)
+endfunction
+
+function! gnosis#think_check() abort
+  call gnosis#save_current_note()
+  let l:r = s:think_run(['check', expand('%:p')])
+  if type(l:r) != v:t_dict || has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  if empty(l:r.kind) || !has_key(l:r, 'counts') || (empty(l:r.counts) && !l:r.ok)
+    echo gnosis#i18n#tr('Gnosis: 思考法のノートではありません（front matter に thinking: 種類）')
+    return
+  endif
+  let l:lines = [printf(gnosis#i18n#tr('思考法: %s'), l:r.kind), '']
+  if !empty(l:r.missing)
+    let l:lines += [gnosis#i18n#tr('足りない節') . ': ' . join(l:r.missing, ' / ')]
+  endif
+  if !empty(l:r.empty)
+    let l:lines += [gnosis#i18n#tr('まだ空の節') . ': ' . join(l:r.empty, ' / ')]
+  endif
+  for l:n in l:r.notes
+    call add(l:lines, '- ' . l:n)
+  endfor
+  if len(l:lines) == 2
+    call add(l:lines, gnosis#i18n#tr('指摘はありません'))
+  endif
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+  nnoremap <buffer> <silent> q :close<CR>
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)
