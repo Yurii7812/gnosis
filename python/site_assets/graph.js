@@ -2,10 +2,10 @@
 (function () {
   var C = window.GraphCore, data = window.GNOSIS_GRAPH || { nodes: [], edges: [] };
   var svg = document.getElementById("g"), W = 900, H = 640, NS = "http://www.w3.org/2000/svg";
-  var state = { n: "", depth: 1, kinds: Object.keys(C.KINDS).filter(function (k) { return k !== "backlink"; }) };
+  var state = { n: "", depth: 1, labels: false, kinds: Object.keys(C.KINDS).filter(function (k) { return k !== "backlink"; }) };
   function readHash() {
     var m;
-    state.n = ""; state.depth = 1;
+    state.n = ""; state.depth = 1; state.labels = /[#&]labels=1/.test(location.hash);
     if ((m = /[#&]n=([^&]*)/.exec(location.hash))) { try { state.n = decodeURIComponent(m[1]); } catch (e) {} }
     if ((m = /[#&]depth=(\d+)/.exec(location.hash))) state.depth = Math.min(9, Math.max(1, +m[1]));
   }
@@ -37,6 +37,8 @@
     var sel = document.getElementById("depth");
     sel.value = String(state.depth);
     sel.addEventListener("change", function () { state.depth = +sel.value; draw(); });
+    var lb = document.getElementById("labels");
+    if (lb) { lb.checked = state.labels; lb.addEventListener("change", function () { state.labels = lb.checked; draw(); }); }
     var ns = document.getElementById("note");
     data.nodes.slice().sort(function (a, b) { return a.title.localeCompare(b.title); }).forEach(function (n) {
       var o = document.createElement("option"); o.value = n.id; o.textContent = n.title; ns.appendChild(o);
@@ -68,6 +70,14 @@
       if (!a || !b || e.s === e.d) return;
       svg.appendChild(el("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: C.KINDS[e.k].color, "stroke-width": "1.5", "marker-end": "url(#a-" + e.k + ")", opacity: "0.8" }));
     });
+    // コンセプトマップとして読めるよう、関係の名前を線の上に出せる（線が多いと文字が重なるので 150 本まで）
+    var labelOff = state.labels && g.edges.length > 150;
+    if (state.labels && !labelOff) g.edges.forEach(function (e) {
+      var a = pos[e.s], b = pos[e.d];
+      if (!a || !b || e.s === e.d) return;
+      svg.appendChild(el("text", { class: "elabel", x: ((a[0] + b[0]) / 2).toFixed(1), y: ((a[1] + b[1]) / 2 - 3).toFixed(1), "text-anchor": "middle", "font-size": "9", fill: C.KINDS[e.k].color }, C.KINDS[e.k].label));
+    });
+    if (labelOff) info.textContent += "（関係が多いので、名前の表示は 150 本までです。中心のノートを選んで絞ってください）";
     g.nodes.forEach(function (n) {
       var p = pos[n.id];
       var a = el("a", { href: n.href });

@@ -69,6 +69,21 @@ class MdHtmlTest(unittest.TestCase):
         h = mh.inline("![図](pic.png)")
         self.assertIn('<img src="pic.png" alt="図" loading="lazy">', h)
 
+    def test_link_label_with_code_or_image_does_not_crash(self):
+        """実バグ: リンクの表示文字にコード・画像があると IndexError で書き出し全体が止まっていた。"""
+        self.assertEqual(mh.inline("[`code`](x.md)"), '<a href="x.html"><code>code</code></a>')
+        self.assertEqual(mh.inline("[![img](a.png)](x.md)"), '<a href="x.html"><img src="a.png" alt="img" loading="lazy"></a>')
+        self.assertEqual(mh.inline("[a `b` c](x.md) and `d`"), '<a href="x.html">a <code>b</code> c</a> and <code>d</code>')
+        self.assertEqual(mh.inline("**[`k`](x.md)**"), '<strong><a href="x.html"><code>k</code></a></strong>')
+        self.assertEqual(mh.inline("`a` [b](x.md) `c`"), '<code>a</code> <a href="x.html">b</a> <code>c</code>')
+        # 安全性: ラベルの中の HTML は文字にされる・危険なリンク先は文字だけ
+        self.assertEqual(mh.inline("[`<script>alert(1)</script>`](x.md)"), '<a href="x.html"><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></a>')
+        out = mh.inline("[`code`](javascript:alert(1))")
+        self.assertNotIn("<a", out)
+        self.assertNotIn("\x00", mh.inline("[`a`](x.md) [`b`](y.md) ![i](z.png) `c`"))     # 退避の印が出力に残らない
+        # 本文全体でも落ちない
+        self.assertIn("<code>x</code>", mh.render("# 題\n\n- [`x`](a.md) と [![i](p.png)](b.md)\n"))
+
     def test_japanese_snake_case_not_italic(self):
         self.assertNotIn("<em>", mh.inline("snake_case_name と file_name_x"))
 

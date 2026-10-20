@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import folgezettel as fz  # noqa: E402
 import gnosis_graph as gg  # noqa: E402
 import graph_analysis  # noqa: E402
+import export_views2  # noqa: E402
 import mandala  # noqa: E402
 import md_html  # noqa: E402
 import tasks as taskmod  # noqa: E402
@@ -225,7 +226,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     items = "".join(f'<li><a href="{html.escape(_out_name(rel), quote=True)}">{html.escape(t)}</a>'
                     + (f' <small>({html.escape(f)})</small>' if f else "") + "</li>" for t, rel, f in index_rows)
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
-                                         f'<a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a> ・ <a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="analysis.html">分析</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
+                                         f'<a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a> ・ <a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="analysis.html">分析</a> ・ <a href="views.html">そのほかのビュー</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
                                            '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
     # ノート一覧のデータ（カード・テーブル・タイムライン）。書き出したノートだけ。派生データなので vault から作り直せる
@@ -255,7 +256,8 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
         meta.append({"id": rel, "title": node.title, "fz": node.fz, "href": _out_name(rel), "time": tm,
                      "mtime": int((root / rel).stat().st_mtime), "excerpt": _excerpt(d["body"]), "image": img,
                      "out": in_out[rel][0], "in": in_out[rel][1], "size": len(text.encode("utf-8")),
-                     "tasks_open": sum(1 for t in ts if not t.done), "tasks_done": sum(1 for t in ts if t.done)})
+                     "tasks_open": sum(1 for t in ts if not t.done), "tasks_done": sum(1 for t in ts if t.done),
+                     "location": export_views2._fm_value(d["fm"], "location")})
     (out / "notes-data.js").write_text("window.GNOSIS_NOTES=" + json.dumps(meta, ensure_ascii=False) + ";\n", encoding="utf-8")
     for name in ("viewscore.js", "views.js"):
         shutil.copyfile(assets / name, out / name)
@@ -282,8 +284,10 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     (out / "graph.html").write_text(_page("グラフ", '<p class="crumb"><a href="index.html">一覧</a></p><h1>グラフ</h1>'
         '<p>中心のノート: <select id="note"><option value="">（全体）</option></select> '
         '深さ: <select id="depth"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></p>'
-        '<div id="kinds"></div><p id="info"></p><svg id="g" viewBox="0 0 900 640" role="img" aria-label="ノートの関係グラフ"></svg>'
+        '<div id="kinds"></div><p><label><input type="checkbox" id="labels"> 関係の名前を線の上に表示（コンセプトマップ）</label></p><p id="info"></p><svg id="g" viewBox="0 0 900 640" role="img" aria-label="ノートの関係グラフ"></svg>'
         '<script src="graph-data.js"></script><script src="graphcore.js"></script><script src="graph.js"></script>'), encoding="utf-8")
+    # 追加ビュー（階層ツリー・Treemap・カンバン・マインドマップ ほか）。graph-data.js が書かれたあと
+    export_views2.write(out, root, g, notes, copied, assets, _page, _out_name)
     # Folgezettel 番号ナビゲーター（番号のついた書き出し済みノート。本文プレビュー付き）
     for name in ("fznav-core.js", "fznav.js"):
         shutil.copyfile(assets / name, out / name)

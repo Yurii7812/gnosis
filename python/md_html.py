@@ -42,8 +42,14 @@ _EM = re.compile(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<![\w_])_(?!\s)(.
 _DEL = re.compile(r"~~(.+?)~~")
 
 
-def inline(text: str) -> str:
-    stash: list[str] = []
+_MARK = re.compile(r"\x00(\d+)\x00")
+
+
+def inline(text: str, _stash: list[str] | None = None) -> str:
+    """行内の書式を HTML にする。退避表（stash）は入れ子の呼び出しと共有し、最上位の呼び出しでだけ解決する
+    （リンクの表示文字の中のコード・画像の退避番号は外側の表のものなので、内側で解決すると IndexError になる）。"""
+    top = _stash is None
+    stash: list[str] = [] if top else _stash
 
     def keep(h: str) -> str:
         stash.append(h)
@@ -59,14 +65,21 @@ def inline(text: str) -> str:
 
     def link(m):
         u = safe_url(m.group(2))
-        label = inline(re.sub(r"\\(.)", r"\1", m.group(1)))
+        label = inline(re.sub(r"\\(.)", r"\1", m.group(1)), stash)
         return keep(f'<a href="{html.escape(u, quote=True)}">{label}</a>') if u is not None else keep(label)
     text = _LINK.sub(link, text)
     text = html.escape(text, quote=False)
     text = _STRONG.sub(lambda m: "<strong>" + (m.group(1) or m.group(2)) + "</strong>", text)
     text = _EM.sub(lambda m: "<em>" + (m.group(1) or m.group(2)) + "</em>", text)
     text = _DEL.sub(lambda m: "<del>" + m.group(1) + "</del>", text)
-    return re.sub(r"\x00(\d+)\x00", lambda m: stash[int(m.group(1))], text)
+    if not top:
+        return text
+    for _ in range(20):                                         # 退避した断片の中に別の断片の番号が入っていることがある
+        resolved = _MARK.sub(lambda m: stash[int(m.group(1))], text)
+        if resolved == text:
+            break
+        text = resolved
+    return text
 
 
 _LIST = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$")
