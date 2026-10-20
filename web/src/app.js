@@ -119,6 +119,9 @@ function applyLook(s) {
     r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
     r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    // ライトのときだけ、Markdown Viewer 拡張（GitHub スタイル）の見え方にする（styles.css の html.theme-light）
+    document.documentElement.classList.toggle("theme-light", !dark);
+    document.documentElement.classList.toggle("theme-dark", dark);
     if (term) term.options.theme = { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.selection };
   }
   if (s.fontSize) {

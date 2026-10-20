@@ -54,6 +54,8 @@
 - `python/thinking.py` + `:GnosisThink`/`:GnosisThinkCheck`: 思考法 12 種（KM05〜KM16）の雛形と構造検査。MECE は重複・漏れの「疑い」だけ。日本語の語の区切りはひらがなで分ける簡易方式（試験で弱点を発見して修正）。
 - `python/vault_backup.py`: バックアップ・検証・復元（UT04 の一部）。Vim コマンド化は未。
 
+- `\A` のライトを Markdown Viewer 拡張（GitHub スタイル）の見え方に（`web/styles.css` の `html.theme-light`、`web/src/app.js`、試験 `web/test/look_e2e.mjs`）。Electron の theme_e2e・view_swap は通過。※ 実機の Brave 拡張との並べての目視比較は未（GitHub スタイルの寸法・色に合わせた）。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

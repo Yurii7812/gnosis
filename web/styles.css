@@ -103,6 +103,39 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 /* 中身が空の関係の節の見出し（Context / Group / Related / BackLink）は出さない */
 .cm-md-sec-empty { height: 0; line-height: 0; font-size: 0; padding: 0 !important; margin: 0 !important; border: 0 !important; overflow: hidden; }
 
+/* ---- ライト: ブラウザの Markdown Viewer 拡張（GitHub スタイル）と同じ見え方 ----
+   本文の幅 980px・余白 45px・行間 1.5・見出し（h1/h2 に下線）・インラインコード・コードブロック・引用・表・リンクを GitHub に合わせる。
+   色は配色（palette）に従う。ダークには影響しない（html.theme-light のときだけ）。 */
+:root.theme-light {
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Noto Sans Mono CJK JP", monospace;
+  --gh-border: #d1d9e0;
+  --gh-subtle: #f6f8fa;
+  --gh-muted: #59636e;
+}
+:root.theme-light .cm-editor .cm-scroller { line-height: 1.5; }
+:root.theme-light .cm-editor .cm-content { max-width: 980px; padding: 45px 45px 40vh; }
+:root.theme-light .cm-md-h1, :root.theme-light .cm-md-h2, :root.theme-light .cm-md-h3,
+:root.theme-light .cm-md-h4, :root.theme-light .cm-md-h5, :root.theme-light .cm-md-h6 { color: var(--fg); font-weight: 600; line-height: 1.25; }
+:root.theme-light .cm-md-h1 { font-size: 2em; padding-top: .6em; padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); }
+:root.theme-light .cm-md-h2 { font-size: 1.5em; padding-top: .8em; padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); }
+:root.theme-light .cm-md-h3 { font-size: 1.25em; padding-top: .8em; }
+:root.theme-light .cm-md-h4 { font-size: 1em; padding-top: .8em; }
+:root.theme-light .cm-md-h5 { font-size: .875em; padding-top: .8em; }
+:root.theme-light .cm-md-h6 { font-size: .85em; color: var(--gh-muted); padding-top: .8em; }
+:root.theme-light .cm-md-code { font-size: 85%; padding: .2em .4em; background: rgba(129, 139, 152, .12); border-radius: 6px; }
+:root.theme-light .cm-md-link-md { text-decoration-color: transparent; }
+:root.theme-light .cm-md-link-md:hover { text-decoration-color: var(--link); }
+:root.theme-light .cm-md-quote { border-left: .25em solid var(--gh-border); padding-left: 1em !important; margin-left: 0; color: var(--gh-muted); }
+:root.theme-light .cm-md-hr { border-bottom: .25em solid var(--gh-border); line-height: .5; }
+:root.theme-light .cm-md-fence { background: var(--gh-subtle); font-size: 85%; line-height: 1.45; padding-left: 16px; padding-right: 16px; }
+:root.theme-light .cm-md-fence-edge { background: var(--gh-subtle); color: transparent; font-size: 8px; line-height: 1; }   /* ``` の行は目立たせない（カーソルがあるときは Vim の表示が出る） */
+:root.theme-light .cm-md-table { font-size: 1em; }
+:root.theme-light .cm-md-table th, :root.theme-light .cm-md-table td { border: 1px solid var(--gh-border); padding: 6px 13px; }
+:root.theme-light .cm-md-table th { background: transparent; font-weight: 600; }
+:root.theme-light .cm-md-table tbody tr:nth-child(even) td { background: var(--gh-subtle); }
+:root.theme-light .cm-md-img img { border-radius: 0; }
+
 /* ---- 起動画面（白背景・黒文字。vault を開くまでは設定のテーマを使わない） ---- */
 body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .launcher { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #000000; overflow: auto; color-scheme: light;

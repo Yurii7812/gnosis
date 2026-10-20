@@ -185,3 +185,6 @@ node "$REPO/web/test/site_views_e2e.mjs"
 if [ "${GNOSIS_RUN_WEB_E2E:-}" = "1" ]; then
   (cd "$REPO/web" && npm test)
 fi
+
+# `\A` のライトの見え方（Markdown Viewer 拡張＝GitHub スタイル）と、ダークが変わらないこと（chromium が無ければ省略）
+node "$REPO/web/test/look_e2e.mjs"

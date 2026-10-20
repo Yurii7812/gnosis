@@ -73,3 +73,5 @@ Windows でも動くように作ってあります（Linux は今のまま）。
 環境変数: `GNOSIS_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`GNOSIS_PTY`（`node-pty` / `python`。
 既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `GNOSIS_PTY=node-pty` で動くことを確認済み。
 
+## ライトの見え方（2026-10-20〜）
+`\A` のライト（白）は、ブラウザの **Markdown Viewer 拡張（GitHub スタイル）と同じ見え方**にする。配色が明るいとき `html.theme-light` が付き、`web/styles.css` の該当ブロックが効く: 本文の幅 980px・余白 45px・行間 1.5・GitHub のフォント・見出し（h1/h2 に下線・本文と同じ色）・インラインコードの背景・コードブロック・引用の左線・表の罫線と偶数行・太い水平線・リンクは通常は下線なし。色は配色（palette）に従う。ダークは従来どおり。試験: `web/test/look_e2e.mjs`（計算済みスタイルの検査。`LOOK_SHOT=フォルダ` で目視用の画像も保存）。
