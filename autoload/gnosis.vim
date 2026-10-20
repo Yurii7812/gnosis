@@ -7820,6 +7820,47 @@ function! gnosis#collect(bang, action, ...) abort
   call s:ga_show(l:root, l:lines, {})
 endfunction
 
+" スマホとの予定のやりとり（TM16〜TM18 の PC 側）。USB（adb）でつないだスマホのアプリへ送る／から受け取る。
+"   :GnosisPushAgenda      未完了のタスク（期限・優先度・ノートの題・本文だけ）をスマホへ送る。ノートは読むだけ
+"   :GnosisPullDone        スマホで「完了」を押したタスクを、ノートへ反映する（[x] と ✅ 日付。繰り返しは次の回を作る）
+function! s:phone_run(script, action) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return {}
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/' . a:script, l:root, a:action], 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': l:out}
+  endtry
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return {}
+  endif
+  return l:r
+endfunction
+
+function! gnosis#push_agenda() abort
+  let l:r = s:phone_run('agenda_push.py', 'push')
+  if !empty(l:r)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('スマホへ予定を送りました（%d 件 / 未完了 %d 件）'), l:r.pushed, l:r.total_open)
+  endif
+endfunction
+
+function! gnosis#pull_done() abort
+  if s:nt_modified()
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:r = s:phone_run('agenda_pull.py', 'pull')
+  if empty(l:r)
+    return
+  endif
+  silent! checktime
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('スマホの完了を反映しました（%d 件。見つからなかったもの %d 件）'), len(l:r.applied), len(l:r.missing))
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

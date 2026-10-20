@@ -33,3 +33,10 @@
 
 ## 試験
 `python/test_capture_merge.py`（merge の単体）、`python/test_capture_import.py`（plan）、`test/capture_embed_net.sh`（まとめるトピック・時系列記録の編集・競合。つながりの行と画像の変更は対象外）、`test/capture_diary_net.sh`（日記の 10 回取り込み・編集・競合）、`test/capture_merge_net.sh`（実 Vim: リネーム追跡も含む。 再実行で増えない／mtime 不変／PC 追記とスマホ別行編集／冪等／同一行競合）、`test/capture_topics_net.sh`。必須 E2E のうち未着手: クラッシュ後の再実行、旧 state 移行、新旧 APK（実機）、スマホのトピック移動・関係編集との組合せ。
+
+## 予定（タスク）の同期（TM16〜TM18）
+PC → スマホ: `python/agenda_push.py push`（`:GnosisPushAgenda`）が、未完了のタスクを `files/agenda.tsv`（タブ区切り・先頭 `# gnosis-agenda v1`）へ adb `run-as` で書く（一時ファイル → mv）。列: `task キー 期限 時刻 優先度 ノートの題 本文`。キーは `sha1(ノートのパス + NUL + 本文)` の先頭 10 桁（行が動いても変わらない）。
+スマホ → PC: アプリで「完了」を押すと `files/agenda-done.tsv` に `done キー 時刻` を追記する。`python/agenda_pull.py pull`（`:GnosisPullDone`）が、前回の残り（`agenda-done.processing`）→ 新しい分の順に、名前を変えてから読み、キーが一致する**未完了のタスクだけ**を `tasks.complete` で完了にし、反映できたらスマホ側の記録を消す。
+クイックタスク追加は、アプリのメモ（`- [ ] 本文 📅 日付`）として保存し、従来の `\M` で取り込む。
+アプリ側（`android/`）: `Agenda.kt`（純粋なロジック）・`AgendaStore.kt`・`AgendaNotifier.kt`（朝のまとめ・時刻つきの通知・完了/10 分後に）・`AgendaActivity.kt`・`AgendaWidget.kt`・`QuickTaskActivity.kt`。`MainActivity` は変えていない（起動口は別に追加）。
+**実機での通知・ウィジェット・画面の確認は未実施。**

@@ -252,6 +252,8 @@ gnosis#preset
 gnosis#preset_autoload
 gnosis#preset_collect
 gnosis#profile
+gnosis#pull_done
+gnosis#push_agenda
 gnosis#push_history
 gnosis#python_cmd
 gnosis#query
