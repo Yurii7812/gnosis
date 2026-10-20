@@ -70,7 +70,7 @@
 | LR13 | 書籍・論文・Webの出典／引用元の追跡、 | 書籍・論文・Webの出典／引用元の追跡、該当箇所への戻りリンク。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
 | LR14 | ハイライト・注釈からMarkdownノー | ハイライト・注釈からMarkdownノート／索引リンク作成。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
 | TM01 | 統合Agenda: ノートと日記内のタス | 統合Agenda: ノートと日記内のタスクを収集。 | Vim + `\A` + Android | 動作検証中（Vim の :GnosisAgenda のみ。`\A`・APK は未実装） | 5 | `python/tasks.py` `test_tasks.py` `test/agenda_net.sh` | P1 タスクエンジン |
-| TM02 | カレンダー: 日記、期限、作成・更新日、 | カレンダー: 日記、期限、作成・更新日、予定を表示。 | Vim + `\A` + Android | 要確認（Agenda はあるがカレンダー表示は未実装） | 5 | — | P1 タスクエンジン |
+| TM02 | カレンダー: 日記、期限、作成・更新日、 | カレンダー: 日記、期限、作成・更新日、予定を表示。 | Vim + `\A` + Android | 動作検証中（月カレンダー・日の一覧。日ごとの作成📝・期限📅・完了✅。うるう年・月末を試験。Agenda とは別に読み取り専用） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM03 | 指定日時のリマインダー。 | 指定日時のリマインダー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM04 | 繰り返しタスク／通知、定期予定。 | 繰り返しタスク／通知、定期予定。 | Vim + `\A` + Android | 一部（Markdown の繰り返し規則と次の回の生成は試験済み。通知側・Android は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
 | TM05 | スヌーズ・再通知。 | スヌーズ・再通知。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
@@ -78,9 +78,9 @@
 | TM07 | ポモドーロ・集中タイマー。 | ポモドーロ・集中タイマー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM08 | 習慣トラッカー。 | 習慣トラッカー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM09 | タスク依存関係、ブロッカー。 | タスク依存関係、ブロッカー。 | Vim + `\A` + Android | 動作検証中（`id:`/`after:` でブロック中を判定し Agenda で分ける。UI での編集は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
-| TM10 | 日／週／月／年のレビュー。 | 日／週／月／年のレビュー。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
+| TM10 | 日／週／月／年のレビュー。 | 日／週／月／年のレビュー。 | Vim + `\A` + Android | 動作検証中（日/週/月/年。年またぎの週も試験。レビューは `:GnosisPeriodReviewWrite` で新しいノートとして残せる。上書きしない・vault 外/ドット始まりへは書かない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM11 | ライフログ（記録用データと日記への接続） | ライフログ（記録用データと日記への接続）。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
-| TM12 | 過去の今日（On This Day）。 | 過去の今日（On This Day）。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
+| TM12 | 過去の今日（On This Day）。 | 過去の今日（On This Day）。 | Vim + `\A` + Android | 動作検証中（過去の年の同じ月日に作ったノート・終えたタスク。今年は含めない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |
 | TM13 | 前回セッションの復元。 | 前回セッションの復元。 | Vim + `\A` + Android | 要確認 | 2 | `test/session_*`（要調査） | P1 共通ID |
 | TM14 | 通知履歴・未処理タスク。 | 通知履歴・未処理タスク。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |
 | TM15 | 知識リマインダー（以前のノート、未完了の | 知識リマインダー（以前のノート、未完了の問い、古い仮説などを再提示）。 | Vim + `\A` + Android | 未実装 | 5 |  | P1 タスクエンジン |

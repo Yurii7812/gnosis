@@ -50,6 +50,7 @@ gnosis#check_missing_prefix_in_current_dir
 gnosis#check_missing_prefix_in_current_dir_once
 gnosis#check_vault
 gnosis#choose_index_root
+gnosis#chrono
 gnosis#cipher_dir
 gnosis#cleanup_stale_locks
 gnosis#clear_search_highlight
@@ -235,6 +236,7 @@ gnosis#review_commit
 gnosis#review_reopen
 gnosis#review_setup
 gnosis#review_skip
+gnosis#review_write
 gnosis#save_before_normal_jump
 gnosis#save_current_note
 gnosis#session#alive

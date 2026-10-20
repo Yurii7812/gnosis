@@ -6469,6 +6469,45 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" 時間軸の見方（TM02 カレンダー・TM10 レビュー・TM12 過去の今日）。読み取り専用。レビューを残すのは :GnosisPeriodReviewWrite のときだけ（新しいノート）。
+"   :GnosisCalendar [YYYY-MM]  :GnosisDay YYYY-MM-DD  :GnosisOnThisDay [YYYY-MM-DD]  :GnosisPeriodReview 日|週|月|年 [YYYY-MM-DD]  :GnosisPeriodReviewWrite 日|週|月|年 YYYY-MM-DD 新しいファイル
+function! gnosis#chrono(kind, ...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/chrono.py', l:root, a:kind] + copy(a:000) + ['--md'], 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#review_write(period, date, file) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/chrono.py', l:root, 'write-review', a:period, a:date, a:file], 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  execute 'edit ' . fnameescape(l:root . '/' . a:file)
+endfunction
+
 " vault のバックアップ・検証・復元（UT04）。  :GnosisBackup [出力先]  :GnosisBackupVerify アーカイブ  :GnosisBackupRestore アーカイブ 新しい空のフォルダ  :GnosisBackupList [出力先]
 " バックアップは tar.gz + manifest（SHA-256）で、元の vault は読むだけ。復元は新しい空のフォルダにだけ行い、既存の vault は上書きしない。
 " 出力先の既定は <vault>/../gnosis-backups（vault の外）。
