@@ -101,9 +101,11 @@ const scenario = `(async () => {
     R.popup.collapsed = !G.isExpanded() && wrap.style.clipPath === '';
   }
 
-  // zn で新しいノートを作る（位置を聞かれるので Enter）
+  // zn で新しいノートを作る。index.md はグループなので、登録方法 → 表示名 → よみ の順に聞かれる（すべて Enter）
   await press('zn', 700);
-  R.znPrompt = G.screen().slice(-3).join('|').trim().slice(0, 80);
+  R.znPrompt = G.screen().slice(-3).join('|').trim().slice(0, 120);
+  await press('\\r', 900);
+  await press('\\r', 900);
   await press('\\r', 2200);
   R.newNote = base(G.state().file);
 
@@ -150,7 +152,8 @@ const scenario = `(async () => {
       R.altClick.line = G.view.getText().split('\\n')[G.state().cur[0] - 1];
       await press('zk', 700);
       R.altClick.prompt = G.screen().slice(-3).map((l) => l.trim()).join('|');
-      await press('g', 2000);
+      // zk はノーマルモードでは BranchGroup を作る n だけを出す（リンク 1 本をグループにする zk → g は廃止）。取り消しで何も変えない
+      await press('\\x1b', 500);
       R.altClick.after = base(G.state().file);
       R.altClick.body = G.view.getText();
       await press('\\x1b', 300);
@@ -337,10 +340,9 @@ try {
   {
     const a = R.altClick || {};
     check(a.found && a.file === "anchor.md" && /\(m2\.md#sec\)/.test(a.line || ""), "Alt+click moves the cursor onto the link without opening it: " + JSON.stringify(a));
-    check(/g=/.test(a.prompt || ""), "zk shows the g key: " + JSON.stringify(a.prompt));
-    check(/^\d{12}\.md$/.test(a.after || "") && (a.body || "").includes("[二](m2.md#sec)") && /attribute: group/.test(a.body || ""), "zk → g made a group with that one link: " + JSON.stringify(a));
+    check(/n=/.test(a.prompt || "") && !/g=/.test(a.prompt || ""), "zk (normal mode) offers n (BranchGroup) only: " + JSON.stringify(a.prompt));
     const an = fs.readFileSync(path.join(vault, "anchor.md"), "utf8");
-    check(an.includes("(" + a.after + ")") && !an.includes("(m2.md#sec)"), "the link in the original note was replaced by the group link: " + an.slice(-200));
+    check(a.after === "anchor.md" && an.includes("(m2.md#sec)") && !/attribute: group/.test(a.body || ""), "Esc after zk changes nothing: " + JSON.stringify(a) + an.slice(-200));
   }
   check(R.__window && R.__window.maximizeRequested === true && R.__window.fullscreen === false, "default: maximized (requested), not fullscreen: " + JSON.stringify(R.__window));
   check(R.images?.file === "img.md", "could not open the image note: " + JSON.stringify(R.images));
@@ -363,8 +365,9 @@ try {
     const z = R.znC || {};
     check(/^\d{12}\.md$/.test(z.now || "") && z.from === "plain.md", "zn c did not create a new note: " + JSON.stringify(z));
     const oldTxt = fs.readFileSync(path.join(vault, "plain.md"), "utf8");
-    const ctx = (oldTxt.split("\nContext:\n")[1] || "").split("\n\n")[0];
-    check(ctx.includes("(" + z.now + ")") && !oldTxt.includes("### Context"), "zn c: the old note (no Context before) should get a Context: block (not ### Context) with the new note: " + oldTxt.slice(0, 300));
+    // c は「リンク先（新しいノート）の Context に今のノート」（自分の側に Context を作るのは a）。今のノートには本文の最後にリンクが入る
+    check(oldTxt.includes("(" + z.now + ")") && !oldTxt.includes("Context:") && !oldTxt.includes("### Context"), "zn c: the old note should only get a body link to the new note (no Context block on its side): " + oldTxt.slice(0, 300));
+    check(/\nContext:\n\[[^\]]*\]\(plain\.md\)/.test(z.body || ""), "zn c: the new note should get a Context: block that links the old note: " + (z.body || "").slice(0, 200));
     check(!/\n### Parent\n/.test(oldTxt), "zn c: no ### Parent should remain");
     check((z.body || "").includes("(plain.md)"), "zn c: the new note body should link the old note: " + (z.body || "").slice(0, 200));
   }
