@@ -92,6 +92,16 @@ call assert_equal(s:body, readfile(s:n))
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:body, readfile(s:n))
 call assert_false(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
+" 診断コマンドが動く（別版は無いので何も作らない・capture_id は既にあるので足す件数は 0）
+let s:nb = len(glob($D . '/v/*.md', 0, 1))
+try
+  call gnosis#capture_backfill()
+  call gnosis#capture_backfill('apply')
+  call gnosis#capture_duplicates()
+catch
+  call add(v:errors, '診断コマンドが失敗: ' . v:exception)
+endtry
+call assert_equal(s:nb, len(glob($D . '/v/*.md', 0, 1)))
 call writefile(v:errors, $D . '/errors')
 if !empty(v:errors) | cquit | endif
 qa!

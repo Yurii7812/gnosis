@@ -5837,6 +5837,50 @@ function! gnosis#capture_resolve(id, how) abort
   echo printf(gnosis#i18n#tr('Gnosis: 競合を解決しました（%s）。次の \M で取り込み済みになります'), a:how)
 endfunction
 
+" 旧版の「書き直すと別版ノートを作る」でできた別版の一覧: :GnosisCaptureDuplicates（消さない・統合は \l → m）
+function! gnosis#capture_duplicates() abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/capture_diag.py', 'duplicates', l:root], 'shellescape(v:val)'), ' ')
+  let l:list = json_decode(system(l:cmd))
+  if empty(l:list)
+    echo gnosis#i18n#tr('Gnosis: スマホのメモの別版はありません')
+    return
+  endif
+  let l:lines = [gnosis#i18n#tr('スマホのメモの別版（何も消していません。統合は元のノートで \l → m）'), '']
+  for l:d in l:list
+    let l:lines += [l:d.original] + map(copy(l:d.versions), '"  ← " . v:val')
+  endfor
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+endfunction
+
+" 旧ノートへ capture_id を足す（リネームしても追跡できる）: :GnosisCaptureBackfill（確認だけ） / :GnosisCaptureBackfill apply（書く）
+function! gnosis#capture_backfill(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:apply = a:0 && a:1 ==# 'apply'
+  if l:apply
+    call gnosis#save_current_note()
+  endif
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/capture_diag.py', 'backfill', l:root] + (l:apply ? ['--apply'] : []), 'shellescape(v:val)'), ' ')
+  let l:r = json_decode(system(l:cmd))
+  if l:apply
+    silent! checktime
+    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートに capture_id を足しました'), len(l:r.items))
+  else
+    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートに capture_id を足せます（書くには :GnosisCaptureBackfill apply）'), len(l:r.items))
+  endif
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

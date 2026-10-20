@@ -31,6 +31,7 @@ python3 "$REPO/python/test_orphans.py"
 python3 "$REPO/python/test_folgezettel.py"
 python3 "$REPO/python/test_capture_import.py"
 python3 "$REPO/python/test_capture_merge.py"
+python3 "$REPO/python/test_capture_diag.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
 

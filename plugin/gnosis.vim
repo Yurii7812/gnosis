@@ -507,6 +507,8 @@ nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
 command! GnosisQuick call gnosis#quick_note()
 command! -nargs=? -complete=file GnosisCaptureImport call gnosis#capture_import(<q-args>)
 command! GnosisCaptureConflicts call gnosis#capture_conflicts()
+command! GnosisCaptureDuplicates call gnosis#capture_duplicates()
+command! -nargs=? GnosisCaptureBackfill call gnosis#capture_backfill(<f-args>)
 command! -nargs=+ GnosisCaptureResolve call gnosis#capture_resolve(<f-args>)
 command! GnosisApkInstall call gnosis#apk_install()
 command! -nargs=? -range GnosisTopic call gnosis#topic#assign(<line1>, <line2>, <q-args>)
