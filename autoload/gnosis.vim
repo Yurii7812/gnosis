@@ -6469,6 +6469,63 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" リマインダー（TM03・TM05・TM14）。ノートの `⏰ 2026-10-25 09:30` を読む。ノートは書き換えない（扱い済み・スヌーズ・履歴は <vault>/.state/reminders.json）。
+"   :GnosisReminders  :GnosisRemindFire[!]（時刻が来たものを記録して表示。! でデスクトップ通知も）  :GnosisRemindAck ID  :GnosisRemindSnooze ID [分]  :GnosisNotifyHistory
+function! s:rem_root() abort
+  let l:root = s:get_pkm_root()
+  return empty(l:root) ? '' : substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+endfunction
+
+function! s:rem_run(args, show) abort
+  let l:root = s:rem_root()
+  if empty(l:root)
+    return 0
+  endif
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/reminders.py', l:root] + a:args + (a:show ? ['--md'] : []), 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return 0
+  endif
+  if !a:show
+    return 1
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+  return 1
+endfunction
+
+function! gnosis#reminders() abort
+  call s:rem_run(['list'], 1)
+endfunction
+
+function! gnosis#remind_fire(bang) abort
+  call s:rem_run(['fire'] + (a:bang ? ['--notify'] : []), 1)
+endfunction
+
+function! gnosis#remind_ack(id) abort
+  if s:rem_run(['ack', a:id], 0)
+    echo 'Gnosis: ' . gnosis#i18n#tr('扱い済みにしました')
+  endif
+endfunction
+
+function! gnosis#remind_snooze(id, ...) abort
+  if s:rem_run(['snooze', a:id] + (a:0 > 0 ? [a:1] : []), 0)
+    echo 'Gnosis: ' . gnosis#i18n#tr('スヌーズしました')
+  endif
+endfunction
+
+function! gnosis#notify_history() abort
+  call s:rem_run(['history'], 1)
+endfunction
+
 " PARA の仮想ビュー（KM01）と MOC・索引案（KM03）。読み取り専用（索引案を新しいノートとして残すときだけ書く）。
 "   :GnosisPara  :GnosisMoc [グループ]（無ければ今のノート）  :GnosisMocPropose 語 [新しいファイル]
 function! s:para_show(args) abort

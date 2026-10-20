@@ -185,6 +185,8 @@
     "検証 NG（問題 %d 件）": "Verification FAILED (%d problems)",
     "復元しました（%d ファイル・検証 %s）: %s": "Restored (%d files, verification %s): %s",
     "バックアップの一覧": "Backups",
+    "扱い済みにしました": "Marked as handled",
+    "スヌーズしました": "Snoozed",
     "- なし": "- none",
     "Gnosis: vault のノートを開いて実行してください": "Gnosis: open a note in the vault first",
     "パターン": "Pattern",
