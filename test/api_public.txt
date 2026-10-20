@@ -108,6 +108,7 @@ gnosis#expand_s_under_cursor
 gnosis#explain
 gnosis#explore
 gnosis#explore_complete
+gnosis#export_book
 gnosis#export_site
 gnosis#fix_fullwidth_heading
 gnosis#focus

@@ -68,6 +68,7 @@ if command -v node >/dev/null 2>&1; then
 else echo "graphcore / fznav: node が無いので省略"; fi
 python3 "$REPO/python/test_export_site.py"
 python3 "$REPO/python/test_export_views2.py"
+python3 "$REPO/python/test_export_doc.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
 
@@ -140,6 +141,7 @@ sh "$REPO/test/rename_net.sh"
 sh "$REPO/test/diagnose_net.sh"
 sh "$REPO/test/edit_net.sh"
 sh "$REPO/test/hyp_net.sh"
+sh "$REPO/test/book_net.sh"
 sh "$REPO/test/think_net.sh"
 sh "$REPO/test/export_site_net.sh"
 sh "$REPO/test/mandala_net.sh"

@@ -7376,6 +7376,40 @@ function! gnosis#debate(a, b) abort
   call s:ed_show('hypotheses.py', ['debate', a:a, a:b])
 endfunction
 
+" 本として書き出す（UT07）。:GnosisExportBook epub|html|pdf [出力ファイル] [起点のノート]
+"   既定の出力先は vault の外の <vault の親>/gnosis-books/<日時>-<vault 名>.<形式>。既存のファイルは上書きしない。PDF は headless 対応のブラウザが要る
+function! gnosis#export_book(kind, ...) abort
+  if index(['epub', 'html', 'pdf'], a:kind) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('形式は epub / html / pdf のどれかです') | echohl NONE
+    return
+  endif
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:out = a:0 > 0 && !empty(a:1) ? fnamemodify(a:1, ':p') : fnamemodify(l:root, ':h') . '/gnosis-books/' . strftime('%Y%m%d-%H%M%S') . '-' . fnamemodify(l:root, ':t') . '.' . a:kind
+  if empty(glob(fnamemodify(l:out, ':h'))) && fnamemodify(l:out, ':h') =~# 'gnosis-books$'
+    call mkdir(fnamemodify(l:out, ':h'), 'p')
+  endif
+  let l:args = [gnosis#python_cmd(), s:note_root . '/python/export_doc.py', l:root, a:kind, l:out, '--title', fnamemodify(l:root, ':t')]
+  if a:0 > 1 && !empty(a:2)
+    let l:args += ['--root', a:2]
+  endif
+  echo 'Gnosis: ' . gnosis#i18n#tr('書き出しています…')
+  redraw
+  let l:res = system(join(map(l:args, 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:res)
+  catch
+    let l:r = {'error': l:res}
+  endtry
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('書き出しました（%d 章・画像 %d）: %s'), l:r.chapters, l:r.images, l:r.path)
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()
