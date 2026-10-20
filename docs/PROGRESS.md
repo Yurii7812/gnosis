@@ -61,6 +61,8 @@
 
 - **`\A` のタブ・分割・コマンドパレット（MD02・SR10）**: レイアウトの木（`web/src/layout.js`・純関数・単体試験）、画面（`panes.js`）、パレット（`palette-core.js`）、main の IPC（workspace 保存・ビュー用サイトの書き出し `.gnosis/cache/site`・Vim コマンド一覧）、iframe 用の橋 `python/site_assets/bridge.js`。実 Electron の E2E（`web/test/panes_e2e.mjs`）と、橋の実ブラウザ試験を追加。E2E 中に、Vim へ `ESC` と `:` を続けて送ると Meta キーと読まれる問題に気づき、間を置いて送るよう修正（ノーマルモードへの文字の流れ込みを防ぐ）。`web` の既存 E2E は全件通過。
 
+- **グラフ分析 GR01〜GR14**（`python/graph_analysis.py`）: ハブ・中心性・橋渡し・コミュニティ・孤立・到達可能性・循環（不正と正常の区別）・密度・索引の比較・Folgezettel の成長・関係の種類・パターン探索・複数経路。Markdown のレポート、`:GnosisGraphReport/Query/Paths`、静的サイトの「分析」ページ、`\A` の分析ビュー。試験で、経路の組み立ての添字ミス（辺の種類が空になる）を発見して修正。`gnosis_graph.Node` に作成日時を追加。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

@@ -97,6 +97,9 @@ gnosis#folgezettel#toggle
 gnosis#get_link_under_cursor
 gnosis#go_back
 gnosis#go_forward
+gnosis#graph_paths
+gnosis#graph_query
+gnosis#graph_report
 gnosis#group_review_check
 gnosis#group_review_snapshot
 gnosis#guard_vault_write

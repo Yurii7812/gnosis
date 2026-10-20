@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import folgezettel as fz  # noqa: E402
 import gnosis_graph as gg  # noqa: E402
+import graph_analysis  # noqa: E402
 import mandala  # noqa: E402
 import md_html  # noqa: E402
 import tasks as taskmod  # noqa: E402
@@ -224,7 +225,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     items = "".join(f'<li><a href="{html.escape(_out_name(rel), quote=True)}">{html.escape(t)}</a>'
                     + (f' <small>({html.escape(f)})</small>' if f else "") + "</li>" for t, rel, f in index_rows)
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
-                                         f'<a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a> ・ <a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
+                                         f'<a href="cards.html">カード</a> ・ <a href="table.html">テーブル</a> ・ <a href="timeline.html">タイムライン</a> ・ <a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="analysis.html">分析</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
                                            '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
     # ノート一覧のデータ（カード・テーブル・タイムライン）。書き出したノートだけ。派生データなので vault から作り直せる
@@ -266,6 +267,11 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     (out / "cards.html").write_text(_page("カード", nav + "<h1>カード</h1>" + tools.format(extra=sorts) + '<div id="cards"></div>' + scripts, body_class="views", body_attrs='data-view="cards"'), encoding="utf-8")
     (out / "table.html").write_text(_page("テーブル", nav + "<h1>テーブル</h1>" + tools.format(extra="") + '<table id="tbl" class="t"></table>' + scripts, body_class="views", body_attrs='data-view="table"'), encoding="utf-8")
     (out / "timeline.html").write_text(_page("タイムライン", nav + "<h1>タイムライン</h1>" + tools.format(extra="") + '<div id="tl"></div>' + scripts, body_class="views", body_attrs='data-view="timeline"'), encoding="utf-8")
+    # 分析ページ（書き出したノートだけで分析する。非公開は含めない）
+    sub = gg.Graph(root=g.root, nodes={r: n for r, n in g.nodes.items() if r in notes},
+                   edges=[e for e in g.edges if e.src in notes and e.dst in notes], broken=[])
+    rep = graph_analysis.report(sub).replace("](", "](").replace(".md)", ".html)")
+    (out / "analysis.html").write_text(_page("グラフ分析", '<p class="crumb"><a href="index.html">一覧</a> ・ <a href="graph.html">グラフ</a></p>' + md_html.render(rep)), encoding="utf-8")
     # グラフ表示（全体・ローカル）。書き出したノートだけを節点・辺にする（非公開ノートは節点にも辺にも出さない）
     shutil.copyfile(assets / "bridge.js", out / "bridge.js")
     for name in ("graphcore.js", "graph.js"):

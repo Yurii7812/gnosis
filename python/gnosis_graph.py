@@ -47,6 +47,7 @@ class Node:
     fz: str = ""     # Folgezettel ID（無ければ ""）
     is_group: bool = False
     attribute: str = ""
+    time: str = ""   # front matter の time:（作成日時。成長の分析に使う）
 
 
 @dataclass
@@ -244,7 +245,8 @@ def build(root: str | Path) -> Graph:
         m = re.search(r"^attribute:\s*(\S+)", fm, re.M)
         if m:
             attr = m.group(1)
-        g.nodes[rel] = Node(id=rel, title=d["title"], fz=fz.value(text), is_group=bool(nf._GROUP_ATTR_RE.search(fm)), attribute=attr)
+        tm = next((ln.split(":", 1)[1].strip() for ln in d["fm"] if ln.startswith("time:")), "")
+        g.nodes[rel] = Node(id=rel, title=d["title"], fz=fz.value(text), is_group=bool(nf._GROUP_ATTR_RE.search(fm)), attribute=attr, time=tm)
         parsed[rel] = d
 
     def resolve(src_rel: str, raw: str):

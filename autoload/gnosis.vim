@@ -6366,6 +6366,109 @@ function! gnosis#think_check() abort
   nnoremap <buffer> <silent> q :close<CR>
 endfunction
 
+" グラフ分析（読み取り専用）: :GnosisGraphReport … 構造のレポート / :GnosisGraphQuery パターン … パターン探索 / :GnosisPaths A B … 複数の経路
+"   パターン例: ?a -[parent_branch]-> ?b{title~テーマ}  /  ?p <-[group]- ?c  /  索引.md -[branch_group]-> ?kid
+function! s:ga_run(args) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return ['', '']
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/graph_analysis.py', l:root] + a:args, 'shellescape(v:val)'), ' ')
+  return [l:root, system(l:cmd)]
+endfunction
+
+function! s:ga_show(root, lines, where) abort
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, a:lines)
+  setlocal nomodifiable filetype=markdown
+  let b:gnosis_ga = {'root': a:root, 'where': a:where}
+  nnoremap <buffer> <silent> <CR> :call <SID>ga_jump()<CR>
+  nnoremap <buffer> <silent> q :close<CR>
+endfunction
+
+function! s:ga_jump() abort
+  let l:f = get(b:gnosis_ga.where, line('.'), '')
+  if empty(l:f)
+    return
+  endif
+  let l:root = b:gnosis_ga.root
+  close
+  execute 'edit ' . fnameescape(l:root . '/' . l:f)
+endfunction
+
+function! gnosis#graph_report() abort
+  let [l:root, l:out] = s:ga_run(['report'])
+  if empty(l:root)
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#graph_query(pattern) abort
+  let [l:root, l:out] = s:ga_run(['query', a:pattern])
+  if empty(l:root)
+    return
+  endif
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': trim(l:out)}
+  endtry
+  if type(l:r) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = ['# ' . gnosis#i18n#tr('パターン') . ': ' . a:pattern, '', printf(gnosis#i18n#tr('%d 件（Enter でその行の最初のノートを開く）'), len(l:r)), '']
+  let l:where = {}
+  for l:x in l:r
+    call add(l:lines, join(l:x.path, '  →  '))
+    let l:where[len(l:lines)] = l:x.path[0]
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#graph_paths(a, b) abort
+  let [l:root, l:out] = s:ga_run(['paths', a:a, a:b])
+  if empty(l:root)
+    return
+  endif
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': trim(l:out)}
+  endtry
+  if type(l:r) == v:t_dict
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  if empty(l:r)
+    echo gnosis#i18n#tr('Gnosis: つながる経路がありません')
+    return
+  endif
+  let l:lines = ['# ' . a:a . ' → ' . a:b, '']
+  let l:where = {}
+  for l:i in range(len(l:r))
+    let l:p = l:r[l:i]
+    call add(l:lines, printf('%s %d: (%d 歩) 種類: %s', gnosis#i18n#tr('経路'), l:i + 1, l:p.length, join(l:p.distinct_kinds, ' / ')))
+    for l:j in range(len(l:p.nodes))
+      call add(l:lines, '  ' . (l:j == 0 ? '  ' : '[' . l:p.kinds[l:j - 1] . '] ') . l:p.titles[l:j])
+      let l:where[len(l:lines)] = l:p.nodes[l:j]
+    endfor
+    call add(l:lines, '')
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

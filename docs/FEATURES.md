@@ -52,7 +52,7 @@
 | SR11 | ジャンプ履歴、戻る／進む、履歴トグル。 | ジャンプ履歴、戻る／進む、履歴トグル。 | Vim + `\A` | 要確認 | 2 | ジャンプ履歴（要調査） | P1 共通ID |
 | SR12 | ブックマーク、ハブ固定キー、ピン留め。 | ブックマーク、ハブ固定キー、ピン留め。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
 | SR13 | 最近閲覧・編集・取り込みしたノートやファ | 最近閲覧・編集・取り込みしたノートやファイル。 | Vim + `\A` | 要確認 | 2 | 最近のノート（要調査） | P1 共通ID |
-| SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 未実装 | 7 |  | P3 グラフ層 |
+| SR14 | リンク経路検索、最短路、経路候補、関係種 | リンク経路検索、最短路、経路候補、関係種別表示。 | Vim + `\A` | 動作検証中（`:GnosisPaths`・`\A` の分析ビューは別。種類を絞った経路の指定は gnosis_graph の API のみ） | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
@@ -111,20 +111,20 @@
 | VW22 | 思考の系譜・成長グラフ（Folgezet | 思考の系譜・成長グラフ（Folgezettel、Branchを区別）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW23 | 比較ビュー（ノート・索引・資料の横並び） | 比較ビュー（ノート・索引・資料の横並び）。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
 | VW24 | 孤立・未参照・未索引ノートビュー。 | 孤立・未参照・未索引ノートビュー。 | `\A` HTML | 未実装 | 3 |  | P2 View API |
-| GR01 | 多接続ハブ検出。 | 多接続ハブ検出。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR02 | 異なる領域をつなぐ橋渡しノート検出。 | 異なる領域をつなぐ橋渡しノート検出。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR03 | コミュニティ検出。 | コミュニティ検出。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR04 | 孤立ノード・孤立群検出。 | 孤立ノード・孤立群検出。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR05 | 最短経路探索。 | 最短経路探索。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR06 | 到達可能性分析（どのIndexから到達で | 到達可能性分析（どのIndexから到達できるか）。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR07 | 循環構造と不正な循環の区別・検出。 | 循環構造と不正な循環の区別・検出。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR08 | 中心性（degree, betweenn | 中心性（degree, betweenness等）の分析。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR09 | 接続密度・領域比較。 | 接続密度・領域比較。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR10 | 2つのTopic Indexの構造比較。 | 2つのTopic Indexの構造比較。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR11 | Folgezettelの知識発展ツリー。 | Folgezettelの知識発展ツリー。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR12 | エッジの関係種別（支持・反論・派生・参考 | エッジの関係種別（支持・反論・派生・参考・文脈・関連等）。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR13 | 構造化グラフクエリ／パターン探索。 | 構造化グラフクエリ／パターン探索。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
-| GR14 | 二点間に存在する複数の異種経路表示。 | 二点間に存在する複数の異種経路表示。 | `\A` + API | 未実装 | 7 |  | P3 グラフ層 |
+| GR01 | 多接続ハブ検出。 | 多接続ハブ検出。 | `\A` + API | 動作検証中（次数・出入り・種類別の内訳）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR02 | 異なる領域をつなぐ橋渡しノート検出。 | 異なる領域をつなぐ橋渡しノート検出。 | `\A` + API | 動作検証中（複数の領域に辺を持つノート・媒介中心性）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR03 | コミュニティ検出。 | コミュニティ検出。 | `\A` + API | 動作検証中（ラベル伝播。決定的・modularity つき）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR04 | 孤立ノード・孤立群検出。 | 孤立ノード・孤立群検出。 | `\A` + API | 動作検証中（孤立ノード・小さな孤立群）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR05 | 最短経路探索。 | 最短経路探索。 | `\A` + API | 動作検証中（`gnosis_graph.shortest_path`・`:GnosisPaths`）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR06 | 到達可能性分析（どのIndexから到達で | 到達可能性分析（どのIndexから到達できるか）。 | `\A` + API | 動作検証中（索引から辿れる範囲・辿れないノート・層ごとの数）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR07 | 循環構造と不正な循環の区別・検出。 | 循環構造と不正な循環の区別・検出。 | `\A` + API | 動作検証中（階層の不正な循環とリンクの相互参照を区別）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR08 | 中心性（degree, betweenn | 中心性（degree, betweenness等）の分析。 | `\A` + API | 動作検証中（次数・媒介(Brandes。大規模は決定的な近似)・近接）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR09 | 接続密度・領域比較。 | 接続密度・領域比較。 | `\A` + API | 動作検証中（領域ごとの密度と領域間の辺）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR10 | 2つのTopic Indexの構造比較。 | 2つのTopic Indexの構造比較。 | `\A` + API | 動作検証中（2 つの索引の範囲・重なり・Jaccard・層・分岐の平均）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR11 | Folgezettelの知識発展ツリー。 | Folgezettelの知識発展ツリー。 | `\A` + API | 動作検証中（枝ごとの大きさ・深さ・月ごとの増え方。成長のアニメーションは未＝XP12）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR12 | エッジの関係種別（支持・反論・派生・参考 | エッジの関係種別（支持・反論・派生・参考・文脈・関連等）。 | `\A` + API | 動作検証中（種類の内訳・複数の種類で結ばれた組）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR13 | 構造化グラフクエリ／パターン探索。 | 構造化グラフクエリ／パターン探索。 | `\A` + API | 動作検証中（`?a -[種類]-> ?b{条件}` の連なり・向き・固定ノート。`:GnosisGraphQuery`）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
+| GR14 | 二点間に存在する複数の異種経路表示。 | 二点間に存在する複数の異種経路表示。 | `\A` + API | 動作検証中（Yen 法で重ならない複数経路・辺の種類つき）。静的サイトの「分析」ページと `\A` の分析ビューあり | 7 | `python/graph_analysis.py` `test_graph_analysis.py` `test/graph_net.sh` | P3 グラフ層 |
 | AI01 | 類似・重複ノートの検出。 | 類似・重複ノートの検出。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
 | AI02 | 追加リンク候補の提案。 | 追加リンク候補の提案。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |
 | AI03 | 索引追加の候補（自動で元Indexを書き | 索引追加の候補（自動で元Indexを書き換えない）。 | API + `\A` | 未実装 | 8 |  | P7 グラフ層 |

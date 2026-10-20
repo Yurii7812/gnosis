@@ -5,9 +5,9 @@
 //   - レイアウトは vault ごとに .gnosis/workspace.json に保存し、次回に復元する（閉じたタブの再開用の履歴も）。
 import * as L from "./layout.js";
 
-export const KIND_LABEL = { vim: "Vim", index: "一覧", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート" };
-const PAGES = { index: "index.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
-export const VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "search", "index"];
+export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート" };
+const PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
+export const VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
 
 function pageFor(tab) {
   const p = tab.params || {};

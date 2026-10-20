@@ -34495,7 +34495,7 @@ ${h3.join(`
     const tab = { ...closed.tab, id: nid("t") };
     return openTab(layout, paneId || panes(layout)[0].id, tab);
   }
-  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "cards", "table", "timeline", "graph", "fznav", "search", "note"]);
+  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note"]);
   function restore(text) {
     let raw;
     try {
@@ -34561,9 +34561,9 @@ ${h3.join(`
   }
 
   // src/panes.js
-  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8" };
-  var PAGES = { index: "index.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
-  var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "search", "index"];
+  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8" };
+  var PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
+  var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
   function pageFor(tab) {
     const p = tab.params || {};
     if (tab.kind === "note") return (p.rel || "index.md").replace(/\.md$/i, ".html").split("/").map(encodeURIComponent).join("/");
