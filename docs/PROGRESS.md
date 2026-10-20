@@ -26,6 +26,11 @@
 - Phase 0 文書一式。
 - **`\M` 差分更新（M01/M02 の一部）**: `python/capture_merge.py`（3-way merge・競合は記録のみ）、`capture_import.py` の `plan` に `merge`、`merge` CLI、`gnosis#capture_import` の分岐、i18n。試験: `test_capture_merge.py` `test_capture_import.py`（旧「別版を作る」を新仕様に変更）`capture_merge_net.sh` `capture_topics_check.vim`（同）。詳細・未実装は `docs/ANDROID_SYNC.md`。
 
+## 追加済みの共通層
+- `python/gnosis_graph.py`（読み取り専用）: 型付き・有向・多重のグラフ（group / parent_branch / branch_group / child_branch / context / related / backlink / link / folgezettel）、壊れたリンク、孤立、最短経路（種類で絞れる）、到達可能性、連結成分、Folgezettel の見取り図（親・兄弟・前後・子・パンくず・自然順の前後・空き番号の区別）と問題検出（重複 ID・欠けた祖先）。CLI: `check` `graph` `path` `fz`。試験 `python/test_gnosis_graph.py`。
+  計測（合成 vault 1 万ノート・約 4 万辺、2026-10-20）: `check` 約 5 秒、`path` 約 5 秒（ほぼ `note_format_v2` のパース時間）。遅くなったらパース結果の差分キャッシュを共有する。
+- 台帳への効果: UT01（壊れたリンク）の検出部、FZ04、GR05/GR06 の土台、VW01/VW02/VW21 のデータ源。UI・Vim コマンド化はまだ。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。
