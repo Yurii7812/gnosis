@@ -6469,6 +6469,64 @@ function! gnosis#graph_paths(a, b) abort
   call s:ga_show(l:root, l:lines, l:where)
 endfunction
 
+" PARA の仮想ビュー（KM01）と MOC・索引案（KM03）。読み取り専用（索引案を新しいノートとして残すときだけ書く）。
+"   :GnosisPara  :GnosisMoc [グループ]（無ければ今のノート）  :GnosisMocPropose 語 [新しいファイル]
+function! s:para_show(args) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return 0
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/para_moc.py', l:root] + a:args + ['--md'], 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return 0
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+  return 1
+endfunction
+
+function! gnosis#para() abort
+  call s:para_show(['para'])
+endfunction
+
+function! gnosis#moc(...) abort
+  let l:name = a:0 > 0 ? join(a:000, ' ') : ''
+  if empty(l:name)
+    let l:root = substitute(fnamemodify(s:get_pkm_root(), ':p'), '/$', '', '')
+    let l:cur = expand('%:p')
+    if empty(l:root) || stridx(l:cur, l:root . '/') != 0
+      echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+      return
+    endif
+    let l:name = strpart(l:cur, len(l:root) + 1)
+  endif
+  call s:para_show(['moc', l:name])
+endfunction
+
+function! gnosis#moc_propose(word, ...) abort
+  if a:0 > 0 && !empty(a:1)
+    let l:root = substitute(fnamemodify(s:get_pkm_root(), ':p'), '/$', '', '')
+    let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/para_moc.py', l:root, 'propose', a:word, '--write', a:1], 'shellescape(v:val)'), ' '))
+    if l:out =~# '^{"error"'
+      echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+      return
+    endif
+    execute 'edit ' . fnameescape(l:root . '/' . a:1)
+    return
+  endif
+  call s:para_show(['propose', a:word])
+endfunction
+
 " 知識の探索（XP01 散歩・XP02 意外な近さ・XP03 知識考古学・XP08 ルーレット・XP09 中間概念）。読み取り専用。Enter でそのノートへ。
 "   :GnosisExplore walk [ノート] | roulette [any|old|orphan] | serendipity [ノート] | archaeology [日数] | between ノートA ノートB
 let s:explore_kinds = ['walk', 'roulette', 'serendipity', 'archaeology', 'between']

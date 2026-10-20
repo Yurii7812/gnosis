@@ -172,6 +172,8 @@ gnosis#maybe_mount_interactive
 gnosis#merge#pick
 gnosis#merge#undo
 gnosis#migrate_state_into_vault
+gnosis#moc
+gnosis#moc_propose
 gnosis#mount_vault
 gnosis#move_visible
 gnosis#new_child
@@ -197,6 +199,7 @@ gnosis#outline_shift_visual
 gnosis#pad_cleanup
 gnosis#paper_index
 gnosis#paper_scan
+gnosis#para
 gnosis#paste_charwise
 gnosis#paste_clipboard
 gnosis#paste_clipboard_link_here

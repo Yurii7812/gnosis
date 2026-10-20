@@ -5,9 +5,9 @@
 
 | ID | 機能 | 説明 | 対象 | 状態 | Phase | 実体・根拠 | 依存 |
 |---|---|---|---|---|---|---|---|
-| KM01 | PARA | Projects / Areas / Resources / Archives を**仮想ビュー**として提供。既存ノートの物理移動・強制分類をしない。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
+| KM01 | PARA | Projects / Areas / Resources / Archives を**仮想ビュー**として提供。既存ノートの物理移動・強制分類をしない。 | `\A` HTML + Markdown | 動作検証中（仮想ビュー。根拠つき。移動・強制分類なし。`para:` 指定が最優先）。`:GnosisPara` | 6 | `python/para_moc.py` `test_para_moc.py` `test/para_net.sh` | P2 View API |
 | KM02 | Zettelkasten | 原子的ノート、リンク、Folgezettelの作成・成長、紙との連携。 | `\A` HTML + Markdown | 要確認 | 6 | `zn`/`zk`・Folgezettel（python/folgezettel*.py） | P2 View API |
-| KM03 | MOC/索引案 | Map of Contentの表示、ノート群から索引案生成（既存索引は勝手に改変しない）。 | `\A` HTML + Markdown | 未実装 | 6 |  | P2 View API |
+| KM03 | MOC/索引案 | Map of Contentの表示、ノート群から索引案生成（既存索引は勝手に改変しない）。 | `\A` HTML + Markdown | 動作検証中（グループの小グループ別表示・語から索引の草稿。既存の索引は変えず、`--write` のときだけ新規ノート・上書きなし）。`:GnosisMoc` `:GnosisMocPropose` | 6 | `python/para_moc.py` `test_para_moc.py` `test/para_net.sh` | P2 View API |
 | KM04 | 曼荼羅ノート | 9×9=81マスの思考展開。各マスからMarkdownノートや別の81マス曼荼羅を開く。曼荼羅そのものの表示はHTML中心、ノートは実際のMarkdownを開く。81マスの構造デー | `\A` HTML + Markdown | 動作検証中（Markdown 表の保存・マスから実ノート／別の曼荼羅・主題副題の同期・静的サイトの 9×9 格子。`\A` 内の対話表示は未） | 3 | `python/mandala.py` `test_mandala.py` `test/mandala_net.sh` | P2 View API |
 | KM05 | Cornell Notes | ノート本文、質問欄、要約欄の編集・出力。 | `\A` HTML + Markdown | 動作検証中（Cornell: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
 | KM06 | Feynmanモード | 自分の説明を書き、理解の抜けを発見する。 | `\A` HTML + Markdown | 動作検証中（Feynman: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
