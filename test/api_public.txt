@@ -164,6 +164,7 @@ gnosis#i18n#system_lang
 gnosis#i18n#t
 gnosis#i18n#t_lang
 gnosis#i18n#tr
+gnosis#import
 gnosis#include_check
 gnosis#include_view
 gnosis#init_encrypted

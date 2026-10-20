@@ -169,7 +169,7 @@
 | UT11 | プラグインAPI／View追加API。 | プラグインAPI／View追加API。 | Vim + API | 一部（表示専用ビューの種類を layout.js の KINDS と panes.js の PAGES に登録する形。外部プラグインが登録する公開 API・Vim 側のプラグイン API は未） | 2 |  | P1 共通ID |
 | UT12 | プロファイラ・パフォーマンス診断。 | プロファイラ・パフォーマンス診断。 | Vim + API | 一部（読み込み・関係グラフ・全文索引・類似度の準備の処理時間と大きいノート。vault に書かない。UI 操作の応答時間・メモリは未計測）。`:GnosisCompat` `:GnosisProfile` | 1 | `python/diagnose.py` `test_diagnose.py` `test/diagnose_net.sh` | - |
 | UT13 | Undo可能な一括変更、ゴミ箱、復元、d | Undo可能な一括変更、ゴミ箱、復元、dry-run。 | Vim + API | 一部（存在確認のみ・未検証） | 1 | `:GnosisTrash*`（ゴミ箱の送り・一覧・空に・復元あり）。dry-run・一括変更の Undo は無い | - |
-| UT14 | インポート・エクスポート・移行の再開／検 | インポート・エクスポート・移行の再開／検証。 | Vim + API | 未実装 | 1 |  | - |
+| UT14 | インポート・エクスポート・移行の再開／検 | インポート・エクスポート・移行の再開／検証。 | Vim + API | 一部（インポート: Obsidian 形式の取り込み（`[[…]]`・`![[画像]]`・`![[ノート]]`→`{{include}}`・見つからないリンクは文字だけ）。試走・新しいサブフォルダのみ・上書きなし・ファイルごとにジャーナルへ記録して中断から再開・内容の照合と壊れたリンクの検査・変更されていないものだけの取り消し。`:GnosisImport`。エクスポートの再開/検証は、スナップショット（`:GnosisSnapshot`）と本の書き出しで個別に済み。**未了**: Notion/Evernote/Roam などの形式、ジャーナルの GUI、タグ・エイリアスの変換） | 1 | `python/import_notes.py` `test_import_notes.py` `test/import_net.sh` | - |
 ## 追加ID（原本 §3・§6・§7・§8・§10 から台帳化）
 
 | ID | 機能 | 対象 | 状態 | Phase | 実体・根拠 |

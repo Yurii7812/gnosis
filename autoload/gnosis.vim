@@ -7722,6 +7722,47 @@ function! gnosis#chain_undo(bang) abort
   echo 'Gnosis: ' . printf(gnosis#i18n#tr('取り消しました: %s'), l:r.restored)
 endfunction
 
+" 他アプリ（Obsidian など）の Markdown フォルダの取り込み（UT14）。  :GnosisImport plan|run 元フォルダ vault 内の新しいサブフォルダ   :GnosisImport resume|verify|undo ID
+"   plan は試走(何も書かない)。run は新しいサブフォルダへだけ書く。中断しても resume で続けられ、verify で照合、undo で(変更されていないものだけ)取り消せる
+function! gnosis#import(action, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if index(['plan', 'run', 'resume', 'verify', 'undo'], a:action) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('plan / run / resume / verify / undo のどれかです') | echohl NONE
+    return
+  endif
+  if (index(['plan', 'run'], a:action) >= 0 && a:0 < 2) || (index(['resume', 'verify', 'undo'], a:action) >= 0 && a:0 < 1)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('引数が足りません') | echohl NONE
+    return
+  endif
+  let l:args = a:action ==# 'plan' || a:action ==# 'run' ? [l:root, fnamemodify(a:1, ':p'), a:2] : [l:root, a:1]
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/import_notes.py', a:action] + l:args, 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': l:out}
+  endtry
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  let l:lines = ['# ' . gnosis#i18n#tr('取り込み') . ' — ' . a:action, '']
+  if a:action ==# 'plan'
+    let l:lines += [printf('- %s: %d / %s: %d', gnosis#i18n#tr('ノート'), l:r.notes, gnosis#i18n#tr('添付'), l:r.files), printf('- %s: %d', gnosis#i18n#tr('見つからないリンク'), len(l:r.unresolved)), printf('- %s: %d', gnosis#i18n#tr('同名で選んだもの'), len(l:r.ambiguous)), printf('- %s: %d', gnosis#i18n#tr('取り込まないファイル'), len(l:r.skipped)), '', gnosis#i18n#tr('試走です。何も書いていません。run で書きます。')]
+    let l:lines += [''] + map(copy(l:r.unresolved[: 20]), '"- " . v:val.file . ": " . v:val.link')
+  elseif a:action ==# 'run' || a:action ==# 'resume'
+    let l:lines += ['ID: ' . l:r.id, printf('- %s: %d / %s: %d / %s: %d', gnosis#i18n#tr('書いた'), get(l:r, 'done', 0), gnosis#i18n#tr('残り'), get(l:r, 'pending', 0), gnosis#i18n#tr('失敗'), get(l:r, 'failed', 0)), '', gnosis#i18n#tr('止まったときは resume ID、確かめるには verify ID。')]
+  elseif a:action ==# 'verify'
+    let l:lines += [(l:r.ok ? gnosis#i18n#tr('問題なし') : gnosis#i18n#tr('問題があります')), printf('- %s: %d / %s: %d / %s: %d / %s: %d', gnosis#i18n#tr('書いた'), l:r.done, gnosis#i18n#tr('変更された'), len(l:r.changed), gnosis#i18n#tr('消えた'), len(l:r.missing), gnosis#i18n#tr('壊れたリンク'), len(l:r.broken_links))]
+    let l:lines += [''] + map(copy(l:r.broken_links[: 20]), '"- " . v:val.file . ":" . v:val.line . " " . v:val.target')
+  else
+    let l:lines += [printf('- %s: %d', gnosis#i18n#tr('消した'), l:r.removed), printf('- %s: %d', gnosis#i18n#tr('変更されていたので残した'), len(l:r.kept_modified))] + map(copy(l:r.kept_modified), '"  - " . v:val')
+  endif
+  call s:ga_show(l:root, l:lines, {})
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()
