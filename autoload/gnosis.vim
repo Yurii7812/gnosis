@@ -5541,6 +5541,11 @@ function! gnosis#capture_import(...) abort
     return
   endif
   let l:plan = json_decode(l:out)
+  " 記録が無いのに行き先にもう入っているメモ（前回、書き込みの途中で止まった）は、二重に追記せず記録だけ直す
+  let l:adopt = filter(copy(l:plan.items), 'get(v:val, "adopt", "") !=# ""')
+  if !empty(l:adopt)
+    call s:capture_run(['record', l:root, l:tmp], join(map(copy(l:adopt), 'v:val.id . "\t" . v:val.adopt'), "\n") . "\n")
+  endif
   let l:todo = filter(copy(l:plan.items), '!v:val.done')
   if empty(l:todo)
     echo gnosis#i18n#tr('Gnosis: 新しいメモはありません（全部取り込み済み）')

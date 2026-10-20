@@ -46,6 +46,11 @@ call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))
 " 3. 同じ編集をもう一度 → 変わらない
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:now, readfile(s:day()))
+" 取り込み記録だけが失われた状態で再実行しても、日記の行は二重に入らない
+call delete($D . '/v/.state/capture_imported.json')
+let s:d3 = readfile(s:day())
+call gnosis#capture_import($D . '/pack')
+call assert_equal(s:d3, readfile(s:day()))
 " 4. PC がその行を書き換えていたら競合（日記は変えず、二重にも入れない）
 let s:l = readfile(s:day())
 let s:l[index(s:l, '12:00 昼の記録(改)')] = '12:00 昼の記録(PC)'

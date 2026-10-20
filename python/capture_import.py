@@ -307,6 +307,12 @@ def plan(outdir: str, root: str) -> dict:
                          or (target.startswith("(topic:") or "#" in target) and single)
                     and (previous.get("text"), previous.get("images")) != (e.get("text"), e.get("images")))
         merge = merge or embedded
+        # 記録が無いのに行き先のノートに同じ行がもう入っているなら、取り込み済み（クラッシュ後の再実行で二重に追記しない）
+        adopt = ""
+        if not done and previous is None and not target and not needs_note and not section:
+            kind = "diary" if topic == "日記" else "record" if record else "topic" if single else ""
+            adopt = adoptable_target(Path(root), e, topic, kind, bool(single and modes[topic].get("stamp", True)))
+            done = bool(adopt)
         missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
         if not done and missing:
             raise ValueError("画像がありません（取り込み済みにはしません）: " + ", ".join(missing))
@@ -332,6 +338,7 @@ def plan(outdir: str, root: str) -> dict:
             "file": target if exists else "",
             "update": metadata_only and not done,
             "merge": merge,
+            "adopt": adopt,
             "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or [])
                                                 + [m.group(2).split("#", 1)[0] for m in MEMO_LINK.finditer(e.get("text") or "")])
                       if k and k in st.get("ids", {}) and k not in by_id
@@ -372,6 +379,23 @@ def embedded_file(root: Path, target: str, topic: str, date: str) -> str:
     if target.startswith("(record:"):
         return record_note(root, topic, date)
     return topic_note(root, topic)
+
+
+def adoptable_target(root: Path, e: dict, topic: str, kind: str, stamp: bool) -> str:
+    """取り込み記録が無い（書き込みの途中で落ちた等）メモの行が、日記・時系列記録・まとめるトピックのノートに
+    すでに入っているなら、その行き先（記録に使う文字列）。無ければ ''。二重に追記しないため。"""
+    date = dt.datetime.fromtimestamp(e.get("created", 0) / 1000).strftime("%Y-%m-%d")
+    target = {"diary": f"(diary:{date})", "record": f"(record:{topic}:{date})", "topic": f"(topic:{topic})"}.get(kind, "")
+    if not target:
+        return ""
+    try:
+        rel = embedded_file(root, target, topic, date)
+        lines = (root / rel).read_text(encoding="utf-8").split("\n") if rel else []
+    except (OSError, ValueError, KeyError):
+        return ""
+    import capture_merge as cm
+    want = embedded_lines(e, target, stamp)
+    return target if cm._find(lines, want, 0) >= 0 else ""
 
 
 def apply_merges(outdir: str, root: str) -> dict:

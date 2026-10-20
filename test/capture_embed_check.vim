@@ -64,6 +64,16 @@ let s:r2 = readfile(s:R)
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:t2, readfile(s:T))
 call assert_equal(s:r2, readfile(s:R))
+" 取り込み記録だけが失われた状態（書き込みの途中で落ちた等）で再実行しても、行は二重に入らない・ノートも増えない
+call delete($D . '/v/.state/capture_imported.json')
+let s:t3 = readfile(s:T)
+let s:r3 = readfile(s:R)
+let s:n3 = len(glob($D . '/v/*.md', 0, 1))
+call gnosis#capture_import($D . '/pack')
+call assert_equal(s:t3, readfile(s:T))
+call assert_equal(s:r3, readfile(s:R))
+call assert_equal(s:n3, len(glob($D . '/v/*.md', 0, 1)))
+call assert_true(filereadable($D . '/v/.state/capture_imported.json'))
 " 同じ行を PC も変えていたら競合
 let s:l = readfile(s:T)
 let s:l[index(s:l, '10:00 ひとつめのアイデア')] = '10:00 ひとつめ(PC)'
