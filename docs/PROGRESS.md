@@ -11,9 +11,10 @@
 - 2026-10-20 時点、`sh test/run.sh` が**最後まで通る**（Electron E2E・Android Gradle・Windows/macOS 実機は未実行）。
 - 取得時（main 570de52）の失敗は、いずれも**仕様変更への試験の追随漏れ**で、実装と現行仕様を確認してから試験側を直した:
   - `test_paper_pkm.py`: 関係が `### Group` 節→先頭の `Group:` ブロックになった（5dbf429）。
-  - `related_check.vim`: `r=Related` は未マージ枝（feat/related-mode）の機能で main の案内に無い。
+  - `related_check.vim`: **試験は正しく、製品の不具合だった**。英語の `\l` の短縮案内が、`a=自分Ctx` の追加で 80 桁を超え、末尾の `a=… r=Related` が切れていた。`i18n/en.json` の短縮文言を直した（試験は元のまま）。※最初「未マージ枝の機能」と誤って説明していたのを訂正。
   - `context_pty_check.py`: `zn`+Enter は ParentBranch: だけを付ける（旧: Context: も）。
   - `requests_1020_net.sh`: 単独実行では通る（取得時は負荷による一時失敗の疑い）。再発したら調査。
+- **`web/test/gui_e2e.mjs`（Electron + 実 Vim）は main の時点で多数失敗**（`npm test` の基準線）。直した 3 件（`### Group` 節→`Group:` ブロック、`\l` の案内の短縮）以外に 7 件残る: zk の g キー・`zn` が新規ノートを作らない・vim modes・`:w`・`zn c` の Context ブロックなど。`zn`/`zk` の操作フローが仕様変更で変わり、試験の送るキー列が合わなくなっている様子。**1 件ずつ現行フローで確認して直す**（試験を黙って緩めない）。Phase 2 の `\A` 作業の前提なので優先度高。`npm test` の他のスクリプト（view_swap・launcher・theme・multi）は未実行。
 - `test/run.sh` は `set -e` で最初の失敗で止まる。全体は約 10 分かかる。作業中は関係する試験だけ回し、区切りで全体を回す。
 - CI（`.github/workflows/gnosis-regression.yml`）は一部の試験しか回さない。
 

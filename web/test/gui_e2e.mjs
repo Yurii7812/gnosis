@@ -372,12 +372,13 @@ try {
     const txt = fs.readFileSync(path.join(vault, "sec.md"), "utf8");
     const lines = txt.split("\n");
     const linkAt = lines.findIndex((l) => /^\[\d{12}\]\(\d{12}\.md\)$/.test(l));
-    const groupAt = lines.indexOf("### Group");
-    check(groupAt > 0, "sec.md should still have its ### Group: " + JSON.stringify(lines));
+    // 関係は先頭の Group: ブロック（本文の上）に移った。zn Enter のリンクは本文の最後に入り、その後ろは空行だけ
+    const groupAt = lines.indexOf("Group:");
+    check(groupAt > 0, "sec.md should still have its Group: block: " + JSON.stringify(lines));
     const bodyAt = lines.indexOf("本文の文。");
-    check(linkAt > bodyAt && linkAt < groupAt && lines.indexOf("### Context") < 0,
-      "zn Enter: the link should be at the end of the body, just before the first section (### Group): " + JSON.stringify(lines.slice(6)));
-    check(lines.slice(linkAt + 1, groupAt).every((l) => l === ""), "zn Enter: nothing but blanks between the link and ### Group: " + JSON.stringify(lines.slice(linkAt, groupAt + 1)));
+    check(groupAt < bodyAt && linkAt > bodyAt && lines.indexOf("### Context") < 0,
+      "zn Enter: the link should be at the end of the body, after the Group: block: " + JSON.stringify(lines.slice(6)));
+    check(lines.slice(linkAt + 1).every((l) => l === ""), "zn Enter: nothing but blanks after the link: " + JSON.stringify(lines.slice(linkAt)));
   }
   {
     const txt = fs.readFileSync(path.join(vault, "pick.md"), "utf8");
@@ -385,7 +386,7 @@ try {
   }
   {
     const k = R.pick || {};
-    check(/h=カーソル直下/.test(k.prompt || "") && /c=Context末尾/.test(k.prompt || ""), "\\l: the place-key prompt should be visible after confirming: " + JSON.stringify(k));
+    check(/h=下/.test(k.prompt || "") && /c=相手Ctx/.test(k.prompt || "") && /r=Related/.test(k.prompt || ""), "\\l: the place-key prompt should be visible after confirming: " + JSON.stringify(k));
     check(k.hasLink, "\\l: the buffer should be fully redrawn behind the prompt (not a blank/half-drawn screen): " + JSON.stringify(k));
     check(k.st?.mode === "n" && k.st.bt === "" && k.st.popups === 0 && !k.expanded, "\\l: back in the normal buffer: " + JSON.stringify(k));
   }

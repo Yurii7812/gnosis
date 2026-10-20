@@ -110,7 +110,7 @@ set columns=80
 for s:lang in ['ja', 'en']
   call gnosis#i18n#set_lang(s:lang)
   let s:prompt = gnosis#insert_prompt_text(1, 1)
-  for s:key in ['t=', 'g=', 'Enter=', 'p=', 'b=', 'h=', 'c=']
+  for s:key in ['t=', 'g=', 'Enter=', 'p=', 'b=', 'h=', 'c=', 'r=Related']
     call assert_match(s:key, s:prompt)
   endfor
 endfor
