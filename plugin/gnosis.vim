@@ -513,6 +513,29 @@ command! GnosisCheck call gnosis#check_vault()
 command! GnosisGraphReport call gnosis#graph_report()
 command! -nargs=+ -complete=custom,gnosis#ai_complete GnosisAi call gnosis#ai(<f-args>)
 command! GnosisBacklinks call gnosis#backlinks()
+command! -range -bar GnosisCalc call gnosis#calc(<line1>, <line2>)
+command! -nargs=? GnosisBlockId call gnosis#block_id(<f-args>)
+command! GnosisBlockCheck call gnosis#block_check()
+command! -nargs=? GnosisInclude call gnosis#include_view(<f-args>)
+command! GnosisIncludeCheck call gnosis#include_check()
+command! GnosisTemplates call gnosis#templates()
+command! -nargs=1 GnosisTemplate call gnosis#template_insert(<f-args>)
+command! -nargs=+ GnosisTemplateNew call gnosis#template_new(<f-args>)
+command! -nargs=? GnosisFold call gnosis#fold(<f-args>)
+command! GnosisFocus call gnosis#focus()
+command! -nargs=+ GnosisClip call gnosis#clip(<f-args>)
+command! GnosisPeek call gnosis#peek()
+command! -nargs=? GnosisMulti call gnosis#multi(<f-args>)
+command! -nargs=1 GnosisMultiApply call gnosis#multi_apply(<q-args>)
+command! GnosisMultiClear call gnosis#multi_clear()
+augroup gnosis_clip
+  autocmd!
+  autocmd TextYankPost * call gnosis#clip_yank()
+augroup END
+augroup gnosis_complete
+  autocmd!
+  autocmd FileType markdown if empty(&l:completefunc) | setlocal completefunc=gnosis#complete | endif
+augroup END
 command! -nargs=? GnosisCompat call gnosis#compat(<f-args>)
 command! GnosisProfile call gnosis#profile()
 command! -nargs=+ GnosisBookmark call gnosis#bookmark(<f-args>)

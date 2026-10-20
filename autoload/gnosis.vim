@@ -6827,6 +6827,536 @@ function! gnosis#ir_rate(id, grade) abort
   endif
 endfunction
 
+" ---- 編集の補助（ED03・ED04・ED05・ED08・ED12〜ED16・ED18） ----
+" 安全な計算(ED14): :GnosisCalc  行末が = の式と {{= 式 }} を計算して結果を足す。範囲指定可。eval は使わない(python/calc.py)
+function! gnosis#calc(line1, line2) abort
+  let l:lines = getline(a:line1, a:line2)
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/calc.py', '--fill', join(l:lines, "\n")], 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('計算できませんでした') | echohl NONE
+    return
+  endtry
+  let l:new = split(l:r.text, "\n", 1)
+  if l:new !=# l:lines
+    call setline(a:line1, l:new)
+  endif
+  if !empty(l:r.problems)
+    let l:p = l:r.problems[0]
+    echohl WarningMsg | echo 'Gnosis: ' . printf(gnosis#i18n#tr('%d 行目: %s'), a:line1 + l:p.line - 1, l:p.error) | echohl NONE
+  elseif l:new ==# l:lines
+    echo 'Gnosis: ' . gnosis#i18n#tr('計算する式がありません（行末が = の式、または {{= 式 }}）')
+  endif
+endfunction
+
+" ブロックリンク(ED04): 今の段落に ^id を付け、リンク(ノート.md#^id)をレジスタ " に入れる
+function! gnosis#block_id(...) abort
+  let l:root = s:nt_root()
+  let l:rel = empty(l:root) ? '' : s:nt_rel(l:root)
+  if empty(l:rel)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  if &modified
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/blocks.py', l:root, 'add-id', l:rel, string(line('.'))] + (a:0 > 0 && !empty(a:1) ? [a:1] : []), 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': l:out}
+  endtry
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  let l:pos = getpos('.')
+  silent! edit!
+  call setpos('.', l:pos)                       " 読み直してもカーソルを段落から飛ばさない
+  let l:link = '[' . fnamemodify(l:rel, ':t:r') . '](' . substitute(fnamemodify(l:rel, ':t'), ' ', '%20', 'g') . '#^' . l:r.id . ')'
+  call setreg('"', l:link)
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('ID ^%s を付けました。リンクをレジスタに入れました: %s'), l:r.id, l:link)
+endfunction
+
+function! s:ed_show(script, args) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/' . a:script, l:root] + a:args + ['--md'], 'shellescape(v:val)'), ' '))
+  if l:out =~# '^{"error"'
+    echohl WarningMsg | echo 'Gnosis: ' . get(json_decode(l:out), 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = split(l:out, "\n", 1)
+  let l:where = {}
+  for l:i in range(len(l:lines))
+    let l:m = matchlist(l:lines[l:i], '](\([^)]*\.md\))')
+    if !empty(l:m)
+      let l:where[l:i + 1] = substitute(l:m[1], '%20', ' ', 'g')
+    endif
+  endfor
+  call s:ga_show(l:root, l:lines, l:where)
+endfunction
+
+function! gnosis#block_check() abort
+  call s:ed_show('blocks.py', ['check'])
+endfunction
+
+" トランスクルージョン(ED05): {{include: ノート.md#見出し}} を展開して表示(元は書き換えない)
+function! gnosis#include_view(...) abort
+  let l:root = s:nt_root()
+  let l:note = a:0 > 0 && !empty(a:1) ? a:1 : (empty(l:root) ? '' : s:nt_rel(l:root))
+  if empty(l:note)
+    echo gnosis#i18n#tr('Gnosis: vault のノートを開いて実行してください')
+    return
+  endif
+  call s:ed_show('transclude.py', ['expand', l:note])
+endfunction
+
+function! gnosis#include_check() abort
+  call s:ed_show('transclude.py', ['check'])
+endfunction
+
+" テンプレート(ED13): vault の テンプレート/ フォルダ
+function! gnosis#templates() abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:r = json_decode(system(join(map([gnosis#python_cmd(), s:note_root . '/python/templates.py', l:root, 'list'], 'shellescape(v:val)'), ' ')))
+  let l:lines = ['# ' . gnosis#i18n#tr('テンプレート'), ''] + map(copy(l:r.templates), '"- " . v:val.name') + (empty(l:r.templates) ? [gnosis#i18n#tr('（vault の テンプレート/ フォルダに .md を置いてください）')] : [])
+  call s:ga_show(l:root, l:lines, {})
+endfunction
+
+function! gnosis#template_insert(name) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/templates.py', l:root, 'render', a:name, '--title', expand('%:t:r')], 'shellescape(v:val)'), ' '))
+  let l:r = json_decode(l:out)
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  let l:lines = split(l:r.text, "\n", 1)
+  if len(l:lines) > 1 && l:lines[-1] ==# ''
+    call remove(l:lines, -1)                    " テンプレート末尾の改行ぶんの空行は足さない
+  endif
+  let l:at = line('.')
+  call append(l:at, l:lines)
+  if type(l:r.cursor) == v:t_dict
+    call cursor(l:at + l:r.cursor.line, l:r.cursor.col)
+  endif
+endfunction
+
+function! gnosis#template_new(name, newfile, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  let l:file = a:newfile =~# '\.md$' ? a:newfile : a:newfile . '.md'
+  let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/templates.py', l:root, 'new', a:name, l:file] + (a:0 > 0 && !empty(a:1) ? ['--title', a:1] : []), 'shellescape(v:val)'), ' '))
+  let l:r = json_decode(l:out)
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  execute 'edit ' . fnameescape(l:root . '/' . l:r.path)
+  if type(l:r.cursor) == v:t_dict
+    call cursor(l:r.cursor.line, l:r.cursor.col)
+  endif
+endfunction
+
+" 折りたたみ(ED15): 見出し・引用(3 行以上)・関係ブロック・コードブロック・<details>。変更のたびに全体を一度だけ計算する
+let s:fold_cache = {}
+function! s:fold_compute(buf) abort
+  let l:lines = getbufline(a:buf, 1, '$')
+  let l:n = len(l:lines)
+  let l:lv = repeat(['0'], l:n)
+  " 先頭の front matter は折りたたまない
+  let l:start = 0
+  if l:n > 0 && l:lines[0] ==# '---'
+    for l:j in range(1, l:n - 1)
+      if l:lines[l:j] ==# '---'
+        let l:start = l:j + 1
+        break
+      endif
+    endfor
+  endif
+  let l:rel = ['ParentBranch:', 'ChildBranch:', 'BranchGroup:', 'Group:', 'Context:', 'Related:', 'BackLink:']
+  " 見出しの階層は 1〜6。引用・関係ブロック・コードブロック・<details> は 7（見出しの中で別の折りたたみになる）。
+  " 普通の行は「いまの見出しの階層」を明示する（'=' は直前の行の階層を引き継ぎ、折りたたみの外に出られないので使わない）。
+  let l:cur = 0
+  let l:i = l:start
+  for l:k in range(0, l:start - 1)
+    let l:lv[l:k] = '0'
+  endfor
+  while l:i < l:n
+    let l:ln = l:lines[l:i]
+    let l:end = -1
+    if l:ln =~# '^\s*\(```\|\~\~\~\)'
+      let l:j = l:i + 1
+      while l:j < l:n && l:lines[l:j] !~# '^\s*\(```\|\~\~\~\)'
+        let l:j += 1
+      endwhile
+      let l:end = min([l:j, l:n - 1])
+    elseif l:ln =~# '^>' 
+      let l:j = l:i
+      while l:j + 1 < l:n && l:lines[l:j + 1] =~# '^>'
+        let l:j += 1
+      endwhile
+      let l:end = l:j - l:i + 1 >= 3 ? l:j : -1
+    elseif index(l:rel, l:ln) >= 0
+      let l:j = l:i
+      while l:j + 1 < l:n && l:lines[l:j + 1] =~# '\S'
+        let l:j += 1
+      endwhile
+      let l:end = l:j
+    elseif l:ln =~# '^<details'
+      let l:j = l:i
+      while l:j < l:n - 1 && l:lines[l:j] !~# '</details>'
+        let l:j += 1
+      endwhile
+      let l:end = l:j
+    endif
+    if l:end > l:i
+      let l:lv[l:i] = '>7'
+      for l:k in range(l:i + 1, l:end)
+        let l:lv[l:k] = '7'
+      endfor
+      let l:i = l:end + 1
+      continue
+    endif
+    let l:m = matchlist(l:ln, '^\(#\{1,6}\)\s\+\S')
+    if !empty(l:m)
+      let l:cur = len(l:m[1])
+      let l:lv[l:i] = '>' . l:cur
+    else
+      let l:lv[l:i] = string(l:cur)
+    endif
+    let l:i += 1
+  endwhile
+  return l:lv
+endfunction
+
+function! gnosis#foldexpr(lnum) abort
+  let l:key = bufnr('%')
+  let l:tick = b:changedtick
+  let l:c = get(s:fold_cache, l:key, {})
+  if get(l:c, 'tick', -1) != l:tick
+    let l:c = {'tick': l:tick, 'lv': s:fold_compute(l:key)}
+    let s:fold_cache[l:key] = l:c
+  endif
+  return get(l:c.lv, a:lnum - 1, '0')
+endfunction
+
+function! gnosis#foldtext() abort
+  let l:t = substitute(getline(v:foldstart), '^\s*\(```\|\~\~\~\)\s*', '', '')
+  return '▸ ' . (empty(trim(l:t)) ? gnosis#i18n#tr('（折りたたみ）') : l:t) . ' (' . (v:foldend - v:foldstart + 1) . ')'
+endfunction
+
+function! gnosis#fold(...) abort
+  let l:mode = a:0 > 0 && !empty(a:1) ? a:1 : 'toggle'
+  let l:on = get(w:, 'gnosis_fold_on', 0)
+  if l:mode ==# 'toggle'
+    let l:mode = l:on ? 'off' : 'on'
+  endif
+  if l:mode ==# 'on'
+    if !l:on
+      let w:gnosis_fold_saved = {'fdm': &l:foldmethod, 'fde': &l:foldexpr, 'fdt': &l:foldtext, 'fen': &l:foldenable, 'fdl': &l:foldlevel}
+    endif
+    setlocal foldmethod=expr foldexpr=gnosis#foldexpr(v:lnum) foldtext=gnosis#foldtext() foldenable foldlevel=99
+    let w:gnosis_fold_on = 1
+  elseif l:mode ==# 'off'
+    if l:on
+      let l:sv = w:gnosis_fold_saved
+      let &l:foldmethod = l:sv.fdm
+      let &l:foldexpr = l:sv.fde
+      let &l:foldtext = l:sv.fdt
+      let &l:foldenable = l:sv.fen
+      let &l:foldlevel = l:sv.fdl
+      if l:sv.fdm ==# 'manual'
+        normal! zE
+      endif
+      let w:gnosis_fold_on = 0
+    endif
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('on / off / toggle のどれかです') | echohl NONE
+  endif
+endfunction
+
+" 集中モード(ED16): 余計な表示を消し、今いる段落以外を薄くする。もう一度で元に戻す
+highlight default link GnosisDim Comment
+function! s:focus_dim() abort
+  if !get(w:, 'gnosis_focus_on', 0)
+    return
+  endif
+  if exists('w:gnosis_focus_match')
+    silent! call matchdelete(w:gnosis_focus_match)
+  endif
+  let l:s = search('^\s*$', 'bnW')
+  let l:e = search('^\s*$', 'nW')
+  let l:s = l:s == 0 ? 1 : l:s
+  let l:e = l:e == 0 ? line('$') : l:e
+  let w:gnosis_focus_match = matchadd('GnosisDim', '\%<' . l:s . 'l\|\%>' . l:e . 'l', 5)
+endfunction
+
+function! gnosis#focus() abort
+  if get(w:, 'gnosis_focus_on', 0)
+    let l:sv = w:gnosis_focus_saved
+    for [l:k, l:v] in items(l:sv.win)
+      call setwinvar(0, '&' . l:k, l:v)
+    endfor
+    for [l:k, l:v] in items(l:sv.glob)
+      execute 'let &' . l:k . ' = ' . string(l:v)
+    endfor
+    silent! call matchdelete(w:gnosis_focus_match)
+    unlet! w:gnosis_focus_match
+    let w:gnosis_focus_on = 0
+    augroup gnosis_focus
+      autocmd! * <buffer>
+    augroup END
+    echo 'Gnosis: ' . gnosis#i18n#tr('集中モードを終わりました')
+    return
+  endif
+  let l:win = {}
+  for l:k in ['number', 'relativenumber', 'signcolumn', 'cursorline', 'colorcolumn', 'list']
+    let l:win[l:k] = getwinvar(0, '&' . l:k)
+  endfor
+  let l:glob = {}
+  for l:k in ['laststatus', 'showmode', 'ruler', 'showcmd']
+    execute 'let l:glob[l:k] = &' . l:k
+  endfor
+  let w:gnosis_focus_saved = {'win': l:win, 'glob': l:glob}
+  setlocal nonumber norelativenumber signcolumn=no nocursorline colorcolumn= nolist
+  set laststatus=0 noshowmode noruler noshowcmd
+  let w:gnosis_focus_on = 1
+  augroup gnosis_focus
+    autocmd! * <buffer>
+    autocmd CursorMoved,CursorMovedI <buffer> call s:focus_dim()
+  augroup END
+  call s:focus_dim()
+  echo 'Gnosis: ' . gnosis#i18n#tr('集中モードにしました（もう一度 :GnosisFocus で戻る）')
+endfunction
+
+" クリップボード履歴(ED12): 既定は無効。有効にしても保存はメモリの中だけ(ディスクに書かない・終了で消える)。パスワードや長い鍵らしきものは記録しない
+let s:clip = {'on': 0, 'items': []}
+function! s:clip_secret(text) abort
+  return a:text =~? '\(password\|passwd\|パスワード\|secret\|api[_-]\?key\|token\|BEGIN [A-Z ]*PRIVATE KEY\)' || a:text =~# '\S\{40,}'
+endfunction
+
+function! gnosis#clip_yank() abort
+  if !s:clip.on || empty(v:event) || get(v:event, 'operator', '') !=# 'y'
+    return
+  endif
+  let l:text = join(get(v:event, 'regcontents', []), "\n")
+  if empty(trim(l:text)) || len(l:text) > 2000 || s:clip_secret(l:text)
+    return
+  endif
+  call filter(s:clip.items, 'v:val !=# l:text')
+  call insert(s:clip.items, l:text, 0)
+  let s:clip.items = s:clip.items[: 49]
+endfunction
+
+function! gnosis#clip(action, ...) abort
+  if a:action ==# 'on'
+    let s:clip.on = 1
+    echo 'Gnosis: ' . gnosis#i18n#tr('コピー履歴を記録します（メモリの中だけ。終了すると消えます）')
+  elseif a:action ==# 'off'
+    let s:clip.on = 0
+    echo 'Gnosis: ' . gnosis#i18n#tr('コピー履歴の記録をやめました')
+  elseif a:action ==# 'clear'
+    let s:clip.items = []
+    echo 'Gnosis: ' . gnosis#i18n#tr('コピー履歴を消しました')
+  elseif a:action ==# 'list'
+    let l:root = s:nt_root()
+    let l:lines = ['# ' . gnosis#i18n#tr('コピー履歴'), ''] + (empty(s:clip.items) ? [gnosis#i18n#tr('なし（:GnosisClip on で記録を始めます）')] : [])
+    for l:i in range(len(s:clip.items))
+      call add(l:lines, printf('%d. %s', l:i + 1, substitute(strpart(s:clip.items[l:i], 0, 80), "\n", ' ⏎ ', 'g')))
+    endfor
+    call s:ga_show(empty(l:root) ? getcwd() : l:root, l:lines, {})
+  elseif a:action ==# 'paste'
+    let l:n = a:0 > 0 ? str2nr(a:1) : 1
+    if l:n < 1 || l:n > len(s:clip.items)
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その番号の履歴はありません') | echohl NONE
+      return
+    endif
+    call append(line('.'), split(s:clip.items[l:n - 1], "\n", 1))
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('on / off / list / paste N / clear のどれかです') | echohl NONE
+  endif
+endfunction
+
+" 入力補完(ED18): <C-x><C-u>。`](` の後はリンク先の相対パス、`[` の後は「題](パス)」を補う
+let s:title_cache = {}
+function! s:note_title(path) abort
+  let l:t = getftime(a:path)
+  let l:c = get(s:title_cache, a:path, [])
+  if !empty(l:c) && l:c[0] == l:t
+    return l:c[1]
+  endif
+  let l:title = ''
+  for l:ln in readfile(a:path, '', 15)
+    let l:m = matchlist(l:ln, '^title:\s*\(.\+\)$')
+    if !empty(l:m)
+      let l:title = trim(l:m[1], " '\"")
+      break
+    endif
+  endfor
+  if empty(l:title)
+    let l:title = fnamemodify(a:path, ':t:r')
+  endif
+  let s:title_cache[a:path] = [l:t, l:title]
+  return l:title
+endfunction
+
+" 題(front matter の title:)・ファイル名・相対パスのどれかに base を含むノート。ファイル名が ID の vault でも題で探せる
+function! s:complete_notes(base) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return []
+  endif
+  let l:items = []
+  let l:low = tolower(a:base)
+  for l:f in globpath(l:root, '**/*.md', 0, 1)
+    if l:f =~# '/\.' || l:f ==# expand('%:p')
+      continue
+    endif
+    let l:rel = l:f[len(l:root) + 1:]
+    let l:name = fnamemodify(l:f, ':t:r')
+    let l:title = empty(l:low) ? '' : s:note_title(l:f)
+    if empty(l:low) || stridx(tolower(l:title), l:low) >= 0 || stridx(tolower(l:name), l:low) >= 0 || stridx(tolower(l:rel), l:low) >= 0
+      call add(l:items, {'path': l:f, 'rel': l:rel, 'name': empty(l:title) ? s:note_title(l:f) : l:title})
+    endif
+    if len(l:items) >= 60
+      break
+    endif
+  endfor
+  return l:items
+endfunction
+
+function! s:rel_from_here(path) abort
+  let l:from = split(expand('%:p:h'), '/')
+  let l:to = split(a:path, '/')
+  let l:i = 0
+  while l:i < len(l:from) && l:i < len(l:to) - 1 && l:from[l:i] ==# l:to[l:i]
+    let l:i += 1
+  endwhile
+  return join(repeat(['..'], len(l:from) - l:i) + l:to[l:i :], '/')
+endfunction
+
+function! gnosis#complete(findstart, base) abort
+  let l:before = strpart(getline('.'), 0, col('.') - 1)
+  if a:findstart
+    let l:m = matchstrpos(l:before, '\](\zs[^)]*$')
+    if l:m[1] >= 0
+      let b:gnosis_complete_kind = 'path'
+      return l:m[1]
+    endif
+    let l:m = matchstrpos(l:before, '\[\zs[^\]]*$')
+    if l:m[1] >= 0
+      let b:gnosis_complete_kind = 'title'
+      return l:m[1]
+    endif
+    return -3
+  endif
+  let l:res = []
+  for l:it in s:complete_notes(a:base)
+    let l:rel = substitute(s:rel_from_here(l:it.path), ' ', '%20', 'g')
+    if get(b:, 'gnosis_complete_kind', '') ==# 'path'
+      call add(l:res, {'word': l:rel, 'abbr': l:it.name, 'menu': l:it.rel})
+    else
+      call add(l:res, {'word': l:it.name . '](' . l:rel . ')', 'abbr': l:it.name, 'menu': l:it.rel})
+    endif
+  endfor
+  return l:res
+endfunction
+
+" リンクのプレビュー(ED03): カーソルの下のリンク先の頭を小さな窓に出す
+function! gnosis#peek_lines(...) abort
+  let l:max = a:0 > 0 ? a:1 : 15
+  let l:link = gnosis#get_link_under_cursor()
+  if empty(l:link) || empty(get(l:link, 'target', ''))
+    return []
+  endif
+  let l:target = substitute(l:link.target, '#.*$', '', '')
+  if l:target =~# '://' || empty(l:target)
+    return []
+  endif
+  let l:file = fnamemodify(expand('%:p:h') . '/' . substitute(l:target, '%20', ' ', 'g'), ':p')
+  if !filereadable(l:file)
+    return []
+  endif
+  let l:lines = readfile(l:file, '', 200)
+  if len(l:lines) > 0 && l:lines[0] ==# '---'
+    let l:end = index(l:lines, '---', 1)
+    if l:end > 0
+      let l:lines = l:lines[l:end + 1 :]
+    endif
+  endif
+  call filter(l:lines, 'v:val =~# "\\S"')
+  return [fnamemodify(l:file, ':t')] + l:lines[: l:max - 1]
+endfunction
+
+function! gnosis#peek() abort
+  let l:lines = gnosis#peek_lines()
+  if empty(l:lines)
+    echo 'Gnosis: ' . gnosis#i18n#tr('カーソルの下に、開けるノートへのリンクがありません')
+    return
+  endif
+  if exists('*popup_atcursor')
+    call popup_atcursor(l:lines, {'border': [], 'padding': [0, 1, 0, 1], 'moved': 'any', 'maxwidth': 80, 'close': 'click'})
+  else
+    echo join(l:lines, "\n")
+  endif
+endfunction
+
+" 複数箇所の同時編集(ED08): 同じ語を全部まとめて印をつけ、まとめて書き換える(取り消しは u 1 回)
+let s:multi = {}
+function! gnosis#multi(...) abort
+  let l:word = a:0 > 0 && !empty(a:1) ? a:1 : expand('<cword>')
+  if empty(l:word)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('語がありません') | echohl NONE
+    return
+  endif
+  call gnosis#multi_clear()
+  let w:gnosis_multi_match = matchadd('Search', '\V' . escape(l:word, '\'), 20)
+  let b:gnosis_multi_word = l:word
+  let l:n = 0
+  for l:ln in getline(1, '$')
+    let l:n += len(split(l:ln, '\V' . escape(l:word, '\'), 1)) - 1
+  endfor
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('「%s」 %d か所に印をつけました（:GnosisMultiApply 新しい語 で書き換え）'), l:word, l:n)
+endfunction
+
+function! gnosis#multi_apply(new) abort
+  let l:word = get(b:, 'gnosis_multi_word', '')
+  if empty(l:word)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('先に :GnosisMulti で語を選んでください') | echohl NONE
+    return
+  endif
+  let l:pat = '\V' . escape(l:word, '\/')
+  let l:cnt = 0
+  for l:ln in getline(1, '$')
+    let l:cnt += len(split(l:ln, '\V' . escape(l:word, '\'), 1)) - 1
+  endfor
+  execute '%s/' . l:pat . '/' . escape(a:new, '\/&~') . '/ge'
+  call gnosis#multi_clear()
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('%d か所を書き換えました（u で元に戻せます）'), l:cnt)
+endfunction
+
+function! gnosis#multi_clear() abort
+  if exists('w:gnosis_multi_match')
+    silent! call matchdelete(w:gnosis_multi_match)
+    unlet w:gnosis_multi_match
+  endif
+  unlet! b:gnosis_multi_word
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

@@ -26,6 +26,8 @@ gnosis#backlinks
 gnosis#backup_vault
 gnosis#backup_vault_with
 gnosis#before_write_viminfo
+gnosis#block_check
+gnosis#block_id
 gnosis#bookmark
 gnosis#branch#add_links
 gnosis#branch#add_parent_links
@@ -39,6 +41,7 @@ gnosis#branch#context_parent
 gnosis#branch#message
 gnosis#branch#run
 gnosis#branch#warn
+gnosis#calc
 gnosis#capture_backfill
 gnosis#capture_conflicts
 gnosis#capture_duplicates
@@ -53,6 +56,8 @@ gnosis#cipher_dir
 gnosis#cleanup_stale_locks
 gnosis#clear_search_highlight
 gnosis#clear_title_cache
+gnosis#clip
+gnosis#clip_yank
 gnosis#clipboard_copy
 gnosis#clipboard_paste
 gnosis#color#base_of
@@ -64,6 +69,7 @@ gnosis#color#normalize
 gnosis#color#on_note_enter
 gnosis#color#refresh
 gnosis#compat
+gnosis#complete
 gnosis#conceal_eol_fix
 gnosis#conflict#disk_changed
 gnosis#conflict#handle
@@ -103,6 +109,10 @@ gnosis#explore
 gnosis#explore_complete
 gnosis#export_site
 gnosis#fix_fullwidth_heading
+gnosis#focus
+gnosis#fold
+gnosis#foldexpr
+gnosis#foldtext
 gnosis#folgezettel#move
 gnosis#folgezettel#toggle
 gnosis#forward
@@ -147,6 +157,8 @@ gnosis#i18n#system_lang
 gnosis#i18n#t
 gnosis#i18n#t_lang
 gnosis#i18n#tr
+gnosis#include_check
+gnosis#include_view
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
@@ -192,6 +204,9 @@ gnosis#moc
 gnosis#moc_propose
 gnosis#mount_vault
 gnosis#move_visible
+gnosis#multi
+gnosis#multi_apply
+gnosis#multi_clear
 gnosis#new_child
 gnosis#new_here_typed
 gnosis#new_prefix_note
@@ -221,6 +236,8 @@ gnosis#para
 gnosis#paste_charwise
 gnosis#paste_clipboard
 gnosis#paste_clipboard_link_here
+gnosis#peek
+gnosis#peek_lines
 gnosis#perf_diag
 gnosis#profile
 gnosis#push_history
@@ -371,6 +388,9 @@ gnosis#tabs#open_link
 gnosis#tabs#popup
 gnosis#tabs#select
 gnosis#tabs#snapshot
+gnosis#template_insert
+gnosis#template_new
+gnosis#templates
 gnosis#termfont#apply_live
 gnosis#termfont#clamp
 gnosis#termfont#command

@@ -23,22 +23,22 @@
 | KM16 | 概念辞書 | 用語・定義・関連概念の索引と比較。 | `\A` HTML + Markdown | 動作検証中（概念辞書: 雛形の作成・構造検査。`\A` 内の専用画面・HTML 表示は未） | 6 | `python/thinking.py` `test_thinking.py` `test/think_net.sh` | P2 View API |
 | ED01 | バックリンク、出典ノートのプレビューと関 | バックリンク、出典ノートのプレビューと関係区分。 | Vim + `\A` | 動作検証中（関係の種類・該当行と前後つき。BackLink 欄・番号の親子は別扱い。`:GnosisBacklinks`） | 3 | `python/backlinks.py` `test_backlinks.py` `test/ai_net.sh` | P2 View API |
 | ED02 | 未リンク参照検出（文字列・意味類似を分け | 未リンク参照検出（文字列・意味類似を分ける）。 | Vim + `\A` | 動作検証中（題の文字一致のみ。コード・リンク内は除外。意味の近さは `:GnosisAi links`） | 3 | `python/backlinks.py` `test_backlinks.py` `test/ai_net.sh` | P2 View API |
-| ED03 | リンクホバー／クリック前プレビュー。 | リンクホバー／クリック前プレビュー。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
-| ED04 | 見出し・段落・ブロック単位の安定リンクと | 見出し・段落・ブロック単位の安定リンクとリネーム耐性。 | Vim + `\A` | 要確認 | 2 | 見出しリンク（`test/heading_links_*`）・ブロックは要調査 | P1 共通ID |
-| ED05 | 他ノート本文・ブロックのトランスクルージ | 他ノート本文・ブロックのトランスクルージョン、循環検出。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
+| ED03 | リンクホバー／クリック前プレビュー。 | リンクホバー／クリック前プレビュー。 | Vim + `\A` | 一部（カーソルの下のリンク先の頭 15 行を小さな窓に出す `:GnosisPeek`。マウスのホバーでの自動表示は未） | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
+| ED04 | 見出し・段落・ブロック単位の安定リンクと | 見出し・段落・ブロック単位の安定リンクとリネーム耐性。 | Vim + `\A` | 動作検証中（`#^id` のブロックリンク: 段落を動かしても切れない・付けるのは明示操作で末尾に追記だけ・`#見出し` が切れたら検出・名前変更で保たれる）。`:GnosisBlockId` `:GnosisBlockCheck` | 2 | `python/blocks.py` `test_blocks.py` `test/edit_net.sh` | P1 共通ID |
+| ED05 | 他ノート本文・ブロックのトランスクルージ | 他ノート本文・ブロックのトランスクルージョン、循環検出。 | Vim + `\A` | 動作検証中（`{{include: ノート#見出し|#^id}}` を引用で展開表示・循環/深さ/欠落を ⚠ で止める・元は書き換えない）。`:GnosisInclude` `:GnosisIncludeCheck`。HTML 書き出しへの反映は未 | 2 | `python/transclude.py` `test_transclude.py` `test/edit_net.sh` | P1 共通ID |
 | ED06 | ノート分割、旧リンク維持、元ノートとのつ | ノート分割、旧リンク維持、元ノートとのつながりを記録。 | Vim + `\A` | 動作検証中（節を同じフォルダの新ノートへ切り出し。元に見出しと→リンクを残し、`Related:` で元を記録。`元.md#見出し` の他ノートのリンクは追随。取り消し可。重複見出し・題・空の節は拒否）。`:GnosisSplit` | 2 | `python/split_notes.py` `test_split_notes.py` `test/split_net.sh` | P1 共通ID |
 | ED07 | ノート統合、重複除去、復元可能な履歴。 | ノート統合、重複除去、復元可能な履歴。 | Vim + `\A` | 一部（`\l → m` の統合と取り消しは既存の `merge_notes.py`。本文の重複除去は未） | 2 | `python/merge_notes.py` `test_merge_notes.py` | P1 共通ID |
-| ED08 | マルチカーソル／複数範囲編集（VimとG | マルチカーソル／複数範囲編集（VimとGUIの適切な方式）。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
+| ED08 | マルチカーソル／複数範囲編集（VimとG | マルチカーソル／複数範囲編集（VimとGUIの適切な方式）。 | Vim + `\A` | 一部（Vim 向けの方式: 同じ語に印→まとめて書き換え→`u` 1 回で戻る。`\A` の GUI 複数カーソルは未）。`:GnosisMulti` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | ED09 | 2ノート比較・差分ビュー。 | 2ノート比較・差分ビュー。 | Vim + `\A` | 動作検証中（行ごとの unified diff・近さ・共通/片方のみの行数）。`:GnosisDiff` | 2 | `python/note_tools.py` `test_note_tools.py` `test/split_net.sh` | P1 共通ID |
 | ED10 | 変更履歴、差分、Undo/Redo、バー | 変更履歴、差分、Undo/Redo、バージョン復元。 | Vim + `\A` | 一部（存在確認のみ・未検証） | 1 | Vim の undo とバッファ保存のみ。ノート単位の履歴・復元は未実装 | - |
 | ED11 | クイックキャプチャ、未整理のメモ、日記へ | クイックキャプチャ、未整理のメモ、日記への自然な接続。 | Vim + `\A` | 要確認 | 1 | `\n` `:GnosisQuick`・`\N`（docs/11） | - |
-| ED12 | クリップボード履歴（許可された範囲、個人 | クリップボード履歴（許可された範囲、個人情報の扱いに注意）。 | Vim + `\A` | 要確認 | 2 | クリップボード（要調査） | P1 共通ID |
-| ED13 | ノートテンプレート、挿入メニュー。 | ノートテンプレート、挿入メニュー。 | Vim + `\A` | 要確認 | 2 | テンプレート（要調査） | P1 共通ID |
-| ED14 | インライン式・計算（安全な評価器を使用。 | インライン式・計算（安全な評価器を使用。シェル実行と分離）。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
-| ED15 | 折りたたみ（見出し、引用、補足、ブランチ | 折りたたみ（見出し、引用、補足、ブランチ）。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
-| ED16 | フォーカス／集中モード。 | フォーカス／集中モード。 | Vim + `\A` | 未実装 | 2 |  | P1 共通ID |
+| ED12 | クリップボード履歴（許可された範囲、個人 | クリップボード履歴（許可された範囲、個人情報の扱いに注意）。 | Vim + `\A` | 一部（既定は無効・メモリの中だけ・パスワード/長い鍵らしきものは記録しない・2000 文字まで）。OS のクリップボード全体の監視はしない（個人情報への配慮）。`:GnosisClip` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
+| ED13 | ノートテンプレート、挿入メニュー。 | ノートテンプレート、挿入メニュー。 | Vim + `\A` | 動作検証中（`テンプレート/` の .md・`{{date}}` 等の文字の置き換えだけ（式は実行しない）・新規ノート作成は上書きなし・フォルダ外への参照を拒否）。`:GnosisTemplate*` | 2 | `python/templates.py` `test_templates.py` `test/edit_net.sh` | P1 共通ID |
+| ED14 | インライン式・計算（安全な評価器を使用。 | インライン式・計算（安全な評価器を使用。シェル実行と分離）。 | Vim + `\A` | 動作検証中（`eval` を使わない構文木の評価。四則・べき乗・関数・定数のみ。名前/属性/文字列/ラムダ等は拒否・べき乗と長さと深さに上限）。`:GnosisCalc` | 2 | `python/calc.py` `test_calc.py` `test/edit_net.sh` | P1 共通ID |
+| ED15 | 折りたたみ（見出し、引用、補足、ブランチ | 折りたたみ（見出し、引用、補足、ブランチ）。 | Vim + `\A` | 動作検証中（見出し・3 行以上の引用・関係ブロック・コードブロック・`<details>`。変更ごとに一度だけ再計算。`:GnosisFold`） | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
+| ED16 | フォーカス／集中モード。 | フォーカス／集中モード。 | Vim + `\A` | 動作検証中（行番号・ステータス等を消し、今の段落以外を薄くする。もう一度で元の設定に戻る）。`:GnosisFocus` | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | ED17 | 文字数・記述量・編集履歴統計。 | 文字数・記述量・編集履歴統計。 | Vim + `\A` | 一部（文字数・語・行・見出し・リンク・タスク。vault 合計・大きいノート・空のノート。編集履歴の統計は未）。`:GnosisStats[!]` | 2 | `python/note_tools.py` `test_note_tools.py` `test/split_net.sh` | P1 共通ID |
-| ED18 | ノート名・索引名・リンク先の入力補完。 | ノート名・索引名・リンク先の入力補完。 | Vim + `\A` | 要確認 | 2 | ノート名の補完（要調査） | P1 共通ID |
+| ED18 | ノート名・索引名・リンク先の入力補完。 | ノート名・索引名・リンク先の入力補完。 | Vim + `\A` | 動作検証中（`<C-x><C-u>`: `](` の後はパス、`[` の後は「題](パス)」。題（front matter）でも絞り込む。サブフォルダは `../`）。IME 変換中の補完・`\A` 側は未 | 2 | `autoload/gnosis.vim` `test/edit_net.sh` | P1 共通ID |
 | SR01 | 高速ファジー検索。 | 高速ファジー検索。 | Vim + `\A` | 一部（`vault_index.py fuzzy` で題・番号・ファイル名。Vim/`\A` の画面は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR02 | 高速全文検索、本文・見出し・関連ファイル | 高速全文検索、本文・見出し・関連ファイル。 | Vim + `\A` | 動作検証中（SQLite FTS5 trigram＋短い語は部分一致。1 万ノートで初回 2.4 秒・差分 0.25 秒・検索 0.3 秒以下） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR03 | 正規表現検索。 | 正規表現検索。 | Vim + `\A` | 動作検証中（`/正規表現/`。不正な式はエラー） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
