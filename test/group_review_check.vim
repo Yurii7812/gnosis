@@ -21,25 +21,22 @@ function! WaitScreen(want) abort
   return 0
 endfunction
 execute 'edit ' . fnameescape(s:g)
-" 1) za（複数）→ 確認画面（未登録はすべて「（推測）」）→ 筋トレのよみを直して q
+" 1) za（複数）→ 確認画面は出さず、1 本ずつ表示名とよみを聞いて入れ、よみの順に並ぶ
+"    筋トレ: 表示名はそのまま（空 Enter）・よみを「きんとれ」に / アヒル: 表示名「あひる」・よみは Esc（登録しない）
 call setreg('"', "[筋トレ](k.md)\n[アヒル](a.md)\n")
+let g:gnosis_test_display_name = ['', 'あひる']
+let g:gnosis_test_yomi = ['きんとれ', "\x1b"]
 call gnosis#add_clipboard_before_up_note()
 call add(g:R, 'screen1 ' . WaitScreen(1))
-call add(g:R, 'guess ' . (search('筋トレ.*すじとれ（推測）') > 0))
-" Enter で中身を見て、<BS> で戻ると画面はそのまま（q も効く）
-call cursor(search('筋トレ'), 2)
-call gnosis#open_link_under_cursor()
-sleep 300m
-call add(g:R, 'enter ' . fnamemodify(bufname('%'), ':t'))
-call gnosis#go_back()
-sleep 300m
-call add(g:R, 'back ' . OnScreen() . ' ' . (maparg('q', 'n') =~# 'review_commit'))
-let s:n = search('筋トレ')
-call setline(s:n, substitute(getline(s:n), '— .*$', '— きんとれ', ''))
-call gnosis#review_commit()
-call WaitScreen(0)
+unlet g:gnosis_test_display_name g:gnosis_test_yomi
 call add(g:R, 'after1 ' . string(Members()))
-call add(g:R, 'yomi ' . string(filter(readfile($D . '/v/k.md'), 'v:val =~# "きんとれ"')))
+call add(g:R, 'yomi ' . string(filter(readfile($D . '/v/k.md'), 'v:val =~# "きんとれ"')) . ' ' . len(filter(readfile($D . '/v/a.md'), 'v:val =~# "yomi"')))
+" Esc で取り消すと何も入らない
+call setreg('"', "[ウシ](u.md)\n")
+let g:gnosis_test_display_name = ["\x1b"]
+call gnosis#add_clipboard_before_up_note()
+unlet g:gnosis_test_display_name
+call add(g:R, 'cancel ' . string(Members()))
 " 2) 手で貼って保存 → 確認画面（今回足した 2 本だけ）→ ゼブラの行を消して q（グループから外れる）
 call append(line('$'), ['[ゼブラ](z.md)', '[ウシ](u.md)'])
 write

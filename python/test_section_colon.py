@@ -78,7 +78,7 @@ with tempfile.TemporaryDirectory() as d:
     check(r["ok"] and p.count("### ChildBranch") == 1 and "ChildBranch:" not in p and "[Y](y.md)" in p,
           "旧形式の ### ChildBranch の節に足す（節を 2 つに分けない）")
 
-# 並び: ParentBranch: → BranchGroup: → Group: → Context:（本文の上）→ 本文 → ChildBranch: → Related: → BackLink:
+# 並び: BranchGroup: → Group: → ParentBranch: → Context:（本文の上。2026-10-20 に変更）→ 本文 → ChildBranch: → Related: → BackLink:
 with tempfile.TemporaryDirectory() as d:
     root = Path(d)
     put(root, "index.md", "Index", ["[G](g.md)"], True)
@@ -100,10 +100,10 @@ with tempfile.TemporaryDirectory() as d:
     nl = lines(root, "n.md")
     heads = [ln for ln in nl if ln in ("ParentBranch:", "BranchGroup:", "Group:", "Context:", "本文N。",
                                        "ChildBranch:", "Related:", "BackLink:")]
-    check(heads == ["ParentBranch:", "BranchGroup:", "Group:", "Context:", "本文N。", "ChildBranch:", "Related:", "BackLink:"],
-          f"順番: ParentBranch → BranchGroup → Group → Context → 本文 → ChildBranch → Related → BackLink: {heads}")
+    check(heads == ["BranchGroup:", "Group:", "ParentBranch:", "Context:", "本文N。", "ChildBranch:", "Related:", "BackLink:"],
+          f"順番: BranchGroup → Group → ParentBranch → Context → 本文 → ChildBranch → Related → BackLink: {heads}")
     h1 = nl.index("# N")
-    check(nl[h1 + 1] == "" and nl[h1 + 2] == "ParentBranch:", "ParentBranch: は H1 の直後（空行 1 つ）")
+    check(nl[h1 + 1] == "" and nl[h1 + 2] == "BranchGroup:", "BranchGroup: は H1 の直後（空行 1 つ）")
     check(nl.index("本文N。") > nl.index("[X](x.md)") and nl[nl.index("本文N。") - 1] == "", "本文はブロックの下（空行 1 つ）")
     before = {q.name: q.read_text(encoding="utf-8") for q in root.glob("*.md")}
     sync(root)

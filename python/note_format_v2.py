@@ -107,7 +107,7 @@ LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統�
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
 # 親は最大 1 つ（ParentBranch）、子は複数（ChildBranch）。Context / Related とは別の関係。
 # 関係の見出しは、Group: / Context: と同じ「名前:」の形で書く（2026-10-15〜）。
-# ノートの並び: ParentBranch: → BranchGroup: → Group: → Context:（ここまで本文の上、H1 の直後のブロック）
+# ノートの並び: BranchGroup: → Group: → ParentBranch: → Context:（ここまで本文の上、H1 の直後のブロック）
 #   → 本文 → ChildBranch: → Related: → BackLink:（本文の下の節）。
 # 旧形式の `### 名前` も読める（出力は「名前:」に統一する）。
 PARENT_BRANCH_MARK = "ParentBranch:"
@@ -459,7 +459,7 @@ _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1|(`+)[^`]*$")
 
 
-# Context: より上に来る、本文の上の先頭のブロックの見出し（並び: ParentBranch → BranchGroup → Group → Context）
+# Context: より上に来る、本文の上の先頭のブロックの見出し（並び: BranchGroup → Group → ParentBranch → Context）
 _ABOVE_CONTEXT_HEADS = ("ParentBranch:", "BranchGroup:", "ThisNoteGroup:", "Group:")
 
 
@@ -1555,18 +1555,25 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     title = _fm_title(fm) or path.stem
     # Group / BranchGroup の後ろに Context がある形式でも、先頭のブロックを
     # 順に取り除いてから Context を読む。旧 ThisNoteGroup も受け付ける。
-    pb_block, rest = _take_parent_branch_block(rest)
-    # 先頭のブロックは、ファイルで先に現れるほうから順に取る。Group: を先に取ると、BranchGroup: が
-    # Group: の上にあるとき、Group: と本文のあいだの空行を一緒に外してしまい、本文のリンク行が
-    # BranchGroup: に吸い込まれる。
-    _bg_at = next((i for i, ln in enumerate(rest) if ln.strip() in (BRANCH_GROUP_HEAD, LEGACY_THIS_NOTE_GROUP_HEAD)), -1)
-    _gp_at = next((i for i, ln in enumerate(rest) if ln.strip() in (GROUP_MARK, LEGACY_GROUP_MARK)), -1)
-    if _bg_at >= 0 and (_gp_at < 0 or _bg_at < _gp_at):
-        branch_links, rest, has_branch_group = _take_branch_group_block(rest)
-        group_block, rest = _take_group_block(rest)
-    else:
-        group_block, rest = _take_group_block(rest)
-        branch_links, rest, has_branch_group = _take_branch_group_block(rest)
+    # 先頭のブロック（ParentBranch: / BranchGroup: / Group:）は、ファイルで先に現れるものから順に取る。
+    # 後ろのブロックを先に取ると、その下の区切りの空行を一緒に外してしまい、本文のリンク行が
+    # 上のブロックに吸い込まれる（並びは BranchGroup → Group → ParentBranch だが、古い並びのノートも読む）。
+    def _first_at(heads):
+        return next((i for i, ln in enumerate(rest) if ln.strip() in heads), len(rest) + 1)
+    order = sorted([(_first_at((PARENT_BRANCH_MARK,)), "pb"),
+                    (_first_at((BRANCH_GROUP_HEAD, LEGACY_THIS_NOTE_GROUP_HEAD)), "bg"),
+                    (_first_at((GROUP_MARK, LEGACY_GROUP_MARK)), "gp")])
+    pb_block: list[str] = []
+    group_block: list[str] = []
+    branch_links: list[str] = []
+    has_branch_group = False
+    for _at, kind in order:
+        if kind == "pb":
+            pb_block, rest = _take_parent_branch_block(rest)
+        elif kind == "bg":
+            branch_links, rest, has_branch_group = _take_branch_group_block(rest)
+        else:
+            group_block, rest = _take_group_block(rest)
     ctx: list[str] = []
     ctx_at = -1
     blk = find_context_block(rest)
@@ -1830,13 +1837,20 @@ def _prune_one_sided_related(lines: list[str], path: Path, resolver,
     return out
 
 
+def _rstrip_blank(lines: list[str]) -> list[str]:
+    k = len(lines)
+    while k > 0 and not lines[k - 1].strip():
+        k -= 1
+    return lines[:k]
+
+
 # BackLink 見出しを出さない生成ノート（紙PKM の Folgezettel-Index など）
 _NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
 
 
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
-    """本文冒頭のブロックを ParentBranch: → BranchGroup: → Group: → Context: の順で出力する。
+    """本文冒頭のブロックを BranchGroup: → Group: → ParentBranch: → Context: の順で出力する（2026-10-20 に変更）。
 
     BranchGroup は直接のブランチで派生したグループ（旧 ThisNoteGroup）。
     Group は所属（手動＋自動）、Context は文脈。
@@ -1850,12 +1864,12 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 
     blocks: list[str] = []
     pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
-    if pbranch:
-        blocks += [PARENT_BRANCH_MARK] + pbranch
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
     if groups:
         blocks += [GROUP_MARK] + groups
+    if pbranch:
+        blocks += [PARENT_BRANCH_MARK] + pbranch
     if links:
         blocks += [CONTEXT_HEAD] + links
     if not blocks:
@@ -1958,8 +1972,10 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     if back_lines:
         sections.append((BACKLINK_MARK, back_lines))
     if not sections:
-        # 節が無いノートは、末尾の空行（書き出しの余白）をそのまま残す
-        lines += [""] * int(n.get("tail_blanks", 0))
+        # 節が無いノートは、末尾の空行（書き出しの余白）をそのまま残す。上のブロックだけのノート（zk のグループなど）は
+        # ブロックの下の区切りの空行がもう入っているので、その分は足さない（同期のたびに空行が増えないように）
+        have = len(lines) - len(_rstrip_blank(lines))
+        lines += [""] * max(0, int(n.get("tail_blanks", 0)) - have)
         return "\n".join(lines) + "\n"
     # 本文末の空行（リンク行と節の間）は残す。本文の余白はそのまま。
     # 節が無かったノートの末尾の空行（画像のあとの空行など）も、最初の節の手前に残す。
@@ -2056,7 +2072,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     import folgezettel as fz
     for p, ident in fz.allocation(root, notes).items():
         fm = notes[p]["fm"] or ["---", "title: " + notes[p]["title"], "---"]
-        updated = fz.set_value("\n".join(fm), ident)
+        updated = fz.set_value("\n".join(fm), ident) if ident else fz.remove_value("\n".join(fm))
         notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
     # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
     for cp, cn in notes.items():

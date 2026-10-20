@@ -30,6 +30,7 @@ python3 "$REPO/python/test_theme_palette.py"
 python3 "$REPO/python/test_orphans.py"
 python3 "$REPO/python/test_folgezettel.py"
 python3 "$REPO/python/test_capture_import.py"
+python3 "$REPO/python/test_merge_notes.py"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \
@@ -66,6 +67,9 @@ sh "$REPO/test/sort_yomi_net.sh"
 
 # グループへの追加は名前とよみの確認画面を通って必ず並ぶ（za・手で貼る・行を消す・Q・:GnosisYomiReview）
 sh "$REPO/test/group_review_net.sh"
+
+# i（行の中）・\L の b / c・\l → g（分岐したグループ・空のグループの空行）・\l → m（マージと取り消し）
+sh "$REPO/test/requests_1020_net.sh"
 
 # - [ ] の行で Enter すると次の行にも - [ ] を作る
 sh "$REPO/test/checkbox_net.sh"

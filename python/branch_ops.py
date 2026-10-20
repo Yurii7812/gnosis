@@ -195,7 +195,7 @@ def insert_link(text: str, mark: str, link_line: str) -> str:
     # 旧形式の見出し（### ChildBranch など）の節があれば、それに足す（同じ節を新旧 2 つに分けない）
     mine = [i for i, m in secs if nf.LEGACY_TO_NEW_MARK.get(m, m) == mark]
     if mark == PB and not mine:
-        # ParentBranch: は本文の上の先頭のブロック（H1 の直後。BranchGroup: / Group: / Context: より上）
+        # ParentBranch: は本文の上の先頭のブロック（H1 の直後。BranchGroup: / Group: より下、Context: より上）
         return _insert_top_block_link(lines, PB, link_line) + "\n"
     if mine:
         start = mine[0]
@@ -249,6 +249,18 @@ def _insert_top_block_link(lines: list[str], mark: str, link_line: str) -> str:
         pre: list[str] = []
     else:
         pre = [""] if h1 is not None else []
+    # 並びは BranchGroup: → Group: → ParentBranch: → Context:。上に来るブロックが続いていれば、その下に置く
+    above = (nf.BRANCH_GROUP_HEAD, nf.LEGACY_THIS_NOTE_GROUP_HEAD, nf.GROUP_MARK)
+    if mark == PB and at < len(lines) and lines[at].strip() in above:
+        j = at
+        while j < len(lines) and not flags[j] and lines[j].strip() in above:
+            j += 1
+            while j < len(lines) and nf._SIMPLE_LINK_LINE_RE.match(lines[j]):
+                j += 1
+        nxt = lines[j] if j < len(lines) else None
+        post = [""] if nxt is not None and nxt.strip() and nxt.strip() not in _TOP_BLOCK_HEADS else []
+        lines[j:j] = [mark, link_line] + post
+        return "\n".join(lines)
     nxt = lines[at] if at < len(lines) else None
     # 次がほかの先頭のブロックならくっつけて並べる。本文ならあいだに空行を 1 つ
     post = [""] if nxt is not None and nxt.strip() and nxt.strip() not in _TOP_BLOCK_HEADS else []

@@ -496,6 +496,8 @@ command! -nargs=? -complete=file GnosisCaptureImport call gnosis#capture_import(
 command! GnosisApkInstall call gnosis#apk_install()
 command! -nargs=? -range GnosisTopic call gnosis#topic#assign(<line1>, <line2>, <q-args>)
 command! GnosisOrphans call gnosis#orphans_open()
+" \l → m でマージしたノートを元に戻す
+command! GnosisMergeUndo call gnosis#merge#undo()
 command! GnosisYomiReview call gnosis#yomi_review()
 command! GnosisReview call gnosis#review_reopen()
 " \q は作業タブ管理。\o はリンクを別の論理タブとして開く。

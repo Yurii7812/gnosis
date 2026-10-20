@@ -1,6 +1,6 @@
 #!/bin/sh
-# グループへの追加は、名前とよみの確認画面を通ってから必ず並べ替わることの回帰網。
-#   za（複数）/ 手で貼って保存 / 行を消す / Q / :GnosisYomiReview
+# グループへの追加は、名前とよみを決めてから必ず並べ替わることの回帰網。
+#   za（複数。表示名とよみを 1 本ずつ聞く）/ 手で貼って保存（確認画面）/ 行を消す / Q / :GnosisYomiReview
 # 使い方: test/group_review_net.sh   （一時フォルダだけを使う。本物の vault には触らない）
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -12,14 +12,12 @@ mk k 筋トレ; mk i イルカ; mk a アヒル; mk u ウシ; mk z ゼブラ
 printf -- "---\ntime: 2026-01-01 00:00:00\ntitle: テスト\nattribute: group\n---\n\n# テスト\n\n[イルカ](i.md)\n" > "$D/v/g.md"
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -S "$REPO/test/group_review_check.vim" </dev/null 2>"$D/err" || true
-WANT="screen1 1
-guess 1
-enter k.md
-back 1 1
-after1 ['[アヒル](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
-yomi ['  \"筋トレ\": \"きんとれ\"']
-screen2 1 n=2
-after2 ['[アヒル](a.md)', '[イルカ](i.md)', '[ウシ](u.md)', '[筋トレ](k.md)']
+WANT="screen1 0
+after1 ['[あひる](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
+yomi ['  \"筋トレ\": \"きんとれ\"'] 0
+cancel ['[あひる](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
+screen2 1 n=4
+after2 ['[あひる](a.md)', '[イルカ](i.md)', '[ウシ](u.md)', '[筋トレ](k.md)']
 screen3 1 n=4
 back g.md"
 if [ "$(cat "$D/out.txt" 2>/dev/null)" = "$WANT" ]; then

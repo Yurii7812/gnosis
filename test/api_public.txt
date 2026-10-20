@@ -145,6 +145,8 @@ gnosis#lock_remove
 gnosis#lock_vault
 gnosis#make_link
 gnosis#maybe_mount_interactive
+gnosis#merge#pick
+gnosis#merge#undo
 gnosis#migrate_state_into_vault
 gnosis#mount_vault
 gnosis#move_visible

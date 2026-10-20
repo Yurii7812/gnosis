@@ -77,4 +77,39 @@ class CaptureTest {
         assertEquals(listOf("x"), rangeIds(order, "zz", "x"))
         assertEquals(listOf("見出し 1", "二つ目"), memoHeadings("本文\n## 見出し 1\n#タグではない\n### 二つ目 \n"))
     }
+
+    @Test fun folgezettelRowsAndCollapse() {
+        val es = listOf(
+            Entry("r1", 1, "", "1"), Entry("a", 2, "", "1a", parent = "r1"), Entry("a1", 3, "", "1a1", parent = "a"),
+            Entry("a1a", 4, "", "1a1a", parent = "a1"), Entry("a2", 5, "", "1a2", parent = "a"), Entry("b", 6, "", "1b", parent = "r1"),
+            Entry("r2", 7, "", "2"), Entry("x", 8, "", "親は別のトピック", parent = "gone"),
+        )
+        val rows = folgeRows(es)
+        assertEquals(listOf("1", "1a", "1a1", "1a1a", "1a2", "1b", "2", "3"), rows.map { it.label })
+        assertEquals(listOf(0, 1, 2, 3, 2, 1, 0, 0), rows.map { it.depth })
+        assertTrue(rows.first { it.entry.id == "a" }.hasChildren)
+        // 1a を折りたたむと 1a1・1a1a・1a2 が消える
+        assertEquals(listOf("1", "1a", "1b", "2", "3"), folgeRows(es, setOf("a")).map { it.label })
+        // 全部折りたたむと最上位だけ
+        assertEquals(listOf("1", "2", "3"), folgeRows(es, folgeParents(es)).map { it.label })
+        assertEquals("aa", folgeLetters(27))
+    }
+
+    @Test fun renameTopicKeepsModesAndRefusesBadNames() {
+        val s = Settings(topics = listOf(DIARY, "夢"), topicModes = mapOf("夢" to TopicMode(record = true)), lastTopic = "夢")
+        val es = listOf(Entry("1", 1, "夢", "a"), Entry("2", 2, DIARY, "b"))
+        val (ne, ns) = renameTopic(es, s, "夢", "ゆめ")!!
+        assertEquals(listOf("ゆめ", DIARY), ne.map { it.topic })
+        assertEquals(listOf(DIARY, "ゆめ"), ns.topics)
+        assertTrue(ns.topicModes["ゆめ"]!!.record)
+        assertEquals("ゆめ", ns.lastTopic)
+        assertNull(renameTopic(es, s, DIARY, "x"))
+        assertNull(renameTopic(es, s, "夢", DIARY))
+        assertNull(renameTopic(es, s, "夢", "  "))
+    }
+
+    @Test fun backdatedTextStamp() {
+        assertEquals("本文", backdatedText("本文", false, 0))
+        assertTrue(backdatedText("本文", true, 0).endsWith(" に記入）\n本文"))
+    }
 }

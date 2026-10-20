@@ -202,6 +202,11 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var settingsOpen by remember { mutableStateOf(false) }
     var imported by remember { mutableStateOf(store.importedIds()) }
     var deleteFor by remember { mutableStateOf<String?>(null) }
+    val collapsed = remember { mutableStateListOf<String>() }      // Folgezettel 表示で折りたたんだメモ
+    var backdate by remember { mutableStateOf<Long?>(null) }       // 日時を指定して書く（日記・時系列記録）。null は今
+    var pickDate by remember { mutableStateOf(false) }
+    var pickTimeFor by remember { mutableStateOf<Long?>(null) }    // 日付を選んだあと、時刻を選んでいる（その日の 0 時）
+    var renameFor by remember { mutableStateOf<String?>(null) }    // 名前を変えるトピック
     val prompt by promptState
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -214,12 +219,14 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         imeWasVisible = imeVisible
     }
     val listState = rememberLazyListState()
+    val treeState = rememberLazyListState()
     val byId = entries.associateBy { it.id }
 
     fun persist() { store.save(entries.toList()); imported = store.importedIds() }
 
     // PC が取り込むたびに imported.json が変わるので、戻ってくるたびに読み直す
     fun setTopic(t: String) {
+        if (t != topic) backdate = null   // 日時の指定はトピックを変えたら今に戻す
         topic = t
         settings = settings.copy(lastTopic = t); store.saveSettings(settings)
     }
@@ -234,6 +241,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         Alarm.ensureScheduled(ctx, settings)
         nextAlarm = Alarm.scheduledTime(ctx)
         onPauseOrDispose {
+            if (!pickingImage) backdate = null   // アプリを離れたら、日時の指定は今に戻す
             // アラームの日記を書き終えてアプリを閉じたら、全部表示に戻す（画像を選びに出たときは戻さない）
             if (fromPrompt && !pickingImage) { fromPrompt = false; promptState.value = false; setTopic(ALL) }
         }
@@ -312,6 +320,19 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     /** 文脈や Branch の親のメモへスクロールし、少しのあいだ色を変えて知らせる。 */
     fun jumpTo(id: String) {
         if (visibleEntries(entries, topic).none { it.id == id }) setTopic(ALL)
+        if (settings.folgeView) {
+            // 祖先を開いてから、その行へ
+            var p = byId[id]?.parent
+            val seen = HashSet<String>()
+            while (true) { val q = p ?: break; if (!seen.add(q)) break; collapsed.remove(q); p = byId[q]?.parent }
+            scope.launch {
+                delay(50)
+                val idx = folgeRows(visibleEntries(entries, topic), collapsed.toSet()).indexOfFirst { it.entry.id == id }
+                if (idx >= 0) treeState.animateScrollToItem(idx)
+                flash = id; delay(1500); if (flash == id) flash = null
+            }
+            return
+        }
         scope.launch {
             delay(50)
             val list = visibleEntries(entries, topic).sortedByDescending { it.created }
@@ -388,7 +409,10 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
             editing = null
         } else {
             val now = System.currentTimeMillis()
-            entries.add(Entry(id = Store.newId(now, entries), created = now, topic = writingTopic(topic), text = text,
+            // 日時を指定したときは、その日時（秒は今の秒にして、ほかのノートの名前と重なりにくくする）
+            val at = backdate?.let { it + now % 60_000 } ?: now
+            val body = if (backdate != null) backdatedText(text, settings.writtenStamp, now) else text
+            entries.add(Entry(id = Store.newId(at, entries), created = at, topic = writingTopic(topic), text = body,
                 images = pendingImages.toList(), parent = replyTo ?: contextsTo.firstOrNull(), contexts = contextsTo.toList()))
             replyTo = null; contextsTo.clear()
         }
@@ -415,6 +439,13 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     }
                 },
                 actions = {
+                    // 時系列表示と Folgezettel 表示（Branch の親子の木）を切り替える
+                    if (search == null && !selecting) IconButton(onClick = {
+                        settings = settings.copy(folgeView = !settings.folgeView); store.saveSettings(settings)
+                    }) {
+                        Icon(if (settings.folgeView) Icons.Filled.Schedule else Icons.Filled.AccountTree,
+                            if (settings.folgeView) "時系列表示にする" else "Folgezettel 表示にする")
+                    }
                     IconButton(onClick = { search = if (search == null) "" else null }) {
                         Icon(if (search != null) Icons.Filled.Close else Icons.Filled.Search, if (search != null) "検索をやめる" else "全文検索")
                     }
@@ -521,6 +552,17 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().clickable { modeFor = topic }.padding(horizontal = 4.dp, vertical = 2.dp))
                 }
+                // 日記・時系列記録では、日時を指定して書ける（過去の日のノートになる）
+                if (topic == DIARY || settings.topicModes[topic]?.record == true) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val bd = backdate
+                        AssistChip(onClick = { pickDate = true },
+                            label = { Text(if (bd == null) "日時: 今" else "日時: " + SimpleDateFormat("M月d日（E）HH:mm", Locale.JAPAN).format(Date(bd))) },
+                            leadingIcon = { Icon(Icons.Filled.Event, null, Modifier.size(16.dp)) },
+                            colors = if (bd != null) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else AssistChipDefaults.assistChipColors())
+                        if (bd != null) IconButton(onClick = { backdate = null }) { Icon(Icons.Filled.Close, "今に戻す") }
+                    }
+                }
                 if (pendingImages.isNotEmpty()) {
                     LazyRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(pendingImages.toList()) { name ->
@@ -562,6 +604,54 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         val sq = search?.trim().orEmpty()
         val shown = (if (search != null && sq.isNotEmpty()) entries.filter { matchesQuery(it.text, sq) }
             else visibleEntries(entries, topic)).sortedByDescending { it.created }
+        if (settings.folgeView && search == null) {
+            // Folgezettel 表示: 親子の木を上から（1, 1a, 1a1 …）。▸/▾ で一部を折りたたむ・開く
+            val rows = folgeRows(shown, collapsed.toSet())
+            Column(Modifier.fillMaxSize().padding(pad)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Folgezettel", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { collapsed.clear() }) { Icon(Icons.Filled.UnfoldMore, null, Modifier.size(16.dp)); Text("全部展開") }
+                    TextButton(onClick = { collapsed.clear(); collapsed.addAll(folgeParents(shown)) }) {
+                        Icon(Icons.Filled.UnfoldLess, null, Modifier.size(16.dp)); Text("全部折りたたみ")
+                    }
+                }
+                LazyColumn(Modifier.fillMaxSize(), state = treeState, contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(rows, key = { it.entry.id }) { r ->
+                        val e = r.entry
+                        Row(Modifier.fillMaxWidth().padding(start = (r.depth * 14).dp), verticalAlignment = Alignment.Top) {
+                            if (r.hasChildren) {
+                                val closed = e.id in collapsed
+                                IconButton(onClick = { if (closed) collapsed.remove(e.id) else collapsed.add(e.id) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(if (closed) Icons.Filled.ChevronRight else Icons.Filled.ExpandMore, if (closed) "展開" else "折りたたむ")
+                                }
+                            } else Spacer(Modifier.width(32.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(r.label + if (r.hasChildren && e.id in collapsed) "  …" else "", fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Bubble(e, e.id in imported, byId, store, selecting = contextFor != null && contextFor != e.id,
+                                    selected = e.id in selected || e.id == flash, selectionMode = selecting,
+                                    open = settings.expandAll || e.id in expanded,
+                                    onToggleOpen = if (settings.expandAll) null else ({ if (e.id in expanded) expanded.remove(e.id) else expanded.add(e.id) }),
+                                    onTap = {
+                                        val cf = contextFor
+                                        if (selecting && rangeMode) selectRange(rows.map { it.entry.id }, e.id)
+                                        else if (selecting) toggleSelection(e.id)
+                                        else if (cf != null && cf != e.id) {
+                                            val k = entries.indexOfFirst { it.id == cf }
+                                            if (k >= 0) { if (e.id in entries[k].contexts) removeContext(cf, e.id) else addContexts(cf, listOf(e.id)) }
+                                        }
+                                    },
+                                    onJump = { jumpTo(it) },
+                                    onLong = { if (selecting) selectRange(rows.map { it.entry.id }, e.id) else sheetFor = e.id },
+                                    alignStart = true)
+                            }
+                        }
+                    }
+                    if (rows.isEmpty()) item { Text("この表示にはまだメモがありません。", Modifier.padding(24.dp), fontSize = 14.sp) }
+                }
+            }
+        } else
         LazyColumn(Modifier.fillMaxSize().padding(pad), state = listState, reverseLayout = true,
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEachIndexed { i, e ->
@@ -706,6 +796,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 }
                             }
                             Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                            // PC から届いた時系列記録の名前は変えない（PC の記録と別物になってしまう）
+                            if (t !in pcRecords) IconButton(onClick = { renameFor = t }) { Icon(Icons.Filled.Edit, "名前を変える") }
                             IconButton(onClick = { modeFor = t }) { Icon(Icons.Filled.Settings, "取り込み方") }
                         }
                     }
@@ -723,6 +815,53 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         AlertDialog(onDismissRequest = { modeFor = null }, title = { Text("「$t」の取り込み方") },
             text = { ModeSwitches(t, m, pcRecords, ::save) },
             confirmButton = { TextButton(onClick = { modeFor = null }) { Text("閉じる") } })
+    }
+
+    renameFor?.let { from ->
+        var name by remember(from) { mutableStateOf(from) }
+        var err by remember(from) { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { renameFor = null }, title = { Text("トピックの名前を変える") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(name, { name = it; err = false }, singleLine = true)
+                Text("このトピックのメモ（${entries.count { it.topic == from }} 件）も新しい名前になります。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                if (err) Text("その名前にはできません（同じ名前のトピックがある・使えない名前）", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            } },
+            confirmButton = { TextButton(onClick = {
+                val r = renameTopic(entries.toList(), settings, from, name)
+                if (r == null) err = true
+                else {
+                    entries.clear(); entries.addAll(r.first); persist()
+                    settings = r.second; store.saveSettings(settings)
+                    if (topic == from) topic = normalizedTopic(name.trim())
+                    renameFor = null
+                }
+            }) { Text("変える") } },
+            dismissButton = { TextButton(onClick = { renameFor = null }) { Text("やめる") } })
+    }
+
+    // 日時を指定して書く: 日付 → 時刻
+    if (pickDate) {
+        val st = rememberDatePickerState(initialSelectedDateMillis = (backdate ?: System.currentTimeMillis()).let { localToUtcDay(it) })
+        DatePickerDialog(onDismissRequest = { pickDate = false },
+            confirmButton = { TextButton(onClick = {
+                pickDate = false
+                st.selectedDateMillis?.let { pickTimeFor = utcDayToLocalMidnight(it) }
+            }) { Text("次へ（時刻）") } },
+            dismissButton = { TextButton(onClick = { pickDate = false }) { Text("やめる") } }) {
+            DatePicker(st)
+        }
+    }
+    pickTimeFor?.let { day ->
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = backdate ?: System.currentTimeMillis() }
+        val ts = rememberTimePickerState(cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true)
+        AlertDialog(onDismissRequest = { pickTimeFor = null }, title = { Text("時刻") },
+            text = { TimePicker(ts) },
+            confirmButton = { TextButton(onClick = {
+                val t = day + (ts.hour * 60L + ts.minute) * 60_000L
+                backdate = if (t > System.currentTimeMillis()) null else t   // 先の日時にはしない
+                pickTimeFor = null
+            }) { Text("決定") } },
+            dismissButton = { TextButton(onClick = { pickTimeFor = null }) { Text("やめる") } })
     }
 
     if (addTopicOpen) {
@@ -849,6 +988,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         var to by remember { mutableStateOf(settings.toHour.toString()) }
         var allDay by remember { mutableStateOf(settings.fromHour == settings.toHour || (settings.fromHour == 0 && settings.toHour == 24)) }
         var ring by remember { mutableStateOf(settings.ringSeconds.toString()) }
+        var stamp by remember { mutableStateOf(settings.writtenStamp) }
         AlertDialog(onDismissRequest = { settingsOpen = false }, title = { Text("アラームと設定") },
             text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -890,13 +1030,21 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                     else Alarm.notify(ctx, (ring.toIntOrNull() ?: 0).coerceIn(0, 600))
                 }) { Text("テスト通知を鳴らす") }
                 HorizontalDivider()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("書いている日時を入れる")
+                        Text("日記・時系列記録で日時を指定して書いたとき、本文の最初に「（今日の日時 に記入）」を入れます。", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(stamp, { stamp = it })
+                }
+                HorizontalDivider()
                 Text("PC へは USB でつなぎ、Gnosis で \\M を押すと取り込めます（パスワードは要りません）。", fontSize = 13.sp)
             } },
             confirmButton = { TextButton(onClick = {
                 settings = settings.copy(alarmOn = on, alarmMinutes = (minutes.toIntOrNull() ?: 60).coerceIn(1, 24 * 60),
                     fromHour = if (allDay) 0 else (from.toIntOrNull() ?: 9).coerceIn(0, 23),
                     toHour = if (allDay) 24 else (to.toIntOrNull() ?: 23).coerceIn(0, 24),
-                    ringSeconds = (ring.toIntOrNull() ?: 0).coerceIn(0, 600))
+                    ringSeconds = (ring.toIntOrNull() ?: 0).coerceIn(0, 600), writtenStamp = stamp)
                 store.saveSettings(settings)
                 if (on && Build.VERSION.SDK_INT >= 33 && !Alarm.hasNotificationPermission(ctx)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 Alarm.ensureChannel(ctx); Alarm.schedule(ctx, settings)
@@ -946,11 +1094,12 @@ private fun ModeSwitches(t: String, m: TopicMode, pcRecords: List<String>, save:
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, selected: Boolean, selectionMode: Boolean,
-                   open: Boolean, onToggleOpen: (() -> Unit)?, onTap: () -> Unit, onLong: () -> Unit, onJump: (String) -> Unit) {
+                   open: Boolean, onToggleOpen: (() -> Unit)?, onTap: () -> Unit, onLong: () -> Unit, onJump: (String) -> Unit,
+                   alignStart: Boolean = false) {
     // 日記も他のメモと同じ色（トピックは右下の小さな文字で分かる）
     val colors = if (selected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (alignStart) Arrangement.Start else Arrangement.End) {
         Card(colors = colors, shape = RoundedCornerShape(14.dp),
             border = if (selecting) CardDefaults.outlinedCardBorder() else null,
             modifier = Modifier.widthIn(max = 340.dp).combinedClickable(onClick = onTap, onLongClick = onLong)) {
@@ -1013,4 +1162,20 @@ private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Sto
             }
         }
     }
+}
+
+/** 端末の時刻の日付を、DatePicker が使う UTC のその日 0 時に。 */
+private fun localToUtcDay(t: Long): Long {
+    val c = java.util.Calendar.getInstance().apply { timeInMillis = t }
+    return java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        clear(); set(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH))
+    }.timeInMillis
+}
+
+/** DatePicker の UTC のその日 0 時を、端末の時刻のその日 0 時に。 */
+private fun utcDayToLocalMidnight(utc: Long): Long {
+    val u = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = utc }
+    return java.util.Calendar.getInstance().apply {
+        clear(); set(u.get(java.util.Calendar.YEAR), u.get(java.util.Calendar.MONTH), u.get(java.util.Calendar.DAY_OF_MONTH))
+    }.timeInMillis
 }

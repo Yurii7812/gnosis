@@ -3134,7 +3134,7 @@ endfunction
 
 " \k 用: Parent セクションへカーソルを移すだけで、リンク先は開かない
 " （:JumpParent は従来どおり、リンクが1つならそのノートを開く）。
-" 「名前:」だけの行（ParentBranch: / BranchGroup: / Group: / Context: / ChildBranch: / Related: / BackLink:）と
+" 「名前:」だけの行（BranchGroup: / Group: / ParentBranch: / Context: / ChildBranch: / Related: / BackLink:）と
 " 旧形式の見出し。ノートの上にも下にも出る。コードブロックの中は数えない。
 let s:colon_head_pat = '\C^\s*\%(ParentBranch:\|BranchGroup:\|ThisNoteGroup:\|Group:\|Context:\|ChildBranch:\|Related:\|BackLink:\|### \%(ParentBranch\|ChildBranch\|Context\|Parent\|Group\|Related\|BackLink\)\)\s*$'
 
@@ -7744,8 +7744,19 @@ function! s:simple_body_append(link) abort
   " 本文の終わり = 最初の関係の節の見出し（Context / Group / Related / BackLink のうち最初のもの）
   let l:up = s:first_section_line()
   if l:up == 0
-    " ブロック（Group: など）のすぐ下なら、空行を 1 つ挟む
-    call append(line('$'), l:blk == line('$') - 1 ? ['', a:link] : [a:link])
+    " 末尾の空行（zk で作ったグループの書き出しの余白など）は詰めてから置く。
+    " 上のブロック（ParentBranch: など）のすぐ下なら空行を 1 つだけ挟む（挟まないとブロックの一部になる）。
+    " 本文の最後がリンク行なら続けて、文章なら空行を 1 つ挟む
+    let l:last = line('$')
+    while l:last > 1 && trim(getline(l:last)) ==# ''
+      let l:last -= 1
+    endwhile
+    if l:last < line('$')
+      silent execute (l:last + 1) . ',$delete _'
+    endif
+    let l:prev = trim(getline(l:last))
+    let l:glue = l:blk != l:last - 1 && l:prev =~# '\]\s*(\S\+)\s*$' && !s:in_diary_list(l:last)
+    call append(l:last, l:glue ? [a:link] : ['', a:link])
     return
   endif
   " ### Context の直前（本文の最後）にリンクを挿入。
@@ -7772,7 +7783,9 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
     while !empty(l:lines) && trim(l:lines[-1]) ==# ''
       call remove(l:lines, -1)
     endwhile
-    let l:sep = !empty(l:lines) && trim(l:lines[-1]) =~# '^\[[^]]*\]([^)]\+)\s*$' ? [] : ['']
+    " 上のブロック（ParentBranch: など）の最後のリンクのすぐ下には続けない（ブロックの一部になる）。空行を 1 つ挟む
+    let l:sep = !empty(l:lines) && trim(l:lines[-1]) =~# '^\[[^]]*\]([^)]\+)\s*$'
+          \ && s:top_block_last_index(l:lines) != len(l:lines) - 1 ? [] : ['']
     call extend(l:lines, a:is_group ? l:sep + [a:link] : ['', a:link, ''])
   else
     " 最初の節の見出しの直前まで続く空行の連なりを剥がす。
@@ -7784,7 +7797,8 @@ function! s:simple_body_append_to_file(file, link, is_group) abort
       call remove(l:lines, l:top, l:hdr - 1)
       let l:hdr = l:top
     endif
-    let l:sep = l:hdr > 0 && trim(l:lines[l:hdr - 1]) =~# '^\[[^]]*\]([^)]\+)\s*$' ? [] : ['']
+    let l:sep = l:hdr > 0 && trim(l:lines[l:hdr - 1]) =~# '^\[[^]]*\]([^)]\+)\s*$'
+          \ && s:top_block_last_index(l:lines) != l:hdr - 1 ? [] : ['']
     call extend(l:lines, a:is_group ? l:sep + [a:link] : ['', a:link, ''], l:hdr)
   endif
   call s:syn_writefile(l:lines, a:file)
@@ -7844,11 +7858,18 @@ function! s:lines_add_group_link(lines, link) abort
   if l:h1 < 0
     return extend(l:lines, ['Group:', a:link])
   endif
-  " 並びは ParentBranch: → BranchGroup: → Group: → Context:。上の 2 つがあれば、その下に作る
-  let l:above = s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:'])
+  " 並びは BranchGroup: → Group: → ParentBranch: → Context:。BranchGroup: があればその下、
+  " 無くてもほかの先頭のブロック（ParentBranch: / Context:）があれば、その上にくっつけて作る
+  let l:above = s:top_blocks_end(l:lines, l:h1, ['BranchGroup:', 'ThisNoteGroup:'])
   if l:above > 0
     call insert(l:lines, a:link, l:above)
     call insert(l:lines, 'Group:', l:above)
+    return l:lines
+  endif
+  let l:first = l:h1 + 1
+  while l:first < len(l:lines) && trim(l:lines[l:first]) ==# '' | let l:first += 1 | endwhile
+  if l:first < len(l:lines) && trim(l:lines[l:first]) =~# '^\%(ParentBranch\|Context\):$'
+    call extend(l:lines, ['Group:', a:link], l:first)
     return l:lines
   endif
   let l:at = l:h1 + 1
@@ -8190,13 +8211,17 @@ function! s:append_link_to_branch_group(link) abort
       endif
     endfor
     if l:h1 < 0 | return 0 | endif
-    " 並びは ParentBranch: → BranchGroup:。ParentBranch: があれば、その下に作る
-    let l:above = s:top_blocks_end(l:lines, l:h1, ['ParentBranch:'])
-    if l:above > 0
-      call extend(l:lines, ['BranchGroup:', a:link], l:above)
-    else
-      call extend(l:lines, ['', 'BranchGroup:', a:link, ''], l:h1 + 1)
+    " BranchGroup: は先頭のブロックの一番上（並びは BranchGroup: → Group: → ParentBranch: → Context:）。
+    " H1 の次の空行はブロックの前の空行に使い、ほかのブロックが続くならくっつけ、本文が続くなら空行を 1 つだけ挟む
+    let l:at = l:h1 + 1
+    let l:pre = ['']
+    if l:at < len(l:lines) && trim(l:lines[l:at]) ==# ''
+      let l:at += 1
+      let l:pre = []
     endif
+    let l:nxt = l:at < len(l:lines) ? trim(l:lines[l:at]) : ''
+    let l:post = (l:nxt ==# '' || l:nxt =~# '^\%(ParentBranch\|Group\|Context\|ThisNoteGroup\):$') ? [] : ['']
+    call extend(l:lines, l:pre + ['BranchGroup:', a:link] + l:post, l:at)
   endif
   call s:replace_buffer_lines(l:lines)
   return 1
@@ -8534,7 +8559,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   call gnosis#push_history()
   " 新ノートの冒頭（ParentBranch: / Group: / Context: などのブロック）の下を、
   " 空行 / カーソル行 / 空行 の形に整えてから開く（開いたあとに書き換えない）。
-  let l:gap_ln = s:new_note_gap(l:file)
+  let l:gap_ln = s:new_note_gap(l:file, !empty(a:attr))
   execute 'edit ' . fnameescape(l:file)
   let l:h1 = search('^#\s', 'nw')
   let l:hl = l:gap_ln
@@ -8630,7 +8655,8 @@ endfunction
 "   Esc → 取り消し（{'ok': 0}）
 " g:gnosis_test_display_name があれば入力の代わりに使う（試験用。"\x1b" は Esc）
 function! s:ask_display_name(default_title, ...) abort
-  let l:prompt = gnosis#i18n#tr('表示名（空 Enter で「%s」・Esc で取り消し）: ', a:default_title)
+  " a:1 … 案内の頭に付ける文字（複数のときの「(1/3) 」など）
+  let l:prompt = (a:0 ? a:1 : '') . gnosis#i18n#tr('表示名（空 Enter で「%s」・Esc で取り消し）: ', a:default_title)
   if exists('g:gnosis_test_display_name')
     let l:r = remove(g:gnosis_test_display_name, 0)
     let l:r = l:r ==# "\x1b" ? "\x01gnosis-cancel" : l:r
@@ -8646,6 +8672,113 @@ function! s:ask_display_name(default_title, ...) abort
     return {'ok': 0}
   endif
   return {'ok': 1, 'name': empty(l:r) ? a:default_title : l:r}
+endfunction
+
+" よみの入力（表示名を決めたあと）。入力欄には登録済みのよみ（無ければ推測）が入っている。
+"   Enter → そのよみを登録 / 全部消して Enter・Esc → 登録しない（並べ替えは推測のよみで行う）
+" g:gnosis_test_yomi があれば入力の代わりに使う（試験用。"\x1b" は Esc）。戻り値はよみ（登録しないなら ''）
+function! s:ask_yomi(group, note, name, ...) abort
+  if empty(a:name) || !filereadable(a:note)
+    return ''
+  endif
+  let l:rd = s:review_readings(a:group, [{'name': a:name, 'abs': fnamemodify(a:note, ':p')}])
+  let l:def = get(get(l:rd, 0, [0, a:name]), 1, a:name)
+  if exists('g:gnosis_test_yomi')
+    let l:r = empty(g:gnosis_test_yomi) ? l:def : remove(g:gnosis_test_yomi, 0)
+    let l:r = l:r ==# "\x1b" ? '' : l:r
+  else
+    let l:prompt = (a:0 ? a:1 : '') . gnosis#i18n#tr('よみ（%s）: ', a:name)
+    try
+      let l:r = inputdialog(l:prompt, l:def, "\x01gnosis-cancel")
+    catch /^Vim:Interrupt$/
+      let l:r = ''
+    endtry
+    redraw
+    if l:r ==# "\x01gnosis-cancel"
+      let l:r = ''
+    endif
+  endif
+  return trim(l:r)
+endfunction
+
+" 決めたよみをメンバーのノートの front matter に書く（[{'abs', 'name', 'yomi'}]。よみが空のものは書かない）。
+" 開いていて未保存のノートは先に保存する
+function! s:save_member_yomis(plan) abort
+  let l:tsv = []
+  for l:p in a:plan
+    if empty(get(l:p, 'yomi', '')) || !filereadable(l:p.abs)
+      continue
+    endif
+    let l:bn = bufnr(l:p.abs)
+    if l:bn > 0 && bufloaded(l:bn) && getbufvar(l:bn, '&modified')
+      let l:here = bufnr('%')
+      silent! execute 'buffer ' . l:bn
+      silent! update
+      silent! execute 'buffer ' . l:here
+    endif
+    call add(l:tsv, l:p.abs . "\t" . l:p.name . "\t" . l:p.yomi)
+  endfor
+  if !empty(l:tsv)
+    call system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany', join(l:tsv, "\n") . "\n")
+  endif
+  " よみを書いたノートを開いていれば読み直す（更新時刻が同じ秒だと checktime は気づかない）
+  for l:p in a:plan
+    let l:bn = bufnr(l:p.abs)
+    if !empty(get(l:p, 'yomi', '')) && l:bn > 0 && bufloaded(l:bn) && !getbufvar(l:bn, '&modified')
+      if l:bn == bufnr('%') && s:disk_differs_from_buffer(l:p.abs)
+        call s:reload_by_edit(l:p.abs)
+      else
+        silent! execute 'checktime ' . l:bn
+      endif
+    endif
+  endfor
+endfunction
+
+" グループ（今のノート。Index を含む）に a:links を入れる（za・\l など）。1 本ずつ表示名を聞き、
+" 続けてそのよみを聞く（複数なら「(1/3)」のように順に）。入れ終わったらよみの順に並べ替える。
+" 表示名で Esc を押すと全部取り消し（何も入れない）。戻り値は入れた数（取り消し・0 本なら 0）。
+function! s:group_add_links_named(links) abort
+  let l:group = expand('%:p')
+  let l:dir = expand('%:p:h')
+  let l:todo = filter(copy(a:links), '!s:buffer_has_link(v:val)')
+  if empty(l:todo)
+    echo 'Gnosis: ' . gnosis#i18n#tr('もうこのグループに入っています')
+    return 0
+  endif
+  let l:plan = []
+  let l:n = len(l:todo)
+  for l:k in range(l:n)
+    let l:m = s:extract_markdown_link(l:todo[l:k])
+    if empty(l:m.target)
+      continue
+    endif
+    let l:abs = fnamemodify(gnosis#resolve_link(substitute(l:m.target, '#.*$', '', ''), l:dir), ':p')
+    let l:def = filereadable(l:abs) ? s:get_title(l:abs) : ''
+    let l:def = empty(l:def) ? l:m.text : l:def
+    let l:label = l:n > 1 ? printf('(%d/%d) ', l:k + 1, l:n) : ''
+    let l:r = s:ask_display_name(l:def, l:label)
+    if !l:r.ok
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+      return 0
+    endif
+    let l:yomi = s:ask_yomi(l:group, l:abs, l:r.name, l:label)
+    call add(l:plan, {'abs': l:abs, 'name': l:r.name, 'yomi': l:yomi,
+          \ 'link': '[' . s:md_link_text(l:r.name) . '](' . l:m.target . ')'})
+  endfor
+  for l:p in l:plan
+    call s:simple_body_append(l:p.link)
+  endfor
+  " 保存の後の気づき（名前とよみの確認画面）は出さない: ここで名前もよみも決めたので、控えを取り直してから保存する
+  call gnosis#group_review_snapshot()
+  silent write
+  call s:save_member_yomis(l:plan)
+  call s:sort_group_file(l:group)
+  if s:disk_differs_from_buffer(l:group)
+    call s:reload_by_edit(l:group)
+  endif
+  call gnosis#group_review_snapshot()
+  echo printf(gnosis#i18n#tr('Gnosis: グループに %d 本入れて、よみの順に並べました'), len(l:plan))
+  return len(l:plan)
 endfunction
 
 " 1 文字を読む（g:gnosis_test_keys があればそこから。試験用）
@@ -10680,25 +10813,17 @@ function! s:insert_links_core(links, ...) abort
   if empty(l:links)
     return 0
   endif
-  " グループ（Index を含む）では置き場所や関係を聞かない。本文の最後に足して保存すれば、
-  " 保存の後の気づきが名前とよみの確認画面を開き、並べ替える。選べるのは通常のノートだけ。
+  " グループ（Index を含む）では置き場所や関係を聞かない。1 本ずつ表示名とよみを聞いて本文の最後に足し、
+  " よみの順に並べ替える（2026-10-20〜。確認画面は出さない）。選べるのは通常のノートだけ。
   if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
-    let l:n = 0
-    for l:lk in l:links
-      if !s:buffer_has_link(l:lk)
-        call s:simple_body_append(l:lk)
-        let l:n += 1
-      endif
-    endfor
-    if a:0 == 0
-      silent write
-    endif
-    return l:n > 0 ? 1 : 0
+    return s:group_add_links_named(l:links) > 0 ? 1 : 0
   endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
   " 今のノートがグループかどうかでは決めない。
   let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
-  echo gnosis#insert_prompt_text(a:0 > 0, l:can_g)
+  " m（マージ）は \l で 1 つだけ選んだとき
+  let l:can_m = !empty(s:inline_pos) && len(l:links) == 1
+  echo gnosis#insert_prompt_text(a:0 > 0, l:can_g, l:can_m)
   let l:ch = s:getkey()
   redraw
   let l:num = char2nr(l:ch)
@@ -10738,6 +10863,23 @@ function! s:insert_links_core(links, ...) abort
     " g: 選んだノート（グループ）に、今のノートを入れる。選んだノートの本文に今のノートへのリンクが入り、
     " 今のノートの Group: に選んだノートが出る（表示名は空欄から聞く。空 Enter = 今のノートのタイトル）。
     return s:join_groups(l:links) > 0
+  endif
+  if l:ch ==# 'm' && l:can_m
+    " m: 選んだノートと開いているノートをマージする（どちらへまとめるかは続けて聞く。:GnosisMergeUndo で戻せる）
+    call gnosis#merge#pick(l:links[0])
+    return -1
+  endif
+  if l:ch ==# 'i'
+    " i: 行の中へそのまま入れる（\l を開いたときのカーソル位置。za ならいまのカーソル位置）。
+    " カーソルの文字のすぐ後ろ（空の行なら行頭）に入れる。関係（Context・Branch など）は何も付けない
+    let l:pos = empty(s:inline_pos) ? getpos('.') : s:inline_pos
+    call cursor(l:pos[1], l:pos[2])
+    let l:text = join(l:links, ' ')
+    let l:cur = getline('.')
+    let l:col = empty(l:cur) ? 0 : col('.') - 1 + len(matchstr(l:cur[col('.') - 1 :], '^.'))
+    call setline('.', strpart(l:cur, 0, l:col) . l:text . strpart(l:cur, l:col))
+    call cursor(line('.'), l:col + strlen(l:text))
+    return 1
   endif
   if l:ch ==# 'h'
     " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
@@ -10829,6 +10971,30 @@ function! s:link_is_group(link) abort
   return filereadable(l:fp) && (fnamemodify(l:fp, ':t') ==# 'index.md' || s:v2_path_attr(l:fp) ==# 'group')
 endfunction
 
+" lines の BranchGroup:（旧 ThisNoteGroup:）のブロックに a:path へのリンクがあるか
+function! s:branch_group_has(lines, path) abort
+  let l:dir = expand('%:p:h')
+  let l:in = 0
+  for l:ln in a:lines
+    if trim(l:ln) =~# '^\%(BranchGroup\|ThisNoteGroup\):$'
+      let l:in = 1
+      continue
+    endif
+    if !l:in
+      continue
+    endif
+    let l:t = matchstr(l:ln, '^\s*\[[^]]*\](\zs[^)]\+\ze)\s*$')
+    if empty(l:t)
+      let l:in = 0
+      continue
+    endif
+    if fnamemodify(gnosis#resolve_link(substitute(l:t, '#.*$', '', ''), l:dir), ':p') ==# fnamemodify(a:path, ':p')
+      return 1
+    endif
+  endfor
+  return 0
+endfunction
+
 " 今のノートを、a:groups（グループへのリンク行）のグループに入れる。グループの本文に今のノートへのリンクを、
 " 表示名つきで入れる（表示名は空欄から聞く。空 Enter = 今のノートのタイトル、Esc = 全部取り消し）。
 " 今のノートの Group: にもすぐ出す。戻り値は入れたグループの数、取り消しなら -1。
@@ -10851,14 +11017,21 @@ function! s:join_groups(groups) abort
       echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
       return -1
     endif
-    call add(l:plan, {'gfp': l:gfp, 'name': l:r.name, 'link': l:lk})
+    " 続けて、その表示名のよみ（グループの中の並びに使う）
+    let l:yomi = s:ask_yomi(l:gfp, l:cur, l:r.name)
+    call add(l:plan, {'gfp': l:gfp, 'name': l:r.name, 'link': l:lk, 'yomi': l:yomi, 'abs': l:cur})
   endfor
   let l:n = 0
   for l:p in l:plan
     let l:gdir = fnamemodify(l:p.gfp, ':h')
-    " グループの本文に、既に今のノートへのリンクがあれば足さない
+    " グループの本文に、既に今のノートへのリンクがあれば足さない。上のブロック（zk で分岐したグループの
+    " ParentBranch: に今のノートがある、など）と下の節（BackLink: など）は本文ではないので数えない
     let l:dup = 0
-    for l:line in readfile(l:p.gfp)
+    let l:glines = readfile(l:p.gfp)
+    let l:gfrom = s:top_block_last_index(l:glines) + 1
+    let l:gto = s:first_section_index_in_lines(l:glines)
+    let l:gto = l:gto < 0 ? len(l:glines) : l:gto
+    for l:line in l:gfrom < l:gto ? l:glines[l:gfrom : l:gto - 1] : []
       let l:old = matchstr(l:line, '\](\zs[^)]\+\ze)')
       if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, l:gdir), ':p') ==# l:cur
         let l:dup = 1
@@ -10868,22 +11041,29 @@ function! s:join_groups(groups) abort
     if !l:dup
       call s:simple_body_append_to_file(l:p.gfp, s:make_link_from_dir(l:cur, s:md_link_text(l:p.name), l:gdir), 1)
     endif
-    " 今のノートの Group: にすぐ出す（同期を待たない）
-    let l:title = s:group_label(l:p.gfp)
-    call s:replace_buffer_lines(s:lines_add_group_link(getline(1, '$'), s:make_link_from_dir(l:p.gfp, l:title, expand('%:p:h'))))
+    " 今のノートの Group: にすぐ出す（同期を待たない）。BranchGroup: にあるグループ（zk で分岐したもの）は
+    " Group: に重ねて出さない（同期も出さないので、出すと消えてちらつく）
+    if !s:branch_group_has(getline(1, '$'), l:p.gfp)
+      let l:title = s:group_label(l:p.gfp)
+      call s:replace_buffer_lines(s:lines_add_group_link(getline(1, '$'), s:make_link_from_dir(l:p.gfp, l:title, expand('%:p:h'))))
+    endif
     let l:n += 1
   endfor
   if l:n > 0
     " よみ（yomi:）は今のノートのファイルに書かれるので、先に今のノートを保存しておく。
-    " 並べ替えは、グループごとに名前とよみの確認画面を通してから（終わったら今のノートへ戻る）。
+    " 名前とよみはもう聞いたので、確認画面は出さずにグループをよみの順に並べ替える。
     if &modified && &buftype ==# ''
       silent! write
     endif
+    call s:save_member_yomis(map(copy(l:plan), '{"abs": v:val.abs, "name": v:val.name, "yomi": v:val.yomi}'))
+    for l:p in l:plan
+      if s:group_path_reviewable(l:p.gfp)
+        call s:sort_group_file(l:p.gfp)
+        call s:review_after(l:p.gfp)
+      endif
+    endfor
     silent! checktime
     echo gnosis#i18n#tr('Gnosis: グループに追加 → ') . join(map(copy(l:plan), 's:group_label(v:val.gfp)'), ', ')
-    for l:p in l:plan
-      call s:review_open(l:p.gfp, [l:cur], {'ret': l:cur})
-    endfor
   endif
   return l:n
 endfunction
@@ -10915,13 +11095,16 @@ function! s:fit_prompt(full, compact) abort
 endfunction
 
 " \l / za の位置キーの案内（1 行）。a:has_t は t（見出し）が使えるか、a:has_g は g（選択先がグループのとき）が使えるか。
-function! gnosis#insert_prompt_text(has_t, has_g) abort
+function! gnosis#insert_prompt_text(has_t, has_g, ...) abort
+  " a:1 が真なら m（マージ。\l で 1 つ選んだとき）も出す
+  let l:has_m = a:0 && a:1
   let l:full = (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=このグループに入る / ') : '')
-        \ . gnosis#i18n#tr('Enter=本文の最後 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / r=Related(相互)') . '  (Esc)'
+        \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / r=Related(相互)')
+        \ . (l:has_m ? gnosis#i18n#tr(' / m=マージ') : '') . '  (Esc)'
   let l:compact = (a:has_t ? gnosis#i18n#tr('t=節 ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=所属 ') : '')
-        \ . gnosis#i18n#tr('Enter=末 p=親 b=子 h=下 c=Context r=Related') . ' (Esc)'
+        \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=Context r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
 
@@ -11547,6 +11730,7 @@ function! gnosis#add_clipboard_before_up_note(...) abort
   call s:insert_links_at_position(l:links, function('s:links_added_done'))
 endfunction
 
+let s:inline_pos = []
 " \l などのピッカーから: 選んだリンク（Markdown リンクの文字列のリスト）を、za と同じ置き場所キー
 " （h / Enter / t / c / r と、行の中へ入れる i）で今のノートに入れる。
 " a:pos はピッカーを開いたときの getpos('.')（i 用）。
@@ -12113,6 +12297,19 @@ function! gnosis#linkify_selection_new_note() abort range
     return
   endif
 
+  " 新しいノートと今のノートのつなぎ方を先に聞く（2026-10-20〜）:
+  "   b … Branch（新しいノートを今のノートの子にする）/ c … Context（新しいノートの Context: に今のノート。
+  "   親が無いので、c と同じく最初の Context が親になる）/ Enter … つなげない（リンクだけ）/ Esc … やめる
+  echo s:fit_prompt(gnosis#i18n#tr('\L: b=Branch(このノートの子) / c=Context(新しいノートの文脈にこのノート) / Enter=つなげない  (Esc=やめる)'),
+        \ gnosis#i18n#tr('\L: b=子 c=Context Enter=なし (Esc)'))
+  let l:how = s:getkey()
+  redraw
+  if l:how ==# "\<Esc>" || l:how ==# 'q' || char2nr(l:how) == 3
+    echo 'Gnosis: ' . gnosis#i18n#tr('やめました（何も変更していません）')
+    return
+  endif
+  let l:how = l:how ==# 'b' ? 'b' : l:how ==# 'c' ? 'c' : ''
+
   let l:target = gnosis#timestamp_filename() . '.md'
   let l:new_file = expand('%:p:h') . s:sep() . l:target
   let l:parent_file = expand('%:p')
@@ -12136,8 +12333,8 @@ function! gnosis#linkify_selection_new_note() abort range
           \ ]
     call s:syn_writefile(l:new_content, l:new_file)
     call s:diary_place_safe(l:new_file, l:new_content)
-    " Parent は付けない（2026-10-09〜）。元ノートは sync が新ノートの BackLink に
-    " 自動で載せる。後に Parent にしたいだけなら \P で足せる。
+    " つなぎ方は最初に聞いた b / c（下で付ける）。Enter なら何も付けず、元ノートは sync が新ノートの
+    " BackLink に自動で載せる。
   endif
 
   let l:link = '[' . l:text . '](' . l:target . ')'
@@ -12145,6 +12342,15 @@ function! gnosis#linkify_selection_new_note() abort range
   " y/n を押したらそのまま新しいノートを開く
   if filereadable(l:new_file)
     silent! write
+    if l:how ==# 'b'
+      let l:r = gnosis#branch#add_paths(l:parent_file, [l:new_file], 1)
+      if !get(l:r, 'ok', 0)
+        echohl WarningMsg | echo gnosis#branch#message(l:r) | echohl NONE
+      endif
+    elseif l:how ==# 'c'
+      call s:simple_add_parent(l:new_file, l:parent_file, l:parent_title)
+      call gnosis#branch#context_parent([l:new_file])
+    endif
     call gnosis#push_history()
     execute 'edit ' . fnameescape(l:new_file)
     let l:h1 = search('^#\s', 'nw')
@@ -17332,7 +17538,9 @@ endfunction
 " 新ノートの冒頭のブロック（Group: / Context: など。リンク行が続く）の下を整える。
 " 本文がまだ無いときだけ、ブロックの最後のリンクの下を「空行 / カーソル行 / 空行」にする。
 " 戻り値はカーソルを置く行（1 始まり）。ブロックが無い・本文があるときは 0（何もしない）。
-function! s:new_note_gap(file) abort
+" a:1 が真（zk のグループ）なら、ブロックの下は空行 1 つとカーソル行だけ（ブロックとリンクのあいだは 1 行空けるだけ）
+function! s:new_note_gap(file, ...) abort
+  let l:compact = a:0 && a:1
   let l:lines = readfile(a:file)
   let l:h1 = match(l:lines, '^#\s\+')
   if l:h1 < 0 | return 0 | endif
@@ -17358,7 +17566,7 @@ function! s:new_note_gap(file) abort
   if l:j < len(l:rest) && l:rest[l:j] !~# '^\s*###\s' && l:rest[l:j] !~# '^\s*\%(ChildBranch\|Related\|BackLink\):\s*$'
     return 0
   endif
-  call s:syn_writefile(l:lines[: l:last] + ['', '', ''] + l:rest[l:j :], a:file)
+  call s:syn_writefile(l:lines[: l:last] + (l:compact ? ['', ''] : ['', '', '']) + l:rest[l:j :], a:file)
   return l:last + 3
 endfunction
 

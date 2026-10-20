@@ -31,6 +31,8 @@ data class Settings(
     val topicModes: Map<String, TopicMode> = emptyMap(),
     val ringSeconds: Int = 0,        // アラームを鳴らし続ける長さ（秒）。0 は 1 回だけ鳴らす
     val expandAll: Boolean = false,  // 長いメモを「続きを見る」を押さずに全部見せる
+    val folgeView: Boolean = false,  // Folgezettel 表示（Branch の親子を木で見せる）。false は時系列
+    val writtenStamp: Boolean = false, // 日時を指定して書いたとき、書いている日時を本文の最初に入れる
 )
 
 /**
@@ -52,6 +54,69 @@ fun topicLabel(topic: String) = when (topic) {
 }
 fun visibleEntries(entries: List<Entry>, topic: String) = entries.filter { topic == ALL || it.topic == topic }
 fun writingTopic(topic: String) = if (topic == ALL) UNASSIGNED else topic
+
+/** Folgezettel 表示の 1 行: メモ・番号（1, 1a, 1a1 …）・深さ・子があるか。 */
+data class FolgeRow(val entry: Entry, val label: String, val depth: Int, val hasChildren: Boolean)
+
+/** 1→a, 26→z, 27→aa（Gnosis の Folgezettel と同じ数え方）。 */
+fun folgeLetters(n: Int): String {
+    var x = n; val sb = StringBuilder()
+    while (x > 0) { x -= 1; sb.insert(0, 'a' + x % 26); x /= 26 }
+    return sb.toString()
+}
+
+/**
+ * Branch の親子（parent）を木にして、上から順に並べる。親が list に無いメモは最上位（古い順に 1, 2, 3 …）。
+ * 子は古い順に、数字で終わる番号には a, b …、文字で終わる番号には 1, 2 … を付ける（1 → 1a → 1a1 → 1a1a）。
+ * collapsed にあるメモの子孫は並べない（そのメモ自体は並べる）。
+ */
+fun folgeRows(list: List<Entry>, collapsed: Set<String> = emptySet()): List<FolgeRow> {
+    val ids = list.map { it.id }.toSet()
+    val kids = list.filter { it.parent != null && it.parent in ids && it.parent != it.id }.groupBy { it.parent!! }
+    val roots = list.filter { it.parent == null || it.parent !in ids || it.parent == it.id }.sortedBy { it.created }
+    val out = ArrayList<FolgeRow>()
+    val seen = HashSet<String>()
+    fun walk(e: Entry, label: String, depth: Int) {
+        if (!seen.add(e.id)) return
+        val cs = kids[e.id].orEmpty().sortedBy { it.created }
+        out.add(FolgeRow(e, label, depth, cs.isNotEmpty()))
+        if (e.id in collapsed) return
+        val numeric = label.last().isDigit()
+        cs.forEachIndexed { i, c -> walk(c, label + if (numeric) folgeLetters(i + 1) else (i + 1).toString(), depth + 1) }
+    }
+    roots.forEachIndexed { i, r -> walk(r, (i + 1).toString(), 0) }
+    // 循環などで最上位からたどれなかったメモも落とさない（折りたたんで隠したものは除く）
+    val reach = HashSet<String>()
+    fun mark(id: String) { if (reach.add(id)) kids[id].orEmpty().forEach { mark(it.id) } }
+    roots.forEach { mark(it.id) }
+    var n = roots.size
+    list.filter { it.id !in reach }.sortedBy { it.created }.forEach { if (it.id !in reach) { mark(it.id); n += 1; walk(it, n.toString(), 0) } }
+    return out
+}
+
+/** 子を持つメモの id（全部折りたたむときに使う）。 */
+fun folgeParents(list: List<Entry>): Set<String> {
+    val ids = list.map { it.id }.toSet()
+    return list.mapNotNull { it.parent }.filter { it in ids }.toSet()
+}
+
+/** トピックの名前を変える（メモ・トピックの一覧・取り込み方・最後に開いたトピック）。日記と、使えない名前・ある名前には変えない。 */
+fun renameTopic(entries: List<Entry>, settings: Settings, from: String, to: String): Pair<List<Entry>, Settings>? {
+    val t = normalizedTopic(to.trim())
+    if (from == DIARY || from == UNASSIGNED || from == ALL || t.isEmpty() || t == from) return null
+    if (t in setOf(ALL, DIARY, "全部", "全部表示", "未所属", "トピック未選択", "その他")) return null
+    if (t in settings.topics || entries.any { it.topic == t }) return null
+    val now = System.currentTimeMillis()
+    val es = entries.map { if (it.topic == from) it.copy(topic = t, edited = now, exported = false) else it }
+    val modes = settings.topicModes.mapKeys { (k, _) -> if (k == from) t else k }
+    val topics = settings.topics.map { if (it == from) t else it }.let { if (from !in settings.topics) it + t else it }
+    return es to settings.copy(topics = topics, topicModes = modes, lastTopic = if (settings.lastTopic == from) t else settings.lastTopic)
+}
+
+/** 日時を指定して書いたときの本文。writtenStamp がオンなら、書いている日時を最初の行に入れる。 */
+fun backdatedText(text: String, writtenStamp: Boolean, writtenAt: Long): String =
+    if (!writtenStamp) text
+    else "（" + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.JAPAN).format(java.util.Date(writtenAt)) + " に記入）\n" + text
 
 /** 並び list の中で a から b まで（どちら向きでも）の id。範囲選択に使う。 */
 fun rangeIds(list: List<String>, a: String, b: String): List<String> {
@@ -137,6 +202,8 @@ class Store(private val ctx: Context) {
             } ?: emptyMap(),
             ringSeconds = o.optInt("ringSeconds", 0).coerceIn(0, 600),
             expandAll = o.optBoolean("expandAll", false),
+            folgeView = o.optBoolean("folgeView", false),
+            writtenStamp = o.optBoolean("writtenStamp", false),
         )
     }
 
@@ -156,6 +223,7 @@ class Store(private val ctx: Context) {
         o.put("fromHour", s.fromHour); o.put("toHour", s.toHour)
         o.put("topics", JSONArray(s.topics)); o.put("lastTopic", s.lastTopic)
         o.put("ringSeconds", s.ringSeconds); o.put("expandAll", s.expandAll)
+        o.put("folgeView", s.folgeView); o.put("writtenStamp", s.writtenStamp)
         // PC の取り込み（\M）もこのファイルを読む（topicModes）
         val modes = JSONObject()
         s.topicModes.forEach { (k, v) -> modes.put(k, JSONObject().put("single", v.single).put("stamp", v.stamp).put("record", v.record)) }

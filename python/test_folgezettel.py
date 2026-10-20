@@ -35,6 +35,21 @@ class FolgezettelTest(unittest.TestCase):
         nf.simple_sync(self.root)
         self.assertEqual(before, {p: p.read_text() for p in before})
 
+    def test_groups_have_no_id(self):
+        # グループは ID を持たない（2026-10-20）: Index にあっても振らず、付いていれば外す。番号は使い回さない
+        self.note('index', body='[g](g.md)\n[n](n.md)')
+        g = self.note('g', '4', body='[m](m.md)')
+        g.write_text(g.read_text().replace('title: g\n', 'title: g\nattribute: group\n'))
+        bg = self.note('bg', '5a')
+        bg.write_text(bg.read_text().replace('title: bg\n', 'title: bg\nattribute: group\n'))
+        n = self.note('n')
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(g), self.ident(bg)], ['', ''])
+        self.assertNotIn(self.ident(n), ('', '4'))
+        before = {p: p.read_text() for p in self.root.glob('*.md')}
+        nf.simple_sync(self.root)
+        self.assertEqual(before, {p: p.read_text() for p in before})
+
     def test_backfill_uses_creation_time_not_index_order(self):
         index = self.note('index', body='[new](a.md)\n[old](z.md)')
         newer, older = self.note('a'), self.note('z')

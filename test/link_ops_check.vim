@@ -248,9 +248,10 @@ call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
 call s:ok('\l c h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
 call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
 
-" ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 i / n）は何もしない
+" ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 n）は何もしない
+"（i は 2026-10-20 に復活: 行の中へそのまま入れる。requests_1020_net.sh で確かめる）
 call s:mk('h.md', 'ノートH', ['H の本文。'])
-for s:k in ['i', 'n', 'x']
+for s:k in ['n', 'x']
   execute 'edit ' . fnameescape(s:v . '/c.md')
   let s:c_before = getline(1, '$')
   let g:gnosis_test_keys = [s:k]

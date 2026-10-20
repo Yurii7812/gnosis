@@ -39,6 +39,17 @@ def set_value(text: str, ident: str) -> str:
     return '\n'.join(lines)
 
 
+def remove_value(text: str) -> str:
+    """front matter の folgezettel: の行を消す（グループは ID を持たない）。"""
+    lines = text.split('\n')
+    fm, _ = nf._split_front_matter(lines)
+    for i in range(1, max(len(fm) - 1, 1)):
+        if re.match(r'^folgezettel\s*:', lines[i]):
+            del lines[i]
+            break
+    return '\n'.join(lines)
+
+
 def parent_id(ident: str) -> str:
     parts = re.findall(r'\d+|[a-z]+', ident)
     return ''.join(parts[:-1])
@@ -79,6 +90,8 @@ def assign_child(parent_text: str, child_text: str, sibling_texts: list[str]) ->
     return set_value(child_text, next_child(pid, sibling_texts))
 
 
+# 紙の PKM のノートの題（番号・番号-題・番号の一覧）。グループでも ID を外さない
+PAPER_TITLE_RE = re.compile(r'^(?:\d+[a-z0-9]*(?:-.*)?|[Ff]olgezettel-Index(?:-.*)?|Paper-Zettelkasten-Index)$')
 DAILY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}-(?:MO|TU|WE|TH|FR|SA|SU)(?:-|$)')
 
 
@@ -138,8 +151,15 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 children[p].append(c)
     ids = {p: value('\n'.join(n['fm'])) for p, n in notes.items()}
     plan = {}
-    # Reserve IDs across the vault, including currently disconnected notes.
-    reserved = set(ids.values())
+    # グループは Folgezettel ID を持たない（2026-10-20 決定）。付いていれば外す（'' は「消す」）。
+    # 紙の PKM の番号（題が番号）は別物なので触らない
+    for p, n in notes.items():
+        if ids[p] and is_group(n) and not PAPER_TITLE_RE.match(n['title']) and not nf._editor_has_unsaved_changes(p):
+            plan[p] = ''
+            ids[p] = ''
+    # Reserve IDs across the vault, including currently disconnected notes
+    # （グループから外した番号も、取り違えないように使い回さない）.
+    reserved = set(ids.values()) | {value('\n'.join(notes[p]['fm'])) for p in plan}
     index = root / 'index.md'
     top = targets(notes[index]['body'], root) if index in notes else []
     # 日記（YYYY-MM-DD-曜日）と時系列記録のその日のノート（front matter の record:）も最上位にする。
@@ -149,21 +169,21 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             top.append(p)
     number = max((int(i) for i in ids.values() if i.isdigit()), default=0)
     for p in sorted(top, key=lambda p: creation_key(p, notes[p])):
-        if parents[p] or ids[p] or nf._editor_has_unsaved_changes(p):
+        if parents[p] or ids[p] or is_group(notes[p]) or nf._editor_has_unsaved_changes(p):
             continue
         number += 1
         while str(number) in reserved:
             number += 1
         ids[p] = plan[p] = str(number)
         reserved.add(ids[p])
-    queue = [p for p in notes if ID_RE.fullmatch(ids[p])]
+    queue = [p for p in notes if ID_RE.fullmatch(ids[p]) and not is_group(notes[p])]
     seen = set()
     for p in queue:
         if p in seen:
             continue
         seen.add(p)
         for c in sorted(children[p], key=lambda c: creation_key(c, notes[c])):
-            if len(parents[c]) != 1 or c == p or nf._editor_has_unsaved_changes(c):
+            if len(parents[c]) != 1 or c == p or is_group(notes[c]) or nf._editor_has_unsaved_changes(c):
                 continue
             if not ids[c]:
                 # All reserved IDs prevent collisions even outside this Branch.

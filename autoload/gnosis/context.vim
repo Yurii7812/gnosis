@@ -63,7 +63,7 @@ function! s:fm_len(lines) abort
   return 0
 endfunction
 
-" Context: より上に来る、本文の上の先頭のブロック（並び: ParentBranch → BranchGroup → Group → Context）
+" Context: より上に来る、本文の上の先頭のブロック（並び: BranchGroup → Group → ParentBranch → Context）
 let s:above_heads = ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:']
 
 " 新形式のブロックの [`Context:` の行, リンクの最後の行]（0 始まり）。無ければ []。
@@ -193,7 +193,7 @@ function! s:insert_new_block(lines, links) abort
   endfor
   let l:at = l:h1 >= 0 ? l:h1 + 1 : l:start
   let l:block = [s:head] + a:links
-  " 上に来るブロック（ParentBranch: / BranchGroup: / Group:）があれば、そのすぐ下に並べる
+  " 上に来るブロック（BranchGroup: / Group: / ParentBranch:）があれば、そのすぐ下に並べる
   let l:above = s:above_end(l:out)
   if l:above >= 0
     call extend(l:out, l:block + (l:above < len(l:out) && trim(l:out[l:above]) !=# '' ? [''] : []), l:above)
