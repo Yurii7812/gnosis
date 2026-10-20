@@ -56,11 +56,11 @@
 | SR15 | 検索一致箇所プレビュー・強調（開いた本文 | 検索一致箇所プレビュー・強調（開いた本文には検索ポップアップ用装飾を残さない）。 | Vim + `\A` | 一部（一致位置の範囲を返す。本文に装飾は残さない。`\A` の強調表示は未） | 3 | `python/vault_index.py` `test_vault_index.py` `test/query_net.sh` | P2 View API |
 | SR16 | 検索→選択→索引案／リンク作成などの安全 | 検索→選択→索引案／リンク作成などの安全なコマンドチェーン。 | Vim + `\A` | 未実装 | 3 |  | P2 View API |
 | LR01 | インクリメンタルリーディング。 | インクリメンタルリーディング。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR02 | 間隔反復（Spaced Repetiti | 間隔反復（Spaced Repetition）。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR03 | フラッシュカード。 | フラッシュカード。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR04 | Cloze穴埋め。 | Cloze穴埋め。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR05 | ランダム復習。 | ランダム復習。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
-| LR06 | Active Recall、答えを見る前 | Active Recall、答えを見る前の想起。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
+| LR02 | 間隔反復（Spaced Repetiti | 間隔反復（Spaced Repetition）。 | `\A` + Markdown | 動作検証中（SM-2。記録は `.gnosis/srs.json`。`\A`・Android は未） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
+| LR03 | フラッシュカード。 | フラッシュカード。 | `\A` + Markdown | 動作検証中（`Q:`/`A:` のカード。複数行可） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
+| LR04 | Cloze穴埋め。 | Cloze穴埋め。 | `\A` + Markdown | 動作検証中（`{{穴埋め}}`・`{{c1::語}}`・ヒント） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
+| LR05 | ランダム復習。 | ランダム復習。 | `\A` + Markdown | 動作検証中（`:GnosisSrs random`。記録しない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
+| LR06 | Active Recall、答えを見る前 | Active Recall、答えを見る前の想起。 | `\A` + Markdown | 動作検証中（答えを見る前の採点を受け付けない） | 6 | `python/srs.py` `test_srs.py` `test/srs_net.sh` | P2 View API |
 | LR07 | 読書ハイライトの取得・ノート接続。 | 読書ハイライトの取得・ノート接続。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |
 | LR08 | PDF注釈、選択テキスト、ページリンク。 | PDF注釈、選択テキスト、ページリンク。 | `\A` + Markdown | 要確認 | 4 | 未実装の疑い | P1 資産モデル |
 | LR09 | 読書進捗・中断位置・再開。 | 読書進捗・中断位置・再開。 | `\A` + Markdown | 未実装 | 6 |  | P2 View API |

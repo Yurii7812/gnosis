@@ -6199,6 +6199,108 @@ function! gnosis#query_promote(file) abort
   echo printf(gnosis#i18n#tr('Gnosis: 検索結果を %s に書きました'), l:r.data.file)
 endfunction
 
+" 間隔反復の復習（SM-2）: :GnosisSrs [random [N]] / :GnosisSrsStats。カードはノートの `Q:`/`A:` と `{{穴埋め}}`（原本はノートのまま。記録は .gnosis/srs.json）
+"   Space/Enter … 答えを見る（見る前に思い出す） / 0〜5 … 自己採点（3 未満は忘れた扱いで翌日） / s … 飛ばす / q … 終える
+function! s:srs_run(args) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return {}
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/srs.py', l:root] + a:args, 'shellescape(v:val)'), ' ')
+  let l:out = system(l:cmd)
+  try
+    return {'root': l:root, 'data': json_decode(l:out)}
+  catch
+    return {'root': l:root, 'data': {'error': trim(l:out)}}
+  endtry
+endfunction
+
+function! gnosis#srs_review(...) abort
+  let l:args = a:0 && a:1 ==# 'random' ? ['random', a:0 > 1 ? a:2 : '5'] : ['due', strftime('%Y-%m-%d')]
+  let l:r = s:srs_run(l:args)
+  if empty(l:r)
+    return
+  endif
+  if type(l:r.data) != v:t_list
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r.data, 'error', '') | echohl NONE
+    return
+  endif
+  if empty(l:r.data)
+    echo gnosis#i18n#tr('Gnosis: 今日の復習はありません')
+    return
+  endif
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  let b:gnosis_srs = {'root': l:r.root, 'cards': l:r.data, 'i': 0, 'shown': 0, 'done': 0, 'random': a:0 && a:1 ==# 'random'}
+  for l:k in ['0', '1', '2', '3', '4', '5']
+    execute 'nnoremap <buffer> <silent> ' . l:k . ' :call <SID>srs_rate(' . l:k . ')<CR>'
+  endfor
+  nnoremap <buffer> <silent> <Space> :call <SID>srs_reveal()<CR>
+  nnoremap <buffer> <silent> <CR> :call <SID>srs_reveal()<CR>
+  nnoremap <buffer> <silent> s :call <SID>srs_next()<CR>
+  nnoremap <buffer> <silent> q :close<CR>
+  call s:srs_draw()
+endfunction
+
+function! s:srs_draw() abort
+  let l:s = b:gnosis_srs
+  setlocal modifiable
+  silent %delete _
+  if l:s.i >= len(l:s.cards)
+    call setline(1, [gnosis#i18n#tr('おしまい') . printf(' (%d / %d)', l:s.done, len(l:s.cards)), '', gnosis#i18n#tr('q で閉じる')])
+  else
+    let l:c = l:s.cards[l:s.i]
+    let l:lines = [printf('%s %d / %d  (%s)', gnosis#i18n#tr('復習'), l:s.i + 1, len(l:s.cards), l:c.path), '', gnosis#i18n#tr('問い') . ':'] + split(l:c.front, "\n", 1)
+    if l:s.shown
+      let l:lines += ['', gnosis#i18n#tr('答え') . ':'] + split(l:c.back, "\n", 1) + ['', gnosis#i18n#tr('0〜5 で採点（3 未満は忘れた）・ s 飛ばす・ q 終える')]
+    else
+      let l:lines += ['', gnosis#i18n#tr('まず思い出してください。Space で答えを見る')]
+    endif
+    call setline(1, l:lines)
+  endif
+  setlocal nomodifiable
+endfunction
+
+function! s:srs_reveal() abort
+  if b:gnosis_srs.i < len(b:gnosis_srs.cards)
+    let b:gnosis_srs.shown = 1
+    call s:srs_draw()
+  endif
+endfunction
+
+function! s:srs_next() abort
+  let b:gnosis_srs.i += 1
+  let b:gnosis_srs.shown = 0
+  call s:srs_draw()
+endfunction
+
+function! s:srs_rate(q) abort
+  let l:s = b:gnosis_srs
+  if l:s.i >= len(l:s.cards) || !l:s.shown
+    return
+  endif
+  " ランダム復習は記録しない（出題の順序に影響させない）。ふつうの復習だけ記録する
+  if !l:s.random
+    let l:r = s:srs_run(['answer', l:s.cards[l:s.i].id, a:q, strftime('%Y-%m-%d')])
+    if type(l:r.data) == v:t_dict && has_key(l:r.data, 'error')
+      echohl WarningMsg | echo 'Gnosis: ' . l:r.data.error | echohl NONE
+      return
+    endif
+  endif
+  let l:s.done += 1
+  call s:srs_next()
+endfunction
+
+function! gnosis#srs_stats() abort
+  let l:r = s:srs_run(['stats', strftime('%Y-%m-%d')])
+  if empty(l:r) || has_key(l:r.data, 'error')
+    return
+  endif
+  let l:d = l:r.data
+  echo printf(gnosis#i18n#tr('Gnosis: カード %d 枚（新規 %d・期日 %d・先 %d）。今日の復習済み %d'), l:d.cards, l:d.new, l:d.due, l:d.later, l:d.reviewed_today)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

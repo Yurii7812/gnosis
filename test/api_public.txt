@@ -264,6 +264,8 @@ gnosis#shell_job
 gnosis#sort_selection
 gnosis#sort_time
 gnosis#sort_yomi
+gnosis#srs_review
+gnosis#srs_stats
 gnosis#stack_copy_delete_line
 gnosis#stack_copy_delete_visual
 gnosis#stack_copy_toggle
