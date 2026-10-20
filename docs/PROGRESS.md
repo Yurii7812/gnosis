@@ -7,25 +7,31 @@
 - **Phase 0 実施中**。完了: 原本の保存、CLAUDE.md、PHILOSOPHY / ARCHITECTURE / ROADMAP / DECISIONS / FEATURES（165 機能 + 追加 ID）、テスト基準線の取得。
 - 未作成の文書（必要な Phase で作る）: DATA_FORMATS / MIGRATION / USER_GUIDE / ANDROID_SYNC / HTML_EXPORT。
 
-## テスト基準線（main 570de52・個別実行、2026-10-20）
-- 実行したもの: `test/vim_static_check.py` `check_guide.py` `i18n_check.py`、`python/test_*.py` 全部、`test/*_net.sh` 全部。**63 本中 60 本成功・3 本失敗**。
-- 失敗（main で元から。今回の変更が原因ではない）:
-  1. `python/test_paper_pkm.py` — 関係ブロックが `### Group` 節から先頭の `Group:` ブロックへ変わった（5dbf429）のに期待値が古い。一部（Folgezettel-Index・日記グループ・月グループ）は直したが、あと 8 件（Index-write の Group、画像と節の間の空行 4 件、日記グループ、キーワード間の空行）が古い期待値のまま。**製品の不具合ではなくテストの追随漏れ**（要・1 件ずつ現行仕様に合わせる）。
-  2. `test/related_net.sh` — `related_check.vim:114` が古い表示文言 `r=Related` を期待。
-  3. `test/requests_1020_net.sh` — 「i・\L・g・マージの流れ」。原因未調査。
-- `test/run.sh` は `set -e` なので 1 に当たった時点で止まり、以降を実行しない（それが分かりにくい原因）。
-- **未実行**: `web` の Electron E2E（`npm test`・xvfb 要）、Android Gradle、Windows／macOS 実機。実行するまで「通った」と書かない。
-- CI（`.github/workflows/gnosis-regression.yml`）は一部の試験しか回していない。
+## テスト基準線
+- 2026-10-20 時点、`sh test/run.sh` が**最後まで通る**（Electron E2E・Android Gradle・Windows/macOS 実機は未実行）。
+- 取得時（main 570de52）の失敗は、いずれも**仕様変更への試験の追随漏れ**で、実装と現行仕様を確認してから試験側を直した:
+  - `test_paper_pkm.py`: 関係が `### Group` 節→先頭の `Group:` ブロックになった（5dbf429）。
+  - `related_check.vim`: `r=Related` は未マージ枝（feat/related-mode）の機能で main の案内に無い。
+  - `context_pty_check.py`: `zn`+Enter は ParentBranch: だけを付ける（旧: Context: も）。
+  - `requests_1020_net.sh`: 単独実行では通る（取得時は負荷による一時失敗の疑い）。再発したら調査。
+- `test/run.sh` は `set -e` で最初の失敗で止まる。全体は約 10 分かかる。作業中は関係する試験だけ回し、区切りで全体を回す。
+- CI（`.github/workflows/gnosis-regression.yml`）は一部の試験しか回さない。
 
 ## 現状監査の要点
 - `\M`（`python/capture_import.py` ＋ `autoload/gnosis.vim`）: id 単位で重複防止（`.state/capture_imported.json`）。本文を書き直すと**別版ノートを作る**（原本 §7.3 と衝突・Phase 1 の最優先）。トピック変更は同一ノートへ反映する。base 保存・3-way merge・日記埋め込みの境界は無い。
 - `\A`: `web/`。読み取り専用の MD 描画＋端末。閲覧専用モード（Alt+V）はある。タブ・分割・GUI 編集・番号ナビ・コマンドパレットは無い。
 - グラフ・カード・曼荼羅・カンバン・FTS・XMP・ポモドーロ・Cornell 等は grep でヒットなし（未実装）。
 
+## 完了（このブランチ）
+- Phase 0 文書一式。
+- **`\M` 差分更新（M01/M02 の一部）**: `python/capture_merge.py`（3-way merge・競合は記録のみ）、`capture_import.py` の `plan` に `merge`、`merge` CLI、`gnosis#capture_import` の分岐、i18n。試験: `test_capture_merge.py` `test_capture_import.py`（旧「別版を作る」を新仕様に変更）`capture_merge_net.sh` `capture_topics_check.vim`（同）。詳細・未実装は `docs/ANDROID_SYNC.md`。
+
 ## 次の具体的タスク
-1. 失敗 3 本の原因を直す（テスト追随: paper_pkm 8 件・related 文言／requests_1020 は原因調査）。直ったら基準線を更新。
-2. `\M` を精密監査: `capture_import.py` の plan／state／別版を作る分岐、`gnosis#capture_import`（Vim 側）、`test/capture_import_*`。結果を DECISIONS（state 版 2・source ID・base 保存）に書く。
-3. 3-way merge の純関数（Python 単体試験）→ 取り込みへ接続 → 原本 §7.3 の必須 E2E を 1 本ずつ追加。
+1. ノート側の不変 source ID: 新規ノートに front matter `capture_id: <id>` を書き、state の行き先が消えた（リネーム）ときは vault を `capture_id` で探して同じノートとして扱う（重複ノートを作らない）。試験: リネーム後の再取り込み。
+2. 日記埋め込み（#7）: 日記の行に source ID を持たせて、再取り込みで編集を反映・二重挿入しない。
+3. 競合の解決操作（`:GnosisCaptureConflicts` の一覧／差分／どちらを採るか）。
+4. 取り込みのジャーナル（クラッシュ後の再実行）、画像 hash。
+5. Phase 1 の残り（UT 系: 壊れたリンク検査・バックアップ等の「要確認」の監査）→ Phase 2。
 
 ## 再現
 `cd ~/src/gnosis-master && export TMPDIR=$HOME/Desktop/test GNOSIS_HOME=$(mktemp -d)` のうえで各試験を個別実行（上記の通り）。

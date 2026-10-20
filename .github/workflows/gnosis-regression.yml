@@ -34,8 +34,10 @@ jobs:
           TMPDIR: ${{ runner.temp }}
         run: |
           python3 python/test_capture_import.py
+          python3 python/test_capture_merge.py
           python3 python/test_orphans.py
           sh test/capture_import_net.sh
+          sh test/capture_merge_net.sh
           sh test/capture_topics_net.sh
       - name: Test Python note relationship synchronization
         run: |

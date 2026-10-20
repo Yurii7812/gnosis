@@ -30,6 +30,7 @@ python3 "$REPO/python/test_theme_palette.py"
 python3 "$REPO/python/test_orphans.py"
 python3 "$REPO/python/test_folgezettel.py"
 python3 "$REPO/python/test_capture_import.py"
+python3 "$REPO/python/test_capture_merge.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
 
@@ -80,6 +81,7 @@ sh "$REPO/test/checkbox_net.sh"
 
 # スマホのメモの取り込み
 sh "$REPO/test/capture_import_net.sh"
+sh "$REPO/test/capture_merge_net.sh"
 sh "$REPO/test/capture_topics_net.sh"
 
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）

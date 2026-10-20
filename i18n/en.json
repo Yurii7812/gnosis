@@ -178,6 +178,7 @@
     "スマホへ入れられませんでした": "Could not install on the phone",
     "Gnosis: スマホに入れました。アプリを開いて確認してください": "Gnosis: installed on the phone. Open the app to check",
     "Gnosis: スマホから読み込んでいます…": "Gnosis: reading from the phone…",
+    "Gnosis: スマホと PC で同じ場所を変えたメモが %d 件あります（ノートは変えていません。取り込み済みにもしていません）: ": "Gnosis: %d phone memo(s) conflict with edits on the PC (notes left unchanged and not marked as imported): ",
     "Gnosis: 新しいメモはありません（全部取り込み済み）": "Gnosis: no new memos (all imported already)",
     "Gnosis: スマホのメモを %d 件取り込みました（ノート %d・日記 %d）。つないでいないものは \\N で整理できます": "Gnosis: imported %d phone memo(s) (notes %d, diary %d). Use \\N to connect the ones left unconnected",
     "Gnosis: とりあえず書く（つなぐのは後で。\\N で未整理の一覧）": "Gnosis: quick note (connect it later; \\N lists unconnected notes)",

@@ -188,8 +188,8 @@
 | AN01 | APK 既存操作の維持（フィルタ・複数選択・移動・画像・長押し・アラーム） | Android | 実装済（docs/11） | 1 | `android/`・実機未確認 |
 | AN02 | タスクエンジン共有（`- [ ]`・期限・繰り返し）→ Agenda／カレンダー／APK | 共通 | 未実装 | 5 | |
 | AN03 | 通知タップでノートを開く・完了・スヌーズ・ウィジェット・週次レビュー | Android | 未実装 | 5 | |
-| M01 | `\M` 重複インポート禁止（source ID・ハッシュ・復旧可能な state） | Vim/Python | 一部（id 単位の重複防止あり。編集後は別版ノートを作る＝要件違反） | 1 | `python/capture_import.py` |
-| M02 | 同一ノートの差分更新・base/local/remote 3-way merge・競合 UI | Vim/`\A` | 未実装 | 1 | 原本 §7.3 の 14 項目 |
+| M01 | `\M` 重複インポート禁止（source ID・ハッシュ・復旧可能な state） | Vim/Python | 動作検証中（id 単位の重複防止＋同一ノート差分更新を試験済み。ノート側 source ID・日記・ジャーナルは未実装） | 1 | `capture_import.py` `capture_merge.py` `docs/ANDROID_SYNC.md` |
+| M02 | 同一ノートの差分更新・base/local/remote 3-way merge・競合 UI | Vim/`\A` | 実装中（merge 実装・試験済み。競合の差分画面・解決操作は未実装） | 1 | `capture_merge.py` |
 | M03 | 日記埋め込みの source ID 別境界・二重挿入なし | Vim/Python | 未実装 | 1 | |
 | M04 | 画像添付 hash 管理・関係(Branch/Context)の差分反映・トピック変更 | Vim/Python | 一部（トピック変更反映あり） | 1 | |
 | M05 | Idempotency／ジャーナル／原子的書込／✓ は永続化後のみ | Python | 未実装 | 1 | |

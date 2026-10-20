@@ -45,7 +45,7 @@ class TestNewNoteCursor(unittest.TestCase):
     def test_zn_enter_types_into_the_middle_blank_line(self) -> None:
         with Session(self.rc, str(self.home), str(self.home), args=[str(self.v / "a.md")]) as s:
             s.send("zn", 0.6)
-            s.send("\r", 1.5)       # 位置キー Enter（本文の最後・Context と Branch が付く）
+            s.send("\r", 1.5)       # 位置キー Enter（本文の最後・ParentBranch が付く）
             s.send("ここに書く", 0.6)  # 挿入モードのまま、すぐ書ける
             s.send(ESC, 0.9)
             s.send(":wa\r", 0.6)
@@ -53,12 +53,12 @@ class TestNewNoteCursor(unittest.TestCase):
         new = sorted(p for p in self.v.glob("2*.md"))
         self.assertEqual(len(new), 1, [p.name for p in self.v.iterdir()])
         lines = new[0].read_text(encoding="utf-8").split("\n")
-        i = lines.index("Context:")
+        i = lines.index("ParentBranch:")  # zn は子ノート = Branch（旧: Context:。1962de9 以降）
         self.assertEqual(lines[i + 1], "[ノートA](a.md)")
         self.assertEqual(lines[i + 2:i + 5], ["", "ここに書く", ""], lines)  # 空行・カーソル行・空行
         self.assertEqual(lines[i - 2], "# " + new[0].stem)
         self.assertEqual(lines[i - 1], "")
-        self.assertEqual(lines[i + 5], "ParentBranch:")
+        self.assertNotIn("Context:", lines)  # 旧仕様では Context: も付いた。いまは ParentBranch: だけ
         self.assertNotIn("### Context", lines)
         a = (self.v / "a.md").read_text(encoding="utf-8")
         self.assertIn("ChildBranch:", a)

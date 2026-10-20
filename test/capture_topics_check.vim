@@ -38,13 +38,13 @@ call gnosis#capture_import($D . '/pack')
 call assert_true(index(readfile(s:n), 'topic: "仕事"') >= 0)
 call assert_true(index(readfile(s:n), 'PC での追記') >= 0)
 call assert_false(filereadable($D . '/v/261019100000-2.md'))
-" 本文の変更時は元の PC ファイルを上書きせず別版として残す。
+" 本文の変更時は別版を作らず、同じノートへスマホの変更だけを足す（PC の追記も残る。仕様 §7.3）。
 let s:data.entries[0].text .= "\nスマホの追記"
 call writefile([json_encode(s:data)], $D . '/pack/capture.json')
 call gnosis#capture_import($D . '/pack')
-call assert_true(filereadable($D . '/v/261019100000-2.md'))
+call assert_false(filereadable($D . '/v/261019100000-2.md'))
 call assert_true(index(readfile(s:n), 'PC での追記') >= 0)
-call assert_true(index(readfile($D . '/v/261019100000-2.md'), 'スマホの追記') >= 0)
+call assert_true(index(readfile(s:n), 'スマホの追記') >= 0)
 " PC で作ったメモもスマホと同じ分類になる。複数行の選択からまとめて移動できる。
 call writefile(['# PC のメモ', '', 'そのままの本文'], $D . '/v/pc.md')
 call gnosis#orphans_open()

@@ -12,6 +12,7 @@ CLI:
     capture_import.py adbrecords < JSON              # PC の時系列記録の名前（["夢", …]）をスマホのアプリへ書く
     capture_import.py adbinstall APK                 # つながっているスマホへ APK を入れる（adb install -r）
     capture_import.py plan OUTDIR ROOT               # 取り込む内容を JSON で出す（取り込み済みの id は除く）
+    capture_import.py merge OUTDIR ROOT              # スマホで書き直したメモを、取り込み済みの同じノートへ差分だけ反映（競合は記録だけ）
     capture_import.py whatsapp TXT OUTDIR [TOPIC]    # WhatsApp の「チャットのエクスポート」を capture.json にする
 """
 from __future__ import annotations
@@ -258,6 +259,10 @@ def plan(outdir: str, root: str) -> dict:
         done = exists and (same or legacy) and not (needs_note and appended)
         metadata_only = exists and previous is not None and all(
             _snapshot(previous)[k] == _snapshot(e)[k] for k in ("text", "images")) and not appended
+        # 本文か画像をスマホで変えた取り込み済みメモ: 別版を作らず、同じノートへ差分だけ当てる（capture_merge）。
+        # 前回の本文（base）が残っている記録と、ノートの実ファイルがあるものだけ。日記・トピック・記録への追記は対象外
+        merge = (exists and previous is not None and "text" in previous and not appended and not same and not metadata_only
+                 and bool(target) and target.endswith(".md"))
         missing = [name for name in e.get("images") or [] if not (Path(outdir) / "images" / name).is_file()]
         if not done and missing:
             raise ValueError("画像がありません（取り込み済みにはしません）: " + ", ".join(missing))
@@ -282,6 +287,7 @@ def plan(outdir: str, root: str) -> dict:
             "done": done,
             "file": target if exists else "",
             "update": metadata_only and not done,
+            "merge": merge,
             "known": {k: st["ids"][k] for k in ([e.get("parent")] + list(e.get("contexts") or [])
                                                 + [m.group(2).split("#", 1)[0] for m in MEMO_LINK.finditer(e.get("text") or "")])
                       if k and k in st.get("ids", {}) and k not in by_id
@@ -293,6 +299,25 @@ def plan(outdir: str, root: str) -> dict:
     for k, e in list(st.get("entries", {}).items()) + [(e["id"], e) for e in entries]:
         titles[k] = _first_line_title(MEMO_LINK.sub(r"\1", e.get("text") or "")) or k
     return {"items": items, "count": len(items), "new": sum(1 for i in items if not i["done"]), "titles": titles}
+
+
+def apply_merges(outdir: str, root: str) -> dict:
+    """plan で merge になったメモを、PC のノートへ差分だけ当てる。{id: {status, file, count}}。競合はノートを変えない。"""
+    import capture_merge as cm
+    rp = Path(root)
+    st = load_state(rp)
+    out = {}
+    for it in plan(outdir, root)["items"]:
+        if not it["merge"]:
+            continue
+        prev = st["entries"][it["id"]]
+        entries = json.loads((Path(outdir) / "capture.json").read_text(encoding="utf-8"))["entries"]
+        remote = next(e for e in entries if e["id"] == it["id"])
+        out[it["id"]] = cm.apply_note(
+            rp, it["id"], it["file"],
+            cm.body_lines(prev.get("text") or "", prev.get("images") or []),
+            cm.body_lines(remote.get("text") or "", remote.get("images") or []))
+    return out
 
 
 def record(root: str, pairs: list[tuple[str, str]], outdir: str = "") -> None:
@@ -389,6 +414,9 @@ def _main(argv: list[str]) -> int:
         except (OSError, ValueError, KeyError) as e:
             print(str(e), file=sys.stderr)
             return 2
+        return 0
+    if len(argv) == 3 and argv[0] == "merge":
+        print(json.dumps(apply_merges(argv[1], argv[2]), ensure_ascii=False))
         return 0
     if len(argv) >= 3 and argv[0] == "record":
         pairs = [tuple(x.split("\t", 1)) for x in sys.stdin.read().splitlines() if "\t" in x]

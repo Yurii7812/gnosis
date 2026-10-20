@@ -159,7 +159,7 @@ def test_create_and_regen() -> None:
         check(folge_text.index("[1](folgezettel-Index-1.md#1)")
               < folge_text.index("[2](folgezettel-Index-2.md#2)"), "Folgezettel-Index は自然順")
         check("[1a](" not in folge_text, "Folgezettel-Index は最上位IDだけ（1a 等は出ない）")
-        check("### Group" in folge_text and "[Paper-Zettelkasten-Index]" in folge_text,
+        check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
         dedicated = pp.folge_index_path(root, "1")
         check(dedicated.is_file(), "専用ノート folgezettel-Index-1 ができる")
@@ -172,7 +172,7 @@ def test_create_and_regen() -> None:
             check("[Paper-Zettelkasten-Index:" in d_text
                   or "[Folgezettel-Index:" in d_text, "専用ノートの Parent")
         iw_text = (root / "Index-write.md").read_text(encoding="utf-8")
-        check("### Group" in iw_text and "[Paper-Zettelkasten-Index]" in iw_text,
+        check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
         check("PAPER:START" not in index_text and "PAPER:END" not in folge_text,
               "管理コメントは書かない")
@@ -408,9 +408,10 @@ def test_diary_register_and_keyword() -> None:
         check(fi.count(f"[日記]({group.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ（diary 表記は無い）: {fi}")
         body_lines = gtext.split("---\n", 2)[2].strip("\n").split("\n")
         body_lines = ["# 日記", ""] + body_lines[2:] if body_lines[:2] == ["# 日記", ""] else body_lines
-        check(body_lines[0] == "# 日記" and body_lines[1] == "" and "" not in body_lines[2:]
-              and body_lines[body_lines.index("### Group") - 1].startswith("[2026-"),
-              f"日記グループは通常ノートと同じ（# の次に空行 1 つ、リンクと ### Group の間に空行なし）: {body_lines}")
+        gb = body_lines.index("Group:")
+        check(body_lines[0] == "# 日記" and body_lines[1] == "" and gb == 2 and body_lines[gb + 3] == ""
+              and "" not in body_lines[gb + 4:] and body_lines[gb + 4].startswith("[2026-"),
+              f"日記グループ: # の次に空行 1 つ、Group: ブロック、空行 1 つ、月のリンクが連続: {body_lines}")
         m10 = _month(root, "2026-10")
         mtext = m10.read_text(encoding="utf-8")
         check("title: 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
@@ -520,6 +521,7 @@ def test_index_has_no_blank_lines_between_links() -> None:
         check(lines[at - 1] == "[Index-write](Index-write.md)", "Index-write と Folgezettel-Index は連続")
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
                       and lines[i - 1] != "[Folgezettel-Index](Folgezettel-Index.md)"
+                      and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
         text = idx.read_text(encoding="utf-8").replace("[Folgezettel-Index](Folgezettel-Index.md)\n\n[日記](", "[Folgezettel-Index](Folgezettel-Index.md)\n\n\n[日記](")
@@ -602,28 +604,26 @@ def test_diary_note_keeps_a_blank_line_after_the_last_image() -> None:
         body = note.read_text(encoding="utf-8").split("---\n", 2)[2]
         check(body.endswith("![](paper-diary-20261007-1.jpg)\n\n"), f"登録直後: 最後の画像のあとに空行: {body!r}")
         pp.regen(root)
-        lines = note.read_text(encoding="utf-8").split("\n")
-        at = lines.index("![](paper-diary-20261007-1.jpg)")
-        check(lines[at + 1] == "" and lines[at + 2].startswith("### Group"), f"sync 後も画像と ### Group のあいだに空行: {lines[at:at+4]}")
-        # 2 ページ目を足しても、画像と節のあいだの空行は 1 つのまま
+        # 関係は先頭の Group: ブロックに移ったので、画像のあとに節は来ない。末尾は画像＋空行 1 つのまま
+        def tail() -> str:
+            return note.read_text(encoding="utf-8").split("---\n", 2)[2]
+        img1, img2 = "![](paper-diary-20261007-1.jpg)", "![](paper-diary-20261007-2.jpg)"
+        check(tail().endswith(img1 + "\n\n") and not tail().endswith("\n\n\n"), f"sync 後も最後の画像のあとは空行 1 つ: {tail()[-60:]!r}")
+        # 2 ページ目を足しても、画像のあとの空行は 1 つのまま
         p2 = root / "p2.jpg"
         p2.write_bytes(b"x")
         pp.register_diary_pages(root, root, [(p2, "2026-10-07")])
         pp.regen(root)
-        lines = note.read_text(encoding="utf-8").split("\n")
-        at = lines.index("![](paper-diary-20261007-2.jpg)")
-        check(lines[at + 1] == "" and lines[at + 2].startswith("### Group") and lines[at - 1] == "" and lines[at - 2] == "![](paper-diary-20261007-1.jpg)",
-              f"2 ページ目のあとも画像と節のあいだは空行 1 つ（増えない）: {lines[at-3:at+4]}")
-        # 空行の無い旧いノート（画像の直後に節）は、空行を 1 つ足す。自分で空行を 2 つ入れたノートは触らない
-        text = note.read_text(encoding="utf-8")
-        note.write_text(text.replace("![](paper-diary-20261007-2.jpg)\n\n### Group", "![](paper-diary-20261007-2.jpg)\n### Group"), encoding="utf-8")
+        check(tail().endswith(img1 + "\n\n" + img2 + "\n\n") and not tail().endswith("\n\n\n"),
+              f"2 ページ目のあとも空行 1 つ（増えない）: {tail()[-100:]!r}")
+        # 末尾の空行が無い旧いノートは空行を 1 つ足す。自分で空行を 2 つ入れたノートは触らない
+        note.write_text(note.read_text(encoding="utf-8").rstrip("\n") + "\n", encoding="utf-8")
         pp.regen(root)
-        check("![](paper-diary-20261007-2.jpg)\n\n### Group" in note.read_text(encoding="utf-8"), "空行が無いときは regen が 1 つ足す")
-        text = note.read_text(encoding="utf-8").replace("![](paper-diary-20261007-2.jpg)\n\n### Group", "![](paper-diary-20261007-2.jpg)\n\n\n### Group")
-        note.write_text(text, encoding="utf-8")
+        check(tail().endswith(img2 + "\n\n"), "空行が無いときは regen が 1 つ足す")
+        note.write_text(note.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         pp.regen(root)
         pp.regen(root)
-        check("![](paper-diary-20261007-2.jpg)\n\n\n### Group" in note.read_text(encoding="utf-8"), "自分で入れた空行（2 つ）は消さない・増やさない")
+        check(tail().endswith(img2 + "\n\n\n"), "自分で入れた空行（2 つ）は消さない・増やさない")
 
 
 # ---------------------------------------------------------------------------

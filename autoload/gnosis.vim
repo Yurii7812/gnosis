@@ -5573,6 +5573,17 @@ function! gnosis#capture_import(...) abort
   let l:imgdir = l:root . '/capture-images'
   let l:made = []
   let l:diary_lines = {}
+  " スマホで書き直した取り込み済みのメモ: 別版を作らず、同じノートへ差分だけ当てる（競合はノートを変えず記録だけ残す）
+  let l:merged = {}
+  let l:conflicts = []
+  if !empty(filter(copy(l:todo), 'get(v:val, "merge", 0)'))
+    let l:mout = s:capture_run(['merge', l:tmp, l:root])
+    if v:shell_error
+      echohl WarningMsg | echo 'Gnosis: ' . trim(l:mout) | echohl NONE
+      return
+    endif
+    let l:merged = json_decode(l:mout)
+  endif
   " 1 つのノートにまとめるトピック: トピック名 → [{date, hm, lines, stamp}]（あとでトピックのノートへ追記）
   let l:topic_lines = {}
   " 時系列記録: 'トピック名' . "\t" . 日付 → [{hm, lines}]（あとでその日の記録のノートへ追記）
@@ -5584,6 +5595,14 @@ function! gnosis#capture_import(...) abort
       call writefile(readfile(l:tmp . '/images/' . l:name, 'b'), l:imgdir . '/' . l:name, 'b')
       call add(l:img, '![](capture-images/' . l:name . ')')
     endfor
+    if get(l:it, 'merge', 0)
+      let l:res = get(l:merged, l:it.id, {})
+      if get(l:res, 'status', 'conflict') ==# 'conflict'
+        call add(l:conflicts, l:it.title . ' (' . l:it.file . ')')
+        continue
+      endif
+      let l:it.update = 1
+    endif
     if l:it.update
       let l:path = l:root . '/' . l:it.file
       let l:lines = readfile(l:path)
@@ -5759,6 +5778,11 @@ function! gnosis#capture_import(...) abort
         \ len(l:made), l:notes, len(l:made) - l:notes)
   if !empty(l:warn)
     echohl WarningMsg | echom join(l:warn, ' / ') | echohl NONE
+  endif
+  if !empty(l:conflicts)
+    echohl WarningMsg
+    echom printf(gnosis#i18n#tr('Gnosis: スマホと PC で同じ場所を変えたメモが %d 件あります（ノートは変えていません。取り込み済みにもしていません）: '), len(l:conflicts)) . join(l:conflicts, ' / ')
+    echohl NONE
   endif
 endfunction
 

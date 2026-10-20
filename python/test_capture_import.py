@@ -52,7 +52,7 @@ class CaptureImportTest(unittest.TestCase):
         dest.unlink()
         self.assertFalse(self.plan()['done'])
 
-    def test_changed_text_is_new_revision_and_topic_move_preserves_pc_file(self):
+    def test_changed_text_is_merge_and_topic_move_preserves_pc_file(self):
         dest = self.record()
         original = dest.read_text()
         self.entry['topic'] = '仕事'; self.entry['edited'] = 42; self.write_pack()
@@ -60,8 +60,11 @@ class CaptureImportTest(unittest.TestCase):
         self.assertFalse(self.plan()['done'])
         self.assertEqual(dest.read_text(), original)
         self.entry['text'] += '\n追記'; self.write_pack()
-        self.assertFalse(self.plan()['update'])
-        self.assertFalse(self.plan()['done'])
+        item = self.plan()
+        # 本文を書き直したら別版ではなく同じノートへの差分更新（merge）。ここでは何も書き換えない（plan は読むだけ）
+        self.assertFalse(item['update'])
+        self.assertFalse(item['done'])
+        self.assertTrue(item['merge'])
         self.assertEqual(dest.read_text(), original)
 
     def test_export_flags_do_not_duplicate(self):
