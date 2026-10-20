@@ -41,7 +41,14 @@ img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #8886;p
 pre{overflow:auto;padding:.6rem;background:#8882}li.task{list-style:none;margin-left:-1.2rem}
 .crumb{font-size:.85rem;opacity:.8}
 #kinds label{display:inline-block;margin-right:.8rem;font-size:.85rem}.sw{display:inline-block;width:.8rem;height:.8rem;margin:0 .25rem;vertical-align:middle;border-radius:2px}
-svg#g{width:100%;height:auto;border:1px solid #8886;margin-top:.5rem}"""
+svg#g{width:100%;height:auto;border:1px solid #8886;margin-top:.5rem}
+body.fz{max-width:78rem}#fz{display:grid;grid-template-columns:minmax(14rem,22rem) 1fr;gap:1rem}
+#tree ul{list-style:none;margin:0;padding:0}.tr{display:flex;align-items:center}.tr.sel{background:#4a90d933;border-radius:4px}.tr.gap .lab{opacity:.6;border-style:dashed}
+button{font:inherit;cursor:pointer}.tog{border:0;background:none;width:1.4rem;color:inherit}.lab,.chip{border:1px solid #8886;background:none;color:inherit;border-radius:4px;padding:.05rem .4rem;margin:.1rem}
+.lab{border-color:transparent;text-align:left}.chip.gap{border-style:dashed;opacity:.7}.chip.now{background:#4a90d955}
+.nav button.go{padding:.3rem .7rem;margin:.15rem;border:1px solid #8886;border-radius:6px;background:none;color:inherit}.nav button:disabled{opacity:.35;cursor:default}
+#cur{font-size:1.25rem;font-weight:bold}#cur.gap{opacity:.7}.row{margin:.4rem 0}.row b{display:inline-block;min-width:5.5rem;font-size:.85rem;opacity:.8}
+iframe#pv{width:100%;height:22rem;border:1px solid #8886;border-radius:6px;background:#fff}.none{opacity:.6;font-size:.85rem}"""
 JS = """(function(){var q=document.getElementById('q'),r=document.getElementById('r'),d=window.GNOSIS_INDEX||[];
 function run(){var v=q.value.trim().toLowerCase();r.textContent='';if(!v)return;var n=0;
 d.forEach(function(e){if(n<200&&(e.t.toLowerCase().indexOf(v)>=0||e.x.indexOf(v)>=0)){n++;
@@ -50,12 +57,12 @@ var m=/^#q=(.*)$/.exec(location.hash);if(m){try{q.value=decodeURIComponent(m[1])
 q.addEventListener('input',run);run()})();"""
 
 
-def _page(title: str, body: str, css_prefix: str = "", extra_head: str = "") -> str:
+def _page(title: str, body: str, css_prefix: str = "", extra_head: str = "", csp: str = CSP, body_class: str = "") -> str:
     return ("<!doctype html>\n<html lang=\"ja\"><head><meta charset=\"utf-8\">"
-            f"<meta http-equiv=\"Content-Security-Policy\" content=\"{CSP}\">"
+            f"<meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             f"<title>{html.escape(title)}</title><link rel=\"stylesheet\" href=\"{css_prefix}style.css\">{extra_head}"
-            f"</head><body>{body}</body></html>\n")
+            f"</head><body{f' class=\"{body_class}\"' if body_class else ''}>{body}</body></html>\n")
 
 
 def _out_name(rel: str) -> str:
@@ -159,7 +166,8 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
                     parts.append(link_to(rel, b["files"][0], b["id"]))
                 else:
                     parts.append(html.escape(b["id"]))
-            crumbs = '<div class="crumb">' + " / ".join(parts + [html.escape(node.fz)]) + "</div>"
+            crumbs = ('<div class="crumb">' + " / ".join(parts + [html.escape(node.fz)])
+                      + f' ・ <a href="{"../" * rel.count("/")}fznav.html#id={urllib.parse.quote(node.fz)}">番号ナビで見る</a></div>')
         kinds = [("parent_branch", "親（ParentBranch）"), ("group", "グループ"), ("context", "文脈"), ("related", "関連"), ("backlink", "バックリンク")]
         rel_html = ""
         for k, label in kinds:
@@ -186,7 +194,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
     items = "".join(f'<li><a href="{html.escape(_out_name(rel), quote=True)}">{html.escape(t)}</a>'
                     + (f' <small>({html.escape(f)})</small>' if f else "") + "</li>" for t, rel, f in index_rows)
     (out / "index.html").write_text(_page(title, f'<h1>{html.escape(title)}</h1><p><a href="folgezettel.html">番号の一覧（Folgezettel）</a> ・ '
-                                         f'<a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
+                                         f'<a href="fznav.html">番号ナビ</a> ・ <a href="graph.html">グラフ</a> ・ <a href="search.html">検索</a></p><ul>{items}</ul>'), encoding="utf-8")
     (out / "search.html").write_text(_page("検索", '<h1>検索</h1><input id="q" type="search" placeholder="題や本文" autofocus>'
                                            '<ul id="r"></ul><script src="search-index.js"></script><script src="search.js"></script>'), encoding="utf-8")
     # グラフ表示（全体・ローカル）。書き出したノートだけを節点・辺にする（非公開ノートは節点にも辺にも出さない）
@@ -201,6 +209,30 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
         '深さ: <select id="depth"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></p>'
         '<div id="kinds"></div><p id="info"></p><svg id="g" viewBox="0 0 900 640" role="img" aria-label="ノートの関係グラフ"></svg>'
         '<script src="graph-data.js"></script><script src="graphcore.js"></script><script src="graph.js"></script>'), encoding="utf-8")
+    # Folgezettel 番号ナビゲーター（番号のついた書き出し済みノート。本文プレビュー付き）
+    for name in ("fznav-core.js", "fznav.js"):
+        shutil.copyfile(assets / name, out / name)
+    fzitems = [{"id": n.fz, "files": [_out_name(r)], "title": n.title} for r, n in g.nodes.items()
+               if r in notes and n.fz and fz.ID_RE.fullmatch(n.fz) and not n.is_group]
+    # ブランチで作ったグループは親ノートと同じ番号を持つ。同じ番号のノートがあればそちらを優先する
+    have = {i["id"] for i in fzitems}
+    for r, n in g.nodes.items():
+        if r in notes and n.fz and fz.ID_RE.fullmatch(n.fz) and n.is_group and n.fz not in have:
+            have.add(n.fz)
+            fzitems.append({"id": n.fz, "files": [_out_name(r)], "title": n.title})
+    (out / "fz-data.js").write_text("window.GNOSIS_FZ=" + json.dumps(fzitems, ensure_ascii=False) + ";\n", encoding="utf-8")
+    FZ_CSP = CSP + "; frame-src 'self'"
+    (out / "fznav.html").write_text(_page("Folgezettel ナビ", """<p class="crumb"><a href="index.html">一覧</a> ・ <a href="folgezettel.html">番号の表</a> ・ <a href="graph.html">グラフ</a></p>
+<h1>Folgezettel ナビ</h1>
+<p class="none">キー: ↑ 親 ・ ↓ 最初の子 ・ ← → 兄弟 ・ [ ] 番号順の前後 ・ Home End 最初と最後 ・ Alt+← → 履歴</p>
+<div id="fz"><div><p><button type="button" id="b-allopen" class="chip">すべて開く</button><button type="button" id="b-allclose" class="chip">すべて閉じる</button></p><div id="tree"></div></div>
+<div class="nav"><div id="cur"></div><div id="crumbs" class="row"></div>
+<div class="row"><button type="button" class="go" id="b-up">↑ 親</button><button type="button" class="go" id="b-down">↓ 最初の子</button><button type="button" class="go" id="b-prev">← 前の兄弟</button><button type="button" class="go" id="b-next">次の兄弟 →</button>
+<button type="button" class="go" id="b-oprev">[ 番号順で前</button><button type="button" class="go" id="b-onext">番号順で次 ]</button><button type="button" class="go" id="b-first">最初</button><button type="button" class="go" id="b-last">最後</button></div>
+<div class="row"><b>親</b><span id="parent"></span></div><div class="row"><b>兄弟</b><span id="siblings"></span></div><div class="row"><b>子</b><span id="children"></span></div>
+<div class="row"><b>たどった順</b><button type="button" class="chip" id="b-back">◀ 戻る</button><button type="button" class="chip" id="b-fwd">進む ▶</button> <span id="trail"></span></div>
+<p><a id="open" href="#">ノートを開く</a></p><iframe id="pv" title="ノートのプレビュー" sandbox="allow-same-origin"></iframe></div></div>
+<script src="fz-data.js"></script><script src="fznav-core.js"></script><script src="fznav.js"></script>""", csp=FZ_CSP, body_class="fz"), encoding="utf-8")
     # fetch() はファイルとして直接開いたとき（file://）に使えないので、索引は <script src> で読む JS にする
     (out / "search-index.js").write_text("window.GNOSIS_INDEX=" + json.dumps(search, ensure_ascii=False) + ";\n", encoding="utf-8")
 

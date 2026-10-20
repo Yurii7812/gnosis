@@ -13,24 +13,28 @@ const data = { nodes, edges };
 const ids = (g) => g.nodes.map((n) => n.id).sort().join("");
 
 // 深さ（辺の向きは無視）
-assert.equal(ids(C.subgraph(data, "a", 0, [])), "a");
-assert.equal(ids(C.subgraph(data, "a", 1, [])), "abc");
-assert.equal(ids(C.subgraph(data, "a", 2, [])), "abcd");
-assert.equal(ids(C.subgraph(data, "e", 1, [])), "de");          // 向きを無視して逆にも辿る
-assert.equal(ids(C.subgraph(data, "a", 9, [])), "abcde");        // 孤立ノード z は含まない
-assert.equal(C.subgraph(data, "a", 1, []).nodes.find((n) => n.id === "c").depth, 1);
+assert.equal(ids(C.subgraph(data, "a", 0, null)), "a");
+assert.equal(ids(C.subgraph(data, "a", 1, null)), "abc");
+assert.equal(ids(C.subgraph(data, "a", 2, null)), "abcd");
+assert.equal(ids(C.subgraph(data, "e", 1, null)), "de");          // 向きを無視して逆にも辿る
+assert.equal(ids(C.subgraph(data, "a", 9, null)), "abcde");        // 孤立ノード z は含まない
+assert.equal(C.subgraph(data, "a", 1, null).nodes.find((n) => n.id === "c").depth, 1);
 // 種類で絞る（経路が切れるとそこまで）
 assert.equal(ids(C.subgraph(data, "a", 9, ["parent_branch"])), "ab");
 assert.equal(ids(C.subgraph(data, "a", 9, ["parent_branch", "link"])), "abcd");
 // 種類を潰さない: a-c は related の辺として残る
-assert.ok(C.subgraph(data, "a", 1, []).edges.some((e) => e.s === "a" && e.d === "c" && e.k === "related"));
+assert.ok(C.subgraph(data, "a", 1, null).edges.some((e) => e.s === "a" && e.d === "c" && e.k === "related"));
 assert.equal(C.subgraph(data, "a", 1, ["link"]).edges.length, 0);          // a から出る link は無い → a 1 ノードだけ
 assert.equal(ids(C.subgraph(data, "a", 1, ["link"])), "a");
 const lr = C.subgraph(data, "a", 1, ["link", "related"]);                  // related(a-c) だけが 1 本
 assert.equal(ids(lr), "ac");
 assert.deepEqual(lr.edges.map((e) => e.k), ["related"]);
+// 種類を 1 つも選ばない（[]）と辺は 0 本（null は全種類）。画面のチェックを全部外したときの意味
+assert.equal(C.subgraph(data, "a", 9, []).edges.length, 0);
+assert.equal(ids(C.subgraph(data, "a", 9, [])), "a");
+assert.equal(C.subgraph(data, "a", 9, null).edges.length, 5);
 // 存在しない中心
-assert.equal(C.subgraph(data, "nope", 2, []).nodes.length, 0);
+assert.equal(C.subgraph(data, "nope", 2, null).nodes.length, 0);
 // 孤立を除く
 assert.equal(ids(C.withoutIsolated(data)), "abcde");
 

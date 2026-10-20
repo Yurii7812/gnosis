@@ -36,7 +36,10 @@ python3 "$REPO/python/test_gnosis_graph.py"
 python3 "$REPO/python/test_tasks.py"
 python3 "$REPO/python/test_md_html.py"
 python3 "$REPO/python/test_mandala.py"
-if command -v node >/dev/null 2>&1; then node "$REPO/python/test_graphcore.mjs"; else echo "graphcore: node が無いので省略"; fi
+if command -v node >/dev/null 2>&1; then
+  node "$REPO/python/test_graphcore.mjs"
+  node "$REPO/python/test_fznav.mjs"
+else echo "graphcore / fznav: node が無いので省略"; fi
 python3 "$REPO/python/test_export_site.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
@@ -165,3 +168,7 @@ python3 "$REPO/test/context_pty_check.py"
 python3 "$REPO/test/link_source_pty_check.py"
 # 本物の gocryptfs の暗号化 vault を複数のウィンドウで使う（gocryptfs / fusermount3 / /dev/fuse が無ければ省略）
 python3 "$REPO/test/session_real_check.py"
+
+# 書き出した静的サイトのビュー（番号ナビ・グラフ・検索・曼荼羅）を本物のブラウザ（Electron の Chromium・xvfb）で操作する試験
+# （web/node_modules と xvfb-run が無ければ省略する）
+node "$REPO/web/test/site_views_e2e.mjs"

@@ -10,6 +10,8 @@
 
 - **グラフ** `graph.html`: 外部ライブラリなしの SVG。全体／「中心のノート + 深さ 1〜5」（`graph.html#n=ノート.md&depth=2`。各ノートに「このノートの周りのグラフ」リンク）。辺は種類ごとの色と向き（親・子・グループ・文脈・関連・本文リンク・バックリンク・番号の親子）で、種類のオン／オフができる。400 ノードを超える全体は、中心を選ぶよう案内。非公開ノートは節点にも辺にもならない。配置の核は `site_assets/graphcore.js`（node で単体試験）。
 
+- **Folgezettel ナビ** `fznav.html`（各ノートに「番号ナビで見る」。`fznav.html#id=1a`）: 左にツリー（開閉・「すべて開く」）、右に今の番号・パンくず・ボタン（親・最初の子・前後の兄弟・番号順の前後・最初・最後）・親／兄弟／子・「たどった順」（履歴。構造上の親子とは別）・本文プレビュー。キー: ↑親 ↓最初の子 ←→兄弟 [ ] 番号順 Home/End Alt+←→履歴。存在しない番号（抜けた祖先）は破線の「空き」で、選んでもノートは作らない。核（`fznav-core.js`）は Python の自然順・親判定と同一であることを言語間で照合。
+
 ## 安全（試験済み: `python/test_md_html.py` `python/test_export_site.py` `test/export_site_net.sh`）
 - 本文は全部エスケープ。生の HTML・`<script>` は通さない。リンク・画像の URL は http / https / mailto / 相対だけ。`javascript:` `data:` `file:` `//` は無効。タグに任意の属性は付かない。
 - 各 HTML に CSP（`default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'`）。表示専用で、編集・ローカルファイル読み出しの仕組みは無い。

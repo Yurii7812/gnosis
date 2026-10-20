@@ -3,9 +3,13 @@
   var C = window.GraphCore, data = window.GNOSIS_GRAPH || { nodes: [], edges: [] };
   var svg = document.getElementById("g"), W = 900, H = 640, NS = "http://www.w3.org/2000/svg";
   var state = { n: "", depth: 1, kinds: Object.keys(C.KINDS).filter(function (k) { return k !== "backlink"; }) };
-  var m;
-  if ((m = /[#&]n=([^&]*)/.exec(location.hash))) { try { state.n = decodeURIComponent(m[1]); } catch (e) {} }
-  if ((m = /[#&]depth=(\d+)/.exec(location.hash))) state.depth = Math.min(9, Math.max(1, +m[1]));
+  function readHash() {
+    var m;
+    state.n = ""; state.depth = 1;
+    if ((m = /[#&]n=([^&]*)/.exec(location.hash))) { try { state.n = decodeURIComponent(m[1]); } catch (e) {} }
+    if ((m = /[#&]depth=(\d+)/.exec(location.hash))) state.depth = Math.min(9, Math.max(1, +m[1]));
+  }
+  readHash();
   var MAX_ALL = 400;
 
   function el(tag, attrs, text) {
@@ -75,4 +79,11 @@
   }
   controls();
   draw();
+  // アドレスの #n= #depth= が書き換わったとき（戻る・進む・各ノートの「周りのグラフ」リンク）も追従する
+  window.addEventListener("hashchange", function () {
+    readHash();
+    document.getElementById("note").value = state.n;
+    document.getElementById("depth").value = String(state.depth);
+    draw();
+  });
 })();

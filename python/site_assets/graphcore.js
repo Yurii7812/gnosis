@@ -13,9 +13,9 @@
     folgezettel: { label: "番号の親子", color: "#c0392b" }
   };
 
-  // 中心ノートから深さ depth 以内（辺の向きは無視）の部分グラフ。kinds が空なら全種類。
+  // 中心ノートから深さ depth 以内（辺の向きは無視）の部分グラフ。kinds が null / 未指定なら全種類、[] なら辺なし（中心だけ）。
   function subgraph(data, center, depth, kinds) {
-    var allow = kinds && kinds.length ? new Set(kinds) : null;
+    var allow = kinds ? new Set(kinds) : null;
     var edges = data.edges.filter(function (e) { return !allow || allow.has(e.k); });
     var adj = new Map();
     function add(a, b) { if (!adj.has(a)) adj.set(a, []); adj.get(a).push(b); }
