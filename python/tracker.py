@@ -11,6 +11,7 @@
 CLI（JSON。--md なら Markdown）:
   tracker.py ROOT start 名前 [--pomodoro] [--at YYYY-MM-DDTHH:MM]   タイマー開始（--pomodoro は 25 分作業＋5 分休憩）
   tracker.py ROOT status [--at …]                                      進行中のタイマー（ポモドーロは今の局面と残り）
+  tracker.py ROOT tick [--at …] [--notify]                             ポモドーロの局面が変わっていたら知らせの文面を返す（--notify でデスクトップ通知。同じ局面は 1 回だけ）
   tracker.py ROOT stop [--at …] [--file 記録.md]                       止めて、記録の行を追記（1 分未満は記録しない）
   tracker.py ROOT report 日|週|月|年 [YYYY-MM-DD]                      名前・タグごとの合計時間
   tracker.py ROOT habit check 名前 [YYYY-MM-DD] [--file 記録.md]       今日（または指定日）やったと記録（二重には書かない）
@@ -24,6 +25,8 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -139,7 +142,7 @@ def start(root: str | Path, label: str, pomodoro: bool = False, now: str | None 
     label = label.strip()
     if not label or "\n" in label:
         raise ValueError("名前を 1 行で指定してください")
-    st = {"label": label, "start": _now(now).strftime(FMT), "pomodoro": bool(pomodoro)}
+    st = {"label": label, "start": _now(now).strftime(FMT), "pomodoro": bool(pomodoro), "notified": "work:1" if pomodoro else None}
     p = _timer_path(root)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(p.name + ".tmp")
@@ -173,6 +176,47 @@ def status(root: str | Path, now: str | None = None) -> dict:
     if st["pomodoro"]:
         out.update(_phase(el))
     return out
+
+
+def tick(root: str | Path, now: str | None = None, notify: bool = False) -> dict:
+    """ポモドーロの局面が前回の知らせから変わっていれば、その知らせの文面を返す(同じ局面では 1 回だけ)。
+    最初の確認で記録が無い古いタイマーは、知らせずに今の局面を覚えるだけ。何回分か遅れて確認したときは、今の局面だけを知らせる。"""
+    root = Path(root).resolve()
+    st = _load_timer(root)
+    if not st or not st.get("pomodoro"):
+        return {"running": bool(st), "changed": False}
+    n = _now(now)
+    el = max(0, int((n - dt.datetime.strptime(st["start"], FMT)).total_seconds() // 60))
+    ph = _phase(el)
+    key = f"{ph['phase']}:{ph['round']}"
+    res = {"running": True, "changed": False, "phase": ph["phase"], "round": ph["round"], "left": ph["left"]}
+    if st.get("notified") != key:
+        first = "notified" not in st or st.get("notified") is None
+        st["notified"] = key
+        tmp = _timer_path(root).with_name("timer.json.tmp")
+        tmp.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, _timer_path(root))
+        if not first:
+            if ph["phase"] == "break":
+                kind = "長い休憩" if ph["left"] > BREAK_MIN else "休憩"
+                msg = f"🍅 {ph['round']} 回目が終わりました。{kind}（あと {ph['left']} 分）"
+            else:
+                msg = f"休憩は終わりです。{ph['round']} 回目の作業を始めましょう（{ph['left']} 分）"
+            res.update({"changed": True, "message": msg})
+            if notify:
+                res["notified"] = _desktop(msg)
+    return res
+
+
+def _desktop(msg: str) -> bool:
+    """notify-send があればデスクトップに通知する(ローカルのみ・外部通信なし)。無ければ False。"""
+    exe = shutil.which("notify-send")
+    if not exe:
+        return False
+    try:
+        return subprocess.run([exe, "-a", "Gnosis", "ポモドーロ", msg], timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def stop(root: str | Path, now: str | None = None, file: str = DEFAULT_FILE) -> dict:
@@ -320,6 +364,8 @@ def main(argv: list[str]) -> int:
         for x in it:
             if x == "--pomodoro":
                 opts["pomodoro"] = True
+            elif x == "--notify":
+                opts["notify"] = True
             elif x in ("--at", "--file"):
                 opts[x[2:]] = next(it)
             else:
@@ -331,6 +377,8 @@ def main(argv: list[str]) -> int:
             r = start(root, a[0], opts.get("pomodoro", False), opts.get("at"))
         elif cmd == "status":
             r = status(root, opts.get("at"))
+        elif cmd == "tick":
+            r = tick(root, opts.get("at"), opts.get("notify", False))
         elif cmd == "stop":
             r = stop(root, opts.get("at"), f)
         elif cmd == "report":

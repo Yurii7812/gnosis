@@ -8467,6 +8467,44 @@ function! gnosis#timer_start(bang, ...) abort
   let l:out = s:tr_run(['start', join(a:000, ' ')] + (a:bang ? ['--pomodoro'] : []), 0)
   if !empty(l:out)
     echo 'Gnosis: ' . gnosis#i18n#tr('計測を始めました: ') . join(a:000, ' ') . (a:bang ? ' 🍅' : '')
+    if a:bang
+      call s:pomo_watch()
+    endif
+  endif
+endfunction
+
+" ポモドーロの局面が変わったら知らせる(TM07)。:GnosisTimerStart! で始めたとき、この Vim の中で定期的に確かめる。
+"   g:gnosis_pomodoro_notify=0 でデスクトップ通知(notify-send。ローカルのみ)を止める / g:gnosis_pomodoro_bell=0 でベルを止める
+"   g:gnosis_pomodoro_interval=確認の間隔(ミリ秒。既定 20000)。Vim を閉じると確認も止まる(タイマー自体は残り、次に :GnosisTimerStatus で分かる)
+let s:pomo_id = -1
+
+function! s:pomo_watch() abort
+  if s:pomo_id >= 0
+    call timer_stop(s:pomo_id)
+  endif
+  let s:pomo_id = timer_start(max([1000, get(g:, 'gnosis_pomodoro_interval', 20000)]), {-> gnosis#pomo_tick()}, {'repeat': -1})
+endfunction
+
+function! gnosis#pomo_tick() abort
+  let l:out = s:tr_run(['tick'] + (get(g:, 'gnosis_pomodoro_notify', 1) ? ['--notify'] : []), 0)
+  if empty(l:out)
+    return
+  endif
+  try
+    let l:r = json_decode(l:out)
+  catch
+    return
+  endtry
+  if !get(l:r, 'running', 0) && s:pomo_id >= 0
+    call timer_stop(s:pomo_id)
+    let s:pomo_id = -1
+  endif
+  if get(l:r, 'changed', 0)
+    let g:gnosis_pomodoro_last = l:r.message
+    echo 'Gnosis: ' . l:r.message
+    if get(g:, 'gnosis_pomodoro_bell', 1)
+      echon nr2char(7)
+    endif
   endif
 endfunction
 
@@ -8475,6 +8513,10 @@ function! gnosis#timer_status() abort
 endfunction
 
 function! gnosis#timer_stop() abort
+  if s:pomo_id >= 0
+    call timer_stop(s:pomo_id)
+    let s:pomo_id = -1
+  endif
   let l:out = s:tr_run(['stop'], 0)
   if empty(l:out)
     return

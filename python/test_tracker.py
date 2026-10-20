@@ -65,6 +65,48 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(P(3 * 30 + 25 + 15)["phase"], "work")
         self.assertEqual(P(3 * 30 + 25 + 15)["round"], 5)
 
+    def test_tick_announces_each_phase_once(self):
+        tr.start(self.root, "集中", True, "2026-10-21T09:00")
+        self.assertFalse(tr.tick(self.root, "2026-10-21T09:10")["changed"])                    # 作業中は知らせない
+        t = tr.tick(self.root, "2026-10-21T09:25")
+        self.assertTrue(t["changed"])
+        self.assertIn("1 回目が終わりました。休憩", t["message"])
+        self.assertFalse(tr.tick(self.root, "2026-10-21T09:26")["changed"])                    # 同じ局面は 1 回だけ
+        w = tr.tick(self.root, "2026-10-21T09:30")
+        self.assertIn("2 回目の作業を始めましょう", w["message"])
+        # 長い休憩(4 回目の後)
+        lb = tr.tick(self.root, "2026-10-21T10:55")
+        self.assertIn("4 回目が終わりました。長い休憩（あと 15 分）", lb["message"])
+        # 何回分か確認が遅れても、今の局面だけを 1 回知らせる
+        late = tr.tick(self.root, "2026-10-21T12:00")
+        self.assertTrue(late["changed"])
+        self.assertFalse(tr.tick(self.root, "2026-10-21T12:00")["changed"])
+
+    def test_tick_non_pomodoro_none_and_old_timer(self):
+        self.assertEqual(tr.tick(self.root, "2026-10-21T09:00"), {"running": False, "changed": False})
+        tr.start(self.root, "普通", False, "2026-10-21T09:00")
+        self.assertEqual(tr.tick(self.root, "2026-10-21T10:00"), {"running": True, "changed": False})
+        # 知らせの記録が無い古いタイマー: 最初の確認では知らせず覚えるだけ、次の局面から知らせる
+        import json
+        tr.stop(self.root, "2026-10-21T10:00")
+        tr.start(self.root, "旧", True, "2026-10-21T09:00")
+        p = self.root / ".state" / "timer.json"
+        st = json.loads(p.read_text(encoding="utf-8")); st.pop("notified"); p.write_text(json.dumps(st), encoding="utf-8")
+        self.assertFalse(tr.tick(self.root, "2026-10-21T09:26")["changed"])
+        self.assertTrue(tr.tick(self.root, "2026-10-21T09:31")["changed"])
+
+    def test_tick_cli_and_notify_without_tool(self):
+        tr.start(self.root, "集中", True, "2026-10-21T09:00")
+        import os
+        old = os.environ.get("PATH", "")
+        os.environ["PATH"] = "/nonexistent"                                                     # notify-send が無くても落ちない
+        try:
+            r = tr.tick(self.root, "2026-10-21T09:25", notify=True)
+        finally:
+            os.environ["PATH"] = old
+        self.assertTrue(r["changed"])
+        self.assertFalse(r["notified"])
+
     def test_pomodoro_stop_counts_completed_rounds(self):
         tr.start(self.root, "集中", True, "2026-10-21T09:00")
         s = tr.status(self.root, "2026-10-21T09:27")

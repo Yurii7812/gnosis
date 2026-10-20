@@ -254,6 +254,7 @@ gnosis#pdf
 gnosis#peek
 gnosis#peek_lines
 gnosis#perf_diag
+gnosis#pomo_tick
 gnosis#preset
 gnosis#preset_autoload
 gnosis#preset_collect

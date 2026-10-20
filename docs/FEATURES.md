@@ -75,7 +75,7 @@
 | TM04 | 繰り返しタスク／通知、定期予定。 | 繰り返しタスク／通知、定期予定。 | Vim + `\A` + Android | 一部（Markdown の繰り返し規則と次の回の生成は試験済み。通知側・Android は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
 | TM05 | スヌーズ・再通知。 | スヌーズ・再通知。 | Vim + `\A` + Android | 動作検証中（扱い済みまで 30 分ごと最大 4 回再通知・スヌーズで回数を数え直す。PC 側） | 5 | `python/reminders.py` `test_reminders.py` `test/remind_net.sh` | P1 タスクエンジン |
 | TM06 | タイムトラッキング。 | タイムトラッキング。 | Vim + `\A` + Android | 一部（PC 側: `⏱` 行・タイマー・名前/タグ別集計・日またぎ・1 分未満は記録しない。Android・`\A` の画面は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
-| TM07 | ポモドーロ・集中タイマー。 | ポモドーロ・集中タイマー。 | Vim + `\A` + Android | 一部（PC 側: 25/5・4 回ごとに 15 分の局面計算を境界値で試験。音・通知での局面切替の知らせは未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
+| TM07 | ポモドーロ・集中タイマー。 | ポモドーロ・集中タイマー。 | Vim + `\A` + Android | 一部（PC 側: 25/5・4 回ごとに 15 分の局面計算を境界値で試験。**局面が変わったときの知らせ**: `tracker.py tick`（同じ局面は 1 回だけ・遅れて確認しても今の局面だけ・古いタイマーは黙って覚える）と、`:GnosisTimerStart!` で始めた Vim が定期的に確かめてメッセージ・ベル・`notify-send` のデスクトップ通知。Vim を閉じると知らせも止まる。**未確認**: 実際のベル音とデスクトップ通知の表示（試験では止めている）。未: Android・Vim を閉じている間の知らせ） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
 | TM08 | 習慣トラッカー。 | 習慣トラッカー。 | Vim + `\A` + Android | 一部（PC 側: `🌱` 行・二重記録しない・連続日数/最長/達成率/28 日。Android・`\A` の画面は未） | 5 | `python/tracker.py` `test_tracker.py` `test/tracker_net.sh` | P1 タスクエンジン |
 | TM09 | タスク依存関係、ブロッカー。 | タスク依存関係、ブロッカー。 | Vim + `\A` + Android | 動作検証中（`id:`/`after:` でブロック中を判定し Agenda で分ける。UI での編集は未実装） | 5 | `python/tasks.py` | P1 タスクエンジン |
 | TM10 | 日／週／月／年のレビュー。 | 日／週／月／年のレビュー。 | Vim + `\A` + Android | 動作検証中（日/週/月/年。年またぎの週も試験。レビューは `:GnosisPeriodReviewWrite` で新しいノートとして残せる。上書きしない・vault 外/ドット始まりへは書かない） | 5 | `python/chrono.py` `test_chrono.py` `test/chrono_net.sh` | P1 タスクエンジン |

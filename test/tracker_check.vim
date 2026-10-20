@@ -14,6 +14,22 @@ GnosisTimerStatus
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "計測中: 資料作り"')))
 call assert_true(!empty(filter(getline(1, '$'), 'v:val =~# "ポモドーロ 1 回目・作業中"')))
 close
+" 局面が変わったら知らせる(テストでは通知・ベルを止める)。開始を 26 分前にずらして確かめる
+let g:gnosis_pomodoro_notify = 0
+let g:gnosis_pomodoro_bell = 0
+call gnosis#pomo_tick()
+call assert_false(exists('g:gnosis_pomodoro_last'))
+let s:t = json_decode(join(readfile($D . '/v/.state/timer.json'), "\n"))
+let s:t.start = strftime('%Y-%m-%dT%H:%M', localtime() - 26 * 60)
+call writefile([json_encode(s:t)], $D . '/v/.state/timer.json')
+call gnosis#pomo_tick()
+call assert_match('1 回目が終わりました。休憩', get(g:, 'gnosis_pomodoro_last', ''))
+unlet g:gnosis_pomodoro_last
+call gnosis#pomo_tick()
+call assert_false(exists('g:gnosis_pomodoro_last'))
+" 開始時刻を今に戻す(あとの「1 分未満は記録しない」の確認のため)
+let s:t.start = strftime('%Y-%m-%dT%H:%M', localtime())
+call writefile([json_encode(s:t)], $D . '/v/.state/timer.json')
 " 動いている間に 2 つ目は始められない
 GnosisTimerStart 別の
 " 1 分未満で止めると記録しない
