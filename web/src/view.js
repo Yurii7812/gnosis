@@ -207,7 +207,7 @@ function decorateLine(line, active, inFence, decos, cfg) {
       class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
       attributes: isMd ? { "data-md-href": tg } : {},
     }).range(dispStart, dispEnd));
-    if (!active) {
+    if (!cfg.linkSource) {
       decos.push(Decoration.replace({}).range(base + a, dispStart));
       decos.push(Decoration.replace({}).range(dispEnd, base + b));
     }
@@ -603,6 +603,11 @@ export function createView(opts) {
       let b = 0;
       while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
       view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) } });
+    },
+    setLinkSource(on) {
+      if (cfg.linkSource === !!on) return;
+      cfg.linkSource = !!on;
+      view.dispatch({ effects: refreshDecorations.of(null) });
     },
     // 見るだけ: カーソルのある行も含め、全部を描いた見た目にする。カーソルへのスクロールもしない
     setViewOnly(on) {

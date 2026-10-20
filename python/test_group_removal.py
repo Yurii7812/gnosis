@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory() as d:
 
     # N の Group: から G へのリンクだけを消す
     text = read(root, "n.md")
-    text = "\n".join(ln for ln in text.split("\n") if ln != "[グループG](g.md)")
+    text = "\n".join(ln for ln in text.split("\n") if not ln.endswith("(g.md)"))
     (root / "n.md").write_text(text, encoding="utf-8")
     sync(root)
     check("(n.md)" not in read(root, "g.md"), "G の本文から N が消える")

@@ -417,18 +417,31 @@ def test_cli() -> None:
 def test_kana_heads() -> None:
     # 本文のリンクが 30 本以上なら頭文字の見出し（「あ」「か」…）の行を入れ、減れば外す。前の見出しは入れ直す
     with tempfile.TemporaryDirectory() as tmp:
-        names = ["アイコン", "あき", "かめ", "がっこう", "ぱん", "Zoo", "1番"] + [f"さ{i:02d}" for i in range(23)]
+        names = ["アイコン", "あき", "かめ", "がっこう", "ぱん", "Zoo", "Apple", "1番"] + [f"さ{i:02d}" for i in range(23)]
         links = [f"[{n}](n{i}.md)" for i, n in enumerate(names)]
         lines = ["---", "title: Index", "attribute: group", "---", "", "# Index", "", "あ", "古い"] + links + ["", "BackLink:", "[x](x.md)"]
         out = jy.kana_heads(lines, tmp)
         body = out[out.index("# Index") + 2:]
         check(body[:4] == ["古い", "あ", "[アイコン](n0.md)", "[あき](n1.md)"], f"あ の見出し: {body[:4]}")
         check("か" in out and out.index("か") + 1 == out.index("[かめ](n2.md)"), "か（が も か にまとめる）")
-        check(out.count("か") == 1 and "は" in out and "Z" in out and "0-9" in out, f"は・Z・0-9: {out}")
+        check(out.count("か") == 1 and "は" in out and "Z" not in out and out.count("英字") == 1 and "0-9" in out, f"は・英字をまとめる・0-9: {out}")
         check(out[-2:] == ["BackLink:", "[x](x.md)"] and "さ" in out, "節の後ろは触らない")
         check(jy.kana_heads(out, tmp) == out, "2 回目は同じ")
         few = jy.kana_heads(lines[:9] + links[:5], tmp)
         check(not any(jy.KANA_HEAD_RE.match(x) for x in few), f"30 本未満なら見出しを外す: {few}")
+
+
+def test_kana_row_threshold() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        prefix = ["# G", ""]
+        links = [f"[あ{i}](a{i}.md)" for i in range(29)] + ["[いぬ](i.md)"]
+        out = jy.kana_heads(prefix + links + ["[きつね](k.md)"], tmp)
+        check("あ" in out and "い" not in out and "か" in out and "き" not in out, "あ行30本はあ、か行はか")
+        out = jy.kana_heads(prefix + links + ["[うし](u.md)", "[きつね](k.md)"], tmp)
+        check(all(x in out for x in ["あ", "い", "う", "か"]) and "き" not in out, "あ行31本でその行だけ分割")
+        check(jy.kana_heads(out, tmp) == out, "分割後の再処理も同一")
+        out = jy.kana_heads([x for x in out if "(u.md)" not in x], tmp)
+        check("い" not in out and "う" not in out, "30本に減ると行に戻す")
 
 
 def main() -> int:

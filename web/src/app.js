@@ -143,6 +143,8 @@ function applyState(s) {
   const el = $("mode");
   const showView = viewOnly && !needsTerminal(s);
   el.textContent = showView ? "VIEW" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
+  if (last.copyStack) el.textContent += " · COPY STACK";
+  if (last.linkSource) el.textContent += " · LINK SOURCE";
   el.className = "mode " + (showView ? "viewonly" : (MODE_CLASS[m] || "normal"));
   $("file").textContent = s.file ? s.file.split("/").pop() : "";
   $("dirty").textContent = s.mod ? "●" : "";
@@ -161,6 +163,7 @@ function applyState(s) {
   if (s.bt === "terminal") return;
   const fileChanged = viewOnly && s.file && s.file !== lastViewFile;
   if (s.file) lastViewFile = s.file;
+  view.setLinkSource(!!last.linkSource);
   if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); }
   if (fileChanged) view.view.scrollDOM.scrollTop = 0; // 見るだけのときは別のノートに移ったら先頭から
   if (s.vtext) view.setVtext(s.vtext);

@@ -1252,7 +1252,7 @@ def test_simple_sync_group_with_my_link_is_added_to_group() -> None:
             f"[X](x.md)\n\n{CTX_MARK}\n{DOWN_MARK}\n", encoding="utf-8")
         v2.simple_sync(root)
         text = (root / "x.md").read_text(encoding="utf-8")
-        check(_group_region(text) == ["[G](g.md)"], f"G が Group に自動で入る: {_group_region(text)}")
+        check(_group_region(text) == ["[G:X](g.md)"], f"G が Group に自動で入る: {_group_region(text)}")
         check(_parent_region(text) == ["[N1](n1.md)"], f"Context はそのまま: {_parent_region(text)}")
         check(BACKLINK_MARK not in text, "BackLink には出ない（空なので見出しも無い）")
         check(v2.simple_sync(root) == 0, "2 回目 0 changes（冪等）")
@@ -1347,7 +1347,7 @@ def test_branch_group_and_group_auto_membership() -> None:
         check("ThisNoteGroup:" not in a and "### Group" not in a,
               "旧 ThisNoteGroup と ### Group は再出力しない")
         check("BranchGroup:\n[G2](g2.md)" in a, "旧 BranchGroup リンクを保持して新見出しへ移行")
-        check("\nGroup:\n[G1](g1.md)" in a and "\nGroup:\n[G2](g2.md)" not in a,
+        check("\nGroup:\n[G1:A](g1.md)" in a and "\nGroup:\n[G2](g2.md)" not in a,
               "BranchGroup にある G2 は Group に重複させず G1 は残す")
         check(a.index("\nBranchGroup:") < a.index("\nGroup:") < a.index("\nContext:"),
               "BranchGroup → Group → Context の順番")
@@ -1359,7 +1359,7 @@ def test_branch_group_and_group_auto_membership() -> None:
         put("g3.md", "G3", "[A](a.md)", True)
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")
-        check("[G3](g3.md)" in a and a.count("[G1](g1.md)") == 1,
+        check("[G3:A](g3.md)" in a and a.count("[G1:A](g1.md)") == 1,
               "新しい所属は Group に追加し重複なし")
         check(a.count("[G2](g2.md)") == 2 and
               "\nGroup:\n[G2](g2.md)" not in a,

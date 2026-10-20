@@ -2937,30 +2937,33 @@ endfunction
 
 " :GnosisLinkSource … リンクの元の Markdown を見せる／隠す（このバッファだけ）。
 " ふだんは表示名だけを見せ、URL（ファイル名）を直接直したいときに切り替える。
-function! gnosis#toggle_link_source() abort
-  if &l:conceallevel == 0
-    let l:on = get(b:, 'gnosis_link_source_saved', [2, 'nvi'])
-    let &l:conceallevel = l:on[0]
-    let &l:concealcursor = l:on[1]
-    unlet! b:gnosis_link_source_saved
-    echo 'Gnosis: ' . gnosis#i18n#t('link.source_hidden')
-  else
-    let b:gnosis_link_source_saved = [&l:conceallevel, &l:concealcursor]
+function! gnosis#toggle_link_source(...) abort
+  if a:0 && index(['on', 'off'], a:1) < 0
+    echoerr 'GnosisLinkSource [on|off]'
+    return
+  endif
+  let l:show = a:0 ? a:1 ==# 'on' : !get(b:, 'gnosis_link_source_on', 0)
+  if l:show
+    if !get(b:, 'gnosis_link_source_on', 0)
+      let b:gnosis_link_source_saved = [&l:conceallevel, 'nvi']
+    endif
+    let b:gnosis_link_source_on = 1
     setlocal conceallevel=0 concealcursor=
     echo 'Gnosis: ' . gnosis#i18n#t('link.source_shown')
+  else
+    let l:normal = get(b:, 'gnosis_link_source_saved', [2, 'nvi'])
+    let b:gnosis_link_source_on = 0
+    let &l:conceallevel = l:normal[0]
+    let &l:concealcursor = l:normal[1]
+    unlet! b:gnosis_link_source_saved
+    echo 'Gnosis: ' . gnosis#i18n#t('link.source_hidden')
   endif
 endfunction
 
-" 挿入モードで行末の直前が隠れた文字（リンクの ](…)）なら、その行だけ展開する（concealcursor から i を外す）。
-" Vim は隠れた文字の後ろの行末に、隠す前の位置でカーソルを描くため、右に空白が続いて見える。
+" A などで行末に入ってもリンクを展開しない。元の Markdown は明示的なモードで編集する。
 function! gnosis#conceal_eol_fix() abort
-  if &l:conceallevel == 0
-    return
-  endif
-  let l:c = col('.')
-  let l:want = l:c > 1 && l:c > strlen(getline('.')) && synconcealed(line('.'), l:c - 1)[0] ? 'nv' : 'nvi'
-  if &l:concealcursor !=# l:want
-    let &l:concealcursor = l:want
+  if &l:conceallevel > 0 && !get(b:, 'gnosis_link_source_on', 0)
+    setlocal concealcursor=nvi
   endif
 endfunction
 
@@ -7875,7 +7878,10 @@ function! s:lines_add_group_link(lines, link) abort
     if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'Group:'
       let l:at = l:i + 1
       while l:at < len(l:lines) && l:lines[l:at] =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
-        if l:lines[l:at] ==# a:link | return l:lines | endif
+        if s:extract_target(l:lines[l:at]) ==# s:extract_target(a:link)
+          let l:lines[l:at] = a:link
+          return l:lines
+        endif
         let l:at += 1
       endwhile
       call insert(l:lines, a:link, l:at)
@@ -8255,6 +8261,67 @@ function! s:append_link_to_branch_group(link) abort
   return 1
 endfunction
 
+" ParentBranch のリンク先。未保存のバッファがあればその内容を見る（既存の親は付け替えない）。
+function! s:parent_branch_paths(path) abort
+  let l:dir = fnamemodify(a:path, ':h')
+  let l:nr = bufnr(a:path)
+  let l:lines = l:nr > 0 && bufloaded(l:nr) ? getbufline(l:nr, 1, '$') : readfile(a:path)
+  let l:flags = s:fence_flags(l:lines)
+  let l:inside = 0
+  let l:parents = []
+  for l:i in range(len(l:lines))
+    if l:flags[l:i] | continue | endif
+    let l:line = trim(l:lines[l:i])
+    if l:line =~# '^\%(ParentBranch:\|###\s\+ParentBranch\s*\)$'
+      let l:inside = 1
+      continue
+    endif
+    if !l:inside | continue | endif
+    let l:target = matchstr(l:line, '^\[[^]]*\](\zs[^)]\+\ze)\s*$')
+    if empty(l:target)
+      let l:inside = 0
+      continue
+    endif
+    call add(l:parents, fnamemodify(gnosis#resolve_link(substitute(l:target, '#.*$', '', ''), l:dir), ':p'))
+  endfor
+  return l:parents
+endfunction
+
+" グループを BranchGroup として持つ起点。通常のグループには親を引き継がない。
+function! s:branch_group_origin(...) abort
+  if !get(g:, 'gnosis_group_inherit_parent', 1) | return '' | endif
+  let l:group = a:0 ? a:1 : expand('%:p')
+  let l:parents = []
+  for l:path in s:parent_branch_paths(l:group)
+    if !filereadable(l:path) || l:path ==# l:group | continue | endif
+    let l:nr = bufnr(l:path)
+    let l:lines = l:nr > 0 && bufloaded(l:nr) ? getbufline(l:nr, 1, '$') : readfile(l:path)
+    if s:branch_group_has(l:lines, l:group, fnamemodify(l:path, ':h')) && index(l:parents, l:path) < 0
+      call add(l:parents, l:path)
+    endif
+  endfor
+  return len(l:parents) == 1 ? l:parents[0] : ''
+endfunction
+
+" グループへの追加時、親のないメンバーだけ起点の子にする。失敗なら登録前に中止する。
+function! s:inherit_group_origin(group, members) abort
+  let l:origin = s:branch_group_origin(a:group)
+  if empty(l:origin) | return 1 | endif
+  let l:kids = []
+  for l:path in a:members
+    if l:path !=# l:origin && filereadable(l:path) && empty(s:parent_branch_paths(l:path)) && index(l:kids, l:path) < 0
+      call add(l:kids, l:path)
+    endif
+  endfor
+  if empty(l:kids) | return 1 | endif
+  let l:r = gnosis#branch#add_paths(l:origin, l:kids)
+  if !get(l:r, 'ok', 0)
+    call gnosis#branch#warn(gnosis#branch#message(l:r))
+    return 0
+  endif
+  return 1
+endfunction
+
 function! s:v2_new_interactive(attr) abort
   if s:pkm_format() !=# 'v2'
     echo 'Gnosis: ' . gnosis#i18n#tr('v2 専用') | return
@@ -8284,18 +8351,18 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if l:grp_src
-    " グループの上の zn: Enter=表示名を付けてこのグループに登録する（あとで必ず並べる）/ o=孤立（どこにもつながない）。
+    " Enter=登録＋BranchGroup の起点を親にする / g=登録だけ / o=孤立。
     " 孤立はどのノートの上でも使えるようにする（Index で思いつきを書いて、あとで \N で整理する）。
     " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
-    echo s:fit_prompt(gnosis#i18n#tr('Enter=このグループに登録 / o=孤立（どこにもつながない）  (Esc/q キャンセル)'),
-          \ gnosis#i18n#tr('Enter=登録 o=孤立 (Esc)'))
+    echo s:fit_prompt(gnosis#i18n#tr('Enter=登録（BranchGroup の起点を親に） / g=登録だけ（親なし） / o=孤立  (Esc/q キャンセル)'),
+          \ gnosis#i18n#tr('Enter=登録＋起点が親 g=登録だけ o=孤立 (Esc)'))
     let l:gch = s:getkey()
     redraw
     if l:gch ==? 'o'
       call s:v2_new_run('', 'o', 0)
       return
     endif
-    if l:gch !=# "\<CR>" && l:gch !=# "\<NL>"
+    if l:gch !=# "\<CR>" && l:gch !=# "\<NL>" && l:gch !=# 'g'
       echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
     endif
     let l:ts = gnosis#timestamp_filename()
@@ -8304,7 +8371,7 @@ function! s:v2_new_interactive(attr) abort
       echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
       return
     endif
-    call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name})
+    call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name, 'group_only': l:gch ==# 'g'})
     return
   endif
   echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / i=カーソルの位置 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
@@ -8465,7 +8532,7 @@ endfunction
 "   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
 "   r は Related だけを相互に追加し、本文リンクや自動 Branch は付けない。
 "   h / t / c / Enter は、元ノートを親・新ノートを子とする Branch を自動で記録する（index.md・グループからは記録しない）。
-"   グループの上: Enter は表示名つきのリンクでグループに登録（新ノートの Group: に出る）、o は登録しない。
+"   グループの上: Enter は登録＋BranchGroup の起点が親、g は登録だけ（group_only）、o は孤立。
 "   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
 function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ch = a:ch
@@ -8488,6 +8555,11 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:place = get(l:opt, 'place', {})
   let l:is_enter = l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
   let l:cursor_pos = getpos('.')
+  let l:origin = l:grp_src && l:is_enter && !get(l:opt, 'group_only', 0) ? s:branch_group_origin() : ''
+  if !empty(l:origin) && getbufvar(bufnr(l:origin), '&modified')
+    call gnosis#branch#warn(gnosis#i18n#t('branch.save_failed'))
+    return
+  endif
 
   let l:auto_branch = empty(a:attr) && !l:grp_src && fnamemodify(l:cur, ':t') !=# 'index.md'
         \ && (index(['h', 'i', 't', 'c'], l:ch) >= 0 || l:is_enter)
@@ -8525,9 +8597,10 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
   " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
-  if l:ch ==# 'b' || l:ch ==# 'p' || l:auto_branch || l:zk_branch_group
+  if l:ch ==# 'b' || l:ch ==# 'p' || l:auto_branch || l:zk_branch_group || !empty(l:origin)
     " p のみ逆向き。b と zn の自動関係は今のノートが親。
-    let l:br = l:ch ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:cur, [l:file])
+    let l:parent = empty(l:origin) ? l:cur : l:origin
+    let l:br = l:ch ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:parent, [l:file])
     if !get(l:br, 'ok', 0)
       call delete(l:file)
       redraw
@@ -8800,9 +8873,8 @@ endfunction
 function! s:group_add_links_named(links) abort
   let l:group = expand('%:p')
   let l:dir = expand('%:p:h')
-  let l:todo = filter(copy(a:links), '!s:buffer_has_link(v:val)')
+  let l:todo = copy(a:links)
   if empty(l:todo)
-    echo 'Gnosis: ' . gnosis#i18n#tr('もうこのグループに入っています')
     return 0
   endif
   let l:plan = []
@@ -8816,7 +8888,8 @@ function! s:group_add_links_named(links) abort
     let l:def = filereadable(l:abs) ? s:get_title(l:abs) : ''
     let l:def = empty(l:def) ? l:m.text : l:def
     let l:label = l:n > 1 ? printf('(%d/%d) ', l:k + 1, l:n) : ''
-    let l:r = s:ask_display_name(l:def, l:label)
+    let l:notice = s:body_has_link(l:todo[l:k]) ? gnosis#i18n#tr('すでにこのグループに入っています。') . ' ' : ''
+    let l:r = s:ask_display_name(l:def, l:label . l:notice)
     if !l:r.ok
       echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
       return 0
@@ -8825,6 +8898,9 @@ function! s:group_add_links_named(links) abort
     call add(l:plan, {'abs': l:abs, 'name': l:r.name, 'yomi': l:yomi,
           \ 'link': '[' . s:md_link_text(l:r.name) . '](' . l:m.target . ')'})
   endfor
+  if !s:inherit_group_origin(l:group, map(copy(l:plan), 'v:val.abs'))
+    return 0
+  endif
   for l:p in l:plan
     call s:simple_body_append(l:p.link)
   endfor
@@ -11051,8 +11127,8 @@ function! s:link_is_group(link) abort
 endfunction
 
 " lines の BranchGroup:（旧 ThisNoteGroup:）のブロックに a:path へのリンクがあるか
-function! s:branch_group_has(lines, path) abort
-  let l:dir = expand('%:p:h')
+function! s:branch_group_has(lines, path, ...) abort
+  let l:dir = a:0 ? a:1 : expand('%:p:h')
   let l:in = 0
   for l:ln in a:lines
     if trim(l:ln) =~# '^\%(BranchGroup\|ThisNoteGroup\):$'
@@ -11074,6 +11150,21 @@ function! s:branch_group_has(lines, path) abort
   return 0
 endfunction
 
+function! s:group_member_names(group, member) abort
+  let l:lines = readfile(a:group)
+  let l:from = s:top_block_last_index(l:lines) + 1
+  let l:to = s:first_section_index_in_lines(l:lines)
+  let l:to = l:to < 0 ? len(l:lines) : l:to
+  let l:names = []
+  for l:line in l:from < l:to ? l:lines[l:from : l:to - 1] : []
+    let l:m = s:extract_markdown_link(l:line)
+    if !empty(l:m.target) && fnamemodify(gnosis#resolve_link(substitute(l:m.target, '#.*$', '', ''), fnamemodify(a:group, ':h')), ':p') ==# a:member
+      if index(l:names, l:m.text) < 0 | call add(l:names, l:m.text) | endif
+    endif
+  endfor
+  return l:names
+endfunction
+
 " 今のノートを、a:groups（グループへのリンク行）のグループに入れる。グループの本文に今のノートへのリンクを、
 " 表示名つきで入れる（表示名は空欄から聞く。空 Enter = 今のノートのタイトル、Esc = 全部取り消し）。
 " 今のノートの Group: にもすぐ出す。戻り値は入れたグループの数、取り消しなら -1。
@@ -11091,7 +11182,8 @@ function! s:join_groups(groups) abort
       echo 'Gnosis: ' . gnosis#i18n#tr('開いているグループに未保存の変更があります。先に保存してください')
       return -1
     endif
-    let l:r = s:ask_display_name(l:cur_title)
+    let l:notice = !empty(s:group_member_names(l:gfp, l:cur)) ? gnosis#i18n#tr('すでにこのグループに入っています。') . ' ' : ''
+    let l:r = s:ask_display_name(l:cur_title, l:notice)
     if !l:r.ok
       echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
       return -1
@@ -11100,30 +11192,17 @@ function! s:join_groups(groups) abort
     let l:yomi = s:ask_yomi(l:gfp, l:cur, l:r.name)
     call add(l:plan, {'gfp': l:gfp, 'name': l:r.name, 'link': l:lk, 'yomi': l:yomi, 'abs': l:cur})
   endfor
+  for l:p in l:plan
+    if !s:inherit_group_origin(l:p.gfp, [l:cur]) | return -1 | endif
+  endfor
   let l:n = 0
   for l:p in l:plan
     let l:gdir = fnamemodify(l:p.gfp, ':h')
-    " グループの本文に、既に今のノートへのリンクがあれば足さない。上のブロック（zk で分岐したグループの
-    " ParentBranch: に今のノートがある、など）と下の節（BackLink: など）は本文ではないので数えない
-    let l:dup = 0
-    let l:glines = readfile(l:p.gfp)
-    let l:gfrom = s:top_block_last_index(l:glines) + 1
-    let l:gto = s:first_section_index_in_lines(l:glines)
-    let l:gto = l:gto < 0 ? len(l:glines) : l:gto
-    for l:line in l:gfrom < l:gto ? l:glines[l:gfrom : l:gto - 1] : []
-      let l:old = matchstr(l:line, '\](\zs[^)]\+\ze)')
-      if !empty(l:old) && fnamemodify(gnosis#resolve_link(l:old, l:gdir), ':p') ==# l:cur
-        let l:dup = 1
-        break
-      endif
-    endfor
-    if !l:dup
-      call s:simple_body_append_to_file(l:p.gfp, s:make_link_from_dir(l:cur, s:md_link_text(l:p.name), l:gdir), 1)
-    endif
+    call s:simple_body_append_to_file(l:p.gfp, s:make_link_from_dir(l:cur, s:md_link_text(l:p.name), l:gdir), 1)
     " 今のノートの Group: にすぐ出す（同期を待たない）。BranchGroup: にあるグループ（zk で分岐したもの）は
     " Group: に重ねて出さない（同期も出さないので、出すと消えてちらつく）
     if !s:branch_group_has(getline(1, '$'), l:p.gfp)
-      let l:title = s:group_label(l:p.gfp)
+      let l:title = s:group_label(l:p.gfp) . ':' . join(s:group_member_names(l:p.gfp, l:cur), ',')
       call s:replace_buffer_lines(s:lines_add_group_link(getline(1, '$'), s:make_link_from_dir(l:p.gfp, l:title, expand('%:p:h'))))
     endif
     let l:n += 1
@@ -11611,7 +11690,7 @@ function! s:review_open(group, targets, ...) abort
         \ gnosis#i18n#tr('「（推測）」のよみは自動の推測です。違っていたら直してください。'),
         \ '']
   for l:it in l:items
-    call add(l:lines, '[' . l:it.name . '](' . l:it.abs . matchstr(l:it.target, '#.*$') . ') — '
+    call add(l:lines, '[' . l:it.name . '](' . l:it.abs . '#gnosis-review-' . l:it.idx . ') — '
           \ . l:it.reading . (l:it.registered ? '' : gnosis#i18n#tr('（推測）')))
   endfor
   let l:file = s:review_file()
@@ -11679,15 +11758,18 @@ function! gnosis#review_commit() abort
       continue
     endif
     let l:abs = fnamemodify(substitute(l:m[2], '#.*$', '', ''), ':p')
-    let l:edited[l:abs] = {'name': l:m[1], 'reading': trim(substitute(l:m[3], gnosis#i18n#tr('（推測）') . '$', '', ''))}
+    let l:id = matchstr(l:m[2], '#gnosis-review-\zs\d\+$')
+    if empty(l:id) | continue | endif
+    let l:edited[l:id] = {'abs': l:abs, 'name': l:m[1], 'reading': trim(substitute(l:m[3], gnosis#i18n#tr('（推測）') . '$', '', ''))}
   endfor
   let l:lines = readfile(l:st.group)
   let l:members = s:group_member_idx(l:lines, fnamemodify(l:st.group, ':t') ==# 'index.md')
   let l:drop = []
+  let l:matched = []
   for l:it in l:st.items
     let l:pos = -1
     for l:i in l:members
-      if trim(l:lines[l:i]) ==# l:it.line
+      if index(l:matched, l:i) < 0 && trim(l:lines[l:i]) ==# l:it.line
         let l:pos = l:i
         break
       endif
@@ -11695,10 +11777,11 @@ function! gnosis#review_commit() abort
     if l:pos < 0
       continue
     endif
-    if !has_key(l:edited, l:it.abs)
+    call add(l:matched, l:pos)
+    if !has_key(l:edited, string(l:it.idx))
       call add(l:drop, l:pos)
-    elseif l:edited[l:it.abs].name !=# l:it.name
-      let l:lines[l:pos] = substitute(l:lines[l:pos], '\V[' . escape(l:it.name, '\') . '](', '[' . escape(l:edited[l:it.abs].name, '\&') . '](', '')
+    elseif l:edited[string(l:it.idx)].name !=# l:it.name
+      let l:lines[l:pos] = substitute(l:lines[l:pos], '\V[' . escape(l:it.name, '\') . '](', '[' . escape(l:edited[string(l:it.idx)].name, '\&') . '](', '')
     endif
   endfor
   for l:pos in reverse(sort(l:drop, 'n'))
@@ -11706,7 +11789,8 @@ function! gnosis#review_commit() abort
   endfor
   call s:syn_writefile(l:lines, l:st.group)
   let l:tsv = []
-  for [l:abs, l:e] in items(l:edited)
+  for l:e in values(l:edited)
+    let l:abs = l:e.abs
     if !empty(l:e.reading) && filereadable(l:abs)
       call add(l:tsv, l:abs . "\t" . l:e.name . "\t" . l:e.reading)
     endif
@@ -11714,7 +11798,7 @@ function! gnosis#review_commit() abort
   if !empty(l:tsv)
     " よみはメンバーのノートの front matter に書く。開いていて未保存のノートは先に保存する
     let l:here = bufnr('%')
-    for l:abs in keys(l:edited)
+    for l:abs in map(values(l:edited), 'v:val.abs')
       let l:bn = bufnr(l:abs)
       if l:bn > 0 && bufloaded(l:bn) && getbufvar(l:bn, '&modified')
         silent! execute 'buffer ' . l:bn
@@ -14674,7 +14758,7 @@ endfunction
 "               ビジュアル: 選択範囲をスタックに追加
 " ---------------------------------------------------------------------------
 
-let s:stack_copy_mode  = 0
+let g:gnosis_stack_copy_mode  = 0
 let s:stack_copy_lines = []
 let s:stack_copy_stl_save = ''
 let s:stack_copy_wbr_save = ''
@@ -14709,33 +14793,65 @@ function! s:stack_copy_statusline_off() abort
   let s:stack_copy_wbr_save = ''
 endfunction
 
-function! s:stack_copy_finish(copy_to_clipboard) abort
-  if a:copy_to_clipboard && !empty(s:stack_copy_lines)
-    let l:text = join(s:stack_copy_lines, "\n")
-    let @" = l:text
-    call gnosis#clipboard_copy(l:text)
-  else
-    
+function! s:stack_copy_attach() abort
+  if !g:gnosis_stack_copy_mode || &buftype !=# '' || get(b:, 'gnosis_stack_attached', 0)
+    return
   endif
+  let b:gnosis_stack_attached = 1
+  let b:gnosis_stack_maps = []
+  for l:mode in ['n', 'x']
+    for l:key in ['y', 'd']
+      let l:old = maparg(l:key, l:mode, 0, 1)
+      if get(l:old, 'buffer', 0) | call add(b:gnosis_stack_maps, [l:mode, l:old]) | endif
+    endfor
+  endfor
+  nnoremap <buffer> <silent> <nowait> y :<C-u>call gnosis#stack_copy_yank_line()<CR>
+  xnoremap <buffer> <silent> <nowait> y :<C-u>call gnosis#stack_copy_yank_visual()<CR>
+  nnoremap <buffer> <silent> <nowait> d :<C-u>call gnosis#stack_copy_delete_line()<CR>
+  xnoremap <buffer> <silent> <nowait> d :<C-u>call gnosis#stack_copy_delete_visual()<CR>
+  call s:stack_copy_statusline_on()
+endfunction
+
+function! s:stack_copy_detach() abort
+  if !get(b:, 'gnosis_stack_attached', 0) | return | endif
   silent! nunmap <buffer> y
   silent! xunmap <buffer> y
   silent! nunmap <buffer> d
   silent! xunmap <buffer> d
+  for l:item in b:gnosis_stack_maps
+    call mapset(l:item[0], 0, l:item[1])
+  endfor
+  unlet! b:gnosis_stack_attached b:gnosis_stack_maps
   call s:stack_copy_statusline_off()
-  let s:stack_copy_mode  = 0
+endfunction
+
+function! s:stack_copy_finish(copy_to_clipboard) abort
+  if a:copy_to_clipboard && !empty(s:stack_copy_lines)
+    let l:text = join(s:stack_copy_lines, "\n") . "\n"
+    call gnosis#clipboard_copy(l:text)
+    call setreg('"', s:stack_copy_lines, 'V')
+    call setreg('0', s:stack_copy_lines, 'V')
+  endif
+  augroup gnosis_copy_stack
+    autocmd!
+  augroup END
+  call s:stack_copy_detach()
+  let g:gnosis_stack_copy_mode = 0
+  echo printf(gnosis#i18n#tr('CopyStack OFF: %d 行をまとめました'), len(s:stack_copy_lines))
   let s:stack_copy_lines = []
 endfunction
 
 function! gnosis#stack_copy_toggle() abort
-  if !s:stack_copy_mode
-    let s:stack_copy_mode  = 1
+  if !g:gnosis_stack_copy_mode
+    let g:gnosis_stack_copy_mode = 1
     let s:stack_copy_lines = []
-    nnoremap <buffer> <silent> <nowait> y :<C-u>call gnosis#stack_copy_yank_line()<CR>
-    xnoremap <buffer> <silent> <nowait> y :<C-u>call gnosis#stack_copy_yank_visual()<CR>
-    nnoremap <buffer> <silent> <nowait> d :<C-u>call gnosis#stack_copy_delete_line()<CR>
-    xnoremap <buffer> <silent> <nowait> d :<C-u>call gnosis#stack_copy_delete_visual()<CR>
-    call s:stack_copy_statusline_on()
-    
+    augroup gnosis_copy_stack
+      autocmd!
+      autocmd BufEnter,WinEnter * call s:stack_copy_attach()
+      autocmd BufLeave,WinLeave * call s:stack_copy_detach()
+    augroup END
+    call s:stack_copy_attach()
+    echo gnosis#i18n#tr('CopyStack ON: y で追加・d で切り取り・\sc で確定')
   else
     call s:stack_copy_finish(!empty(s:stack_copy_lines))
   endif
@@ -14769,7 +14885,6 @@ function! gnosis#stack_copy_delete_visual() abort range
   for l:i in range(l:s, l:e)
     call add(s:stack_copy_lines, getline(l:i))
   endfor
-  execute "normal! <Esc>"
   execute "'<,'>delete _"
   
 endfunction
@@ -17585,11 +17700,15 @@ function! s:record_retitle(root, file, old, new) abort
         \ {_, v -> v ==# 'title: ' . a:old ? 'title: ' . a:new : v ==# '# ' . a:old ? '# ' . a:new : v})})
   let l:from = '[' . a:old . '](' . a:file . ')'
   let l:to = '[' . a:new . '](' . a:file . ')'
+  " グループのリンクは「[グループ名:表示名](…)」の形もある（同期が付ける）。その「グループ名:」も改める
+  let l:lab = '\V[' . escape(a:old, '\') . ':\(\[^]]\*\)](' . escape(a:file, '\') . ')'
   for l:f in glob(l:dir . '*.md', 0, 1)
-    if index(readfile(l:f), l:from) < 0 && match(readfile(l:f), '\V' . escape(l:from, '\')) < 0
+    let l:fl = readfile(l:f)
+    if index(l:fl, l:from) < 0 && match(l:fl, '\V' . escape(l:from, '\')) < 0 && match(l:fl, l:lab) < 0
       continue
     endif
-    call s:diary_edit_file(l:f, {lines -> map(copy(lines), {_, v -> substitute(v, '\V' . escape(l:from, '\'), escape(l:to, '\&'), 'g')})})
+    call s:diary_edit_file(l:f, {lines -> map(copy(lines), {_, v -> substitute(substitute(v, '\V' . escape(l:from, '\'), escape(l:to, '\&'), 'g'),
+          \ l:lab, escape('[' . a:new . ':', '\&') . '\1](' . escape(a:file, '\&') . ')', 'g')})})
   endfor
 endfunction
 

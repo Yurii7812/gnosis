@@ -419,9 +419,9 @@ def sort_lines(lines: list[str], base_dir, extra_key_fn=None) -> list[str]:
     return out
 
 
-# グループ（Index を含む）のリンクが多いとき、頭文字ごとに入れる見出しの行（「あ」「か」「A」「0-9」「その他」だけの行）。
+# グループの見出し（A-Z は旧版が生成した見出しの除去にも使う）。
 # Gnosis が作る行なので、付け直すときはこの形の行を全部外してから入れ直す。
-KANA_HEAD_RE = re.compile(r"^(?:[ぁ-ゖ]|[A-Z]|0-9|その他)$")
+KANA_HEAD_RE = re.compile(r"^(?:[ぁ-ゖ]|[A-Z]|英字|0-9|その他)$")
 KANA_HEAD_MIN = 30
 _SMALL_KANA = str.maketrans("ぁぃぅぇぉっゃゅょゎゕゖ", "あいうえおつやゆよわかけ")
 
@@ -457,7 +457,7 @@ def strip_kana_heads(lines: list[str]) -> list[str]:
 
 
 def kana_heads(lines: list[str], base_dir, minimum: int = KANA_HEAD_MIN) -> list[str]:
-    """本文のリンクだけの行が minimum 本以上なら、頭文字が変わるところに「あ」の見出しの行を入れる。
+    """本文のリンクが minimum 本以上なら五十音の行見出し、その行が minimum を超えれば字ごとに分ける。
 
     前に入れた見出しはいったん全部外す（本数が減れば見出しは無くなる）。対象は sort_lines と同じ
     （本文の上のブロック・コードブロック・ChildBranch: などの節より後ろは見ない）。
@@ -484,10 +484,22 @@ def kana_heads(lines: list[str], base_dir, minimum: int = KANA_HEAD_MIN) -> list
             slots.append(i)
     if len(slots) < minimum:
         return lines
+    rows = ["あいうえお", "かきくけこ", "さしすせそ", "たちつてと", "なにぬねの",
+            "はひふへほ", "まみむめも", "やゆよ", "らりるれろ", "わゐゑをん"]
+    row_of = {ch: row[0] for row in rows for ch in row}
+    initials = {i: kana_initial(line_reading(lines[i], base_dir)) for i in slots}
+    counts: dict[str, int] = {}
+    for ini in initials.values():
+        row = row_of.get(ini, ini)
+        counts[row] = counts.get(row, 0) + 1
     heads: dict[int, str] = {}
     prev = None
     for i in slots:
-        ini = kana_initial(line_reading(lines[i], base_dir))
+        ini = initials[i]
+        row = row_of.get(ini, ini)
+        ini = ini if counts[row] > minimum else row
+        if ini.isascii() and ini.isalpha():
+            ini = "英字"
         if ini != prev:
             heads[i] = ini
             prev = ini

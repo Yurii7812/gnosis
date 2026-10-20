@@ -286,7 +286,7 @@ def test_relation_links_show_all_sections() -> None:
         out_path = ex._run(root, root / "A.md",
                             lambda sid, dir_of: ex.collect_simple(sid, dir_of, 1))
         text = out_path.read_text(encoding="utf-8")
-        check("- 親: [G](" in text, "親セクションが出る")
+        check("- 親: [G:A](" in text, "親セクションが出る")
         check("- 関連: [R](" in text, "関連セクションが出る（ノートに混ざらない）")
         check("- 子（本文）: [B](" in text, "子（本文）セクションが出る")
         check("- バックリンク: [D](" in text, "バックリンクセクションが出る")

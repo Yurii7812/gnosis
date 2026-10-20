@@ -279,9 +279,9 @@ call s:ok('\l g: 選んだグループの本文に今のノートが入る（空
 let s:group_lines = s:file('g.md')
 let s:added_at = index(s:group_lines, '[ノートJG4](jg4.md)')
 call s:ok('\l g Enter: 既存リンクとの間に空行を足さない', s:added_at > 0 && s:group_lines[s:added_at - 1] ==# '[ノートA](a.md)', string(s:group_lines))
-call s:ok('\l g: 今のノートの Group: にグループが出る（保存前でもバッファに）', index(getline(1, '$'), 'Group:') >= 0 && index(getline(1, '$'), '[グループG](g.md)') >= 0, string(getline(1, '$')))
-call s:ok('\l g: 今のノートの本文にグループへのリンクは置かない', count(getline(1, '$'), '[グループG](g.md)') == 1)
-call s:ok('\l g: 保存されている', s:has('jg4.md', '^\[グループG\](g\.md)$'))
+call s:ok('\l g: 今のノートの Group: にグループが出る（保存前でもバッファに）', index(getline(1, '$'), 'Group:') >= 0 && index(getline(1, '$'), '[グループG:ノートJG4](g.md)') >= 0, string(getline(1, '$')))
+call s:ok('\l g: 今のノートの本文にグループへのリンクは置かない', count(getline(1, '$'), '[グループG:ノートJG4](g.md)') == 1)
+call s:ok('\l g: 保存されている', s:has('jg4.md', '^\[グループG:ノートJG4\](g\.md)$'))
 execute 'edit ' . fnameescape(s:v . '/jg5.md')
 let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['好きな*名前_']
@@ -303,8 +303,10 @@ let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['']
 call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
 let s:g_after = s:file('g.md')
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_display_name = ['別名JG6']
 call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-call s:ok('\l g: 同じグループに 2 回入れても重複しない', s:file('g.md') ==# s:g_after || count(s:file('g.md'), '[ノートJG6](jg6.md)') == 1)
+call s:ok('\l g: 同じグループに別名でも追加できる', count(s:file('g.md'), '[ノートJG6](jg6.md)') == 1 && count(s:file('g.md'), '[別名JG6](jg6.md)') == 1)
 " ------------------------------------------------------------------ za → g（クリップボードのグループに、今のノートを入れる）
 call s:mk('jg7.md', 'ノートJG7', ['JG7 の本文。'])
 execute 'edit ' . fnameescape(s:v . '/jg7.md')
@@ -313,7 +315,7 @@ let @0 = @"
 let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['']
 call gnosis#add_clipboard_before_up_note()
-call s:ok('za g: グループの本文に今のノート、今のノートの Group: にグループ', s:has('g.md', '^\[ノートJG7\](jg7\.md)$') && index(getline(1, '$'), '[グループG](g.md)') >= 0, string(s:file('g.md')))
+call s:ok('za g: グループの本文に今のノート、今のノートの Group: にグループ', s:has('g.md', '^\[ノートJG7\](jg7\.md)$') && index(getline(1, '$'), '[グループG:ノートJG7](g.md)') >= 0, string(s:file('g.md')))
 
 " ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
 let s:cols_save = &columns
@@ -446,7 +448,7 @@ let g:gnosis_test_display_name = ['い']
 call gnosis#insert_links_pick(['[所属グループ](gjg.md)'], getpos('.'))
 let s:gjg = s:file('gjg.md')
 call s:ok('g Enter: 入れたグループがよみ順に並ぶ', s:gjg[-3:] ==# ['[あ](gj1.md)', '[い](gj2.md)', '[う](gj3.md)'], string(s:gjg))
-call s:ok('g: 今のノートの Group: にグループが出る・保存済み', index(getline(1, '$'), '[所属グループ](gjg.md)') >= 0 && !&modified, string(getline(1, '$')))
+call s:ok('g: 今のノートの Group: にグループが出る・保存済み', index(getline(1, '$'), '[所属グループ:い](gjg.md)') >= 0 && !&modified, string(getline(1, '$')))
 
 " ------------------------------------------------------------------ za → c → Esc（何も変えない）
 call s:mk('k.md', 'ノートK', ['K の本文。'])

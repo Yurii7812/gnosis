@@ -139,6 +139,16 @@ fun deleteTopic(entries: List<Entry>, settings: Settings, name: String): Pair<Li
         lastTopic = if (settings.lastTopic == name) ALL else settings.lastTopic)
 }
 
+/** 取り込み済みメモを消すとき、その削除で空になる通常トピックだけを片付ける。 */
+fun settingsAfterImportedRemoval(entries: List<Entry>, settings: Settings, removed: Set<String>, records: Set<String> = emptySet()): Settings {
+    val occupied = entries.filter { it.id !in removed }.map { it.topic }.toSet()
+    val gone = entries.filter { it.id in removed }.map { it.topic }.toSet().filter {
+        it !in occupied && it !in records && it !in setOf(DIARY, ALL, UNASSIGNED) && settings.topicModes[it]?.record != true
+    }.toSet()
+    return settings.copy(topics = settings.topics.filter { it !in gone }, topicModes = settings.topicModes - gone,
+        lastTopic = if (settings.lastTopic in gone) ALL else settings.lastTopic)
+}
+
 /** 並び list の中で a から b まで（どちら向きでも）の id。範囲選択に使う。 */
 fun rangeIds(list: List<String>, a: String, b: String): List<String> {
     val i = list.indexOf(a); val j = list.indexOf(b)
@@ -174,7 +184,7 @@ fun matchesQuery(text: String, query: String): Boolean {
 class Store(private val ctx: Context) {
     private val file get() = File(ctx.filesDir, "entries.json")
     private val settingsFile get() = File(ctx.filesDir, "settings.json")
-    val imageDir: File get() = File(ctx.filesDir, "images").apply { mkdirs() }
+    val imageDir: File by lazy { File(ctx.filesDir, "images").apply { mkdirs() } }
 
     fun load(): List<Entry> {
         if (!file.exists()) return emptyList()
@@ -191,12 +201,12 @@ class Store(private val ctx: Context) {
     }
 
     /** PC の Gnosis が取り込んだ id（PC が書き戻す）。 */
-    fun importedIds(): Set<String> {
+    fun importedIds(entries: List<Entry>? = null): Set<String> {
         val f = File(ctx.filesDir, "imported.json")
         if (!f.exists()) return emptySet()
         return try {
             val imported = JSONObject(f.readText()).optJSONArray("entries") ?: return emptySet()
-            val current = load().associateBy { it.id }
+            val current = (entries ?: load()).associateBy { it.id }
             (0 until imported.length()).mapNotNull { i ->
                 val old = fromJson(imported.getJSONObject(i))
                 val now = current[old.id]

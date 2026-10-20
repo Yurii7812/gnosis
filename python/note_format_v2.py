@@ -2134,13 +2134,20 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             return None
         return tp if tp in notes else None
 
+    member_names: dict[Path, dict[Path, list[str]]] = {}
     body_t: dict[Path, list[Path]] = {}
     for p, n in notes.items():
         ts: list[Path] = []
-        for _d, tg in _links_from(n["body"]):
+        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
+        names: dict[Path, list[str]] = {}
+        for display, tg in _links_from(n["body"]):
             rp = res(tg, dirs[p])
             if rp is not None and rp != p:
                 ts.append(rp)
+                labels = names.setdefault(rp, [])
+                if display not in labels:
+                    labels.append(display)
+        member_names[p] = names
         body_t[p] = ts
 
     incoming: dict[Path, list[Path]] = {p: [] for p in notes}
@@ -2388,6 +2395,10 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 if rp in branch_targets or rp in seen_g:
                     continue
                 seen_g.add(rp)
+                labels = member_names.get(rp, {}).get(p, [])
+                if labels:
+                    target = _SIMPLE_INLINE_LINK.search(ln).group(2)
+                    ln = f"[{titles[rp]}:{','.join(labels)}]({target})"
             dedup.append(ln)
         group_lines = dedup
         if moved:

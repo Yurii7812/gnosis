@@ -3,6 +3,10 @@
 let s:w = $GR_WORK
 let s:v = s:w . '/vault'
 let s:out = []
+function! s:is_grp(tail, name, file) abort
+  " グループのリンクの表示名は「グループ名」か「グループ名:グループの中の表示名」
+  return len(a:tail) == 2 && a:tail[0] ==# 'Group:' && a:tail[1] =~# '^\V[' . a:name . '\%(:\[^]]\*\)\=](' . a:file . ')\$'
+endfunction
 function! s:ok(name, cond) abort
   call add(s:out, (a:cond ? 'OK ' : 'NG ') . a:name)
 endfunction
@@ -49,7 +53,7 @@ try
   call gnosis#refresh_guide()
   call s:ok('既存 Index の # Index 直後の空行を復元',
         \ get(readfile(s:v . '/index.md'), s:header + 1, 'missing') ==# '')
-  call s:ok('作成直後: ### Group に Index', s:tail(s:g) ==# ['Group:', '[Index](index.md)'])
+  call s:ok('作成直後: ### Group に Index', s:is_grp(s:tail(s:g), 'Index', 'index.md'))
 
   " 既存の操作ガイドで Group が欠落していても、起動時更新で Index の所属を修復する
   let s:broken = s:guide()
@@ -63,7 +67,7 @@ try
   endif
   call writefile(s:broken, s:v . '/gnosis-guide.md')
   call gnosis#refresh_guide()
-  call s:ok('欠落した Group / Index を修復', s:tail(s:guide()) ==# ['Group:', '[Index](index.md)'])
+  call s:ok('欠落した Group / Index を修復', s:is_grp(s:tail(s:guide()), 'Index', 'index.md'))
   call s:ok('作成直後: 同期しても変わらない', s:sync() =~# 'updated 0 file')
 
   " 起動時の更新（プラグインの更新でテンプレートが変わった場合も含む）
@@ -71,7 +75,7 @@ try
   call gnosis#refresh_guide()
   let s:g = s:guide()
   call s:ok('更新: 本文はテンプレートに戻る', index(s:g, '古い本文の行') < 0 && index(s:g, '## リンク') >= 0)
-  call s:ok('更新: Group の Index が残る', s:tail(s:g) ==# ['Group:', '[Index](index.md)'])
+  call s:ok('更新: Group の Index が残る', s:is_grp(s:tail(s:g), 'Index', 'index.md'))
   call s:ok('更新: 見出しが重複しない', s:count(s:g, '^Group:$') == 1 && s:count(s:g, '^---$') == 2)
   call s:ok('更新: 同期しても変わらない', s:sync() =~# 'updated 0 file')
   let s:before = s:guide()
@@ -84,10 +88,10 @@ try
   call writefile(s:idx, s:v . '/index.md')
   call s:sync()
   let s:g = s:guide()
-  call s:ok('移動: Group がハーブになる', s:tail(s:g) ==# ['Group:', '[ハーブ](261013140400.md)'])
+  call s:ok('移動: Group がハーブになる', s:is_grp(s:tail(s:g), 'ハーブ', '261013140400.md'))
   call s:ok('移動: 古い所属（Index）が残らない', s:count(s:tail(s:g), 'index\.md') == 0)
   call gnosis#refresh_guide()
-  call s:ok('移動後の更新: ハーブが残る', s:tail(s:guide()) ==# ['Group:', '[ハーブ](261013140400.md)'])
+  call s:ok('移動後の更新: ハーブが残る', s:is_grp(s:tail(s:guide()), 'ハーブ', '261013140400.md'))
   call s:ok('移動後の更新: 同期しても変わらない（相手側のリンクも消えない）',
         \ s:sync() =~# 'updated 0 file' && !empty(filter(readfile(s:v . '/261013140400.md'), 'v:val =~# "gnosis-guide.md"')))
 
@@ -97,7 +101,7 @@ try
   call s:sync()
   call gnosis#refresh_guide()
   let s:t = s:tail(s:guide())
-  call s:ok('複数所属: Index とハーブの両方', s:count(s:t, '^\[Index\](index\.md)$') == 1 && s:count(s:t, '^\[ハーブ\](261013140400\.md)$') == 1)
+  call s:ok('複数所属: Index とハーブの両方', s:count(s:t, '^\[Index\%(:[^]]*\)\=\](index\.md)$') == 1 && s:count(s:t, '^\[ハーブ\%(:[^]]*\)\=\](261013140400\.md)$') == 1)
   call s:ok('複数所属: 同期しても変わらない', s:sync() =~# 'updated 0 file')
 
   " 普通のノートの本文からガイドへリンク → ガイドに BackLink:（通常のノートと同じ）
@@ -128,7 +132,8 @@ try
   endfor
   let s:g = s:guide()
   call s:ok('英語: 題が英語', index(s:g, 'title: Gnosis Guide') >= 0 && index(s:g, '# Gnosis Guide') >= 0)
-  call s:ok('英語: 関係の節が残る', s:tail(s:g) ==# s:t)
+  " グループのリンクの表示名は「グループ名:グループの中の表示名」なので、題が変わればそこも変わる。リンク先で比べる
+  call s:ok('英語: 関係の節が残る', map(copy(s:tail(s:g)), 'substitute(v:val, "^\\[[^]]*\\]", "", "")') ==# map(copy(s:t), 'substitute(v:val, "^\\[[^]]*\\]", "", "")'))
   let s:before_sync = {}
   for s:fp in glob(s:v . '/*.md', 1, 1)
     let s:before_sync[s:fp] = readfile(s:fp)

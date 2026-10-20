@@ -288,7 +288,18 @@ command!          GnosisThemeReset call gnosis#settings#set('theme', {'kind': 'b
 " 文字サイズ（Gnosis 全体。:GnosisFontSize 20 / +1 / -1 / reset。引数なしで今の大きさ）
 command! -nargs=? GnosisFontSize call gnosis#termfont#command(<q-args>)
 " リンクの元の Markdown（[表示名](ファイル名)）を見せる・隠すの切り替え（このバッファだけ）
-command!          GnosisLinkSource call gnosis#toggle_link_source()
+command! -nargs=?  GnosisLinkSource call gnosis#toggle_link_source(<f-args>)
+
+" BranchGroup の起点を親にする動作（セッション全体。zn と za の両方）。
+function! s:group_parent_mode(...) abort
+  if a:0 && index(['on', 'off'], a:1) < 0
+    echoerr 'GnosisGroupParent [on|off]'
+    return
+  endif
+  let g:gnosis_group_inherit_parent = a:0 ? a:1 ==# 'on' : !get(g:, 'gnosis_group_inherit_parent', 1)
+  echo gnosis#i18n#tr('BranchGroup の起点を親にする: %s', g:gnosis_group_inherit_parent ? 'ON' : 'OFF')
+endfunction
+command! -nargs=? GnosisGroupParent call s:group_parent_mode(<f-args>)
 
 command!          GnosisChooseIndexDir call gnosis#choose_index_root()
 command!          GnosisChooseIndex call gnosis#choose_index_root()
@@ -776,7 +787,7 @@ endfunction
 " Markdown リンクの concealment
 "   [テキスト](url)  →  テキスト  のみ表示
 "   ノーマルモードではカーソル行でも中身を隠す（concealcursor=n）。
-"   挿入モード（とビジュアル/選択）ではカーソル行を展開し、中身が見える。
+"   挿入・ビジュアルモードでもリンク先を隠す。明示的な LinkSource モードで編集する。
 "   隠れた範囲の上にはカーソルを表示できないため、←/→ と h/l は隠れた範囲を
 "   まとめて飛び越える（gnosis#move_visible）。
 " ---------------------------------------------------------------------------
@@ -809,15 +820,9 @@ function! s:setup_conceal() abort
 
   if get(g:, 'gnosis_markdown_conceal_links', 0) && !l:too_large_for_conceal
     setlocal conceallevel=2
-    " ノーマルモードではカーソル行も含めて中身を隠す（表示名だけ見せる）。
-    " 挿入モードは concealcursor に i が無いのでカーソル行が展開され、中身が
-    " 見える。隠れた範囲の上では素の ←/→ が止まって見えるため、
-    " move_visible で隠れた範囲をまとめて飛び越える。
-    " 文字リンクのURLは Normal / Insert / Visual の各モードで隠す。
-    " 編集時にURLを直接見る場合は :setlocal conceallevel=0 で切り替え可能。
+    " A で行末に追記するときも表示名だけを見せる。
+    " :GnosisLinkSource on / off で元の Markdown を編集するモードを切り替える。
     setlocal concealcursor=nvi
-    " 挿入モードで、隠したリンクで終わる行の行末にいるとき、Vim はカーソルを隠す前の位置
-    " （リンクの右に URL の長さぶん空いたところ）に描く。そこにいる間だけその行を展開する
     augroup gnosis_conceal_eol
       autocmd! * <buffer>
       autocmd InsertEnter,CursorMovedI,TextChangedI <buffer> call gnosis#conceal_eol_fix()
@@ -838,6 +843,10 @@ function! s:setup_conceal() abort
     silent! nunmap <buffer> h
     silent! nunmap <buffer> l
     setlocal linebreak
+  endif
+
+  if get(b:, 'gnosis_link_source_on', 0)
+    setlocal conceallevel=0 concealcursor=
   endif
 
   " リンクの構文（[ と ](…) を隠し、表示名に色と下線）は autoload の gnosis#link_syntax。

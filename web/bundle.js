@@ -32592,7 +32592,7 @@ ${h3.join(`
         class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
         attributes: isMd ? { "data-md-href": tg } : {}
       }).range(dispStart, dispEnd));
-      if (!active) {
+      if (!cfg.linkSource) {
         decos.push(Decoration.replace({}).range(base2 + a, dispStart));
         decos.push(Decoration.replace({}).range(dispEnd, base2 + b3));
       }
@@ -33012,6 +33012,11 @@ ${h3.join(`
         let b2 = 0;
         while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
         view3.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) } });
+      },
+      setLinkSource(on2) {
+        if (cfg.linkSource === !!on2) return;
+        cfg.linkSource = !!on2;
+        view3.dispatch({ effects: refreshDecorations.of(null) });
       },
       // 見るだけ: カーソルのある行も含め、全部を描いた見た目にする。カーソルへのスクロールもしない
       setViewOnly(on2) {
@@ -33920,6 +33925,8 @@ ${h3.join(`
     const el2 = $3("mode");
     const showView = viewOnly && !needsTerminal(s15);
     el2.textContent = showView ? "VIEW" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
+    if (last2.copyStack) el2.textContent += " \xB7 COPY STACK";
+    if (last2.linkSource) el2.textContent += " \xB7 LINK SOURCE";
     el2.className = "mode " + (showView ? "viewonly" : MODE_CLASS[m] || "normal");
     $3("file").textContent = s15.file ? s15.file.split("/").pop() : "";
     $3("dirty").textContent = s15.mod ? "\u25CF" : "";
@@ -33937,6 +33944,7 @@ ${h3.join(`
     if (s15.bt === "terminal") return;
     const fileChanged = viewOnly && s15.file && s15.file !== lastViewFile;
     if (s15.file) lastViewFile = s15.file;
+    view2.setLinkSource(!!last2.linkSource);
     if (s15.lines) {
       view2.setText(s15.lines.join("\n"));
       preloadImages(s15.lines);

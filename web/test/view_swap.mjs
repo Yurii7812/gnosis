@@ -97,6 +97,19 @@ step("empty relation sections are hidden", () => {
   v.setVim({ cur: [8, 1], mode: "n" });
   if (!shown().some((x) => /BackLink/.test(x))) throw new Error("heading under the cursor should be shown");
 });
+// カーソル行や A 相当の行末でもリンク先は隠し、明示的なモードだけで展開する。
+step("link source is explicitly toggled", () => {
+  v.setText("# 題\\n\\n- [ ] [修正](261020131029.md)\\n");
+  const shown = () => v.view.contentDOM.textContent;
+  v.setVim({ cur: [3, 1], mode: "n" });
+  if (shown().includes("261020131029.md")) throw new Error("normal cursor revealed link source");
+  v.setVim({ cur: [3, 99], mode: "i" });
+  if (shown().includes("261020131029.md")) throw new Error("append revealed link source");
+  v.setLinkSource(true);
+  if (!shown().includes("261020131029.md")) throw new Error("source mode did not reveal link");
+  v.setLinkSource(false);
+  if (shown().includes("261020131029.md")) throw new Error("source off did not hide link");
+});
 // アンカー（#見出し）つきのリンクも、クリックできるノートのリンク（data-md-href）になること
 step("anchor link is a clickable note link", () => {
   v.setText("# 見出し\\n\\n[二](n.md#2f)\\n[普通](m.md)\\n[外部](https://example.com/a.md#x)\\n");

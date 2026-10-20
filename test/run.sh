@@ -68,6 +68,8 @@ sh "$REPO/test/sort_yomi_net.sh"
 
 # グループへの追加は名前とよみの確認画面を通って必ず並ぶ（za・手で貼る・行を消す・Q・:GnosisYomiReview）
 sh "$REPO/test/group_review_net.sh"
+sh "$REPO/test/requests_7_net.sh"
+sh "$REPO/test/requests_8_net.sh"
 
 # i（行の中）・\L の b / c・\l → g（分岐したグループ・空のグループの空行）・\l → m（マージと取り消し）
 sh "$REPO/test/requests_1020_net.sh"
@@ -145,5 +147,6 @@ python3 "$REPO/test/keys_pty_check.py"
 python3 "$REPO/test/theme_pty_check.py"
 # 新規ノート（zn → Enter）の本文入力位置（Context の後ろの空行に、すぐ書ける）
 python3 "$REPO/test/context_pty_check.py"
+python3 "$REPO/test/link_source_pty_check.py"
 # 本物の gocryptfs の暗号化 vault を複数のウィンドウで使う（gocryptfs / fusermount3 / /dev/fuse が無ければ省略）
 python3 "$REPO/test/session_real_check.py"

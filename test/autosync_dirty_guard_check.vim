@@ -28,7 +28,7 @@ try
   call s:ok('ユーザーの本文編集が保存された', index(readfile(s:v . '/child.md'), 'User edit must be preserved') >= 0)
   call system(s:cmd)
   let s:after = readfile(s:v . '/child.md')
-  call s:ok('保存後の再同期で Group が更新される', index(s:after, 'Group:') >= 0 && index(s:after, '[Index](index.md)') >= 0)
+  call s:ok('保存後の再同期で Group が更新される', index(s:after, 'Group:') >= 0 && match(s:after, '^\[Index\%(:[^]]*\)\=\](index.md)$') >= 0)
   call s:ok('同期後もユーザーの編集は保持', index(s:after, 'User edit must be preserved') >= 0)
 catch
   call add(s:out, 'NG exception: ' . v:exception . ' at ' . v:throwpoint)

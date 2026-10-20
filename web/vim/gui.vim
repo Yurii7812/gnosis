@@ -62,6 +62,8 @@ function! s:snapshot(force) abort
         \ 'file': expand('%:p'),
         \ 'buf': bufnr('%'),
         \ 'mode': l:m,
+        \ 'copyStack': get(g:, 'gnosis_stack_copy_mode', 0),
+        \ 'linkSource': get(b:, 'gnosis_link_source_on', 0),
         \ 'cur': [line('.'), col('.')],
         \ 'bt': &buftype,
         \ 'ft': &filetype,

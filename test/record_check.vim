@@ -73,7 +73,7 @@ try
   call gnosis#record_migrate('夢日記', '旧夢')
   call s:ok('移行: 題を改めて時系列記録の中へ', s:has('old-dream.md', '^title: 旧夢$') && s:has('old-dream.md', '^# 旧夢$') && !s:has('index.md', 'old-dream.md')
         \ && s:has(s:rec, '^\[旧夢\](old-dream.md)$') && s:has('old-dream.md', '^\[時系列記録\](' . s:rec . ')$'))
-  call s:ok('移行: 月のグループは 2026-10-旧夢（日記の 2026-10 と分ける）', s:has('old-month.md', '^title: 2026-10-旧夢$') && s:has('old-dream.md', '^\[2026-10-旧夢\](old-month.md)$') && s:has('old-day.md', '^\[2026-10-旧夢\](old-month.md)$'))
+  call s:ok('移行: 月のグループは 2026-10-旧夢（日記の 2026-10 と分ける）', s:has('old-month.md', '^title: 2026-10-旧夢$') && s:has('old-dream.md', '^\[2026-10-旧夢\](old-month.md)$') && s:has('old-day.md', '^\[2026-10-旧夢\%(:[^]]*\)\=\](old-month.md)$'), string(s:file('old-day.md')) . string(s:file('old-dream.md')))
   call s:ok('移行: その日のノートに record と、その日の日記の上にリンク・今日のノートから外す',
         \ s:has('old-day.md', '^record: "旧夢"$') && s:has('old-diary.md', '^\[2026-10-12-MO-夢-病院\](old-day.md)$')
         \ && len(filter(s:file('old-diary.md'), 'v:val =~# "^\\[.*\\](old-day\\.md)$"')) == 1, string(s:file('old-diary.md')))

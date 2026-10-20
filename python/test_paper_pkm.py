@@ -169,8 +169,8 @@ def test_create_and_regen() -> None:
             check("folgezettel_index" not in d_text and "title: folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
-            check("[Paper-Zettelkasten-Index]" in d_text
-                  or "[Folgezettel-Index]" in d_text, "専用ノートの Parent")
+            check("[Paper-Zettelkasten-Index:" in d_text
+                  or "[Folgezettel-Index:" in d_text, "専用ノートの Parent")
         iw_text = (root / "Index-write.md").read_text(encoding="utf-8")
         check("### Group" in iw_text and "[Paper-Zettelkasten-Index]" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")

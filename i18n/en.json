@@ -1,5 +1,11 @@
 {
   "ja": {
+    "BranchGroup の起点を親にする: %s": "Use the BranchGroup origin as parent: %s",
+    "Enter=登録（BranchGroup の起点を親に） / g=登録だけ（親なし） / o=孤立  (Esc/q キャンセル)": "Enter=join (BranchGroup origin as parent) / g=join only (no parent) / o=isolated (Esc/q cancels)",
+    "Enter=登録＋起点が親 g=登録だけ o=孤立 (Esc)": "Enter=join+origin parent g=join only o=isolated (Esc)",
+    "CopyStack OFF: %d 行をまとめました": "CopyStack OFF: combined %d lines",
+    "CopyStack ON: y で追加・d で切り取り・\\sc で確定": "CopyStack ON: y adds, d cuts, \\sc finishes",
+    "すでにこのグループに入っています。": "Already in this group.",
     "今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / i=行の中 / o=置かない / w=置かずにリンク先をヤンク  (Esc で取り消し)": "Where to put the link in this note: Enter=end of body / t=under a heading / h=below cursor / i=inline / o=nowhere / w=don't place it, yank the target  (Esc cancels)",
     "置き場所: Enter=末 t=見出し h=直下 i=行中 o=なし w=ヤンク (Esc)": "Place: Enter=end t=heading h=below i=inline o=none w=yank (Esc)",
     "Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / a=Context(今のノートにリンク先) / r=Related(相互)": "Enter=end of body / i=inline / p=Parent / b=Branch(child) / h=below cursor / c=Context(this note into the target) / a=Context(the target into this note) / r=Related(both)",

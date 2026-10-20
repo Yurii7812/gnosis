@@ -44,10 +44,10 @@ with tempfile.TemporaryDirectory() as d:
     b = read(root, "b.md")
     c = read(root, "c.md")
     a = read(root, "a.md")
-    check("[A](a.md)" in b and b.index("Group:") < b.index("[A](a.md)"), "B: A の本文にいるので Group: に A が入る")
+    check("[A:B](a.md)" in b and b.index("Group:") < b.index("[A:B](a.md)"), "B: A の本文にいるので Group: に A が入る")
     check("Group:" not in c, "C: A の本文にいない（C から A へ向けて書いただけ）ので Group: は付かない")
     check("[B](b.md)" in a and "Group:" in a, "A: 本文の B は残り、A の Group: もある")
-    check(a.index("[B](b.md)") > a.index("[P](p.md)"), "A: 本文のリンクは Group: の下")
+    check(a.index("[B](b.md)") > a.index("[P:A](p.md)"), "A: 本文のリンクは Group: の下")
     check("Context:" not in a, "A: 不要な Context: を作らない")
 
     # Group: の直後に空行を挟んだ本文のリンクは、Group: に取り込まれない
@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory() as d:
     check("[M](m.md)" in g2 and g2.index("[M](m.md)") > g2.index("[P](p.md)") and "Context:" not in g2,
           "Group: の下の本文のリンクは、Group: にも Context: にもならない")
     m = read(root, "m.md")
-    check("[G2](g2.md)" in m, "M: G2 の本文にいるので Group: に G2 が入る")
+    check("[G2:M](g2.md)" in m, "M: G2 の本文にいるので Group: に G2 が入る")
 
     import io
     before = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
@@ -114,6 +114,23 @@ with tempfile.TemporaryDirectory() as d:
     p_ = read(root, "p.md")
     cb = p_[p_.index("ChildBranch:") + 1:]
     check(cb[0] == "[C](c.md)" and cb[1] == "" and "[A](a.md)" in cb[2:], f"Context にしている子が上: {cb}")
+
+# 同じグループに別名で複数掲載。削除・名前変更・再同期に追従する。
+with tempfile.TemporaryDirectory() as d:
+    root = Path(d)
+    note(root, "a.md", "A", ["本文"])
+    note(root, "b.md", "B", ["[aaa](a.md)", "[bbb](a.md)", "[aaa](a.md#見出し)"], True)
+    sync(root)
+    check("[B:aaa,bbb](b.md)" in read(root, "a.md"), "複数の表示名をまとめ、同じ表示名は重ねない")
+    before = read(root, "a.md")
+    sync(root)
+    check(before == read(root, "a.md"), "別名つき Group の同期は冪等")
+    note(root, "b.md", "改名B", ["[bbb](a.md)"], True)
+    sync(root)
+    check("[改名B:bbb](b.md)" in read(root, "a.md"), "グループ改名と一つの別名削除に追従")
+    note(root, "b.md", "改名B", [], True)
+    sync(root)
+    check("Group:" not in read(root, "a.md"), "最後の別名を消すと所属も消える")
 
 print("all passed" if ng == 0 else f"{ng} failed")
 sys.exit(1 if ng else 0)

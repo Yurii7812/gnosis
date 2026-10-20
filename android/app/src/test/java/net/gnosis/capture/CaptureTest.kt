@@ -12,6 +12,20 @@ class CaptureTest {
         Entry("3", 3, "仕事", "仕事のメモ"),
     )
 
+    @Test fun importedRemovalKeepsRecordsAndUnimportedTopics() {
+        val es = listOf(Entry("a", 1, "済み", "a"), Entry("b", 2, "途中", "b"),
+            Entry("c", 3, "途中", "c"), Entry("d", 4, "夢", "d"),
+            Entry("e", 5, DIARY, "e"), Entry("f", 6, "PC記録", "f"))
+        val settings = Settings(topics = listOf(DIARY, "済み", "途中", "夢", "PC記録", "まだ空"), lastTopic = "済み",
+            topicModes = mapOf("済み" to TopicMode(single = true), "夢" to TopicMode(record = true)))
+        val out = settingsAfterImportedRemoval(es, settings, setOf("a", "b", "d", "e", "f"), setOf("PC記録"))
+        assertEquals(listOf(DIARY, "途中", "夢", "PC記録", "まだ空"), out.topics)
+        assertEquals(ALL, out.lastTopic)
+        assertFalse("済み" in out.topicModes)
+        assertTrue(out.topicModes["夢"]!!.record)
+        assertEquals(settings, settingsAfterImportedRemoval(es, settings, emptySet()))
+    }
+
     @Test fun filterAndComposeDestination() {
         assertEquals(entries, visibleEntries(entries, ALL))
         assertEquals(listOf(entries[0]), visibleEntries(entries, UNASSIGNED))
