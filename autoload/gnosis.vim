@@ -5881,6 +5881,88 @@ function! gnosis#capture_backfill(...) abort
   endif
 endfunction
 
+" 統合 Agenda: vault 中の Markdown タスク（- [ ]）を期限ごとに集める: :GnosisAgenda [YYYY-MM-DD]
+"   <CR> … そのタスクの行へ移る / x … 完了にする（繰り返しは次の回を作る） / r … 読み直す / q … 閉じる
+function! gnosis#agenda(...) abort
+  let l:root = s:get_pkm_root()
+  if empty(l:root)
+    return
+  endif
+  let l:root = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  let l:today = a:0 && !empty(a:1) ? a:1 : strftime('%Y-%m-%d')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/tasks.py', 'agenda', l:root, l:today], 'shellescape(v:val)'), ' ')
+  let l:ag = json_decode(system(l:cmd))
+  let l:titles = [['overdue', gnosis#i18n#tr('期限切れ')], ['today', gnosis#i18n#tr('今日')], ['soon', gnosis#i18n#tr('近日（7日以内）')],
+        \ ['later', gnosis#i18n#tr('それ以降')], ['undated', gnosis#i18n#tr('期限なし')], ['blocked', gnosis#i18n#tr('ブロック中（先のタスクが未完了）')],
+        \ ['not_started', gnosis#i18n#tr('開始前')]]
+  let l:lines = ['# Agenda ' . l:today, '']
+  let l:where = {}
+  for [l:k, l:name] in l:titles
+    if empty(l:ag[l:k])
+      continue
+    endif
+    call add(l:lines, '## ' . l:name . ' (' . len(l:ag[l:k]) . ')')
+    for l:t in l:ag[l:k]
+      let l:when = l:t.due . (empty(l:t.due_time) ? '' : ' ' . l:t.due_time)
+      call add(l:lines, '- [ ] ' . l:t.text . (empty(l:when) ? '' : '  (' . l:when . ')') . '  — ' . l:t.file . ':' . l:t.line)
+      let l:where[len(l:lines)] = [l:t.file, l:t.line]
+    endfor
+    call add(l:lines, '')
+  endfor
+  if len(l:lines) == 2
+    call add(l:lines, gnosis#i18n#tr('未完了のタスクはありません'))
+  endif
+  new
+  setlocal buftype=nofile bufhidden=wipe noswapfile
+  call setline(1, l:lines)
+  setlocal nomodifiable
+  let b:gnosis_agenda = {'root': l:root, 'where': l:where, 'today': l:today}
+  nnoremap <buffer> <silent> <CR> :call <SID>agenda_jump()<CR>
+  nnoremap <buffer> <silent> x :call <SID>agenda_complete()<CR>
+  nnoremap <buffer> <silent> r :call <SID>agenda_reload()<CR>
+  nnoremap <buffer> <silent> q :close<CR>
+endfunction
+
+function! s:agenda_target() abort
+  return get(get(b:, 'gnosis_agenda', {'where': {}}).where, line('.'), [])
+endfunction
+
+function! s:agenda_jump() abort
+  let l:t = s:agenda_target()
+  if empty(l:t)
+    return
+  endif
+  let l:root = b:gnosis_agenda.root
+  close
+  execute 'edit ' . fnameescape(l:root . '/' . l:t[0])
+  call cursor(l:t[1], 1)
+endfunction
+
+function! s:agenda_complete() abort
+  let l:t = s:agenda_target()
+  if empty(l:t)
+    return
+  endif
+  let l:root = b:gnosis_agenda.root
+  call gnosis#save_current_note()
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/tasks.py', 'complete', l:root . '/' . l:t[0], l:t[1], b:gnosis_agenda.today], 'shellescape(v:val)'), ' ')
+  let l:r = json_decode(system(l:cmd))
+  if !get(l:r, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:r, 'error', '') | echohl NONE
+    return
+  endif
+  silent! checktime
+  call s:agenda_reload()
+endfunction
+
+function! s:agenda_reload() abort
+  let l:today = b:gnosis_agenda.today
+  let l:at = line('.')
+  close
+  call gnosis#agenda(l:today)
+  call cursor(min([l:at, line('$')]), 1)
+endfunction
+
 " PC の時系列記録の名前（日記を除く）をスマホのアプリへ渡す。スマホで時系列記録を書くときはこの中から選ぶ
 function! s:capture_push_records(root) abort
   let l:notes = s:diary_scan(a:root)

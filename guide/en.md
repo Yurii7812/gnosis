@@ -239,7 +239,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 
 ### Diary, encryption, trash, paper PKM, images
 - `:GnosisRefreshColors` clear leftover highlights and redraw the colors ・ `:GnosisColorDoctor` write a color diagnostics log to the logs folder of the Gnosis home
-- `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` diary
+- `:GnosisAgenda` [YYYY-MM-DD] … collect every `- [ ]` in the vault by due date (`📅 2026-10-25` or `due:`): overdue, today, soon, no date, blocked. Supports `🔁 weekly` repeats, `⏫` priority, `id:` / `after:` dependencies. `Enter` jumps to the line, `x` completes (a repeating task gets its next occurrence) ・ `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` diary
 - `:GnosisMount` `:GnosisLock` `:GnosisSetPassword` `:GnosisRemovePassword` `:GnosisBackup` `:GnosisExitCleanup` encryption
 - `:GnosisTrash` `:GnosisTrashList` `:GnosisTrashEmpty` trash ・ `:GnosisPaperIndex` paper PKM Index ・ `:GnosisScan` import scans
 - `:GnosisSetImageSize` / `:SetImageSize` image size ・ `:GnosisGallery` / `:Gallery` ・ `:GnosisGalleryFolder` / `:GalleryFolder` image gallery

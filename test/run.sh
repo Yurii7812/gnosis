@@ -33,6 +33,7 @@ python3 "$REPO/python/test_capture_import.py"
 python3 "$REPO/python/test_capture_merge.py"
 python3 "$REPO/python/test_capture_diag.py"
 python3 "$REPO/python/test_gnosis_graph.py"
+python3 "$REPO/python/test_tasks.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
 
@@ -86,6 +87,7 @@ sh "$REPO/test/capture_import_net.sh"
 sh "$REPO/test/capture_merge_net.sh"
 sh "$REPO/test/capture_diary_net.sh"
 sh "$REPO/test/capture_embed_net.sh"
+sh "$REPO/test/agenda_net.sh"
 sh "$REPO/test/capture_topics_net.sh"
 
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）

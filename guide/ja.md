@@ -239,7 +239,7 @@
 
 ### 日記・暗号・ゴミ箱・紙PKM・画像
 - `:GnosisRefreshColors` 検索ハイライトなどの残りを消して配色を描き直す ・ `:GnosisColorDoctor` 配色の診断ログを Gnosis ホームの logs に書く
-- `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` 日記
+- `:GnosisAgenda` [YYYY-MM-DD] … vault 中の `- [ ]` を期限（`📅 2026-10-25`・`due:`）ごとに集める（期限切れ・今日・近日・期限なし・ブロック中。`🔁 weekly` などの繰り返し、`⏫` 優先度、`id:` と `after:` の依存に対応）。`Enter` でその行へ、`x` で完了（繰り返しは次の回を作る） ・ `:GnosisToday` `:GnosisDiaryAdopt` `:GnosisDiaryUpdate` / `:SimpleDiaryUpdate` 日記
 - `:GnosisMount` `:GnosisLock` `:GnosisSetPassword` `:GnosisRemovePassword` `:GnosisBackup` `:GnosisExitCleanup` 暗号化
 - `:GnosisTrash` `:GnosisTrashList` `:GnosisTrashEmpty` ゴミ箱 ・ `:GnosisPaperIndex` 紙PKM Index ・ `:GnosisScan` スキャン取り込み
 - `:GnosisSetImageSize` / `:SetImageSize` 画像サイズ ・ `:GnosisGallery` / `:Gallery` ・ `:GnosisGalleryFolder` / `:GalleryFolder` 画像ギャラリー

@@ -506,6 +506,7 @@ nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
 nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
 command! GnosisQuick call gnosis#quick_note()
 command! -nargs=? -complete=file GnosisCaptureImport call gnosis#capture_import(<q-args>)
+command! -nargs=? GnosisAgenda call gnosis#agenda(<f-args>)
 command! GnosisCaptureConflicts call gnosis#capture_conflicts()
 command! GnosisCaptureDuplicates call gnosis#capture_duplicates()
 command! -nargs=? GnosisCaptureBackfill call gnosis#capture_backfill(<f-args>)

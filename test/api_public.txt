@@ -12,6 +12,7 @@ gnosis#add_from_clipboard
 gnosis#add_link_to_parent
 gnosis#add_to_parent
 gnosis#after_shell_rm
+gnosis#agenda
 gnosis#apk_install
 gnosis#at_add
 gnosis#at_add_reverse
