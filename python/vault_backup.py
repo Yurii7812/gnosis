@@ -42,15 +42,46 @@ def _sha256(data: bytes | Path) -> str:
     return h.hexdigest()
 
 
+IGNORE_FILE = ".gnosis/backup-ignore"
+
+
+def ignore_patterns(root: Path) -> list[str]:
+    """バックアップから外すパターン（`<vault>/.gnosis/backup-ignore`。1 行 1 つ・# で始まる行と空行は無視）。
+    `大きい動画/`（末尾 / はフォルダ）・`*.mp4`・`下書き/*`・`memo.md` のように、vault からの相対パスに fnmatch で当てる。"""
+    try:
+        lines = (root / IGNORE_FILE).read_text(encoding="utf-8").split("\n")
+    except (OSError, UnicodeDecodeError):
+        return []                                    # 読めない除外ファイルでバックアップを止めない（除外なし=多めに含める側に倒す）
+    return [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+
+
+def _ignored(rel: str, patterns: list[str]) -> bool:
+    import fnmatch
+    parts = rel.split("/")
+    for pat in patterns:
+        if pat.endswith("/"):
+            d = pat.rstrip("/")
+            if any(fnmatch.fnmatchcase("/".join(parts[:i + 1]), d) or fnmatch.fnmatchcase(parts[i], d) for i in range(len(parts) - 1)):
+                return True
+        elif fnmatch.fnmatchcase(rel, pat) or fnmatch.fnmatchcase(parts[-1], pat):
+            return True
+    return False
+
+
 def _files(root: Path):
-    """バックアップの対象（相対パス, 絶対パス）。ドット始まりのフォルダ・ファイルとシンボリックリンクは含めない。"""
+    """バックアップの対象（相対パス, 絶対パス）。ドット始まりのフォルダ・ファイルとシンボリックリンクは含めない。
+    `.gnosis/backup-ignore` のパターンに当たるものも含めない。"""
+    patterns = ignore_patterns(root)
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and not (Path(dirpath) / d).is_symlink())
         for name in sorted(filenames):
             p = Path(dirpath) / name
             if name.startswith(".") or p.is_symlink():
                 continue
-            yield p.relative_to(root).as_posix(), p
+            rel = p.relative_to(root).as_posix()
+            if patterns and _ignored(rel, patterns):
+                continue
+            yield rel, p
 
 
 def _manifest_path(archive: Path) -> Path:

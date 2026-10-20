@@ -7535,6 +7535,47 @@ function! gnosis#preset_autoload() abort
   return !empty(l:d.auto) && has_key(l:d.profiles, l:d.auto) ? s:set_apply(l:d.profiles[l:d.auto]) : 0
 endfunction
 
+" Git 連携（UT05）。  :GnosisGit status | diff [ノート] | log [ノート] | show ノート 版 | commit メッセージ
+"   status・diff・log・show は読み取り専用。commit はメッセージが要り、ノート・添付だけ(.state/.gnosis は含めない)。push・pull はしない
+function! gnosis#git(action, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if index(['status', 'diff', 'log', 'show', 'commit'], a:action) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('status / diff / log / show / commit のどれかです') | echohl NONE
+    return
+  endif
+  let l:args = copy(a:000)
+  if a:action ==# 'commit'
+    if empty(l:args)
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('コミットのメッセージを指定してください') | echohl NONE
+      return
+    endif
+    if s:nt_modified()
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('未保存の編集があります。保存してから実行してください') | echohl NONE
+      return
+    endif
+    let l:args = [join(l:args, ' ')]
+    let l:out = system(join(map([gnosis#python_cmd(), s:note_root . '/python/gitops.py', l:root, 'commit'] + l:args, 'shellescape(v:val)'), ' '))
+    try
+      let l:r = json_decode(l:out)
+    catch
+      let l:r = {'error': l:out}
+    endtry
+    if has_key(l:r, 'error')
+      echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    else
+      echo 'Gnosis: ' . printf(gnosis#i18n#tr('コミットしました（%d ファイル）: %s'), l:r.files, l:r.rev)
+    endif
+    return
+  endif
+  if index(['diff', 'log'], a:action) >= 0 && empty(l:args) && !empty(s:nt_rel(l:root))
+    let l:args = [s:nt_rel(l:root)]
+  endif
+  call s:ed_show('gitops.py', [a:action] + l:args)
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()

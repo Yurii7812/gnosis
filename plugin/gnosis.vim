@@ -513,6 +513,7 @@ command! GnosisCheck call gnosis#check_vault()
 command! GnosisGraphReport call gnosis#graph_report()
 command! -nargs=+ -complete=custom,gnosis#ai_complete GnosisAi call gnosis#ai(<f-args>)
 command! GnosisBacklinks call gnosis#backlinks()
+command! -nargs=+ GnosisGit call gnosis#git(<f-args>)
 command! -nargs=+ GnosisPreset call gnosis#preset(<f-args>)
 augroup gnosis_preset
   autocmd!

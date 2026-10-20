@@ -119,6 +119,7 @@ gnosis#folgezettel#move
 gnosis#folgezettel#toggle
 gnosis#forward
 gnosis#get_link_under_cursor
+gnosis#git
 gnosis#go_back
 gnosis#go_forward
 gnosis#graph_paths

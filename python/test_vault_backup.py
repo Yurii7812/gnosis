@@ -55,6 +55,39 @@ class BackupTest(unittest.TestCase):
         self.assertEqual(vb.verify(r["archive"]), {"ok": True, "files": 3, "problems": []})
         self.assertEqual(sorted(p.name for p in self.out.iterdir()), ["20261020223000-vault.manifest.json", "20261020223000-vault.tar.gz"])
 
+    def test_ignore_patterns_select_backup_targets(self):
+        r = self.root
+        (r / "大きい動画").mkdir()
+        (r / "大きい動画" / "m.mp4").write_bytes(b"video")
+        (r / "sub" / "deep").mkdir()
+        (r / "sub" / "deep" / "x.md").write_text("# x\n", encoding="utf-8")
+        (r / "下書き.md").write_text("# 下書き\n", encoding="utf-8")
+        (r / "clip.mp4").write_bytes(b"v")
+        (r / ".gnosis" / "backup-ignore").write_text("# 動画は外す\n\n大きい動画/\n*.mp4\nsub/deep/*\n下書き.md\n", encoding="utf-8")
+        before = self.snapshot()
+        self.assertEqual(vb.ignore_patterns(r), ["大きい動画/", "*.mp4", "sub/deep/*", "下書き.md"])          # コメントと空行は無視
+        names = {rel for rel, _ in vb._files(r)}
+        self.assertEqual(names, {"a.md", "sub/b.md", "pic.png"})                                          # フォルダ・拡張子・サブパス・単一ファイルが外れる
+        info = vb.backup(r, self.out, now=NOW)
+        self.assertEqual(info["files"], 3)
+        self.assertTrue(info["verified"])
+        restored = Path(self.tmp.name) / "restored"
+        vb.restore(info["archive"], restored)
+        got = {p.relative_to(restored).as_posix() for p in restored.rglob("*") if p.is_file()}
+        self.assertEqual(got, {"a.md", "sub/b.md", "pic.png"})                                            # 復元にも含まれない
+        self.assertEqual(before, self.snapshot())                                                         # 元の vault は不変(除外は書き込まない)
+
+    def test_ignore_file_absent_or_broken_changes_nothing(self):
+        base = {rel for rel, _ in vb._files(self.root)}
+        self.assertEqual(vb.ignore_patterns(self.root), [])
+        (self.root / ".gnosis" / "backup-ignore").write_bytes(b"\xff\xfe not utf8 \x00")
+        try:
+            vb.ignore_patterns(self.root)
+        except UnicodeDecodeError:
+            self.fail("読めない除外ファイルで落ちてはいけない")
+        (self.root / ".gnosis" / "backup-ignore").write_text("", encoding="utf-8")
+        self.assertEqual({rel for rel, _ in vb._files(self.root)}, base)                                  # 空なら何も外れない
+
     def test_refuses_overwrite_and_inside_output(self):
         vb.backup(self.root, self.out, now=NOW)
         with self.assertRaises(ValueError):
