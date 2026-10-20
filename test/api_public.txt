@@ -62,6 +62,7 @@ gnosis#clip
 gnosis#clip_yank
 gnosis#clipboard_copy
 gnosis#clipboard_paste
+gnosis#collect
 gnosis#color#base_of
 gnosis#color#contrast
 gnosis#color#doctor

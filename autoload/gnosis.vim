@@ -7763,6 +7763,63 @@ function! gnosis#import(action, ...) abort
   call s:ga_show(l:root, l:lines, {})
 endfunction
 
+" 外部情報の収集（AI11）。既定では通信しない。  :GnosisCollect status|enable|disable|allow URL|deny URL|run
+"   通信は「enable で有効にし・allow で許可した URL だけ・run を実行した」ときだけ。run は許可した URL の一覧を見せて確認する(! で確認なし)。
+"   書くのは 収集/ への新しいノートだけ。既存のノートは変えない。定期実行は cron / systemd timer から collector.py run を呼ぶ
+function! gnosis#collect(bang, action, ...) abort
+  let l:root = s:nt_root()
+  if empty(l:root)
+    return
+  endif
+  if index(['status', 'enable', 'disable', 'allow', 'deny', 'run'], a:action) < 0
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('status / enable / disable / allow / deny / run のどれかです') | echohl NONE
+    return
+  endif
+  if index(['allow', 'deny'], a:action) >= 0 && a:0 < 1
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('URL を指定してください') | echohl NONE
+    return
+  endif
+  let l:py = gnosis#python_cmd()
+  let l:script = s:note_root . '/python/collector.py'
+  if a:action ==# 'run' && !a:bang
+    let l:st = json_decode(system(join(map([l:py, l:script, l:root, 'status'], 'shellescape(v:val)'), ' ')))
+    if !get(l:st, 'enabled', 0) || empty(get(l:st, 'allow', []))
+      echo 'Gnosis: ' . gnosis#i18n#tr('収集が有効でないか、許可した URL がありません。通信しませんでした')
+      return
+    endif
+    let l:msg = gnosis#i18n#tr('許可した次の URL に接続します（読むだけです）:') . "\n" . join(map(copy(l:st.allow), '"  " . v:val'), "\n")
+    if confirm(l:msg, gnosis#i18n#tr("&はい\n&いいえ"), 2) != 1
+      return
+    endif
+  endif
+  let l:out = system(join(map([l:py, l:script, l:root, a:action] + (a:0 > 0 ? [a:1] : []), 'shellescape(v:val)'), ' '))
+  try
+    let l:r = json_decode(l:out)
+  catch
+    let l:r = {'error': l:out}
+  endtry
+  if has_key(l:r, 'error')
+    echohl WarningMsg | echo 'Gnosis: ' . l:r.error | echohl NONE
+    return
+  endif
+  let l:lines = ['# ' . gnosis#i18n#tr('外部情報の収集') . ' — ' . a:action, '']
+  if a:action ==# 'run'
+    if !get(l:r, 'ran', 0)
+      let l:lines += [get(l:r, 'reason', '')]
+    else
+      let l:lines += [printf(gnosis#i18n#tr('新しいノート %d 件・失敗したフィード %d 件'), l:r.new, l:r.errors), '']
+      for l:f in l:r.feeds
+        call add(l:lines, printf('- %s — %s %d / %s %d%s', l:f.url, gnosis#i18n#tr('新規'), l:f.new, gnosis#i18n#tr('既知'), l:f.skipped, empty(l:f.error) ? '' : ' / ' . gnosis#i18n#tr('失敗') . ': ' . l:f.error))
+      endfor
+    endif
+  else
+    let l:st = a:action ==# 'status' ? l:r : json_decode(system(join(map([l:py, l:script, l:root, 'status'], 'shellescape(v:val)'), ' ')))
+    let l:lines += [gnosis#i18n#tr('収集') . ': ' . (get(l:st, 'enabled', 0) ? gnosis#i18n#tr('有効') : gnosis#i18n#tr('無効（通信しません）')), gnosis#i18n#tr('最後の実行') . ': ' . get(l:st, 'last_run', ''), '', gnosis#i18n#tr('許可した URL') . ':']
+    let l:lines += map(copy(get(l:st, 'allow', [])), '"- " . v:val') + (empty(get(l:st, 'allow', [])) ? [gnosis#i18n#tr('なし')] : [])
+  endif
+  call s:ga_show(l:root, l:lines, {})
+endfunction
+
 " Markdown 互換性検査（UT08）と性能診断（UT12）。読み取り専用。  :GnosisCompat [error|warn|info]   :GnosisProfile
 function! s:dg_show(args) abort
   let l:root = s:nt_root()
