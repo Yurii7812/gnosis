@@ -65,6 +65,7 @@ setTimeout(() => {
     contentMaxWidth: cs(".cm-content", "maxWidth"), contentPad: cs(".cm-content", "paddingLeft"),
     lineHeight: cs(".cm-scroller", "lineHeight"),
     fontFamily: cs(".cm-scroller", "fontFamily"),
+    bodyColor: getComputedStyle(document.body).color,
     h1: { size: cs(".cm-md-h1", "fontSize"), weight: cs(".cm-md-h1", "fontWeight"), color: cs(".cm-md-h1", "color"), border: cs(".cm-md-h1", "borderBottomWidth") + " " + cs(".cm-md-h1", "borderBottomStyle") },
     h2: { size: cs(".cm-md-h2", "fontSize"), border: cs(".cm-md-h2", "borderBottomWidth") },
     h3: { size: cs(".cm-md-h3", "fontSize"), color: cs(".cm-md-h3", "color"), border: cs(".cm-md-h3", "borderBottomWidth") },
@@ -110,7 +111,7 @@ try {
   check(L.lineHeight === "24px", "light: 行間 1.5（16px → 24px） " + L.lineHeight);
   check(/Segoe UI|Helvetica|Noto Sans/.test(L.fontFamily) && !/^"?Noto Sans JP"?,/.test(L.fontFamily), "light: GitHub のフォントスタック " + L.fontFamily);
   check(L.h1.size === "32px" && L.h1.weight === "600" && L.h1.border === "1px solid", "light: h1 は 2em・太さ 600・下線 " + JSON.stringify(L.h1));
-  check(L.h1.color === "rgb(31, 35, 40)", "light: 見出しは本文と同じ色（茶色にしない） " + L.h1.color);
+  check(L.h1.color === L.bodyColor, "light: 見出しは本文と同じ色（茶色にしない） " + L.h1.color + " / " + L.bodyColor);
   check(L.h2.size === "24px" && L.h2.border === "1px", "light: h2 は 1.5em・下線 " + JSON.stringify(L.h2));
   check(L.h3.size === "20px" && L.h3.border === "0px", "light: h3 は 1.25em・下線なし " + JSON.stringify(L.h3));
   check(L.code.bg === "rgba(129, 139, 152, 0.12)" && L.code.pad === "5.44px", "light: インラインコード " + JSON.stringify(L.code));
