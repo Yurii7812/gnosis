@@ -91,6 +91,7 @@ case "$cmd" in
   mv) src=$(rel "$1"); dst=$(rel "$2"); [ -f "$src" ] && mv "$src" "$dst" || exit 1 ;;
   cat) f=$(rel "$1"); [ -f "$f" ] && cat "$f" || exit 1 ;;
   rm) {'exit 1' if fail_rm else 'shift; rm -f "$(rel "$1")"'} ;;
+  tee) cat > "$(rel "$1")" ;;
 esac
 """, encoding="utf-8")
         script.chmod(script.stat().st_mode | stat.S_IEXEC)
@@ -110,7 +111,11 @@ esac
         d = self.fake_adb(phone)
         res = self.with_adb(d, lambda: pl.pull(self.root, TODAY))
         self.assertEqual(len(res["applied"]), 1)
-        self.assertEqual(sorted(p.name for p in phone.iterdir()), [])                                # 反映できたら、スマホ側の記録は消える
+        self.assertEqual(sorted(p.name for p in phone.iterdir() if p.name.startswith("agenda-done")), [])      # 反映できたら、スマホ側の記録は消える
+        sent = (phone / "agenda.tsv").read_text(encoding="utf-8")                                     # 反映後の最新の予定を送り直す(完了済みは含まれない)
+        self.assertEqual(res["refreshed"], sum(1 for ln in sent.split("\n") if ln.startswith("task\t")))
+        self.assertNotIn(self.k("a.md", "ゴミ出し"), sent)                                              # 完了にした a.md のゴミ出し(別のノートの同名のタスクは残る)
+        self.assertIn(self.k("a.md", "電球"), sent)
         again = self.with_adb(d, lambda: pl.pull(self.root, TODAY))                                 # もう一度は何もない
         self.assertEqual((again["total"], again["applied"]), (0, []))
 
@@ -133,6 +138,20 @@ esac
             self.with_adb(d, lambda: pl.pull(self.root, TODAY))
         self.assertIn("消せませんでした", str(cm.exception))
         self.assertIn("- [x] ゴミ出し", (self.root / "a.md").read_text(encoding="utf-8"))            # 反映自体は済んでいる
+
+    def test_refresh_failure_is_reported_not_fatal_and_can_be_skipped(self):
+        phone = self.base / "phone"; phone.mkdir()
+        (phone / "agenda-done.tsv").write_text(self.done(self.k("a.md", "ゴミ出し")), encoding="utf-8")
+        d = self.fake_adb(phone)
+        (d / "adb").write_text((d / "adb").read_text(encoding="utf-8").replace("  tee)", "  tee) exit 1 ;;\n  tee_unused)"), encoding="utf-8")   # 送り直しだけ失敗する
+        res = self.with_adb(d, lambda: pl.pull(self.root, TODAY))
+        self.assertEqual(len(res["applied"]), 1)                                                      # 反映は済んでいる
+        self.assertIn("スマホへ送れませんでした", res["refresh_error"])
+        self.assertIn("- [x] ゴミ出し", (self.root / "a.md").read_text(encoding="utf-8"))
+        (phone / "agenda-done.tsv").write_text(self.done(self.k("a.md", "電球")), encoding="utf-8")
+        d2 = self.fake_adb(phone)
+        res2 = self.with_adb(d2, lambda: pl.pull(self.root, TODAY, refresh=False))
+        self.assertNotIn("refreshed", res2)
 
     def test_no_adb(self):
         old = os.environ["PATH"]

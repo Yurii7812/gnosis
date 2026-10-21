@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -45,6 +47,13 @@ private fun AgendaScreen() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val store = remember { AgendaStore(ctx) }
     var version by remember { mutableIntStateOf(0) }
+    // 画面に戻ったとき(PC から新しい予定が届いたあと・通知から開いたとき)に、予定を読み直す
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) version++ }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
     var prefs by remember { mutableStateOf(AgendaNotifier.load(ctx)) }
     val data = remember(version) { store.visible() }
     val today = LocalDate.now()

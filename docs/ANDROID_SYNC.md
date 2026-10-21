@@ -36,7 +36,7 @@
 
 ## 予定（タスク）の同期（TM16〜TM18）
 PC → スマホ: `python/agenda_push.py push`（`:GnosisPushAgenda`）が、未完了のタスクを `files/agenda.tsv`（タブ区切り・先頭 `# gnosis-agenda v1`）へ adb `run-as` で書く（一時ファイル → mv）。列: `task キー 期限 時刻 優先度 ノートの題 本文`。キーは `sha1(ノートのパス + NUL + 本文)` の先頭 10 桁（行が動いても変わらない）。
-スマホ → PC: アプリで「完了」を押すと `files/agenda-done.tsv` に `done キー 時刻` を追記する。`python/agenda_pull.py pull`（`:GnosisPullDone`）が、前回の残り（`agenda-done.processing`）→ 新しい分の順に、名前を変えてから読み、キーが一致する**未完了のタスクだけ**を `tasks.complete` で完了にし、反映できたらスマホ側の記録を消す。
+スマホ → PC: アプリで「完了」を押すと `files/agenda-done.tsv` に `done キー 時刻` を追記する。`python/agenda_pull.py pull`（`:GnosisPullDone`）が、前回の残り（`agenda-done.processing`）→ 新しい分の順に、名前を変えてから読み、キーが一致する**未完了のタスクだけ**を `tasks.complete` で完了にし、反映できたらスマホ側の記録を消し、**反映後の最新の予定を送り直す**（記録を消すと、スマホが古い予定のまま完了済みを隠せず、画面に復活して見えるため。実機で見つけた不具合）。
 クイックタスク追加は、アプリのメモ（`- [ ] 本文 📅 日付`）として保存し、従来の `\M` で取り込む。
 アプリ側（`android/`）: `Agenda.kt`（純粋なロジック）・`AgendaStore.kt`・`AgendaNotifier.kt`（朝のまとめ・時刻つきの通知・完了/10 分後に）・`AgendaActivity.kt`・`AgendaWidget.kt`・`QuickTaskActivity.kt`。`MainActivity` は変えていない（起動口は別に追加）。
 **実機での通知・ウィジェット・画面の確認は未実施。**

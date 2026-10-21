@@ -5,7 +5,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,16 +22,17 @@ import java.time.LocalDate
 class QuickTaskActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)   // 画面の幅いっぱいに。縦は中身の分だけ
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(Modifier.fillMaxSize()) {
+                Surface(Modifier.fillMaxWidth()) {
                     var text by remember { mutableStateOf("") }
                     var due by remember { mutableIntStateOf(0) }   // 0 なし / 1 今日 / 2 明日 / 3 来週
                     var high by remember { mutableStateOf(false) }
-                    Column(Modifier.systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("タスクを足す", style = MaterialTheme.typography.titleLarge)
                         OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("やること") }, modifier = Modifier.fillMaxWidth())
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {      // 狭い画面でも「来週」が切れない
                             listOf("期限なし", "今日", "明日", "来週").forEachIndexed { i, l -> FilterChip(selected = due == i, onClick = { due = i }, label = { Text(l) }) }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = high, onCheckedChange = { high = it }); Text("急ぎ") }

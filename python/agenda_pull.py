@@ -84,7 +84,7 @@ def _drain(exe: str, root: str | Path, today: dt.date | None) -> dict | None:
     return res
 
 
-def pull(root: str | Path, today: dt.date | None = None) -> dict:
+def pull(root: str | Path, today: dt.date | None = None, refresh: bool = True) -> dict:
     exe = _adb()
     if not exe:
         raise ValueError("adb が見つかりません")
@@ -100,7 +100,15 @@ def pull(root: str | Path, today: dt.date | None = None) -> dict:
         results.append(new)
     if not results:
         return {"applied": [], "missing": [], "total": 0, "note": "スマホに未反映の完了はありません"}
-    return {"applied": [x for r in results for x in r["applied"]], "missing": [x for r in results for x in r["missing"]], "total": sum(r["total"] for r in results)}
+    out = {"applied": [x for r in results for x in r["applied"]], "missing": [x for r in results for x in r["missing"]], "total": sum(r["total"] for r in results)}
+    if refresh:
+        # 反映して完了の記録を消すと、スマホは古い予定(agenda.tsv)を持ったまま完了済みを隠せなくなり、画面に復活して見える。
+        # 反映後の最新の予定を送り直す(失敗しても反映は済んでいるので、結果に書くだけ)
+        try:
+            out["refreshed"] = ap.push(root, today)["pushed"]
+        except (ValueError, OSError, subprocess.SubprocessError) as e:
+            out["refresh_error"] = str(e)[:200]
+    return out
 
 
 def main(argv: list[str]) -> int:
@@ -109,7 +117,7 @@ def main(argv: list[str]) -> int:
         if cmd == "apply":
             r = apply_text(root, Path(rest[0]).read_text(encoding="utf-8"))
         elif cmd == "pull":
-            r = pull(root)
+            r = pull(root, refresh="--no-refresh" not in rest)
         else:
             print(__doc__, file=sys.stderr)
             return 2

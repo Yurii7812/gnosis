@@ -35,7 +35,7 @@
             android:name=".QuickTaskActivity"
             android:label="タスクを足す"
             android:exported="false"
-            android:theme="@android:style/Theme.Material.Dialog"
+            android:theme="@android:style/Theme.Material.Dialog.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
         <receiver android:name=".AgendaMorningReceiver" android:exported="false" />
         <receiver android:name=".AgendaTimedReceiver" android:exported="false" />
