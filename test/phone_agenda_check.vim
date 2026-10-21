@@ -10,7 +10,7 @@ let g:gnosis_root = $D . '/v/'
 redir => s:m0
 silent GnosisPullDone
 redir END
-call assert_match('反映しました（0 件', s:m0)
+call assert_match('反映しました（完了 0・編集 0・反映できなかったもの 0）', s:m0)
 " 送る
 GnosisPushAgenda
 call assert_true(filereadable($D . '/phone/agenda.tsv'))

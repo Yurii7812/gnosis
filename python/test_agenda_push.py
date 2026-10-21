@@ -50,7 +50,7 @@ class AgendaPushTest(unittest.TestCase):
         self.assertEqual(lines[1], "generated\t2026-10-21T07:00")
         for ln in lines[2:]:
             f = ln.split("\t")
-            self.assertEqual((len(f), f[0]), (7, "task"), ln)                               # 本文・題にタブがあっても列がずれない
+            self.assertEqual((len(f), f[0]), (10, "task"), ln)                              # 本文・題にタブがあっても列がずれない(7 列目までは v1、あとに所要時間・通知・繰り返し)
         self.assertRegex(tsv, r"task\t[0-9a-f]{10}\t2026-10-21\t\t\t仕事 のタブ\t資料 を送る")      # タブは空白に・キーは 10 桁
 
     def test_task_key_is_stable_and_distinct(self):
@@ -147,6 +147,15 @@ exit 0
         self.assertEqual(run("write", str(Path(self.tmp.name) / "x.tsv"), "2026-10-21")[0], 0)
         self.assertEqual(run("write", str(Path(self.tmp.name) / "x.tsv"))[0], 1)
         self.assertEqual(run("bogus")[0], 2)
+
+    def test_extra_columns_duration_reminds_repeat(self):
+        (self.root / "e.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: 予定\n---\n\n- [ ] 会議 📅 2026-10-21 09:30 ⌛ 1h30m 🔔 1d,10m 🔁 weekly\n- [ ] 通知なし 📅 2026-10-21 🔔 none\n- [ ] ふつう 📅 2026-10-21 10:00\n", encoding="utf-8")
+        rows = {r["text"]: r for r in ap.snapshot(self.root, TODAY)["tasks"]}
+        self.assertEqual((rows["会議"]["duration"], rows["会議"]["reminds"], rows["会議"]["repeat"]), (90, "1d,10m", "weekly"))
+        self.assertEqual(rows["通知なし"]["reminds"], "none")
+        self.assertEqual((rows["ふつう"]["duration"], rows["ふつう"]["reminds"], rows["ふつう"]["repeat"]), (0, "", ""))
+        lines = [ln.split("\t") for ln in ap.to_tsv(ap.snapshot(self.root, TODAY)).split("\n") if "会議" in ln]
+        self.assertEqual(lines[0][7:], ["90", "1d,10m", "weekly"])
 
 
 if __name__ == "__main__":

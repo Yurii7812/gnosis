@@ -153,6 +153,80 @@ esac
         res2 = self.with_adb(d2, lambda: pl.pull(self.root, TODAY, refresh=False))
         self.assertNotIn("refreshed", res2)
 
+    # ---- 編集(日時・所要時間・通知・繰り返し・優先度) ----
+    def edit(self, key, due="", time="", dur="", rem="", rep="", prio=""):
+        return f"edit\t{key}\t{due}\t{time}\t{dur}\t{rem}\t{rep}\t{prio}\n"
+
+    def a(self):
+        return (self.root / "a.md").read_text(encoding="utf-8")
+
+    def test_edit_rewrites_only_marks_of_the_matching_open_task(self):
+        r = pl.apply_edits_text(self.root, self.edit(self.k("a.md", "ゴミ出し"), "2026-10-23", "08:30", "15", "1d,10m", "daily", "high"))
+        self.assertEqual([x["text"] for x in r["edited"]], ["ゴミ出し"])
+        self.assertIn("- [ ] ゴミ出し 📅 2026-10-23 08:30 ⌛ 15m 🔔 1d,10m 🔁 daily ⏫", self.a())
+        self.assertIn("- [ ] 電球 📅 2026-10-19", self.a())                                 # ほかのタスクは変わらない
+        self.assertIn("- [ ] ゴミ出し 📅 2026-10-22", (self.root / "b.md").read_text(encoding="utf-8"))   # 別のノートの同名のタスクも変わらない
+        self.assertTrue(self.a().startswith("---\ntime: 2026-01-01 00:00:00\ntitle: 家\n---\n"))     # 本文・front matter はそのまま
+
+    def test_edit_is_idempotent_last_wins_and_can_clear(self):
+        k = self.k("a.md", "電球")
+        q = self.edit(k, "2026-10-25", "09:00") + self.edit(k, "2026-10-26", "10:00", "30", "none", "", "low")
+        r = pl.apply_edits_text(self.root, q)
+        self.assertEqual(len(r["edited"]), 1)                                                # 同じキーは最後の 1 つだけ
+        once = self.a()
+        self.assertIn("- [ ] 電球 📅 2026-10-26 10:00 ⌛ 30m 🔔 none 🔽", once)
+        pl.apply_edits_text(self.root, q)
+        self.assertEqual(self.a(), once)                                                     # もう一度反映しても同じ(冪等)
+        pl.apply_edits_text(self.root, self.edit(k))                                         # すべて空 = 期限・所要時間・通知・繰り返し・優先度を消す
+        self.assertIn("- [ ] 電球\n", self.a())
+
+    def test_edit_missing_rejected_done_and_crlf(self):
+        r = pl.apply_edits_text(self.root, self.edit("0123456789", "2026-10-25"))
+        self.assertEqual((r["edited"], r["edit_missing"]), ([], ["0123456789"]))               # 見つからない
+        done_key = self.k("a.md", "終えた")
+        self.assertEqual(pl.apply_edits_text(self.root, self.edit(done_key, "2026-10-25"))["edit_missing"], [done_key])    # 完了済みは変えない
+        bad = self.k("a.md", "ゴミ出し")
+        for q in (self.edit(bad, "2026-13-45"), self.edit(bad, "2026-10-25", "25:00"), self.edit(bad, "2026-10-25", "", "abc"), self.edit(bad, "2026-10-25", "", "", "10x"),
+                  self.edit(bad, "2026-10-25", "", "", "", "sometimes"), self.edit(bad, "2026-10-25", "", "", "", "", "urgent"), self.edit(bad, "2026-10-25", "", "999999")):
+            rr = pl.apply_edits_text(self.root, q)
+            self.assertEqual((rr["edited"], rr["edit_rejected"]), ([], [bad]), q)                # 正しくない値は反映しない
+        self.assertIn("- [ ] ゴミ出し 📅 2026-10-21\n", self.a())
+        (self.root / "c.md").write_bytes("- [ ] 改行 📅 2026-10-21\r\n- [ ] 別 📅 2026-10-21\r\n".encode("utf-8"))
+        pl.apply_edits_text(self.root, self.edit(self.k("c.md", "改行"), "2026-10-22", "07:00"))
+        self.assertEqual((self.root / "c.md").read_bytes().decode("utf-8"), "- [ ] 改行 📅 2026-10-22 07:00\r\n- [ ] 別 📅 2026-10-21\r\n")   # CRLF を保つ
+        self.assertEqual(pl.apply_edits_text(self.root, "")["edit_total"], 0)
+
+    def test_edit_without_date_drops_time_and_repeat_task_keeps_edit_after_complete(self):
+        k = self.k("a.md", "週次")
+        pl.apply_edits_text(self.root, self.edit(k, "2026-10-21", "09:00", "45", "10m", "weekly"))
+        res = pl.apply_text(self.root, self.done(k), TODAY)
+        self.assertEqual(len(res["applied"]), 1)
+        self.assertIn("- [ ] 週次 📅 2026-10-28 09:00 ⌛ 45m 🔔 10m 🔁 weekly", self.a())        # 次の回は編集した時刻・所要時間・通知を引き継ぐ
+        pl.apply_edits_text(self.root, self.edit(k, "", "09:00"))
+        self.assertIn("- [ ] 週次\n", self.a())                                                # 日付が空なら時刻も消える(完了済みの元の行は残る)
+
+    def test_pull_applies_edits_before_done_and_reports(self):
+        phone = self.base / "phone"; phone.mkdir()
+        k = self.k("a.md", "週次")
+        (phone / "agenda-edit.tsv").write_text(self.edit(k, "2026-10-21", "09:00", "", "5m", "weekly"), encoding="utf-8")
+        (phone / "agenda-done.tsv").write_text(self.done(k), encoding="utf-8")
+        d = self.fake_adb(phone)
+        res = self.with_adb(d, lambda: pl.pull(self.root, TODAY))
+        self.assertEqual((len(res["edited"]), len(res["applied"])), (1, 1))
+        self.assertIn("- [ ] 週次 📅 2026-10-28 09:00 🔔 5m 🔁 weekly", self.a())              # 編集 → 完了の順
+        self.assertEqual(sorted(p.name for p in phone.iterdir() if p.name.startswith(("agenda-edit", "agenda-done"))), [])
+        again = self.with_adb(d, lambda: pl.pull(self.root, TODAY))
+        self.assertEqual((again["edited"], again["applied"]), ([], []))
+
+    def test_pull_resumes_edit_processing_after_interruption(self):
+        phone = self.base / "phone"; phone.mkdir()
+        (phone / "agenda-edit.processing").write_text(self.edit(self.k("a.md", "電球"), "2026-10-30"), encoding="utf-8")      # 前回、反映の途中で止まった分
+        (phone / "agenda-edit.tsv").write_text(self.edit(self.k("a.md", "ゴミ出し"), "2026-10-31"), encoding="utf-8")        # そのあと増えた分
+        d = self.fake_adb(phone)
+        res = self.with_adb(d, lambda: pl.pull(self.root, TODAY))
+        self.assertEqual(sorted(x["text"] for x in res["edited"]), ["ゴミ出し", "電球"])
+        self.assertIn("電球 📅 2026-10-30", self.a())
+
     def test_no_adb(self):
         old = os.environ["PATH"]
         os.environ["PATH"] = "/nonexistent"

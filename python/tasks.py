@@ -10,6 +10,8 @@ PC の Agenda、`\\A` のカレンダー、Android の通知が同じ解析を�
   - [ ] 本文 🛫 2026-10-20            … 開始日（`start:`）。その日までは Agenda に出さない
   - [ ] 本文 🔁 weekly               … 繰り返し（`repeat:`）。daily / weekly / monthly / yearly / weekday / every N days|weeks|months|years
   - [ ] 本文 ⏫ / 🔼 / 🔽            … 優先度（高・中・低）
+  - [ ] 本文 📅 2026-10-25 09:30 ⌛ 1h30m   … 所要時間（`duration:90m` でも可。90m・1h・1h30m）
+  - [ ] 本文 📅 2026-10-25 09:30 🔔 10m,1d  … 通知（期限の何分・何時間・何日前か。`notify:` でも可。`🔔 none` は通知なし。書かなければ時刻ちょうど）
   - [ ] 本文 id:a1  /  after:a1      … 依存関係（after の相手が未完了ならブロック中）
   - [x] 本文 ✅ 2026-10-20           … 完了日（`done:`）
 コードブロックの中の `- [ ]` はタスクではない。
@@ -36,6 +38,8 @@ SCHED_RE = re.compile(r"(?:⏳|\bscheduled:)\s*" + _DATE)
 START_RE = re.compile(r"(?:🛫|\bstart:)\s*" + _DATE)
 DONE_RE = re.compile(r"(?:✅|\bdone:)\s*" + _DATE)
 REPEAT_RE = re.compile(r"(?:🔁|\brepeat:)\s*([A-Za-z]+(?: \d+ [a-z]+)?|every \d+ [a-z]+)")
+DURATION_RE = re.compile(r"(?:⌛|\bduration:)\s*(\d+h(?:\d+m)?|\d+m)")
+REMIND_RE = re.compile(r"(?:🔔|\bnotify:)\s*(none|\d+[mhd](?:,\d+[mhd])*)")
 ID_RE = re.compile(r"(?<![\w-])id:([\w-]+)")
 AFTER_RE = re.compile(r"(?<![\w-])after:([\w-]+)")
 PRIORITY = {"⏫": "high", "🔼": "medium", "🔽": "low"}
@@ -55,13 +59,34 @@ class Task:
     done_date: str = ""
     repeat: str = ""
     priority: str = ""
+    duration: int = 0         # 分。0 は指定なし
+    reminds: list[int] | None = None   # 期限の何分前に知らせるか。None=書いていない(時刻ちょうど)・[]=通知なし
     tid: str = ""
     after: list[str] = field(default_factory=list)
     blocked: bool = False
 
 
+def parse_duration(v: str) -> int:
+    """90m / 1h / 1h30m → 分。"""
+    m = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)m)?", v)
+    return int(m.group(1) or 0) * 60 + int(m.group(2) or 0) if m else 0
+
+
+def fmt_duration(minutes: int) -> str:
+    return "" if minutes <= 0 else (f"{minutes // 60}h" + (f"{minutes % 60}m" if minutes % 60 else "") if minutes % 60 == 0 or minutes >= 60 else f"{minutes}m")
+
+
+def parse_offset(v: str) -> int:
+    """10m / 2h / 1d → 分。"""
+    return int(v[:-1]) * {"m": 1, "h": 60, "d": 1440}[v[-1]]
+
+
+def fmt_offset(minutes: int) -> str:
+    return f"{minutes // 1440}d" if minutes and minutes % 1440 == 0 else f"{minutes // 60}h" if minutes and minutes % 60 == 0 else f"{minutes}m"
+
+
 def _strip_marks(text: str) -> str:
-    for rx in (DUE_RE, SCHED_RE, START_RE, DONE_RE, REPEAT_RE, ID_RE, AFTER_RE):
+    for rx in (DUE_RE, SCHED_RE, START_RE, DONE_RE, REPEAT_RE, DURATION_RE, REMIND_RE, ID_RE, AFTER_RE):
         text = rx.sub("", text)
     for m in PRIORITY:
         text = text.replace(m, "")
@@ -85,10 +110,59 @@ def parse_line(raw: str, file: str = "", line: int = 0) -> Task | None:
     if (x := REPEAT_RE.search(body)):
         t.repeat = x.group(1).strip().lower()
     t.priority = next((v for k, v in PRIORITY.items() if k in body), "")
+    if (x := DURATION_RE.search(body)):
+        t.duration = parse_duration(x.group(1))
+    if (x := REMIND_RE.search(body)):
+        t.reminds = [] if x.group(1) == "none" else sorted({parse_offset(v) for v in x.group(1).split(",")}, reverse=True)
     if (x := ID_RE.search(body)):
         t.tid = x.group(1)
     t.after = AFTER_RE.findall(body)
     return t
+
+
+PRIORITY_MARK = {"high": "⏫", "medium": "🔼", "low": "🔽"}
+
+
+def edit_line(raw: str, due: str | None = None, time: str | None = None, duration: int | None = None, reminds: list[int] | None | str = "keep",
+              repeat: str | None = None, priority: str | None = None) -> str:
+    """未完了のタスク行の、日付・時刻・所要時間・通知・繰り返し・優先度の印だけを書き換えて返す(本文・ほかの印はそのまま)。
+    引数が None のものは変えない。due="" で期限を消す(時刻も消える)。duration=0・repeat=""・priority="" でその印を消す。
+    reminds: "keep"=変えない・None=印を消す(書かなければ時刻ちょうど)・[]=通知なし・[10, 1440]=10 分前と 1 日前。
+    書き換えた印は行の最後にまとめて置く。完了済みの行・タスクでない行は、そのまま返す。"""
+    t = parse_line(raw)
+    if not t or t.done:
+        return raw
+    body = TASK_RE.match(raw).group("text")
+    head = raw[:len(raw) - len(body)]
+
+    def drop(rx):
+        nonlocal body
+        body = re.sub(r"\s*" + rx.pattern, "", body, count=1)
+    new_due = t.due if due is None else due
+    new_time = t.due_time if time is None else time
+    if due is not None or time is not None:
+        drop(DUE_RE)
+    if duration is not None:
+        drop(DURATION_RE)
+    if reminds != "keep":
+        drop(REMIND_RE)
+    if repeat is not None:
+        drop(REPEAT_RE)
+    if priority is not None:
+        for mk in PRIORITY:
+            body = re.sub(r"\s*" + re.escape(mk), "", body)
+    add = []
+    if (due is not None or time is not None) and new_due:
+        add.append("📅 " + new_due + (" " + new_time if new_time else ""))
+    if duration:
+        add.append("⌛ " + fmt_duration(duration))
+    if reminds != "keep" and reminds is not None:
+        add.append("🔔 " + (",".join(fmt_offset(m) for m in sorted(set(reminds), reverse=True)) if reminds else "none"))
+    if repeat:
+        add.append("🔁 " + repeat)
+    if priority:
+        add.append(PRIORITY_MARK[priority])
+    return head + (body.rstrip() + (" " + " ".join(add) if add else "")).strip()
 
 
 def parse_text(text: str, file: str = "") -> list[Task]:

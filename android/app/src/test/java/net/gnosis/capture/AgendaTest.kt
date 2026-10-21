@@ -152,4 +152,89 @@ task	aaaaaaaaaa				仕事	いつか
         assertTrue(AgendaWidget.lines(d.copy(generated = "2026-10-17T07:00"), today, now).first.endsWith("（4 日前の予定）"))
         assertFalse(AgendaWidget.lines(d.copy(generated = "2026-10-19T07:00"), today, now).first.contains("日前"))   // 2 日前までは表示しない
     }
+
+    @Test fun parseExtraColumnsAreOptionalAndValidated() {
+        val d = Agenda.parse(Agenda.HEADER + "\n" +
+            "task\t1111111111\t2026-10-25\t09:30\thigh\t家\t会議\t90\t1d,10m\tweekly\n" +
+            "task\t2222222222\t2026-10-25\t\t\t家\t古い形\n" +                         // 7 列(古い PC)
+            "task\t3333333333\t\t\t\t家\t壊れた追加列\tabc\t10x\tsometimes\n" +        // 読めない値は既定に戻す
+            "task\t4444444444\t\t\t\t家\t通知なし\t\tnone\t\n")!!
+        assertEquals(AgendaTask("1111111111", "2026-10-25", "09:30", "high", "家", "会議", 90, "1d,10m", "weekly"), d.tasks[0])
+        assertEquals(Triple(0, "", ""), Triple(d.tasks[1].duration, d.tasks[1].reminds, d.tasks[1].repeat))
+        assertEquals(Triple(0, "", ""), Triple(d.tasks[2].duration, d.tasks[2].reminds, d.tasks[2].repeat))
+        assertEquals("none", d.tasks[3].reminds)
+    }
+
+    @Test fun formatsMatchPython() {
+        assertEquals(listOf("", "45m", "1h", "1h30m", "2h"), listOf(0, 45, 60, 90, 120).map { Agenda.fmtDuration(it) })
+        assertEquals(listOf("5m", "1h", "90m", "1d", "2d"), listOf(5, 60, 90, 1440, 2880).map { Agenda.fmtOffset(it) })
+        assertEquals(listOf(1440, 120, 10), Agenda.parseReminds("10m,1d,2h,10m"))
+        assertEquals(emptyList<Int>(), Agenda.parseReminds("none"))
+        assertNull(Agenda.parseReminds("10x"))
+        assertEquals("1d,10m", Agenda.remindsText(listOf(10, 1440, 10)))
+        assertEquals(listOf("時刻ちょうど", "10 分前", "1 時間前", "90 分前", "1 日前"), listOf(0, 10, 60, 90, 1440).map { Agenda.offsetLabel(it) })
+    }
+
+    @Test fun taskLineSameAsPythonEditLine() {
+        val spec = TaskSpec("2026-10-25", "09:30", 90, "10m,1d", "weekly", "high")
+        assertEquals("- [ ] 会議 📅 2026-10-25 09:30 ⌛ 1h30m 🔔 1d,10m 🔁 weekly ⏫", Agenda.taskLine("会議", spec))
+        assertEquals("- [ ] 買う 📅 2026-10-22 🔔 none", Agenda.taskLine("買う", TaskSpec("2026-10-22", reminds = "none")))
+        assertEquals("- [ ] 薬 📅 2026-10-22 10:30 ⌛ 1h 🔔 5m 🔁 daily 🔽", Agenda.taskLine("薬", TaskSpec("2026-10-22", "10:30", 60, "5m", "daily", "low")))
+        assertEquals("- [ ] だけ", Agenda.taskLine("だけ", TaskSpec()))
+        assertEquals("- [ ] 二行 目", Agenda.taskLine("- [ ] 二行\n目", TaskSpec()))
+        assertNull(Agenda.taskLine("  ", TaskSpec()))
+        assertNull(Agenda.taskLine("x", TaskSpec("2026-13-45")))                              // 日付が正しくない
+        assertNull(Agenda.taskLine("x", TaskSpec("", "09:00")))                               // 日付なしの時刻
+        assertNull(Agenda.taskLine("x", TaskSpec("2026-10-22", "25:00")))
+        assertNull(Agenda.taskLine("x", TaskSpec(reminds = "abc")))
+        assertNull(Agenda.taskLine("x", TaskSpec(repeat = "sometimes")))
+        assertNull(Agenda.taskLine("x", TaskSpec(priority = "urgent")))
+        assertNull(Agenda.taskLine("x", TaskSpec(duration = 999999)))
+    }
+
+    @Test fun editLineAndApplyEdit() {
+        val spec = TaskSpec("2026-10-23", "08:30", 15, "10m,1d", "daily", "high")
+        assertEquals("edit\t00ff4958bf\t2026-10-23\t08:30\t15\t1d,10m\tdaily\thigh", Agenda.editLine("00ff4958bf", spec))
+        assertEquals("edit\t00ff4958bf\t\t\t\t\t\t", Agenda.editLine("00ff4958bf", TaskSpec()))                      // すべて空 = 全部消す
+        assertEquals("edit\t00ff4958bf\t2026-10-23\t\t\tnone\t\t", Agenda.editLine("00ff4958bf", TaskSpec("2026-10-23", reminds = "none")))
+        assertNull(Agenda.editLine("short", spec))
+        assertNull(Agenda.editLine("00ff4958bf", spec.copy(due = "x")))
+        assertNull(Agenda.editLine("0123456789\tinject", spec))                                // タブで行を壊せない
+        assertNull(Agenda.editLine("00ff4958bf", TaskSpec("", "09:00")))                          // 日付なしの時刻は送らない
+        val tasks = listOf(t("00ff4958bf", "2026-10-21", "09:00", "ゴミ"), t("1111111111", "2026-10-21", "10:00", "別"))
+        val r = Agenda.applyEdit(tasks, "00ff4958bf", spec)
+        assertEquals(AgendaTask("00ff4958bf", "2026-10-23", "08:30", "high", "ノート", "ゴミ", 15, "1d,10m", "daily"), r[0])
+        assertEquals(tasks[1], r[1])                                                           // ほかは変わらない
+        assertEquals("", Agenda.applyEdit(tasks, "00ff4958bf", TaskSpec())[0].time)            // 日付を消せば時刻も消える
+        assertEquals(tasks, Agenda.applyEdit(tasks, "00ff4958bf", spec.copy(due = "x")))        // 正しくない設定は何も変えない
+        assertEquals(spec, Agenda.specOf(r[0]).copy(reminds = "10m,1d"))
+    }
+
+    @Test fun tsvRoundTrip() {
+        val d = AgendaData("2026-10-21T07:00", listOf(AgendaTask("1111111111", "2026-10-25", "09:30", "high", "家", "会議", 90, "1d,10m", "weekly"), t("2222222222", "", text = "いつか")))
+        assertEquals(d, Agenda.parse(Agenda.toTsv(d)))
+        assertEquals(1, Agenda.toTsv(d).lines().count { it.startsWith("generated") })
+    }
+
+    @Test fun alarmPlanCoversRemindersTimesAndHorizon() {
+        val tasks = listOf(
+            AgendaTask("1111111111", "2026-10-21", "09:30", "", "n", "既定"),                                   // 時刻ちょうど
+            AgendaTask("2222222222", "2026-10-21", "09:30", "", "n", "複数", reminds = "10m,1h"),                // 8:30 と 9:20
+            AgendaTask("3333333333", "2026-10-21", "09:30", "", "n", "なし", reminds = "none"),
+            AgendaTask("4444444444", "2026-10-22", "08:00", "", "n", "明日", reminds = "1d"),                    // 今日の 8:00
+            AgendaTask("5555555555", "2026-10-22", "", "", "n", "終日", reminds = "1h"),                         // 9 時基準 → 8:00
+            AgendaTask("6666666666", "2026-10-22", "", "", "n", "終日の既定"),                                    // 指定が無ければ朝のまとめだけ
+            AgendaTask("7777777777", "2026-10-30", "09:00", "", "n", "遠い"),
+            AgendaTask("8888888888", "2026-10-21", "06:00", "", "n", "過去"))
+        val p = Agenda.alarmPlan(tasks, now)
+        assertEquals(listOf("2026-10-21T08:00" to "明日", "2026-10-21T08:30" to "複数", "2026-10-21T09:20" to "複数", "2026-10-21T09:30" to "既定", "2026-10-22T08:00" to "終日"),
+            p.map { it.at.toString().take(16) to it.task.text })
+        assertEquals(listOf(1440, 60, 10, 0, 60), p.map { it.offset })                                                   // 時刻順に、期限の何分前の知らせか
+        assertEquals(5, p.size)
+        assertEquals(2, Agenda.alarmPlan(tasks, now, limit = 2).size)
+        assertEquals(listOf("明日"), Agenda.alarmPlan(tasks, now, horizonHours = 1).map { it.task.text })      // 1 時間先(今日の 8:00)まで。終日は明日の 8:00 なので入らない
+        assertTrue(Agenda.alarmPlan(tasks, now, horizonHours = 0).isEmpty())
+        assertEquals(listOf(0), Agenda.remindOffsets(tasks[0]))
+        assertEquals(emptyList<Int>(), Agenda.remindOffsets(tasks[2]))
+    }
 }

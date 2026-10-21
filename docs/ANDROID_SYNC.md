@@ -40,3 +40,9 @@ PC → スマホ: `python/agenda_push.py push`（`:GnosisPushAgenda`）が、未
 クイックタスク追加は、アプリのメモ（`- [ ] 本文 📅 日付`）として保存し、従来の `\M` で取り込む。
 アプリ側（`android/`）: `Agenda.kt`（純粋なロジック）・`AgendaStore.kt`・`AgendaNotifier.kt`（朝のまとめ・時刻つきの通知・完了/10 分後に）・`AgendaActivity.kt`・`AgendaWidget.kt`・`QuickTaskActivity.kt`。`MainActivity` は変えていない（起動口は別に追加）。
 **実機での通知・ウィジェット・画面の確認は未実施。**
+
+### 予定の編集（日時・所要時間・通知・繰り返し・優先度）
+`agenda.tsv` の `task` 行は、7 列目（本文）のあとに **所要時間(分)・通知・繰り返し** の 3 列が付く（古い 7 列のままでも読める）。通知は `""`（書かない＝時刻ちょうど）・`none`・`1d,10m`（期限の 1 日前と 10 分前）。
+スマホで「編集」を保存すると、`files/agenda-edit.tsv` に `edit キー 日付 時刻 所要時間 通知 繰り返し 優先度` を 1 行足し、手元の `agenda.tsv` にも先に反映する。
+`python/agenda_pull.py pull`（`:GnosisPullDone`）は、完了より先に編集を反映する: キーが一致する未完了のタスクの `📅 日付 時刻`・`⌛`・`🔔`・`🔁`・優先度の印だけを書き換える（`tasks.edit_line`。本文・ほかの印・CRLF はそのまま）。同じキーは最後の 1 つ・正しくない値は却下・見つからないキーは報告。反映後に最新の予定を送り直す。
+通知の予約は `Agenda.alarmPlan`（48 時間先まで・最大 30 件）。時刻つきは設定した通知の分だけ、日付だけのタスクは通知を選んだときだけ 9 時を基準にする。

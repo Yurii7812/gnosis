@@ -91,6 +91,55 @@ class TasksTest(unittest.TestCase):
             self.assertTrue(next(t for t in ts if t.text == "C").blocked)
             self.assertEqual(next(t for t in ts if t.text == "C").file, "sub/c.md")
 
+    def test_duration_and_reminds_parse_and_are_not_part_of_text(self):
+        t = tk.parse_line("- [ ] 会議 📅 2026-10-25 09:30 ⌛ 1h30m 🔔 10m,1d,2h")
+        self.assertEqual((t.text, t.duration, t.reminds), ("会議", 90, [1440, 120, 10]))      # 大きい順(早く知らせるものから)
+        self.assertEqual(tk.parse_line("- [ ] A duration:45m notify:5m").duration, 45)
+        self.assertEqual(tk.parse_line("- [ ] A 🔔 none").reminds, [])                          # 通知なし
+        self.assertIsNone(tk.parse_line("- [ ] A 📅 2026-10-25 09:30").reminds)                 # 書かない = 時刻ちょうど
+        self.assertEqual(tk.parse_line("- [ ] A ⌛ abc").duration, 0)                           # 読めない値は無視
+        self.assertEqual(tk.fmt_duration(90), "1h30m")
+        self.assertEqual(tk.fmt_duration(120), "2h")
+        self.assertEqual(tk.fmt_duration(45), "45m")
+        self.assertEqual([tk.fmt_offset(m) for m in (5, 60, 90, 1440, 2880)], ["5m", "1h", "90m", "1d", "2d"])
+
+    def test_edit_line_changes_only_the_given_marks(self):
+        raw = "  - [ ] 薬を飲む 📅 2026-10-21 09:00 ⌛ 30m 🔔 10m 🔁 weekly ⏫ id:a1 ⏳ 2026-10-20"
+        e = tk.edit_line(raw, due="2026-10-22", time="10:30", duration=60, reminds=[5, 1440], repeat="daily", priority="low")
+        t = tk.parse_line(e)
+        self.assertEqual((t.text, t.due, t.due_time, t.duration, t.reminds, t.repeat, t.priority), ("薬を飲む", "2026-10-22", "10:30", 60, [1440, 5], "daily", "low"))
+        self.assertEqual((t.tid, t.scheduled), ("a1", "2026-10-20"))                         # ほかの印・本文はそのまま
+        self.assertTrue(e.startswith("  - [ ] 薬を飲む"))                                      # インデントを保つ
+        self.assertEqual(e.count("📅"), 1)
+        # None の引数は変えない
+        k = tk.parse_line(tk.edit_line(raw, time="11:00"))
+        self.assertEqual((k.due, k.due_time, k.duration, k.reminds, k.repeat, k.priority), ("2026-10-21", "11:00", 30, [10], "weekly", "high"))
+        # 消す
+        c = tk.parse_line(tk.edit_line(raw, due="", duration=0, reminds=None, repeat="", priority=""))
+        self.assertEqual((c.due, c.due_time, c.duration, c.reminds, c.repeat, c.priority, c.text), ("", "", 0, None, "", "", "薬を飲む"))
+        self.assertEqual(tk.parse_line(tk.edit_line("- [ ] A", reminds=[])).reminds, [])
+        # 日付だけ変えて時刻は残す / 日付を足す
+        moved = tk.parse_line(tk.edit_line(raw, due="2026-11-01"))
+        self.assertEqual((moved.due, moved.due_time), ("2026-11-01", "09:00"))                    # 日付だけ変えれば、時刻は残る(予定を別の日へ動かす)
+        allday = tk.parse_line(tk.edit_line(raw, time=""))
+        self.assertEqual((allday.due, allday.due_time), ("2026-10-21", ""))                       # time="" で時刻だけ消す(終日)
+        self.assertEqual(tk.edit_line("- [ ] 買う", due="2026-10-22", time="08:00"), "- [ ] 買う 📅 2026-10-22 08:00")
+        # 2 回かけても同じ(冪等)
+        self.assertEqual(tk.edit_line(e, due="2026-10-22", time="10:30", duration=60, reminds=[5, 1440], repeat="daily", priority="low"), e)
+
+    def test_edit_line_leaves_done_and_non_tasks_alone(self):
+        self.assertEqual(tk.edit_line("- [x] A 📅 2026-10-20 ✅ 2026-10-20", due="2026-11-01"), "- [x] A 📅 2026-10-20 ✅ 2026-10-20")
+        self.assertEqual(tk.edit_line("ふつうの行", due="2026-11-01"), "ふつうの行")
+
+    def test_repeating_task_keeps_new_marks_in_next_occurrence(self):
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+            p = Path(d) / "a.md"
+            p.write_text("- [ ] 週報 📅 2026-10-21 09:00 ⌛ 30m 🔔 10m,1d 🔁 weekly\n", encoding="utf-8")
+            tk.complete(str(p), 1, D(2026, 10, 21))
+            lines = p.read_text(encoding="utf-8").split("\n")
+            nxt = [tk.parse_line(x) for x in lines if x.startswith("- [ ]")][0]
+            self.assertEqual((nxt.due, nxt.due_time, nxt.duration, nxt.reminds), ("2026-10-28", "09:00", 30, [1440, 10]))
+
 
 if __name__ == "__main__":
     unittest.main()

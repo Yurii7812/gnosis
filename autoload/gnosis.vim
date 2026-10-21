@@ -7863,7 +7863,8 @@ function! gnosis#pull_done() abort
     return
   endif
   silent! checktime
-  echo 'Gnosis: ' . printf(gnosis#i18n#tr('スマホの完了を反映しました（%d 件。見つからなかったもの %d 件）'), len(l:r.applied), len(l:r.missing))
+  let l:miss = len(l:r.missing) + len(get(l:r, 'edit_missing', [])) + len(get(l:r, 'edit_rejected', []))
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('スマホの完了と編集を反映しました（完了 %d・編集 %d・反映できなかったもの %d）'), len(l:r.applied), len(get(l:r, 'edited', [])), l:miss)
 endfunction
 
 " PDF の注釈・引用とページリンクの検査（LR08）。  :GnosisPdf annotations|digest|check|page …

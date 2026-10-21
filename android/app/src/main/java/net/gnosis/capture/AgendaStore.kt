@@ -12,6 +12,7 @@ import java.time.LocalDateTime
 class AgendaStore(private val ctx: Context) {
     private val file get() = File(ctx.filesDir, "agenda.tsv")
     private val doneFile get() = File(ctx.filesDir, "agenda-done.tsv")
+    private val editFile get() = File(ctx.filesDir, "agenda-edit.tsv")
 
     fun load(): AgendaData? = try { if (file.exists()) Agenda.parse(file.readText()) else null } catch (_: Exception) { null }
 
@@ -25,6 +26,22 @@ class AgendaStore(private val ctx: Context) {
     fun markDone(key: String, now: LocalDateTime = LocalDateTime.now()): Boolean {
         val line = Agenda.doneLine(key, now) ?: return false
         return try { doneFile.appendText(line + "\n"); true } catch (_: Exception) { false }
+    }
+
+    /**
+     * タスクの日時・所要時間・通知・繰り返し・優先度の編集を保存する。PC へ渡す編集の記録(agenda-edit.tsv。PC の agenda_pull.py がノートの行へ書く)に 1 行足し、
+     * 手元の予定(agenda.tsv)にも先に反映する(PC が反映して送り直すまでの間も、画面と通知が新しい設定になる)。設定が正しくなければ何もせず false。
+     */
+    fun saveEdit(key: String, spec: TaskSpec): Boolean {
+        val line = Agenda.editLine(key, spec) ?: return false
+        val d = load() ?: return false
+        if (d.tasks.none { it.key == key }) return false
+        return try {
+            editFile.appendText(line + "\n")
+            val tmp = File(ctx.filesDir, "agenda.tsv.tmp")
+            tmp.writeText(Agenda.toTsv(d.copy(tasks = Agenda.applyEdit(d.tasks, key, spec))))
+            tmp.renameTo(file)
+        } catch (_: Exception) { false }
     }
 
     /** 完了済みを除いた、いま見せる予定。 */

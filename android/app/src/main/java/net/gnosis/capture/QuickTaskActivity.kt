@@ -8,6 +8,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,18 +29,13 @@ class QuickTaskActivity : ComponentActivity() {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxWidth()) {
                     var text by remember { mutableStateOf("") }
-                    var due by remember { mutableIntStateOf(0) }   // 0 なし / 1 今日 / 2 明日 / 3 来週
-                    var high by remember { mutableStateOf(false) }
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var spec by remember { mutableStateOf(TaskSpec()) }
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("タスクを足す", style = MaterialTheme.typography.titleLarge)
                         OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("やること") }, modifier = Modifier.fillMaxWidth())
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {      // 狭い画面でも「来週」が切れない
-                            listOf("期限なし", "今日", "明日", "来週").forEachIndexed { i, l -> FilterChip(selected = due == i, onClick = { due = i }, label = { Text(l) }) }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = high, onCheckedChange = { high = it }); Text("急ぎ") }
+                        TaskEditor(spec) { spec = it }
                         Button(onClick = {
-                            val day = when (due) { 1 -> LocalDate.now(); 2 -> LocalDate.now().plusDays(1); 3 -> LocalDate.now().plusDays(7); else -> null }
-                            val line = Agenda.quickTaskLine(text, day, high)
+                            val line = Agenda.taskLine(text, spec)
                             if (line == null) { Toast.makeText(this@QuickTaskActivity, "やることを入れてください", Toast.LENGTH_SHORT).show() }
                             else try {
                                 val store = Store(this@QuickTaskActivity)

@@ -247,7 +247,7 @@
     "annotations / digest / check / page のどれかを指定してください": "Use annotations, digest, check or page",
     "PDF を指定してください": "Give a PDF",
     "スマホへ予定を送りました（%d 件 / 未完了 %d 件）": "Sent the agenda to the phone (%d tasks / %d open)",
-    "スマホの完了を反映しました（%d 件。見つからなかったもの %d 件）": "Applied completions from the phone (%d; %d not found)",
+    "スマホの完了と編集を反映しました（完了 %d・編集 %d・反映できなかったもの %d）": "Applied completions and edits from the phone (done %d, edited %d, not applied %d)",
     "status / enable / disable / allow / deny / run のどれかです": "Use status / enable / disable / allow / deny / run",
     "URL を指定してください": "Give a URL",
     "収集が有効でないか、許可した URL がありません。通信しませんでした": "Collection is not enabled or no URL is allowed. Nothing was fetched.",

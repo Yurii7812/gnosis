@@ -4,8 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -55,6 +58,7 @@ private fun AgendaScreen() {
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
     var prefs by remember { mutableStateOf(AgendaNotifier.load(ctx)) }
+    var editing by remember { mutableStateOf<AgendaTask?>(null) }
     val data = remember(version) { store.visible() }
     val today = LocalDate.now()
     val b = remember(data, version) { data?.let { Agenda.bucket(it.tasks, today) } }
@@ -75,13 +79,20 @@ private fun AgendaScreen() {
                 if (tasks.isNotEmpty()) {
                     item { Text("$label（${tasks.size}）", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }
                     items(tasks, key = { it.key }) { t ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(Modifier.fillMaxWidth().clickable { editing = t }) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(t.text)
-                                Text((if (t.due.isNotEmpty()) t.due + (if (t.time.isNotEmpty()) " " + t.time else "") + "・" else "") + t.note, style = MaterialTheme.typography.bodySmall)
+                                Text(detail(t), style = MaterialTheme.typography.bodySmall)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     TextButton(onClick = { if (store.markDone(t.key)) { version++; AgendaWidget.refresh(ctx) } }) { Text("完了") }
-                                    TextButton(onClick = { AgendaNotifier.snooze(ctx, t) }) { Text("10 分後に知らせる") }
+                                    var menu by remember { mutableStateOf(false) }
+                                    Box {
+                                        TextButton(onClick = { menu = true }) { Text("スヌーズ") }
+                                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                            for (m in Agenda.SNOOZE_CHOICES) DropdownMenuItem(text = { Text("$m 分後にもう一度") }, onClick = { menu = false; AgendaNotifier.snooze(ctx, t, m) })
+                                        }
+                                    }
+                                    TextButton(onClick = { editing = t }) { Text("編集") }
                                 }
                             }
                         }
@@ -92,6 +103,14 @@ private fun AgendaScreen() {
         item {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text("通知", style = MaterialTheme.typography.titleMedium)
+            // 「アラームとリマインダー」が許可されていないと、通知が数分〜十数分ずれることがある(Android の仕様)。許可は利用者が設定画面で行う
+            if (!Alarm.canScheduleExact(ctx)) {
+                Text("今は通知が数分〜十数分ずれることがあります。時刻どおりに知らせるには、設定の「アラームとリマインダー」を許可してください。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = {
+                    try { ctx.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:" + ctx.packageName))) }
+                    catch (_: Exception) { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.packageName))) }
+                }) { Text("許可の設定を開く") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = prefs.morningOn, onCheckedChange = { prefs = prefs.copy(morningOn = it); AgendaNotifier.save(ctx, prefs) })
                 Text("  朝のまとめ（今日・期限切れ）")
@@ -105,7 +124,7 @@ private fun AgendaScreen() {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = prefs.timedOn, onCheckedChange = { prefs = prefs.copy(timedOn = it); AgendaNotifier.save(ctx, prefs) })
-                Text("  時刻つきのタスクの直前に知らせる")
+                Text("  タスクごとに設定した通知（時刻ちょうど・10 分前など）を出す")
             }
             Text("静かな時間（時刻つきの通知を出さない）: ${prefs.quietFrom} 時〜${prefs.quietTo} 時", style = MaterialTheme.typography.bodySmall)
             Row {
@@ -116,4 +135,37 @@ private fun AgendaScreen() {
             }
         }
     }
+
+    // タスクの編集（日付・時刻・所要時間・通知・繰り返し・優先度）。保存すると、手元の画面と通知にすぐ反映し、PC へは次の :GnosisPullDone でノートの行に書かれる
+    editing?.let { t ->
+        var spec by remember(t.key) { mutableStateOf(Agenda.specOf(t)) }
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(t.text, maxLines = 2) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { TaskEditor(spec) { spec = it } } },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (store.saveEdit(t.key, spec)) { AgendaNotifier.scheduleTimed(ctx); AgendaWidget.refresh(ctx); version++ }
+                    else android.widget.Toast.makeText(ctx, "保存できませんでした", android.widget.Toast.LENGTH_SHORT).show()
+                    editing = null
+                }) { Text("保存") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("やめる") } },
+        )
+    }
 }
+
+/** カードの 2 行目: 日付・時刻・所要時間・繰り返し・通知・ノートの題。 */
+private fun detail(t: AgendaTask): String {
+    val parts = ArrayList<String>()
+    if (t.due.isNotEmpty()) parts.add(t.due + (if (t.time.isNotEmpty()) " " + t.time + (if (t.duration > 0) "〜" + endTime(t) else "") else ""))
+    if (t.duration > 0 && t.time.isEmpty()) parts.add(Agenda.fmtDuration(t.duration))
+    if (t.repeat.isNotEmpty()) parts.add("🔁 " + repeatLabel(t.repeat))
+    if (t.reminds == "none") parts.add("通知なし") else if (t.reminds.isNotEmpty()) parts.add("🔔 " + (Agenda.parseReminds(t.reminds) ?: emptyList()).joinToString("・") { Agenda.offsetLabel(it) })
+    parts.add(t.note)
+    return parts.joinToString("・")
+}
+
+private fun endTime(t: AgendaTask): String = runCatching { java.time.LocalTime.parse(t.time).plusMinutes(t.duration.toLong()).toString() }.getOrDefault("")
+
+private fun repeatLabel(r: String) = when (r) { "daily" -> "毎日"; "weekly" -> "毎週"; "monthly" -> "毎月"; "yearly" -> "毎年"; "weekday" -> "平日"; else -> r }

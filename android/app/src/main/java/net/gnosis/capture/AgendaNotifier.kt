@@ -84,48 +84,52 @@ object AgendaNotifier {
         try { ctx.getSystemService(NotificationManager::class.java).notify(NOTIF_MORNING, n) } catch (_: SecurityException) { }
     }
 
-    // ---- 時刻つきのタスク ----
-    private fun timedPending(ctx: Context, key: String, text: String, note: String) =
-        PendingIntent.getBroadcast(ctx, 6000 + (key.hashCode() and 0xfff), Intent(ctx, AgendaTimedReceiver::class.java).putExtra(EXTRA_KEY, key).putExtra(EXTRA_TEXT, text).putExtra(EXTRA_NOTE, note),
+    // ---- 時刻つきのタスク（設定した通知ごと: 時刻ちょうど・N 分前・1 日前 …） ----
+    const val EXTRA_OFFSET = "offset"
+    const val EXTRA_MINUTES = "minutes"
+    private fun reqCode(key: String, offset: Int) = 6000 + ((key.hashCode() * 31 + offset) and 0xffff)
+    private fun notifId(key: String) = 9000 + (key.hashCode() and 0xfff)
+
+    private fun timedPending(ctx: Context, key: String, offset: Int, text: String, note: String) =
+        PendingIntent.getBroadcast(ctx, reqCode(key, offset), Intent(ctx, AgendaTimedReceiver::class.java).putExtra(EXTRA_KEY, key).putExtra(EXTRA_OFFSET, offset).putExtra(EXTRA_TEXT, text).putExtra(EXTRA_NOTE, note),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    /** 今日のこれから先の、時刻つきのタスクの知らせを予約し直す（前の予約は消す）。 */
+    /** これから先(48 時間)の、設定した通知を予約し直す(前の予約は消す)。予定が届いたとき・編集したとき・画面を開いたとき・再起動のあとに呼ぶ。 */
     fun scheduleTimed(ctx: Context) {
         val p = prefs(ctx)
         val am = ctx.getSystemService(AlarmManager::class.java)
-        p.getStringSet("timed", emptySet())!!.forEach { k -> am.cancel(timedPending(ctx, k, "", "")) }
-        if (!load(ctx).timedOn) { p.edit().remove("timed").apply(); return }
+        p.getStringSet("timed2", emptySet())!!.forEach { id -> val (k, o) = id.split(":"); am.cancel(timedPending(ctx, k, o.toInt(), "", "")) }
+        if (!load(ctx).timedOn) { p.edit().remove("timed2").apply(); return }
         val data = AgendaStore(ctx).visible() ?: return
-        val now = LocalDateTime.now()
-        val plan = Agenda.timedToday(data.tasks, now.toLocalDate(), now, 10)
-        plan.forEach { (at, t) -> alarm(ctx, millis(at), timedPending(ctx, t.key, t.text, t.note)) }
-        p.edit().putStringSet("timed", plan.map { it.second.key }.toSet()).apply()
+        val plan = Agenda.alarmPlan(data.tasks, LocalDateTime.now(), 48, 30)
+        plan.forEach { a -> alarm(ctx, millis(a.at), timedPending(ctx, a.task.key, a.offset, a.task.text, a.task.note)) }
+        p.edit().putStringSet("timed2", plan.map { "${it.task.key}:${it.offset}" }.toSet()).apply()
     }
 
-    fun notifyTask(ctx: Context, key: String, text: String, note: String) {
+    fun notifyTask(ctx: Context, key: String, offset: Int, text: String, note: String) {
         val s = load(ctx)
         if (AlarmTiming.inside(s.quietFrom, s.quietTo, LocalDateTime.now().hour) && s.quietFrom != s.quietTo) return    // 静かな時間は出さない
         if (key in AgendaStore(ctx).doneKeys()) return                                                                     // もう完了を押したものは出さない
         ensureChannel(ctx)
         fun act(action: String, label: String, req: Int) = NotificationCompat.Action.Builder(0, label,
-            PendingIntent.getBroadcast(ctx, req + (key.hashCode() and 0xfff), Intent(ctx, AgendaActionReceiver::class.java).setAction(action).putExtra(EXTRA_KEY, key).putExtra(EXTRA_TEXT, text).putExtra(EXTRA_NOTE, note),
+            PendingIntent.getBroadcast(ctx, req + (key.hashCode() and 0xfff), Intent(ctx, AgendaActionReceiver::class.java).setAction(action).putExtra(EXTRA_KEY, key).putExtra(EXTRA_TEXT, text).putExtra(EXTRA_NOTE, note).putExtra(EXTRA_MINUTES, 10),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build()
-        val n = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(R.drawable.ic_note).setContentTitle(text).setContentText(note)
-            .setContentIntent(openAgenda(ctx, REQ_MORNING + 2)).setAutoCancel(true).addAction(act(ACTION_DONE, "完了", 7000)).addAction(act(ACTION_SNOOZE, "10 分後に", 8000)).build()
-        try { ctx.getSystemService(NotificationManager::class.java).notify(9000 + (key.hashCode() and 0xfff), n) } catch (_: SecurityException) { }
+        val title = if (offset > 0) "あと ${Agenda.offsetLabel(offset).removeSuffix("前")}: $text" else text
+        val n = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(R.drawable.ic_note).setContentTitle(title).setContentText(note)
+            .setContentIntent(openAgenda(ctx, REQ_MORNING + 2)).setAutoCancel(true).addAction(act(ACTION_DONE, "完了", 7000)).addAction(act(ACTION_SNOOZE, "スヌーズ（10 分）", 8000)).build()
+        try { ctx.getSystemService(NotificationManager::class.java).notify(notifId(key), n) } catch (_: SecurityException) { }
     }
 
-    fun onAction(ctx: Context, action: String?, key: String, text: String, note: String) {
-        val nm = ctx.getSystemService(NotificationManager::class.java)
-        nm.cancel(9000 + (key.hashCode() and 0xfff))
+    fun onAction(ctx: Context, action: String?, key: String, text: String, note: String, minutes: Int = 10) {
+        ctx.getSystemService(NotificationManager::class.java).cancel(notifId(key))
         when (action) {
             ACTION_DONE -> { AgendaStore(ctx).markDone(key); AgendaWidget.refresh(ctx) }
-            ACTION_SNOOZE -> alarm(ctx, millis(Agenda.snoozeAt(LocalDateTime.now(), 10)), timedPending(ctx, key, text, note))
+            ACTION_SNOOZE -> alarm(ctx, millis(Agenda.snoozeAt(LocalDateTime.now(), minutes)), timedPending(ctx, key, -1, text, note))
         }
     }
 
-    /** 画面からの「10 分後に」。 */
-    fun snooze(ctx: Context, t: AgendaTask, minutes: Int = 10) = alarm(ctx, millis(Agenda.snoozeAt(LocalDateTime.now(), minutes)), timedPending(ctx, t.key, t.text, t.note))
+    /** 画面からのスヌーズ(あとでもう一度知らせる)。 */
+    fun snooze(ctx: Context, t: AgendaTask, minutes: Int = 10) = alarm(ctx, millis(Agenda.snoozeAt(LocalDateTime.now(), minutes)), timedPending(ctx, t.key, -1, t.text, t.note))
 }
 
 class AgendaMorningReceiver : BroadcastReceiver() {
@@ -136,12 +140,12 @@ class AgendaMorningReceiver : BroadcastReceiver() {
 
 class AgendaTimedReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        AgendaNotifier.notifyTask(ctx, intent.getStringExtra(AgendaNotifier.EXTRA_KEY) ?: return, intent.getStringExtra(AgendaNotifier.EXTRA_TEXT) ?: "", intent.getStringExtra(AgendaNotifier.EXTRA_NOTE) ?: "")
+        AgendaNotifier.notifyTask(ctx, intent.getStringExtra(AgendaNotifier.EXTRA_KEY) ?: return, intent.getIntExtra(AgendaNotifier.EXTRA_OFFSET, 0).coerceAtLeast(0), intent.getStringExtra(AgendaNotifier.EXTRA_TEXT) ?: "", intent.getStringExtra(AgendaNotifier.EXTRA_NOTE) ?: "")
     }
 }
 
 class AgendaActionReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        AgendaNotifier.onAction(ctx, intent.action, intent.getStringExtra(AgendaNotifier.EXTRA_KEY) ?: return, intent.getStringExtra(AgendaNotifier.EXTRA_TEXT) ?: "", intent.getStringExtra(AgendaNotifier.EXTRA_NOTE) ?: "")
+        AgendaNotifier.onAction(ctx, intent.action, intent.getStringExtra(AgendaNotifier.EXTRA_KEY) ?: return, intent.getStringExtra(AgendaNotifier.EXTRA_TEXT) ?: "", intent.getStringExtra(AgendaNotifier.EXTRA_NOTE) ?: "", intent.getIntExtra(AgendaNotifier.EXTRA_MINUTES, 10))
     }
 }

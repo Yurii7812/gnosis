@@ -44,6 +44,11 @@ def task_key(file: str, text: str) -> str:
     return hashlib.sha1((file + "\0" + _clean(text)).encode("utf-8")).hexdigest()[:10]
 
 
+def reminds_text(reminds: list[int] | None) -> str:
+    """"" = 書いていない(時刻ちょうど)・"none" = 通知なし・"1d,10m" = 期限の 1 日前と 10 分前。"""
+    return "" if reminds is None else ("none" if not reminds else ",".join(tk.fmt_offset(m) for m in reminds))
+
+
 def snapshot(root: str | Path, today: dt.date | None = None, now: dt.datetime | None = None) -> dict:
     root = Path(root).resolve()
     today = today or dt.date.today()
@@ -58,7 +63,8 @@ def snapshot(root: str | Path, today: dt.date | None = None, now: dt.datetime | 
             p = root / t.file
             titles[t.file] = nf._simple_parse_text(p, p.read_text(encoding="utf-8"))["title"]
         day = t.due or t.scheduled
-        rows.append({"key": task_key(t.file, t.text), "due": day, "time": t.due_time if t.due else "", "priority": t.priority, "note": _clean(titles[t.file]), "text": _clean(t.text)})
+        rows.append({"key": task_key(t.file, t.text), "due": day, "time": t.due_time if t.due else "", "priority": t.priority, "note": _clean(titles[t.file]), "text": _clean(t.text),
+                     "duration": t.duration, "reminds": reminds_text(t.reminds), "repeat": _clean(t.repeat)})
     rank = {"high": 0, "medium": 1, "low": 2, "": 3}
     rows.sort(key=lambda r: (r["due"] or "9999-99-99", r["time"] or "99:99", rank[r["priority"]], r["note"], r["text"]))
     return {"generated": now.strftime("%Y-%m-%dT%H:%M"), "tasks": rows[:MAX_TASKS], "total_open": len(rows)}
@@ -67,7 +73,8 @@ def snapshot(root: str | Path, today: dt.date | None = None, now: dt.datetime | 
 def to_tsv(snap: dict) -> str:
     lines = [HEADER, f"generated\t{snap['generated']}"]
     for r in snap["tasks"]:
-        lines.append("\t".join(["task", r["key"], r["due"], r["time"], r["priority"], r["note"], r["text"]]))
+        # 7 列目までは v1 のまま。あとに 所要時間(分)・通知・繰り返し を足す(古いアプリは 7 列目までを読むので壊れない)
+        lines.append("\t".join(["task", r["key"], r["due"], r["time"], r["priority"], r["note"], r["text"], str(r["duration"] or ""), r["reminds"], r["repeat"]]))
     return "\n".join(lines) + "\n"
 
 
