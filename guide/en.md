@@ -101,7 +101,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Search (fzf)
 
 - `gs` … full-text search of the vault (titles first; titles on the left, hits highlighted on the right) → `⏎` opens the hit line (`:GnosisSearch`)
-- `<Space>` … search the notes linked from the current note (titles first; their bodies too) → `⏎` opens
+- `<Space>` … switch between the mandala view (left) and the plain note (right). The current note sits in the middle with up to 8 connected notes around it (for an index: the notes it lists; for a note: the indexes it belongs to; more than 8 go on further mandalas, `[` `]`). In the mandala window move with `hjkl` / arrows and `1`-`8` (clockwise) / `0` (center); `Enter` centers the cell (a note opens on the right, the cursor stays in the mandala); `-` / `⌫` goes back; `m` cycles the mode (all → indexes only → notes only); `f` toggles full-screen 9×9 / split 3×3; `q` closes. The old "search linked notes" is `:GnosisLocalLinks` (not the table-based mandala notes of `:GnosisMandala`)
 - `\l` … choose a note with the same search and put a link with a position key (`:GnosisLinkPick`)
 - Search modes (shared by `gs` and normal / visual `\l`) … `Ctrl+→` / `Ctrl+↓` cycle forward, `Ctrl+←` / `Ctrl+↑` backward: All → Groups → Groups + index names → Notes. The screen shows the current mode. Switching preserves the query and works with zero results. Plain arrows keep their existing behavior
 - Index names … body links in groups (`index.md`, topic indexes, etc.) supply independent candidates pointing to their destination only when that destination's `Group:` lists the source group. Relation fields, code, and ordinary notes' body links are excluded. Different names for one destination stay separate; identical destination/name pairs are deduplicated. Normal `\l` inserts that display name, visual `\l` keeps the selected text. `gs` opens the destination (a name-only hit does not jump to a made-up body hit line)
@@ -230,6 +230,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 
 ### Moving
 - `:GnosisTabs` open the tab board (`\q`) ・ `:GnosisTabAdd` add the current note to the board (`\Q`)
+- `:GnosisLocalLinks` search the notes linked from the current note (the old `<Space>`; `<Space>` is now the mandala view)
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` to the parent ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` first child ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` last child
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` last link near Context
 

@@ -334,14 +334,14 @@ class TestFzf(Env):
 
     def test_other_pickers(self) -> None:
         v = self._vault()
-        # <Space>（今のノートのリンク先を検索）と \l（リンク挿入）も同じ fzf。↑ で動く
+        # :GnosisLocalLinks（旧 <Space>。今のノートのリンク先を検索）と \l（リンク挿入）も同じ fzf。↑ で動く
         (v / "alpha.md").write_text(note("Title-alpha", "[b](beta.md)\n[g](gamma.md)"), encoding="utf-8")
         for mode in MODES:
             with self.subTest(mode=mode):
                 self.out.unlink(missing_ok=True)
                 with Session(self._rc(v), str(self.home), str(self.gh), env={"PATH": os.environ["PATH"]}) as s:
                     s.send(f":edit {v}/alpha.md\r")
-                    s.send(" ", 1.5)
+                    s.send(":GnosisLocalLinks\r", 1.5)
                     s.key(mode, "up", 0.5)
                     s.send("\r", 0.8)
                     s.send(ESC + b"[20~", 0.3)

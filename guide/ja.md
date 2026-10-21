@@ -101,7 +101,7 @@
 ## 検索（fzf）
 
 - `gs` … vault を全文検索（タイトル優先。左はタイトル、右はヒット箇所を強調）→ `⏎` でヒット行を開く（`:GnosisSearch`）
-- `<Space>` … 今のノートのリンク先を検索（タイトル優先。リンク先ノートの本文も検索対象）→ `⏎` で開く
+- `<Space>` … 曼荼羅ビュー（左）とふつうのノート（右）を行き来する。中心のノートの周りに、つながっているノートを 8 つずつ並べる（索引が中心なら載っているノート、ノートが中心なら所属する索引。8 つを超えたら `[` `]` で 2 枚目以降）。曼荼羅のウィンドウでは `hjkl` / 矢印と `1`-`8`（時計回り）・`0`（中心）で動き、`Enter` でそのマスを中心にする（ノートなら右に開く。カーソルは曼荼羅に残る）、`-` / `⌫` で一つ前、`m` でモード（すべて → 索引だけ → ノートだけ）、`f` で全画面の 9×9 ⇔ 分割の 3×3、`q` で閉じる。旧「リンク先を検索」は `:GnosisLocalLinks`（`:GnosisMandala` 系の表の曼荼羅ノートとは別）
 - `\l` … 同じ全文検索でノートを選び、置き場所キーでリンクを入れる（`:GnosisLinkPick`）
 - 検索モード（`gs` / 通常・ビジュアルの `\l` 共通）… `Ctrl+→` / `Ctrl+↓` で次、`Ctrl+←` / `Ctrl+↑` で前へ循環: 全部 → グループだけ → グループ＋索引の表示名 → ノートだけ。現在モードは画面に表示。検索語は切替後も保持し、空の結果でも切替できる。普通の矢印は従来どおり
 - 索引の表示名 … グループ（`index.md`・トピックIndexなど）の本文リンクのうち、リンク先の `Group:` に登録元グループがあるものだけ、その呼び名をリンク先への独立候補として表示。関係欄・コード内・通常ノートの本文リンクは含めない。同じリンク先でも表示名が違えば別候補、宛先と表示名が同じなら重複を除く。通常の `\l` はその表示名でリンクを追加し、ビジュアルの `\l` は元の選択文字列を使う。`gs` はリンク先を開く（表示名だけのヒットでは本文のヒット行へ移動しない）
@@ -230,6 +230,7 @@
 
 ### 移動
 - `:GnosisTabs` タブのボードを開く（`\q`） ・ `:GnosisTabAdd` 今のノートをボードに足す（`\Q`）
+- `:GnosisLocalLinks` 今のノートのリンク先を検索（旧 `<Space>`。`<Space>` は曼荼羅ビュー）
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` 親へ ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` 子の先頭 ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` 子の末尾
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` Context 付近の最後のリンクへ
 

@@ -25,14 +25,14 @@ endif
 
 command! -nargs=0 FSearch call gnosis_search#run()
 command! -nargs=0 LinkPick call gnosis_search#pick_insert_link()
+command! -nargs=0 GnosisLocalLinks call gnosis_search#search_local()
 
 if !exists('g:gnosis_search_no_mappings')
   " gs = go search（rg 感覚の 2 打）。g 始まりなので他キーを遅延させない。
   " gs … vault を ripgrep で全文検索（:Rg と同じ見た目・挙動）。
   nnoremap <silent> gs        <Cmd>FSearch<CR>
-  " <Space> … 今のノートに表示中のリンクだけを fzf で一覧 → 開く。
-  " （Gnosis 側の旧ポップアップ定義をこのプラグインのほうで上書きする）
-  nnoremap <silent> <Space>   <Cmd>call gnosis_search#search_local()<CR>
+  " <Space> は曼荼羅ビュー（plugin/gnosis.vim → autoload/gnosis/mview.vim）。旧「今のノートのリンクを fzf で一覧」は
+  " アーカイブして、:GnosisLocalLinks だけ残した。
   " \l … タイトル優先の全文検索 → カーソル位置に [タイトル](相対.md) を挿入。
   " ビジュアルでは選択範囲をリンクで置き換える（表示テキストは選択文字列）。
   nnoremap <silent> \l        <Cmd>LinkPick<CR>

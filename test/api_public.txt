@@ -221,6 +221,10 @@ gnosis#move_visible
 gnosis#multi
 gnosis#multi_apply
 gnosis#multi_clear
+gnosis#mview#close
+gnosis#mview#items
+gnosis#mview#state
+gnosis#mview#toggle
 gnosis#new_child
 gnosis#new_here_typed
 gnosis#new_prefix_note

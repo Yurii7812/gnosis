@@ -1,0 +1,100 @@
+" 曼荼羅ビュー（<Space>）の回帰網（test/mview_net.sh から呼ぶ）。
+" 結果は $MV_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
+set nomore
+let s:work = $MV_WORK
+let s:v = s:work . '/vault'
+let s:res = []
+let g:gnosis_root = s:v . '/'
+let g:gnosis_autosync = 0
+let g:gnosis_skip_interactive_mount = 1
+let g:gnosis_diary_auto = 0
+let g:gnosis_test_review_skip = 1
+
+function! s:ok(name, cond, ...) abort
+  call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
+endfunction
+function! s:keys(k) abort
+  call feedkeys(a:k, 'xt')
+endfunction
+function! s:text() abort
+  return join(getbufline(gnosis#mview#state().buf, 1, '$'), "\n")
+endfunction
+function! s:note() abort
+  return fnamemodify(bufname(winbufnr(win_id2win(win_getid()))), ':t')
+endfunction
+function! s:mk(name, title, attr, grp, body) abort
+  let l:ls = ['---', 'time: 2026-01-01 00:00:00', 'title: ' . a:title] + (a:attr ? ['attribute: group'] : []) + ['---', '', '# ' . a:title, '']
+  if !empty(a:grp)
+    let l:ls += ['Group:'] + map(copy(a:grp), '"[" . v:val[0] . "](" . v:val[1] . ")"') + ['']
+  endif
+  call writefile(l:ls + a:body, s:v . '/' . a:name)
+endfunction
+
+call s:mk('index.md', 'Index', 0, [], ['[植物](plant.md)', '[料理](cook.md)'])
+let s:members = ['ハーブ', 'バラ', '栽培', 'ローズマリー', 'ミント', 'バジル', 'タイム', 'サルビア', 'ラベンダー', '水やり']
+let s:files = ['herb', 'rose', 'grow', 'rosemary', 'mint', 'basil', 'thyme', 'sage', 'lav', 'water']
+call s:mk('plant.md', '植物', 1, [['Index', 'index.md']], map(copy(s:files), '"[" . s:members[v:key] . "](" . v:val . ".md)"'))
+call s:mk('cook.md', '料理', 1, [['Index', 'index.md']], ['[カレー](curry.md)'])
+call s:mk('herb.md', 'ハーブ', 0, [['植物', 'plant.md'], ['料理', 'cook.md']], ['ハーブの話', '[ミント](mint.md)'])
+for s:i in range(1, len(s:files) - 1)
+  call s:mk(s:files[s:i] . '.md', s:members[s:i], 0, [['植物', 'plant.md']], [])
+endfor
+call s:mk('curry.md', 'カレー', 0, [['料理', 'cook.md']], [])
+
+" ふつうのノートから <Space>: そのノートを中心に、所属する索引が周りに出る
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
+call s:ok('中心は今のノート', s:st.center ==# 'herb.md', s:st.center)
+call s:ok('周りに所属の索引が出る', s:text() =~# '1 ◆植物' && s:text() =~# '2 ◆料理', s:text())
+call s:ok('ノートのつながりも出る（すべて）', s:text() =~# '3 ミント')
+call s:ok('右にそのノートが開いている', fnamemodify(bufname(winbufnr(win_id2win(1) ? 2 : 1)), ':t') ==# 'herb.md' || index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0)
+
+" モード: 索引だけ → ノートだけ
+call s:keys('m')
+call s:ok('索引だけ: ミントは出ない', s:text() !~# 'ミント' && s:text() =~# '◆植物', s:text())
+call s:keys('m')
+call s:ok('ノートだけ: 索引は出ない', s:text() !~# '◆' && s:text() =~# 'ミント', s:text())
+call s:keys('m')
+
+" 移動して Enter: その索引が中心になる（カーソルは曼荼羅のまま）
+call s:keys('1')
+call s:keys("\<CR>")
+call s:ok('Enter で植物が中心', s:st.center ==# 'plant.md', s:st.center)
+call s:ok('カーソルは曼荼羅に残る', &filetype ==# 'gnosis-mandala')
+call s:ok('索引の中身が 8 つ周りに出る', s:text() =~# '1 ハーブ' && s:text() =~# '8 サルビア', s:text())
+call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
+" ページ送り
+call s:keys(']')
+call s:ok('] で 2 枚目: ラベンダーと水やり', s:text() =~# '1 ラベンダー' && s:text() =~# '2 水やり' && s:text() =~# '2/2', s:text())
+call s:keys(']')
+call s:ok('最後の次へは進まない', s:st.page == 1)
+call s:keys('[')
+" ノートのマスで Enter: 右にそのノートが開く
+call s:keys('3')
+call s:keys("\<CR>")
+call s:ok('ノートのマスで中心が栽培に', s:st.center ==# 'grow.md', s:st.center)
+call s:ok('右に栽培が開く', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'grow.md') >= 0)
+call s:ok('栽培の周りに所属の植物', s:text() =~# '1 ◆植物', s:text())
+" 戻る
+call s:keys('-')
+call s:ok('- で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
+" 全画面 9×9
+call s:keys('f')
+call s:ok('f で 9×9', s:st.size == 9 && winnr('$') == 1, s:st.size . ' wins=' . winnr('$'))
+call s:ok('9×9 は 9 行 9 列', len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "^┃\\|^│"')) >= 18)
+call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハーブ' && s:text() =~# 'ミント', s:text())
+call s:keys('f')
+call s:ok('もう一度 f で 3×3 に戻る', s:st.size == 3 && winnr('$') == 2)
+" Space でノートへ、もう一度で曼荼羅へ
+call s:keys(' ')
+call s:ok('Space でノートのウィンドウへ', &filetype !=# 'gnosis-mandala')
+call s:keys(' ')
+call s:ok('Space でまた曼荼羅へ', &filetype ==# 'gnosis-mandala')
+" 閉じる
+call s:keys('q')
+call s:ok('q で閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
+
+call writefile(s:res, s:work . '/result.txt')
+qa!

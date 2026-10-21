@@ -690,7 +690,9 @@ xnoremap <silent> \S :<C-u>call gnosis#sort_selection()<CR>
 "     + - * = も記号としてそのまま打てる（子親追加・マーク・ヤンクは ⏎ で
 "     入力を終えたコマンド状態か、英字キー c/p/m/y で行う）
 " <S-Space> … ポップアップを出さずカーソルだけ次の関係リンクへ（従来動作）。
-nnoremap <silent> <Space>   <Cmd>call gnosis#relation_link_popup()<CR>
+" 旧ノートナビゲータ（上の説明）は廃止。<Space> は曼荼羅ビュー（autoload/gnosis/mview.vim）と、ふつうのノートの切り替え。
+"   旧: nnoremap <silent> <Space> <Cmd>call gnosis#relation_link_popup()<CR>
+nnoremap <silent> <Space>   <Cmd>call gnosis#mview#toggle()<CR>
 nnoremap <silent> <S-Space> <Cmd>call gnosis#jump_relation_link(1)<CR>
 " 数字 1-9,0 … 本文 → Parent/Child の順で通し番号にした N 番目のリンクへ移動
 "（0 は10番目）。該当リンクが無い所ではそのままカウント/行頭移動として働く
