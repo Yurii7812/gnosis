@@ -6,6 +6,7 @@ TMPDIR=${TMPDIR:-$HOME/Desktop/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$REPO/test/noclip.sh"   # 本物のクリップボードを読まない・書かない
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/vault" "$WORK/home"

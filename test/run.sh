@@ -10,6 +10,8 @@ export TMPDIR
 GNOSIS_HOME=${GNOSIS_HOME:-$(mktemp -d)}
 export GNOSIS_HOME
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# 試験は本物のクリップボードを読まない・書かない（vault の外のファイルを拾って書き換えた事故の再発防止）
+. "$REPO/test/noclip.sh"
 GOLDEN="$REPO/test/api_public.txt"
 OUT=$(mktemp)
 ERR=$(mktemp)

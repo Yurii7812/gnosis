@@ -3,6 +3,7 @@
 # 使い方: test/requests_1020_net.sh   （一時フォルダだけを使う。本物の vault には触らない）
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$REPO/test/noclip.sh"   # 本物のクリップボードを読まない・書かない
 D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/r1020.XXXXXX")
 trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh"

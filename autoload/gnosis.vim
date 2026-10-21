@@ -11996,8 +11996,14 @@ endfunction
 " 開いていて未保存のノートは先に保存する
 function! s:save_member_yomis(plan) abort
   let l:tsv = []
+  " よみは vault の中のノートにだけ書く（vault の外のファイルへのリンクを入れても、そのファイルは書き換えない）
+  let l:root = s:get_pkm_root()
+  let l:root = empty(l:root) ? '' : fnamemodify(resolve(l:root), ':p')
   for l:p in a:plan
-    if empty(get(l:p, 'yomi', '')) || !filereadable(l:p.abs)
+    if empty(get(l:p, 'yomi', '')) || !filereadable(l:p.abs) || l:p.abs !~? '\.md$'
+      continue
+    endif
+    if empty(l:root) || stridx(fnamemodify(resolve(l:p.abs), ':p'), l:root) != 0
       continue
     endif
     let l:bn = bufnr(l:p.abs)

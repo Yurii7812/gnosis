@@ -51,5 +51,14 @@ call add(g:R, 'screen3 ' . WaitScreen(1) . ' n=' . len(filter(getline(1, '$'), '
 call gnosis#review_skip()
 call WaitScreen(0)
 call add(g:R, 'back ' . fnamemodify(bufname('%'), ':t'))
+" 4) vault の外のファイルへのリンクを入れても、そのファイルにはよみを書かない（2026-10-21 の事故の再発防止）
+call writefile(['# 外のファイル', '', '本文'], $D . '/outside.md')
+call setreg('"', "[外のファイル](../outside.md)\n")
+let g:gnosis_test_display_name = ['']
+let g:gnosis_test_yomi = ['そと']
+call gnosis#add_clipboard_before_up_note()
+unlet g:gnosis_test_display_name g:gnosis_test_yomi
+call WaitScreen(0)
+call add(g:R, 'outside ' . string(readfile($D . '/outside.md')))
 call writefile(g:R, $D . '/out.txt')
 qa!

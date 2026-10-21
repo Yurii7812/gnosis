@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$REPO/test/noclip.sh"   # 本物のクリップボードを読まない・書かない
 D=$(mktemp -d "${TMPDIR:-/tmp}/gnosis7.XXXXXX")
 trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh"

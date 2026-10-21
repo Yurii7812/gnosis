@@ -4,6 +4,7 @@
 # 使い方: test/group_review_net.sh   （一時フォルダだけを使う。本物の vault には触らない）
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$REPO/test/noclip.sh"   # 本物のクリップボードを読まない・書かない
 D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/grv.XXXXXX")
 trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh"
@@ -19,7 +20,8 @@ cancel ['[あひる](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
 screen2 1 n=4
 after2 ['[あひる](a.md)', '[イルカ](i.md)', '[ウシ](u.md)', '[筋トレ](k.md)']
 screen3 1 n=4
-back g.md"
+back g.md
+outside ['# 外のファイル', '', '本文']"
 if [ "$(cat "$D/out.txt" 2>/dev/null)" = "$WANT" ]; then
   echo "group_review OK"
 else
