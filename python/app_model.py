@@ -212,6 +212,7 @@ class Vault:
         self.root = Path(root).resolve()
         self.notes: dict[str, Note] = {}
         self._incoming: dict[str, list] | None = None
+        self._links_in: dict[str, list] | None = None
         self._tasks: list | None = None
         self._bfs: dict | None = None
         self.refreshed_at = 0.0
@@ -249,6 +250,7 @@ class Vault:
             changed += 1
         if changed:
             self._incoming = None
+            self._links_in = None
             self._bfs = None
         self._tasks = None
         return changed
@@ -423,6 +425,47 @@ class Vault:
             d["origin"] = self.ref(o) if o else None
         return d
 
+    # ---- リンク（\\A の右のバー: バックリンク・出ていくリンク・関係） ----
+    LINK_PLACES = (("body", "本文"), ("ctx", "Context"), ("pb", "ParentBranch"), ("groups", "Group"), ("bg", "BranchGroup"))
+
+    def links_in(self) -> dict[str, list]:
+        """ノート → それへリンクしている (ノート, 場所, Link) の一覧（本文と先頭のブロック。下の BackLink: などの節は数えない）。"""
+        if self._links_in is None:
+            inc: dict[str, list] = {}
+            for m in self.notes.values():
+                for attr, place in self.LINK_PLACES:
+                    for lk in getattr(m, attr):
+                        if lk.rel and lk.rel != m.rel:
+                            inc.setdefault(lk.rel, []).append((m.rel, place, lk))
+            self._links_in = inc
+        return self._links_in
+
+    def links(self, file: str) -> dict:
+        rel = self._rel_of(file)
+        n = self.notes.get(rel)
+        if n is None:
+            return {"rel": rel, "missing": True}
+        back: dict[str, dict] = {}
+        for src, place, lk in self.links_in().get(rel, []):
+            b = back.setdefault(src, {**self.ref(src), "kind": self.kind(self.notes[src]), "places": [], "hits": []})
+            if place not in b["places"]:
+                b["places"].append(place)
+            if len(b["hits"]) < 5:
+                b["hits"].append({"place": place, "text": lk.text, "row": lk.row, "line": lk.line})
+        backs = sorted(back.values(), key=lambda x: (x["places"] == ["Group"], x["title"]))
+        out, seen = [], set()
+        for lk in n.body:
+            key = lk.rel or ("?" + lk.text)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({**(self.ref(lk.rel) if lk.rel else {"rel": "", "title": lk.text, "missing": True}), "text": lk.text, "line": lk.line})
+        children = [self.ref(m.rel) for m in self.notes.values() if any(lk.rel == rel for lk in m.pb)]
+        refs = lambda lst: [self.ref(lk.rel) for lk in lst if lk.rel]
+        return {**self.ref(rel), "kind": self.kind(n), "backlinks": backs, "outgoing": out,
+                "context": refs(n.ctx), "parents": refs(n.pb), "children": sorted(children, key=lambda x: (x.get("fz", ""), x["title"])),
+                "groups": refs(n.groups), "topics": refs(n.bg)}
+
     def kind(self, n: Note) -> str:
         if n.rel == self.index_rel():
             return "index"
@@ -593,9 +636,10 @@ METHODS = {
     "nav.topics": lambda v, p: v.topics(v._rel_of(p.get("file", ""))),
     "nav.entries": lambda v, p: v.entries(v._rel_of(p.get("file", ""))),
     "nav.indexes": lambda v, p: v.indexes(),
-    "nav.notes": lambda v, p: v.notes_list(p.get("q", ""), kind=p.get("kind", "")),
+    "nav.notes": lambda v, p: v.notes_list(p.get("q", ""), limit=max(1, min(int(p.get("limit", 80) or 80), 2000)), kind=p.get("kind", "")),
     "nav.root": lambda v, p: v.note_info(v.index_rel()),
     "nav.unindexed": lambda v, p: v.unindexed(),
+    "nav.links": lambda v, p: v.links(p.get("file", "")),
     "cal.month": lambda v, p: v.month(p.get("ym") or dt.date.today().strftime("%Y-%m")),
     "cal.day": lambda v, p: v.day(p.get("date") or dt.date.today().isoformat()),
     "task.complete": lambda v, p: task_complete_text(v, p.get("file", ""), p.get("line", 0), p.get("today", "")),

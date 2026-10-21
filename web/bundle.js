@@ -740,60 +740,60 @@ WARNING: This link could potentially be dangerous`)) {
     }
     O.first = a;
     function u(I, k) {
-      let P = 0;
-      for (let oe of I) if (k(oe, P++)) return true;
+      let P2 = 0;
+      for (let oe of I) if (k(oe, P2++)) return true;
       return false;
     }
     O.some = u;
     function h4(I, k) {
-      for (let P of I) if (k(P)) return P;
+      for (let P2 of I) if (k(P2)) return P2;
     }
     O.find = h4;
     function* c(I, k) {
-      for (let P of I) k(P) && (yield P);
+      for (let P2 of I) k(P2) && (yield P2);
     }
     O.filter = c;
     function* d(I, k) {
-      let P = 0;
-      for (let oe of I) yield k(oe, P++);
+      let P2 = 0;
+      for (let oe of I) yield k(oe, P2++);
     }
     O.map = d;
     function* _2(I, k) {
-      let P = 0;
-      for (let oe of I) yield* k(oe, P++);
+      let P2 = 0;
+      for (let oe of I) yield* k(oe, P2++);
     }
     O.flatMap = _2;
     function* p(...I) {
       for (let k of I) yield* k;
     }
     O.concat = p;
-    function m(I, k, P) {
-      let oe = P;
+    function m(I, k, P2) {
+      let oe = P2;
       for (let Me of I) oe = k(oe, Me);
       return oe;
     }
     O.reduce = m;
-    function* f(I, k, P = I.length) {
-      for (k < 0 && (k += I.length), P < 0 ? P += I.length : P > I.length && (P = I.length); k < P; k++) yield I[k];
+    function* f(I, k, P2 = I.length) {
+      for (k < 0 && (k += I.length), P2 < 0 ? P2 += I.length : P2 > I.length && (P2 = I.length); k < P2; k++) yield I[k];
     }
     O.slice = f;
     function A(I, k = Number.POSITIVE_INFINITY) {
-      let P = [];
-      if (k === 0) return [P, I];
+      let P2 = [];
+      if (k === 0) return [P2, I];
       let oe = I[Symbol.iterator]();
       for (let Me = 0; Me < k; Me++) {
         let Pe = oe.next();
-        if (Pe.done) return [P, O.empty()];
-        P.push(Pe.value);
+        if (Pe.done) return [P2, O.empty()];
+        P2.push(Pe.value);
       }
-      return [P, { [Symbol.iterator]() {
+      return [P2, { [Symbol.iterator]() {
         return oe;
       } }];
     }
     O.consume = A;
     async function R(I) {
       let k = [];
-      for await (let P of I) k.push(P);
+      for await (let P2 of I) k.push(P2);
       return Promise.resolve(k);
     }
     O.asyncToArray = R;
@@ -1293,10 +1293,10 @@ ${h4.join(`
       return N2.event;
     }
     Qe.fromDOMEventEmitter = k;
-    function P(y) {
+    function P2(y) {
       return new Promise((T) => i(y)(T));
     }
-    Qe.toPromise = P;
+    Qe.toPromise = P2;
     function oe(y) {
       let T = new v();
       return y.then((g) => {
@@ -3982,7 +3982,7 @@ ${h4.join(`
     createRow(t3, e, i, r, n, o2, l, a, u, h4, c) {
       let d = [], _2 = this._characterJoinerService.getJoinedCharacters(e), p = this._themeService.colors, m = t3.getNoBgTrimmedLength();
       i && m < o2 + 1 && (m = o2 + 1);
-      let f, A = 0, R = "", O = 0, I = 0, k = 0, P = 0, oe = false, Me = 0, Pe = false, Ke = 0, di = 0, V = [], Qe = h4 !== -1 && c !== -1;
+      let f, A = 0, R = "", O = 0, I = 0, k = 0, P2 = 0, oe = false, Me = 0, Pe = false, Ke = 0, di = 0, V = [], Qe = h4 !== -1 && c !== -1;
       for (let y = 0; y < m; y++) {
         t3.loadCell(y, this._workCell);
         let T = this._workCell.getWidth();
@@ -3999,11 +3999,11 @@ ${h4.join(`
         });
         let ze = x.getChars() || we;
         if (ze === " " && (x.isUnderline() || x.isOverline()) && (ze = "\xA0"), Ke = T * a - u.get(ze, x.isBold(), x.isItalic()), !f) f = this._document.createElement("span");
-        else if (A && (N2 && Pe || !N2 && !Pe && x.bg === I) && (N2 && Pe && p.selectionForeground || x.fg === k) && x.extended.ext === P && te === oe && Ke === Me && !Z && !g && !Oe && w) {
+        else if (A && (N2 && Pe || !N2 && !Pe && x.bg === I) && (N2 && Pe && p.selectionForeground || x.fg === k) && x.extended.ext === P2 && te === oe && Ke === Me && !Z && !g && !Oe && w) {
           x.isInvisible() ? R += we : R += ze, A++;
           continue;
         } else A && (f.textContent = R), f = this._document.createElement("span"), A = 0, R = "";
-        if (I = x.bg, k = x.fg, P = x.extended.ext, oe = te, Me = Ke, Pe = N2, g && o2 >= y && o2 <= E && (o2 = y), !this._coreService.isCursorHidden && Z && this._coreService.isCursorInitialized) {
+        if (I = x.bg, k = x.fg, P2 = x.extended.ext, oe = te, Me = Ke, Pe = N2, g && o2 >= y && o2 <= E && (o2 = y), !this._coreService.isCursorHidden && Z && this._coreService.isCursorInitialized) {
           if (V.push("xterm-cursor"), this._coreBrowserService.isFocused) l && V.push("xterm-cursor-blink"), V.push(r === "bar" ? "xterm-cursor-bar" : r === "underline" ? "xterm-cursor-underline" : "xterm-cursor-block");
           else if (n) switch (n) {
             case "outline":
@@ -7366,7 +7366,7 @@ ${h4.join(`
     }
     requestMode(e, i) {
       let r;
-      ((P) => (P[P.NOT_RECOGNIZED = 0] = "NOT_RECOGNIZED", P[P.SET = 1] = "SET", P[P.RESET = 2] = "RESET", P[P.PERMANENTLY_SET = 3] = "PERMANENTLY_SET", P[P.PERMANENTLY_RESET = 4] = "PERMANENTLY_RESET"))(r ||= {});
+      ((P2) => (P2[P2.NOT_RECOGNIZED = 0] = "NOT_RECOGNIZED", P2[P2.SET = 1] = "SET", P2[P2.RESET = 2] = "RESET", P2[P2.PERMANENTLY_SET = 3] = "PERMANENTLY_SET", P2[P2.PERMANENTLY_RESET = 4] = "PERMANENTLY_RESET"))(r ||= {});
       let n = this._coreService.decPrivateModes, { activeProtocol: o2, activeEncoding: l } = this._coreMouseService, a = this._coreService, { buffers: u, cols: h4 } = this._bufferService, { active: c, alt: d } = u, _2 = this._optionsService.rawOptions, p = (A, R) => (a.triggerDataEvent(`${b.ESC}[${i ? "" : "?"}${A};${R}$y`), true), m = (A) => A ? 1 : 2, f = e.params[0];
       return i ? f === 2 ? p(f, 4) : f === 4 ? p(f, m(a.modes.insertMode)) : f === 12 ? p(f, 3) : f === 20 ? p(f, m(_2.convertEol)) : p(f, 0) : f === 1 ? p(f, m(n.applicationCursorKeys)) : f === 3 ? p(f, _2.windowOptions.setWinLines ? h4 === 80 ? 2 : h4 === 132 ? 1 : 0 : 0) : f === 6 ? p(f, m(n.origin)) : f === 7 ? p(f, m(n.wraparound)) : f === 8 ? p(f, 3) : f === 9 ? p(f, m(o2 === "X10")) : f === 12 ? p(f, m(_2.cursorBlink)) : f === 25 ? p(f, m(!a.isCursorHidden)) : f === 45 ? p(f, m(n.reverseWraparound)) : f === 66 ? p(f, m(n.applicationKeypad)) : f === 67 ? p(f, 4) : f === 1e3 ? p(f, m(o2 === "VT200")) : f === 1002 ? p(f, m(o2 === "DRAG")) : f === 1003 ? p(f, m(o2 === "ANY")) : f === 1004 ? p(f, m(n.sendFocus)) : f === 1005 ? p(f, 4) : f === 1006 ? p(f, m(l === "SGR")) : f === 1015 ? p(f, 4) : f === 1016 ? p(f, m(l === "SGR_PIXELS")) : f === 1048 ? p(f, 1) : f === 47 || f === 1047 || f === 1049 ? p(f, m(c === d)) : f === 2004 ? p(f, m(n.bracketedPasteMode)) : f === 2026 ? p(f, m(n.synchronizedOutput)) : p(f, 0);
     }
@@ -34753,6 +34753,7 @@ ${h4.join(`
     let siteUrl = "";
     let sig = "";
     let saveTimer = null;
+    let vimTitle = "";
     const els = /* @__PURE__ */ new Map();
     const paneEls = /* @__PURE__ */ new Map();
     const splitEls = /* @__PURE__ */ new Map();
@@ -34960,6 +34961,8 @@ ${h4.join(`
       if (!paneEls.has(focusPane)) focusPane = panes(layout)[0].id;
       const solo = paneEls.size === 1 && panes(layout)[0].tabs.length === 1;
       root.classList.toggle("solo", solo);
+      const tr2 = (n) => n.type === "tabs" ? n : tr2(n.dir === "row" ? n.b : n.a);
+      for (const [id2, p] of paneEls) p.pane.classList.toggle("edge-tr", id2 === tr2(layout).id);
       walk(layout, (n) => {
         if (n.type !== "split") return;
         const e = splitEls.get(n.id);
@@ -35008,7 +35011,9 @@ ${h4.join(`
         t3.draggable = true;
         t3.dataset.tabId = tab.id;
         t3.title = KIND_LABEL[tab.kind] || tab.kind;
-        t3.appendChild(h4("span", "tabtitle", (tab.pinned ? "\u{1F4CC} " : "") + (tab.title || KIND_LABEL[tab.kind] || tab.kind)));
+        const label = tab.kind === "vim" ? vimTitle || "Vim" : tab.title || KIND_LABEL[tab.kind] || tab.kind;
+        t3.appendChild(h4("span", "tabtitle", (tab.pinned ? "\u{1F4CC} " : "") + label));
+        if (tab.kind === "vim") t3.title = "Vim: " + (vimTitle || "");
         if (tab.kind !== "vim") {
           const x = h4("button", "tabclose", "\xD7");
           x.type = "button";
@@ -35239,6 +35244,17 @@ ${h4.join(`
       layout = activateTab(layout, next.id);
       changed();
     }
+    function closeActive() {
+      const pane = findPane(layout, focusPane) || panes(layout)[0];
+      const t3 = (findTab(layout, pane.active) || {}).tab;
+      if (!t3 || t3.kind === "vim" || t3.pinned) return false;
+      return closeTab2(t3.id);
+    }
+    function setVimTitle(t3) {
+      if (t3 === vimTitle) return;
+      vimTitle = t3;
+      for (const pane of panes(layout)) if (pane.tabs.some((x) => x.kind === "vim")) renderBar(pane, paneEls.get(pane.id));
+    }
     function showVim() {
       const v2 = vimTab(layout);
       if (v2) {
@@ -35276,6 +35292,8 @@ ${h4.join(`
       openExtra,
       openFeatures,
       closeTab: closeTab2,
+      closeActive,
+      setVimTitle,
       reopenClosed,
       splitFocused,
       unsplitFocused,
@@ -35376,6 +35394,7 @@ ${h4.join(`
           inp.type = "search";
           inp.placeholder = f.placeholder || "\u63A2\u3059\u2026";
           inp.autocomplete = "off";
+          inp.value = f.query || "";
           const chosen = h3("div", "gpick-chosen", "");
           const list = h3("div", "gpick-list");
           let items = [], sel2 = 0, timer = null;
@@ -35507,6 +35526,39 @@ ${h4.join(`
   var KIND_BADGE = { index: "Global Index", topic: "\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15", group: "\u7D22\u5F15", diary: "\u65E5\u8A18", mandala: "\u66FC\u837C\u7F85", canvas: "\u30AD\u30E3\u30F3\u30D0\u30B9", note: "" };
   function noteSub(x) {
     return [KIND_BADGE[x.kind] || "", x.path || "", x.time ? x.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 ");
+  }
+  function popupMenu(x, y, items) {
+    document.querySelectorAll(".ctxmenu").forEach((m2) => m2.remove());
+    const m = h3("div", "ctxmenu");
+    m.style.left = x + "px";
+    m.style.top = y + "px";
+    for (const it of items) {
+      if (it === "-") {
+        m.appendChild(h3("div", "sep"));
+        continue;
+      }
+      const b2 = h3("button", "", it.label);
+      b2.type = "button";
+      b2.disabled = !!it.disabled;
+      b2.addEventListener("click", () => {
+        m.remove();
+        it.run();
+      });
+      m.appendChild(b2);
+    }
+    document.body.appendChild(m);
+    m.style.maxHeight = window.innerHeight - 16 + "px";
+    const r = m.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
+    if (r.right > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
+    const away = (e) => {
+      if (!m.contains(e.target)) {
+        m.remove();
+        document.removeEventListener("mousedown", away, true);
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", away, true), 0);
+    return m;
   }
 
   // src/nav.js
@@ -36353,6 +36405,19 @@ ${h4.join(`
     }
     return null;
   }
+  function relLink(dir, rel) {
+    const from = dir.split("/").filter(Boolean), to = rel.split("/");
+    let i = 0;
+    while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+    const path = "../".repeat(from.length - i) + to.slice(i).join("/");
+    return path.replace(/%/g, "%25").replace(/ /g, "%20").replace(/\(/g, "%28").replace(/\)/g, "%29");
+  }
+  function cellLink(label, dir, rel) {
+    return `[${label.replace(/\[/g, "(").replace(/\]/g, ")").trim()}](${relLink(dir, rel)})`;
+  }
+  function unlinkText(v2) {
+    return v2.replace(new RegExp(LINK_RE.source, "g"), (_2, t3) => t3.replace(/\\(.)/g, "$1"));
+  }
   var blockCells = (b2) => {
     const br3 = Math.floor(b2 / 3) * 3, bc2 = b2 % 3 * 3;
     const out = [];
@@ -36456,9 +36521,51 @@ ${h4.join(`
       if (m) {
         grid[m[0]][m[1]] = v2;
         const other = body.querySelector(`[data-rc="${m[0]},${m[1]}"] textarea`);
-        if (other && other !== document.activeElement) other.value = v2;
+        if (other && other !== document.activeElement) {
+          other.value = v2;
+          other.dispatchEvent(new Event("blur"));
+        }
       }
       schedule();
+    }
+    const dirOf = () => rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "";
+    async function putNote(r, c, target, title) {
+      if (!title) {
+        const q2 = await ctx.query("nav.note", { file: target });
+        title = q2.ok && q2.result && !q2.result.missing ? q2.result.title : target.split("/").pop().replace(/\.md$/i, "");
+      }
+      if (target === rel) {
+        toast("\u3053\u306E\u66FC\u837C\u7F85\u81EA\u8EAB\u306F\u5165\u308C\u3089\u308C\u307E\u305B\u3093", "err");
+        return;
+      }
+      const cur = unlinkText(grid[r][c]).trim();
+      const v2 = cellLink(cur || title, dirOf(), target);
+      const ta2 = body.querySelector(`[data-rc="${r},${c}"] textarea`);
+      if (ta2) ta2.value = v2;
+      setCell(r, c, v2);
+      if (ta2) ta2.dispatchEvent(new Event("blur"));
+      toast(`\u300C${title}\u300D\u3092\u30DE\u30B9\u306B\u5165\u308C\u307E\u3057\u305F`);
+    }
+    async function pickNote(r, c) {
+      const cur = unlinkText(grid[r][c]).trim();
+      const v2 = await form({
+        title: "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u306B\u5165\u308C\u308B",
+        ok: "\u5165\u308C\u308B",
+        note: cur ? `\u30DE\u30B9\u306E\u6587\u5B57\u300C${cur}\u300D\u306F\u305D\u306E\u307E\u307E\u8868\u793A\u540D\u306B\u3057\u3066\u3001\u9078\u3093\u3060\u30CE\u30FC\u30C8\u3078\u306E\u30EA\u30F3\u30AF\u306B\u3057\u307E\u3059\u3002` : "\u30DE\u30B9\u306B\u306F\u9078\u3093\u3060\u30CE\u30FC\u30C8\u306E\u984C\u304C\u5165\u308A\u307E\u3059\uFF08\u3042\u3068\u304B\u3089\u76F4\u305B\u307E\u3059\uFF09\u3002",
+        fields: [{
+          key: "file",
+          label: "\u30CE\u30FC\u30C8",
+          type: "picker",
+          placeholder: "\u984C\u3067\u63A2\u3059",
+          query: cur,
+          load: async (q2) => {
+            const res = await ctx.query("nav.notes", { q: q2 });
+            return (res.ok ? res.result : []).filter((x) => x.rel !== rel).map((x) => ({ value: x.rel, label: x.title, sub: noteSub(x) }));
+          }
+        }]
+      });
+      if (!v2 || !v2.file) return;
+      await putNote(r, c, v2.file);
     }
     function cellEl(r, c, opts = {}) {
       const v2 = grid[r][c];
@@ -36509,6 +36616,22 @@ ${h4.join(`
       ta2.addEventListener("blur", () => {
         cell2.classList.remove("editing");
         drawDisp();
+        drawTools();
+      });
+      const isNote = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("text/gnosis-note");
+      cell2.addEventListener("dragover", (e) => {
+        if (isNote(e)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          cell2.classList.add("drop");
+        }
+      });
+      cell2.addEventListener("dragleave", () => cell2.classList.remove("drop"));
+      cell2.addEventListener("drop", (e) => {
+        cell2.classList.remove("drop");
+        if (!isNote(e)) return;
+        e.preventDefault();
+        putNote(r, c, e.dataTransfer.getData("text/gnosis-note"));
       });
       function drawDisp() {
         const cur = grid[r][c];
@@ -36535,10 +36658,21 @@ ${h4.join(`
         toolsKey = key;
         tools.textContent = "";
         cell2.classList.toggle("linked", !!lk);
-        if (lk) tools.appendChild(button("\u958B\u304F", () => openLink(lk[2]), "md-tool", "\u30EA\u30F3\u30AF\u5148\u3092 Vim \u3067\u958B\u304F"));
-        else if (cur.trim()) {
+        if (lk) {
+          tools.appendChild(button("\u958B\u304F", () => openLink(lk[2]), "md-tool", "\u30EA\u30F3\u30AF\u5148\u3092 Vim \u3067\u958B\u304F"));
+          tools.appendChild(button("\u5916\u3059", () => {
+            const v3 = unlinkText(grid[r][c]);
+            ta2.value = v3;
+            setCell(r, c, v3);
+            drawDisp();
+            drawTools();
+          }, "md-tool", "\u30EA\u30F3\u30AF\u3092\u5916\u3057\u3066\u6587\u5B57\u3060\u3051\u6B8B\u3059"));
+        } else if (cur.trim()) {
           tools.appendChild(button("\u30CE\u30FC\u30C8\u306B", () => linkCell(r, c, "note"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3067\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u3092\u4F5C\u308A\u3001\u30DE\u30B9\u3092\u30EA\u30F3\u30AF\u306B\u3059\u308B"));
+          tools.appendChild(button("\u65E2\u5B58\u2026", () => pickNote(r, c), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3001\u3053\u306E\u30DE\u30B9\u3092\u305D\u306E\u30CE\u30FC\u30C8\u3078\u306E\u30EA\u30F3\u30AF\u306B\u3059\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
           tools.appendChild(button("\u66FC\u837C\u7F85\u306B", () => linkCell(r, c, "mandala"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3092\u4E3B\u984C\u306B\u3057\u305F\u5225\u306E\u66FC\u837C\u7F85\u3092\u4F5C\u308B"));
+        } else {
+          tools.appendChild(button("\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u2026", () => pickNote(r, c), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3053\u306E\u30DE\u30B9\u306B\u5165\u308C\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
         }
         if (opts.zoom) tools.appendChild(button("\u5E83\u3052\u308B \u25B8", opts.zoom, "md-tool zoom", "\u3053\u306E\u30DE\u30B9\u3092\u4E2D\u5FC3\u306B 8 \u30DE\u30B9\u3067\u5E83\u3052\u308B\uFF08Alt+\u2193\uFF09"));
       }
@@ -36620,7 +36754,7 @@ ${h4.join(`
         mini.appendChild(mb);
       }
       body.appendChild(mini);
-      body.appendChild(h3("div", "nav-dim small md-help", "Enter/Tab \u3067\u6B21\u306E\u30DE\u30B9\u30FBShift+Tab \u3067\u524D\u30FB\u526F\u984C\u306E\u300C\u5E83\u3052\u308B \u25B8\u300D\uFF08Alt+\u2193\uFF09\u3067\u305D\u306E\u30D6\u30ED\u30C3\u30AF\u3078\u30FBAlt+\u2191 \u3067\u4E2D\u5FC3\u3078\u623B\u308B\u3002\u6253\u3061\u7D42\u308F\u3063\u3066\u5C11\u3057\u3059\u308B\u3068 Vim \u304C\u4FDD\u5B58\u3057\u307E\u3059\u3002"));
+      body.appendChild(h3("div", "nav-dim small md-help", "Enter/Tab \u3067\u6B21\u306E\u30DE\u30B9\u30FBShift+Tab \u3067\u524D\u30FB\u526F\u984C\u306E\u300C\u5E83\u3052\u308B \u25B8\u300D\uFF08Alt+\u2193\uFF09\u3067\u305D\u306E\u30D6\u30ED\u30C3\u30AF\u3078\u30FBAlt+\u2191 \u3067\u4E2D\u5FC3\u3078\u623B\u308B\u3002\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u306F\u300C\u65E2\u5B58\u2026\u300D\u304B\u3001\u5DE6\u53F3\u306E\u30D0\u30FC\u304B\u3089\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3067\u5165\u308A\u307E\u3059\u3002\u6253\u3061\u7D42\u308F\u3063\u3066\u5C11\u3057\u3059\u308B\u3068 Vim \u304C\u4FDD\u5B58\u3057\u307E\u3059\u3002"));
     }
     load();
     return { el: el2, loaded: true, onShow: () => {
@@ -37173,6 +37307,763 @@ ${h4.join(`
     } };
   }
 
+  // src/icons.js
+  var P = {
+    "panel-left": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+    "panel-right": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+    search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.3-4.3"/>',
+    "file-search": '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M14 3v5h5"/><path d="M19 8v3"/><circle cx="15.5" cy="16.5" r="3"/><path d="m21 22-3.3-3.3"/>',
+    files: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    index: '<path d="M4 5h4M4 12h4M4 19h4"/><path d="M11 5h9M13 12h7M13 19h7"/><path d="M11 5v14"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    today: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>',
+    mandala: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>',
+    canvas: '<rect x="3" y="3" width="7" height="6" rx="1"/><rect x="14" y="15" width="7" height="6" rx="1"/><path d="M10 6h4a3 3 0 0 1 3 3v6"/>',
+    graph: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.3 7 15.6 7.6M7 8.3l2 7.4M16.4 10 11.8 16"/>',
+    command: '<path d="m5 8 4 4-4 4"/><path d="M12 17h7"/>',
+    columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+    cards: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+    table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
+    timeline: '<path d="M4 12h16"/><circle cx="7" cy="12" r="2"/><circle cx="13" cy="12" r="2"/><circle cx="19" cy="12" r="1"/><path d="M7 4v6M13 14v6"/>',
+    features: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    backlink: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+    outline: '<path d="M4 6h16M8 12h12M12 18h8"/>',
+    relation: '<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/>',
+    hash: '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    "note-plus": '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M12 12v6M9 15h6"/>',
+    back: '<path d="m15 18-6-6 6-6"/>',
+    forward: '<path d="m9 18 6-6-6-6"/>',
+    more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    book: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5V4.5"/>',
+    pencil: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+    terminal: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m6 9 3 3-3 3M12 15h5"/>',
+    split: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+    vault: '<path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12" r="3"/><path d="M12 9V7M12 17v-2M9 12H7M17 12h-2"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>'
+  };
+  function icon(name2, size = 18) {
+    const s15 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s15.setAttribute("viewBox", "0 0 24 24");
+    s15.setAttribute("width", String(size));
+    s15.setAttribute("height", String(size));
+    s15.setAttribute("fill", "none");
+    s15.setAttribute("stroke", "currentColor");
+    s15.setAttribute("stroke-width", "1.8");
+    s15.setAttribute("stroke-linecap", "round");
+    s15.setAttribute("stroke-linejoin", "round");
+    s15.setAttribute("aria-hidden", "true");
+    s15.classList.add("ico");
+    s15.innerHTML = P[name2] || P.features;
+    return s15;
+  }
+  function iconButton(name2, label, onClick2, cls = "") {
+    const b2 = document.createElement("button");
+    b2.type = "button";
+    b2.className = "icobtn " + cls;
+    b2.title = label;
+    b2.setAttribute("aria-label", label);
+    b2.appendChild(icon(name2));
+    if (onClick2) b2.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick2(e);
+    });
+    return b2;
+  }
+
+  // src/docks.js
+  var KEY = "gnosis.docks";
+  var LS = {
+    get() {
+      try {
+        return JSON.parse(localStorage.getItem(KEY) || "null");
+      } catch {
+        return null;
+      }
+    },
+    set(v2) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(v2));
+      } catch {
+      }
+    }
+  };
+  function createDocks({ ribbonEl, leftEl, rightEl, leftSplit, rightSplit, centerEl, panels, ribbon, onResize, menu }) {
+    const byId = new Map(panels.map((p) => [p.id, p]));
+    const saved = LS.get() || {};
+    const st3 = {
+      left: { open: true, width: 300, tabs: [], active: "", ...saved.left || {} },
+      right: { open: true, width: 280, tabs: [], active: "", ...saved.right || {} },
+      ribbonHidden: Array.isArray(saved.ribbonHidden) ? saved.ribbonHidden : []
+    };
+    for (const side of ["left", "right"]) st3[side].tabs = (st3[side].tabs || []).filter((id2) => byId.has(id2));
+    for (const p of panels) if (!st3.left.tabs.includes(p.id) && !st3.right.tabs.includes(p.id)) st3[p.side].tabs.push(p.id);
+    for (const side of ["left", "right"]) if (!st3[side].tabs.includes(st3[side].active)) st3[side].active = st3[side].tabs[0] || "";
+    const inst = /* @__PURE__ */ new Map();
+    let file = "";
+    const els = { left: leftEl, right: rightEl };
+    const splits = { left: leftSplit, right: rightSplit };
+    const heads = {}, bodies = {};
+    const save = () => LS.set(st3);
+    const leftToggle = iconButton("panel-left", "\u5DE6\u306E\u30D0\u30FC\u3092\u51FA\u3059\u30FB\u96A0\u3059", () => toggle("left"), "ribbon-toggle");
+    function drawRibbon() {
+      ribbonEl.textContent = "";
+      const top2 = h3("div", "ribbon-top"), bot = h3("div", "ribbon-bottom");
+      top2.appendChild(leftToggle);
+      for (const it of ribbon) {
+        if (st3.ribbonHidden.includes(it.id)) continue;
+        const b2 = iconButton(it.icon, it.title, () => it.run(), "ribbon-btn");
+        b2.dataset.ribbon = it.id;
+        (it.bottom ? bot : top2).appendChild(b2);
+      }
+      ribbonEl.append(top2, bot);
+    }
+    ribbonEl.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      menu(e.clientX, e.clientY, ribbon.map((it) => ({
+        label: (st3.ribbonHidden.includes(it.id) ? "\u2610 " : "\u2611 ") + it.title,
+        run: () => {
+          const i = st3.ribbonHidden.indexOf(it.id);
+          if (i >= 0) st3.ribbonHidden.splice(i, 1);
+          else st3.ribbonHidden.push(it.id);
+          save();
+          drawRibbon();
+        }
+      })));
+    });
+    const rightToggle = iconButton("panel-right", "\u53F3\u306E\u30D0\u30FC\u3092\u51FA\u3059\u30FB\u96A0\u3059", () => toggle("right"), "dock-toggle right");
+    const rightFloat = iconButton("panel-right", "\u53F3\u306E\u30D0\u30FC\u3092\u51FA\u3059", () => toggle("right", true), "dock-float right");
+    centerEl.appendChild(rightFloat);
+    for (const side of ["left", "right"]) {
+      const el2 = els[side];
+      el2.classList.add("dock", side);
+      const head = h3("div", "dock-head"), body = h3("div", "dock-body");
+      el2.append(head, body);
+      heads[side] = head;
+      bodies[side] = body;
+      head.addEventListener("dragover", (e) => {
+        if ([...e.dataTransfer.types].includes("text/gnosis-panel")) {
+          e.preventDefault();
+          head.classList.add("drop");
+        }
+      });
+      head.addEventListener("dragleave", () => head.classList.remove("drop"));
+      head.addEventListener("drop", (e) => {
+        head.classList.remove("drop");
+        const id2 = e.dataTransfer.getData("text/gnosis-panel");
+        if (!byId.has(id2)) return;
+        e.preventDefault();
+        const tabs = [...head.querySelectorAll(".dock-tab")];
+        let index = tabs.length;
+        for (let i = 0; i < tabs.length; i++) {
+          const r = tabs[i].getBoundingClientRect();
+          if (e.clientX < r.left + r.width / 2) {
+            index = i;
+            break;
+          }
+        }
+        move(id2, side, index);
+      });
+      wireSplit(side);
+    }
+    function wireSplit(side) {
+      splits[side].addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const mv = (ev) => {
+          const w = side === "left" ? ev.clientX - els.left.getBoundingClientRect().left : window.innerWidth - ev.clientX;
+          st3[side].width = Math.max(180, Math.min(700, Math.round(w)));
+          apply();
+        };
+        const up = () => {
+          document.removeEventListener("mousemove", mv, true);
+          document.removeEventListener("mouseup", up, true);
+          save();
+          onResize && onResize();
+        };
+        document.addEventListener("mousemove", mv, true);
+        document.addEventListener("mouseup", up, true);
+      });
+      splits[side].addEventListener("dblclick", () => toggle(side, false));
+    }
+    function ensure(id2) {
+      if (inst.has(id2)) return inst.get(id2);
+      const p = byId.get(id2);
+      const el2 = h3("div", "dock-panel");
+      el2.dataset.panel = id2;
+      let api = {};
+      try {
+        api = p.create(el2) || {};
+      } catch (e) {
+        el2.appendChild(h3("div", "nav-empty", "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e)));
+      }
+      const it = { el: el2, api, followed: "" };
+      inst.set(id2, it);
+      return it;
+    }
+    function drawSide(side) {
+      const s15 = st3[side], head = heads[side], body = bodies[side];
+      head.textContent = "";
+      const tabs = h3("div", "dock-tabs");
+      for (const id2 of s15.tabs) {
+        const p = byId.get(id2);
+        const b2 = h3("button", "dock-tab" + (id2 === s15.active ? " active" : ""));
+        b2.type = "button";
+        b2.title = p.title;
+        b2.setAttribute("aria-label", p.title);
+        b2.dataset.panel = id2;
+        b2.appendChild(icon(p.icon));
+        b2.draggable = true;
+        b2.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/gnosis-panel", id2);
+          e.dataTransfer.effectAllowed = "move";
+        });
+        b2.addEventListener("click", () => {
+          if (s15.active === id2 && s15.open) toggle(side, false);
+          else show(id2);
+        });
+        b2.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          const other = side === "left" ? "right" : "left";
+          menu(e.clientX, e.clientY, [{ label: other === "left" ? "\u5DE6\u306E\u30D0\u30FC\u3078\u79FB\u3059" : "\u53F3\u306E\u30D0\u30FC\u3078\u79FB\u3059", run: () => move(id2, other) }, { label: "\u3053\u306E\u30D0\u30FC\u3092\u9589\u3058\u308B", run: () => toggle(side, false) }]);
+        });
+        tabs.appendChild(b2);
+      }
+      if (side === "left") head.append(tabs);
+      else head.append(tabs, rightToggle);
+      const title = byId.get(s15.active)?.title || "";
+      els[side].setAttribute("aria-label", title);
+      for (const ch of [...body.children]) ch.hidden = ch.dataset.panel !== s15.active;
+      if (s15.active) {
+        const it = ensure(s15.active);
+        if (it.el.parentNode !== body) body.appendChild(it.el);
+        it.el.hidden = false;
+        if (s15.open) showPanel(it);
+      }
+    }
+    function showPanel(it) {
+      if (it.api.follow && it.followed !== file) {
+        it.followed = file;
+        try {
+          it.api.follow(file);
+        } catch {
+        }
+      }
+      if (it.api.onShow) try {
+        it.api.onShow();
+      } catch {
+      }
+    }
+    function apply() {
+      const r = document.documentElement.style;
+      for (const side of ["left", "right"]) {
+        const s15 = st3[side];
+        els[side].hidden = !s15.open || !s15.tabs.length;
+        splits[side].hidden = els[side].hidden;
+        r.setProperty(`--dock-${side}-w`, s15.width + "px");
+      }
+      rightFloat.hidden = !els.right.hidden;
+      centerEl.classList.toggle("right-closed", els.right.hidden);
+      leftToggle.setAttribute("aria-pressed", String(!els.left.hidden));
+    }
+    function render2() {
+      drawRibbon();
+      drawSide("left");
+      drawSide("right");
+      apply();
+      onResize && onResize();
+    }
+    function sideOf(id2) {
+      return st3.left.tabs.includes(id2) ? "left" : st3.right.tabs.includes(id2) ? "right" : "";
+    }
+    function toggle(side, on2) {
+      const s15 = st3[side];
+      s15.open = on2 === void 0 ? !(s15.open && s15.tabs.length) : !!on2;
+      save();
+      apply();
+      if (s15.open) drawSide(side);
+      onResize && onResize();
+    }
+    function show(id2) {
+      const side = sideOf(id2);
+      if (!side) return null;
+      st3[side].active = id2;
+      st3[side].open = true;
+      save();
+      drawSide(side);
+      apply();
+      onResize && onResize();
+      return inst.get(id2)?.api || null;
+    }
+    function move(id2, side, index) {
+      const from = sideOf(id2);
+      if (!from) return;
+      st3[from].tabs = st3[from].tabs.filter((x) => x !== id2);
+      if (st3[from].active === id2) st3[from].active = st3[from].tabs[0] || "";
+      const t3 = st3[side].tabs;
+      t3.splice(index === void 0 ? t3.length : Math.min(index, t3.length), 0, id2);
+      st3[side].active = id2;
+      st3[side].open = true;
+      save();
+      render2();
+    }
+    function follow(f) {
+      file = f || "";
+      for (const side of ["left", "right"]) {
+        const s15 = st3[side];
+        if (!s15.open || !s15.active) continue;
+        const it = inst.get(s15.active);
+        if (it && it.api.follow && it.followed !== file) {
+          it.followed = file;
+          try {
+            it.api.follow(file);
+          } catch {
+          }
+        }
+      }
+    }
+    function refresh2() {
+      for (const side of ["left", "right"]) {
+        const s15 = st3[side];
+        if (!s15.open || !s15.active) continue;
+        const it = inst.get(s15.active);
+        if (it && it.api.refresh) try {
+          it.api.refresh();
+        } catch {
+        }
+      }
+      for (const [id2, it] of inst) if (!isVisible(id2)) it.followed = "";
+    }
+    function isVisible(id2) {
+      const side = sideOf(id2);
+      return !!side && st3[side].open && st3[side].active === id2;
+    }
+    render2();
+    return {
+      toggle,
+      show,
+      move,
+      follow,
+      refresh: refresh2,
+      isVisible,
+      isOpen: (side) => !els[side].hidden,
+      panel: (id2) => ensure(id2).api,
+      state: () => JSON.parse(JSON.stringify(st3))
+    };
+  }
+
+  // src/panels.js
+  function draggable2(el2, rel) {
+    if (!rel) return el2;
+    el2.draggable = true;
+    el2.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/gnosis-note", rel);
+      e.dataTransfer.effectAllowed = "copy";
+    });
+    return el2;
+  }
+  function panelHead(el2, title, tools = []) {
+    const head = h3("div", "pnl-head");
+    head.appendChild(h3("span", "pnl-title", title));
+    const t3 = h3("span", "pnl-tools");
+    for (const b2 of tools) t3.appendChild(b2);
+    head.appendChild(t3);
+    el2.appendChild(head);
+    return head;
+  }
+  function noteRow(ctx, x, sub) {
+    const b2 = h3("button", "pnl-item");
+    b2.type = "button";
+    b2.title = x.rel || x.title;
+    b2.appendChild(h3("span", "pnl-item-title", x.title));
+    const badge = KIND_BADGE[x.kind];
+    if (badge) b2.appendChild(h3("span", "pnl-badge kind-" + x.kind, badge));
+    if (sub) b2.appendChild(h3("span", "pnl-item-sub", sub));
+    if (x.missing) b2.classList.add("missing");
+    else b2.addEventListener("click", () => ctx.open(x.rel));
+    return draggable2(b2, x.missing ? "" : x.rel);
+  }
+  function notesPanel(ctx) {
+    return (el2) => {
+      el2.classList.add("pnl");
+      panelHead(el2, "\u30CE\u30FC\u30C8", [button("\uFF0B", () => ctx.newNote(), "pnl-btn", "\u65B0\u3057\u3044\u30CE\u30FC\u30C8\uFF08Ctrl+N\uFF09")]);
+      const search = h3("input", "pnl-search");
+      search.type = "search";
+      search.placeholder = "\u984C\u3067\u7D5E\u308B";
+      search.setAttribute("aria-label", "\u30CE\u30FC\u30C8\u3092\u984C\u3067\u7D5E\u308B");
+      const list = h3("div", "pnl-body");
+      el2.append(search, list);
+      let timer = null, cur = "", my = 0;
+      async function load() {
+        const q2 = search.value.trim();
+        const n = ++my;
+        const r = await ctx.query("nav.notes", { q: q2, limit: q2 ? 200 : 120 });
+        if (n !== my) return;
+        list.textContent = "";
+        const res = r.ok ? r.result : [];
+        if (!res.length) {
+          list.appendChild(h3("div", "nav-empty", q2 ? "\u898B\u3064\u304B\u308A\u307E\u305B\u3093" : "\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093"));
+          return;
+        }
+        if (!q2) list.appendChild(h3("div", "pnl-sec", "\u6700\u8FD1\u306E\u30CE\u30FC\u30C8"));
+        for (const x of res) {
+          const row = noteRow(ctx, x, [x.path || "", x.time ? x.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 "));
+          if (cur && cur.endsWith("/" + x.rel)) row.classList.add("cur");
+          list.appendChild(row);
+        }
+      }
+      search.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(load, 140);
+      });
+      search.addEventListener("keydown", (e) => {
+        if (imeActive(e)) return;
+        if (e.key === "Enter") {
+          const f = list.querySelector(".pnl-item:not(.missing)");
+          if (f) f.click();
+        }
+        if (e.key === "Escape") {
+          search.value = "";
+          load();
+          ctx.focusVim();
+        }
+      });
+      return { onShow: () => load(), refresh: () => load(), follow: (f) => {
+        cur = f;
+        for (const r of list.querySelectorAll(".pnl-item")) r.classList.toggle("cur", !!cur && cur.endsWith("/" + r.title));
+      } };
+    };
+  }
+  function featuresPanel(getItems) {
+    return (el2) => {
+      el2.classList.add("pnl", "featpanel");
+      panelHead(el2, "\u6A5F\u80FD");
+      const search = h3("input", "pnl-search");
+      search.type = "search";
+      search.placeholder = "\u6A5F\u80FD\u3092\u63A2\u3059\uFF08\u4F8B: \u5206\u5272\u30FB\u65E5\u8A18\u30FB\u307E\u3093\u3060\u3089\uFF09";
+      search.setAttribute("aria-label", "\u6A5F\u80FD\u3092\u63A2\u3059");
+      const list = h3("div", "pnl-body");
+      const msg = h3("div", "pnl-msg", "");
+      el2.append(search, list, msg);
+      let items = [], open = loadOpen();
+      function loadOpen() {
+        try {
+          return new Set(JSON.parse(localStorage.getItem("gnosis.featOpen") || "null") || ["\u7D22\u5F15", "\u6642\u9593", "\u66FC\u837C\u7F85", "\u30AD\u30E3\u30F3\u30D0\u30B9", "\u30D3\u30E5\u30FC", "\u30D0\u30FC"]);
+        } catch {
+          return /* @__PURE__ */ new Set();
+        }
+      }
+      function saveOpen() {
+        try {
+          localStorage.setItem("gnosis.featOpen", JSON.stringify([...open]));
+        } catch {
+        }
+      }
+      function draw() {
+        const q2 = search.value.trim();
+        const shown = q2 ? rank(items, q2, 400) : items;
+        list.textContent = "";
+        if (!shown.length) {
+          list.appendChild(h3("div", "nav-empty", "\u898B\u3064\u304B\u308A\u307E\u305B\u3093"));
+          return;
+        }
+        if (q2) {
+          shown.forEach((it, i) => list.appendChild(itemEl(it, i === 0)));
+          return;
+        }
+        const groups = /* @__PURE__ */ new Map();
+        for (const it of shown) {
+          if (!groups.has(it.group)) groups.set(it.group, []);
+          groups.get(it.group).push(it);
+        }
+        for (const [g, its] of groups) {
+          const isOpen = open.has(g);
+          const gh = h3("button", "feat-g" + (isOpen ? " open" : ""));
+          gh.type = "button";
+          gh.append(icon("chevron", 14), h3("span", "", g), h3("span", "pnl-count", String(its.length)));
+          gh.addEventListener("click", () => {
+            if (open.has(g)) open.delete(g);
+            else open.add(g);
+            saveOpen();
+            draw();
+          });
+          list.appendChild(gh);
+          if (isOpen) for (const it of its) list.appendChild(itemEl(it));
+        }
+      }
+      function itemEl(it, first) {
+        const b2 = h3("button", "pnl-item feat-item" + (first ? " sel" : ""));
+        b2.type = "button";
+        b2.title = it.label;
+        b2.appendChild(h3("span", "pnl-item-title", it.label));
+        if (search.value.trim()) b2.appendChild(h3("span", "pnl-item-sub", it.group));
+        b2.addEventListener("click", async () => {
+          try {
+            await it.run();
+            msg.textContent = "\u5B9F\u884C\u3057\u307E\u3057\u305F: " + it.label;
+          } catch (e) {
+            msg.textContent = "\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e);
+          }
+        });
+        return b2;
+      }
+      search.addEventListener("input", draw);
+      search.addEventListener("keydown", (e) => {
+        if (imeActive(e)) return;
+        if (e.key === "Enter") {
+          const f = list.querySelector(".feat-item");
+          if (f) f.click();
+        }
+        if (e.key === "Escape") {
+          search.value = "";
+          draw();
+        }
+      });
+      async function load() {
+        try {
+          items = await getItems();
+        } catch {
+          items = [];
+        }
+        draw();
+      }
+      return { onShow: () => load(), refresh: () => {
+      }, focusSearch: () => {
+        search.focus();
+        search.select();
+      } };
+    };
+  }
+  function linksPanel(ctx) {
+    return (el2) => {
+      el2.classList.add("pnl");
+      panelHead(el2, "\u30EA\u30F3\u30AF");
+      const body = h3("div", "pnl-body");
+      el2.appendChild(body);
+      let file = "", my = 0;
+      function sec(title, count2) {
+        const s15 = h3("div", "pnl-sec");
+        s15.append(h3("span", "", title));
+        if (count2 != null) s15.appendChild(h3("span", "pnl-count", String(count2)));
+        body.appendChild(s15);
+      }
+      async function load() {
+        if (!file) {
+          body.textContent = "";
+          body.appendChild(h3("div", "nav-empty", "\u30CE\u30FC\u30C8\u3092\u958B\u304F\u3068\u3001\u3053\u3053\u306B\u30EA\u30F3\u30AF\u304C\u51FA\u307E\u3059"));
+          return;
+        }
+        const n = ++my;
+        const r = await ctx.query("nav.links", { file });
+        if (n !== my) return;
+        body.textContent = "";
+        const d = r.ok ? r.result : { missing: true };
+        if (d.missing) {
+          body.appendChild(h3("div", "nav-empty", "\u3053\u306E\u30D5\u30A1\u30A4\u30EB\u306F vault \u306E\u30CE\u30FC\u30C8\u3067\u306F\u3042\u308A\u307E\u305B\u3093"));
+          return;
+        }
+        const rel = [["Context\uFF08\u6587\u8108\uFF09", d.context], ["ParentBranch\uFF08\u89AA\uFF09", d.parents], ["ChildBranch\uFF08\u5B50\uFF09", d.children], ["Group\uFF08\u8F09\u3063\u3066\u3044\u308B\u7D22\u5F15\uFF09", d.groups], ["BranchGroup\uFF08\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\uFF09", d.topics]].filter(([, xs2]) => xs2 && xs2.length);
+        if (rel.length) {
+          sec("\u95A2\u4FC2");
+          for (const [t3, xs2] of rel) {
+            body.appendChild(h3("div", "pnl-sub", t3));
+            for (const x of xs2) body.appendChild(noteRow(ctx, x, x.fz || ""));
+          }
+        }
+        sec("\u30D0\u30C3\u30AF\u30EA\u30F3\u30AF", d.backlinks.length);
+        if (!d.backlinks.length) body.appendChild(h3("div", "pnl-none", "\u3053\u306E\u30CE\u30FC\u30C8\u3078\u30EA\u30F3\u30AF\u3057\u3066\u3044\u308B\u30CE\u30FC\u30C8\u306F\u3042\u308A\u307E\u305B\u3093"));
+        for (const b2 of d.backlinks) {
+          const row = noteRow(ctx, b2, b2.places.join("\u30FB"));
+          body.appendChild(row);
+          const hits = b2.hits.filter((x) => x.place === "\u672C\u6587" && (x.row || x.text !== d.title));
+          for (const hit of hits.slice(0, 2)) {
+            const s15 = h3("div", "pnl-snip");
+            s15.textContent = (hit.row ? hit.row + " \u203A " : "") + hit.text;
+            body.appendChild(s15);
+          }
+        }
+        sec("\u51FA\u3066\u3044\u304F\u30EA\u30F3\u30AF", d.outgoing.length);
+        if (!d.outgoing.length) body.appendChild(h3("div", "pnl-none", "\u672C\u6587\u306B\u30EA\u30F3\u30AF\u306F\u3042\u308A\u307E\u305B\u3093"));
+        for (const o2 of d.outgoing) body.appendChild(noteRow(ctx, o2, o2.missing ? "\uFF08\u307E\u3060\u7121\u3044\u30CE\u30FC\u30C8\uFF09" : o2.text !== o2.title ? "\u300C" + o2.text + "\u300D" : ""));
+      }
+      return { follow: (f) => {
+        file = f;
+        load();
+      }, refresh: () => load(), onShow: () => {
+      } };
+    };
+  }
+  function outlinePanel(ctx) {
+    return (el2) => {
+      el2.classList.add("pnl");
+      panelHead(el2, "\u30A2\u30A6\u30C8\u30E9\u30A4\u30F3");
+      const body = h3("div", "pnl-body");
+      el2.appendChild(body);
+      let sig = "";
+      function draw(force) {
+        const lines = ctx.getLines() || [];
+        const heads = [];
+        let fence = false, fm = lines[0] === "---";
+        lines.forEach((ln2, i) => {
+          if (fm) {
+            if (i > 0 && ln2 === "---") fm = false;
+            return;
+          }
+          if (/^\s*(```|~~~)/.test(ln2)) {
+            fence = !fence;
+            return;
+          }
+          if (fence) return;
+          const m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(ln2);
+          if (m) heads.push({ level: m[1].length, text: m[2].replace(/\[((?:\\.|[^\]\\])*)\]\([^)]*\)/g, "$1"), line: i + 1 });
+        });
+        const s15 = JSON.stringify(heads);
+        if (s15 === sig && !force) return;
+        sig = s15;
+        body.textContent = "";
+        if (!heads.length) {
+          body.appendChild(h3("div", "nav-empty", "\u898B\u51FA\u3057\u304C\u3042\u308A\u307E\u305B\u3093"));
+          return;
+        }
+        const min = Math.min(...heads.map((x) => x.level));
+        for (const x of heads) {
+          const b2 = h3("button", "pnl-item outline-item");
+          b2.type = "button";
+          b2.style.paddingLeft = 8 + (x.level - min) * 14 + "px";
+          b2.textContent = x.text;
+          b2.title = `${x.line} \u884C\u76EE`;
+          b2.addEventListener("click", () => ctx.gotoLine(x.line));
+          body.appendChild(b2);
+        }
+      }
+      return { onShow: () => draw(true), follow: () => draw(true), refresh: () => draw(), update: () => draw() };
+    };
+  }
+
+  // src/switcher.js
+  function createSwitcher({ query, open, create, onClose }) {
+    const back = h3("div", "qs-back");
+    back.hidden = true;
+    const box = h3("div", "qs");
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "\u30CE\u30FC\u30C8\u3092\u958B\u304F");
+    const input = h3("input", "qs-input");
+    input.type = "text";
+    input.placeholder = "\u30CE\u30FC\u30C8\u306E\u984C\u3092\u6253\u3064\uFF08Enter \u3067\u958B\u304F\u30FBShift+Enter \u3067\u65B0\u3057\u304F\u4F5C\u308B\uFF09";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    const list = h3("ul", "qs-list");
+    list.setAttribute("role", "listbox");
+    const foot = h3("div", "qs-foot", "\u2191\u2193 \u9078\u3076\u3000Enter \u958B\u304F\u3000Shift+Enter \u65B0\u3057\u304F\u4F5C\u308B\u3000Esc \u9589\u3058\u308B");
+    box.append(input, list, foot);
+    back.appendChild(box);
+    document.body.appendChild(back);
+    let items = [], sel2 = 0, my = 0, timer = null, composing = false, loadedQ = null;
+    async function load() {
+      const q2 = input.value.trim();
+      const n = ++my;
+      const r = await query("nav.notes", { q: q2, limit: 60 });
+      if (n !== my) return;
+      loadedQ = q2;
+      items = (r.ok ? r.result : []).map((x) => ({ ...x, act: "open" }));
+      if (q2 && !items.some((x) => x.title === q2)) items.push({ title: q2, act: "create" });
+      sel2 = Math.min(sel2, Math.max(0, items.length - 1));
+      draw();
+    }
+    function draw() {
+      list.textContent = "";
+      items.forEach((it, i) => {
+        const li2 = h3("li", "qs-item" + (i === sel2 ? " sel" : "") + (it.act === "create" ? " create" : ""));
+        li2.setAttribute("role", "option");
+        if (it.act === "create") li2.append(h3("span", "qs-title", "\uFF0B \u65B0\u3057\u3044\u30CE\u30FC\u30C8\u300C" + it.title + "\u300D\u3092\u4F5C\u308B"));
+        else {
+          li2.append(h3("span", "qs-title", it.title));
+          const sub = [KIND_BADGE[it.kind] || "", it.path || "", it.time ? it.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 ");
+          if (sub) li2.append(h3("span", "qs-sub", sub));
+        }
+        li2.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          sel2 = i;
+          run(e.shiftKey);
+        });
+        list.appendChild(li2);
+      });
+      const s15 = list.querySelector(".sel");
+      if (s15) s15.scrollIntoView({ block: "nearest" });
+    }
+    async function run(forceCreate) {
+      const q2 = input.value.trim();
+      if (loadedQ !== q2) {
+        clearTimeout(timer);
+        sel2 = 0;
+        await load();
+      }
+      const it = items[sel2];
+      close(false);
+      if (forceCreate || it && it.act === "create") {
+        if (q2) await create(q2);
+        return;
+      }
+      if (it) await open(it.rel);
+    }
+    function close(refocus = true) {
+      back.hidden = true;
+      if (refocus) onClose && onClose();
+    }
+    input.addEventListener("input", () => {
+      sel2 = 0;
+      clearTimeout(timer);
+      timer = setTimeout(load, 100);
+    });
+    input.addEventListener("compositionstart", () => {
+      composing = true;
+    });
+    input.addEventListener("compositionend", () => {
+      composing = false;
+    });
+    input.addEventListener("keydown", (e) => {
+      if (imeActive(e)) return;
+      if (e.key === "ArrowDown" || e.ctrlKey && e.key === "n") {
+        e.preventDefault();
+        sel2 = Math.min(sel2 + 1, items.length - 1);
+        draw();
+      } else if (e.key === "ArrowUp" || e.ctrlKey && e.key === "p") {
+        e.preventDefault();
+        sel2 = Math.max(sel2 - 1, 0);
+        draw();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        run(e.shiftKey);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    });
+    back.addEventListener("mousedown", (e) => {
+      if (e.target === back) close();
+    });
+    input.addEventListener("blur", () => setTimeout(() => {
+      if (!composing && !back.hidden && document.activeElement !== input) close(false);
+    }, 150));
+    return {
+      open() {
+        back.hidden = false;
+        input.value = "";
+        sel2 = 0;
+        items = [];
+        loadedQ = null;
+        draw();
+        load();
+        setTimeout(() => input.focus(), 0);
+      },
+      close,
+      isOpen: () => !back.hidden
+    };
+  }
+
   // src/app.js
   var gui = window.gui;
   var $3 = (id2) => document.getElementById(id2);
@@ -37187,6 +38078,9 @@ ${h4.join(`
   var expanded = false;
   var collapseTimer = null;
   var nav2 = null;
+  var docks = null;
+  var switcher = null;
+  var curLines = [];
   var noteRoot = "";
   function fullRowsPx() {
     return cell.h * term.rows;
@@ -37334,6 +38228,8 @@ ${h4.join(`
     if (s15.lines) {
       view2.setText(s15.lines.join("\n"));
       preloadImages(s15.lines);
+      curLines = s15.lines;
+      outlineSoon();
     }
     if (fileChanged) view2.view.scrollDOM.scrollTop = 0;
     if (s15.vtext) view2.setVtext(s15.vtext);
@@ -37374,7 +38270,13 @@ ${h4.join(`
     if (!nav2) return;
     if (s15.file !== void 0 && s15.bt !== "terminal" && s15.file && s15.file !== navFile) {
       navFile = s15.file;
-      nav2.follow(s15.file);
+      const f = s15.file;
+      setNoteTitle(f.split("/").pop().replace(/\.md$/i, ""));
+      Promise.resolve(nav2.follow(f)).then(() => {
+        const i = nav2.info();
+        if (navFile === f && i && i.title && !i.missing) setNoteTitle(i.title, i);
+      });
+      docks && docks.follow(f);
     }
     if (s15.mod !== void 0) {
       if (navMod && !s15.mod) refreshAppViewsSoon();
@@ -37385,7 +38287,21 @@ ${h4.join(`
     clearTimeout(navTimer);
     navTimer = setTimeout(() => {
       nav2 && nav2.refresh();
+      docks && docks.refresh();
     }, ms2);
+  }
+  function setNoteTitle(title, info) {
+    const el2 = $3("vh-title");
+    if (el2) {
+      el2.textContent = "";
+      const crumbs = info && info.crumbs && info.crumbs[0] ? info.crumbs[0].filter((x) => x.via !== "topic").slice(0, -1) : [];
+      if (crumbs.length) el2.appendChild(document.createTextNode(crumbs.slice(-2).map((x) => x.label || x.title).join(" / ") + " / "));
+      const b2 = document.createElement("b");
+      b2.textContent = title;
+      el2.appendChild(b2);
+      el2.title = info && info.rel ? info.rel : title;
+    }
+    panes2 && panes2.setVimTitle(title);
   }
   async function vimOpen(rel) {
     const r = await gui.openNote(rel);
@@ -37409,6 +38325,9 @@ ${h4.join(`
     showVim: () => panes2.showVim(),
     focusVim: () => term && term.focus(),
     changed: () => refreshAppViewsSoon(300),
+    newNote: (title) => newNote(title),
+    getLines: () => guiEdit && guiEdit.isOn() ? view2.view.state.doc.toString().split("\n") : curLines,
+    gotoLine: (l) => gotoLine(l),
     readNote: (rel) => gui.readNote(absOf(rel)),
     // 本文を Vim に保存させる（保存時の同期が全部走る）。先に Vim の未保存を保存する。読んだときと違えば競合を返す
     commit: async (rel, text, hash2) => {
@@ -37513,54 +38432,121 @@ ${h4.join(`
   function openCalendar() {
     panes2.openOrFocus("calendar", {}, "\u30AB\u30EC\u30F3\u30C0\u30FC");
   }
-  var LS = { get: (k, d) => {
-    try {
-      const v2 = localStorage.getItem(k);
-      return v2 == null ? d : v2;
-    } catch {
-      return d;
+  async function newNote(title) {
+    if (!title) {
+      const v2 = await form({ title: "\u65B0\u3057\u3044\u30CE\u30FC\u30C8", ok: "\u4F5C\u3063\u3066\u66F8\u304F", note: "\u4ECA\u65E5\u306E\u65E5\u8A18\u306E\u300C\u4ECA\u65E5\u306E\u30CE\u30FC\u30C8\u300D\u306B\u8F09\u308A\u307E\u3059\u3002\u7D22\u5F15\u306B\u8F09\u305B\u308B\u306E\u306F\u3001\u5DE6\u306E\u30D0\u30FC\u306E\u300C\u7D22\u5F15\u300D\u304B\u3089\u3002", fields: [{ key: "title", label: "\u984C", required: true }] });
+      if (!v2) return false;
+      title = v2.title.trim();
     }
-  }, set: (k, v2) => {
-    try {
-      localStorage.setItem(k, v2);
-    } catch {
+    const r = await appCtx.op("note_new", { kind: "note", title });
+    if (!r.ok) {
+      toast(r.error || "\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F", "err");
+      return false;
     }
-  } };
-  function setSidebar(on2) {
-    const sb = $3("sidebar");
-    if (!sb) return;
-    sb.hidden = !on2;
-    $3("sidebar-split").hidden = !on2;
-    LS.set("gnosis.sidebar", on2 ? "1" : "0");
-    for (const b2 of document.querySelectorAll('[data-nav="sidebar"]')) b2.setAttribute("aria-pressed", String(on2));
-    scheduleFit();
+    return true;
   }
-  function initSidebar() {
-    const sb = $3("sidebar");
-    nav2 = createNavSidebar(sb, appCtx);
-    const w = Number(LS.get("gnosis.sidebarWidth", "300"));
-    document.documentElement.style.setProperty("--sidebar-w", Math.max(200, Math.min(700, w || 300)) + "px");
-    setSidebar(LS.get("gnosis.sidebar", "1") === "1");
-    const sp = $3("sidebar-split");
-    sp.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      const mv = (ev) => {
-        const x = Math.max(200, Math.min(700, ev.clientX));
-        document.documentElement.style.setProperty("--sidebar-w", x + "px");
-      };
-      const up = (ev) => {
-        document.removeEventListener("mousemove", mv, true);
-        document.removeEventListener("mouseup", up, true);
-        LS.set("gnosis.sidebarWidth", String(Math.max(200, Math.min(700, ev.clientX))));
-        scheduleFit();
-      };
-      document.addEventListener("mousemove", mv, true);
-      document.addEventListener("mouseup", up, true);
-    });
-    sb.addEventListener("gnosis-open-editor", (e) => {
-      if (e.detail === "mandala") openMandala();
-      else openCanvas();
-    });
+  function gotoLine(l) {
+    if (guiEdit && guiEdit.isOn()) {
+      const v2 = view2.view, doc2 = v2.state.doc;
+      const ln2 = doc2.line(Math.max(1, Math.min(l, doc2.lines)));
+      v2.dispatch({ selection: { anchor: ln2.from }, scrollIntoView: true });
+      v2.focus();
+      return;
+    }
+    panes2.showVim();
+    const m = (last2.mode || "n")[0];
+    const mv = `:call cursor(${l},1)|normal! zt|redraw|echo ""\r`;
+    if (viewOnly) {
+      const doc2 = view2.view.state.doc;
+      view2.view.scrollDOM.scrollTop = view2.view.lineBlockAt(doc2.line(Math.max(1, Math.min(l, doc2.lines))).from).top;
+      return;
+    }
+    if (m === "n") gui.write(mv);
+    else if (m === "i") gui.write("" + mv);
+    term.focus();
+  }
+  function viewsMenu(x, y) {
+    popupMenu(x, y, [
+      ...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => panes2.openView(k) })),
+      "-",
+      ...EXTRA_VIEWS.map(([k, t3]) => ({ label: t3, run: () => panes2.openExtra(k) })),
+      "-",
+      { label: "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", run: () => panes2.reloadViews() }
+    ]);
+  }
+  function setSidebar(on2) {
+    if (on2) docks.show("index");
+    else docks.toggle("left", false);
+  }
+  function initDocks() {
+    const ribbon = [
+      { id: "switcher", icon: "file-search", title: "\u30CE\u30FC\u30C8\u3092\u958B\u304F\uFF08Ctrl+O\uFF09", run: () => switcher.open() },
+      { id: "new", icon: "note-plus", title: "\u65B0\u3057\u3044\u30CE\u30FC\u30C8\uFF08Ctrl+N\uFF09", run: () => newNote() },
+      { id: "today", icon: "today", title: "\u4ECA\u65E5\u306E\u65E5\u8A18\u3092\u958B\u304F", run: () => appCtx.op("diary_open", {}) },
+      { id: "calendar", icon: "calendar", title: "\u30AB\u30EC\u30F3\u30C0\u30FC\uFF08Alt+C\uFF09", run: () => openCalendar() },
+      { id: "browser", icon: "columns", title: "\u7D22\u5F15\u30D6\u30E9\u30A6\u30B6\uFF08Index \u2192 \u30CE\u30FC\u30C8 \u2192 \u30C8\u30D4\u30C3\u30AF\u7D22\u5F15 \u3092\u5217\u3067\u8FBF\u308B\uFF09", run: () => openIndexBrowser() },
+      { id: "graph", icon: "graph", title: "\u30B0\u30E9\u30D5", run: () => panes2.openView("graph") },
+      { id: "mandala", icon: "mandala", title: "\u66FC\u837C\u7F85\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\u304C\u66FC\u837C\u7F85\u306A\u3089\u958B\u304F\u30FB\u7121\u3051\u308C\u3070\u65B0\u3057\u304F\u4F5C\u308B\uFF09", run: () => openMandala() },
+      { id: "canvas", icon: "canvas", title: "\u30AD\u30E3\u30F3\u30D0\u30B9\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\u304C\u30AD\u30E3\u30F3\u30D0\u30B9\u306A\u3089\u958B\u304F\u30FB\u7121\u3051\u308C\u3070\u65B0\u3057\u304F\u4F5C\u308B\uFF09", run: () => openCanvas() },
+      { id: "palette", icon: "command", title: "\u30B3\u30DE\u30F3\u30C9\u30D1\u30EC\u30C3\u30C8\uFF08Ctrl+P\uFF09", run: () => openPalette() },
+      { id: "views", icon: "cards", title: "\u8868\u793A\u5C02\u7528\u306E\u30D3\u30E5\u30FC\uFF08\u30AB\u30FC\u30C9\u30FB\u30C6\u30FC\u30D6\u30EB\u30FB\u6642\u7CFB\u5217\u30FB\u691C\u7D22\u2026\uFF09", bottom: true, run: (e) => {
+        const r = document.querySelector('[data-ribbon="views"]').getBoundingClientRect();
+        viewsMenu(r.right + 4, r.top);
+      } },
+      { id: "features", icon: "features", title: "\u5168\u6A5F\u80FD\uFF08\u5DE6\u306E\u30D0\u30FC\u306E\u300C\u6A5F\u80FD\u300D\uFF09", bottom: true, run: () => {
+        const p = docks.show("features");
+        p && p.focusSearch && p.focusSearch();
+      } }
+    ];
+    const panels = [
+      {
+        id: "index",
+        side: "left",
+        icon: "index",
+        title: "\u7D22\u5F15\uFF08\u30C0\u30D6\u30EB\u30A4\u30F3\u30C7\u30C3\u30AF\u30B9: Index \u304B\u3089\u306E\u9053\u30FB\u8F09\u3063\u3066\u3044\u308B\u7D22\u5F15\u30FB\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3002Alt+I \u3067\u7D22\u5F15\u8A9E\u3092\u63A2\u3059\uFF09",
+        create: (el2) => {
+          el2.id = "sidebar";
+          nav2 = createNavSidebar(el2, appCtx);
+          el2.addEventListener("gnosis-open-editor", (e) => {
+            if (e.detail === "mandala") openMandala();
+            else openCanvas();
+          });
+          return { refresh: () => {
+          } };
+        }
+      },
+      { id: "notes", side: "left", icon: "files", title: "\u30CE\u30FC\u30C8\uFF08\u6700\u8FD1\u306E\u30CE\u30FC\u30C8\u30FB\u984C\u3067\u63A2\u3059\uFF09", create: notesPanel(appCtx) },
+      { id: "features", side: "left", icon: "features", title: "\u6A5F\u80FD\uFF08\u5168\u90E8\u306E\u6A5F\u80FD\u3002\u62BC\u3059\u3068\u5B9F\u884C\uFF09", create: featuresPanel(async () => {
+        if (!vimCmds) {
+          try {
+            vimCmds = await gui.vimCommands();
+          } catch {
+            vimCmds = [];
+          }
+        }
+        return paletteItems();
+      }) },
+      { id: "links", side: "right", icon: "link", title: "\u30EA\u30F3\u30AF\uFF08\u95A2\u4FC2\u30FB\u30D0\u30C3\u30AF\u30EA\u30F3\u30AF\u30FB\u51FA\u3066\u3044\u304F\u30EA\u30F3\u30AF\uFF09", create: linksPanel(appCtx) },
+      { id: "outline", side: "right", icon: "outline", title: "\u30A2\u30A6\u30C8\u30E9\u30A4\u30F3\uFF08\u898B\u51FA\u3057\uFF09", create: outlinePanel(appCtx) }
+    ];
+    docks = createDocks({ ribbonEl: $3("ribbon"), leftEl: $3("leftdock"), rightEl: $3("rightdock"), leftSplit: $3("leftdock-split"), rightSplit: $3("rightdock-split"), centerEl: $3("center"), panels, ribbon, onResize: () => scheduleFit(), menu: popupMenu });
+    docks.panel("index");
+    switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t3) => newNote(t3), onClose: () => backToInputSoon() });
+  }
+  var outlineTimer = null;
+  function outlineSoon() {
+    if (!docks || !docks.isVisible("outline")) return;
+    clearTimeout(outlineTimer);
+    outlineTimer = setTimeout(() => {
+      const p = docks.panel("outline");
+      p.update && p.update();
+    }, 250);
+  }
+  function backToInputSoon() {
+    setTimeout(() => {
+      if (guiEdit && guiEdit.isOn()) view2.focus();
+      else term && term.focus();
+    }, 0);
   }
   var vimCmds = null;
   function paletteItems() {
@@ -37571,10 +38557,21 @@ ${h4.join(`
     add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
     for (const k of VIEW_KINDS) add("\u30D3\u30E5\u30FC", `${KIND_LABEL[k]}\u3092\u958B\u304F`, `${k} view`, () => panes2.openView(k));
     for (const [k, t3] of EXTRA_VIEWS) add("\u30D3\u30E5\u30FC", `${t3}\u3092\u958B\u304F`, `${k} view \u8FFD\u52A0\u30D3\u30E5\u30FC`, () => panes2.openExtra(k));
-    add("\u30D3\u30E5\u30FC", "\u6A5F\u80FD\u4E00\u89A7\u3092\u958B\u304F", "features list \u4E00\u89A7 \u5168\u6A5F\u80FD", () => panes2.openFeatures());
-    add("\u7D22\u5F15", "\u7D22\u5F15\u30CA\u30D3\uFF08\u30B5\u30A4\u30C9\u30D0\u30FC\uFF09\u3092\u51FA\u3059\u30FB\u96A0\u3059", "index nav sidebar \u7D22\u5F15 \u30B5\u30A4\u30C9\u30D0\u30FC double index", () => setSidebar($3("sidebar").hidden));
+    add("\u30D3\u30E5\u30FC", "\u6A5F\u80FD\u4E00\u89A7\u3092\u30BF\u30D6\u3067\u958B\u304F", "features list \u4E00\u89A7 \u5168\u6A5F\u80FD", () => panes2.openFeatures());
+    add("\u30D0\u30FC", "\u5DE6\u306E\u30D0\u30FC\u3092\u51FA\u3059\u30FB\u96A0\u3059", "left sidebar toggle \u5DE6 \u30B5\u30A4\u30C9\u30D0\u30FC", () => docks.toggle("left"));
+    add("\u30D0\u30FC", "\u53F3\u306E\u30D0\u30FC\u3092\u51FA\u3059\u30FB\u96A0\u3059", "right sidebar toggle \u53F3 \u30B5\u30A4\u30C9\u30D0\u30FC", () => docks.toggle("right"));
+    add("\u30D0\u30FC", "\u7D22\u5F15\uFF08\u5DE6\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "index nav sidebar \u7D22\u5F15 \u30B5\u30A4\u30C9\u30D0\u30FC double index", () => docks.show("index"));
+    add("\u30D0\u30FC", "\u30CE\u30FC\u30C8\u306E\u4E00\u89A7\uFF08\u5DE6\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "files notes list \u30CE\u30FC\u30C8 \u4E00\u89A7 \u6700\u8FD1", () => docks.show("notes"));
+    add("\u30D0\u30FC", "\u6A5F\u80FD\uFF08\u5DE6\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "features \u6A5F\u80FD", () => {
+      const p = docks.show("features");
+      p && p.focusSearch && p.focusSearch();
+    });
+    add("\u30D0\u30FC", "\u30EA\u30F3\u30AF\u30FB\u30D0\u30C3\u30AF\u30EA\u30F3\u30AF\uFF08\u53F3\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "backlinks links outgoing \u30D0\u30C3\u30AF\u30EA\u30F3\u30AF \u30EA\u30F3\u30AF \u95A2\u4FC2", () => docks.show("links"));
+    add("\u30D0\u30FC", "\u30A2\u30A6\u30C8\u30E9\u30A4\u30F3\uFF08\u53F3\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "outline headings \u30A2\u30A6\u30C8\u30E9\u30A4\u30F3 \u898B\u51FA\u3057", () => docks.show("outline"));
+    add("\u30CE\u30FC\u30C8", "\u30CE\u30FC\u30C8\u3092\u958B\u304F\uFF08\u30AF\u30A4\u30C3\u30AF\u30B9\u30A4\u30C3\u30C1\u30E3\u30FC\uFF09", "quick switcher open note ctrl+o \u958B\u304F \u63A2\u3059", () => switcher.open());
+    add("\u30CE\u30FC\u30C8", "\u65B0\u3057\u3044\u30CE\u30FC\u30C8", "new note ctrl+n \u65B0\u898F \u4F5C\u308B", () => newNote());
     add("\u7D22\u5F15", "\u7D22\u5F15\u8A9E\u3067\u63A2\u3059", "search keyword \u7D22\u5F15\u8A9E \u691C\u7D22", () => {
-      setSidebar(true);
+      docks.show("index");
       nav2.focusSearch();
     });
     add("\u7D22\u5F15", "\u7D22\u5F15\u30D6\u30E9\u30A6\u30B6\u3092\u958B\u304F\uFF08Index \u2192 \u30CE\u30FC\u30C8 \u2192 \u30C8\u30D4\u30C3\u30AF\u7D22\u5F15 \u3092\u5217\u3067\u8FBF\u308B\uFF09", "index browser miller \u7D22\u5F15 \u30D6\u30E9\u30A6\u30B6", () => openIndexBrowser());
@@ -37600,6 +38597,7 @@ ${h4.join(`
     add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));
     add("\u30BF\u30D6", "\u524D\u306E\u30BF\u30D6", "previous tab", () => panes2.cycle(-1));
     add("\u30BF\u30D6", "\u9589\u3058\u305F\u30BF\u30D6\u3092\u958B\u304F", "reopen closed tab \u518D\u958B", () => panes2.reopenClosed());
+    add("\u30BF\u30D6", "\u4ECA\u306E\u30BF\u30D6\u3092\u9589\u3058\u308B", "close tab ctrl+w \u9589\u3058\u308B", () => panes2.closeActive());
     add("\u5206\u5272", "\u53F3\u306B\u5206\u5272", "split right row \u5DE6\u53F3", () => panes2.splitFocused("row"));
     add("\u5206\u5272", "\u4E0B\u306B\u5206\u5272", "split down col \u4E0A\u4E0B", () => panes2.splitFocused("col"));
     add("\u5206\u5272", "\u5206\u5272\u3092\u89E3\u9664", "unsplit join", () => panes2.unsplitFocused());
@@ -37657,8 +38655,7 @@ ${h4.join(`
   }
   function closePalette() {
     $3("palette").hidden = true;
-    if (guiEdit.isOn()) view2.focus();
-    else term.focus();
+    backToInputSoon();
   }
   function drawPalette() {
     const all = paletteItems();
@@ -37731,12 +38728,7 @@ ${h4.join(`
         if (!composing && !$3("palette").hidden && document.activeElement !== input) $3("palette").hidden = true;
       }, 150);
     });
-    document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") {
-        e.preventDefault();
-        openPalette();
-      }
-    }, true);
+    initHotkeys();
   }
   function currentMode() {
     return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim";
@@ -37770,6 +38762,55 @@ ${h4.join(`
       $3("file").textContent = (guiEdit.state().file || "").split("/").pop();
     }
   }
+  function initHotkeys() {
+    const inTerm = (t3) => !!(t3 && t3.closest && t3.closest("#term"));
+    const vimFree = () => {
+      const m = (last2.mode || "n")[0];
+      return viewOnly || m === "n" && !needsTerminal(last2);
+    };
+    document.addEventListener("keydown", (e) => {
+      if (!e.ctrlKey || e.altKey || e.metaKey || imeActive(e)) return;
+      if (!document.getElementById("launcher").hidden) return;
+      const t3 = e.target;
+      const take = (fn2) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fn2();
+      };
+      if (e.code === "Tab") return take(() => panes2.cycle(e.shiftKey ? -1 : 1));
+      if (e.shiftKey) {
+        if (e.code === "KeyP") return take(() => openPalette());
+        if (e.code === "KeyF") return take(() => panes2.openView("search"));
+        return;
+      }
+      if (t3 && t3.closest && t3.closest(".qs, #palette")) return;
+      if (inTerm(t3) && !vimFree()) return;
+      if (e.code === "KeyP") return take(() => openPalette());
+      if (e.code === "KeyO") return take(() => switcher.open());
+      if (e.code === "KeyN" && !(t3 && t3.closest && t3.closest("input, textarea"))) return take(() => newNote());
+      if (e.code === "KeyW" && panes2.activeKind() !== "vim") return take(() => panes2.closeActive());
+    }, true);
+  }
+  function noteMenu(x, y) {
+    const i = nav2 && nav2.info();
+    const items = [];
+    if (i && i.kind === "mandala") items.push({ label: "\u66FC\u837C\u7F85\u306E\u753B\u9762\u3067\u958B\u304F", run: () => openMandala() });
+    if (i && i.kind === "canvas") items.push({ label: "\u30AD\u30E3\u30F3\u30D0\u30B9\u306E\u753B\u9762\u3067\u958B\u304F", run: () => openCanvas() });
+    items.push(
+      { label: "\u7D22\u5F15\u306B\u8F09\u305B\u308B\u2026", disabled: !i || i.missing || i.is_index, run: () => nav2.actions.addToIndex(i) },
+      { label: "\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u4F5C\u308B\u2026", disabled: !i || i.missing || !!i.entries, run: () => nav2.actions.newTopic(i) },
+      { label: "\u3053\u306E\u7D22\u5F15\u306B\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u2026", disabled: !i || !i.entries, run: () => nav2.actions.newInIndex(i) },
+      "-",
+      { label: "\u30EA\u30F3\u30AF\u30FB\u30D0\u30C3\u30AF\u30EA\u30F3\u30AF\u3092\u53F3\u306E\u30D0\u30FC\u306B", run: () => docks.show("links") },
+      { label: "\u30A2\u30A6\u30C8\u30E9\u30A4\u30F3\u3092\u53F3\u306E\u30D0\u30FC\u306B", run: () => docks.show("outline") },
+      "-",
+      { label: "\u53F3\u306B\u5206\u5272", run: () => panes2.splitFocused("row") },
+      { label: "\u4E0B\u306B\u5206\u5272", run: () => panes2.splitFocused("col") },
+      { label: "\u5206\u5272\u3092\u89E3\u9664", run: () => panes2.unsplitFocused() },
+      { label: "\u9589\u3058\u305F\u30BF\u30D6\u3092\u958B\u304F", run: () => panes2.reopenClosed() }
+    );
+    popupMenu(x, y, items);
+  }
   function initToolbar() {
     for (const b2 of document.querySelectorAll("#modes [data-mode]")) b2.addEventListener("click", () => setMode(b2.dataset.mode));
     for (const b2 of document.querySelectorAll("#edit-tools [data-cmd]")) {
@@ -37778,35 +38819,22 @@ ${h4.join(`
         guiEdit.run(b2.dataset.cmd);
       });
     }
-    for (const b2 of document.querySelectorAll("#view-tools [data-open]")) b2.addEventListener("click", () => panes2.openView(b2.dataset.open));
-    for (const b2 of document.querySelectorAll("#history-tools [data-hist]")) b2.addEventListener("click", () => historyGo(b2.dataset.hist === "back" ? -1 : 1));
+    for (const b2 of document.querySelectorAll("#history-tools [data-hist]")) {
+      b2.appendChild(icon(b2.dataset.hist === "back" ? "back" : "forward"));
+      b2.addEventListener("click", () => historyGo(b2.dataset.hist === "back" ? -1 : 1));
+    }
+    const more = $3("vh-more");
+    more.appendChild(icon("more"));
+    more.addEventListener("click", () => {
+      const r = more.getBoundingClientRect();
+      noteMenu(r.left - 200, r.bottom + 2);
+    });
     window.addEventListener("mouseup", (e) => {
       if (e.button === 3 || e.button === 4) {
         e.preventDefault();
         historyGo(e.button === 3 ? -1 : 1);
       }
     });
-    for (const b2 of document.querySelectorAll("#nav-tools [data-nav]")) {
-      b2.addEventListener("click", () => {
-        const a = b2.dataset.nav;
-        if (a === "sidebar") setSidebar($3("sidebar").hidden);
-        else if (a === "browser") openIndexBrowser();
-        else if (a === "calendar") openCalendar();
-        else if (a === "mandala") openMandala();
-        else if (a === "canvas") openCanvas();
-      });
-    }
-    for (const b2 of document.querySelectorAll("#view-tools [data-pane]")) {
-      b2.addEventListener("click", () => {
-        const a = b2.dataset.pane;
-        if (a === "split-row") panes2.splitFocused("row");
-        else if (a === "split-col") panes2.splitFocused("col");
-        else if (a === "unsplit") panes2.unsplitFocused();
-        else if (a === "reopen") panes2.reopenClosed();
-        else if (a === "palette") openPalette();
-        else if (a === "features") panes2.openFeatures();
-      });
-    }
     initPalette();
     refreshModeUI();
   }
@@ -38074,7 +39102,10 @@ ${h4.join(`
       onImageSize,
       onClick,
       onCommand: (id2) => guiEdit ? guiEdit.run(id2) : false,
-      onUserChange: (u) => guiEdit && guiEdit.onUserChange(u)
+      onUserChange: (u) => {
+        if (guiEdit) guiEdit.onUserChange(u);
+        outlineSoon();
+      }
     });
     guiEdit = createGuiEdit({ view: view2, gui, $: $3, getLast: () => last2, showError, onChange: () => refreshModeUI() });
     panes2 = createPanes({
@@ -38106,7 +39137,7 @@ ${h4.join(`
         { label: "\u30AD\u30E3\u30F3\u30D0\u30B9\u2026", run: () => openCanvas() }
       ]
     });
-    initSidebar();
+    initDocks();
     initToolbar();
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -38205,7 +39236,7 @@ ${h4.join(`
         } else term.focus();
       }
     };
-    const keepsFocus = (t3) => t3 && t3.closest && t3.closest("#sidebar, .keepfocus, .gdlg-back, .featbox, .ctxmenu, #palette, input, textarea, select");
+    const keepsFocus = (t3) => t3 && t3.closest && t3.closest("#leftdock, #rightdock, .keepfocus, .gdlg-back, .featbox, .ctxmenu, #palette, .qs-back, input, textarea, select");
     document.addEventListener("mousedown", (e) => {
       if (keepsFocus(e.target)) return;
       setTimeout(backToInput, 0);
@@ -38224,7 +39255,7 @@ ${h4.join(`
       }
       if (e.code === "KeyI") {
         e.preventDefault();
-        setSidebar(true);
+        docks.show("index");
         nav2.focusSearch();
       } else if (e.code === "KeyC") {
         e.preventDefault();
@@ -38261,6 +39292,9 @@ ${h4.join(`
       openCalendar,
       openIndexBrowser,
       setSidebar,
+      docks: () => docks,
+      switcher: () => switcher,
+      newNote,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];

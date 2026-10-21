@@ -45,7 +45,7 @@ export function form({ title, fields, ok = "OK", note = "" }) {
       row.appendChild(h("span", "gdlg-label", f.label));
       if (f.type === "picker") {
         const wrap = h("div", "gpick");
-        const inp = h("input"); inp.type = "search"; inp.placeholder = f.placeholder || "探す…"; inp.autocomplete = "off";
+        const inp = h("input"); inp.type = "search"; inp.placeholder = f.placeholder || "探す…"; inp.autocomplete = "off"; inp.value = f.query || "";
         const chosen = h("div", "gpick-chosen", "");
         const list = h("div", "gpick-list");
         let items = [], sel = 0, timer = null;
@@ -133,4 +133,24 @@ export const KIND_BADGE = { index: "Global Index", topic: "トピック索引", 
 // ノートの候補の添え書き: 種類（トピック索引など）・Index からの道・日付。同じ題のノートを見分けられるように
 export function noteSub(x) {
   return [KIND_BADGE[x.kind] || "", x.path || "", x.time ? x.time.slice(0, 10) : ""].filter(Boolean).join(" · ");
+}
+
+// 小さなメニュー（右クリック・「…」のボタン）。items: [{ label, run, disabled? } | "-"]
+export function popupMenu(x, y, items) {
+  document.querySelectorAll(".ctxmenu").forEach((m) => m.remove());
+  const m = h("div", "ctxmenu"); m.style.left = x + "px"; m.style.top = y + "px";
+  for (const it of items) {
+    if (it === "-") { m.appendChild(h("div", "sep")); continue; }
+    const b = h("button", "", it.label); b.type = "button"; b.disabled = !!it.disabled;
+    b.addEventListener("click", () => { m.remove(); it.run(); });
+    m.appendChild(b);
+  }
+  document.body.appendChild(m);
+  m.style.maxHeight = (window.innerHeight - 16) + "px";
+  const r = m.getBoundingClientRect();
+  if (r.bottom > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
+  if (r.right > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
+  const away = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("mousedown", away, true); } };
+  setTimeout(() => document.addEventListener("mousedown", away, true), 0);
+  return m;
 }

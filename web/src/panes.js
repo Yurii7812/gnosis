@@ -32,6 +32,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, fe
   let siteUrl = "";
   let sig = "";
   let saveTimer = null;
+  let vimTitle = "";                // Vim のタブの名前（開いているノートの題。Obsidian のタブと同じ）
   const els = new Map();            // タブ id → { el, frame?, loaded }
   const paneEls = new Map();        // ペイン id → { pane, bar, body, zone }
   const splitEls = new Map();       // 分割 id → { split, a, b, splitter }
@@ -173,7 +174,10 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, fe
     // ペインがなくなっていたらフォーカスを直す
     if (!paneEls.has(focusPane)) focusPane = L.panes(layout)[0].id;
     const solo = paneEls.size === 1 && L.panes(layout)[0].tabs.length === 1;
-    root.classList.toggle("solo", solo);                           // Vim だけのときはタブバーを出さない（今までと同じ見た目）
+    root.classList.toggle("solo", solo);
+    // 右上のペイン（右のバーを閉じたとき、その開けるボタンがタブバーの右端に重なる）
+    const tr = (n) => (n.type === "tabs" ? n : tr(n.dir === "row" ? n.b : n.a));
+    for (const [id, p] of paneEls) p.pane.classList.toggle("edge-tr", id === tr(layout).id);
     // 分割の比率
     L.walk(layout, (n) => { if (n.type !== "split") return; const e = splitEls.get(n.id); if (!e) return; e.a.style.flex = `0 0 calc(${n.ratio * 100}% - 3px)`; e.b.style.flex = "1 1 0"; });
     for (const pane of L.panes(layout)) {
@@ -205,7 +209,9 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, fe
     for (const tab of pane.tabs) {
       const t = h("div", "tab" + (pane.active === tab.id ? " active" : "") + (tab.pinned ? " pinned" : ""));
       t.draggable = true; t.dataset.tabId = tab.id; t.title = KIND_LABEL[tab.kind] || tab.kind;
-      t.appendChild(h("span", "tabtitle", (tab.pinned ? "📌 " : "") + (tab.title || KIND_LABEL[tab.kind] || tab.kind)));
+      const label = tab.kind === "vim" ? (vimTitle || "Vim") : (tab.title || KIND_LABEL[tab.kind] || tab.kind);
+      t.appendChild(h("span", "tabtitle", (tab.pinned ? "📌 " : "") + label));
+      if (tab.kind === "vim") t.title = "Vim: " + (vimTitle || "");
       if (tab.kind !== "vim") {
         const x = h("button", "tabclose", "×"); x.type = "button"; x.title = tab.pinned ? "固定されています（右クリックで解除）" : "閉じる"; x.disabled = !!tab.pinned;
         x.addEventListener("click", (e) => { e.stopPropagation(); closeTab(tab.id); });
@@ -342,6 +348,17 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, fe
     const next = pane.tabs[(i + dir + pane.tabs.length) % pane.tabs.length];
     layout = L.activateTab(layout, next.id); changed();
   }
+  function closeActive() {
+    const pane = L.findPane(layout, focusPane) || L.panes(layout)[0];
+    const t = (L.findTab(layout, pane.active) || {}).tab;
+    if (!t || t.kind === "vim" || t.pinned) return false;
+    return closeTab(t.id);
+  }
+  function setVimTitle(t) {
+    if (t === vimTitle) return;
+    vimTitle = t;
+    for (const pane of L.panes(layout)) if (pane.tabs.some((x) => x.kind === "vim")) renderBar(pane, paneEls.get(pane.id));
+  }
   function showVim() { const v = L.vimTab(layout); if (v) { focusPane = L.findTab(layout, v.id).pane.id; layout = L.activateTab(layout, v.id); changed(); } }
   function setNoteTab(rel) { openView("note", { rel }, rel.replace(/\.md$/i, "").split("/").pop()); }
 
@@ -364,7 +381,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, fe
   render();
   return {
     getLayout: () => layout, panesCount: () => paneEls.size, closedCount: () => closed.size(),
-    openView, openExtra, openFeatures, closeTab, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
+    openView, openExtra, openFeatures, closeTab, closeActive, setVimTitle, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
     activeKind: () => { const p = L.findPane(layout, focusPane) || L.panes(layout)[0]; return (L.findTab(layout, p.active) || {}).tab?.kind || ""; },
     focusPaneId: () => focusPane,
     // 同じ種類・同じノートのタブがあればそれを前に出し、無ければ開く（曼荼羅・キャンバス・カレンダーなど）

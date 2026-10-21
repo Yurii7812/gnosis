@@ -23,29 +23,112 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg-dim) 45%, transparent) transparent; }
 
 html { --strip-h: 54px; }
-#mainrow { display: flex; height: calc(100vh - 24px - var(--toolbar-h, 36px)); overflow: hidden; }
-#workspace { position: relative; flex: 1 1 0; min-width: 0; height: 100%; overflow: hidden; }
+#mainrow { display: flex; height: calc(100vh - 24px); overflow: hidden; }
+#center { position: relative; flex: 1 1 0; min-width: 0; height: 100%; overflow: hidden; }
+#workspace { position: absolute; inset: 0; overflow: hidden; }
 #workspace > .pane, #workspace > .split { position: absolute; inset: 0; }
 #stage { position: absolute; inset: 0; overflow: hidden; }
-.view { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); overflow: hidden; }
+#stage { --vh-h: 36px; }
+.gui-edit #stage { --vh-h: 70px; }
+.view { position: absolute; left: 0; right: 0; top: var(--vh-h); bottom: var(--strip-h); overflow: hidden; }
 .view .cm-editor { height: 100%; }
 
 /* 端末（本物の Vim の画面）: 普段は下の数行だけ見せ、確認・fzf などのときは全体を見せる */
 #termwrap { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bg); overflow: hidden; z-index: 5; }
 #termwrap.strip { height: var(--strip-h); border-top: 1px solid var(--line); }
-#termwrap.expanded { top: 0; height: auto; border-top: none; }
+#termwrap.expanded { top: var(--vh-h); height: auto; border-top: none; }
 #term { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 6px; }
 #term .xterm-viewport { overflow: hidden !important; }
 
-/* ---- ツールバー（モード切替・GUI 編集の道具） ---- */
-#toolbar { display: flex; align-items: center; gap: 10px; height: var(--toolbar-h, 36px); padding: 0 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 13px; overflow-x: auto; white-space: nowrap; }
-#toolbar .grp { display: inline-flex; align-items: center; gap: 4px; }
-#toolbar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
-#toolbar button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; cursor: pointer; }
-#toolbar button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-#toolbar button:disabled { opacity: .4; cursor: default; }
-#toolbar #modes button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
-.save-state { margin-left: auto; font-size: 12px; color: var(--fg-dim); }
+/* ---- ノートの見出し（Obsidian のビューの見出し）と GUI 編集の道具 ---- */
+#viewhead { position: absolute; left: 0; right: 0; top: 0; height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: var(--bg); border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-size: 13px; z-index: 6; }
+#viewhead .grp { display: inline-flex; align-items: center; gap: 2px; }
+.vh-title { flex: 1 1 0; min-width: 0; text-align: center; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.vh-title b { color: var(--fg); font-weight: 600; }
+#modes { border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
+#modes button { font: inherit; font-size: 12px; color: var(--fg-dim); background: transparent; border: 0; border-radius: 5px; padding: 2px 9px; cursor: pointer; }
+#modes button:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+#modes button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 700; }
+#edit-tools { position: absolute; left: 0; right: 0; top: 36px; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 13px; overflow-x: auto; white-space: nowrap; z-index: 6; }
+#edit-tools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; flex: 0 0 auto; }
+#edit-tools button { font: inherit; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+#edit-tools button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+#edit-tools button:disabled { opacity: .4; cursor: default; }
+/* アイコンのボタン（Obsidian の clickable-icon） */
+.icobtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--fg-dim); background: transparent; border: 0; border-radius: 6px; cursor: pointer; flex: 0 0 auto; }
+.icobtn:hover:not(:disabled) { color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.icobtn:disabled { opacity: .35; cursor: default; }
+.icobtn[aria-pressed="true"] { color: var(--accent); }
+.ico { display: block; flex: 0 0 auto; }
+
+/* ---- 左端のアイコン列（リボン） ---- */
+#ribbon { flex: 0 0 44px; width: 44px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 6px 0 8px; background: var(--bg-2); border-right: 1px solid var(--line); overflow: hidden; }
+.ribbon-top, .ribbon-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ribbon-toggle { margin-bottom: 8px; }
+#ribbon .icobtn { width: 32px; height: 32px; }
+
+/* ---- 左右のバー（サイドドック） ---- */
+.dock { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; background: var(--bg-2); font-size: 13px; overflow: hidden; }
+.dock.left { width: var(--dock-left-w, 300px); }
+.dock.right { width: var(--dock-right-w, 280px); }
+.dock-split { flex: 0 0 4px; cursor: col-resize; background: var(--line); opacity: .5; }
+.dock-split:hover { background: var(--accent); opacity: 1; }
+.dock-head { display: flex; align-items: center; gap: 2px; height: 36px; flex: 0 0 36px; padding: 0 6px; border-bottom: 1px solid var(--line); }
+.dock-head.drop { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.dock-tabs { display: flex; align-items: center; gap: 2px; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+.dock-tab { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; color: var(--fg-dim); background: transparent; border: 0; border-radius: 6px; cursor: pointer; flex: 0 0 auto; }
+.dock-tab:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.dock-tab.active { color: var(--fg); background: color-mix(in srgb, var(--fg) 14%, transparent); }
+.dock-body { position: relative; flex: 1 1 0; min-height: 0; }
+.dock-panel { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.dock-float { position: absolute; top: 2px; right: 4px; z-index: 8; }
+#center.right-closed .pane.edge-tr > .tabbar { padding-right: 36px; }
+/* パネルの共通の見た目 */
+.pnl { font-size: 13px; }
+.pnl-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }
+.pnl-title { flex: 1; font-size: 11.5px; font-weight: 700; color: var(--fg-dim); letter-spacing: .04em; }
+.pnl-tools { display: inline-flex; gap: 4px; }
+.pnl-btn { font: inherit; font-size: 13px; color: var(--fg-dim); background: transparent; border: 0; border-radius: 5px; padding: 0 7px; cursor: pointer; }
+.pnl-btn:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.pnl-search { margin: 2px 8px 6px; font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.pnl-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.pnl-body { flex: 1 1 0; overflow-y: auto; padding: 0 6px 24px; }
+.pnl-msg { flex: 0 0 auto; font-size: 11.5px; color: var(--fg-dim); padding: 0 10px; min-height: 0; }
+.pnl-msg:empty { display: none; }
+.pnl-msg:not(:empty) { padding: 4px 10px 6px; border-top: 1px solid var(--line); }
+.pnl-sec { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--fg-dim); margin: 12px 4px 4px; }
+.pnl-sec > span:first-child { flex: 1; }
+.pnl-sub { font-size: 11px; color: var(--fg-dim); margin: 6px 6px 2px; }
+.pnl-count { font-size: 11px; font-weight: 400; color: var(--fg-dim); background: color-mix(in srgb, var(--fg) 10%, transparent); border-radius: 8px; padding: 0 6px; }
+.pnl-none { color: var(--fg-dim); font-size: 12px; padding: 2px 8px 6px; }
+.pnl-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; width: 100%; text-align: left; font: inherit; color: var(--fg); background: transparent; border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.pnl-item:hover, .pnl-item.sel { background: color-mix(in srgb, var(--fg) 9%, transparent); }
+.pnl-item.cur { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.pnl-item.missing { color: var(--fg-dim); cursor: default; font-style: italic; }
+.pnl-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.pnl-item-sub { flex: 1 1 100%; font-size: 11px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-badge { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
+.pnl-badge.kind-index { background: color-mix(in srgb, #d4a72c 35%, transparent); }
+.pnl-badge.kind-topic { background: color-mix(in srgb, #57ab5a 30%, transparent); }
+.pnl-snip { font-size: 11.5px; color: var(--fg-dim); margin: 0 8px 4px 18px; padding: 3px 8px; border-left: 2px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-item { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feat-g { display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg); background: transparent; border: 0; border-radius: 5px; padding: 4px 4px; margin-top: 2px; cursor: pointer; }
+.feat-g:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.feat-g > span:nth-child(2) { flex: 1; }
+.feat-g .ico { transform: rotate(-90deg); transition: transform .1s; color: var(--fg-dim); }
+.feat-g.open .ico { transform: none; }
+.feat-item { padding-left: 24px; }
+/* クイックスイッチャー（Ctrl+O） */
+.qs-back { position: fixed; inset: 0; z-index: 75; background: rgba(0,0,0,.3); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.qs { width: min(680px, 92vw); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.35); overflow: hidden; }
+.qs-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--fg); background: var(--bg); border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; outline: none; }
+.qs-list { list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow-y: auto; }
+.qs-item { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13.5px; }
+.qs-item.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.qs-item.create .qs-title { color: var(--accent); }
+.qs-sub { color: var(--fg-dim); font-size: 11.5px; }
+.qs-foot { font-size: 11.5px; color: var(--fg-dim); padding: 6px 12px; border-top: 1px solid var(--line); }
+.save-state { font-size: 12px; color: var(--fg-dim); white-space: nowrap; }
 .save-state.dirty { color: #bf8700; }
 .save-state.conflict { color: #cf222e; font-weight: 700; }
 #conflict, #ask { position: fixed; left: 50%; top: 52px; transform: translateX(-50%); z-index: 30; max-width: 90vw; padding: 10px 14px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -56,8 +139,6 @@ html { --strip-h: 54px; }
 /* GUI 編集中: 端末（Vim）は隠す。Vim 風のカーソル表示は出さず、ブラウザの文字カーソルを使う */
 .gui-edit #termwrap { display: none; }
 .gui-edit .view { bottom: 0; }
-#toolbar #view-tools { margin-left: 12px; }
-#toolbar #history-tools button { padding: 2px 8px; }
 .gui-edit span.cm-vim-bar, .gui-edit span.cm-vim-block, .gui-edit .cm-vim-block, .gui-edit span.cm-vim-under { display: none; background: transparent; }
 .gui-edit .cm-content { caret-color: var(--fg); cursor: text; }
 .gui-edit .cm-line ::selection, .gui-edit .cm-content ::selection { background: var(--selection); }
@@ -75,15 +156,17 @@ html { --strip-h: 54px; }
 .splitter:hover { background: var(--accent); }
 .pane { display: flex; flex-direction: column; overflow: hidden; }
 .pane.focus { box-shadow: inset 0 2px 0 var(--accent); }
-.tabbar { display: flex; align-items: stretch; gap: 1px; height: 30px; flex: 0 0 30px; background: var(--bg-2); border-bottom: 1px solid var(--line); overflow-x: auto; }
-#workspace.solo .tabbar { display: none; }
-.tab { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer; border-right: 1px solid var(--line); white-space: nowrap; user-select: none; }
-.tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.tabbar { display: flex; align-items: flex-end; gap: 2px; height: 36px; flex: 0 0 36px; padding: 0 6px; background: var(--bg-2); border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
+.tab { display: flex; align-items: center; gap: 6px; height: 30px; max-width: 240px; padding: 0 8px 0 12px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer; border-radius: 7px 7px 0 0; white-space: nowrap; user-select: none; }
+.tab:hover:not(.active) { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.tabtitle { overflow: hidden; text-overflow: ellipsis; }
+.tab.active { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--line); clip-path: inset(-1px -1px 0 -1px); }
 .tab.pinned .tabtitle { font-weight: 700; }
 .tabclose { border: 0; background: none; color: inherit; font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 4px; cursor: pointer; }
 .tabclose:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 15%, transparent); }
 .tabclose:disabled { opacity: .3; cursor: default; }
-.tabplus { border: 0; background: none; color: var(--fg-dim); font-size: 14px; padding: 0 10px; cursor: pointer; }
+.tabplus { align-self: center; border: 0; background: none; color: var(--fg-dim); font-size: 15px; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+.tabplus:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, transparent); }
 .panebody { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
 .dropzone { position: absolute; z-index: 20; background: color-mix(in srgb, var(--accent) 22%, transparent); border: 2px solid var(--accent); pointer-events: none; }
 .dropzone[data-zone="center"] { inset: 0; }
@@ -213,7 +296,7 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 :root.theme-light .cm-md-img img { border-radius: 0; }
 
 /* ---- 起動画面（白背景・黒文字。vault を開くまでは設定のテーマを使わない） ---- */
-body.launching #stage, body.launching #statusbar, body.launching #sidebar, body.launching #sidebar-split { visibility: hidden; }
+body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .launcher { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #000000; overflow: auto; color-scheme: light;
   font-family: var(--font-body); display: flex; flex-direction: column; }
 .launcher button, .launcher input, .launcher select { font: inherit; color: #000; background: #fff; border: 1px solid #000; border-radius: 6px; padding: 6px 14px; }
@@ -321,9 +404,7 @@ body.launching #stage, body.launching #statusbar, body.launching #sidebar, body.
 .gtoast.err { background: #e5534b; color: #fff; }
 
 /* ---- 索引ナビ（サイドバー） ---- */
-#sidebar { flex: 0 0 var(--sidebar-w, 300px); width: var(--sidebar-w, 300px); min-width: 0; display: flex; flex-direction: column; background: var(--bg-2); border-right: 1px solid var(--line); font-size: 13px; }
-#sidebar-split { flex: 0 0 4px; cursor: col-resize; background: transparent; }
-#sidebar-split:hover { background: var(--accent); }
+#sidebar { font-size: 13px; }
 .nav-head { padding: 8px; border-bottom: 1px solid var(--line); }
 .nav-search { width: 100%; font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 .nav-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -458,6 +539,7 @@ body.launching #stage, body.launching #statusbar, body.launching #sidebar, body.
 .md-grid3 .md-disp { font-size: 14px; }
 .md-cell textarea { flex: 1; width: 100%; resize: none; border: 0; background: transparent; color: var(--fg); font: inherit; text-align: center; line-height: 1.4; padding: 2px; }
 .md-cell textarea:focus { outline: 2px solid var(--accent); border-radius: 4px; }
+.md-cell.drop { outline: 2px dashed var(--accent); outline-offset: 1px; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
 .md-grid3 .md-cell textarea { font-size: 14px; }
 .md-tools { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; opacity: 0; transition: opacity .1s; }
 .md-cell:hover .md-tools, .md-cell:focus-within .md-tools { opacity: 1; }

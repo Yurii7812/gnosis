@@ -187,6 +187,19 @@ class AppModelTest(unittest.TestCase):
         self.assertEqual(self.v.note_info("index.md")["kind"], "index")
         self.assertEqual(self.v.note_info(str(self.root / "r.md"))["rel"], "r.md")   # 絶対パスでも
 
+    def test_links_backlinks_outgoing_relations(self):
+        d = self.v.links("r.md")
+        # r.md へリンクしているのは、索引 gh.md の本文と、gr.md の ParentBranch:
+        back = {x["rel"]: x["places"] for x in d["backlinks"]}
+        self.assertEqual(back, {"gh.md": ["本文"], "gr.md": ["ParentBranch"]})
+        self.assertEqual([x["rel"] for x in d["children"]], ["gr.md"])
+        self.assertEqual([x["rel"] for x in d["groups"]], ["gh.md"])
+        self.assertEqual([x["rel"] for x in d["topics"]], ["gr.md"])
+        # 出ていくリンクは本文のものだけ（先頭のブロックは関係として別に出す）
+        self.assertEqual([x["rel"] for x in self.v.links("gr.md")["outgoing"]], ["rs.md", "ru.md"])
+        self.assertEqual(self.v.links("gr.md")["parents"][0]["rel"], "r.md")
+        self.assertTrue(self.v.links("nai.md")["missing"])
+
     def test_entries_rows(self):
         e = self.v.entries("gh.md")
         self.assertEqual([(x["label"], x["row"]) for x in e], [("まとめ", ""), ("ローズマリー", ""), ("栽培", "育てる")])

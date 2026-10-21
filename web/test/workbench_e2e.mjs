@@ -409,6 +409,89 @@ const scenario = `(async () => {
   R.un.added = !!(await waitFor(async () => (await read('index.md')).includes('[旅行](' + R.md.rel + ')')));
   R.un.after = await waitFor(() => { const t = [...document.querySelectorAll('.di-unrow .nav-label')].map((x) => x.textContent); return !t.includes('旅行') && t; }, 6000);
 
+
+  // 12. Obsidian のような枠: 左右のバー・リボン・クイックスイッチャー・Ctrl+P・リンク・アウトライン
+  const D = G.docks();
+  R.ob = { ribbon: [...document.querySelectorAll('#ribbon [data-ribbon]')].map((b) => b.dataset.ribbon), leftTabs: [...document.querySelectorAll('#leftdock .dock-tab')].map((b) => b.dataset.panel), rightTabs: [...document.querySelectorAll('#rightdock .dock-tab')].map((b) => b.dataset.panel) };
+  document.querySelector('#ribbon .ribbon-toggle').click(); await sleep(200);
+  R.ob.leftClosed = document.getElementById('leftdock').hidden;
+  document.querySelector('#ribbon .ribbon-toggle').click(); await sleep(200);
+  R.ob.leftReopened = !document.getElementById('leftdock').hidden;
+  document.querySelector('#rightdock .dock-toggle').click(); await sleep(200);
+  R.ob.rightClosed = document.getElementById('rightdock').hidden && !document.querySelector('.dock-float').hidden;
+  document.querySelector('.dock-float').click(); await sleep(200);
+  R.ob.rightReopened = !document.getElementById('rightdock').hidden;
+  // クイックスイッチャー（Vim のノーマルモードで Ctrl+O）→ ローズマリーの栽培 を開く
+  G.panes().showVim(); await sleep(200); G.term.focus();
+  await G.send('\x1b'); await sleep(300);
+  document.querySelector('#term textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'o', code: 'KeyO', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(200);
+  R.ob.switcherOpen = G.switcher().isOpen();
+  typeIn(document.querySelector('.qs-input'), 'ローズマリーの栽培');
+  await waitFor(() => [...document.querySelectorAll('.qs-item')].some((x) => x.textContent.includes('ローズマリーの栽培')));
+  R.ob.qsItems = [...document.querySelectorAll('.qs-item')].map((x) => x.textContent).slice(0, 3);
+  R.ob.qsOpenBeforeEnter = G.switcher().isOpen();
+  document.querySelector('.qs-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  R.ob.switched = await waitFor(() => vimFile() === 'rs.md' && 'rs.md');
+  R.ob.tabTitle = await waitFor(() => { const t = [...document.querySelectorAll('.tab .tabtitle')].map((x) => x.textContent).find((x) => x.includes('ローズマリーの栽培')); return t; });
+  // リンク（右のバー）: rs.md へは索引 gr.md の本文からリンクがある
+  D.show('links');
+  R.ob.back = await waitFor(() => { const t = document.querySelector('#rightdock .dock-panel[data-panel="links"]').innerText; return t.includes('バックリンク') && t.includes('ローズマリー') && t.replace(/\\s+/g, ' ').slice(0, 300); });
+  if (!R.ob.back) { R.ob.backText = document.querySelector('#rightdock').innerText.slice(0, 300); R.ob.dock = JSON.stringify(D.state().right); R.ob.q = JSON.stringify(await window.gui.query('nav.links', { file: G.state().file })).slice(0, 300); }
+  await shot('11-obsidian-links');
+  // Ctrl+P（ノーマルモード）でコマンドパレット
+  G.term.focus();
+  document.querySelector('#term textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(200);
+  R.ob.palette = !document.getElementById('palette').hidden;
+  document.getElementById('palette-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(200);
+  // 挿入モードの Ctrl+P は Vim のまま（パレットを開かない）
+  await G.send('o'); await waitFor(() => (G.state().mode || '')[0] === 'i', 3000);
+  document.querySelector('#term textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(200);
+  R.ob.paletteInInsert = !document.getElementById('palette').hidden;
+  await G.send('\x1b'); await sleep(200); await G.send('u'); await sleep(300);
+  // 機能（左のバー）: 探して押すと実行される
+  D.show('features'); await sleep(300);
+  const fs2 = document.querySelector('#leftdock .dock-panel[data-panel="features"] .pnl-search');
+  typeIn(fs2, 'アウトライン');
+  const fi = await waitFor(() => document.querySelector('#leftdock .dock-panel[data-panel="features"] .feat-item'));
+  R.ob.featFirst = fi && fi.textContent;
+  fi && fi.click(); await sleep(300);
+  R.ob.outlineShown = D.isVisible('outline');
+  R.ob.outline = await waitFor(() => [...document.querySelectorAll('#rightdock .outline-item')].map((x) => x.textContent).join('|'));
+  D.show('index');
+
+  // 13. 曼荼羅に既存のノートを入れる（「既存…」で選ぶ・ドラッグで落とす）・外す
+  G.openMandala('pick');
+  await waitFor(() => dlg());
+  await pick(0, '旅行', '旅行');
+  await okDlg();
+  await waitFor(() => document.querySelector('.mdbox .md-cell textarea'), 8000);
+  await sleep(500);
+  const mdBox = [...document.querySelectorAll('.mdbox')].find((x) => x.offsetParent);
+  const c3 = (r, c) => mdBox.querySelector('[data-rc="' + r + ',' + c + '"]');
+  if (![...mdBox.querySelectorAll('.md-grid3')].length) btn(document.querySelector('.md-bar'), '3×3 で考える').click();
+  await sleep(300);
+  // 中心のブロックへ
+  btn(mdBox.querySelector('.md-crumbs'), '旅行')?.click(); await sleep(300);
+  const ex = await waitFor(() => [...c3(4, 3).querySelectorAll('button')].find((b) => b.textContent.startsWith('既存')));
+  ex.click();
+  await waitFor(() => dlg());
+  R.mdx = { picked: await pick(0, 'ハーブの栽培', 'ハーブの栽培') };
+  await okDlg();
+  R.mdx.saved = await waitFor(async () => { const t = await read(R.md.rel); return (t.match(/\\[ハーブの栽培\\]\\(hs\\.md\\)/g) || []).length === 2; });
+  if (!R.mdx.saved) R.mdx.text = (await read(R.md.rel)).split('\\n').filter((l) => l.startsWith('|')).join('\\n');
+  // ドラッグで落とす（ノートのパネルの行と同じ text/gnosis-note）
+  const dt = new DataTransfer(); dt.setData('text/gnosis-note', 'u.md');
+  c3(5, 3).dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  c3(5, 3).dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  R.mdx.dropped = await waitFor(async () => (await read(R.md.rel)).includes('[運動](u.md)'));
+  await shot('12-mandala-existing');
+  const un = await waitFor(() => [...c3(5, 3).querySelectorAll('button')].find((b) => b.textContent === '外す'));
+  un.click();
+  R.mdx.unlinked = await waitFor(async () => { const t = await read(R.md.rel); return !t.includes('(u.md)') && (t.match(/\\| 運動 \\|/g) || []).length >= 1; });
   } catch (e) { R.error = String(e && e.stack || e); R.errSide = sideText().slice(0, 400); R.errScreen = G.screen().filter((x) => x.trim()).slice(-3); await shot('error'); }
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
@@ -454,6 +537,11 @@ try {
   check(R.ime?.dialogKept && R.ime.dialogClosedByEsc && R.ime.navKept, "IME: Enter/Esc while composing do not submit or close dialogs or open search hits: " + JSON.stringify(R.ime));
   check(R.md?.composingNotSaved && R.md.committedSaved, "IME: a mandala cell is not saved while composing, and is saved once confirmed: " + JSON.stringify(R.md));
   check(R.cv?.card && R.cv.cards.length >= 4 && ["まとめ", "ローズマリー", "栽培"].every((x) => R.cv.labels.includes(x)) && R.cv.file && /canvas: true/.test(R.cv.file) && /\[ハーブ\]\(h\.md\)/.test(R.cv.file), "canvas: place a note, expand its topic index as labelled arrows, saved as Markdown: " + JSON.stringify({ ...R.cv, file: !!R.cv?.file }));
+  check(JSON.stringify(R.ob?.leftTabs) === '["index","notes","features"]' && JSON.stringify(R.ob.rightTabs) === '["links","outline"]' && R.ob.ribbon.includes("switcher") && R.ob.leftClosed && R.ob.leftReopened && R.ob.rightClosed && R.ob.rightReopened, "Obsidian-like frame: ribbon, left/right docks that hide and show: " + JSON.stringify(R.ob));
+  check(R.ob?.switcherOpen && R.ob.switched === "rs.md" && R.ob.tabTitle, "Ctrl+O in Vim's normal mode opens the quick switcher, Enter opens the note and the tab shows its title: " + JSON.stringify(R.ob));
+  check(/ローズマリー/.test(R.ob?.back || "") && R.ob.palette && !R.ob.paletteInInsert, "links panel shows backlinks; Ctrl+P opens the palette in normal mode but not in insert mode: " + JSON.stringify(R.ob));
+  check(/アウトライン/.test(R.ob?.featFirst || "") && R.ob.outlineShown && /ローズマリーの栽培/.test(R.ob.outline || ""), "features panel runs a command; outline lists the headings: " + JSON.stringify(R.ob));
+  check(R.mdx?.picked && R.mdx.saved && R.mdx.dropped && R.mdx.unlinked, "mandala: put an existing note into a cell (picker, mirrored), drop a note onto a cell, unlink: " + JSON.stringify(R.mdx));
   check(R.un?.rows?.includes("旅行") && R.un.rows.includes("ハーブの図") && R.un.pickedGlobal && R.un.added && R.un.after, "unindexed notes are listed and can be put on the Global Index from there: " + JSON.stringify(R.un));
   // ノートの原本: 試験で作ったもの以外のノートは、載せた索引（gh.md）・完了したタスク（d1.md）・トピック索引を足したノート（rs.md）だけが変わる
   const idx = fs.readFileSync(path.join(vault, "index.md"), "utf8");

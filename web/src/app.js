@@ -11,7 +11,11 @@ import { createNavSidebar, createIndexBrowser, navActions } from "./nav.js";
 import { createCalendar } from "./calendar.js";
 import { createMandala } from "./mandala.js";
 import { createCanvas } from "./canvas.js";
-import { form, toast, noteSub, imeActive } from "./ui.js";
+import { form, toast, noteSub, imeActive, popupMenu } from "./ui.js";
+import { createDocks } from "./docks.js";
+import { notesPanel, featuresPanel, linksPanel, outlinePanel } from "./panels.js";
+import { createSwitcher } from "./switcher.js";
+import { icon } from "./icons.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -26,7 +30,10 @@ let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
 let collapseTimer = null;
-let nav = null;     // 索引ナビ（サイドバー。src/nav.js）
+let nav = null;     // 索引ナビ（左のバーのパネル。src/nav.js）
+let docks = null;   // 左端のアイコン列と左右のバー（src/docks.js）
+let switcher = null; // クイックスイッチャー（Ctrl+O。src/switcher.js）
+let curLines = [];  // Vim で開いているノートの行（アウトライン用）
 let noteRoot = "";  // vault のノートのフォルダ（相対パスを絶対パスにする）
 
 // ---------------------------------------------------------------- 端末（xterm.js）
@@ -188,7 +195,7 @@ function applyState(s) {
   const fileChanged = viewOnly && s.file && s.file !== lastViewFile;
   if (s.file) lastViewFile = s.file;
   view.setLinkSource(!!last.linkSource);
-  if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); }
+  if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); curLines = s.lines; outlineSoon(); }
   if (fileChanged) view.view.scrollDOM.scrollTop = 0; // 見るだけのときは別のノートに移ったら先頭から
   if (s.vtext) view.setVtext(s.vtext);
   if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
@@ -232,7 +239,13 @@ function showHistory(s) {
 function followNav(s) {
   showHistory(s);
   if (!nav) return;
-  if (s.file !== undefined && s.bt !== "terminal" && s.file && s.file !== navFile) { navFile = s.file; nav.follow(s.file); }
+  if (s.file !== undefined && s.bt !== "terminal" && s.file && s.file !== navFile) {
+    navFile = s.file;
+    const f = s.file;
+    setNoteTitle(f.split("/").pop().replace(/\.md$/i, ""));
+    Promise.resolve(nav.follow(f)).then(() => { const i = nav.info(); if (navFile === f && i && i.title && !i.missing) setNoteTitle(i.title, i); });
+    docks && docks.follow(f);
+  }
   if (s.mod !== undefined) {
     if (navMod && !s.mod) refreshAppViewsSoon();      // 保存した: 索引の情報が変わったかもしれない
     navMod = s.mod;
@@ -240,7 +253,20 @@ function followNav(s) {
 }
 function refreshAppViewsSoon(ms = 600) {
   clearTimeout(navTimer);
-  navTimer = setTimeout(() => { nav && nav.refresh(); }, ms);   // 保存のあとの同期（別のノートの Group: など）を待ってから
+  navTimer = setTimeout(() => { nav && nav.refresh(); docks && docks.refresh(); }, ms);   // 保存のあとの同期（別のノートの Group: など）を待ってから
+}
+
+// ノートの見出しとタブに、開いているノートの題を出す（Obsidian と同じ）
+function setNoteTitle(title, info) {
+  const el = $("vh-title");
+  if (el) {
+    el.textContent = "";
+    const crumbs = info && info.crumbs && info.crumbs[0] ? info.crumbs[0].filter((x) => x.via !== "topic").slice(0, -1) : [];
+    if (crumbs.length) el.appendChild(document.createTextNode(crumbs.slice(-2).map((x) => x.label || x.title).join(" / ") + " / "));
+    const b = document.createElement("b"); b.textContent = title; el.appendChild(b);
+    el.title = info && info.rel ? info.rel : title;
+  }
+  panes && panes.setVimTitle(title);
 }
 
 async function vimOpen(rel) {
@@ -263,6 +289,9 @@ const appCtx = {
   showVim: () => panes.showVim(),
   focusVim: () => term && term.focus(),
   changed: () => refreshAppViewsSoon(300),
+  newNote: (title) => newNote(title),
+  getLines: () => (guiEdit && guiEdit.isOn() ? view.view.state.doc.toString().split("\n") : curLines),
+  gotoLine: (l) => gotoLine(l),
   readNote: (rel) => gui.readNote(absOf(rel)),
   // 本文を Vim に保存させる（保存時の同期が全部走る）。先に Vim の未保存を保存する。読んだときと違えば競合を返す
   commit: async (rel, text, hash) => {
@@ -333,33 +362,80 @@ async function openCanvas(mode) {
 function openIndexBrowser() { panes.openOrFocus("dindex", {}, "索引ブラウザ"); }
 function openCalendar() { panes.openOrFocus("calendar", {}, "カレンダー"); }
 
-// ---- サイドバー（索引ナビ）の表示・幅。表示と幅はこの PC の画面の好み（localStorage） ----
-const LS = { get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
-function setSidebar(on) {
-  const sb = $("sidebar");
-  if (!sb) return;
-  sb.hidden = !on;
-  $("sidebar-split").hidden = !on;
-  LS.set("gnosis.sidebar", on ? "1" : "0");
-  for (const b of document.querySelectorAll('[data-nav="sidebar"]')) b.setAttribute("aria-pressed", String(on));
-  scheduleFit();
+// ---- 新しいノート（Ctrl+N・リボン・ノートのパネル・クイックスイッチャー）----
+async function newNote(title) {
+  if (!title) {
+    const v = await form({ title: "新しいノート", ok: "作って書く", note: "今日の日記の「今日のノート」に載ります。索引に載せるのは、左のバーの「索引」から。", fields: [{ key: "title", label: "題", required: true }] });
+    if (!v) return false;
+    title = v.title.trim();
+  }
+  const r = await appCtx.op("note_new", { kind: "note", title });
+  if (!r.ok) { toast(r.error || "作れませんでした", "err"); return false; }
+  return true;
 }
-function initSidebar() {
-  const sb = $("sidebar");
-  nav = createNavSidebar(sb, appCtx);
-  const w = Number(LS.get("gnosis.sidebarWidth", "300"));
-  document.documentElement.style.setProperty("--sidebar-w", Math.max(200, Math.min(700, w || 300)) + "px");
-  setSidebar(LS.get("gnosis.sidebar", "1") === "1");
-  const sp = $("sidebar-split");
-  sp.addEventListener("mousedown", (e) => {
-    e.preventDefault();
-    const mv = (ev) => { const x = Math.max(200, Math.min(700, ev.clientX)); document.documentElement.style.setProperty("--sidebar-w", x + "px"); };
-    const up = (ev) => { document.removeEventListener("mousemove", mv, true); document.removeEventListener("mouseup", up, true); LS.set("gnosis.sidebarWidth", String(Math.max(200, Math.min(700, ev.clientX)))); scheduleFit(); };
-    document.addEventListener("mousemove", mv, true); document.addEventListener("mouseup", up, true);
-  });
-  // 索引ナビの中の「曼荼羅で開く」「キャンバスで開く」
-  sb.addEventListener("gnosis-open-editor", (e) => { if (e.detail === "mandala") openMandala(); else openCanvas(); });
+
+// アウトラインの見出しを押した: その行へ（Vim ならカーソルを動かす。GUI 編集なら編集欄で）
+function gotoLine(l) {
+  if (guiEdit && guiEdit.isOn()) {
+    const v = view.view, doc = v.state.doc;
+    const ln = doc.line(Math.max(1, Math.min(l, doc.lines)));
+    v.dispatch({ selection: { anchor: ln.from }, scrollIntoView: true });
+    v.focus();
+    return;
+  }
+  panes.showVim();
+  const m = (last.mode || "n")[0];
+  const mv = `:call cursor(${l},1)|normal! zt|redraw|echo ""\r`;
+  if (viewOnly) { const doc = view.view.state.doc; view.view.scrollDOM.scrollTop = view.view.lineBlockAt(doc.line(Math.max(1, Math.min(l, doc.lines))).from).top; return; }
+  if (m === "n") gui.write(mv);
+  else if (m === "i") gui.write("\x0f" + mv);
+  term.focus();
 }
+
+// ---- 左端のアイコン列と左右のバー（Obsidian と同じ並び）。開け閉め・幅はこの PC の好み（localStorage） ----
+function viewsMenu(x, y) {
+  popupMenu(x, y, [
+    ...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => panes.openView(k) })), "-",
+    ...EXTRA_VIEWS.map(([k, t]) => ({ label: t, run: () => panes.openExtra(k) })), "-",
+    { label: "ビューを最新の状態に更新", run: () => panes.reloadViews() },
+  ]);
+}
+function setSidebar(on) {   // 互換: 左のバーの「索引」を出す・隠す
+  if (on) docks.show("index"); else docks.toggle("left", false);
+}
+function initDocks() {
+  const ribbon = [
+    { id: "switcher", icon: "file-search", title: "ノートを開く（Ctrl+O）", run: () => switcher.open() },
+    { id: "new", icon: "note-plus", title: "新しいノート（Ctrl+N）", run: () => newNote() },
+    { id: "today", icon: "today", title: "今日の日記を開く", run: () => appCtx.op("diary_open", {}) },
+    { id: "calendar", icon: "calendar", title: "カレンダー（Alt+C）", run: () => openCalendar() },
+    { id: "browser", icon: "columns", title: "索引ブラウザ（Index → ノート → トピック索引 を列で辿る）", run: () => openIndexBrowser() },
+    { id: "graph", icon: "graph", title: "グラフ", run: () => panes.openView("graph") },
+    { id: "mandala", icon: "mandala", title: "曼荼羅（今のノートが曼荼羅なら開く・無ければ新しく作る）", run: () => openMandala() },
+    { id: "canvas", icon: "canvas", title: "キャンバス（今のノートがキャンバスなら開く・無ければ新しく作る）", run: () => openCanvas() },
+    { id: "palette", icon: "command", title: "コマンドパレット（Ctrl+P）", run: () => openPalette() },
+    { id: "views", icon: "cards", title: "表示専用のビュー（カード・テーブル・時系列・検索…）", bottom: true, run: (e) => { const r = document.querySelector('[data-ribbon="views"]').getBoundingClientRect(); viewsMenu(r.right + 4, r.top); } },
+    { id: "features", icon: "features", title: "全機能（左のバーの「機能」）", bottom: true, run: () => { const p = docks.show("features"); p && p.focusSearch && p.focusSearch(); } },
+  ];
+  const panels = [
+    { id: "index", side: "left", icon: "index", title: "索引（ダブルインデックス: Index からの道・載っている索引・トピック索引。Alt+I で索引語を探す）",
+      create: (el) => { el.id = "sidebar"; nav = createNavSidebar(el, appCtx); el.addEventListener("gnosis-open-editor", (e) => { if (e.detail === "mandala") openMandala(); else openCanvas(); }); return { refresh: () => {} }; } },
+    { id: "notes", side: "left", icon: "files", title: "ノート（最近のノート・題で探す）", create: notesPanel(appCtx) },
+    { id: "features", side: "left", icon: "features", title: "機能（全部の機能。押すと実行）", create: featuresPanel(async () => { if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } } return paletteItems(); }) },
+    { id: "links", side: "right", icon: "link", title: "リンク（関係・バックリンク・出ていくリンク）", create: linksPanel(appCtx) },
+    { id: "outline", side: "right", icon: "outline", title: "アウトライン（見出し）", create: outlinePanel(appCtx) },
+  ];
+  docks = createDocks({ ribbonEl: $("ribbon"), leftEl: $("leftdock"), rightEl: $("rightdock"), leftSplit: $("leftdock-split"), rightSplit: $("rightdock-split"), centerEl: $("center"), panels, ribbon, onResize: () => scheduleFit(), menu: popupMenu });
+  docks.panel("index");     // 索引ナビは、隠れていても今のノートの情報（nav.info）に使う
+  switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t) => newNote(t), onClose: () => backToInputSoon() });
+}
+let outlineTimer = null;
+function outlineSoon() {
+  if (!docks || !docks.isVisible("outline")) return;
+  clearTimeout(outlineTimer);
+  outlineTimer = setTimeout(() => { const p = docks.panel("outline"); p.update && p.update(); }, 250);
+}
+function backToInputSoon() { setTimeout(() => { if (guiEdit && guiEdit.isOn()) view.focus(); else term && term.focus(); }, 0); }
 
 // ---------------------------------------------------------------- コマンドパレット（全部の機能の入口。ボタン・キーと同じ操作を呼ぶ）
 let vimCmds = null;
@@ -371,9 +447,17 @@ function paletteItems() {
   add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
   for (const k of VIEW_KINDS) add("ビュー", `${KIND_LABEL[k]}を開く`, `${k} view`, () => panes.openView(k));
   for (const [k, t] of EXTRA_VIEWS) add("ビュー", `${t}を開く`, `${k} view 追加ビュー`, () => panes.openExtra(k));
-  add("ビュー", "機能一覧を開く", "features list 一覧 全機能", () => panes.openFeatures());
-  add("索引", "索引ナビ（サイドバー）を出す・隠す", "index nav sidebar 索引 サイドバー double index", () => setSidebar($("sidebar").hidden));
-  add("索引", "索引語で探す", "search keyword 索引語 検索", () => { setSidebar(true); nav.focusSearch(); });
+  add("ビュー", "機能一覧をタブで開く", "features list 一覧 全機能", () => panes.openFeatures());
+  add("バー", "左のバーを出す・隠す", "left sidebar toggle 左 サイドバー", () => docks.toggle("left"));
+  add("バー", "右のバーを出す・隠す", "right sidebar toggle 右 サイドバー", () => docks.toggle("right"));
+  add("バー", "索引（左のバー）を出す", "index nav sidebar 索引 サイドバー double index", () => docks.show("index"));
+  add("バー", "ノートの一覧（左のバー）を出す", "files notes list ノート 一覧 最近", () => docks.show("notes"));
+  add("バー", "機能（左のバー）を出す", "features 機能", () => { const p = docks.show("features"); p && p.focusSearch && p.focusSearch(); });
+  add("バー", "リンク・バックリンク（右のバー）を出す", "backlinks links outgoing バックリンク リンク 関係", () => docks.show("links"));
+  add("バー", "アウトライン（右のバー）を出す", "outline headings アウトライン 見出し", () => docks.show("outline"));
+  add("ノート", "ノートを開く（クイックスイッチャー）", "quick switcher open note ctrl+o 開く 探す", () => switcher.open());
+  add("ノート", "新しいノート", "new note ctrl+n 新規 作る", () => newNote());
+  add("索引", "索引語で探す", "search keyword 索引語 検索", () => { docks.show("index"); nav.focusSearch(); });
   add("索引", "索引ブラウザを開く（Index → ノート → トピック索引 を列で辿る）", "index browser miller 索引 ブラウザ", () => openIndexBrowser());
   add("索引", "今のノートを索引に載せる", "add index 載せる 索引語 \\l g", () => nav.info() && nav.actions.addToIndex(nav.info()));
   add("索引", "今のノートのトピック索引を作る", "topic index branchgroup zk トピック索引", () => nav.info() && nav.actions.newTopic(nav.info()));
@@ -393,6 +477,7 @@ function paletteItems() {
   add("タブ", "次のタブ", "next tab", () => panes.cycle(1));
   add("タブ", "前のタブ", "previous tab", () => panes.cycle(-1));
   add("タブ", "閉じたタブを開く", "reopen closed tab 再開", () => panes.reopenClosed());
+  add("タブ", "今のタブを閉じる", "close tab ctrl+w 閉じる", () => panes.closeActive());
   add("分割", "右に分割", "split right row 左右", () => panes.splitFocused("row"));
   add("分割", "下に分割", "split down col 上下", () => panes.splitFocused("col"));
   add("分割", "分割を解除", "unsplit join", () => panes.unsplitFocused());
@@ -422,7 +507,7 @@ async function openPalette() {
   drawPalette();
   input.focus();
 }
-function closePalette() { $("palette").hidden = true; if (guiEdit.isOn()) view.focus(); else term.focus(); }
+function closePalette() { $("palette").hidden = true; backToInputSoon(); }
 function drawPalette() {
   const all = paletteItems();
   palItems = rank(all, $("palette-input").value);
@@ -458,8 +543,7 @@ function initPalette() {
     else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
   });
   input.addEventListener("blur", () => { setTimeout(() => { if (!composing && !$("palette").hidden && document.activeElement !== input) $("palette").hidden = true; }, 150); });
-  // どこからでも Ctrl+Shift+P（Vim の画面にフォーカスがあるときは xterm の処理の前に捕まえる）
-  document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") { e.preventDefault(); openPalette(); } }, true);
+  initHotkeys();
 }
 
 // ---------------------------------------------------------------- モード（Real Vim / GUI 編集 / 閲覧専用）と、ツールバー
@@ -484,6 +568,55 @@ function refreshModeUI() {
   if (m === "gui") { const el = $("mode"); el.textContent = "EDIT"; el.className = "mode edit"; $("file").textContent = (guiEdit.state().file || "").split("/").pop(); }
 }
 
+// Obsidian と同じキー。Vim の画面では、ノーマルモードのときだけ取る（挿入・コマンドラインの Ctrl+P/N/O は Vim のまま）
+//   Ctrl+P コマンドパレット・Ctrl+O ノートを開く・Ctrl+N 新しいノート・Ctrl+W タブを閉じる（Vim のタブは閉じない）
+//   Ctrl+Tab / Ctrl+Shift+Tab 次・前のタブ・Ctrl+Shift+F 検索・Ctrl+Shift+P もパレット
+function initHotkeys() {
+  const inTerm = (t) => !!(t && t.closest && t.closest("#term"));
+  const vimFree = () => { const m = (last.mode || "n")[0]; return viewOnly || (m === "n" && !needsTerminal(last)); };
+  document.addEventListener("keydown", (e) => {
+    if (!e.ctrlKey || e.altKey || e.metaKey || imeActive(e)) return;
+    if (!document.getElementById("launcher").hidden) return;
+    const t = e.target;
+    const take = (fn) => { e.preventDefault(); e.stopPropagation(); fn(); };
+    if (e.code === "Tab") return take(() => panes.cycle(e.shiftKey ? -1 : 1));
+    if (e.shiftKey) {
+      if (e.code === "KeyP") return take(() => openPalette());
+      if (e.code === "KeyF") return take(() => panes.openView("search"));
+      return;
+    }
+    // 打っている欄（クイックスイッチャー・パレットの中など）の中では、その欄の Ctrl+P/N（候補の上下）に任せる
+    if (t && t.closest && t.closest(".qs, #palette")) return;
+    if (inTerm(t) && !vimFree()) return;
+    if (e.code === "KeyP") return take(() => openPalette());
+    if (e.code === "KeyO") return take(() => switcher.open());
+    if (e.code === "KeyN" && !(t && t.closest && t.closest("input, textarea"))) return take(() => newNote());
+    if (e.code === "KeyW" && panes.activeKind() !== "vim") return take(() => panes.closeActive());
+  }, true);
+}
+
+// ノートの見出しの「…」: このノートでできること
+function noteMenu(x, y) {
+  const i = nav && nav.info();
+  const items = [];
+  if (i && i.kind === "mandala") items.push({ label: "曼荼羅の画面で開く", run: () => openMandala() });
+  if (i && i.kind === "canvas") items.push({ label: "キャンバスの画面で開く", run: () => openCanvas() });
+  items.push(
+    { label: "索引に載せる…", disabled: !i || i.missing || i.is_index, run: () => nav.actions.addToIndex(i) },
+    { label: "トピック索引を作る…", disabled: !i || i.missing || !!i.entries, run: () => nav.actions.newTopic(i) },
+    { label: "この索引に新しいノート…", disabled: !i || !i.entries, run: () => nav.actions.newInIndex(i) },
+    "-",
+    { label: "リンク・バックリンクを右のバーに", run: () => docks.show("links") },
+    { label: "アウトラインを右のバーに", run: () => docks.show("outline") },
+    "-",
+    { label: "右に分割", run: () => panes.splitFocused("row") },
+    { label: "下に分割", run: () => panes.splitFocused("col") },
+    { label: "分割を解除", run: () => panes.unsplitFocused() },
+    { label: "閉じたタブを開く", run: () => panes.reopenClosed() },
+  );
+  popupMenu(x, y, items);
+}
+
 function initToolbar() {
   for (const b of document.querySelectorAll("#modes [data-mode]")) b.addEventListener("click", () => setMode(b.dataset.mode));
   for (const b of document.querySelectorAll("#edit-tools [data-cmd]")) {
@@ -491,24 +624,15 @@ function initToolbar() {
     b.addEventListener("mousedown", (e) => e.preventDefault());
     b.addEventListener("click", () => { guiEdit.run(b.dataset.cmd); });
   }
-  for (const b of document.querySelectorAll("#view-tools [data-open]")) b.addEventListener("click", () => panes.openView(b.dataset.open));
-  for (const b of document.querySelectorAll("#history-tools [data-hist]")) b.addEventListener("click", () => historyGo(b.dataset.hist === "back" ? -1 : 1));
+  for (const b of document.querySelectorAll("#history-tools [data-hist]")) {
+    b.appendChild(icon(b.dataset.hist === "back" ? "back" : "forward"));
+    b.addEventListener("click", () => historyGo(b.dataset.hist === "back" ? -1 : 1));
+  }
+  const more = $("vh-more");
+  more.appendChild(icon("more"));
+  more.addEventListener("click", () => { const r = more.getBoundingClientRect(); noteMenu(r.left - 200, r.bottom + 2); });
   // マウスの戻る(3)・進む(4)ボタン
   window.addEventListener("mouseup", (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); historyGo(e.button === 3 ? -1 : 1); } });
-  for (const b of document.querySelectorAll("#nav-tools [data-nav]")) {
-    b.addEventListener("click", () => {
-      const a = b.dataset.nav;
-      if (a === "sidebar") setSidebar($("sidebar").hidden); else if (a === "browser") openIndexBrowser(); else if (a === "calendar") openCalendar();
-      else if (a === "mandala") openMandala(); else if (a === "canvas") openCanvas();
-    });
-  }
-  for (const b of document.querySelectorAll("#view-tools [data-pane]")) {
-    b.addEventListener("click", () => {
-      const a = b.dataset.pane;
-      if (a === "split-row") panes.splitFocused("row"); else if (a === "split-col") panes.splitFocused("col");
-      else if (a === "unsplit") panes.unsplitFocused(); else if (a === "reopen") panes.reopenClosed(); else if (a === "palette") openPalette(); else if (a === "features") panes.openFeatures();
-    });
-  }
   initPalette();
   refreshModeUI();
 }
@@ -734,7 +858,7 @@ async function boot() {
   view = createView({
     parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick,
     onCommand: (id) => (guiEdit ? guiEdit.run(id) : false),
-    onUserChange: (u) => guiEdit && guiEdit.onUserChange(u),
+    onUserChange: (u) => { if (guiEdit) guiEdit.onUserChange(u); outlineSoon(); },
   });
   guiEdit = createGuiEdit({ view, gui, $, getLast: () => last, showError, onChange: () => refreshModeUI() });
   panes = createPanes({
@@ -749,7 +873,7 @@ async function boot() {
       { label: "曼荼羅…", run: () => openMandala() }, { label: "キャンバス…", run: () => openCanvas() },
     ],
   });
-  initSidebar();
+  initDocks();
   initToolbar();
 
   term = new Terminal({
@@ -802,7 +926,7 @@ async function boot() {
   // どこを押しても、キー入力は端末（Vim）へ戻す。GUI 編集中は編集欄に戻す
   const backToInput = () => { if (document.getElementById("launcher").hidden) { if (guiEdit.isOn()) { if (!document.activeElement || document.activeElement === document.body) view.focus(); } else term.focus(); } };
   // 索引ナビ・カレンダー・曼荼羅・キャンバス・ダイアログの中を押したときは、キー入力をそこに残す（Vim へ戻さない）
-  const keepsFocus = (t) => t && t.closest && t.closest("#sidebar, .keepfocus, .gdlg-back, .featbox, .ctxmenu, #palette, input, textarea, select");
+  const keepsFocus = (t) => t && t.closest && t.closest("#leftdock, #rightdock, .keepfocus, .gdlg-back, .featbox, .ctxmenu, #palette, .qs-back, input, textarea, select");
   document.addEventListener("mousedown", (e) => { if (keepsFocus(e.target)) return; setTimeout(backToInput, 0); });
   window.addEventListener("focus", () => { if (!keepsFocus(document.activeElement)) backToInput(); });
   // Alt+I: 索引ナビへ（索引語で探す）。Alt+C: カレンダー
@@ -813,7 +937,7 @@ async function boot() {
       if (e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]") && !e.target.closest("#term")) return;
       e.preventDefault(); e.stopPropagation(); historyGo(e.code === "ArrowLeft" ? -1 : 1); return;
     }
-    if (e.code === "KeyI") { e.preventDefault(); setSidebar(true); nav.focusSearch(); }
+    if (e.code === "KeyI") { e.preventDefault(); docks.show("index"); nav.focusSearch(); }
     else if (e.code === "KeyC") { e.preventDefault(); openCalendar(); }
   }, true);
   // GUI 編集中（編集欄にフォーカスがあるとき）のモード切替キー
@@ -832,7 +956,7 @@ async function boot() {
     isViewOnly: () => viewOnly,
     setViewOnly,
     setMode, currentMode, guiEdit: () => guiEdit, panes: () => panes, openPalette,
-    nav: () => nav, appCtx, openMandala, openCanvas, openCalendar, openIndexBrowser, setSidebar,
+    nav: () => nav, appCtx, openMandala, openCanvas, openCalendar, openIndexBrowser, setSidebar, docks: () => docks, switcher: () => switcher, newNote,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

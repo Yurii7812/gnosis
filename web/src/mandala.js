@@ -3,8 +3,10 @@
 //   9×9: 全体を見ながら直す。
 //   副題は中心のブロックと周りのブロックの真ん中の 2 か所にある。片方を直せばもう片方も同じにする（mandala.py の sync と同じ対応）。
 //   マスの文字から「ノートにする」「曼荼羅にする」（Vim の gnosis#app_op → mandala.py link-cell）。
+//   既存のノートを入れる: 「既存…」で選ぶか、左右のバー・索引ブラウザのノートをマスへドラッグする（マスが [文字](ノート.md) になる）。
+//   「外す」でリンクだけを外して文字を残す。
 //   保存は Vim（:write）。読んだときの内容と違えば上書きせず読み直す。
-import { h, button, toast, imeActive } from "./ui.js";
+import { h, button, toast, imeActive, form, noteSub } from "./ui.js";
 
 const N = 9;
 const RING = [[3, 3], [3, 4], [3, 5], [4, 5], [5, 5], [5, 4], [5, 3], [4, 3]];          // 上から時計回り
@@ -85,6 +87,23 @@ export function mirrorOf(r, c) {
   return null;
 }
 
+// 曼荼羅ノートのフォルダ（dir、vault からの相対・末尾 / 付き）から、ノート rel へのリンク先
+export function relLink(dir, rel) {
+  const from = dir.split("/").filter(Boolean), to = rel.split("/");
+  let i = 0;
+  while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+  const path = "../".repeat(from.length - i) + to.slice(i).join("/");
+  return path.replace(/%/g, "%25").replace(/ /g, "%20").replace(/\(/g, "%28").replace(/\)/g, "%29");
+}
+// マスに入れるリンクの文字（[ ] は表のリンクを壊すので ( ) に。mandala.py と同じ）
+export function cellLink(label, dir, rel) {
+  return `[${label.replace(/\[/g, "(").replace(/\]/g, ")").trim()}](${relLink(dir, rel)})`;
+}
+// マスの文字からリンクを外す（表示名だけを残す）
+export function unlinkText(v) {
+  return v.replace(new RegExp(LINK_RE.source, "g"), (_, t) => t.replace(/\\(.)/g, "$1"));
+}
+
 // ブロック b（0..8）の 3×3 のマスの位置（行, 列）
 const blockCells = (b) => { const br = Math.floor(b / 3) * 3, bc = (b % 3) * 3; const out = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out.push([br + r, bc + c]); return out; };
 
@@ -154,9 +173,33 @@ export function createMandala(ctx, params) {
     if (m) {
       grid[m[0]][m[1]] = v;
       const other = body.querySelector(`[data-rc="${m[0]},${m[1]}"] textarea`);
-      if (other && other !== document.activeElement) other.value = v;
+      if (other && other !== document.activeElement) { other.value = v; other.dispatchEvent(new Event("blur")); }
     }
     schedule();
+  }
+  const dirOf = () => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "");
+  // マス (r, c) に既存のノート target（vault からの相対）を入れる。文字があればそれを表示名に、無ければノートの題
+  async function putNote(r, c, target, title) {
+    if (!title) { const q = await ctx.query("nav.note", { file: target }); title = q.ok && q.result && !q.result.missing ? q.result.title : target.split("/").pop().replace(/\.md$/i, ""); }
+    if (target === rel) { toast("この曼荼羅自身は入れられません", "err"); return; }
+    const cur = unlinkText(grid[r][c]).trim();
+    const v = cellLink(cur || title, dirOf(), target);
+    const ta = body.querySelector(`[data-rc="${r},${c}"] textarea`);
+    if (ta) ta.value = v;
+    setCell(r, c, v);
+    if (ta) ta.dispatchEvent(new Event("blur"));
+    toast(`「${title}」をマスに入れました`);
+  }
+  async function pickNote(r, c) {
+    const cur = unlinkText(grid[r][c]).trim();
+    const v = await form({
+      title: "既存のノートをマスに入れる", ok: "入れる",
+      note: cur ? `マスの文字「${cur}」はそのまま表示名にして、選んだノートへのリンクにします。` : "マスには選んだノートの題が入ります（あとから直せます）。",
+      fields: [{ key: "file", label: "ノート", type: "picker", placeholder: "題で探す", query: cur,
+        load: async (q) => { const res = await ctx.query("nav.notes", { q }); return (res.ok ? res.result : []).filter((x) => x.rel !== rel).map((x) => ({ value: x.rel, label: x.title, sub: noteSub(x) })); } }],
+    });
+    if (!v || !v.file) return;
+    await putNote(r, c, v.file);
   }
 
   function cellEl(r, c, opts = {}) {
@@ -184,7 +227,12 @@ export function createMandala(ctx, params) {
     const disp = h("div", "md-disp");
     disp.addEventListener("mousedown", (e) => { e.preventDefault(); cell.classList.add("editing"); ta.focus(); });
     ta.addEventListener("focus", () => cell.classList.add("editing"));
-    ta.addEventListener("blur", () => { cell.classList.remove("editing"); drawDisp(); });
+    ta.addEventListener("blur", () => { cell.classList.remove("editing"); drawDisp(); drawTools(); });
+    // 左右のバー・索引ブラウザのノートを落とすと、そのノートへのリンクになる
+    const isNote = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("text/gnosis-note");
+    cell.addEventListener("dragover", (e) => { if (isNote(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; cell.classList.add("drop"); } });
+    cell.addEventListener("dragleave", () => cell.classList.remove("drop"));
+    cell.addEventListener("drop", (e) => { cell.classList.remove("drop"); if (!isNote(e)) return; e.preventDefault(); putNote(r, c, e.dataTransfer.getData("text/gnosis-note")); });
     function drawDisp() {
       const cur = grid[r][c];
       disp.textContent = "";
@@ -211,10 +259,15 @@ export function createMandala(ctx, params) {
       toolsKey = key;
       tools.textContent = "";
       cell.classList.toggle("linked", !!lk);
-      if (lk) tools.appendChild(button("開く", () => openLink(lk[2]), "md-tool", "リンク先を Vim で開く"));
-      else if (cur.trim()) {
+      if (lk) {
+        tools.appendChild(button("開く", () => openLink(lk[2]), "md-tool", "リンク先を Vim で開く"));
+        tools.appendChild(button("外す", () => { const v = unlinkText(grid[r][c]); ta.value = v; setCell(r, c, v); drawDisp(); drawTools(); }, "md-tool", "リンクを外して文字だけ残す"));
+      } else if (cur.trim()) {
         tools.appendChild(button("ノートに", () => linkCell(r, c, "note"), "md-tool", "このマスの文字で新しいノートを作り、マスをリンクにする"));
+        tools.appendChild(button("既存…", () => pickNote(r, c), "md-tool", "既存のノートを選んで、このマスをそのノートへのリンクにする（ノートをマスへドラッグしても入ります）"));
         tools.appendChild(button("曼荼羅に", () => linkCell(r, c, "mandala"), "md-tool", "このマスの文字を主題にした別の曼荼羅を作る"));
+      } else {
+        tools.appendChild(button("既存のノート…", () => pickNote(r, c), "md-tool", "既存のノートを選んでこのマスに入れる（ノートをマスへドラッグしても入ります）"));
       }
       if (opts.zoom) tools.appendChild(button("広げる ▸", opts.zoom, "md-tool zoom", "このマスを中心に 8 マスで広げる（Alt+↓）"));
     }
@@ -285,7 +338,7 @@ export function createMandala(ctx, params) {
       mini.appendChild(mb);
     }
     body.appendChild(mini);
-    body.appendChild(h("div", "nav-dim small md-help", "Enter/Tab で次のマス・Shift+Tab で前・副題の「広げる ▸」（Alt+↓）でそのブロックへ・Alt+↑ で中心へ戻る。打ち終わって少しすると Vim が保存します。"));
+    body.appendChild(h("div", "nav-dim small md-help", "Enter/Tab で次のマス・Shift+Tab で前・副題の「広げる ▸」（Alt+↓）でそのブロックへ・Alt+↑ で中心へ戻る。既存のノートは「既存…」か、左右のバーからマスへドラッグで入ります。打ち終わって少しすると Vim が保存します。"));
   }
 
   load();

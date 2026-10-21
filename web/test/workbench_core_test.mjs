@@ -2,7 +2,7 @@
 //   曼荼羅: 表の読み書きが python/mandala.py と同じ形・表の外の本文を変えない・副題の対・マスごとの 3-way
 //   キャンバス: gnosis-canvas のブロックとその上のリンクの行だけを書き直す・相対パス
 import assert from "node:assert/strict";
-import { parseGrid, renderTable, replaceTable, mirrorOf, mergeGrids, cellsOf } from "../src/mandala.js";
+import { parseGrid, renderTable, replaceTable, mirrorOf, mergeGrids, cellsOf, relLink, cellLink, unlinkText } from "../src/mandala.js";
 import { parseCanvas, writeCanvas } from "../src/canvas.js";
 import { fold, rank, readings } from "../src/palette-core.js";
 
@@ -81,5 +81,17 @@ const empty = () => Array.from({ length: 9 }, () => Array(9).fill(""));
   assert.equal(rank(withRead, "ひらく")[0].label !== undefined, true);
   for (const w of ["きょう", "にっき", "ひらく"]) assert.ok(readings("今日の日記を開く").includes(w), w);
   assert.equal(rank(items, "GRAPH")[0].label, "グラフを開く");
+}
+// 曼荼羅のマスに既存のノートを入れる（リンク先は曼荼羅のフォルダから・表示名の [ ] は ( ) に・外すと文字だけ）
+{
+  assert.equal(relLink("", "abc.md"), "abc.md");
+  assert.equal(relLink("sub/", "abc.md"), "../abc.md");
+  assert.equal(relLink("sub/", "sub/abc.md"), "abc.md");
+  assert.equal(relLink("a/b/", "a/c/x y.md"), "../c/x%20y.md");
+  assert.equal(cellLink("ハーブ [仮]", "", "h.md"), "[ハーブ (仮)](h.md)");
+  assert.equal(unlinkText("[ハーブ](h.md) と [運動](u.md)"), "ハーブ と 運動");
+  // 入れたリンクは、表に書いて読み直しても同じ
+  const g = parseGrid(renderTable(Array.from({ length: 9 }, (_, r) => Array.from({ length: 9 }, (_, c) => (r === 4 && c === 4 ? cellLink("主題", "", "t.md") : "")))).join("\n"));
+  assert.equal(g[4][4], "[主題](t.md)");
 }
 console.log("workbench core: OK");
