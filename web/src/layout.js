@@ -153,7 +153,7 @@ export function reopen(layout, closed, paneId) {
 
 // ---- 保存・復元 ----
 export function serialize(layout) { return JSON.stringify(layout); }
-const KINDS = new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note"]);
+const KINDS = new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note", "v2"]);
 export function restore(text) {
   let raw;
   try { raw = typeof text === "string" ? JSON.parse(text) : text; } catch { return newLayout(); }

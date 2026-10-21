@@ -258,3 +258,6 @@ node "$REPO/web/test/look_e2e.mjs"
 # `\A` の GUI 編集モード: 純関数（書式・履歴・ノートの読み書き）の単体試験。実 Electron の E2E は GNOSIS_RUN_WEB_E2E=1 で web/test/gui_edit_e2e.mjs
 node "$REPO/web/test/editcmds_test.mjs"
 node "$REPO/web/test/noteio_test.cjs"
+# `\A` のタブ配置と追加ビュー（23 種）の純関数の試験（追加ビューの一覧が export_views2.py と一致するか）
+node "$REPO/web/test/layout_test.mjs"
+node "$REPO/web/test/extra_views_test.mjs"

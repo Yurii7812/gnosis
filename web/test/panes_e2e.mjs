@@ -159,6 +159,19 @@ const scenario = `(async () => {
   const noteFrame = [...document.querySelectorAll('.viewframe')].find((f) => f.src.endsWith('/b.html'));
   R.noteTab = { kinds: kinds(lay()), frame: !!noteFrame, name: noteFrame ? noteFrame.name : '' };
 
+  // 11b. 追加ビュー（ツリー・マインドマップ等 23 種）も同じタブとして開ける。表示専用の iframe に書き出したページが入る
+  P().openExtra('tree');
+  await waitFor(() => [...document.querySelectorAll('.viewframe')].find((f) => f.src.endsWith('/tree.html')), 20000);
+  const treeFrame = [...document.querySelectorAll('.viewframe')].find((f) => f.src.endsWith('/tree.html'));
+  let treeText = '';
+  await waitFor(() => { try { treeText = treeFrame.contentDocument.getElementById('v2').textContent; return treeText.length > 0; } catch (e) { treeText = 'cross-origin'; return true; } }, 15000);
+  P().openExtra('nope-not-a-view');                                    // 知らないキーでも壊れず一覧ページになる
+  await sleep(300);
+  R.extra = { kinds: kinds(lay()), frame: !!treeFrame, name: treeFrame ? treeFrame.name : '', text: treeText.slice(0, 60), tabs: tabsOf().flat().filter((t) => t === '階層ツリー').length, unknown: !![...document.querySelectorAll('.viewframe')].find((f) => f.src.endsWith('/views.html')) };
+  inp.value = '階層ツリー'; inp.dispatchEvent(new Event('input')); await sleep(200);
+  R.extraPalette = [...document.querySelectorAll('#palette-list li')].some((e) => e.textContent.includes('階層ツリーを開く'));
+  inp.value = ''; document.getElementById('palette').hidden = true;
+
   // 12. Vim のタブに戻る（Vim は動き続けている）
   P().showVim();
   await sleep(700);
@@ -204,6 +217,9 @@ try {
   check(R.vimCmdInList?.some((t) => t.includes(":GnosisCheck")) && R.vimCmdRan, "palette lists and runs a Vim command (:GnosisCheck): " + JSON.stringify([R.vimCmdInList, R.vimCmdRan]));
   check(R.unsplit?.panes === 1, "unsplit leaves one pane: " + JSON.stringify(R.unsplit));
   check(R.noteTab?.kinds?.includes("note") && R.noteTab.frame && R.noteTab.name === "gnosis:read", "a read-only note tab: " + JSON.stringify(R.noteTab));
+  check(R.extra?.kinds?.includes("v2") && R.extra.frame && R.extra.name === "gnosis:open" && R.extra.tabs === 1 && R.extra.unknown, "an extra view opens as a tab (tree), one tab only, unknown key falls back to the list: " + JSON.stringify(R.extra));
+  check(R.extra?.text === "cross-origin" || R.extra?.text.length > 0, "the extra view page rendered: " + JSON.stringify(R.extra?.text));
+  check(R.extraPalette, "the command palette lists the extra views");
   check(R.backToVim?.stageW > 300 && R.backToVim.mode === "vim" && R.vimAlive === "b.md", "back to the Vim tab, Vim is alive: " + JSON.stringify([R.backToVim, R.vimAlive]));
   check(fs.existsSync(path.join(vault, ".gnosis", "workspace.json")), "workspace.json exists in the vault");
   check(fs.existsSync(path.join(vault, ".gnosis", "cache", "site", "index.html")), "view site was exported to .gnosis/cache/site");

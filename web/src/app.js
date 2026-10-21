@@ -5,6 +5,7 @@ import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
 import { createGuiEdit } from "./guiedit.js";
 import { createPanes, KIND_LABEL, VIEW_KINDS } from "./panes.js";
+import { EXTRA_VIEWS } from "./extra-views.js";
 import { rank } from "./palette-core.js";
 
 const gui = window.gui;
@@ -211,6 +212,7 @@ function paletteItems() {
   add("モード", "GUI 編集モード（Vim を使わない）", "gui edit editor 編集", () => setMode("gui"));
   add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
   for (const k of VIEW_KINDS) add("ビュー", `${KIND_LABEL[k]}を開く`, `${k} view`, () => panes.openView(k));
+  for (const [k, t] of EXTRA_VIEWS) add("ビュー", `${t}を開く`, `${k} view 追加ビュー`, () => panes.openExtra(k));
   add("ビュー", "ビューを最新の状態に更新", "refresh reload 更新", () => panes.reloadViews());
   add("タブ", "Vim のタブへ移る", "vim tab", () => panes.showVim());
   add("タブ", "次のタブ", "next tab", () => panes.cycle(1));

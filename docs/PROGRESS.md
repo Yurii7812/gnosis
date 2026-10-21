@@ -125,6 +125,8 @@
 - **全体回帰 run11**: `sh test/run.sh`（`GNOSIS_RUN_WEB_E2E=1`、`\A` の E2E 込み）が編集なしで `exit=0`。run10 以降に ED17 編集履歴統計（`:GnosisActivity`）・SR13（`:GnosisRecent viewed|imported`）・ED10 版の履歴（`:GnosisVersions`）・UT13 一括変更の取引（`:GnosisBulk`）・ED07 本文の重複（`:GnosisDedupe`）・LR12 自己説明の拡張を追加。
 - **残り（PC だけでは完了できないもの）**: 実機（Android/Windows/macOS）での確認、AI12（音声認識エンジン無し）、AI10 の生成（LLM）、`\A` への新ビュー・各機能の画面の埋め込み、Android のその他の通知・画面。これらは「一部/未確認」のまま台帳に明記してある。**main へはまだマージしていない**（全機能が完成していないため）。
 
+- **`\A` への追加ビュー（MD02）**: 追加ビュー 23 種を `v2` タブとして開けるようにした（タブの「＋」→「その他のビュー…」・コマンドパレット）。`bundle.js` を再ビルド。panes E2E と extra_views_test で確認。
+
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
 2. （完了）日記・時系列記録・まとめるトピックへの埋め込みの差分更新。残: トピック側の画像・つながり行の変更、スマホでトピックを移した埋め込みメモ。

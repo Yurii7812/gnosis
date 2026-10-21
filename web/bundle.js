@@ -34495,7 +34495,7 @@ ${h3.join(`
     const tab = { ...closed.tab, id: nid("t") };
     return openTab(layout, paneId || panes(layout)[0].id, tab);
   }
-  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note"]);
+  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note", "v2"]);
   function restore(text) {
     let raw;
     try {
@@ -34560,13 +34560,43 @@ ${h3.join(`
     return lay;
   }
 
+  // src/extra-views.js
+  var EXTRA_VIEWS = [
+    ["tree", "\u968E\u5C64\u30C4\u30EA\u30FC"],
+    ["mindmap", "\u30DE\u30A4\u30F3\u30C9\u30DE\u30C3\u30D7"],
+    ["sunburst", "Sunburst"],
+    ["treemap", "Treemap"],
+    ["matrix", "\u96A3\u63A5\u884C\u5217"],
+    ["sankey", "Sankey"],
+    ["compare", "\u6BD4\u8F03"],
+    ["orphans", "\u5B64\u7ACB\u30FB\u672A\u53C2\u7167\u30FB\u672A\u7D22\u5F15"],
+    ["kanban", "\u30AB\u30F3\u30D0\u30F3"],
+    ["growth", "\u6210\u9577"],
+    ["river", "\u30B9\u30C8\u30FC\u30EA\u30FC\u30EA\u30D0\u30FC"],
+    ["map", "\u5730\u56F3"],
+    ["graph3d", "3D \u30B0\u30E9\u30D5"],
+    ["slides", "\u30B9\u30E9\u30A4\u30C9"],
+    ["whiteboard", "\u30DB\u30EF\u30A4\u30C8\u30DC\u30FC\u30C9"],
+    ["gallery", "\u30AE\u30E3\u30E9\u30EA\u30FC"],
+    ["museum", "\u77E5\u8B58\u306E\u535A\u7269\u9928"],
+    ["palace", "\u8A18\u61B6\u306E\u5BAE\u6BBF"],
+    ["maze", "\u601D\u8003\u306E\u8FF7\u8DEF"],
+    ["timelapse", "\u6210\u9577\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3"],
+    ["ideas", "\u30A2\u30A4\u30C7\u30A2\u5408\u6210\u5668"],
+    ["hypotheses", "\u4EEE\u8AAC\u5B9F\u9A13\u5BA4"],
+    ["debate", "\u601D\u8003\u306E\u5BFE\u6226"]
+  ];
+  var EXTRA_KEYS = new Set(EXTRA_VIEWS.map((v2) => v2[0]));
+  var extraTitle = (key) => (EXTRA_VIEWS.find((v2) => v2[0] === key) || [key, key])[1];
+
   // src/panes.js
-  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8" };
+  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8", v2: "\u8FFD\u52A0\u30D3\u30E5\u30FC" };
   var PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
   var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
   function pageFor(tab) {
     const p = tab.params || {};
     if (tab.kind === "note") return (p.rel || "index.md").replace(/\.md$/i, ".html").split("/").map(encodeURIComponent).join("/");
+    if (tab.kind === "v2") return EXTRA_KEYS.has(p.key) ? `${p.key}.html` : "views.html";
     const base2 = PAGES[tab.kind] || "index.html";
     if (tab.kind === "graph" && p.n) return `${base2}#n=${encodeURIComponent(p.n)}&depth=${p.depth || 1}`;
     if (tab.kind === "fznav" && p.id) return `${base2}#id=${encodeURIComponent(p.id)}`;
@@ -34793,10 +34823,13 @@ ${h3.join(`
       plus2.title = "\u30D3\u30E5\u30FC\u3092\u958B\u304F";
       plus2.addEventListener("click", (e) => {
         const r = plus2.getBoundingClientRect();
-        menu(r.left, r.bottom, VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
+        menu(r.left, r.bottom, [...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
           focusPane = pane.id;
           openView(k);
-        } })));
+        } })), "-", { label: "\u305D\u306E\u4ED6\u306E\u30D3\u30E5\u30FC\u2026", run: () => {
+          focusPane = pane.id;
+          extraMenu(r.left, r.bottom);
+        } }]);
         e.stopPropagation();
       });
       pe2.bar.appendChild(plus2);
@@ -34928,6 +34961,14 @@ ${h3.join(`
         document.addEventListener("mouseup", up, true);
       });
     }
+    function openExtra(key) {
+      openView("v2", { key }, extraTitle(key));
+    }
+    function extraMenu(x, y) {
+      menu(x, y, EXTRA_VIEWS.map(([k, t3]) => ({ label: t3, run: () => {
+        openExtra(k);
+      } })));
+    }
     function openView(kind, params = {}, title = "") {
       layout = openTab(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[0].id, newTab(kind, { title: title || KIND_LABEL[kind] || kind, params }));
       changed();
@@ -34999,6 +35040,7 @@ ${h3.join(`
       panesCount: () => paneEls.size,
       closedCount: () => closed.size(),
       openView,
+      openExtra,
       closeTab: closeTab2,
       reopenClosed,
       splitFocused,
@@ -35244,6 +35286,7 @@ ${h3.join(`
     add("\u30E2\u30FC\u30C9", "GUI \u7DE8\u96C6\u30E2\u30FC\u30C9\uFF08Vim \u3092\u4F7F\u308F\u306A\u3044\uFF09", "gui edit editor \u7DE8\u96C6", () => setMode("gui"));
     add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
     for (const k of VIEW_KINDS) add("\u30D3\u30E5\u30FC", `${KIND_LABEL[k]}\u3092\u958B\u304F`, `${k} view`, () => panes2.openView(k));
+    for (const [k, t3] of EXTRA_VIEWS) add("\u30D3\u30E5\u30FC", `${t3}\u3092\u958B\u304F`, `${k} view \u8FFD\u52A0\u30D3\u30E5\u30FC`, () => panes2.openExtra(k));
     add("\u30D3\u30E5\u30FC", "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", "refresh reload \u66F4\u65B0", () => panes2.reloadViews());
     add("\u30BF\u30D6", "Vim \u306E\u30BF\u30D6\u3078\u79FB\u308B", "vim tab", () => panes2.showVim());
     add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));

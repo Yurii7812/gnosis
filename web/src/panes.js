@@ -4,14 +4,16 @@
 //   - ドラッグでタブの並べ替え・別のペインへの移動・端へ落として分割。分割線のドラッグでリサイズ。右クリックのメニューでも同じ操作。
 //   - レイアウトは vault ごとに .gnosis/workspace.json に保存し、次回に復元する（閉じたタブの再開用の履歴も）。
 import * as L from "./layout.js";
+import { EXTRA_VIEWS, EXTRA_KEYS, extraTitle } from "./extra-views.js";
 
-export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート" };
+export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート", v2: "追加ビュー" };
 const PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
 export const VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
 
 function pageFor(tab) {
   const p = tab.params || {};
   if (tab.kind === "note") return (p.rel || "index.md").replace(/\.md$/i, ".html").split("/").map(encodeURIComponent).join("/");
+  if (tab.kind === "v2") return EXTRA_KEYS.has(p.key) ? `${p.key}.html` : "views.html";        // 知らないキー(古い保存・手書き)は一覧ページへ
   const base = PAGES[tab.kind] || "index.html";
   if (tab.kind === "graph" && p.n) return `${base}#n=${encodeURIComponent(p.n)}&depth=${p.depth || 1}`;
   if (tab.kind === "fznav" && p.id) return `${base}#id=${encodeURIComponent(p.id)}`;
@@ -165,7 +167,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
       pe.bar.appendChild(t);
     }
     const plus = h("button", "tabplus", "＋"); plus.type = "button"; plus.title = "ビューを開く";
-    plus.addEventListener("click", (e) => { const r = plus.getBoundingClientRect(); menu(r.left, r.bottom, VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => { focusPane = pane.id; openView(k); } }))); e.stopPropagation(); });
+    plus.addEventListener("click", (e) => { const r = plus.getBoundingClientRect(); menu(r.left, r.bottom, [...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => { focusPane = pane.id; openView(k); } })), "-", { label: "その他のビュー…", run: () => { focusPane = pane.id; extraMenu(r.left, r.bottom); } }]); e.stopPropagation(); });
     pe.bar.appendChild(plus);
   }
 
@@ -248,6 +250,8 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
   }
 
   // ---- 操作（ボタン・メニュー・キー・パレットが同じものを呼ぶ） ----
+  function openExtra(key) { openView("v2", { key }, extraTitle(key)); }
+  function extraMenu(x, y) { menu(x, y, EXTRA_VIEWS.map(([k, t]) => ({ label: t, run: () => { openExtra(k); } }))); }
   function openView(kind, params = {}, title = "") {
     layout = L.openTab(layout, paneEls.has(focusPane) ? focusPane : L.panes(layout)[0].id, L.newTab(kind, { title: title || KIND_LABEL[kind] || kind, params }));
     changed();
@@ -303,7 +307,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
   render();
   return {
     getLayout: () => layout, panesCount: () => paneEls.size, closedCount: () => closed.size(),
-    openView, closeTab, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
+    openView, openExtra, closeTab, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
     activeKind: () => { const p = L.findPane(layout, focusPane) || L.panes(layout)[0]; return (L.findTab(layout, p.active) || {}).tab?.kind || ""; },
     focusPaneId: () => focusPane,
     activateTab: (id) => { layout = L.activateTab(layout, id); changed(); },
