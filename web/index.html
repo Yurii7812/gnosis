@@ -12,6 +12,11 @@
   <div id="launcher" class="launcher" hidden></div>
   <!-- モードの切り替えと、GUI 編集の道具。キーでもできる操作は、全部ここのボタンからもできる -->
   <div id="toolbar" role="toolbar" aria-label="Gnosis">
+    <!-- ノートの履歴（Vim の ⌫ と \. と同じ）。マウスの戻る/進むボタン・Alt+←/→ でも -->
+    <span class="grp" id="history-tools">
+      <button type="button" data-hist="back" title="戻る（Alt+← ・マウスの戻るボタン・Vim の ⌫）" disabled>← 戻る</button>
+      <button type="button" data-hist="forward" title="進む（Alt+→ ・マウスの進むボタン・Vim の \.）" disabled>進む →</button>
+    </span>
     <span class="grp" id="modes">
       <button type="button" data-mode="vim" title="本物の Vim で編集（Alt+V で閲覧専用に）">Vim</button>
       <button type="button" data-mode="gui" title="GUI 編集: Vim を知らなくても書ける普通のエディタ（Alt+E）">GUI 編集</button>

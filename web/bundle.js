@@ -37254,7 +37254,19 @@ ${h4.join(`
   var navFile = "";
   var navMod = 0;
   var navTimer = null;
+  async function historyGo(dir) {
+    if (guiEdit && guiEdit.isOn() && !await setMode("vim")) return;
+    const r = await gui.op(dir < 0 ? "go_back" : "go_forward", {});
+    if (!r.ok) toast(r.error || "\u79FB\u308C\u307E\u305B\u3093\u3067\u3057\u305F");
+    else panes2.showVim();
+  }
+  function showHistory(s15) {
+    if (!s15.hist) return;
+    const [b2, f] = s15.hist;
+    for (const el2 of document.querySelectorAll("#history-tools [data-hist]")) el2.disabled = el2.dataset.hist === "back" ? !b2 : !f;
+  }
   function followNav(s15) {
+    showHistory(s15);
     if (!nav2) return;
     if (s15.file !== void 0 && s15.bt !== "terminal" && s15.file && s15.file !== navFile) {
       navFile = s15.file;
@@ -37478,6 +37490,8 @@ ${h4.join(`
     add("\u30AD\u30E3\u30F3\u30D0\u30B9", "\u65B0\u3057\u3044\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u4F5C\u308B", "canvas new \u30AD\u30E3\u30F3\u30D0\u30B9", () => openCanvas("new"));
     add("\u30AD\u30E3\u30F3\u30D0\u30B9", "\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u9078\u3093\u3067\u958B\u304F", "canvas open \u30AD\u30E3\u30F3\u30D0\u30B9", () => openCanvas("pick"));
     add("\u30D3\u30E5\u30FC", "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", "refresh reload \u66F4\u65B0", () => panes2.reloadViews());
+    add("\u79FB\u52D5", "\u623B\u308B\uFF08\u524D\u306B\u958B\u3044\u3066\u3044\u305F\u30CE\u30FC\u30C8\uFF09", "back history \u623B\u308B", () => historyGo(-1));
+    add("\u79FB\u52D5", "\u9032\u3080", "forward history \u9032\u3080", () => historyGo(1));
     add("\u30BF\u30D6", "Vim \u306E\u30BF\u30D6\u3078\u79FB\u308B", "vim tab", () => panes2.showVim());
     add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));
     add("\u30BF\u30D6", "\u524D\u306E\u30BF\u30D6", "previous tab", () => panes2.cycle(-1));
@@ -37653,6 +37667,13 @@ ${h4.join(`
       });
     }
     for (const b2 of document.querySelectorAll("#view-tools [data-open]")) b2.addEventListener("click", () => panes2.openView(b2.dataset.open));
+    for (const b2 of document.querySelectorAll("#history-tools [data-hist]")) b2.addEventListener("click", () => historyGo(b2.dataset.hist === "back" ? -1 : 1));
+    window.addEventListener("mouseup", (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        historyGo(e.button === 3 ? -1 : 1);
+      }
+    });
     for (const b2 of document.querySelectorAll("#nav-tools [data-nav]")) {
       b2.addEventListener("click", () => {
         const a = b2.dataset.nav;
@@ -38010,7 +38031,7 @@ ${h4.join(`
         setMode("gui");
         return false;
       }
-      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyI" || e.code === "KeyC")) {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyI" || e.code === "KeyC" || e.code === "ArrowLeft" || e.code === "ArrowRight")) {
         swallowed = true;
         return false;
       }
@@ -38082,6 +38103,13 @@ ${h4.join(`
     });
     document.addEventListener("keydown", (e) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        if (e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]") && !e.target.closest("#term")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        historyGo(e.code === "ArrowLeft" ? -1 : 1);
+        return;
+      }
       if (e.code === "KeyI") {
         e.preventDefault();
         setSidebar(true);

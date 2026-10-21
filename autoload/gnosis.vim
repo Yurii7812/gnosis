@@ -21286,6 +21286,7 @@ endfunction
 "   task_add    {date, text, time}                 … 今日の日記にタスクを書く（期限 📅 は date）
 "   note_new    {title, kind: note|mandala|canvas, subs} … 新しいノート・曼荼羅・キャンバス（今日の日記の「今日のノート」に載る）
 "   mandala_link {file, row, col, kind}            … 曼荼羅のマスの文字からノート（kind=mandala なら別の曼荼羅）を作る
+"   go_back / go_forward                           … ノートの履歴を戻る（⌫ と同じ）・進む（\. と同じ）
 " =============================================================================
 function! s:app_root() abort
   let l:root = s:get_pkm_root()
@@ -21442,6 +21443,11 @@ function! gnosis#app_op(m) abort
     call s:write_new_note(l:lines, l:file)
     call s:app_edit(l:file)
     return {'ok': 1, 'rel': l:ts . '.md'}
+  elseif l:op ==# 'go_back' || l:op ==# 'go_forward'
+    " ⌫（戻る）・\.（進む）と同じ履歴
+    let l:before = expand('%:p')
+    if l:op ==# 'go_back' | call gnosis#go_back() | else | call gnosis#go_forward() | endif
+    return {'ok': expand('%:p') !=# l:before, 'error': expand('%:p') ==# l:before ? (l:op ==# 'go_back' ? 'これ以上戻れません' : 'これ以上進めません') : ''}
   elseif l:op ==# 'mandala_link'
     let l:file = s:app_abs(l:root, get(a:m, 'file', ''))
     call s:app_edit(l:file)

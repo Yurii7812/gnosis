@@ -473,7 +473,7 @@ function appQuery(method, params, timeoutMs = 30000) {
 }
 ipcMain.handle("app:query", (_e, method, params) => (typeof method === "string" ? appQuery(method, params) : { ok: false, error: "bad request" }));
 // 操作（書き込み）は Vim に頼む（gnosis#app_op）。ファイルは vault の中に限る（Vim 側でも確かめる）
-const APP_OPS = new Set(["index_add", "index_new", "topic_new", "diary_open", "task_add", "note_new", "mandala_link"]);
+const APP_OPS = new Set(["index_add", "index_new", "topic_new", "diary_open", "task_add", "note_new", "mandala_link", "go_back", "go_forward"]);
 ipcMain.handle("app:op", async (_e, op, params) => {
   if (!APP_OPS.has(op)) return { ok: false, error: "知らない操作です" };
   const r = await vimCall({ ...(params && typeof params === "object" ? params : {}), type: "op", op }, 20000);

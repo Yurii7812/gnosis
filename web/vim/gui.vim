@@ -152,6 +152,7 @@ function! s:snapshot(force) abort
         \ 'rows': &lines,
         \ 'cols': &columns,
         \ 'cmdtype': getcmdtype(),
+        \ 'hist': [len(get(g:, 'gnosis_history', [])), len(get(g:, 'gnosis_forward', []))],
         \ }
   " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
   let l:pp = []

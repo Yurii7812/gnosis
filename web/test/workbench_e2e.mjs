@@ -171,6 +171,21 @@ const scenario = `(async () => {
   await waitFor(() => document.querySelector('#sidebar .nav-sub') && document.querySelector('#sidebar .nav-sub').textContent.includes('利用'));
   R.twisty = document.querySelector('#sidebar .nav-sub') ? document.querySelector('#sidebar .nav-sub').innerText.replace(/\\s+/g, ' ') : '';
 
+  // 1b. 戻る・進む（ツールバー。Vim の ⌫ と \. と同じ履歴）: h.md → rs.md と開いて、戻ると h.md、進むと rs.md
+  await G.appCtx.open('rs.md');
+  await waitFor(() => vimFile() === 'rs.md');
+  const hb = () => document.querySelector('#history-tools [data-hist="back"]'), hf = () => document.querySelector('#history-tools [data-hist="forward"]');
+  await waitFor(() => !hb().disabled);
+  R.hist = { backEnabled: !hb().disabled, fwdDisabledAtFirst: hf().disabled };
+  hb().click();
+  R.hist.afterBack = await waitFor(() => vimFile() === 'h.md' && vimFile(), 5000);
+  await waitFor(() => !hf().disabled, 3000);
+  R.hist.fwdEnabled = !hf().disabled;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', altKey: true, bubbles: true, cancelable: true }));
+  R.hist.afterAltRight = await waitFor(() => vimFile() === 'rs.md' && vimFile(), 5000);
+  window.dispatchEvent(new MouseEvent('mouseup', { button: 3, bubbles: true, cancelable: true }));
+  R.hist.afterMouseBack = await waitFor(() => vimFile() === 'h.md' && vimFile(), 5000);
+
   // 2. 深いノートの道（索引の名前で出る）
   await G.appCtx.open('rs.md');
   await waitFor(() => G.nav().info() && G.nav().info().rel === 'rs.md');
@@ -371,6 +386,7 @@ try {
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.side?.shown && JSON.stringify(R.side.crumbs) === '["Index","ハーブ"]' && R.side.indexedHerb && R.side.topics && R.side.entries, "sidebar follows the note (path, indexes with aliases, topic index entries): " + JSON.stringify(R.side));
+  check(R.hist?.backEnabled && R.hist.fwdDisabledAtFirst && R.hist.afterBack === "h.md" && R.hist.fwdEnabled && R.hist.afterAltRight === "rs.md" && R.hist.afterMouseBack === "h.md", "back/forward buttons, Alt+→ and the mouse back button follow Vim's history: " + JSON.stringify(R.hist));
   check(/栽培/.test(R.twisty) && /利用/.test(R.twisty), "▸ opens a nested topic index in place: " + R.twisty);
   check(JSON.stringify(R.deep) === '["Index","ハーブ","ローズマリー","栽培"]', "the path of a deep note uses the index names: " + JSON.stringify(R.deep));
   check(R.search?.some((x) => x.includes("Index › ハーブ ›") && x.includes("栽培")) && R.search.some((x) => x.includes("Index › ハーブ › ローズマリー ›")), "keyword search shows which index the keyword is in: " + JSON.stringify(R.search));

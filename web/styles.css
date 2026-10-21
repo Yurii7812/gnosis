@@ -57,6 +57,7 @@ html { --strip-h: 54px; }
 .gui-edit #termwrap { display: none; }
 .gui-edit .view { bottom: 0; }
 #toolbar #view-tools { margin-left: 12px; }
+#toolbar #history-tools button { padding: 2px 8px; }
 .gui-edit span.cm-vim-bar, .gui-edit span.cm-vim-block, .gui-edit .cm-vim-block, .gui-edit span.cm-vim-under { display: none; background: transparent; }
 .gui-edit .cm-content { caret-color: var(--fg); cursor: text; }
 .gui-edit .cm-line ::selection, .gui-edit .cm-content ::selection { background: var(--selection); }

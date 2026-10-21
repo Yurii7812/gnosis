@@ -217,7 +217,20 @@ function scheduleFit() {
 const absOf = (rel) => (!rel || rel.startsWith("/") || /^[A-Za-z]:[\\/]/.test(rel) ? rel : (noteRoot ? noteRoot.replace(/[\\/]$/, "") + "/" + rel : rel));
 const relOf = (file) => { const r = noteRoot.replace(/[\\/]$/, "") + "/"; return file && noteRoot && file.startsWith(r) ? file.slice(r.length) : file; };
 let navFile = "", navMod = 0, navTimer = null;
+// 戻る・進む（ツールバー・マウスの戻る/進むボタン・Alt+←/→）。履歴は Vim のもの（⌫ と \.）
+async function historyGo(dir) {
+  if (guiEdit && guiEdit.isOn() && !(await setMode("vim"))) return;
+  const r = await gui.op(dir < 0 ? "go_back" : "go_forward", {});
+  if (!r.ok) toast(r.error || "移れませんでした");
+  else panes.showVim();
+}
+function showHistory(s) {
+  if (!s.hist) return;
+  const [b, f] = s.hist;
+  for (const el of document.querySelectorAll("#history-tools [data-hist]")) el.disabled = el.dataset.hist === "back" ? !b : !f;
+}
 function followNav(s) {
+  showHistory(s);
   if (!nav) return;
   if (s.file !== undefined && s.bt !== "terminal" && s.file && s.file !== navFile) { navFile = s.file; nav.follow(s.file); }
   if (s.mod !== undefined) {
@@ -374,6 +387,8 @@ function paletteItems() {
   add("キャンバス", "新しいキャンバスを作る", "canvas new キャンバス", () => openCanvas("new"));
   add("キャンバス", "キャンバスを選んで開く", "canvas open キャンバス", () => openCanvas("pick"));
   add("ビュー", "ビューを最新の状態に更新", "refresh reload 更新", () => panes.reloadViews());
+  add("移動", "戻る（前に開いていたノート）", "back history 戻る", () => historyGo(-1));
+  add("移動", "進む", "forward history 進む", () => historyGo(1));
   add("タブ", "Vim のタブへ移る", "vim tab", () => panes.showVim());
   add("タブ", "次のタブ", "next tab", () => panes.cycle(1));
   add("タブ", "前のタブ", "previous tab", () => panes.cycle(-1));
@@ -473,6 +488,9 @@ function initToolbar() {
     b.addEventListener("click", () => { guiEdit.run(b.dataset.cmd); });
   }
   for (const b of document.querySelectorAll("#view-tools [data-open]")) b.addEventListener("click", () => panes.openView(b.dataset.open));
+  for (const b of document.querySelectorAll("#history-tools [data-hist]")) b.addEventListener("click", () => historyGo(b.dataset.hist === "back" ? -1 : 1));
+  // マウスの戻る(3)・進む(4)ボタン
+  window.addEventListener("mouseup", (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); historyGo(e.button === 3 ? -1 : 1); } });
   for (const b of document.querySelectorAll("#nav-tools [data-nav]")) {
     b.addEventListener("click", () => {
       const a = b.dataset.nav;
@@ -755,7 +773,7 @@ async function boot() {
     swallowed = false;
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setMode(viewOnly ? "vim" : "view"); return false; }
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") { e.preventDefault(); swallowed = true; setMode("gui"); return false; }
-    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyI" || e.code === "KeyC")) { swallowed = true; return false; }   // 索引ナビ・カレンダー（document 側で開く）
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyI" || e.code === "KeyC" || e.code === "ArrowLeft" || e.code === "ArrowRight")) { swallowed = true; return false; }   // 索引ナビ・カレンダー（document 側で開く）
     if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "BracketRight" || e.code === "BracketLeft")) { e.preventDefault(); swallowed = true; panes.cycle(e.code === "BracketRight" ? 1 : -1); return false; }
     if (e.ctrlKey && e.shiftKey && e.code === "KeyP") { e.preventDefault(); swallowed = true; return false; }   // パレットは document 側で開く
     if (viewBlocks()) { swallowed = true; viewOnlyKey(e); return false; }
@@ -786,6 +804,11 @@ async function boot() {
   // Alt+I: 索引ナビへ（索引語で探す）。Alt+C: カレンダー
   document.addEventListener("keydown", (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+      // 文字を打っている欄の中では、ふつうの Alt+矢印のまま
+      if (e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]") && !e.target.closest("#term")) return;
+      e.preventDefault(); e.stopPropagation(); historyGo(e.code === "ArrowLeft" ? -1 : 1); return;
+    }
     if (e.code === "KeyI") { e.preventDefault(); setSidebar(true); nav.focusSearch(); }
     else if (e.code === "KeyC") { e.preventDefault(); openCalendar(); }
   }, true);
