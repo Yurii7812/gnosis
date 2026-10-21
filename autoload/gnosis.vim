@@ -11738,7 +11738,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
       endtry
       call s:diary_place_safe(l:file, readfile(l:file))
     else
-      call s:write_new_note(gnosis#note_template(l:ts, !empty(a:attr) ? 1 : 0), l:file)
+      call s:write_new_note(gnosis#note_template(get(l:opt, 'title', l:ts), !empty(a:attr) ? 1 : 0), l:file)
     endif
   finally
     let s:diary_skip_from = ''
@@ -11760,7 +11760,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let l:branch_ok = 1
   endif
 
-  let l:link = '[' . l:ts . '](' . l:ts . '.md)'
+  let l:link = '[' . s:md_link_text(get(l:opt, 'title', l:ts)) . '](' . l:ts . '.md)'
   if l:is_enter && l:grp_src
     " グループに登録するリンクは、入力した表示名（空なら新ノートのタイトル = ファイル名）
     let l:link = '[' . s:md_link_text(get(l:opt, 'name', l:ts)) . '](' . l:ts . '.md)'
@@ -11808,7 +11808,15 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   call s:run_update_one_for_sync(l:cur)
   if l:grp_src && l:added && s:group_path_reviewable(l:cur)
     " 新しいノートは表示名を入れたばかりなので、ここでよみだけを聞いてから並べる（Esc なら保存しない）
-    call s:ask_new_member_yomi(l:cur, l:file, matchstr(l:link, '^\[\zs\%(\\.\|[^\]\\]\)*\ze\]'))
+    if has_key(l:opt, 'yomi')
+      " \A から: よみは答えとして受け取っている（空なら登録しない＝推測のよみで並べる）
+      if !empty(trim(l:opt.yomi))
+        call gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany',
+              \ fnamemodify(l:file, ':p') . "\t" . get(l:opt, 'name', l:ts) . "\t" . trim(l:opt.yomi) . "\n")
+      endif
+    else
+      call s:ask_new_member_yomi(l:cur, l:file, matchstr(l:link, '^\[\zs\%(\\.\|[^\]\\]\)*\ze\]'))
+    endif
     call s:sort_group_file(l:cur)
     if s:disk_differs_from_buffer(l:cur)
       call s:reload_by_edit(l:cur)
@@ -12020,7 +12028,9 @@ endfunction
 " グループ（今のノート。Index を含む）に a:links を入れる（za・\l など）。1 本ずつ表示名を聞き、
 " 続けてそのよみを聞く（複数なら「(1/3)」のように順に）。入れ終わったらよみの順に並べ替える。
 " 表示名で Esc を押すと全部取り消し（何も入れない）。戻り値は入れた数（取り消し・0 本なら 0）。
-function! s:group_add_links_named(links) abort
+function! s:group_add_links_named(links, ...) abort
+  " a:1（任意）: 聞く代わりに使う答え [{'name': 表示名, 'yomi': よみ}]（\A の索引ナビ。gnosis#app_op）
+  let l:answers = a:0 ? copy(a:1) : []
   let l:group = expand('%:p')
   let l:dir = expand('%:p:h')
   let l:todo = copy(a:links)
@@ -12039,12 +12049,18 @@ function! s:group_add_links_named(links) abort
     let l:def = empty(l:def) ? l:m.text : l:def
     let l:label = l:n > 1 ? printf('(%d/%d) ', l:k + 1, l:n) : ''
     let l:notice = s:body_has_link(l:todo[l:k]) ? gnosis#i18n#tr('すでにこのグループに入っています。') . ' ' : ''
-    let l:r = s:ask_display_name(l:def, l:label . l:notice)
-    if !l:r.ok
-      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
-      return 0
+    if !empty(l:answers)
+      let l:ans = remove(l:answers, 0)
+      let l:r = {'ok': 1, 'name': empty(get(l:ans, 'name', '')) ? l:def : l:ans.name}
+      let l:yomi = trim(get(l:ans, 'yomi', ''))
+    else
+      let l:r = s:ask_display_name(l:def, l:label . l:notice)
+      if !l:r.ok
+        echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+        return 0
+      endif
+      let l:yomi = s:ask_yomi(l:group, l:abs, l:r.name, l:label)
     endif
-    let l:yomi = s:ask_yomi(l:group, l:abs, l:r.name, l:label)
     call add(l:plan, {'abs': l:abs, 'name': l:r.name, 'yomi': l:yomi,
           \ 'link': '[' . s:md_link_text(l:r.name) . '](' . l:m.target . ')'})
   endfor
@@ -21251,4 +21267,185 @@ endfunction
 " 元に戻される（検索状態が復元される）ので、<Cmd> を typeahead に積んで関数の外で実行する。
 function! gnosis#clear_search_highlight() abort
   call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
+endfunction
+
+" =============================================================================
+" \A（アプリ）の索引ナビ・カレンダー・曼荼羅・キャンバスから呼ぶ操作（web/vim/gui.vim の "op"）。
+" 対話をせず、答えを引数で受け取る。中身は zn / zk / \l / \d と同じ処理を通す（書くのはいつもこの Vim）。
+" 戻り値 {'ok': 0/1, 'error': 文字, 'file': 開いたファイル}。
+"   index_add   {group, target, name, yomi, back} … 索引（グループ）に既存のノートを載せる（\l の g と同じ。よみの順に並べる）
+"   index_new   {group, name, yomi, title}         … 索引に新しいノートを作って載せる（グループの上の zn → Enter）
+"   topic_new   {note, title}                      … ノートから分岐するトピック索引を作る（zk → n）
+"   diary_open  {date}                             … その日の日記を開く。無ければ作る（今日より先の日は作らない。date が空なら今日）
+"   task_add    {date, text, time}                 … 今日の日記にタスクを書く（期限 📅 は date）
+"   note_new    {title, kind: note|mandala|canvas, subs} … 新しいノート・曼荼羅・キャンバス（今日の日記の「今日のノート」に載る）
+"   mandala_link {file, row, col, kind}            … 曼荼羅のマスの文字からノート（kind=mandala なら別の曼荼羅）を作る
+" =============================================================================
+function! s:app_root() abort
+  let l:root = s:get_pkm_root()
+  return empty(l:root) ? '' : substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+endfunction
+
+function! s:app_abs(root, file) abort
+  let l:f = a:file
+  if empty(l:f) | return '' | endif
+  if !s:is_absolute_path(l:f)
+    let l:f = a:root . '/' . l:f
+  endif
+  let l:f = fnamemodify(l:f, ':p')
+  if stridx(l:f, a:root . '/') != 0 || l:f !~? '\.md$'
+    throw 'vault の外のファイルは扱えません: ' . a:file
+  endif
+  return l:f
+endfunction
+
+" 今のバッファを保存してから a:file を開く（同じなら何もしない）
+function! s:app_edit(file) abort
+  if &modified && &buftype ==# '' && !empty(expand('%:p'))
+    call gnosis#save_current_note()
+    if &modified | throw '今のノートを保存できませんでした' | endif
+  endif
+  if fnamemodify(expand('%:p'), ':p') !=# fnamemodify(a:file, ':p')
+    call gnosis#push_history()
+    execute 'silent edit ' . fnameescape(a:file)
+  endif
+endfunction
+
+function! gnosis#app_op(m) abort
+  let l:op = get(a:m, 'op', '')
+  let l:root = s:app_root()
+  if empty(l:root)
+    return {'ok': 0, 'error': 'vault が開かれていません'}
+  endif
+  if l:op ==# 'index_add'
+    let l:group = s:app_abs(l:root, get(a:m, 'group', ''))
+    let l:target = s:app_abs(l:root, get(a:m, 'target', ''))
+    if !filereadable(l:group) || !filereadable(l:target)
+      return {'ok': 0, 'error': 'ノートが見つかりません'}
+    endif
+    let l:back = empty(get(a:m, 'back', '')) ? '' : s:app_abs(l:root, a:m.back)
+    call s:app_edit(l:group)
+    if !s:buf_is_group()
+      return {'ok': 0, 'error': '載せ先が索引（グループ）ではありません'}
+    endif
+    let l:link = s:make_link_from_dir(l:target, '', expand('%:p:h'))
+    if s:body_has_link(l:link)
+      if !empty(l:back) | call s:app_edit(l:back) | endif
+      return {'ok': 0, 'error': 'この索引にはもう載っています'}
+    endif
+    let l:n = s:group_add_links_named([l:link], [{'name': get(a:m, 'name', ''), 'yomi': get(a:m, 'yomi', '')}])
+    if !empty(l:back) | call s:app_edit(l:back) | endif
+    return {'ok': l:n > 0, 'error': l:n > 0 ? '' : '載せられませんでした'}
+  elseif l:op ==# 'index_new'
+    let l:group = s:app_abs(l:root, get(a:m, 'group', ''))
+    let l:name = trim(get(a:m, 'name', ''))
+    if !filereadable(l:group) || empty(l:name)
+      return {'ok': 0, 'error': '索引と名前が要ります'}
+    endif
+    call s:app_edit(l:group)
+    if !s:buf_is_group()
+      return {'ok': 0, 'error': '索引（グループ）ではありません'}
+    endif
+    let l:ts = gnosis#timestamp_filename()
+    let l:k = 1
+    while filereadable(s:join_path(expand('%:p:h'), l:ts . '.md')) && l:k < 600
+      let l:ts = strftime('%y%m%d%H%M%S', localtime() + l:k)
+      let l:k += 1
+    endwhile
+    let l:title = trim(get(a:m, 'title', ''))
+    call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:name, 'yomi': get(a:m, 'yomi', ''), 'title': empty(l:title) ? l:name : l:title})
+    return {'ok': fnamemodify(expand('%:t'), ':r') ==# l:ts, 'error': ''}
+  elseif l:op ==# 'topic_new'
+    let l:note = s:app_abs(l:root, get(a:m, 'note', ''))
+    if !filereadable(l:note)
+      return {'ok': 0, 'error': 'ノートが見つかりません'}
+    endif
+    call s:app_edit(l:note)
+    if s:buf_is_group()
+      return {'ok': 0, 'error': 'トピック索引は、起点になる普通のノートから作ります'}
+    endif
+    let l:before = expand('%:p')
+    let l:title = trim(get(a:m, 'title', ''))
+    call s:v2_new_run('group', 'n', 0, {'title': empty(l:title) ? gnosis#current_title() : l:title})
+    return {'ok': expand('%:p') !=# l:before, 'error': expand('%:p') ==# l:before ? 'トピック索引を作れませんでした' : ''}
+  elseif l:op ==# 'diary_open'
+    let l:today = s:diary_day_of_time('')
+    let l:date = empty(get(a:m, 'date', '')) ? l:today : a:m.date
+    if l:date !~# '^\d\{4}-\d\d-\d\d$'
+      return {'ok': 0, 'error': '日付の形が違います'}
+    endif
+    let l:st = s:diary_state_read()
+    let l:notes = s:diary_scan(l:root)
+    let l:diary = s:diary_find(l:root, l:date, l:st, l:notes)
+    if empty(l:diary)
+      if l:date ># l:today
+        return {'ok': 0, 'error': 'まだ来ていない日の日記は作りません'}
+      endif
+      call s:app_edit(expand('%:p'))
+      let l:diary = l:date ==# l:today ? s:diary_create(l:root, l:date, l:notes) : s:diary_create(l:root, l:date, l:notes, l:date . ' 00:00:00')
+      let l:st.days[l:date] = l:diary
+      call s:diary_state_write(l:st)
+    endif
+    call s:app_edit(l:root . '/' . l:diary)
+    if l:date ==# l:today
+      call s:diary_cursor()
+    endif
+    return {'ok': 1}
+  elseif l:op ==# 'task_add'
+    let l:text = trim(substitute(get(a:m, 'text', ''), '[\r\n]\+', ' ', 'g'))
+    let l:date = get(a:m, 'date', '')
+    let l:time = get(a:m, 'time', '')
+    if empty(l:text) || (!empty(l:date) && l:date !~# '^\d\{4}-\d\d-\d\d$') || (!empty(l:time) && l:time !~# '^\d\{1,2}:\d\d$')
+      return {'ok': 0, 'error': 'タスクの文字・日付・時刻を確かめてください'}
+    endif
+    let l:line = '- [ ] ' . l:text . (empty(l:date) ? '' : ' 📅 ' . l:date . (empty(l:time) ? '' : ' ' . l:time))
+    if &modified && &buftype ==# '' && !empty(expand('%:p'))
+      call gnosis#save_current_note()
+    endif
+    call s:capture_diary_append(l:root, s:diary_day_of_time(''), [[l:line]])
+    silent! checktime
+    return {'ok': 1, 'line': l:line}
+  elseif l:op ==# 'note_new'
+    let l:kind = get(a:m, 'kind', 'note')
+    let l:title = trim(get(a:m, 'title', ''))
+    if empty(l:title)
+      return {'ok': 0, 'error': '題が要ります'}
+    endif
+    let l:ts = gnosis#timestamp_filename()
+    let l:k = 1
+    while filereadable(l:root . '/' . l:ts . '.md') && l:k < 600
+      let l:ts = strftime('%y%m%d%H%M%S', localtime() + l:k)
+      let l:k += 1
+    endwhile
+    let l:file = l:root . '/' . l:ts . '.md'
+    if l:kind ==# 'mandala'
+      let l:subs = filter(copy(get(a:m, 'subs', [])), 'type(v:val) == v:t_string && !empty(trim(v:val))')[: 7]
+      let l:r = s:mandala_run(['new', l:file . '.tmp', l:title] + l:subs)
+      if !get(l:r, 'ok', 0)
+        return {'ok': 0, 'error': get(l:r, 'error', '曼荼羅を作れませんでした')}
+      endif
+      let l:lines = readfile(l:file . '.tmp')
+      call delete(l:file . '.tmp')
+    elseif l:kind ==# 'canvas'
+      let l:lines = ['---', 'time: ' . gnosis#timestamp_yaml(), 'title: ' . l:title, 'canvas: true', '---', '', '# ' . l:title, '',
+            \ '```gnosis-canvas', '{"nodes": [], "edges": []}', '```']
+    else
+      let l:lines = gnosis#note_template(l:title)
+    endif
+    call s:app_edit(expand('%:p'))
+    call s:write_new_note(l:lines, l:file)
+    call s:app_edit(l:file)
+    return {'ok': 1, 'rel': l:ts . '.md'}
+  elseif l:op ==# 'mandala_link'
+    let l:file = s:app_abs(l:root, get(a:m, 'file', ''))
+    call s:app_edit(l:file)
+    let l:r = s:mandala_run(['link-cell', l:file, string(get(a:m, 'row', -1)), string(get(a:m, 'col', -1)), get(a:m, 'kind', 'note') ==# 'mandala' ? 'mandala' : 'note'])
+    silent! checktime
+    if !get(l:r, 'ok', 0)
+      return {'ok': 0, 'error': get(l:r, 'error', '')}
+    endif
+    call s:diary_place_safe(fnamemodify(l:file, ':h') . '/' . l:r.file)
+    return {'ok': 1, 'rel': l:r.file}
+  endif
+  return {'ok': 0, 'error': '知らない操作です: ' . l:op}
 endfunction

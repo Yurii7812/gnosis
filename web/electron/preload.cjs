@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld("gui", {
   saveWorkspace: (text) => ipcRenderer.invoke("workspace:save", text),
   viewSite: (force) => ipcRenderer.invoke("view:site", !!force),
   vimCommands: () => ipcRenderer.invoke("cmds:vim"),
+  // 索引ナビ・索引ブラウザ・カレンダー・曼荼羅・キャンバス（読むのは app_model.py、書くのは Vim の gnosis#app_op）
+  query: (method, params) => ipcRenderer.invoke("app:query", method, params || {}),
+  op: (op, params) => ipcRenderer.invoke("app:op", op, params || {}),
+  noteRoot: () => ipcRenderer.invoke("app:root"),
+  // 試験だけ（GNOSIS_TEST_SHOTS のとき main が受け付ける）: 今の画面を撮る
+  testShot: (name) => ipcRenderer.invoke("test:shot", String(name)),
 });
 
 // 起動画面・vault の選択と管理・設定

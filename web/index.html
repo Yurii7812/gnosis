@@ -40,6 +40,14 @@
       <button type="button" data-cmd="redo" title="やり直す（Ctrl+Y）">↷ やり直す</button>
       <button type="button" data-cmd="save" title="保存（Ctrl+S。自動でも保存します）">保存</button>
     </span>
+    <!-- ダブルインデックスと、Vim の画面の外でできること（書くのはいつも Vim） -->
+    <span class="grp" id="nav-tools">
+      <button type="button" data-nav="sidebar" title="索引ナビ: Index からの道・載っている索引・トピック索引（Alt+I で索引語を探す）">☰ 索引</button>
+      <button type="button" data-nav="browser" title="索引ブラウザ: Global Index → ノート → トピック索引 → … を列で辿る">索引ブラウザ</button>
+      <button type="button" data-nav="calendar" title="カレンダー: 日記・記録・タスク（Alt+C）">カレンダー</button>
+      <button type="button" data-nav="mandala" title="曼荼羅: 今のノートが曼荼羅なら開く・無ければ新しく作る">曼荼羅</button>
+      <button type="button" data-nav="canvas" title="キャンバス: ノートや文字のカードを並べて矢印でつなぐ">キャンバス</button>
+    </span>
     <span class="grp" id="view-tools" title="表示専用のビュー（書き込みません）。タブや分割ペインで並べて開けます">
       <button type="button" data-open="cards" title="カード">カード</button>
       <button type="button" data-open="table" title="テーブル">テーブル</button>
@@ -70,11 +78,16 @@
     <label></label> <input type="text" size="40"> <button type="button" data-act="ok">OK</button> <button type="button" data-act="cancel">やめる</button>
   </div>
   <!-- ワークスペース: タブと分割ペイン（src/panes.js）。最初は Vim の画面（#stage）だけが入っている -->
-  <div id="workspace" class="solo">
-    <div id="stage">
-      <div id="view" class="view"></div>
-      <div id="termwrap" class="strip">
-        <div id="term"></div>
+  <div id="mainrow">
+    <!-- 索引ナビ（src/nav.js）。いつも Vim で開いているノートに付いていく -->
+    <aside id="sidebar" aria-label="索引ナビ"></aside>
+    <div id="sidebar-split" title="幅を変える"></div>
+    <div id="workspace" class="solo">
+      <div id="stage">
+        <div id="view" class="view"></div>
+        <div id="termwrap" class="strip">
+          <div id="term"></div>
+        </div>
       </div>
     </div>
   </div>

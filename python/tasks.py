@@ -270,19 +270,16 @@ def _atomic_write(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def complete(path: str | Path, line: int, today: dt.date) -> dict:
-    """行 line（1 から）のタスクを完了にする。繰り返しは、完了した行の下に次の回（未完了）を作る。
-    行がタスクでない・すでに完了のときは何も書かない。"""
-    path = Path(path)
-    text = path.read_text(encoding="utf-8")
+def complete_text(text: str, line: int, today: dt.date) -> tuple[str, dict]:
+    """complete の書かない版。完了にした後の本文と結果を返す（`\\A` は Vim に保存させるのでこちらを使う）。"""
     lines = text.split("\n")
     if not 1 <= line <= len(lines):
         raise ValueError("行がありません")
-    t = parse_line(lines[line - 1], str(path), line)
+    t = parse_line(lines[line - 1], "", line)
     if t is None:
-        return {"ok": False, "error": "タスクの行ではありません"}
+        return text, {"ok": False, "error": "タスクの行ではありません"}
     if t.done:
-        return {"ok": True, "changed": False}
+        return text, {"ok": True, "changed": False}
     done_line = TASK_RE.sub(lambda m: f"{m.group('indent')}{m.group('bullet')} [x] {m.group('text')}", lines[line - 1], count=1)
     if not t.done_date:
         done_line = done_line.rstrip() + f" ✅ {today.isoformat()}"
@@ -301,8 +298,18 @@ def complete(path: str | Path, line: int, today: dt.date) -> dict:
         nxt_line = DONE_RE.sub("", nxt_line).rstrip()
         new_lines.append(nxt_line)
     lines[line - 1:line] = new_lines
-    _atomic_write(path, "\n".join(lines))
-    return {"ok": True, "changed": True, "next": new_lines[1] if t.repeat else ""}
+    return "\n".join(lines), {"ok": True, "changed": True, "next": new_lines[1] if t.repeat else ""}
+
+
+def complete(path: str | Path, line: int, today: dt.date) -> dict:
+    """行 line（1 から）のタスクを完了にする。繰り返しは、完了した行の下に次の回（未完了）を作る。
+    行がタスクでない・すでに完了のときは何も書かない。"""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    new, res = complete_text(text, line, today)
+    if res.get("changed"):
+        _atomic_write(path, new)
+    return res
 
 
 def main(argv: list[str]) -> int:

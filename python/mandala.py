@@ -12,6 +12,7 @@ CLI（JSON）:
   mandala.py new FILE 主題 [副題1 … 副題8]    新しい曼荼羅ノートを作る（既存のファイルは上書きしない）
   mandala.py sync FILE                          主題・副題の対応を揃える（食い違いは変えず報告）
   mandala.py link FILE LINE COL [note|mandala]  カーソルのマスの文字から新しいノート／別の曼荼羅を作り、マスをリンクにする
+  mandala.py link-cell FILE ROW COL [note|mandala]  同じことを、マスの位置（行・列とも 0 から）で（`\\A` の曼荼羅）
   mandala.py show FILE                          81 マスを JSON で出す
 """
 from __future__ import annotations
@@ -214,7 +215,8 @@ def main(argv: list[str]) -> int:
             p = Path(argv[1])
             if p.exists():
                 raise ValueError("すでにあります（上書きしません）: " + str(p))
-            _atomic(p, new_text(argv[2], argv[3:]))
+            import datetime as dt
+            _atomic(p, new_text(argv[2], argv[3:], dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             print(json.dumps({"ok": True, "file": str(p)}, ensure_ascii=False))
             return 0
         if len(argv) == 2 and argv[0] == "sync":
@@ -233,6 +235,13 @@ def main(argv: list[str]) -> int:
             if pos is None:
                 raise ValueError("表のマスの上で実行してください")
             res = link_cell(p, pos[0], pos[1], argv[4] if len(argv) == 5 else "note")
+            print(json.dumps(res, ensure_ascii=False))
+            return 0 if res["ok"] else 1
+        if len(argv) in (4, 5) and argv[0] == "link-cell":
+            r, c = int(argv[2]), int(argv[3])
+            if not (0 <= r < N and 0 <= c < N):
+                raise ValueError("マスの位置が違います")
+            res = link_cell(Path(argv[1]), r, c, argv[4] if len(argv) == 5 else "note")
             print(json.dumps(res, ensure_ascii=False))
             return 0 if res["ok"] else 1
         if len(argv) == 2 and argv[0] == "show":
