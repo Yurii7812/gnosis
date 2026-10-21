@@ -169,7 +169,7 @@ try {
   check(R.afterCancel?.view === "settings" && R.afterCancel.editorGone && R.afterCancel.appSel === "builtin", "cancel returns to settings without applying: " + JSON.stringify(R.afterCancel));
   check(R.reopen?.previewBg === "rgb(250, 250, 250)", "after cancel the editor starts from the old colors again: " + JSON.stringify(R.reopen));
   check(R.saved?.view === "settings" && R.saved.st?.kind === "custom" && R.saved.st.name === "ほんのり黄色", "saving selects the new app theme: " + JSON.stringify(R.saved));
-  check(/アプリ|app/i.test(R.vimEditor?.title || "") === false && R.vimEditor?.previewBg === "rgb(30, 30, 30)", "regular Vim editor starts from the standard dark (#1E1E1E), not the app colors: " + JSON.stringify(R.vimEditor));
+  check(/アプリ|app/i.test(R.vimEditor?.title || "") === false && R.vimEditor?.previewBg === "rgb(34, 39, 46)", "regular Vim editor starts from the standard dark (#22272E), not the app colors: " + JSON.stringify(R.vimEditor));
   check(R.escCancel?.view === "settings" && R.escCancel.editorGone, "Esc cancels the editor: " + JSON.stringify(R.escCancel));
   check(R.arrow?.idAfterDown && R.arrow.idAfterDown !== "s-lang", "ArrowDown moves between settings items: " + JSON.stringify(R.arrow));
   // 設定ファイル: アプリ用だけが保存され、通常の Vim 用は変わらない・キャンセルした分は残らない

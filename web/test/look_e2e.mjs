@@ -103,20 +103,27 @@ let failed = 0;
 const check = (ok, msg) => { if (!ok) { console.error("FAIL: " + msg); failed = 1; } };
 try {
   const L = dump("light"), D = dump("dark");
-  // 2026-10-21〜 ライトもダークも Obsidian の組版（DECISIONS D008）: 行の幅 700px（＋余白 32px×2）・行間 1.5・見出し 1.618/1.462/1.318em の太字で本文の色・下線なし
-  for (const [n, X, fg] of [["light", L, "rgb(34, 34, 34)"], ["dark", D, "rgb(218, 218, 218)"]]) {
-    check(X.contentMaxWidth === "764px" && X.contentPad === "32px", n + ": 行の幅 700px（＋余白 32px） " + X.contentMaxWidth + " " + X.contentPad);
-    check(X.lineHeight === "24px", n + ": 行間 1.5（16px → 24px） " + X.lineHeight);
-    check(/ui-sans-serif/.test(X.fontFamily) && /Noto Sans JP/.test(X.fontFamily), n + ": Obsidian のフォントの並び（日本語は Noto Sans JP） " + X.fontFamily);
-    check(X.h1.size === "25.888px" && X.h1.weight === "700" && X.h1.border === "0px none", n + ": h1 は 1.618em・太字・下線なし " + JSON.stringify(X.h1));
-    check(X.h1.color === fg && X.h3.color === fg, n + ": 見出しは本文と同じ色 " + X.h1.color + " " + X.h3.color);
-    check(X.h2.size === "23.392px" && X.h2.border === "0px" && X.h3.size === "21.088px", n + ": h2 1.462em・h3 1.318em " + JSON.stringify([X.h2, X.h3]));
-    check(X.quote.border === "2px", n + ": 引用は左の細い線 " + JSON.stringify(X.quote));
-    check(X.th.weight === "700" && X.tdEven === "rgba(0, 0, 0, 0)", n + ": 表は縞なし " + JSON.stringify([X.th, X.tdEven]));
-  }
-  check(L.hasLightClass && !D.hasLightClass, "html.theme-light はライトだけ");
-  check(L.bodyBg === "rgb(255, 255, 255)" && D.bodyBg === "rgb(30, 30, 30)", "背景はライト白・ダーク #1E1E1E " + L.bodyBg + " " + D.bodyBg);
-  check(L.link === "rgb(9, 105, 218)" && D.link === "rgb(108, 182, 255)", "リンクの色は今までどおり " + L.link + " " + D.link);
+  // ライト = GitHub スタイル（Markdown Viewer 拡張の既定）
+  check(L.hasLightClass, "light: html.theme-light が付く");
+  check(L.bodyBg === "rgb(255, 255, 255)", "light: 背景は白 " + L.bodyBg);
+  check(L.contentMaxWidth === "980px" && L.contentPad === "45px", "light: 本文の幅 980px・余白 45px " + L.contentMaxWidth + " " + L.contentPad);
+  check(L.lineHeight === "24px", "light: 行間 1.5（16px → 24px） " + L.lineHeight);
+  check(/Segoe UI|Helvetica|Noto Sans/.test(L.fontFamily) && !/^"?Noto Sans JP"?,/.test(L.fontFamily), "light: GitHub のフォントスタック " + L.fontFamily);
+  check(L.h1.size === "32px" && L.h1.weight === "600" && L.h1.border === "1px solid", "light: h1 は 2em・太さ 600・下線 " + JSON.stringify(L.h1));
+  check(L.h1.color === "rgb(31, 35, 40)", "light: 見出しは本文と同じ色（茶色にしない） " + L.h1.color);
+  check(L.h2.size === "24px" && L.h2.border === "1px", "light: h2 は 1.5em・下線 " + JSON.stringify(L.h2));
+  check(L.h3.size === "20px" && L.h3.border === "0px", "light: h3 は 1.25em・下線なし " + JSON.stringify(L.h3));
+  check(L.code.bg === "rgba(129, 139, 152, 0.12)" && L.code.pad === "5.44px", "light: インラインコード " + JSON.stringify(L.code));
+  check(L.link === "rgb(9, 105, 218)", "light: リンクは #0969DA " + L.link);
+  check(L.quote.border === "4px" && L.quote.color === "rgb(89, 99, 110)", "light: 引用は左線 .25em・#59636E " + JSON.stringify(L.quote));
+  check(L.fence.bg === "rgb(246, 248, 250)" && L.fence.pad === "16px", "light: コードブロック " + JSON.stringify(L.fence));
+  check(L.th.border === "1px" && L.th.pad === "13px" && L.th.weight === "600", "light: 表のセル " + JSON.stringify(L.th));
+  check(L.tdEven === "rgb(246, 248, 250)", "light: 表の偶数行 " + L.tdEven);
+  // ダークは変えない（従来の見え方）
+  check(!D.hasLightClass, "dark: html.theme-light は付かない");
+  check(D.contentMaxWidth === "860px", "dark: 本文の幅は従来どおり 860px " + D.contentMaxWidth);
+  check(D.h1.weight === "700", "dark: 見出しの太さは従来どおり " + D.h1.weight);
+  check(D.lineHeight === "28.8px", "dark: 行間は従来どおり 1.8 " + D.lineHeight);
   if (process.env.LOOK_SHOT) {
     fs.mkdirSync(process.env.LOOK_SHOT, { recursive: true });
     for (const t of ["light", "dark"]) {
@@ -124,7 +131,7 @@ try {
         `--screenshot=${path.join(process.env.LOOK_SHOT, t + ".png")}`, url(t)], { stdio: "ignore" });
     }
   }
-  if (!failed) console.log("look e2e: OK (ライトもダークも Obsidian の組版・リンクの色は今までどおり)");
+  if (!failed) console.log("look e2e: OK (ライトは GitHub スタイル（Markdown Viewer 拡張と同じ）・ダークは従来どおり)");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

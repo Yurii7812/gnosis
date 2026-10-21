@@ -65,27 +65,14 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val promptState = mutableStateOf(false)
-    private val navState = mutableStateOf<NavRequest?>(null)   // カレンダーから: メモの場所へ・その日の日記として書く
-
-    companion object {
-        const val EXTRA_JUMP = "net.gnosis.capture.JUMP"              // このメモの場所へ（id）
-        const val EXTRA_DIARY_DATE = "net.gnosis.capture.DIARY_DATE"  // この日の日記として書く（YYYY-MM-DD）
-    }
-
-    private fun takeNav(i: Intent?) {
-        i ?: return
-        i.getStringExtra(EXTRA_JUMP)?.let { navState.value = NavRequest("jump", it) }
-        i.getStringExtra(EXTRA_DIARY_DATE)?.let { navState.value = NavRequest("diary", it) }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         promptState.value = intent?.getBooleanExtra(Alarm.EXTRA_PROMPT, false) == true
-        takeNav(intent)
         setContent {
             MaterialTheme(colorScheme = GnosisColors) {
-                Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState, navState) }
+                Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
             }
         }
     }
@@ -93,7 +80,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(Alarm.EXTRA_PROMPT, false)) promptState.value = true
-        takeNav(intent)
     }
 
     override fun onResume() {
@@ -103,7 +89,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** PC の Gnosis のダーク（既定のテーマ・起動画面と同じ）に合わせた配色。文字は真っ白にせず、背景との差は十分に取る。 */
-internal val GnosisColors = darkColorScheme(
+private val GnosisColors = darkColorScheme(
     primary = Color(0xFF6CB6FF), onPrimary = Color(0xFF0D1117),
     primaryContainer = Color(0xFF2D4F75), onPrimaryContainer = Color(0xFFE6EDF3),
     secondary = Color(0xFFE5C07B), onSecondary = Color(0xFF22272E),
@@ -170,12 +156,9 @@ private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>,
         dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } })
 }
 
-/** ほかの画面からの頼み（kind: jump = メモの場所へ・diary = その日の日記として書く）。 */
-data class NavRequest(val kind: String, val value: String, val at: Long = System.nanoTime())
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, navState: MutableState<NavRequest?> = mutableStateOf(null)) {
+fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val entries = remember { mutableStateListOf<Entry>().apply { addAll(store.load()) } }
@@ -371,21 +354,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, navState: Mu
         }
     }
 
-    // カレンダーから来たとき: メモの場所へ／その日の日記として書く（日付の指定は「日付を指定して書く」と同じ）
-    val nav by navState
-    LaunchedEffect(nav) {
-        val r = nav ?: return@LaunchedEffect
-        navState.value = null
-        when (r.kind) {
-            "jump" -> if (entries.any { it.id == r.value }) jumpTo(r.value)
-            "diary" -> runCatching { java.time.LocalDate.parse(r.value) }.getOrNull()?.let { d ->
-                setTopic(DIARY)
-                backdate = if (d == java.time.LocalDate.now()) null else CalendarModel.startOfDay(d)
-                focusTick++
-            }
-        }
-    }
-
     /** 選んだメモを古い順に 1 件へまとめる（本文は空行で区切る。画像・文脈も引き継ぐ）。 */
     fun mergeEntries(ids: Set<String>) {
         val group = entries.filter { it.id in ids }.sortedBy { it.created }
@@ -530,12 +498,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, navState: Mu
                             if (topic !in listOf(ALL, UNASSIGNED, DIARY)) {
                                 DropdownMenuItem(text = { Text("このトピックの取り込み方") }, leadingIcon = { Icon(Icons.Filled.Settings, null) }, onClick = { moreMenu = false; modeFor = topic })
                             }
-                            DropdownMenuItem(text = { Text("カレンダー") }, leadingIcon = { Icon(Icons.Filled.CalendarMonth, null) }, onClick = {
-                                moreMenu = false; ctx.startActivity(Intent(ctx, CalendarActivity::class.java))
-                            })
-                            DropdownMenuItem(text = { Text("予定（PC のタスク）") }, leadingIcon = { Icon(Icons.Filled.EventNote, null) }, onClick = {
-                                moreMenu = false; ctx.startActivity(Intent(ctx, AgendaActivity::class.java))
-                            })
                             DropdownMenuItem(text = { Text("複数選択") }, leadingIcon = { Icon(Icons.Filled.Checklist, null) }, onClick = {
                                 moreMenu = false; selecting = true; selected.clear(); rangeAnchor = null; rangeMode = false; contextFor = null; keyboard?.hide()
                             })

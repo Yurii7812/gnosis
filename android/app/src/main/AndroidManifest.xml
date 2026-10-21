@@ -21,35 +21,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".AgendaActivity"
-            android:label="Gnosis 予定"
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        <activity
-            android:name=".CalendarActivity"
-            android:label="カレンダー"
-            android:exported="false" />
-        <activity
-            android:name=".QuickTaskActivity"
-            android:label="タスクを足す"
-            android:exported="false"
-            android:theme="@android:style/Theme.Material.Dialog.NoActionBar"
-            android:windowSoftInputMode="adjustResize" />
-        <receiver android:name=".AgendaMorningReceiver" android:exported="false" />
-        <receiver android:name=".AgendaTimedReceiver" android:exported="false" />
-        <receiver android:name=".AgendaActionReceiver" android:exported="false" />
-        <receiver android:name=".AgendaWidget" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agenda_widget_info" />
-        </receiver>
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".RingStopReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="false">

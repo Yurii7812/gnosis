@@ -158,7 +158,5 @@ class RingStopReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         Alarm.schedule(ctx, Store(ctx).loadSettings())
-        AgendaNotifier.scheduleMorning(ctx)      // 再起動・時刻変更・アプリ更新のあとも、朝の通知と今日の時刻つきの知らせを予約し直す
-        AgendaNotifier.scheduleTimed(ctx)
     }
 }

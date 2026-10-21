@@ -87,7 +87,7 @@ try {
     check(/アルファ/.test(a.R.first.text) && !/ベータ/.test(a.R.first.text), "window A shows only A's notes: " + a.R.first.text);
     check(/ベータ/.test(b.R.first.text) && !/アルファ/.test(b.R.first.text), "window B shows only B's notes: " + b.R.first.text);
     check(String(a.R.first.bg).toLowerCase() === "#f8f4e8", "window A uses A's own app theme: " + a.R.first.bg);
-    check(String(b.R.first.bg).toLowerCase() === "#1e1e1e", "window B uses the default dark (no mixing of settings): " + b.R.first.bg);
+    check(String(b.R.first.bg).toLowerCase() === "#22272e", "window B uses the default dark (no mixing of settings): " + b.R.first.bg);
     check(/アルファだけの本文/.test(a.R.afterOpen.text) && String(a.R.afterOpen.file).startsWith(vA), "window A still works after B finished (opened A's own note): " + JSON.stringify(a.R.afterOpen).slice(0, 300));
     check(/ベータだけの本文/.test(b.R.afterOpen.text) && String(b.R.afterOpen.file).startsWith(vB), "window B opened B's own note: " + JSON.stringify(b.R.afterOpen).slice(0, 300));
   }

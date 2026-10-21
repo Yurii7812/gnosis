@@ -23,12 +23,6 @@ Vim ──(TCP/JSON)──► 画面 ……… バッファの全文・カーソ
   すべてのキーが Vim へ届く。起動時は普通の Vim。許可するキーは `src/app.js` の `VIEW_PASS`。
 - 一番下: モード表示（NORMAL / INSERT / VISUAL …）。
 
-## 作業台（2026-10-21〜）
-
-Vim は書く場所、`\A` はそれ以上のことをする場所。左の**索引ナビ**（Vim の今のノートに付いていく。Index からの道・載っている索引・トピック索引・索引語の検索）、
-タブの**索引ブラウザ**・**カレンダー**・**曼荼羅**・**キャンバス**。読むのは `python/app_model.py`（常駐）、書くのはいつも Vim（`gnosis#app_op`・`:write`）。
-使い方は `docs/USER_GUIDE.md` §6、方針は `docs/DECISIONS.md` D007。`src/nav.js` `src/calendar.js` `src/mandala.js` `src/canvas.js` `src/ui.js`。
-
 ## 起動
 
 ```bash

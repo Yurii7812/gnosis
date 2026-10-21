@@ -613,9 +613,8 @@ export function createView(opts) {
       }),
       EditorView.theme({
         "&": { fontSize: "var(--content-font-size, 16px)", height: "100%" },
-        // Obsidian の「行の長さを制限」（700px）と行間 1.5
-        ".cm-content": { padding: "32px 32px 40vh", maxWidth: "calc(var(--line-width, 700px) + 64px)", margin: "0 auto" },
-        ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.5" },
+        ".cm-content": { padding: "32px 28px 40vh", maxWidth: "860px", margin: "0 auto" },
+        ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.8" },
         ".cm-gutters": { display: "none" },
         "&.cm-focused": { outline: "none" },
       }),
@@ -626,7 +625,6 @@ export function createView(opts) {
   const api = {
     view,
     getText: () => view.state.doc.toString(),
-    isComposing: () => !!(view.composing || view.compositionStarted),   // 日本語入力の変換中
     // GUI 編集モードの入り切り。入ると編集できる状態になり、Vim の状態の反映（カーソル・ビジュアル）はやめる
     setEditable(on) {
       this.editing = !!on;

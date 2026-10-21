@@ -436,57 +436,6 @@ ipcMain.handle("view:site", async (_e, force) => {
   return buildSite();
 });
 
-// ---- 索引ナビ・索引ブラウザ・カレンダーのデータ（python/app_model.py を常駐させ、1 行 1 つの JSON で問い合わせる。読み取り専用） ----
-let appModel = null; // { root, child, buf, pending: Map(id → resolve), seq }
-function appModelFor(root) {
-  if (appModel && appModel.root === root && appModel.child.exitCode === null) return appModel;
-  if (appModel) { try { appModel.child.kill(); } catch { /* ignore */ } }
-  const py = process.platform === "win32" ? "python" : "python3";
-  const child = spawn(py, [path.join(REPO, "python", "app_model.py"), "serve", root], { stdio: ["pipe", "pipe", "pipe"] });
-  const m = { root, child, buf: "", pending: new Map(), seq: 0 };
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (d) => {
-    m.buf += d;
-    let i;
-    while ((i = m.buf.indexOf("\n")) >= 0) {
-      const line = m.buf.slice(0, i); m.buf = m.buf.slice(i + 1);
-      let r; try { r = JSON.parse(line); } catch { continue; }
-      const f = m.pending.get(r.id); if (f) { m.pending.delete(r.id); f(r); }
-    }
-  });
-  child.stderr.on("data", (d) => log("app_model: " + String(d).slice(0, 400)));
-  const fail = (why) => { for (const [, f] of m.pending) f({ error: why }); m.pending.clear(); };
-  child.on("error", (e) => fail(String(e)));
-  child.on("exit", () => fail("索引のデータの読み込みが止まりました"));
-  appModel = m;
-  return m;
-}
-function appQuery(method, params, timeoutMs = 30000) {
-  if (!noteRootDir) return Promise.resolve({ ok: false, error: "vault が開かれていません" });
-  const m = appModelFor(noteRootDir);
-  return new Promise((resolve) => {
-    const id = ++m.seq;
-    const timer = setTimeout(() => { m.pending.delete(id); resolve({ ok: false, error: "索引のデータの応答がありません" }); }, timeoutMs);
-    m.pending.set(id, (r) => { clearTimeout(timer); resolve(r.error ? { ok: false, error: r.error } : { ok: true, result: r.result }); });
-    try { m.child.stdin.write(JSON.stringify({ id, method, params: params || {} }) + "\n"); } catch (e) { clearTimeout(timer); m.pending.delete(id); resolve({ ok: false, error: String(e) }); }
-  });
-}
-ipcMain.handle("app:query", (_e, method, params) => (typeof method === "string" ? appQuery(method, params) : { ok: false, error: "bad request" }));
-// 操作（書き込み）は Vim に頼む（gnosis#app_op）。ファイルは vault の中に限る（Vim 側でも確かめる）
-const APP_OPS = new Set(["index_add", "index_new", "topic_new", "diary_open", "task_add", "note_new", "mandala_link", "go_back", "go_forward"]);
-ipcMain.handle("app:op", async (_e, op, params) => {
-  if (!APP_OPS.has(op)) return { ok: false, error: "知らない操作です" };
-  const r = await vimCall({ ...(params && typeof params === "object" ? params : {}), type: "op", op }, 20000);
-  return { ok: !!r.ok, error: r.error || "", file: r.file || "", rel: r.rel || "", line: r.line || "" };
-});
-ipcMain.handle("app:root", () => noteRootDir);
-// 試験だけ: 途中の画面のスクリーンショット（GNOSIS_TEST_SCRIPT と GNOSIS_TEST_SHOTS の両方があるときだけ）
-ipcMain.handle("test:shot", async (_e, name) => {
-  const dir = env("TEST_SHOTS");
-  if (!TEST || !dir || !win || !/^[\w.-]+$/.test(name)) return false;
-  try { const img = await win.webContents.capturePage(); fs.writeFileSync(path.join(dir, name + ".png"), img.toPNG()); return true; } catch { return false; }
-});
-
 // ---- コマンドパレット: Vim の Gnosis コマンドの一覧（plugin/gnosis.vim の command! から）----
 ipcMain.handle("cmds:vim", () => {
   try {
@@ -539,5 +488,4 @@ app.on("before-quit", (e) => {
     return;
   }
   try { bridge?.kill(); } catch { /* ignore */ } try { server?.close(); } catch { /* ignore */ }
-  try { appModel?.child.kill(); } catch { /* ignore */ }
 });

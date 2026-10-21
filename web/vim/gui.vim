@@ -37,7 +37,6 @@ endfunction
 "            reload=1 なら先にディスクから読み直す（外の変更を取り込んでから上書きするとき）
 "   open   … file を開く（ふだんのジャンプ履歴に積む）
 "   reload … 外で変わったファイルを読み直す（GUI 編集から Vim に戻るとき）
-"   op     … 索引に載せる・トピック索引を作る・日記を開く・タスクを足す など（gnosis#app_op。答えは引数で受け取り、何も聞かない）
 function! s:ack(id, d) abort
   if ch_status(s:ch) ==# 'open'
     call ch_sendraw(s:ch, json_encode(extend({'ack': a:id}, a:d)) . "\n")
@@ -87,10 +86,6 @@ function! s:gui_command(m) abort
         execute 'silent! edit ' . fnameescape(a:m.file)
       endif
       let l:r.ok = s:same_file(expand('%:p'), a:m.file)
-    elseif l:t ==# 'op' && type(get(a:m, 'op', 0)) == v:t_string
-      " \A の索引ナビ・カレンダー・曼荼羅・キャンバスの操作（autoload/gnosis.vim の gnosis#app_op）
-      call extend(l:r, gnosis#app_op(a:m))
-      redraw!
     elseif l:t ==# 'reload'
       silent! checktime
       if !&modified && &buftype ==# '' && !empty(expand('%:p')) && filereadable(expand('%:p'))
@@ -152,7 +147,6 @@ function! s:snapshot(force) abort
         \ 'rows': &lines,
         \ 'cols': &columns,
         \ 'cmdtype': getcmdtype(),
-        \ 'hist': [len(get(g:, 'gnosis_history', [])), len(get(g:, 'gnosis_forward', []))],
         \ }
   " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
   let l:pp = []
