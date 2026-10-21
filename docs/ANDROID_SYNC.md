@@ -34,15 +34,5 @@
 ## 試験
 `python/test_capture_merge.py`（merge の単体）、`python/test_capture_import.py`（plan）、`test/capture_embed_net.sh`（まとめるトピック・時系列記録の編集・競合。つながりの行と画像の変更は対象外）、`test/capture_diary_net.sh`（日記の 10 回取り込み・編集・競合）、`test/capture_merge_net.sh`（実 Vim: リネーム追跡も含む。 再実行で増えない／mtime 不変／PC 追記とスマホ別行編集／冪等／同一行競合）、`test/capture_topics_net.sh`。必須 E2E のうち未着手: クラッシュ後の再実行、旧 state 移行、新旧 APK（実機）、スマホのトピック移動・関係編集との組合せ。
 
-## 予定（タスク）の同期（TM16〜TM18）
-PC → スマホ: `python/agenda_push.py push`（`:GnosisPushAgenda`）が、未完了のタスクを `files/agenda.tsv`（タブ区切り・先頭 `# gnosis-agenda v1`）へ adb `run-as` で書く（一時ファイル → mv）。列: `task キー 期限 時刻 優先度 ノートの題 本文`。キーは `sha1(ノートのパス + NUL + 本文)` の先頭 10 桁（行が動いても変わらない）。
-スマホ → PC: アプリで「完了」を押すと `files/agenda-done.tsv` に `done キー 時刻` を追記する。`python/agenda_pull.py pull`（`:GnosisPullDone`）が、前回の残り（`agenda-done.processing`）→ 新しい分の順に、名前を変えてから読み、キーが一致する**未完了のタスクだけ**を `tasks.complete` で完了にし、反映できたらスマホ側の記録を消し、**反映後の最新の予定を送り直す**（記録を消すと、スマホが古い予定のまま完了済みを隠せず、画面に復活して見えるため。実機で見つけた不具合）。
-クイックタスク追加は、アプリのメモ（`- [ ] 本文 📅 日付`）として保存し、従来の `\M` で取り込む。
-アプリ側（`android/`）: `Agenda.kt`（純粋なロジック）・`AgendaStore.kt`・`AgendaNotifier.kt`（朝のまとめ・時刻つきの通知・完了/10 分後に）・`AgendaActivity.kt`・`AgendaWidget.kt`・`QuickTaskActivity.kt`。`MainActivity` は変えていない（起動口は別に追加）。
-**実機での通知・ウィジェット・画面の確認は未実施。**
-
-### 予定の編集（日時・所要時間・通知・繰り返し・優先度）
-`agenda.tsv` の `task` 行は、7 列目（本文）のあとに **所要時間(分)・通知・繰り返し** の 3 列が付く（古い 7 列のままでも読める）。通知は `""`（書かない＝時刻ちょうど）・`none`・`1d,10m`（期限の 1 日前と 10 分前）。
-スマホで「編集」を保存すると、`files/agenda-edit.tsv` に `edit キー 日付 時刻 所要時間 通知 繰り返し 優先度` を 1 行足し、手元の `agenda.tsv` にも先に反映する。
-`python/agenda_pull.py pull`（`:GnosisPullDone`）は、完了より先に編集を反映する: キーが一致する未完了のタスクの `📅 日付 時刻`・`⌛`・`🔔`・`🔁`・優先度の印だけを書き換える（`tasks.edit_line`。本文・ほかの印・CRLF はそのまま）。同じキーは最後の 1 つ・正しくない値は却下・見つからないキーは報告。反映後に最新の予定を送り直す。
-通知の予約は `Agenda.alarmPlan`（48 時間先まで・最大 30 件）。時刻つきは設定した通知の分だけ、日付だけのタスクは通知を選んだときだけ 9 時を基準にする。
+## 予定・カレンダー（廃止）
+2026-10-22、スマホは**メモを残すだけ**に戻した（DECISIONS D010）。予定の送受信（`agenda_push.py` / `agenda_pull.py`）・ウィジェット・通知・カレンダーは外した。旧版はタグ `archive/gui-workbench-2026-10-21`。

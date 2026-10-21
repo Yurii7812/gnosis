@@ -2,7 +2,13 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-21 夕）
+## 現在地（2026-10-22）
+- ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main ae01c51 から）。**main へは未マージ・push 未**。DECISIONS D010・USER_GUIDE §5/§6。
+  - GUI（作業台・Obsidian 風）とスマホの予定・カレンダーをアーカイブ（タグ `archive/gui-workbench-2026-10-21`）。タブを `\q` / `\Q` の別ボードに。起動を `\c` に。
+  - 曼荼羅ビュー（`<Space>`）・`\g`（索引を曼荼羅で選んで載せる）。試験: `python/test_mandala_view.py`・`test/mview_net.sh`・`test/tabs_board_net.sh`。
+  - 未確認: 実機の端末での見た目と手触り（Konsole・日本語入力中の挙動）。`\g` の `\gi` との待ち時間。近い Folgezettel 的な関連のモードは未実装。
+
+## 以前の現在地（2026-10-21 夕）
 - ブランチ `feat/obsidian-layout`（worktree `~/src/gnosis-obs`、main 18c8c82 から）。**main へは未マージ・push 未**。DECISIONS D008・USER_GUIDE §5/§6。
   - `\A` を Obsidian の枠に（リボン・開け閉めできる左右のバー・ノートの見出し・クイックスイッチャー・Ctrl+P/O/N/W/Tab）、曼荼羅に既存のノートを入れる・外す、右のバーのリンク（`nav.links`）とアウトライン。
   - 配色・組版を Obsidian に（ダーク #1E1E1E・ライト #FFF・見出しは本文の色・行の幅 700px・ボタン/ダイアログ）。Vim の配色・起動画面・`\A` の起動画面も。
