@@ -5472,17 +5472,24 @@ function! s:hub_dir() abort
   return s:state_dir() . s:sep() . 'hubs'
 endfunction
 
-function! s:hub_file() abort
+" board が空ならハブ（\h / \H）、'tabs' ならタブのボード（\q / \Q）。同じ仕組みで別のファイル。
+function! s:hub_file(...) abort
   let l:dir = s:hub_dir()
   if !isdirectory(l:dir)
     call mkdir(l:dir, 'p')
   endif
-  return l:dir . s:sep() . sha256(s:hub_root_key())[0:15] . '.md'
+  let l:board = a:0 ? a:1 : ''
+  return l:dir . s:sep() . (empty(l:board) ? '' : l:board . '-') . sha256(s:hub_root_key())[0:15] . '.md'
 endfunction
 
-function! s:hub_migrate() abort
-  let l:file = s:hub_file()
+function! s:hub_migrate(...) abort
+  let l:board = a:0 ? a:1 : ''
+  let l:file = s:hub_file(l:board)
   if filereadable(l:file)
+    return l:file
+  endif
+  if !empty(l:board)
+    call s:syn_writefile([], l:file)
     return l:file
   endif
   let l:lines = []
@@ -5513,8 +5520,8 @@ endfunction
 " \h / \0 … ハブ画面（編集可能な Markdown）を開く。
 " 起動直後の最初の \h が表示されない不具合のため、:edit は open_index と同じ
 " timer 経路で行う（map 内の silent! edit + redraw では再描画が保留される）。
-function! gnosis#hub_open() abort
-  let l:file = s:hub_migrate()
+function! gnosis#hub_open(...) abort
+  let l:file = s:hub_migrate(a:0 ? a:1 : '')
   call gnosis#push_history()
   call timer_start(0, function('s:timer_hub_edit_cb', [l:file]))
   call timer_start(50, function('s:timer_redraw_cb'))
@@ -9317,16 +9324,17 @@ function! gnosis#hub_set(...) abort
   if empty(l:file) || !s:is_markdown_file(l:file)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノート上で実行して') | echohl NONE | return
   endif
-  let l:hub = s:hub_migrate()
+  let l:board = a:0 ? a:1 : ''
+  let l:hub = s:hub_migrate(l:board)
   let l:link = '[' . gnosis#current_title() . '](' . fnamemodify(l:file, ':p') . ')'
   let l:lines = readfile(l:hub)
   if index(l:lines, l:link) >= 0
-    echo gnosis#i18n#tr('Gnosis: ハブ登録済み')
+    echo gnosis#i18n#tr(empty(l:board) ? 'Gnosis: ハブ登録済み' : 'Gnosis: タブ登録済み')
     return
   endif
   call add(l:lines, l:link)
   call s:syn_writefile(l:lines, l:hub)
-  echo printf(gnosis#i18n#tr('Gnosis: ハブに追加（%d 件）'), len(l:lines))
+  echo printf(gnosis#i18n#tr(empty(l:board) ? 'Gnosis: ハブに追加（%d 件）' : 'Gnosis: タブに追加（%d 件）'), len(l:lines))
 endfunction
 
 function! gnosis#hub_jump(n) abort
@@ -11835,7 +11843,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   if l:grp_src && l:added && s:group_path_reviewable(l:cur)
     " 新しいノートは表示名を入れたばかりなので、ここでよみだけを聞いてから並べる（Esc なら保存しない）
     if has_key(l:opt, 'yomi')
-      " \A から: よみは答えとして受け取っている（空なら登録しない＝推測のよみで並べる）
+      " \c から: よみは答えとして受け取っている（空なら登録しない＝推測のよみで並べる）
       if !empty(trim(l:opt.yomi))
         call gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:sort_yomi_script()) . ' setmany',
               \ fnamemodify(l:file, ':p') . "\t" . get(l:opt, 'name', l:ts) . "\t" . trim(l:opt.yomi) . "\n")
@@ -12061,7 +12069,7 @@ endfunction
 " 続けてそのよみを聞く（複数なら「(1/3)」のように順に）。入れ終わったらよみの順に並べ替える。
 " 表示名で Esc を押すと全部取り消し（何も入れない）。戻り値は入れた数（取り消し・0 本なら 0）。
 function! s:group_add_links_named(links, ...) abort
-  " a:1（任意）: 聞く代わりに使う答え [{'name': 表示名, 'yomi': よみ}]（\A の索引ナビ。gnosis#app_op）
+  " a:1（任意）: 聞く代わりに使う答え [{'name': 表示名, 'yomi': よみ}]（\c の索引ナビ。gnosis#app_op）
   let l:answers = a:0 ? copy(a:1) : []
   let l:group = expand('%:p')
   let l:dir = expand('%:p:h')
@@ -18262,7 +18270,7 @@ endfunction
 " Web app (ブラウザで閲覧・編集)
 "   ノート実体と同じフォルダをブラウザ (Brave/Chrome) から直接読み書きする。
 "   サーバーは立てない。同期ロジックは JS 移植 (web/src/sync.js)。
-"   起動: :GnosisWeb / \A
+"   起動: :GnosisWeb / \c
 " ---------------------------------------------------------------------------
 function! gnosis#open_web() abort
   " 関数内の <sfile> は信用できない（現在のバッファ名になることがある）。
@@ -18550,7 +18558,7 @@ endfunction
 " gocryptfs は「空でないマウントポイント」を拒否するため、起動時の vimrc や
 " プラグインの初期化がロック中に mountpoint へファイルを作ると、正しいパスワード
 " でもマウントに失敗する。
-" この Vim 自身がマウントしたか。アプリ（\A）が起動する Vim は、別の Vim が先にマウントした vault を
+" この Vim 自身がマウントしたか。アプリ（\c）が起動する Vim は、別の Vim が先にマウントした vault を
 " 終了時にアンマウントしない（アンマウントすると元の Vim が使えなくなり、次にまたパスワードを聞かれる）。
 let s:mounted_by_me = 0
 

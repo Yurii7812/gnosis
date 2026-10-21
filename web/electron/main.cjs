@@ -8,7 +8,7 @@
 //   キー入力 ──► 擬似端末 ──► Vim
 //
 // 環境変数（GNOSIS_* が無ければ旧名 PKM_* も読む）:
-//   GNOSIS_ROOT  … vault（指定すると起動画面を出さずにその vault で始める。Vim の \A から）
+//   GNOSIS_ROOT  … vault（指定すると起動画面を出さずにその vault で始める。Vim の \c から）
 //   GNOSIS_FILE  … 最初に開くノート
 //   GNOSIS_VIMRC … 使う vimrc（既定: Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）
 //   GNOSIS_VIM   … Vim の実行ファイル（既定: PATH の vim）

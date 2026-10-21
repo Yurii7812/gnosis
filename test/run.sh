@@ -191,6 +191,7 @@ sh "$REPO/test/diary_hierarchy_net.sh"
 
 # Branch（b モード: ChildBranch / ParentBranch・親は最大 1 つ・循環と自己参照の拒否・同期後の維持）
 sh "$REPO/test/branch_net.sh"
+sh "$REPO/test/tabs_board_net.sh"
 
 # Context（本文冒頭の Context: ブロック）と w モード・旧 ### Context の保護・同期後の維持
 sh "$REPO/test/context_net.sh"

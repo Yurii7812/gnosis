@@ -31,7 +31,7 @@ npm run build          # src/*.js -> bundle.js
 npm run app            # = electron .
 ```
 
-Vim からは `\A` / `:GnosisWeb`。Electron を使う場合のみ `gnosis --app`（通常の `gnosis` はターミナル Vim）。
+Vim からは `\c` / `:GnosisWeb`。Electron を使う場合のみ `gnosis --app`（通常の `gnosis` はターミナル Vim）。
 
 環境変数: `GNOSIS_ROOT`（vault。指定すると起動画面を出さずにその vault で始める）、`GNOSIS_FILE`（最初に開くノート）、
 `GNOSIS_VIMRC`（使う vimrc。既定は Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）、`GNOSIS_HOME`、`GNOSIS_VIM`。旧 `PKM_*` も読む。

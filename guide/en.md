@@ -76,10 +76,9 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\bu` … last link near Context ・ `<S-Space>` … pick from the link list and move
 - `\h` / `\0` … hub screen (an editable list of links) ・ `\H` … add the current note to the hub ・ Adding to a group (or the Index) with `za` / `\l` asks, link by link, for the **display name** (empty `Enter` = the target's title; `Esc` cancels all) and its **reading** (a guess is filled in; edit and `Enter`, clear it to not register), then sorts by reading (several links are asked in turn, "(1/3)" …). Pasting by hand and saving opens the **name and reading check screen** (`[name](…) — reading`; guesses are marked (guess). Edit names and readings; delete a line to remove it from the group. `Enter` views the note. `q` saves and sorts, `Q` sorts without saving. `:GnosisReview` returns to it; `:GnosisYomiReview` reviews every member) ・ Enter in insert mode on a `- [ ]` line … starts the next line with `- [ ] ` (Enter on an empty item ends the list) ・ `\n` (`:GnosisQuick`) … quick note (a blank note with no questions; listed in the diary automatically; connect it later) ・ `\M` (`:GnosisCaptureImport`) … import the Gnosis memo APK's memos from a phone connected by USB (rewritten memos update the same note by difference; edits to the same place on the PC are kept as conflicts: see `:GnosisCaptureConflicts`, resolve with `:GnosisCaptureResolve ID keep|append`; old extra versions: `:GnosisCaptureDuplicates`; add the tracking mark to old notes: `:GnosisCaptureBackfill`, `apply` to write) ・ `\a` (also `\N`; `:GnosisOrphans`) … list of unfiled notes (no Folgezettel ID; connect rough notes later; groups, diaries and paper-PKM notes are not listed)
 - `\1`〜`\9` … jump to the Nth hub entry (inside the hub, normal link numbers)
-- `\i` … open `index.md` ・ `\A` … the note app (Electron / browser)
-- `\q` … list of work tabs (shown by note **title**; duplicate titles also show the file name). Pick with `↑` / `↓` (`j` / `k`), switch with `Enter`, close with `Esc` (`q`). `/` filters by title, `a` add ・ `x` close ・ `X` close others ・ `C` close all (`:GnosisTabs`)
-- `\o` … open the link under the cursor in a new work tab (`<CR>` moves inside the current tab; `:GnosisOpenLinkTab`)
-- `Alt+V` in the app (`\A`) … view-only mode ⇔ normal Vim. View-only (VIEW at the bottom) shows no cursor and does not send editing keys. Scroll with `j`/`k`, arrows, PageUp/Down, `gg`/`G`, `Ctrl-d`/`Ctrl-u`. Search with `/` `?` `n` `N` `*` `#`. Also usable: `gs`, `gm`, Space, Tab, `<CR>`, `<BS>`, `_`, digits, `\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc`
+- `\i` … open `index.md` ・ `\c` … the note app (Electron / browser)
+- `\q` … open the tab board (same mechanism as the `\h` hub, a separate list of plain links; number keys jump, you can edit it). `\Q` … add the current note to the board (`:GnosisTabs` / `:GnosisTabAdd`)
+- `Alt+V` in the app (`\c`) … view-only mode ⇔ normal Vim. View-only (VIEW at the bottom) shows no cursor and does not send editing keys. Scroll with `j`/`k`, arrows, PageUp/Down, `gg`/`G`, `Ctrl-d`/`Ctrl-u`. Search with `/` `?` `n` `N` `*` `#`. Also usable: `gs`, `gm`, Space, Tab, `<CR>`, `<BS>`, `_`, digits, `\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc`
 - `Alt` + click on a link in the app … moves only the cursor onto the link without opening it (to move only the cursor onto a link)
 - The app also draws tables (`| a | b |`) and `<img src="…" width="50%">`. Inside a table or in insert mode the cursor line stays plain text
 - `Ctrl-T` (`<C-t>`) … insert the time (`HH:MM ` with a space) at the cursor (in normal mode, enters insert mode first; replaces Vim's Ctrl-T indent / tag-back) ・ `\T` (`:GnosisTimeMode`) … time mode on/off (this note only; it ends when you move to another note or close it; while on, the time goes at the start of each empty line you begin to write, and Enter adds a blank line; not before `#` `-` `*` `>` and the like; Enter on a line with only the time removes it; checkbox and table lines work as usual; chronological-record notes open with it on; "時刻" in the status line)
@@ -123,7 +122,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Other environment keys
 
 - `\w` … save all buffers (`:wa`) ・ `\r` … clear screen leftovers (`:redraw!`) ・ `gm` … open the current note in the default app
-- Edits are saved automatically after about 1.5 seconds of inactivity (also while inserting, and right away on Esc; .md / .csv in the vault; also when leaving a buffer; disable with `g:gnosis_autosave=0`). `gm` / `\A` / `\tD` / syncing always save first. No swap files
+- Edits are saved automatically after about 1.5 seconds of inactivity (also while inserting, and right away on Esc; .md / .csv in the vault; also when leaving a buffer; disable with `g:gnosis_autosave=0`). `gm` / `\c` / `\tD` / syncing always save first. No swap files
 - `<C-v>` … paste the system clipboard ・ `<C-c>` (visual) … copy to the system clipboard
 - `j` / `k` / `<Up>` / `<Down>` … move by screen lines (also in insert mode, without leaving it, so the input method stays on)
 
@@ -131,7 +130,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 - An encrypted vault is `A/note` (plain view) + `A/.crypt` (encrypted data) side by side. Gnosis asks for the password on start, mounts it, and locks it on exit
 - `:GnosisMount` … mount by hand ・ `:GnosisLock` … lock by hand (unmount). A vault that another window or app is using is not locked (`:GnosisLock!` forces it)
-- Several windows (Vim, the `\A` app) can open different vaults, or the same vault, at the same time. An encrypted vault is locked only when **the last window using it** ends (or switches to another vault). The registry lives outside the vault (`sessions/` in the Gnosis home), and entries of processes that crashed are removed automatically. If a note you are editing in several windows was changed elsewhere, autosave does not overwrite it: your unsaved content is backed up to `.state/conflicts/` and you get a warning
+- Several windows (Vim, the `\c` app) can open different vaults, or the same vault, at the same time. An encrypted vault is locked only when **the last window using it** ends (or switches to another vault). The registry lives outside the vault (`sessions/` in the Gnosis home), and entries of processes that crashed are removed automatically. If a note you are editing in several windows was changed elsewhere, autosave does not overwrite it: your unsaved content is backed up to `.state/conflicts/` and you get a warning
 - `:GnosisBackup` `[destination]` … pack the project folder (`.crypt` and others; not the contents of `note/`) into a 7z with the vault password
 - `:GnosisSetPassword` … encrypt an unencrypted vault, or change the password
 - `:GnosisRemovePassword` … remove the encryption and go back to plain files
@@ -230,7 +229,7 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 - `:GnosisWNext` open the next link target left by w ・ `:GnosisContextMigrate` migrate an old-style Context to the new format explicitly ・ `:GnosisBranchCheck` check Branch consistency (reports several parents, one-sided links, cycles and self references; rewrites nothing) ・ `:GnosisLinkPick` / `:LinkPick` search and insert a link ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` full-text search ・ `:GnosisFileContentSearch` / `:FileContentSearch` full-text search
 
 ### Moving
-- `:GnosisTabs` list of work tabs (`\q`) ・ `:GnosisOpenLinkTab` open a link in a new work tab (`\o`)
+- `:GnosisTabs` open the tab board (`\q`) ・ `:GnosisTabAdd` add the current note to the board (`\Q`)
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` to the parent ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` first child ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` last child
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` last link near Context
 

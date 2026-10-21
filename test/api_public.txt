@@ -405,13 +405,6 @@ gnosis#table_tab
 gnosis#table_tab_action
 gnosis#table_to_csv
 gnosis#table_to_csv_current
-gnosis#tabs#close
-gnosis#tabs#filter
-gnosis#tabs#on_enter
-gnosis#tabs#open_link
-gnosis#tabs#popup
-gnosis#tabs#select
-gnosis#tabs#snapshot
 gnosis#template_insert
 gnosis#template_new
 gnosis#templates

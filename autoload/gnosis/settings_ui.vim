@@ -351,7 +351,7 @@ function! s:choose_theme() abort
   endif
 endfunction
 
-" \A のアプリの配色を選ぶ（組み込み＝白 か、自分で作ったもの）
+" \c のアプリの配色を選ぶ（組み込み＝白 か、自分で作ったもの）
 function! s:choose_app_theme() abort
   let l:choices = [{'kind': 'builtin'}]
   for l:name in sort(keys(get(s:settings, 'appCustomThemes', {})))
@@ -368,7 +368,7 @@ function! s:choose_app_theme() abort
 endfunction
 
 " カスタム配色の編集（カラーパレットとリアルタイムプレビュー。gnosis#theme_edit）。
-" a:target … 'vim'（通常の Vim の配色）か 'app'（\A のアプリの配色）。2 つは別の設定で、互いに影響しない。
+" a:target … 'vim'（通常の Vim の配色）か 'app'（\c のアプリの配色）。2 つは別の設定で、互いに影響しない。
 " 保存するまで設定は書き換えない。取り消せば何も変わらない。
 function! s:open_editor(target) abort
   let l:app = a:target ==# 'app'

@@ -168,7 +168,7 @@ function defaultSettings() {
     appearance: "light",
     theme: { kind: "builtin" },
     customThemes: {},
-    // \A のアプリ（Electron）の配色。通常の Vim の配色（theme / customThemes）とは別の設定
+    // \c のアプリ（Electron）の配色。通常の Vim の配色（theme / customThemes）とは別の設定
     appTheme: { kind: "builtin" },
     appCustomThemes: {},
   };
@@ -242,7 +242,7 @@ function paletteFor(s) {
   return { ...(pals[s.appearance] || pals.light), base: s.appearance };
 }
 
-// \A のアプリの配色。既定は白（palettes.app）。自分で作ったものは、背景か本文を変えたら補助の色（muted / accent）を作り直す。
+// \c のアプリの配色。既定は白（palettes.app）。自分で作ったものは、背景か本文を変えたら補助の色（muted / accent）を作り直す。
 // 通常の Vim の配色（paletteFor）とは別。Vim 側の変更はここに影響しない（逆も同じ）。
 function appPaletteFor(s) {
   const pals = builtinPalettes();

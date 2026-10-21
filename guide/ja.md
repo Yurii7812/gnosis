@@ -76,10 +76,9 @@
 - `\bu` … Context 付近の最後のリンクへ ・ `<S-Space>` … リンク一覧から選んで移動
 - `\h` / `\0` … ハブ画面（編集可能なリンク一覧） ・ `\H` … 今のノートをハブに追加 ・ グループ（Index を含む）の上で `za` / `\l` で足すと、1 本ずつ**表示名**（空 `Enter` = リンク先のタイトル。`Esc` で全部取り消し）と、その**よみ**（推測が入っている。直して `Enter`、全部消すと登録しない）を聞いて入れ、よみの順に並べ替える（複数なら「(1/3)」のように順に）。手で貼って保存したときは**名前とよみの確認画面**が開く（`[表示名](…) — よみ`。推測には「（推測）」。表示名もよみも書き換えられ、行を消すとグループから外れる。`Enter` で中身を見る。`q` で保存して並べ替え、`Q` は保存せずに並べ替え。離れたら `:GnosisReview` で戻る。全員を見直すのは `:GnosisYomiReview`）・ `- [ ]` の行で挿入モードの Enter … 次の行にも `- [ ] ` を作る（空の項目で Enter ならやめる） ・ `\n`（`:GnosisQuick`）… とりあえず書く（何も聞かずにまっさらなノート。日記に自動で載る。つなぐのは後で） ・ `\M`（`:GnosisCaptureImport`）… USB でつないだスマホから Gnosis メモ APK のメモを取り込む（書き直したメモは同じノートへ差分だけ反映。PC と同じ場所を変えていたら競合として残し、`:GnosisCaptureConflicts` で見て `:GnosisCaptureResolve ID keep|append` で解決。旧版の別版は `:GnosisCaptureDuplicates` で一覧、旧ノートに追跡用の印を足すのは `:GnosisCaptureBackfill`（`apply` で書く）） ・ `\a`（`\N` も同じ。`:GnosisOrphans`）… 未所属（Folgezettel ID の無い）ノートの一覧（雑に書いたノートを後でつなぐ。グループ・日記・紙の PKM のノートは出ない）
 - `\1`〜`\9` … ハブの N 番目へ直行（ハブ内では普通のリンク番号）
-- `\i` … `index.md` を開く ・ `\A` … ノートアプリ（Electron / ブラウザ）
-- `\q` … 作業タブの一覧（ノートの**タイトル**で表示。同じタイトルは補助にファイル名も出す）。`↑` / `↓`（`j` / `k`）で選び、`Enter` で切り替え、`Esc`（`q`）で閉じる。`/` はタイトルで絞り込み、`a` 追加 ・ `x` 閉じる ・ `X` 他を閉じる ・ `C` 全部閉じる（`:GnosisTabs`）
-- `\o` … カーソル下のリンクを新しい作業タブで開く（`<CR>` は今のタブの中で移動。`:GnosisOpenLinkTab`）
-- アプリ（`\A`）の `Alt+V` … 見るだけモード ⇔ 普通の Vim。見るだけ（下に VIEW）はカーソルを出さず、編集するキーは送らない。`j`/`k`・矢印・PageUp/Down・`gg`/`G`・`Ctrl-d`/`Ctrl-u` でスクロール。`/` `?` `n` `N` `*` `#` で検索。`gs`・`gm`・Space・Tab・`<CR>`・`<BS>`・`_`・数字・`\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc` も使える
+- `\i` … `index.md` を開く ・ `\c` … ノートアプリ（Electron / ブラウザ）
+- `\q` … タブのボードを開く（`\h` のハブと同じ仕組みで、別のリスト。普通のリンクなので数字キーで移動・編集もできる）。`\Q` … 今のノートをボードに足す（`:GnosisTabs` / `:GnosisTabAdd`）
+- アプリ（`\c`）の `Alt+V` … 見るだけモード ⇔ 普通の Vim。見るだけ（下に VIEW）はカーソルを出さず、編集するキーは送らない。`j`/`k`・矢印・PageUp/Down・`gg`/`G`・`Ctrl-d`/`Ctrl-u` でスクロール。`/` `?` `n` `N` `*` `#` で検索。`gs`・`gm`・Space・Tab・`<CR>`・`<BS>`・`_`・数字・`\h` `\H` `\0` `\i` `\d` `\.` `\L` `\gi` `\r` `\bu` `\k` `\j` `\J` `\sc` も使える
 - アプリでリンクを `Alt` + クリック … 開かずにカーソルだけをリンクへ動かす（カーソルだけを動かしたいときに使う）
 - アプリは表（`| a | b |`）と `<img src="…" width="50%">` も描く。カーソルが表の中・インサート中は文字のまま
 - `Ctrl-T`（`<C-t>`）… カーソルの位置に時刻（`時:分 ` と半角スペース）を入れる（ノーマルでは挿入モードに入って入れる。Vim 標準の Ctrl-T の字下げ・タグ戻りの代わり）・`\T`（`:GnosisTimeMode`）… 時刻モードのオン／オフ（そのノートだけ。ほかのノートへ移る・閉じると切れる。オンのあいだは空の行に書き始めると行の頭に時刻が入り、Enter で空行を 1 つはさむ。`#` `-` `*` `>` などの書き始めには入れない。時刻だけの行で Enter なら時刻を消す。チェックボックス・表の行はいつもどおり。時系列記録のノートは開くとオン。ステータスラインに「時刻」）
@@ -123,7 +122,7 @@
 ## 環境のその他
 
 - `\w` … 全バッファを保存（`:wa`） ・ `\r` … 画面の残像を消す（`:redraw!`） ・ `gm` … 今のノートを既定アプリで開く
-- 編集は約1.5秒無操作で自動保存（挿入中も。Esc でも即保存。vault の .md / .csv 対象。バッファを離れるときも即保存。`g:gnosis_autosave=0` で無効）。`gm` / `\A` / `\tD` / 同期の前は必ず保存してから実行。swap は作らない
+- 編集は約1.5秒無操作で自動保存（挿入中も。Esc でも即保存。vault の .md / .csv 対象。バッファを離れるときも即保存。`g:gnosis_autosave=0` で無効）。`gm` / `\c` / `\tD` / 同期の前は必ず保存してから実行。swap は作らない
 - `<C-v>` … システムクリップボードを貼る ・ `<C-c>`（ビジュアル）… システムクリップボードへコピー
 - `j` / `k` / `<Up>` / `<Down>` … 表示行で上下（挿入モードでも同じ。挿入モードを抜けないので IME は維持される）
 
@@ -131,7 +130,7 @@
 
 - vault は `A/note`（平文ビュー）+ `A/.crypt`（暗号実体）の兄弟構成。起動時にパスワードを聞いてマウントし、終了時に自動ロックする
 - `:GnosisMount` … 手動マウント ・ `:GnosisLock` … 手動ロック（アンマウント）。別のウィンドウ・アプリが使っている vault は、ロックしない（`:GnosisLock!` で強制）
-- 複数のウィンドウ（Vim・`\A` のアプリ）で、別々の vault も同じ vault も同時に開ける。暗号化 vault は、**使っている最後のウィンドウ**が終わる（または別の vault へ切り替える）ときだけロックされる。登録簿は vault の外（Gnosis ホームの `sessions/`）にあり、異常終了したプロセスの登録は自動で消える。同じノートを複数のウィンドウで編集して他で書き換えられたときは、自動保存は上書きせず、未保存の内容を `.state/conflicts/` に退避して警告する
+- 複数のウィンドウ（Vim・`\c` のアプリ）で、別々の vault も同じ vault も同時に開ける。暗号化 vault は、**使っている最後のウィンドウ**が終わる（または別の vault へ切り替える）ときだけロックされる。登録簿は vault の外（Gnosis ホームの `sessions/`）にあり、異常終了したプロセスの登録は自動で消える。同じノートを複数のウィンドウで編集して他で書き換えられたときは、自動保存は上書きせず、未保存の内容を `.state/conflicts/` に退避して警告する
 - `:GnosisBackup` `[出力先]` … プロジェクトフォルダ（`.crypt` 他。`note/` の中身は除く）を vault のパスワードで 7z 化
 - `:GnosisSetPassword` … 未暗号化なら暗号化、暗号化済みならパスワード変更
 - `:GnosisRemovePassword` … 暗号化を解除して平文に戻す
@@ -230,7 +229,7 @@
 - `:GnosisWNext` w で残したリンク先を次々に開く ・ `:GnosisContextMigrate` 旧形式の Context を新形式へ明示的に移す ・ `:GnosisBranchCheck` Branch の整合性を検査（親が複数・片側だけ・循環・自己参照を報告。何も書き換えない） ・ `:GnosisLinkPick` / `:LinkPick` 全文検索してリンク挿入 ・ `:GnosisSearch` / `:GnosisFSearch` / `:FSearch` 全文検索 ・ `:GnosisFileContentSearch` / `:FileContentSearch` 全文検索
 
 ### 移動
-- `:GnosisTabs` 作業タブの一覧（`\q`） ・ `:GnosisOpenLinkTab` リンクを新しい作業タブで開く（`\o`）
+- `:GnosisTabs` タブのボードを開く（`\q`） ・ `:GnosisTabAdd` 今のノートをボードに足す（`\Q`）
 - `:GnosisJumpParent` / `:JumpParent` / `:GnosisJumpUp` / `:JumpUp` 親へ ・ `:GnosisJumpChildTop` / `:JumpChildTop` / `:GnosisJumpDownTop` / `:JumpDownTop` 子の先頭 ・ `:GnosisJumpChildBottom` / `:JumpChildBottom` / `:GnosisJumpDownBottom` / `:JumpDownBottom` 子の末尾
 - `:GnosisJumpLastLinkBeforeParent` / `:JumpLastLinkBeforeParent` / `:GnosisJumpLastLinkBeforeUp` / `:JumpLastLinkBeforeUp` Context 付近の最後のリンクへ
 

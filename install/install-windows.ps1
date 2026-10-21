@@ -11,7 +11,7 @@
 param(
   [switch]$SkipInstall,   # never install anything; report what is missing and stop
   [switch]$NoShortcut,
-  [switch]$NoApp,         # skip the optional Electron note app (\A from Vim)
+  [switch]$NoApp,         # skip the optional Electron note app (\c from Vim)
   [switch]$Resume,        # started by the post-reboot RunOnce entry
   [switch]$Yes,           # do not ask before installing WSL / WezTerm (reboot is still asked)
   [string]$Ref = '',      # optional Git tag/branch for the Linux-side checkout
@@ -294,7 +294,7 @@ function Invoke-WslBash([string]$name,[string]$source,[string]$operation) {
   }
 }
 
-# Ubuntu in WSL ships no Japanese font, so the Electron app (\A) shows boxes. When none is
+# Ubuntu in WSL ships no Japanese font, so the Electron app (\c) shows boxes. When none is
 # installed, link the Windows ones into the user's font folder (no sudo) and prefer good ones.
 $script:JaFontSetup = @'
 command -v fc-list >/dev/null 2>&1 || exit 0
@@ -322,7 +322,7 @@ fc-cache -f >/dev/null 2>&1
 exit 0
 '@
 
-# Linux pieces of the optional Electron app (\A in Vim). Node is kept in a Gnosis-only folder
+# Linux pieces of the optional Electron app (\c in Vim). Node is kept in a Gnosis-only folder
 # (checksum-verified from nodejs.org) so Ubuntu's own packages are not replaced.
 $script:AppSetup = @'
 H="${XDG_DATA_HOME:-$HOME/.local/share}/gnosis"
@@ -416,7 +416,7 @@ grep -q -- '--tui' "$HOME/gnosis/bin/gnosis" || fail "launcher has no --tui mode
 "$HOME/.local/bin/gnosis" --doctor >/dev/null 2>&1 || fail "gnosis --doctor reported problems (run: wsl -d Ubuntu -- ~/.local/bin/gnosis --doctor)"
 if [ -f "$HOME/gnosis/web/electron/main.cjs" ] && [ "${GNOSIS_VERIFY_APP:-1}" = 1 ]; then
   el="$HOME/gnosis/web/node_modules/.bin/electron"
-  test -x "$el" || fail "app (Electron) not installed; \A will not work. Re-run the installer"
+  test -x "$el" || fail "app (Electron) not installed; \c will not work. Re-run the installer"
   test -f "$HOME/gnosis/web/bundle.js" || fail "app bundle (web/bundle.js) not built"
   missing=$(ldd "$HOME/gnosis/web/node_modules/electron/dist/electron" 2>/dev/null | grep 'not found' || true)
   [ -z "$missing" ] || fail "app libraries missing: $missing"

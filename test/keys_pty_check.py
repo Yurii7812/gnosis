@@ -280,64 +280,6 @@ class TestScreens(Env):
                     self.assertNotIn("<F1", s.text())
 
 
-class TestWorkTabs(Env):
-    def test_titles_arrows_enter_esc(self) -> None:
-        for mode in MODES:
-            with self.subTest(mode=mode):
-                self.out.unlink(missing_ok=True)
-                v = self.make_vault(f"vt-{mode}", {
-                    "n1.md": note("植物について"),
-                    "n2.md": note("ハーブ"),
-                    "n3.md": "# H1 だけのノート\n\n本文\n",
-                    "n4.md": note("同じタイトル"),
-                    "n5.md": note("同じタイトル"),
-                })
-                rc = self.rc(root=v)
-                with Session(rc, str(self.home), str(self.gh)) as s:
-                    # 作業タブを作る: 最初に今のノートが 1 つ目のタブになり、a で足してから次のノートへ移る
-                    # （普通の移動は、今のタブの中身を入れ替える）
-                    s.send(f":edit {v}/n1.md\r", 1.0)
-                    s.send(":call gnosis#tabs#snapshot()\r")
-                    for n in ("n2", "n3", "n4", "n5"):
-                        s.send("\\q")
-                        s.send("a")
-                        s.send("q")
-                        s.send(f":edit {v}/{n}.md\r", 0.6)
-                    s.send("\\q")
-                    text = s.text()
-                    self.assertIn("植物について", text)
-                    self.assertIn("ハーブ", text)
-                    self.assertIn("H1 だけのノート", text)  # front matter の title が無ければ最初の H1
-                    self.assertNotIn("n1.md", text)
-                    self.assertNotIn("(n2.md)", text)
-                    self.assertIn("同じタイトル  (n4.md)", text)  # 重複は識別できる
-                    self.assertIn("同じタイトル  (n5.md)", text)
-                    self.assertNotIn("<F1", text)
-                    # 選択位置は現在のタブ（n5）。↑ を 4 回で n1
-                    for _ in range(4):
-                        s.key(mode, "up")
-                    s.send("\r")
-                    s.send(self.dump_cmd("expand('%:t')"))
-                    self.assertEqual(self.read_out(), "'n1.md'")
-                    s.send("\\q")
-                    s.key(mode, "down")
-                    s.send("\r")
-                    s.send(self.dump_cmd("expand('%:t')"))
-                    self.assertEqual(self.read_out(), "'n2.md'")
-                    # Esc で閉じる（何も切り替えない）
-                    s.send("\\q")
-                    s.key(mode, "down")
-                    s.send(ESC, 0.9)
-                    s.send(self.dump_cmd("[expand('%:t'), len(popup_list())]"))
-                    self.assertEqual(self.read_out(), "['n2.md', 0]")
-                    # タイトルで絞り込める
-                    s.send("\\q")
-                    s.send("/")
-                    s.send("ハーブ\r")
-                    self.assertIn("ハーブ", s.text())
-                    self.assertNotIn("植物について", s.text())
-
-
 class TestFzf(Env):
     def setUp(self) -> None:
         super().setUp()

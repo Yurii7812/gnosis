@@ -13,11 +13,11 @@
 "            | {"kind": "plugin", "repo": "作者/リポジトリ", "colorscheme": "名前"},
 "     "customThemes": {"名前": {"base": "light|dark", "bg": "#rrggbb", "fg": …,
 "                               "link": …, "heading": …, "selection": …, "cursorline": …}},
-"     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \A のアプリ（Electron）の配色
+"     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}}
 "   }
 "   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
-"   \A のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
+"   \c のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
 "
 " 設定の優先順位（上ほど強い）:
 "   1. その vault の .gnosis/settings.json（設定画面で変えるもの: 言語・見た目・
@@ -96,7 +96,7 @@ function! gnosis#settings#validate(s) abort
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0
     let l:s.theme = {'kind': 'builtin'}
   endif
-  " \A のアプリの配色（組み込み か 自分で作ったものだけ。追加テーマは Vim の colorscheme なのでアプリには使わない）
+  " \c のアプリの配色（組み込み か 自分で作ったものだけ。追加テーマは Vim の colorscheme なのでアプリには使わない）
   if type(get(l:s, 'appTheme', 0)) != v:t_dict || index(['builtin', 'custom'], get(l:s.appTheme, 'kind', '')) < 0
     let l:s.appTheme = {'kind': 'builtin'}
   endif

@@ -119,12 +119,12 @@ function! gnosis#theme#palette(s) abort
   return l:p
 endfunction
 
-" \A のアプリ（Electron）の配色。通常の Vim の配色（palette）とは別の設定（appTheme / appCustomThemes）。
+" \c のアプリ（Electron）の配色。通常の Vim の配色（palette）とは別の設定（appTheme / appCustomThemes）。
 "   既定は通常の Vim と同じ見た目（ダーク・ライト）。自分で作った配色は 背景・本文・リンク・見出し・選択範囲・カーソル行 を自由に変えられる。
 "   背景か本文を変えた配色では、補助の色（muted / accent）を組み込みのものから引き継がず作り直す。
 function! gnosis#theme#app_palette(s) abort
   let l:pals = gnosis#settings#builtin_palettes()
-  " 組み込みは通常の Vim と同じ見た目（ダーク・ライト）。\A 用のカスタム配色を選んだときだけ別の色
+  " 組み込みは通常の Vim と同じ見た目（ダーク・ライト）。\c 用のカスタム配色を選んだときだけ別の色
   let l:p = copy(get(l:pals, get(a:s, 'appearance', 'dark'), l:pals.dark))
   let l:th = get(a:s, 'appTheme', {})
   if get(l:th, 'kind', 'builtin') ==# 'custom'
@@ -143,7 +143,7 @@ function! gnosis#theme#app_palette(s) abort
   return l:p
 endfunction
 
-" いまの Vim が \A のアプリ（Electron）の中で動いているか
+" いまの Vim が \c のアプリ（Electron）の中で動いているか
 function! gnosis#theme#in_app() abort
   return !empty($GNOSIS_GUI_PORT)
 endfunction
@@ -199,7 +199,7 @@ endfunction
 function! gnosis#theme#apply(s) abort
   let l:kind = get(a:s.theme, 'kind', 'builtin')
   let &background = gnosis#settings#background(a:s)
-  " \A のアプリの中の Vim は、アプリ用の配色（appTheme。既定は通常の Vim と同じ見た目）を使う。
+  " \c のアプリの中の Vim は、アプリ用の配色（appTheme。既定は通常の Vim と同じ見た目）を使う。
   " 通常の Vim 用のテーマ（theme / customThemes / 追加テーマ）はアプリには効かない。
   if gnosis#theme#in_app()
     let g:gnosis_palette = gnosis#theme#app_palette(a:s)

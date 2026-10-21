@@ -175,13 +175,13 @@ endif
 " ---------------------------------------------------------------------------
 
 command!          GnosisToday call gnosis#diary_today()
-command!          GnosisTabs call gnosis#tabs#popup()
+command!          GnosisTabs call gnosis#hub_open('tabs')
 command!          GnosisWNext call gnosis#write_next()
 command! -bang -nargs=* GnosisContextMigrate call gnosis#context#migrate_command(<q-args>, <bang>0)
 command!          GnosisFolgezettelMove call gnosis#folgezettel#toggle()
 command!          GnosisBranchCheck call gnosis#branch#check_command()
 command!          GnosisBranchFromContext call gnosis#branch#context_migrate()
-command!          GnosisOpenLinkTab call gnosis#tabs#open_link()
+command!          GnosisTabAdd call gnosis#hub_set('tabs')
 command!          GnosisRefreshColors call gnosis#color#refresh()
 command!          GnosisColorDoctor call gnosis#color#doctor()
 command!          GnosisDiaryAdopt call gnosis#diary_adopt()
@@ -653,14 +653,9 @@ command! GnosisOrphans call gnosis#orphans_open()
 command! GnosisMergeUndo call gnosis#merge#undo()
 command! GnosisYomiReview call gnosis#yomi_review()
 command! GnosisReview call gnosis#review_reopen()
-" \q は作業タブ管理。\o はリンクを別の論理タブとして開く。
-nnoremap <silent> \q       <Cmd>call gnosis#tabs#popup()<CR>
-nnoremap <silent> \o       <Cmd>call gnosis#tabs#open_link()<CR>
-" ノート移動では現作業タブの内容だけ更新（新タブは増やさない）。
-augroup gnosis_work_tabs
-  autocmd!
-  autocmd BufEnter *.md call gnosis#tabs#on_enter()
-augroup END
+" \q は「タブ」のボード（\h のハブと同じ仕組みで別のファイル）。\Q で今のノートを足す。
+nnoremap <silent> \q       <Cmd>call gnosis#hub_open('tabs')<CR>
+nnoremap <silent> \Q       <Cmd>call gnosis#hub_set('tabs')<CR>
 " ゴミ箱（ソフト削除）: \tr=一覧（⏎=開く / ^r=復元 / ^e=空） / \tD=今のノートをゴミ箱へ / \tE=空にする
 "   （\td は \tdr/\tdc（表の行・列削除）と待ちが被るので \tD にする）
 nnoremap <silent> \tr       <Cmd>call gnosis#trash_list()<CR>
@@ -839,8 +834,8 @@ nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>
 nnoremap <silent> \gi       <Cmd>call gnosis#open_gallery_smart()<CR>
 " アプリ (Electron / ブラウザ) を開く。vault はアプリ側 (既定 ~/files/yurii-note)。
-" 既定では使われていない \A。(\w は other.vim の :wa なので使わない)
-nnoremap <silent> \A        <Cmd>call gnosis#open_web()<CR>
+" ノートアプリ（\c を改め、\ と小文字の \c）。(\w は other.vim の :wa なので使わない)
+nnoremap <silent> \c        <Cmd>call gnosis#open_web()<CR>
 
 " ---------------------------------------------------------------------------
 " Shift-Tab / BackTab の端末互換
@@ -1016,7 +1011,7 @@ endif
 "   - 対象は vault 配下の .md / .csv（同期が走るのは .md だけ）
 "   - 無操作デバウンス（挿入・置換中も含む）+ Esc で即保存 +
 "     バッファ/ウィンドウを離れるとき即保存
-"   - 外部アプリで開く前（gm / \A）・ゴミ箱へ移す前（\tD）・同期の前も
+"   - 外部アプリで開く前（gm / \c）・ゴミ箱へ移す前（\tD）・同期の前も
 "     呼び出し側が gnosis#save_current_note() で書き出す
 "   - ターミナルを×で閉じる（SIGHUP）は Vim 側でフックできないため、
 "     挿入中でも短めのデバウンスで書き、未保存の窓を小さくしている
