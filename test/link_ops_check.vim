@@ -12,6 +12,8 @@ let g:gnosis_autosync = 0
 let g:gnosis_skip_interactive_mount = 1
 let g:gnosis_diary_auto = 0
 let g:gnosis_test_review_skip = 1
+" よみの入力は既定値を使う(Vim 9.1.0016 など古い Vim は、-es で標準入力が空だと inputdialog() の所で終わってしまう。版に頼らない)
+let g:gnosis_test_yomi = []
 
 function! s:ok(name, cond, ...) abort
   call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
