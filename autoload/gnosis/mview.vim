@@ -12,7 +12,9 @@
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
 "   a g n c          モード: a すべて / g 索引だけ / n ノートだけ / c 近い索引（Folgezettel・つながり・題で近い順）
-"   s                検索（題・本文。結果が周りに並ぶ）    /  今の周りを絞り込む    f 全画面（9×9）⇔ 分割（3×3）
+"   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
+"   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
+"   F                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
 "   Space            ノートのウィンドウへ    r 読み直す    q 閉じる
 " 元データは python/mandala_view.py（読み取り専用）。ノートは書き換えない。
 
@@ -95,20 +97,28 @@ function! s:near(c) abort
       let s:S.nearc[a:c] = []
     endtry
   endif
+  " 先にすでに所属している索引（Index も）、そのあとに「近いのにまだ載っていない」索引
   let s:S.why = {}
+  let l:out = gnosis#mview#items(s:S.data, a:c, 'groups')
+  for l:id in l:out
+    let s:S.why[l:id] = '所属'
+  endfor
   for l:d in s:S.nearc[a:c]
-    let s:S.why[l:d.id] = join(l:d.why, '・')
+    if index(l:out, l:d.id) < 0
+      call add(l:out, l:d.id)
+      let s:S.why[l:d.id] = join(l:d.why, '・')
+    endif
   endfor
   if empty(s:S.nearc[a:c])
-    " 手がかりが無いときは Index の直下の索引から始める
-    let l:fb = gnosis#mview#items(s:S.data, 'index.md', 'groups')
-    call filter(l:fb, 'v:val !=# a:c')
-    for l:id in l:fb
-      let s:S.why[l:id] = 'Index'
+    " 手がかりが無いときは Index の直下の索引も足す
+    for l:id in gnosis#mview#items(s:S.data, 'index.md', 'groups')
+      if l:id !=# a:c && index(l:out, l:id) < 0
+        call add(l:out, l:id)
+        let s:S.why[l:id] = 'Index'
+      endif
     endfor
-    return l:fb
   endif
-  return map(copy(s:S.nearc[a:c]), 'v:val.id')
+  return l:out
 endfunction
 
 " 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
@@ -161,6 +171,15 @@ endfunction
 " 盤面は n×n（n は 3 か 9）。マス = {'id': ノート, 'role': 'center'|'item'|'sub'|'empty'}
 
 function! s:board() abort
+  let l:b = s:board_cells()
+  if !empty(s:S.rquery)
+    let l:c = s:S.size == 3 ? 1 : 4
+    let l:b[l:c][l:c] = {'id': '', 'role': 'center', 'n': 0, 'text': '検索: ' . s:S.rquery}
+  endif
+  return l:b
+endfunction
+
+function! s:board_cells() abort
   let l:n = s:S.size
   let l:b = []
   for l:i in range(l:n)
@@ -236,6 +255,9 @@ function! s:pad(s, w) abort
 endfunction
 
 function! s:label(cell) abort
+  if has_key(a:cell, 'text')
+    return a:cell.text
+  endif
   if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
     return ''
   endif
@@ -278,6 +300,7 @@ function! s:render() abort
   let l:pages = s:pages(s:S.center)
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
+        \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
   call add(l:lines, s:fit(printf(' %s%s   %d/%d   [%s]   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
         \ s:S.page + 1, l:pages, s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
   for l:k in range(l:top)
@@ -327,8 +350,8 @@ function! s:render() abort
     call add(l:lines, '')
   endwhile
   call add(l:lines, s:fit(get(s:S, 'pick', 0)
-        \ ? ' hjkl 1-8 移動 Enter 中心に（索引が中心で Enter=ここに追加） a g n c モード s 検索 / 絞り込み [] - f q 取消'
-        \ : ' hjkl 1-8 移動 Enter 中心に a g n c モード s 検索 / 絞り込み [] 前後 - 戻る f 全画面 Space ノート q 閉じる', l:W))
+        \ ? ' hjkl 1-8 移動 Enter 中心に（索引が中心で Enter=ここに追加） a g n c モード s 検索 / ヒットへ Tab 次 F 絞り込み [] - f q 取消'
+        \ : ' hjkl 1-8 移動 Enter 中心に a g n c モード s 検索 / ヒットへ(Tab 次) F 絞り込み [] - f 全画面 Space q', l:W))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -381,7 +404,7 @@ function! s:mark() abort
     for l:c in range(l:n)
       let l:cell = s:S.cells[l:r][l:c]
       let l:sp = get(s:S.spans, l:r . ',' . l:c, [])
-      if empty(l:sp) || empty(l:cell.id)
+      if empty(l:sp) || (empty(l:cell.id) && !has_key(l:cell, 'text'))
         continue
       endif
       if l:r == s:S.cur[0] && l:c == s:S.cur[1]
@@ -391,6 +414,10 @@ function! s:mark() abort
       endif
     endfor
   endfor
+  " / の語は、ふつうの検索のようにハイライト
+  if !empty(get(s:S, 'find', ''))
+    call add(w:mview_match, matchadd('Search', '\c\V' . escape(s:S.find, '\'), 5))
+  endif
   let l:sp = get(s:S.spans, s:S.cur[0] . ',' . s:S.cur[1], [])
   if !empty(l:sp)
     call cursor(l:sp[0][0], l:sp[0][1])
@@ -428,6 +455,7 @@ function! s:digit(d) abort
 endfunction
 
 function! s:set_center(id, page) abort
+  let s:S.find = ''
   let s:S.center = a:id
   let s:S.page = a:page
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -456,7 +484,101 @@ function! s:enter() abort
   call s:set_center(l:cell.id, 0)
 endfunction
 
-" 索引を選ぶ: / で題を絞り込む（空にすると解除）
+" ---- / : ふつうの検索のように、語をハイライトしてヒットしたマスへ飛ぶ ----------------------
+
+function! s:title_of(id) abort
+  return has_key(s:S.data.nodes, a:id) ? tolower(s:S.data.nodes[a:id].t) : ''
+endfunction
+
+" ヒットの一覧 [[枚, 行, 列], …]（読む順）。ほかの枚は周りの 8 マスだけ、今の枚は見えているマス全部
+function! s:hit_list() abort
+  let l:q = tolower(s:S.find)
+  let l:out = []
+  let l:ring = s:items(s:S.center)
+  for l:i in range(len(l:ring))
+    if stridx(s:title_of(l:ring[l:i]), l:q) >= 0
+      let l:p = s:pos[l:i % 8]
+      let l:o = s:S.size == 3 ? 0 : 3
+      call add(l:out, [l:i / 8, l:o + l:p[0], l:o + l:p[1]])
+    endif
+  endfor
+  let l:mid = s:S.size == 3 ? 1 : 4
+  for l:r in range(s:S.size)
+    for l:c in range(s:S.size)
+      let l:cell = s:S.cells[l:r][l:c]
+      if (l:cell.role ==# 'sub' || (l:r == l:mid && l:c == l:mid)) && !empty(l:cell.id) && stridx(s:title_of(l:cell.id), l:q) >= 0
+        call add(l:out, [s:S.page, l:r, l:c])
+      endif
+    endfor
+  endfor
+  return sort(l:out, {a, b -> a[0] != b[0] ? a[0] - b[0] : (a[1] != b[1] ? a[1] - b[1] : a[2] - b[2])})
+endfunction
+
+function! s:cmp3(a, b) abort
+  for l:k in range(3)
+    if a:a[l:k] != a:b[l:k]
+      return a:a[l:k] - a:b[l:k]
+    endif
+  endfor
+  return 0
+endfunction
+
+" ヒットへ飛ぶ。dir=1 は次、-1 は前（端で折り返す）。first=1 は今の位置も含めて探す
+function! s:jump(dir, ...) abort
+  if empty(get(s:S, 'find', ''))
+    return
+  endif
+  let l:hits = s:hit_list()
+  let s:S.hit_n = len(l:hits)
+  if empty(l:hits)
+    let s:S.hit_i = 0
+    call s:render()
+    return
+  endif
+  let l:here = [s:S.page, s:S.cur[0], s:S.cur[1]]
+  let l:target = -1
+  if a:dir > 0
+    for l:i in range(len(l:hits))
+      if s:cmp3(l:hits[l:i], l:here) > (a:0 && a:1 ? -1 : 0)
+        let l:target = l:i
+        break
+      endif
+    endfor
+    if l:target < 0 | let l:target = 0 | endif
+  else
+    for l:i in range(len(l:hits) - 1, 0, -1)
+      if s:cmp3(l:hits[l:i], l:here) < 0
+        let l:target = l:i
+        break
+      endif
+    endfor
+    if l:target < 0 | let l:target = len(l:hits) - 1 | endif
+  endif
+  let s:S.hit_i = l:target + 1
+  let s:S.page = l:hits[l:target][0]
+  let s:S.cur = [l:hits[l:target][1], l:hits[l:target][2]]
+  call s:render()
+endfunction
+
+function! s:find_prompt() abort
+  let s:S.find = trim(input('/', get(s:S, 'find', '')))
+  let s:S.hit_n = 0
+  let s:S.hit_i = 0
+  if empty(s:S.find)
+    call s:render()
+  else
+    call s:jump(1, 1)
+  endif
+endfunction
+
+function! s:find_clear() abort
+  if !empty(get(s:S, 'find', ''))
+    let s:S.find = ''
+    call s:render()
+  endif
+endfunction
+
+" 索引を選ぶ: F で題を絞り込む（空にすると解除）
 function! s:filter() abort
   let l:q = input(get(s:S, 'pick', 0) ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
   let s:S.query = trim(l:q)
@@ -496,6 +618,7 @@ endfunction
 " モード（英字）: a すべて / g 索引だけ / n ノートだけ / c 近い索引
 function! s:setmode(m) abort
   let s:S.mode = a:m
+  let s:S.find = ''
   let s:S.query = ''
   let s:S.rquery = ''
   let s:S.page = 0
@@ -611,7 +734,11 @@ function! s:setup_buffer() abort
   nnoremap <buffer><silent> n <Cmd>call <SID>setmode('notes')<CR>
   nnoremap <buffer><silent> c <Cmd>call <SID>setmode('near')<CR>
   nnoremap <buffer><silent> s <Cmd>call <SID>search()<CR>
-  nnoremap <buffer><silent> / <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><silent> / <Cmd>call <SID>find_prompt()<CR>
+  nnoremap <buffer><silent> F <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
+  nnoremap <buffer><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
+  nnoremap <buffer><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
   nnoremap <buffer><silent> f <Cmd>call <SID>full()<CR>
   nnoremap <buffer><silent> r <Cmd>call <SID>reload()<CR>
   nnoremap <buffer><silent> q <Cmd>call gnosis#mview#close()<CR>
@@ -645,6 +772,7 @@ function! s:open(center, ...) abort
   let s:S.query = ''
   let s:S.rquery = ''
   let s:S.results = []
+  let s:S.find = ''
   let s:S.nearc = {}
   let s:S.why = {}
   if !s:load()

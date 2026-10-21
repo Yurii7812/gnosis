@@ -62,7 +62,7 @@ call s:ok('a ですべてに戻る', s:text() =~# '◆植物' && s:text() =~# '�
 let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
 call s:keys('r')
-call s:ok('検索の結果が周りに出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）', s:text())
+call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
 call s:keys('g')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
 call s:keys('a')
@@ -79,6 +79,14 @@ call s:keys(']')
 call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビア' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
 call s:keys(']')
 call s:ok('最後の次へは進まない', s:st.page == 1)
+call s:keys('[')
+" / : ふつうの検索のようにヒットへ飛ぶ（複数枚あるときは別の枚へも）。入力そのものは試験できないので状態を入れる
+let s:st.find = 'ラベンダー'
+call s:keys("\<Tab>")
+call s:ok('Tab で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 1] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
+call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダー 1/1', s:text())
+call s:keys("\<Esc>")
+call s:ok('Esc で検索のハイライトを解く', s:st.find ==# '')
 call s:keys('[')
 " 1 2 3 / 4 _ 5 / 6 7 8 の並び（4 は中心の左・5 は右）
 call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *◆植物"')) == 1 && s:text() =~# '5 ローズ', s:text())
@@ -108,6 +116,13 @@ call s:ok('Space でまた曼荼羅へ', &filetype ==# 'gnosis-mandala')
 " 閉じる
 call s:keys('q')
 call s:ok('q で閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
+
+" c: 近い索引。すでに所属している索引が先に出る
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call s:keys('c')
+call s:ok('c: すでに所属している索引が先に出る', s:text() =~# '1 ◆植物' && s:text() =~# '2 ◆料理' && s:text() =~# '所属', s:text())
+call s:keys('q')
 
 " \g: 曼荼羅で索引を選んで、今のノートを載せる
 call s:mk('misc.md', '雑記', 0, [], [])
