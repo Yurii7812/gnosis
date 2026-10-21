@@ -34495,7 +34495,7 @@ ${h3.join(`
     const tab = { ...closed.tab, id: nid("t") };
     return openTab(layout, paneId || panes(layout)[0].id, tab);
   }
-  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note", "v2"]);
+  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note", "v2", "features"]);
   function restore(text) {
     let raw;
     try {
@@ -34589,8 +34589,43 @@ ${h3.join(`
   var EXTRA_KEYS = new Set(EXTRA_VIEWS.map((v2) => v2[0]));
   var extraTitle = (key) => (EXTRA_VIEWS.find((v2) => v2[0] === key) || [key, key])[1];
 
+  // src/palette-core.js
+  function score(query, text) {
+    const q2 = query.toLowerCase(), s15 = text.toLowerCase();
+    if (!q2) return 0;
+    let pos = 0, total = 0, prev = -2;
+    for (const ch of q2) {
+      const k = s15.indexOf(ch, pos);
+      if (k < 0) return -1;
+      total += 10 + (k === prev + 1 ? 15 : 0) + (k === 0 || /[\s:_\-/（(]/.test(s15[k - 1]) ? 10 : 0);
+      prev = k;
+      pos = k + 1;
+    }
+    return total - Math.floor(s15.length / 4);
+  }
+  function rank(items, query, limit = 60) {
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    if (!terms.length) return items.slice(0, limit);
+    const out = [];
+    items.forEach((it, i) => {
+      const hay = it.label + " " + (it.keywords || "") + " " + (it.group || "");
+      let sum = 0;
+      for (const t3 of terms) {
+        const a = score(t3, it.label), b2 = score(t3, hay);
+        const best = Math.max(a >= 0 ? a + 20 : -1, b2);
+        if (best < 0) {
+          sum = -1;
+          break;
+        }
+        sum += best;
+      }
+      if (sum >= 0) out.push({ it, sum, i });
+    });
+    return out.sort((x, y) => y.sum - x.sum || x.i - y.i).slice(0, limit).map((o2) => o2.it);
+  }
+
   // src/panes.js
-  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8", v2: "\u8FFD\u52A0\u30D3\u30E5\u30FC" };
+  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8", v2: "\u8FFD\u52A0\u30D3\u30E5\u30FC", features: "\u6A5F\u80FD\u4E00\u89A7" };
   var PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
   var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
   function pageFor(tab) {
@@ -34603,7 +34638,7 @@ ${h3.join(`
     if (tab.kind === "search" && p.q) return `${base2}#q=${encodeURIComponent(p.q)}`;
     return base2;
   }
-  function createPanes({ root, stageEl, gui: gui2, onNote, onResize, onChange }) {
+  function createPanes({ root, stageEl, gui: gui2, onNote, onResize, onChange, featureItems }) {
     let layout = newLayout();
     const closed = createClosedStack();
     let focusPane = panes(layout)[0].id;
@@ -34638,6 +34673,7 @@ ${h3.join(`
     }
     function makeEl(tab) {
       if (tab.kind === "vim") return { el: stageEl, loaded: true };
+      if (tab.kind === "features") return makeFeatures(tab);
       const el2 = h3("div", "viewbox");
       const strip = h3("div", "viewstrip");
       const refresh2 = h3("button", "", "\u66F4\u65B0");
@@ -34667,13 +34703,72 @@ ${h3.join(`
       const entry = { el: el2, frame, msg, loaded: false, tab };
       return entry;
     }
+    function makeFeatures(tab) {
+      const el2 = h3("div", "viewbox featbox");
+      const head = h3("div", "feathead");
+      const input = document.createElement("input");
+      input.type = "search";
+      input.className = "featsearch";
+      input.placeholder = "\u6A5F\u80FD\u3092\u691C\u7D22\uFF08\u4F8B: \u30B0\u30E9\u30D5 / \u5206\u5272 / \u30B9\u30DE\u30DB / \u30BF\u30B9\u30AF\uFF09";
+      input.setAttribute("aria-label", "\u6A5F\u80FD\u3092\u691C\u7D22");
+      const hint = h3("div", "feathint", "\u9805\u76EE\u3092\u30AF\u30EA\u30C3\u30AF\u3059\u308B\u3068\u5B9F\u884C\u3057\u307E\u3059\u3002\u30D3\u30E5\u30FC\u306F\u65B0\u3057\u3044\u30BF\u30D6\u3067\u958B\u304D\u3001Vim \u306E\u30B3\u30DE\u30F3\u30C9\u306F Vim \u306B\u5165\u529B\u3057\u307E\u3059\u3002\uFF08\u30B3\u30DE\u30F3\u30C9\u30D1\u30EC\u30C3\u30C8\u306F Ctrl+Shift+P\uFF09");
+      head.append(input, hint);
+      const list = h3("div", "featlist");
+      el2.append(head, list);
+      let items = [];
+      function draw() {
+        const q2 = input.value.trim();
+        const shown = q2 ? rank(items, q2, 2e3) : items;
+        list.textContent = "";
+        const groups = /* @__PURE__ */ new Map();
+        for (const it of shown) {
+          if (!groups.has(it.group)) groups.set(it.group, []);
+          groups.get(it.group).push(it);
+        }
+        if (!shown.length) list.appendChild(h3("div", "featnone", "\u898B\u3064\u304B\u308A\u307E\u305B\u3093"));
+        for (const [g, its] of groups) {
+          const d = document.createElement("details");
+          d.className = "featgroup";
+          d.open = !!q2 || g !== "Vim";
+          d.appendChild(h3("summary", "", `${g}\uFF08${its.length}\uFF09`));
+          const grid = h3("div", "featgrid");
+          for (const it of its) {
+            const b2 = h3("button", "featitem", it.label);
+            b2.type = "button";
+            b2.title = it.label;
+            b2.addEventListener("click", async () => {
+              try {
+                await it.run();
+                hint.textContent = "\u5B9F\u884C\u3057\u307E\u3057\u305F: " + it.label;
+              } catch (e) {
+                hint.textContent = "\u5B9F\u884C\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e);
+              }
+            });
+            grid.appendChild(b2);
+          }
+          d.appendChild(grid);
+          list.appendChild(d);
+        }
+      }
+      async function refresh2() {
+        try {
+          items = featureItems ? await featureItems() : [];
+        } catch {
+          items = [];
+        }
+        draw();
+      }
+      input.addEventListener("input", draw);
+      refresh2();
+      return { el: el2, loaded: true, tab, features: true, refresh: refresh2 };
+    }
     function setMsg(entry, text) {
       entry.msg.textContent = text;
       entry.msg.hidden = !text;
     }
     async function load(tab) {
       const entry = els.get(tab.id);
-      if (!entry || entry.loaded || tab.kind === "vim") return;
+      if (!entry || entry.loaded || tab.kind === "vim" || tab.kind === "features") return;
       entry.loaded = true;
       try {
         const base2 = await ensureSite(false);
@@ -34823,7 +34918,10 @@ ${h3.join(`
       plus2.title = "\u30D3\u30E5\u30FC\u3092\u958B\u304F";
       plus2.addEventListener("click", (e) => {
         const r = plus2.getBoundingClientRect();
-        menu(r.left, r.bottom, [...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
+        menu(r.left, r.bottom, [{ label: "\u2630 \u6A5F\u80FD\u4E00\u89A7", run: () => {
+          focusPane = pane.id;
+          openFeatures();
+        } }, "-", ...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
           focusPane = pane.id;
           openView(k);
         } })), "-", { label: "\u305D\u306E\u4ED6\u306E\u30D3\u30E5\u30FC\u2026", run: () => {
@@ -34854,6 +34952,10 @@ ${h3.join(`
         m.appendChild(b2);
       }
       document.body.appendChild(m);
+      m.style.maxHeight = window.innerHeight - 16 + "px";
+      const r = m.getBoundingClientRect();
+      if (r.bottom > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
+      if (r.right > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
       const away = (e) => {
         if (!m.contains(e.target)) {
           m.remove();
@@ -34961,6 +35063,9 @@ ${h3.join(`
         document.addEventListener("mouseup", up, true);
       });
     }
+    function openFeatures() {
+      openView("features", {}, "\u6A5F\u80FD\u4E00\u89A7");
+    }
     function openExtra(key) {
       openView("v2", { key }, extraTitle(key));
     }
@@ -35041,6 +35146,7 @@ ${h3.join(`
       closedCount: () => closed.size(),
       openView,
       openExtra,
+      openFeatures,
       closeTab: closeTab2,
       reopenClosed,
       splitFocused,
@@ -35064,41 +35170,6 @@ ${h3.join(`
         reloadAll();
       }
     };
-  }
-
-  // src/palette-core.js
-  function score(query, text) {
-    const q2 = query.toLowerCase(), s15 = text.toLowerCase();
-    if (!q2) return 0;
-    let pos = 0, total = 0, prev = -2;
-    for (const ch of q2) {
-      const k = s15.indexOf(ch, pos);
-      if (k < 0) return -1;
-      total += 10 + (k === prev + 1 ? 15 : 0) + (k === 0 || /[\s:_\-/（(]/.test(s15[k - 1]) ? 10 : 0);
-      prev = k;
-      pos = k + 1;
-    }
-    return total - Math.floor(s15.length / 4);
-  }
-  function rank(items, query, limit = 60) {
-    const terms = query.trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return items.slice(0, limit);
-    const out = [];
-    items.forEach((it, i) => {
-      const hay = it.label + " " + (it.keywords || "") + " " + (it.group || "");
-      let sum = 0;
-      for (const t3 of terms) {
-        const a = score(t3, it.label), b2 = score(t3, hay);
-        const best = Math.max(a >= 0 ? a + 20 : -1, b2);
-        if (best < 0) {
-          sum = -1;
-          break;
-        }
-        sum += best;
-      }
-      if (sum >= 0) out.push({ it, sum, i });
-    });
-    return out.sort((x, y) => y.sum - x.sum || x.i - y.i).slice(0, limit).map((o2) => o2.it);
   }
 
   // src/app.js
@@ -35287,6 +35358,7 @@ ${h3.join(`
     add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
     for (const k of VIEW_KINDS) add("\u30D3\u30E5\u30FC", `${KIND_LABEL[k]}\u3092\u958B\u304F`, `${k} view`, () => panes2.openView(k));
     for (const [k, t3] of EXTRA_VIEWS) add("\u30D3\u30E5\u30FC", `${t3}\u3092\u958B\u304F`, `${k} view \u8FFD\u52A0\u30D3\u30E5\u30FC`, () => panes2.openExtra(k));
+    add("\u30D3\u30E5\u30FC", "\u6A5F\u80FD\u4E00\u89A7\u3092\u958B\u304F", "features list \u4E00\u89A7 \u5168\u6A5F\u80FD", () => panes2.openFeatures());
     add("\u30D3\u30E5\u30FC", "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", "refresh reload \u66F4\u65B0", () => panes2.reloadViews());
     add("\u30BF\u30D6", "Vim \u306E\u30BF\u30D6\u3078\u79FB\u308B", "vim tab", () => panes2.showVim());
     add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));
@@ -35471,6 +35543,7 @@ ${h3.join(`
         else if (a === "unsplit") panes2.unsplitFocused();
         else if (a === "reopen") panes2.reopenClosed();
         else if (a === "palette") openPalette();
+        else if (a === "features") panes2.openFeatures();
       });
     }
     initPalette();
@@ -35752,7 +35825,18 @@ ${h3.join(`
         if (!r.ok) showError(r.error || "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F");
         else panes2.showVim();
       },
-      onResize: () => scheduleFit()
+      onResize: () => scheduleFit(),
+      // 機能一覧タブの中身(コマンドパレットと同じ項目)。Vim のコマンドの一覧は初回だけ Vim に聞く
+      featureItems: async () => {
+        if (!vimCmds) {
+          try {
+            vimCmds = await gui.vimCommands();
+          } catch {
+            vimCmds = [];
+          }
+        }
+        return paletteItems();
+      }
     });
     initToolbar();
     term = new Dl({

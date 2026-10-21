@@ -5,8 +5,9 @@
 //   - レイアウトは vault ごとに .gnosis/workspace.json に保存し、次回に復元する（閉じたタブの再開用の履歴も）。
 import * as L from "./layout.js";
 import { EXTRA_VIEWS, EXTRA_KEYS, extraTitle } from "./extra-views.js";
+import { rank } from "./palette-core.js";
 
-export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート", v2: "追加ビュー" };
+export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート", v2: "追加ビュー", features: "機能一覧" };
 const PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
 export const VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
 
@@ -21,7 +22,7 @@ function pageFor(tab) {
   return base;
 }
 
-export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) {
+export function createPanes({ root, stageEl, gui, onNote, onResize, onChange, featureItems }) {
   let layout = L.newLayout();
   const closed = L.createClosedStack();
   let focusPane = L.panes(layout)[0].id;
@@ -46,6 +47,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
   }
   function makeEl(tab) {
     if (tab.kind === "vim") return { el: stageEl, loaded: true };
+    if (tab.kind === "features") return makeFeatures(tab);
     const el = h("div", "viewbox");
     const strip = h("div", "viewstrip");
     const refresh = h("button", "", "更新"); refresh.type = "button"; refresh.title = "ノートの最新の状態でビューを作り直す";
@@ -65,10 +67,48 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
     const entry = { el, frame, msg, loaded: false, tab };
     return entry;
   }
+  // ---- 機能一覧（全機能をグループ別に見せ、クリックで実行する。コマンドパレットと同じ項目） ----
+  function makeFeatures(tab) {
+    const el = h("div", "viewbox featbox");
+    const head = h("div", "feathead");
+    const input = document.createElement("input"); input.type = "search"; input.className = "featsearch";
+    input.placeholder = "機能を検索（例: グラフ / 分割 / スマホ / タスク）"; input.setAttribute("aria-label", "機能を検索");
+    const hint = h("div", "feathint", "項目をクリックすると実行します。ビューは新しいタブで開き、Vim のコマンドは Vim に入力します。（コマンドパレットは Ctrl+Shift+P）");
+    head.append(input, hint);
+    const list = h("div", "featlist");
+    el.append(head, list);
+    let items = [];
+    function draw() {
+      const q = input.value.trim();
+      const shown = q ? rank(items, q, 2000) : items;
+      list.textContent = "";
+      const groups = new Map();
+      for (const it of shown) { if (!groups.has(it.group)) groups.set(it.group, []); groups.get(it.group).push(it); }
+      if (!shown.length) list.appendChild(h("div", "featnone", "見つかりません"));
+      for (const [g, its] of groups) {
+        const d = document.createElement("details"); d.className = "featgroup";
+        d.open = !!q || g !== "Vim";                              // Vim のコマンドは数が多いので、普段は畳んでおく(検索すると開く)
+        d.appendChild(h("summary", "", `${g}（${its.length}）`));
+        const grid = h("div", "featgrid");
+        for (const it of its) {
+          const b = h("button", "featitem", it.label); b.type = "button"; b.title = it.label;
+          b.addEventListener("click", async () => {
+            try { await it.run(); hint.textContent = "実行しました: " + it.label; } catch (e) { hint.textContent = "実行できませんでした: " + String((e && e.message) || e); }
+          });
+          grid.appendChild(b);
+        }
+        d.appendChild(grid); list.appendChild(d);
+      }
+    }
+    async function refresh() { try { items = featureItems ? await featureItems() : []; } catch { items = []; } draw(); }
+    input.addEventListener("input", draw);
+    refresh();
+    return { el, loaded: true, tab, features: true, refresh };
+  }
   function setMsg(entry, text) { entry.msg.textContent = text; entry.msg.hidden = !text; }
   async function load(tab) {
     const entry = els.get(tab.id);
-    if (!entry || entry.loaded || tab.kind === "vim") return;
+    if (!entry || entry.loaded || tab.kind === "vim" || tab.kind === "features") return;
     entry.loaded = true;
     try {
       const base = await ensureSite(false);
@@ -167,7 +207,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
       pe.bar.appendChild(t);
     }
     const plus = h("button", "tabplus", "＋"); plus.type = "button"; plus.title = "ビューを開く";
-    plus.addEventListener("click", (e) => { const r = plus.getBoundingClientRect(); menu(r.left, r.bottom, [...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => { focusPane = pane.id; openView(k); } })), "-", { label: "その他のビュー…", run: () => { focusPane = pane.id; extraMenu(r.left, r.bottom); } }]); e.stopPropagation(); });
+    plus.addEventListener("click", (e) => { const r = plus.getBoundingClientRect(); menu(r.left, r.bottom, [{ label: "☰ 機能一覧", run: () => { focusPane = pane.id; openFeatures(); } }, "-", ...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => { focusPane = pane.id; openView(k); } })), "-", { label: "その他のビュー…", run: () => { focusPane = pane.id; extraMenu(r.left, r.bottom); } }]); e.stopPropagation(); });
     pe.bar.appendChild(plus);
   }
 
@@ -182,6 +222,11 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
       m.appendChild(b);
     }
     document.body.appendChild(m);
+    // 画面からはみ出さないように: 高さは画面に収めて(あふれたらスクロール)、右端・下端では内側へ寄せる
+    m.style.maxHeight = (window.innerHeight - 16) + "px";
+    const r = m.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
+    if (r.right > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
     const away = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("mousedown", away, true); } };
     setTimeout(() => document.addEventListener("mousedown", away, true), 0);
   }
@@ -250,6 +295,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
   }
 
   // ---- 操作（ボタン・メニュー・キー・パレットが同じものを呼ぶ） ----
+  function openFeatures() { openView("features", {}, "機能一覧"); }
   function openExtra(key) { openView("v2", { key }, extraTitle(key)); }
   function extraMenu(x, y) { menu(x, y, EXTRA_VIEWS.map(([k, t]) => ({ label: t, run: () => { openExtra(k); } }))); }
   function openView(kind, params = {}, title = "") {
@@ -307,7 +353,7 @@ export function createPanes({ root, stageEl, gui, onNote, onResize, onChange }) 
   render();
   return {
     getLayout: () => layout, panesCount: () => paneEls.size, closedCount: () => closed.size(),
-    openView, openExtra, closeTab, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
+    openView, openExtra, openFeatures, closeTab, reopenClosed, splitFocused, unsplitFocused, cycle, showVim, setNoteTab, restore, save,
     activeKind: () => { const p = L.findPane(layout, focusPane) || L.panes(layout)[0]; return (L.findTab(layout, p.active) || {}).tab?.kind || ""; },
     focusPaneId: () => focusPane,
     activateTab: (id) => { layout = L.activateTab(layout, id); changed(); },

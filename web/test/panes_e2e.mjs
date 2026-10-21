@@ -172,6 +172,29 @@ const scenario = `(async () => {
   R.extraPalette = [...document.querySelectorAll('#palette-list li')].some((e) => e.textContent.includes('階層ツリーを開く'));
   inp.value = ''; document.getElementById('palette').hidden = true;
 
+  // 11c. 機能一覧: ツールバーのボタンで、全機能をグループ別に見せるタブが開く。検索でき、クリックで実行できる。「＋」のメニューは画面に収まる
+  await click('#view-tools [data-pane="features"]');
+  await waitFor(() => document.querySelectorAll('.featitem').length > 10, 15000);
+  const featGroups = [...document.querySelectorAll('.featgroup > summary')].map((x) => x.textContent);
+  const featTotal = document.querySelectorAll('.featitem').length;
+  const featSearch = document.querySelector('.featsearch');
+  featSearch.value = '階層ツリー'; featSearch.dispatchEvent(new Event('input')); await sleep(250);
+  const found = [...document.querySelectorAll('.featitem')].map((b) => b.textContent);
+  const tabsBefore = kinds(lay()).length;
+  const openBtn = [...document.querySelectorAll('.featitem')].find((b) => b.textContent === '階層ツリーを開く');
+  if (openBtn) { openBtn.click(); await sleep(400); }
+  featSearch.value = 'zzzz-no-such'; featSearch.dispatchEvent(new Event('input')); await sleep(200);
+  const none = document.querySelector('.featnone') ? document.querySelector('.featnone').textContent : '';
+  featSearch.value = ''; featSearch.dispatchEvent(new Event('input')); await sleep(200);
+  const plus = document.querySelector('.tabplus'); plus.click(); await sleep(250);
+  const m1 = document.querySelector('.ctxmenu'); const r1 = m1.getBoundingClientRect();
+  const firstItem = m1.querySelector('button').textContent;
+  [...m1.querySelectorAll('button')].find((b) => b.textContent.startsWith('その他')).click(); await sleep(250);
+  const m2 = document.querySelector('.ctxmenu'); const r2 = m2.getBoundingClientRect();
+  R.features = { kinds: kinds(lay()), groups: featGroups, total: featTotal, found, tabsSame: kinds(lay()).length === tabsBefore, none, firstItem,
+    menu1: r1.top >= 0 && r1.bottom <= innerHeight && r1.right <= innerWidth, menu2: r2.top >= 0 && r2.bottom <= innerHeight && r2.right <= innerWidth, menu2n: m2.querySelectorAll('button').length, overflowY: getComputedStyle(m2).overflowY };
+  document.querySelectorAll('.ctxmenu').forEach((m) => m.remove());
+
   // 12. Vim のタブに戻る（Vim は動き続けている）
   P().showVim();
   await sleep(700);
@@ -220,6 +243,10 @@ try {
   check(R.extra?.kinds?.includes("v2") && R.extra.frame && R.extra.name === "gnosis:open" && R.extra.tabs === 1 && R.extra.unknown, "an extra view opens as a tab (tree), one tab only, unknown key falls back to the list: " + JSON.stringify(R.extra));
   check(R.extra?.text === "cross-origin" || R.extra?.text.length > 0, "the extra view page rendered: " + JSON.stringify(R.extra?.text));
   check(R.extraPalette, "the command palette lists the extra views");
+  check(R.features?.kinds?.includes("features") && R.features.groups.some((g) => g.startsWith("モード")) && R.features.groups.some((g) => g.startsWith("ビュー")) && R.features.total > 30,
+    "the features tab lists every group (modes / views / ...): " + JSON.stringify([R.features?.groups, R.features?.total]));
+  check(R.features?.found?.includes("階層ツリーを開く") && R.features.tabsSame && R.features.none === "見つかりません", "features search narrows the list, a click runs it (no duplicate tab), no-hit message: " + JSON.stringify([R.features?.found, R.features?.tabsSame, R.features?.none]));
+  check(R.features?.firstItem === "☰ 機能一覧" && R.features.menu1 && R.features.menu2 && R.features.menu2n === 23 && R.features.overflowY === "auto", "the + menu starts with the features list, stays inside the window and scrolls: " + JSON.stringify([R.features?.firstItem, R.features?.menu1, R.features?.menu2, R.features?.menu2n, R.features?.overflowY]));
   check(R.backToVim?.stageW > 300 && R.backToVim.mode === "vim" && R.vimAlive === "b.md", "back to the Vim tab, Vim is alive: " + JSON.stringify([R.backToVim, R.vimAlive]));
   check(fs.existsSync(path.join(vault, ".gnosis", "workspace.json")), "workspace.json exists in the vault");
   check(fs.existsSync(path.join(vault, ".gnosis", "cache", "site", "index.html")), "view site was exported to .gnosis/cache/site");

@@ -213,6 +213,7 @@ function paletteItems() {
   add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
   for (const k of VIEW_KINDS) add("ビュー", `${KIND_LABEL[k]}を開く`, `${k} view`, () => panes.openView(k));
   for (const [k, t] of EXTRA_VIEWS) add("ビュー", `${t}を開く`, `${k} view 追加ビュー`, () => panes.openExtra(k));
+  add("ビュー", "機能一覧を開く", "features list 一覧 全機能", () => panes.openFeatures());
   add("ビュー", "ビューを最新の状態に更新", "refresh reload 更新", () => panes.reloadViews());
   add("タブ", "Vim のタブへ移る", "vim tab", () => panes.showVim());
   add("タブ", "次のタブ", "next tab", () => panes.cycle(1));
@@ -317,7 +318,7 @@ function initToolbar() {
     b.addEventListener("click", () => {
       const a = b.dataset.pane;
       if (a === "split-row") panes.splitFocused("row"); else if (a === "split-col") panes.splitFocused("col");
-      else if (a === "unsplit") panes.unsplitFocused(); else if (a === "reopen") panes.reopenClosed(); else if (a === "palette") openPalette();
+      else if (a === "unsplit") panes.unsplitFocused(); else if (a === "reopen") panes.reopenClosed(); else if (a === "palette") openPalette(); else if (a === "features") panes.openFeatures();
     });
   }
   initPalette();
@@ -552,6 +553,8 @@ async function boot() {
     root: $("workspace"), stageEl: $("stage"), gui,
     onNote: async (rel) => { const r = await gui.openNote(rel); if (!r.ok) showError(r.error || "開けませんでした"); else panes.showVim(); },
     onResize: () => scheduleFit(),
+    // 機能一覧タブの中身(コマンドパレットと同じ項目)。Vim のコマンドの一覧は初回だけ Vim に聞く
+    featureItems: async () => { if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } } return paletteItems(); },
   });
   initToolbar();
 
