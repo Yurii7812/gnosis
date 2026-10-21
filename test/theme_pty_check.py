@@ -84,13 +84,13 @@ class TestThemeEditor(unittest.TestCase):
             self.assertIn("プレビュー", s.text())
             self.assertIn("植物について", s.text())
             self.assertIn("ローズマリー", s.text())
-            self.assertIn("#22272E", s.text())  # HEX が出る
+            self.assertIn("#1E1E1E", s.text())  # HEX が出る
             self.assertNotIn("example.md", s.text())  # リンクは表示名だけ（URL は出さない）
-            self.assertEqual(self.cell_bg(s, "植物について"), "22272e")  # 最初は今の背景
+            self.assertEqual(self.cell_bg(s, "植物について"), "1e1e1e")  # 最初は今の背景
             link = self.cell(s, "ローズマリー")
             self.assertTrue(link.underscore, "リンクは下線")
             self.assertEqual(link.fg, "6cb6ff")
-            self.assertEqual(self.cell(s, "植物について").fg, "e5c07b")  # 見出しの色
+            self.assertEqual(self.cell(s, "植物について").fg, "dadada")  # 見出しの色
             # 背景を HEX で打つ。打つたびに反映され、確定前でもプレビューの背景が変わる
             s.send("\r", 0.4)  # 背景の行で Enter
             for ch in "ffffff":
@@ -117,7 +117,7 @@ class TestThemeEditor(unittest.TestCase):
             self.assertEqual(self.settings.read_text(encoding="utf-8"), before, "取り消しでは保存されない")
             # もう一度開いて、保存する
             s.send("\r", 0.8)  # 設定画面に戻った直後の選択位置は、編集を始めた項目（custom）のまま
-            self.assertEqual(self.cell_bg(s, "植物について"), "22272e", "取り消したあと、編集画面は元の色から始まる")
+            self.assertEqual(self.cell_bg(s, "植物について"), "1e1e1e", "取り消したあと、編集画面は元の色から始まる")
             s.send("\r", 0.4)
             for ch in "ffffff":
                 s.send(ch, 0.15)
@@ -137,7 +137,7 @@ class TestThemeEditor(unittest.TestCase):
             self.assertEqual(self.cell_bg(s, "Index"), "ffffff", s.text()[:400])
 
     def test_theme_chooser_uses_arrow_keys(self) -> None:
-        custom = {"base": "dark", "bg": "#101010", "fg": "#eeeeee", "link": "#99ccff", "heading": "#ffcc66", "selection": "#333333", "cursorline": "#1f2328"}
+        custom = {"base": "dark", "bg": "#101010", "fg": "#eeeeee", "link": "#99ccff", "heading": "#ffcc66", "selection": "#333333", "cursorline": "#222222"}
         self.settings.write_text(json.dumps({"version": 1, "language": "ja", "appearance": "dark", "theme": {"kind": "builtin"},
                                              "customThemes": {"x": custom, "y": custom},
                                              "appTheme": {"kind": "builtin"}, "appCustomThemes": {"z": custom}}), encoding="utf-8")
@@ -180,7 +180,7 @@ class TestThemeEditor(unittest.TestCase):
             s.send("\r", 0.8)
             self.assertIn("アプリ", s.text())
             # アプリ用も、今の見た目（この vault はダーク）の配色から始まる
-            self.assertEqual(self.cell_bg(s, "植物について"), "22272e", "アプリ用は今の見た目の背景から始まる")
+            self.assertEqual(self.cell_bg(s, "植物について"), "1e1e1e", "アプリ用は今の見た目の背景から始まる")
             self.assertEqual(self.cell(s, "ローズマリー").fg, "6cb6ff")
             s.send("\r", 0.4)  # 背景の行
             for ch in "f8f4e8":

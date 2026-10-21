@@ -2,7 +2,14 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-21 昼）
+## 現在地（2026-10-21 夕）
+- ブランチ `feat/obsidian-layout`（worktree `~/src/gnosis-obs`、main 18c8c82 から）。**main へは未マージ・push 未**。DECISIONS D008・USER_GUIDE §5/§6。
+  - `\A` を Obsidian の枠に（リボン・開け閉めできる左右のバー・ノートの見出し・クイックスイッチャー・Ctrl+P/O/N/W/Tab）、曼荼羅に既存のノートを入れる・外す、右のバーのリンク（`nav.links`）とアウトライン。
+  - 配色・組版を Obsidian に（ダーク #1E1E1E・ライト #FFF・見出しは本文の色・行の幅 700px・ボタン/ダイアログ）。Vim の配色・起動画面・`\A` の起動画面も。
+  - 試験: `web/test/workbench_e2e.mjs` に枠・スイッチャー・Ctrl+P（挿入モードでは取らない）・リンク・アウトライン・曼荼羅の既存ノートを追加。色を前提にした既存の試験（theme_check・terminal_visual・launcher/theme/look E2E など）を新しい色に合わせた。
+  - 未確認: 利用者の実機での見た目（Wayland・実際のフォント）・タッチ操作。
+
+## 以前の現在地（2026-10-21 昼）
 - main は 666e4f5（feat/master-roadmap を取り込み済み）。作業中のブランチは `feat/index-workbench`（下の「`\A` の作業台」）。
 
 ## 以前の現在地（2026-10-20 夜）

@@ -1,8 +1,8 @@
 " Terminal Gnosis regression: actual Braille splash + Markdown conceal + palette #10.
 let s:errors = []
 call gnosis#theme#apply(gnosis#settings#defaults())
-call assert_equal('#22272E', g:gnosis_palette.bg, 'Gnosis #10 background')
-call assert_equal('#CDD5DE', g:gnosis_palette.fg, 'Gnosis #10 foreground')
+call assert_equal('#1E1E1E', g:gnosis_palette.bg, 'Gnosis #10 background')
+call assert_equal('#DADADA', g:gnosis_palette.fg, 'Gnosis #10 foreground')
 call assert_equal('#6CB6FF', g:gnosis_palette.link, 'Gnosis dark link')
 
 let s:logo = gnosis#start#logo(80, 23)
@@ -53,7 +53,8 @@ call assert_true(s:cr(s:p.muted, s:p.bg) >= 4.5, 'muted contrast >= 4.5:1')
 call assert_true(s:cr(s:p.link, s:p.bg) >= 4.5, 'link contrast >= 4.5:1')
 call assert_true(s:cr(s:p.fg, s:p.selection) >= 4.5, 'selected text contrast >= 4.5:1')
 call assert_notequal(tolower(s:p.fg), tolower(s:p.link), 'link differs from body')
-call assert_notequal(tolower(s:p.fg), tolower(s:p.heading), 'heading differs from body')
+" 見出しは Obsidian と同じく本文と同じ色の太字（2026-10-21）
+call assert_equal(tolower(s:p.fg), tolower(s:p.heading), 'heading is the body color (Obsidian)')
 call assert_equal('1', synIDattr(synIDtrans(hlID('markdownH1')), 'bold', 'gui'), 'heading bold')
 call assert_equal('', synIDattr(synIDtrans(hlID('Comment')), 'italic', 'gui'), 'no italic comments')
 call assert_equal('#6cb6ff', tolower(synIDattr(synIDtrans(hlID('gnosisStartArt')), 'fg#', 'gui')), 'Chnoubis art uses the dark link color #6CB6FF')

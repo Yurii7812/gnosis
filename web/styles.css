@@ -1,20 +1,24 @@
-/* マークダウンビューア（GitHub 風）の見た目。操作は Vim。 */
+/* 見た目は Obsidian に合わせる（背景・文字・見出し・行の幅・フォント）。リンクの色は Gnosis のまま、アクセントは黒（ダークでは明るい灰色）。操作は Vim。 */
 :root {
-  --bg: #fafafa;
-  --bg-2: #ebebeb;
-  --bg-3: #d1d1d1;
-  --fg: #1f1f1f;
-  --fg-dim: #575757;
-  --line: #d1d1d1;
-  --link: #21538c;
-  --accent: #2d70be;
-  --heading: #603510;
-  --selection: #b5cfee;
-  --cursorline: #ebebeb;
+  /* vault のテーマを読むまでの色（ダーク）。読んだら app.js の applyLook が上書きする */
+  --bg: #1e1e1e;
+  --bg-2: #272727;
+  --bg-3: #313131;
+  --fg: #dadada;
+  --fg-dim: #b3b3b3;
+  --line: #333333;
+  --link: #6cb6ff;
+  --accent: #b3b3b3;
+  --on-accent: #1e1e1e;
+  --heading: #dadada;
+  --selection: #474747;
+  --cursorline: #262626;
   --content-font-size: 16px;
-  --font-body: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", system-ui, sans-serif;
-  color-scheme: light;
-  --font-mono: "JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace;
+  --line-width: 700px;
+  /* Obsidian と同じフォントの並び（日本語は Noto Sans JP など） */
+  --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Inter", "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", "Liberation Mono", Menlo, Monaco, Consolas, "Noto Sans Mono CJK JP", monospace;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -48,7 +52,7 @@ html { --strip-h: 54px; }
 #modes { border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
 #modes button { font: inherit; font-size: 12px; color: var(--fg-dim); background: transparent; border: 0; border-radius: 5px; padding: 2px 9px; cursor: pointer; }
 #modes button:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
-#modes button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 700; }
+#modes button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 #edit-tools { position: absolute; left: 0; right: 0; top: 36px; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 13px; overflow-x: auto; white-space: nowrap; z-index: 6; }
 #edit-tools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; flex: 0 0 auto; }
 #edit-tools button { font: inherit; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
@@ -220,28 +224,31 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 
 /* ---- 本文（マークダウンの見た目） ---- */
 .cm-content { font-size: var(--content-font-size); }
-.cm-scroller { line-height: 1.8; }
-.cm-md-h1, .cm-md-h2, .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--heading); }
-.cm-md-h1 { font-size: 2em; font-weight: 700; line-height: 1.3; padding-bottom: .3em; padding-top: .5em; border-bottom: 1px solid var(--line); }
-.cm-md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.35; padding-bottom: .3em; padding-top: .6em; border-bottom: 1px solid var(--line); }
-.cm-md-h3 { font-size: 1.25em; font-weight: 700; padding-top: .4em; }
-.cm-md-h4, .cm-md-h5, .cm-md-h6 { font-weight: 700; }
+/* 行の幅（700px）・行間（1.5）は view.js の CodeMirror のテーマで決める */
+/* 見出し: Obsidian と同じ大きさ（1.618 / 1.462 / 1.318 / 1.188em）・太字・下線なし */
+.cm-md-h1, .cm-md-h2, .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--heading); font-weight: 700; line-height: 1.3; }
+.cm-md-h1 { font-size: 1.618em; padding-top: .6em; padding-bottom: .15em; }
+.cm-md-h2 { font-size: 1.462em; padding-top: .6em; padding-bottom: .1em; }
+.cm-md-h3 { font-size: 1.318em; padding-top: .5em; }
+.cm-md-h4 { font-size: 1.188em; padding-top: .4em; }
+.cm-md-h5 { font-size: 1.076em; padding-top: .4em; }
+.cm-md-h6 { font-size: 1em; padding-top: .4em; }
 .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--subheading, var(--heading)); }
 .cm-md-bold { font-weight: 700; }
 .cm-md-em { font-style: italic; }
 .cm-md-strike { text-decoration: line-through; color: var(--fg-dim); }
-.cm-md-code { font-family: var(--font-mono); font-size: .88em; background: color-mix(in srgb, var(--fg-dim) 18%, transparent); padding: .15em .4em; border-radius: 6px; }
+.cm-md-code { font-family: var(--font-mono); font-size: .875em; background: var(--bg-2); padding: .1em .3em; border-radius: 4px; }
 .cm-md-link { color: var(--link); }
 .cm-md-link-md { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); }
 .cm-md-link-md:hover { text-decoration-color: var(--link); }
-.cm-md-quote { border-left: 4px solid var(--line); padding-left: 14px !important; color: var(--fg-dim); margin-left: 2px; }
+.cm-md-quote { border-left: 2px solid var(--accent); padding-left: 18px !important; color: var(--fg); margin-left: 0; }
 .cm-md-hr { border-bottom: 2px solid var(--line); line-height: .5; }
 .cm-md-img img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 8px 0; }
 .cm-md-bullet { color: var(--fg-dim); display: inline-block; width: 1.1em; text-align: center; }
 .cm-md-li { padding-left: 4px; }
 .cm-md-task { width: 15px; height: 15px; margin: 0 6px 0 2px; vertical-align: -2px; accent-color: var(--accent); cursor: pointer; }
 .cm-md-task-done { color: var(--fg-dim); text-decoration: line-through; }
-.cm-md-fence { background: var(--bg-2); font-family: var(--font-mono); font-size: .88em; }
+.cm-md-fence { background: var(--bg-2); font-family: var(--font-mono); font-size: .875em; padding-left: 12px; padding-right: 12px; }
 .cm-md-fence-edge { font-size: 11px; color: var(--fg-dim); line-height: 1.4; }
 .cm-md-fm-hide { display: none !important; }
 .cm-md-fm { color: var(--fg-dim); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--bg-2); }
@@ -256,69 +263,37 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-tablewrap { overflow-x: auto; margin: 10px 0; }
 .cm-md-table { border-collapse: collapse; font-size: .95em; line-height: 1.5; }
 .cm-md-table th, .cm-md-table td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
-.cm-md-table th { background: var(--bg-2); font-weight: 700; }
-.cm-md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-2) 60%, transparent); }
+.cm-md-table th { background: transparent; font-weight: 700; }
+
 .cm-vim-hit { background: color-mix(in srgb, #f5c400 28%, transparent); border-radius: 3px; }
 /* 中身が空の関係の節の見出し（Context / Group / Related / BackLink）は出さない */
 .cm-md-sec-empty { height: 0; line-height: 0; font-size: 0; padding: 0 !important; margin: 0 !important; border: 0 !important; overflow: hidden; }
 
-/* ---- ライト: ブラウザの Markdown Viewer 拡張（GitHub スタイル）と同じ見え方 ----
-   本文の幅 980px・余白 45px・行間 1.5・見出し（h1/h2 に下線）・インラインコード・コードブロック・引用・表・リンクを GitHub に合わせる。
-   色は配色（palette）に従う。ダークには影響しない（html.theme-light のときだけ）。 */
-:root.theme-light {
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Noto Sans Mono CJK JP", monospace;
-  --gh-border: #d1d9e0;
-  --gh-subtle: #f6f8fa;
-  --gh-muted: #59636e;
-}
-:root.theme-light .cm-editor .cm-scroller { line-height: 1.5; }
-:root.theme-light .cm-editor .cm-content { max-width: 980px; padding: 45px 45px 40vh; }
-:root.theme-light .cm-md-h1, :root.theme-light .cm-md-h2, :root.theme-light .cm-md-h3,
-:root.theme-light .cm-md-h4, :root.theme-light .cm-md-h5, :root.theme-light .cm-md-h6 { color: var(--fg); font-weight: 600; line-height: 1.25; }
-:root.theme-light .cm-md-h1 { font-size: 2em; padding-top: .6em; padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); }
-:root.theme-light .cm-md-h2 { font-size: 1.5em; padding-top: .8em; padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); }
-:root.theme-light .cm-md-h3 { font-size: 1.25em; padding-top: .8em; }
-:root.theme-light .cm-md-h4 { font-size: 1em; padding-top: .8em; }
-:root.theme-light .cm-md-h5 { font-size: .875em; padding-top: .8em; }
-:root.theme-light .cm-md-h6 { font-size: .85em; color: var(--gh-muted); padding-top: .8em; }
-:root.theme-light .cm-md-code { font-size: 85%; padding: .2em .4em; background: rgba(129, 139, 152, .12); border-radius: 6px; }
-:root.theme-light .cm-md-link-md { text-decoration-color: transparent; }
-:root.theme-light .cm-md-link-md:hover { text-decoration-color: var(--link); }
-:root.theme-light .cm-md-quote { border-left: .25em solid var(--gh-border); padding-left: 1em !important; margin-left: 0; color: var(--gh-muted); }
-:root.theme-light .cm-md-hr { border-bottom: .25em solid var(--gh-border); line-height: .5; }
-:root.theme-light .cm-md-fence { background: var(--gh-subtle); font-size: 85%; line-height: 1.45; padding-left: 16px; padding-right: 16px; }
-:root.theme-light .cm-md-fence-edge { background: var(--gh-subtle); color: transparent; font-size: 8px; line-height: 1; }   /* ``` の行は目立たせない（カーソルがあるときは Vim の表示が出る） */
-:root.theme-light .cm-md-table { font-size: 1em; }
-:root.theme-light .cm-md-table th, :root.theme-light .cm-md-table td { border: 1px solid var(--gh-border); padding: 6px 13px; }
-:root.theme-light .cm-md-table th { background: transparent; font-weight: 600; }
-:root.theme-light .cm-md-table tbody tr:nth-child(even) td { background: var(--gh-subtle); }
-:root.theme-light .cm-md-img img { border-radius: 0; }
-
-/* ---- 起動画面（白背景・黒文字。vault を開くまでは設定のテーマを使わない） ---- */
+/* ---- 起動画面（Obsidian のダークと同じ背景 #1E1E1E・文字 #DADADA。図案は Vim の起動画面と同じリンクの色。vault を開くまでは設定のテーマを使わない） ---- */
 body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
-.launcher { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #000000; overflow: auto; color-scheme: light;
+.launcher { position: fixed; inset: 0; z-index: 50; background: var(--l-bg); color: var(--l-fg); overflow: auto; color-scheme: dark;
+  --l-bg: #1e1e1e; --l-fg: #dadada; --l-line: #3f3f3f; --l-dim: #b3b3b3; --l-hover: #2a2a2a;
   font-family: var(--font-body); display: flex; flex-direction: column; }
-.launcher button, .launcher input, .launcher select { font: inherit; color: #000; background: #fff; border: 1px solid #000; border-radius: 6px; padding: 6px 14px; }
+.launcher button, .launcher input, .launcher select { font: inherit; color: var(--l-fg); background: #2a2a2a; border: 1px solid var(--l-line); border-radius: 6px; padding: 6px 14px; }
 .launcher button:disabled { opacity: .4; }
-.launcher button:focus-visible, .launcher input:focus-visible, .launcher select:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
-.launcher .l-primary { background: #000; color: #fff; font-weight: 700; }
+.launcher button:focus-visible, .launcher input:focus-visible, .launcher select:focus-visible { outline: 2px solid var(--l-fg); outline-offset: 2px; }
+.launcher .l-primary { background: var(--l-fg); color: var(--l-bg); font-weight: 700; }
 .l-start { margin: auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 100%; }
-.l-art { margin: 0; color: #000; font-family: "DejaVu Sans Mono", "Noto Sans Mono", "Menlo", "Consolas", monospace; line-height: 1; letter-spacing: 0; white-space: pre; user-select: none; }
+.l-art { margin: 0; color: #6cb6ff; font-family: "DejaVu Sans Mono", "Noto Sans Mono", "Menlo", "Consolas", monospace; line-height: 1; letter-spacing: 0; white-space: pre; user-select: none; }
 .l-title { font-size: 34px; font-weight: 700; letter-spacing: .12em; }
 .l-vault { display: flex; flex-direction: column; gap: 2px; }
 .l-vname { font-weight: 700; }
 .l-vpath { font-family: var(--font-mono); font-size: 13px; word-break: break-all; }
-.l-warn, .l-msg { font-weight: 700; color: #000; border: 1px solid #000; border-radius: 6px; padding: 6px 10px; max-width: 640px; white-space: pre-wrap; }
-.l-hint { font-size: 12px; color: #444; }
+.l-warn, .l-msg { font-weight: 700; color: var(--l-fg); border: 1px solid var(--l-fg); border-radius: 6px; padding: 6px 10px; max-width: 640px; white-space: pre-wrap; }
+.l-hint { font-size: 12px; color: var(--l-dim); }
 .l-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .l-panel { width: 100%; max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .l-head { display: flex; align-items: center; gap: 12px; }
 .l-head h2 { margin: 0; font-size: 20px; }
-.l-list { list-style: none; margin: 0; padding: 0; border: 1px solid #000; border-radius: 6px; max-height: 50vh; overflow: auto; }
-.l-item { padding: 8px 12px; border-bottom: 1px solid #ccc; cursor: pointer; text-align: left; }
+.l-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--l-fg); border-radius: 6px; max-height: 50vh; overflow: auto; }
+.l-item { padding: 8px 12px; border-bottom: 1px solid var(--l-line); cursor: pointer; text-align: left; }
 .l-item:last-child { border-bottom: none; }
-.l-item.sel { background: #000; color: #fff; }
+.l-item.sel { background: var(--l-fg); color: var(--l-bg); }
 .l-item.missing .l-vname { text-decoration: line-through; }
 .l-form { display: flex; flex-direction: column; gap: 10px; }
 .l-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -326,7 +301,7 @@ body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .l-row { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .l-row input[type=number] { width: 7em; }
 .l-field input[type=number] { width: 7em; }
-.l-colors { border: 1px solid #000; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
+.l-colors { border: 1px solid var(--l-fg); border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
 .l-colors input[type=color] { width: 56px; height: 32px; padding: 0 4px; }
 @media (max-width: 520px) { .l-field > span:first-child { min-width: 0; width: 100%; } .l-title { font-size: 26px; } }
 
@@ -338,15 +313,15 @@ body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .e-sub { font-weight: 700; margin-top: 4px; }
 .e-rows { display: flex; flex-direction: column; gap: 6px; }
 .e-row { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; }
-.e-row.sel { border-color: #000; background: #f1f1f1; }
+.e-row.sel { border-color: var(--l-fg); background: var(--l-hover); }
 .e-label { min-width: 6em; font-weight: 700; }
 .launcher .e-hex { width: 8em; font-family: var(--font-mono); text-transform: uppercase; }
 .e-row input[type=color] { width: 56px; height: 32px; padding: 0 4px; }
-.e-swatch { display: inline-block; width: 44px; height: 24px; border: 1px solid #000; border-radius: 4px; }
+.e-swatch { display: inline-block; width: 44px; height: 24px; border: 1px solid var(--l-fg); border-radius: 4px; }
 .e-grid { display: flex; flex-direction: column; gap: 3px; }
 .e-grid-row { display: flex; gap: 3px; }
-.launcher .e-sw { width: 30px; height: 22px; padding: 0; border: 1px solid #777; border-radius: 3px; cursor: pointer; }
-.launcher .e-sw:focus-visible { outline: 3px solid #000; outline-offset: 1px; }
+.launcher .e-sw { width: 30px; height: 22px; padding: 0; border: 1px solid var(--l-line); border-radius: 3px; cursor: pointer; }
+.launcher .e-sw:focus-visible { outline: 3px solid var(--l-fg); outline-offset: 1px; }
 /* プレビュー: Gnosis が実際に表示するときと同じ組み合わせ（リンクは表示名と下線・見出しは太字・# は控えめな色） */
 .e-preview { background: var(--pv-bg, #fff); color: var(--pv-fg, #000); border: 1px solid #000; border-radius: 6px; padding: 12px 16px; line-height: 1.75; font-size: 16px; text-align: left;
   font-family: var(--font-body); }
@@ -389,7 +364,7 @@ body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .gdlg-err { flex: 1; color: #e5534b; font-size: 12.5px; }
 .gdlg button, .nav-btn { font: inherit; font-size: 12.5px; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
 .gdlg button:hover, .nav-btn:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.gdlg button.primary, .nav-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.gdlg button.primary, .nav-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
 .nav-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); }
 .nav-btn.wide { display: block; width: 100%; margin: 4px 0 8px; }
 .gpick { display: flex; flex-direction: column; gap: 4px; }
@@ -494,7 +469,7 @@ body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .cal-cell.blank { cursor: default; background: var(--bg-2); }
 .cal-cell.future { background: color-mix(in srgb, var(--bg-2) 40%, var(--bg)); }
 .cal-cell:hover:not(.blank) { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
-.cal-cell.today .cal-day { background: var(--accent); color: #fff; border-radius: 10px; padding: 0 6px; }
+.cal-cell.today .cal-day { background: var(--accent); color: var(--on-accent); border-radius: 10px; padding: 0 6px; }
 .cal-cell.sel { box-shadow: inset 0 0 0 2px var(--accent); }
 .cal-day { font-weight: 700; font-size: 12.5px; align-self: flex-start; }
 .cal-marks { display: flex; flex-wrap: wrap; gap: 3px; font-size: 11px; }
@@ -582,3 +557,67 @@ body.launching #mainrow, body.launching #statusbar { visibility: hidden; }
 .cv-card:hover .cv-port { opacity: .9; }
 .cv-resize { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--fg-dim) 50%); opacity: .4; }
 .cv-colors button { font-size: 16px; }
+
+/* ==== 仕上げ: Obsidian の部品の作り（ボタン・入力欄・ダイアログ・パレット・ステータスバー）に合わせる ====
+   ボタン: 枠線なし・淡い面・小さな影（radius 5px）。入力欄: 少し沈んだ面に 1px の線。ダイアログ: 角 12px・大きく柔らかい影。
+   色はテーマ（--bg / --fg / --accent）から作る。アクセントは黒（ダークでは明るい灰色）。 */
+:root { --btn-bg: color-mix(in srgb, var(--fg) 13%, var(--bg)); --btn-hover: color-mix(in srgb, var(--fg) 19%, var(--bg));
+  --btn-shadow: inset 0 .5px .5px .5px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.25); --field-bg: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  --modal-shadow: 0 1.8px 7.3px rgba(0,0,0,.071), 0 6.3px 24.7px rgba(0,0,0,.112), 0 30px 90px rgba(0,0,0,.2); --radius-s: 4px; --radius-m: 8px; --radius-l: 12px; }
+:root.theme-light { --btn-bg: #ffffff; --btn-hover: #f2f2f2; --btn-shadow: inset 0 0 0 1px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.065); --field-bg: #ffffff; }
+button { transition: background-color .08s, color .08s; }
+.nav-btn, .gdlg button, .viewstrip button, .md-tool, .cal-bar button, .cv-bar button, .md-bar button, .di-top button {
+  font: inherit; font-size: 12.5px; color: var(--fg); background: var(--btn-bg); border: 0; border-radius: 5px; box-shadow: var(--btn-shadow); padding: 4px 11px; cursor: pointer; }
+.nav-btn:hover, .gdlg button:hover, .viewstrip button:hover, .md-tool:hover, .cal-bar button:hover, .cv-bar button:hover, .md-bar button:hover, .di-top button:hover { background: var(--btn-hover); }
+.gdlg button.primary, .nav-btn.primary, .nav-btn[aria-pressed="true"], .md-bar button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.nav-sectitle .nav-btn, .nav-tools .nav-btn { padding: 1px 8px; font-size: 11.5px; box-shadow: none; background: transparent; color: var(--fg-dim); }
+.nav-sectitle .nav-btn:hover, .nav-tools .nav-btn:hover { color: var(--fg); background: var(--btn-bg); }
+.md-tool { font-size: 10.5px; padding: 1px 6px; }
+input[type="search"], input[type="text"], .pnl-search, .nav-search, .gdlg input, .gdlg textarea, .featsearch {
+  background: var(--field-bg); border: 1px solid var(--line); border-radius: 5px; color: var(--fg); }
+.pnl-search:focus, .nav-search:focus, .gdlg input:focus, .gdlg textarea:focus, .featsearch:focus { outline: none; border-color: color-mix(in srgb, var(--fg) 40%, var(--bg)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 12%, transparent); }
+/* ダイアログ・パレット・クイックスイッチャー・メニュー（Obsidian のモーダルと候補の窓） */
+.gdlg-back, .qs-back { background: rgba(0,0,0,.45); }
+.gdlg { border-radius: var(--radius-l); box-shadow: var(--modal-shadow); border: 1px solid color-mix(in srgb, var(--fg) 14%, var(--bg)); padding: 18px 20px; }
+.gdlg-title { font-size: 16px; }
+#palette, .qs { width: min(700px, 92vw); border-radius: var(--radius-l); box-shadow: var(--modal-shadow); border: 1px solid color-mix(in srgb, var(--fg) 14%, var(--bg)); background: var(--bg-2); }
+#palette-input, .qs-input { background: transparent; padding: 14px 16px; font-size: 16px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+#palette-list li, .qs-item { border-radius: var(--radius-s); }
+#palette-list li.sel, .qs-item.sel, .gpick-item.sel { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.qs-item.create .qs-title { color: var(--fg); font-weight: 600; }
+.ctxmenu { background: var(--bg-2); border-radius: var(--radius-m); box-shadow: var(--modal-shadow); border: 1px solid color-mix(in srgb, var(--fg) 14%, var(--bg)); padding: 6px; }
+.ctxmenu button { border-radius: var(--radius-s); padding: 5px 10px; font-size: 13px; }
+.ctxmenu button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.gtoast { background: var(--bg-2); border: 1px solid color-mix(in srgb, var(--fg) 14%, var(--bg)); border-radius: var(--radius-m); box-shadow: var(--modal-shadow); }
+/* ステータスバー: Obsidian のように控えめ（小さな文字・淡い色）。モードは小さな札で */
+#statusbar { height: 24px; gap: 10px; padding: 0 10px; font-size: 12px; color: var(--fg-dim); background: var(--bg-2); border-top: 1px solid var(--line); }
+#statusbar .mode { height: 17px; padding: 0 7px; border-radius: 4px; font-size: 10.5px; letter-spacing: .06em; color: var(--fg); background: color-mix(in srgb, var(--fg) 14%, transparent); }
+#statusbar .mode.insert, #statusbar .mode.edit { color: var(--bg); background: var(--link); }
+#statusbar .mode.visual { color: #fff; background: #8250df; }
+#statusbar .mode.replace { color: #fff; background: #cf222e; }
+#statusbar .mode.command { color: #1e1e1e; background: #d4a72c; }
+#statusbar .file { color: var(--fg-dim); }
+/* タブ・リボン・バー: 区切り線を細く、面で分ける */
+.tab { font-size: 13px; }
+.tab.active { box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent); }
+.dock-split { opacity: 0; background: var(--line); flex-basis: 3px; }
+#mainrow:hover .dock-split { opacity: .6; }
+.dock-split:hover { opacity: 1 !important; background: color-mix(in srgb, var(--fg) 35%, var(--bg)); }
+.dock.left { border-right: 1px solid var(--line); }
+.dock.right { border-left: 1px solid var(--line); }
+#ribbon { border-right: 1px solid var(--line); }
+.splitter { background: var(--line); flex-basis: 1px; }
+.splitter:hover { background: color-mix(in srgb, var(--fg) 35%, var(--bg)); }
+/* 曼荼羅・カレンダー・キャンバスの道具の列も、ノートの見出しと同じ面に */
+.md-bar, .cv-bar, .cal-bar, .di-top { background: var(--bg); border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.md-cell { border-radius: var(--radius-m); border-color: color-mix(in srgb, var(--line) 80%, transparent); }
+.md-cell.theme { background: color-mix(in srgb, var(--fg) 12%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 30%, var(--bg)); font-weight: 700; }
+.md-cell.sub, .md-cell.mid.theme { background: color-mix(in srgb, var(--fg) 7%, var(--bg)); }
+.md-cell.sub2, .md-cell.mid { background: color-mix(in srgb, var(--fg) 4%, var(--bg)); }
+.tabbar { scrollbar-width: none; }
+.tabbar::-webkit-scrollbar { display: none; }
+/* 曼荼羅のマス: 「広げる」だけはいつも見せ、ほかの道具はマスに乗ったとき・打っているときだけ */
+.md-tools { opacity: 1; }
+.md-cell:not(:hover):not(:focus-within) .md-tool:not(.zoom) { display: none; }
+.md-tool.zoom { color: var(--fg-dim); background: transparent; box-shadow: none; font-weight: 600; }
+.md-tool.zoom:hover { color: var(--fg); background: var(--btn-bg); }

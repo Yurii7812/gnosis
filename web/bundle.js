@@ -33022,8 +33022,9 @@ ${h4.join(`
         }),
         EditorView.theme({
           "&": { fontSize: "var(--content-font-size, 16px)", height: "100%" },
-          ".cm-content": { padding: "32px 28px 40vh", maxWidth: "860px", margin: "0 auto" },
-          ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.8" },
+          // Obsidian の「行の長さを制限」（700px）と行間 1.5
+          ".cm-content": { padding: "32px 32px 40vh", maxWidth: "calc(var(--line-width, 700px) + 64px)", margin: "0 auto" },
+          ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.5" },
           ".cm-gutters": { display: "none" },
           "&.cm-focused": { outline: "none" }
         })
@@ -38160,15 +38161,16 @@ ${h4.join(`
       r.setProperty("--bg", p.bg);
       r.setProperty("--fg", p.fg);
       r.setProperty("--link", p.link);
-      r.setProperty("--accent", p.link);
+      r.setProperty("--accent", p.accent || p.link);
+      r.setProperty("--on-accent", p.bg);
       r.setProperty("--heading", p.heading);
       r.setProperty("--subheading", p.subheading || p.heading);
       r.setProperty("--selection", p.selection);
       r.setProperty("--cursorline", p.cursorline);
-      r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);
-      r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 14 : 8}%, ${p.bg})`);
-      r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
-      r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
+      r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 5 : 4}%, ${p.bg})`);
+      r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 10 : 9}%, ${p.bg})`);
+      r.setProperty("--fg-dim", p.muted || `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
+      r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 9 : 12}%, ${p.bg})`);
       document.documentElement.style.colorScheme = dark ? "dark" : "light";
       document.documentElement.classList.toggle("theme-light", !dark);
       document.documentElement.classList.toggle("theme-dark", dark);

@@ -119,7 +119,7 @@ try {
   if (process.env.VERBOSE) console.log(JSON.stringify(R, null, 2));
   if (R.fatal) { console.error("fatal: " + R.fatal); process.exit(1); }
   const s = R.start || {};
-  check(s.visible && s.bg === "rgb(255, 255, 255)" && s.fg === "rgb(0, 0, 0)" && s.artColor === "rgb(0, 0, 0)", "start screen must be white background / black text: " + JSON.stringify(s));
+  check(s.visible && s.bg === "rgb(30, 30, 30)" && s.fg === "rgb(218, 218, 218)" && s.artColor === "rgb(108, 182, 255)", "start screen: Obsidian's dark background #1E1E1E, text #DADADA, Chnoubis in the link color: " + JSON.stringify(s));
   check(s.stageHidden === "hidden", "notes must not be shown before Enter: " + s.stageHidden);
   if (!small) check(s.braille && !s.artHidden && s.artLines >= 27 && s.artFits, "Chnoubis symbol (Braille) must be shown and fit: " + JSON.stringify(s));
   check(s.title === "Gnosis" && /保管庫/.test(s.text) && s.text.includes(v1), "title / vault name / path: " + s.text);
@@ -141,8 +141,8 @@ try {
   const o = R.opened || {};
   check(o.launcherHidden && /index\.md$/.test(o.file || ""), "Enter opens the vault in Vim: " + JSON.stringify(o));
   // \A のアプリの既定は白（通常の Vim の標準配色とは別。vault の「ダーク」設定にも左右されない）
-  // 見た目の既定はダーク（#22272E。2026-10-19 に利用者が決定。白はライトテーマとして選べる）
-  check(String(o.bg).toLowerCase() === "#22272e" && o.bodyBg === "rgb(34, 39, 46)" && String(o.palette).toLowerCase() === "#22272e", "the app default theme (dark) is applied after opening: " + JSON.stringify(o));
+  // 見た目の既定はダーク（#1E1E1E。2026-10-19 に利用者が決定。白はライトテーマとして選べる）
+  check(String(o.bg).toLowerCase() === "#1e1e1e" && o.bodyBg === "rgb(30, 30, 30)" && String(o.palette).toLowerCase() === "#1e1e1e", "the app default theme (dark) is applied after opening: " + JSON.stringify(o));
   check(o.font === "22px", "font size from the vault settings: " + JSON.stringify(o));
   check(o.lang === "ja", "Vim uses the vault language: " + JSON.stringify(o));
   check(R.__window && R.__window.fullscreen === false, "never fullscreen: " + JSON.stringify(R.__window));

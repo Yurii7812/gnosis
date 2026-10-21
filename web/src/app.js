@@ -129,15 +129,18 @@ function applyLook(s) {
     r.setProperty("--bg", p.bg);
     r.setProperty("--fg", p.fg);
     r.setProperty("--link", p.link);
-    r.setProperty("--accent", p.link);
+    // アクセントは Obsidian の紫ではなく黒（ダークでは明るい灰色）。その上の文字は背景の色
+    r.setProperty("--accent", p.accent || p.link);
+    r.setProperty("--on-accent", p.bg);
     r.setProperty("--heading", p.heading);
     r.setProperty("--subheading", p.subheading || p.heading);
     r.setProperty("--selection", p.selection);
     r.setProperty("--cursorline", p.cursorline);
-    r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);
-    r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 14 : 8}%, ${p.bg})`);
-    r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
-    r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
+    // 左右のバー・タブの列は Obsidian の background-secondary（ダーク #262626・ライト #F6F6F6）ほどの濃さ
+    r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 5 : 4}%, ${p.bg})`);
+    r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 10 : 9}%, ${p.bg})`);
+    r.setProperty("--fg-dim", p.muted || `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
+    r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 9 : 12}%, ${p.bg})`);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
     // ライトのときだけ、Markdown Viewer 拡張（GitHub スタイル）の見え方にする（styles.css の html.theme-light）
     document.documentElement.classList.toggle("theme-light", !dark);

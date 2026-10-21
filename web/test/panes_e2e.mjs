@@ -43,30 +43,31 @@ const scenario = `(async () => {
   const waitFor = async (fn, ms = 10000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(80); } return null; };
   const P = () => G.panes();
   const lay = () => P().getLayout();
-  const tabsOf = () => [...document.querySelectorAll('.pane')].map((p) => [...p.querySelectorAll('.tab')].map((t) => t.querySelector('.tabtitle').textContent));
+  const tabsOf = () => [...document.querySelectorAll('.pane')].map((p) => [...p.querySelectorAll('.tab')].map((t) => (t.title.startsWith('Vim') ? 'Vim' : t.querySelector('.tabtitle').textContent)));
   const kinds = (n) => { const o = []; (function w(x) { if (x.type === 'tabs') x.tabs.forEach((t) => o.push(t.kind)); else { w(x.a); w(x.b); } })(n); return o; };
   const click = async (sel) => { document.querySelector(sel).click(); await sleep(250); };
+  const run = async (fn) => { fn(); await sleep(250); };
   const R = {};
   await waitFor(() => G.state().file);
   await sleep(800);
 
   // 1. 最初は Vim だけ（タブバーを出さない。今までと同じ見た目）
-  R.solo = { tabbarHidden: getComputedStyle(document.querySelector('.tabbar')).display === 'none', kinds: kinds(lay()), stageW: document.getElementById('stage').offsetWidth };
+  R.solo = { tabbarShown: getComputedStyle(document.querySelector('.tabbar')).display !== 'none', vimTabTitle: document.querySelector('.tab .tabtitle').textContent, kinds: kinds(lay()), stageW: document.getElementById('stage').offsetWidth };
 
   // 2. ツールバーでカードを開く → タブが増える。iframe に書き出した静的サイトのページが入る
-  await click('#view-tools [data-open="cards"]');
+  await run(() => G.panes().openView('cards'));
   await waitFor(() => document.querySelector('.viewframe') && document.querySelector('.viewframe').src, 20000);
   const fr = document.querySelector('.viewframe');
   await waitFor(() => document.querySelector('.viewmsg').hidden, 20000);
   R.cards = { tabs: tabsOf(), src: fr.src.split('/').slice(-1)[0], name: fr.name, msgHidden: document.querySelector('.viewmsg').hidden, tabbarShown: getComputedStyle(document.querySelector('.tabbar')).display !== 'none', vimHidden: document.getElementById('stage').closest('.hidden-tab') !== null || getComputedStyle(document.getElementById('stage')).display === 'none' };
 
   // 3. 同じものは重ねて開かない
-  await click('#view-tools [data-open="cards"]');
+  await run(() => G.panes().openView('cards'));
   R.noDup = tabsOf()[0].length;
 
   // 4. 右に分割 → 2 つのペイン。Vim は小さくなっても動く
-  await click('#view-tools [data-open="graph"]');
-  await click('#view-tools [data-pane="split-row"]');
+  await run(() => G.panes().openView('graph'));
+  await run(() => G.panes().splitFocused('row'));
   await sleep(500);
   R.split = { panes: P().panesCount(), tabs: tabsOf(), type: lay().type, dir: lay().dir };
   P().showVim();                          // Vim のタブを前に出す（分割で狭くなっても動く）
@@ -101,7 +102,7 @@ const scenario = `(async () => {
   gTab.querySelector('.tabclose').click();
   await sleep(300);
   R.closed = { kinds: kinds(lay()), closedCount: P().closedCount() };
-  await click('#view-tools [data-pane="reopen"]');
+  await run(() => G.panes().reopenClosed());
   R.reopened = { kinds: kinds(lay()), closedCount: P().closedCount(), count: kinds(lay()).length === before };
 
   // 8. 分割線のドラッグでリサイズ
@@ -152,7 +153,7 @@ const scenario = `(async () => {
 
   // 11. 分割を解除 → タブは失われない。ノートのタブ（読み取り専用の表示）も開ける
   const tabCountBefore = kinds(lay()).length;
-  await click('#view-tools [data-pane="unsplit"]');
+  await run(() => G.panes().unsplitFocused());
   R.unsplit = { panes: P().panesCount(), keptTabs: kinds(lay()).length === tabCountBefore || kinds(lay()).length === tabCountBefore - 0 };
   P().setNoteTab('b.md');
   await sleep(400);
@@ -173,7 +174,7 @@ const scenario = `(async () => {
   inp.value = ''; document.getElementById('palette').hidden = true;
 
   // 11c. 機能一覧: ツールバーのボタンで、全機能をグループ別に見せるタブが開く。検索でき、クリックで実行できる。「＋」のメニューは画面に収まる
-  await click('#view-tools [data-pane="features"]');
+  await run(() => G.panes().openFeatures());
   await waitFor(() => document.querySelectorAll('.featitem').length > 10, 15000);
   const featGroups = [...document.querySelectorAll('.featgroup > summary')].map((x) => x.textContent);
   const featTotal = document.querySelectorAll('.featitem').length;
@@ -224,7 +225,7 @@ try {
   if (R.fatal) { console.error("fatal: " + R.fatal); process.exit(1); }
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
-  check(R.solo?.tabbarHidden && JSON.stringify(R.solo.kinds) === '["vim"]' && R.solo.stageW > 300, "start: Vim only, no tab bar: " + JSON.stringify(R.solo));
+  check(R.solo?.tabbarShown && R.solo.vimTabTitle !== "Vim" && JSON.stringify(R.solo.kinds) === '["vim"]' && R.solo.stageW > 300, "start: Vim only; the tab bar is always shown (Obsidian) and the Vim tab shows the note's title: " + JSON.stringify(R.solo));
   check(R.cards?.tabs?.[0]?.join() === "Vim,カード" && R.cards.src === "cards.html" && R.cards.name === "gnosis:open" && R.cards.msgHidden && R.cards.tabbarShown, "open the cards view in a tab: " + JSON.stringify(R.cards));
   check(R.noDup === 3 || R.noDup === 2 || R.noDup > 0, "tabs counted: " + R.noDup);
   check(R.split?.panes === 2 && R.split.type === "split" && R.split.dir === "row", "split to the right: " + JSON.stringify(R.split));
