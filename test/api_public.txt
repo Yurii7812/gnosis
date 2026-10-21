@@ -173,6 +173,7 @@ gnosis#i18n#tr
 gnosis#import
 gnosis#include_check
 gnosis#include_view
+gnosis#index_add
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
@@ -223,6 +224,7 @@ gnosis#multi_apply
 gnosis#multi_clear
 gnosis#mview#close
 gnosis#mview#items
+gnosis#mview#pick
 gnosis#mview#state
 gnosis#mview#toggle
 gnosis#new_child

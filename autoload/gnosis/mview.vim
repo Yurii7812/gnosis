@@ -77,14 +77,31 @@ function! gnosis#mview#items(data, center, mode) abort
   return l:out
 endfunction
 
+" 周辺に出すもの。索引を選ぶとき（pick）は索引だけで、/ で絞り込んだ間は、中心にかかわらず題が合う索引を並べる
+function! s:items(c) abort
+  if get(s:S, 'pick', 0)
+    if a:c ==# s:S.center && !empty(get(s:S, 'query', ''))
+      let l:q = tolower(s:S.query)
+      let l:out = []
+      for l:id in sort(keys(s:S.data.nodes))
+        if s:S.data.nodes[l:id].g && l:id !=# a:c && stridx(tolower(s:S.data.nodes[l:id].t), l:q) >= 0
+          call add(l:out, l:id)
+        endif
+      endfor
+      return l:out
+    endif
+    return gnosis#mview#items(s:S.data, a:c, 'groups')
+  endif
+  return gnosis#mview#items(s:S.data, a:c, s:S.mode)
+endfunction
+
 function! s:pages(center) abort
-  let l:all = gnosis#mview#items(s:S.data, a:center, s:S.mode)
-  return max([1, (len(l:all) + 7) / 8])
+  return max([1, (len(s:items(a:center)) + 7) / 8])
 endfunction
 
 " 中心 c の page 枚目の周辺 8 マス（足りない所は ''）
 function! s:ring(c, page) abort
-  let l:all = gnosis#mview#items(s:S.data, a:c, s:S.mode)
+  let l:all = s:items(a:c)
   let l:r = l:all[a:page * 8 : a:page * 8 + 7]
   while len(l:r) < 8
     call add(l:r, '')
@@ -190,8 +207,13 @@ function! s:render() abort
   " 上の見出し（今の中心・何枚目・モード）
   let l:ctitle = has_key(s:S.data.nodes, s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
   let l:pages = s:pages(s:S.center)
-  call add(l:lines, s:fit(printf(' %s   %d/%d   [%s]   %s', l:ctitle, s:S.page + 1, l:pages,
-        \ s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9'), l:W))
+  if get(s:S, 'pick', 0)
+    call add(l:lines, s:fit(printf(' 追加先の索引: %s   %d/%d   %s%s', l:ctitle, s:S.page + 1, l:pages,
+          \ l:n == 3 ? '3×3' : '9×9', empty(get(s:S, 'query', '')) ? '' : '   絞り込み: ' . s:S.query), l:W))
+  else
+    call add(l:lines, s:fit(printf(' %s   %d/%d   [%s]   %s', l:ctitle, s:S.page + 1, l:pages,
+          \ s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9'), l:W))
+  endif
   for l:r in range(l:n)
     call add(l:lines, s:hline(l:n, l:cw, l:r, l:heavy))
     let l:cellines = []
@@ -220,7 +242,9 @@ function! s:render() abort
     endfor
   endfor
   call add(l:lines, s:hline(l:n, l:cw, l:n, l:heavy))
-  call add(l:lines, s:fit(' hjkl 移動 Enter 中心に [] 前後 - 戻る m モード f 全画面 Space ノート q 閉じる', l:W))
+  call add(l:lines, s:fit(get(s:S, 'pick', 0)
+        \ ? ' hjkl 移動 Enter 中心に（中心で Enter=ここに追加） / 絞り込み [] 前後 - 戻る f 全画面 q 取消'
+        \ : ' hjkl 移動 Enter 中心に [] 前後 - 戻る m モード f 全画面 Space ノート q 閉じる', l:W))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -330,12 +354,43 @@ function! s:enter() abort
   if empty(l:cell.id)
     return
   endif
+  if get(s:S, 'pick', 0)
+    if l:cell.id ==# s:S.center && empty(get(s:S, 'query', ''))
+      call s:decide(l:cell.id)
+      return
+    endif
+    let s:S.query = ''
+    call add(s:S.hist, [s:S.center, s:S.page])
+    call s:set_center(l:cell.id, 0)
+    return
+  endif
   if l:cell.id ==# s:S.center
     call s:show_note(l:cell.id)
     return
   endif
   call add(s:S.hist, [s:S.center, s:S.page])
   call s:set_center(l:cell.id, 0)
+endfunction
+
+" 索引を選ぶ: / で題を絞り込む（空にすると解除）
+function! s:filter() abort
+  if !get(s:S, 'pick', 0)
+    return
+  endif
+  let l:q = input('索引を絞り込む（空で解除）: ', get(s:S, 'query', ''))
+  let s:S.query = trim(l:q)
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
+
+" 中心の索引に決める: 曼荼羅を閉じ、元のノートを載せる
+function! s:decide(id) abort
+  let l:src = s:S.src
+  let l:group = s:S.root . '/' . a:id
+  call gnosis#mview#close()
+  let s:S.pick = 0
+  call gnosis#index_add(l:src, l:group)
 endfunction
 
 function! s:back() abort
@@ -407,6 +462,9 @@ function! s:ensure_note_win() abort
 endfunction
 
 function! s:show_note(id) abort
+  if get(s:S, 'pick', 0)
+    return
+  endif
   let l:path = s:S.root . '/' . a:id
   if !filereadable(l:path)
     return
@@ -444,6 +502,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><silent> - <Cmd>call <SID>back()<CR>
   nnoremap <buffer><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><silent> m <Cmd>call <SID>mode()<CR>
+  nnoremap <buffer><silent> / <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><silent> f <Cmd>call <SID>full()<CR>
   nnoremap <buffer><silent> r <Cmd>call <SID>reload()<CR>
   nnoremap <buffer><silent> q <Cmd>call gnosis#mview#close()<CR>
@@ -468,8 +527,12 @@ function! s:hl() abort
   highlight default link GnosisMviewCenter Title
 endfunction
 
-function! s:open(center) abort
+function! s:open(center, ...) abort
   call s:hl()
+  let l:pick = a:0 ? a:1 : ''
+  let s:S.pick = !empty(l:pick)
+  let s:S.src = l:pick
+  let s:S.query = ''
   if !s:load()
     echohl WarningMsg | echo 'Gnosis: vault が選ばれていません' | echohl NONE
     return
@@ -536,6 +599,16 @@ function! gnosis#mview#toggle() abort
     let l:rel = strpart(l:file, len(l:root) + 1)
   endif
   call s:open(l:rel)
+endfunction
+
+" \g: 今のノートを載せる索引を、曼荼羅で選ぶ（/ で絞り込み → 移動 → 中心で Enter）
+function! gnosis#mview#pick() abort
+  let l:file = expand('%:p')
+  if empty(l:file) || &filetype ==# 'gnosis-mandala' || l:file !~? '\.md$'
+    echohl WarningMsg | echo 'Gnosis: 索引に載せるノートを開いて実行して' | echohl NONE
+    return
+  endif
+  call s:open('index.md', l:file)
 endfunction
 
 function! gnosis#mview#close() abort

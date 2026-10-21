@@ -96,5 +96,26 @@ call s:ok('Space でまた曼荼羅へ', &filetype ==# 'gnosis-mandala')
 call s:keys('q')
 call s:ok('q で閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
 
+" \g: 曼荼羅で索引を選んで、今のノートを載せる
+call s:mk('misc.md', '雑記', 0, [], [])
+call s:mk('empty.md', '空の索引', 1, [['Index', 'index.md']], [])
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: Index', '---', '', '# Index', '', '[植物](plant.md)', '[料理](cook.md)', '[空の索引](empty.md)'], s:v . '/index.md')
+let g:gnosis_test_display_name = ['雑記']
+let g:gnosis_test_yomi = ['ざっき']
+execute 'edit ' . s:v . '/misc.md'
+call gnosis#mview#pick()
+let s:st = gnosis#mview#state()
+call s:ok('\g の曼荼羅は索引から始まり索引だけが出る', s:st.pick == 1 && s:st.center ==# 'index.md' && s:text() =~# '◆植物' && s:text() =~# '◆空の索引', s:text())
+call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
+let s:st.query = '空'
+call s:keys('r')
+call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 ◆空の索引' && s:text() !~# '◆植物', s:text())
+call s:keys('1')
+call s:keys("\<CR>")
+call s:ok('絞り込んだ索引へ進むと絞り込みは解ける', s:st.center ==# 'empty.md' && s:st.query ==# '', s:st.center)
+call s:keys("\<CR>")
+call s:ok('中心で Enter すると載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
+call s:ok('載せたあとは元のノートに戻り曼荼羅は閉じる', fnamemodify(expand('%:p'), ':t') ==# 'misc.md' && winnr('$') == 1, expand('%:p') . ' ' . winnr('$'))
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

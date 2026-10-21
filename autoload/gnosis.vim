@@ -12069,7 +12069,7 @@ endfunction
 " 続けてそのよみを聞く（複数なら「(1/3)」のように順に）。入れ終わったらよみの順に並べ替える。
 " 表示名で Esc を押すと全部取り消し（何も入れない）。戻り値は入れた数（取り消し・0 本なら 0）。
 function! s:group_add_links_named(links, ...) abort
-  " a:1（任意）: 聞く代わりに使う答え [{'name': 表示名, 'yomi': よみ}]（\c の索引ナビ。gnosis#app_op）
+  " a:1（任意）: 聞く代わりに使う答え [{'name': 表示名, 'yomi': よみ}]（試験用）
   let l:answers = a:0 ? copy(a:1) : []
   let l:group = expand('%:p')
   let l:dir = expand('%:p:h')
@@ -21307,4 +21307,32 @@ endfunction
 " 元に戻される（検索状態が復元される）ので、<Cmd> を typeahead に積んで関数の外で実行する。
 function! gnosis#clear_search_highlight() abort
   call feedkeys("\<Cmd>nohlsearch\<CR>", 'n')
+endfunction
+
+" \g（曼荼羅で選んだ索引に、a:src のノートを載せる）。表示名とよみは zn / \l の g と同じ画面で聞く。
+" 載せたあとは元のノートに戻る。
+function! gnosis#index_add(src, group) abort
+  if !filereadable(a:src) || !filereadable(a:group)
+    echohl WarningMsg | echo 'Gnosis: ノートが見つかりません' | echohl NONE
+    return
+  endif
+  if &modified && &buftype ==# '' && !empty(expand('%:p'))
+    call gnosis#save_current_note()
+  endif
+  call gnosis#push_history()
+  execute 'silent edit ' . fnameescape(a:group)
+  if !s:buf_is_group()
+    echohl WarningMsg | echo 'Gnosis: 載せ先が索引（グループ）ではありません' | echohl NONE
+    execute 'silent edit ' . fnameescape(a:src)
+    return
+  endif
+  let l:link = s:make_link_from_dir(a:src, '', expand('%:p:h'))
+  let l:n = 0
+  if s:body_has_link(l:link)
+    echohl WarningMsg | echo 'Gnosis: この索引にはもう載っています' | echohl NONE
+  else
+    let l:n = s:group_add_links_named([l:link])
+  endif
+  execute 'silent edit ' . fnameescape(a:src)
+  return l:n
 endfunction
