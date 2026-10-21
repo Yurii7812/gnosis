@@ -36,3 +36,24 @@
 ## 7. 派生データの保証
 - vault のノートを書き換えない: グラフ・検査・Agenda（読む側）・書き出し・診断（`duplicates`、`backfill` の既定）。
 - 書く操作は一時ファイル＋`os.replace`（`\M` の merge・競合解決・`mandala.py`・`tasks.py complete`・`backfill --apply`）。
+
+## 8. キャンバス（`\A`。2026-10-21・DECISIONS D007）
+```markdown
+---
+time: 2026-10-21 13:00:00
+title: ハーブの図
+canvas: true
+---
+
+# ハーブの図
+
+（自由な本文。画面は触らない）
+
+[ハーブ](h.md)
+[ローズマリーを育ててみた](r.md)
+```gnosis-canvas
+{"nodes":[{"id":"n1","type":"note","file":"h.md","x":0,"y":0,"w":220,"h":110},{"id":"t1","type":"text","text":"考え","x":300,"y":0,"w":180,"h":70,"color":"#57ab5a"}],"edges":[{"id":"e1","from":"n1","to":"t1","label":"栽培"}]}
+```
+```
+- `file` は vault からの相対パス。リンクの行はキャンバスのノートからの相対パスで、`\A` が保存のたびに書き直す（コードブロックの直前に続くリンクだけの行）。
+- 壊れた JSON は空のキャンバスとして開き、保存で書き直す（開いたときに知らせる）。

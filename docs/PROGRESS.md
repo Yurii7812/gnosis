@@ -2,7 +2,10 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-20 夜）
+## 現在地（2026-10-21 昼）
+- main は 666e4f5（feat/master-roadmap を取り込み済み）。作業中のブランチは `feat/index-workbench`（下の「`\A` の作業台」）。
+
+## 以前の現在地（2026-10-20 夜）
 - ブランチ `feat/master-roadmap`（worktree `~/src/gnosis-master`、`main` 570de52 から）。**main へは未マージ・push 未**（マージは利用者の指示待ち）。
 - 全体回帰 `sh test/run.sh` は `exit=0`（run5）。**試験の実行中にファイルを編集すると失敗する**（`checkbox` の試験が `autoload` の編集と重なった実例あり）ので、回している間は編集しない。`web` の Electron E2E（`GNOSIS_RUN_WEB_E2E=1`）も全件通過（別実行）。
 - Phase 0 完了。Phase 1: `\M` の差分更新（同一ノート・日記・記録・トピック・リネーム追跡・競合解決・クラッシュ後の再実行・診断）まで。Phase 2: 静的ビュー（番号ナビ・グラフ・カード・テーブル・タイムライン・曼荼羅・検索）は実ブラウザで確認済み。**`\A` 内のタブ・分割・3 モードは未着手（GUI 編集は設計の承認待ち: DECISIONS D006）**。
@@ -136,6 +139,12 @@
 - **スマホのタスクごとの日時・通知の設定（2026-10-21・利用者の依頼）**: `tasks.py` に `⌛`（所要時間）と `🔔`（通知）を追加し `edit_line` で行の印だけを書き換え、`agenda_push`（列を追加）・`agenda_pull`（編集の取り込み）、アプリの `TaskEditor`（日付・時刻・所要時間・通知・繰り返し・優先度）と `Agenda.alarmPlan`（N 分前・1 日前）を実装。「10 分後に」は「スヌーズ」に改名（5/10/30/60 分）。実機で編集→通知→PC のノートへの反映を確認。
 
 - **`\A` の機能一覧とメニューの見切れ（利用者の指摘 2026-10-21）**: 「☰ 機能一覧」タブ（全機能をグループ別・検索・クリックで実行）を追加し、「＋」・右クリックのメニューを画面内に収めてスクロールできるようにした。`bundle.js` を再ビルド。panes E2E に確認を追加し、`npm test` 一式が通過。
+
+- **`\A` の作業台とスマホのカレンダー（2026-10-21・利用者の依頼「全体的に使いづらい。ダブルインデックスを主軸に、\A で使いやすく」）**: ブランチ `feat/index-workbench`（worktree `~/src/gnosis-index`、main 666e4f5 から）。DECISIONS D007。
+  - `\A`: 索引ナビ（サイドバー・Vim の今のノートに付いていく）・索引語で探す・載せる／トピック索引を作る／索引に新しいノート（書くのは Vim の `gnosis#app_op`）・索引ブラウザ（列で辿る・索引に無いノート）・カレンダー・曼荼羅（3×3／9×9・3-way 保存）・キャンバス（Markdown に保存・索引を広げる）。`python/app_model.py`（常駐・1 万ノートで初回 2 秒・ノート移動 0.02 秒）。
+  - スマホ: カレンダーの画面（CalendarModel・単体試験 3 件・APK ビルド OK）。**実機は未確認**（`:GnosisApkInstall` で入れて確かめる）。
+  - 試験: `python/test_app_model.py`（11 件）・`web/test/workbench_core_test.mjs`・`web/test/workbench_e2e.mjs`（実 Electron + 本物の Vim。`GNOSIS_E2E_SHOTS=フォルダ` で途中の画面を保存）。
+  - **事故と再発防止**: 回帰の `group_review_net.sh` が本物のクリップボード（wl-paste）を読み、そこにあった `~/Desktop/ワークフロー整理文章作成.md` をグループに入れて、その先頭によみの front matter を書いた。元に戻した（控え `~/Desktop/test/ワークフロー整理文章作成.md.before-restore`）。製品はよみを vault の中の .md にだけ書くよう修正、試験は `test/noclip.sh` でクリップボードを差し替え。
 
 ## 次の具体的タスク
 1. （完了）ノート側 source ID `capture_id:` とリネーム追跡。残: 旧ノート（`capture_id` 無し）への後付け（`capture_id` を state から補う移行コマンド・dry-run 付き）。
