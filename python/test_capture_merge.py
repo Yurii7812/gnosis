@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """capture_merge: スマホ側の変更だけを PC のノートへ 3-way で反映する（仕様 §7.3 の本文まわり）。"""
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -83,7 +84,7 @@ def test_images() -> None:
 
 def test_apply_note() -> None:
     print("apply_note: ファイルへの適用（原子的・競合の記録）")
-    with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+    with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")) as d:
         root = Path(d)
         p = root / "a.md"
         base = ["一行目", "二行目"]
