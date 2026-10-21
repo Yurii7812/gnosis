@@ -31,6 +31,8 @@ from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tasks as tk  # noqa: E402
+import obsidian_search as osearch  # noqa: E402
+import japanese_yomi as jy  # noqa: E402
 
 LINK_RE = re.compile(r"(?<!!)\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 LINK_LINE_RE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)\s]+\)\s*$")
@@ -213,6 +215,9 @@ class Vault:
         self.notes: dict[str, Note] = {}
         self._incoming: dict[str, list] | None = None
         self._links_in: dict[str, list] | None = None
+        self.texts: dict[str, str] = {}              # 全文検索用の本文（変わったファイルだけ読み直す）
+        self.mtimes: dict[str, int] = {}
+        self._docs: dict | None = None
         self._tasks: list | None = None
         self._bfs: dict | None = None
         self.refreshed_at = 0.0
@@ -244,13 +249,18 @@ class Vault:
                 n = parse_note(self.root, p, text)
                 n.sig = sig
                 self.notes[rel] = n
+                self.texts[rel] = text
+                self.mtimes[rel] = st.st_mtime_ns
                 changed += 1
         for rel in [r for r in self.notes if r not in seen]:
             del self.notes[rel]
+            self.texts.pop(rel, None)
+            self.mtimes.pop(rel, None)
             changed += 1
         if changed:
             self._incoming = None
             self._links_in = None
+            self._docs = None
             self._bfs = None
         self._tasks = None
         return changed
@@ -466,6 +476,79 @@ class Vault:
                 "context": refs(n.ctx), "parents": refs(n.pb), "children": sorted(children, key=lambda x: (x.get("fz", ""), x["title"])),
                 "groups": refs(n.groups), "topics": refs(n.bg)}
 
+    # ---- 全文検索（Obsidian と同じ書き方。python/obsidian_search.py） ----
+    def search_full(self, q: str, match_case: bool = False, sort: str = "name-asc", limit: int = 300) -> dict:
+        if self._docs is None:
+            self._docs = {}
+        docs = []
+        for rel, n in self.notes.items():
+            d = self._docs.get(rel)
+            if d is None or d.text is not self.texts.get(rel):
+                d = osearch.Doc.make(rel, n.title, self.texts.get(rel, ""))
+                self._docs[rel] = d
+            docs.append(d)
+        try:
+            res = osearch.search(docs, q, match_case=match_case)
+        except osearch.QueryError as e:
+            return {"results": [], "total": 0, "error": str(e), "explain": ""}
+        key = {
+            "name-asc": lambda x: (norm(x["title"]), x["rel"]),
+            "name-desc": lambda x: (norm(x["title"]), x["rel"]),
+            "mtime-new": lambda x: -self.mtimes.get(x["rel"], 0),
+            "mtime-old": lambda x: self.mtimes.get(x["rel"], 0),
+            "ctime-new": lambda x: self.notes[x["rel"]].time or "",
+            "ctime-old": lambda x: self.notes[x["rel"]].time or "",
+        }.get(sort)
+        if key:
+            res["results"].sort(key=key, reverse=sort in ("name-desc", "ctime-new"))
+        for x in res["results"]:
+            x["kind"] = self.kind(self.notes[x["rel"]])
+        res["results"] = res["results"][:limit]
+        return res
+
+    # ---- あいうえお順（曼荼羅の並び替え）: 文字の一覧 → 五十音順に並べた添字 ----
+    def yomi_order(self, texts: list, readings: dict | None = None) -> list[int]:
+        readings = readings or {}
+        keys = []
+        for i, t in enumerate(texts):
+            t = re.sub(r"\[((?:\\.|[^\]\\])*)\]\([^)]*\)", r"\1", str(t)).strip()
+            y = readings.get(t) or jy.reading_for(t)
+            keys.append((jy.reading_key(y), i))
+        return [i for _, i in sorted(keys)]
+
+    # ---- 索引を曼荼羅で見る: 真ん中に索引の題、周りに項目（8 つずつ）、そのまわりに項目のトピック索引の項目 ----
+    def mandala_index(self, file: str) -> dict:
+        rel = self._rel_of(file)
+        n = self.notes.get(rel)
+        if n is None:
+            return {"rel": rel, "missing": True}
+        grel = rel
+        if not n.is_group:
+            tops = [b.rel for b in n.bg if b.rel in self.notes and self.notes[b.rel].is_group]
+            if not tops:
+                return {**self.ref(rel), "units": [], "error": "索引（グループ）でも、トピック索引のあるノートでもありません"}
+            grel = tops[0]
+        g = self.notes[grel]
+        units = []
+        for k, lk in enumerate(x for x in g.body if x.rel and x.rel != grel):
+            t = self.notes.get(lk.rel)
+            children, drill = [], ""
+            if t is not None:
+                if t.is_group:
+                    drill = t.rel
+                    children = [{"label": c.text, **self.ref(c.rel)} for c in t.body if c.rel and c.rel != t.rel]
+                else:
+                    for b in t.bg:
+                        bt = self.notes.get(b.rel)
+                        if bt is not None and bt.is_group:
+                            drill = drill or bt.rel
+                            children += [{"label": c.text, **self.ref(c.rel)} for c in bt.body if c.rel and c.rel != bt.rel]
+            units.append({"label": lk.text, **self.ref(lk.rel), "order": k, "row": lk.row, "time": t.time if t else "",
+                          "yomi": g.yomi.get(lk.text, ""), "children": children, "drill": drill})
+        o = self.origin_of(grel)
+        return {**self.ref(grel), "title": g.title if grel != self.index_rel() else "Index", "kind": self.kind(g), "units": units,
+                "origin": self.ref(o) if o else None, "path": self.path_text(grel)}
+
     def kind(self, n: Note) -> str:
         if n.rel == self.index_rel():
             return "index"
@@ -535,7 +618,7 @@ class Vault:
         out.sort(key=lambda x: (not x["is_index"], x["path"]))
         return out
 
-    def notes_list(self, q: str = "", limit: int = 80, kind: str = "") -> list[dict]:
+    def notes_list(self, q: str = "", limit: int = 80, kind: str = "", sort: str = "") -> list[dict]:
         qn = norm(q)
         out = []
         for n in self.notes.values():
@@ -543,11 +626,33 @@ class Vault:
                 continue
             if kind and self.kind(n) != kind:
                 continue
-            out.append({**self.ref(n.rel), "time": n.time, "kind": self.kind(n)})
-        out.sort(key=lambda x: (x["time"] or ""), reverse=True)
+            out.append({**self.ref(n.rel), "time": n.time, "kind": self.kind(n), "mtime": self.mtimes.get(n.rel, 0) // 1_000_000})
+        # 並び（Obsidian のファイル一覧と同じ 6 通り）。既定は作った日時の新しい順
+        if sort in ("name-asc", "name-desc"):
+            out.sort(key=lambda x: (norm(x["title"]), x["rel"]), reverse=sort == "name-desc")
+        elif sort in ("mtime-new", "mtime-old"):
+            out.sort(key=lambda x: x["mtime"], reverse=sort == "mtime-new")
+        else:
+            out.sort(key=lambda x: (x["time"] or ""), reverse=sort != "ctime-old")
         out = out[:limit]
         for x in out:
             x["path"] = self.path_text(x["rel"])   # 同じ題のノート（最初のノートとそのトピック索引など）を見分ける
+        return out
+
+    # ---- 全部のノート（クイックスイッチャーのあいまい検索用。題のよみ付き） ----
+    def notes_all(self) -> list[dict]:
+        if not hasattr(self, "_yomi_cache"):
+            self._yomi_cache: dict[str, str] = {}
+        out = []
+        for n in self.notes.values():
+            y = self._yomi_cache.get(n.title)
+            if y is None:
+                try:
+                    y = jy.kata2hira(jy.reading_for(n.title))
+                except Exception:
+                    y = n.title
+                self._yomi_cache[n.title] = y
+            out.append({"rel": n.rel, "title": n.title, "kind": self.kind(n), "time": n.time, "yomi": "" if y == n.title else y})
         return out
 
     # ---- カレンダー ----
@@ -636,10 +741,14 @@ METHODS = {
     "nav.topics": lambda v, p: v.topics(v._rel_of(p.get("file", ""))),
     "nav.entries": lambda v, p: v.entries(v._rel_of(p.get("file", ""))),
     "nav.indexes": lambda v, p: v.indexes(),
-    "nav.notes": lambda v, p: v.notes_list(p.get("q", ""), limit=max(1, min(int(p.get("limit", 80) or 80), 2000)), kind=p.get("kind", "")),
+    "nav.notes": lambda v, p: v.notes_list(p.get("q", ""), limit=max(1, min(int(p.get("limit", 80) or 80), 5000)), kind=p.get("kind", ""), sort=p.get("sort", "")),
+    "nav.all": lambda v, p: v.notes_all(),
     "nav.root": lambda v, p: v.note_info(v.index_rel()),
     "nav.unindexed": lambda v, p: v.unindexed(),
     "nav.links": lambda v, p: v.links(p.get("file", "")),
+    "search.full": lambda v, p: v.search_full(p.get("q", ""), bool(p.get("case")), p.get("sort", "name-asc"), int(p.get("limit", 300) or 300)),
+    "yomi.order": lambda v, p: v.yomi_order(p.get("texts", []), p.get("readings")),
+    "mandala.index": lambda v, p: v.mandala_index(p.get("file", "")),
     "cal.month": lambda v, p: v.month(p.get("ym") or dt.date.today().strftime("%Y-%m")),
     "cal.day": lambda v, p: v.day(p.get("date") or dt.date.today().isoformat()),
     "task.complete": lambda v, p: task_complete_text(v, p.get("file", ""), p.get("line", 0), p.get("today", "")),
@@ -647,7 +756,7 @@ METHODS = {
 
 
 # 打つたびに来る問い合わせ（探す）は、vault の読み直しを 1.5 秒に 1 回へ間引く（1 万ノートで 1 回 0.2 秒ほど）
-LIGHT = {"nav.search", "nav.notes", "nav.indexes"}
+LIGHT = {"nav.search", "nav.notes", "nav.indexes", "search.full", "yomi.order", "nav.all"}
 
 
 def handle(vault: Vault, req: dict) -> dict:

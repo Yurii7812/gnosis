@@ -211,7 +211,8 @@ export function createNavSidebar(root, ctx) {
     // 索引（グループ）なら、その項目
     if (info.entries) {
       const tools = h("span", "nav-tools");
-      tools.append(button("＋ 新しいノート", () => act.newInIndex(info), "nav-btn", "この索引に新しいノートを作って載せる（zn → Enter と同じ）"),
+      tools.append(button("▦", () => root.dispatchEvent(new CustomEvent("gnosis-open-editor", { detail: "imandala" })), "nav-btn", "この索引を曼荼羅で見る"),
+        button("＋ 新しいノート", () => act.newInIndex(info), "nav-btn", "この索引に新しいノートを作って載せる（zn → Enter と同じ）"),
         button("＋ 既存", () => act.addExisting(info), "nav-btn", "この索引に既存のノートを載せる"));
       const s = section(`この索引の項目（${info.entries.length}）`, tools);
       if (info.origin) {
@@ -235,7 +236,10 @@ export function createNavSidebar(root, ctx) {
     }
     // トピック索引（BranchGroup）
     if (!info.entries || info.topics.length) {
-      const s = section(`トピック索引（${info.topics.length}）`, info.entries ? null : button("＋ 作る", () => act.newTopic(info), "nav-btn", "このノートから分岐するトピック索引を作る（zk → n と同じ）"));
+      const tt = h("span", "nav-tools");
+      if (!info.entries && info.topics.length) tt.appendChild(button("▦", () => root.dispatchEvent(new CustomEvent("gnosis-open-editor", { detail: "imandala" })), "nav-btn", "トピック索引を曼荼羅で見る"));
+      if (!info.entries) tt.appendChild(button("＋ 作る", () => act.newTopic(info), "nav-btn", "このノートから分岐するトピック索引を作る（zk → n と同じ）"));
+      const s = section(`トピック索引（${info.topics.length}）`, tt.childNodes.length ? tt : null);
       if (!info.topics.length) s.appendChild(h("div", "nav-dim", "このノートが育ったら、トピック索引を作って細かい名前で索引できます"));
       for (const t of info.topics) {
         const th = h("div", "nav-subhead");

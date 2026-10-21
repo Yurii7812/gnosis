@@ -111,6 +111,9 @@ ParentBranch:
 [栽培](rs.md)
 [利用](ru.md)
 `);
+// 項目が 10 ある索引（索引の曼荼羅が 2 枚になる）
+W("many.md", "---\ntime: 2026-10-11 09:00:00\ntitle: 果物\nattribute: group\n---\n\n# 果物\n\n" + ["みかん", "りんご", "いちご", "ぶどう", "もも", "なし", "かき", "すいか", "メロン", "バナナ"].map((t, k) => `[${t}](f${k}.md)`).join("\n") + "\n");
+["みかん", "りんご", "いちご", "ぶどう", "もも", "なし", "かき", "すいか", "メロン", "バナナ"].forEach((t, k) => W(`f${k}.md`, `---\ntime: 2026-10-11 09:0${k}:00\ntitle: ${t}\n---\n\n# ${t}\n\n${t}は甘い。\n`));
 for (const [n, t] of [["hm.md", "ハーブのまとめ"], ["hs.md", "ハーブの栽培"], ["rs.md", "ローズマリーの栽培"], ["ru.md", "ローズマリーの利用"], ["u.md", "運動"]]) W(n, `---\ntime: 2026-10-10 12:00:00\ntitle: ${t}\n---\n\n# ${t}\n\n${t}の本文。\n`);
 W("d1.md", `
 ---
@@ -364,7 +367,7 @@ const scenario = `(async () => {
   const toNote = await waitFor(() => [...document.querySelector('.mdbox [data-rc="0,3"]').querySelectorAll('button')].find((b) => b.textContent === 'ノートに'));
   toNote.click();
   R.md.linked = await waitFor(async () => /\\[着替え\\]\\(\\d+(?:-\\d+)?\\.md\\)/.test(await read(mdRel)));
-  const b9 = btn(document.querySelector('.md-bar'), '9×9 全体'); b9.click(); await sleep(300);
+  const b9 = btn(document.querySelector('.md-bar'), '9×9'); b9.click(); await sleep(300);
   R.md.grid9 = document.querySelectorAll('.mdbox .md-grid9 .md-cell').length;
   await shot('8-mandala-9');
 
@@ -472,7 +475,7 @@ const scenario = `(async () => {
   await sleep(500);
   const mdBox = [...document.querySelectorAll('.mdbox')].find((x) => x.offsetParent);
   const c3 = (r, c) => mdBox.querySelector('[data-rc="' + r + ',' + c + '"]');
-  if (![...mdBox.querySelectorAll('.md-grid3')].length) btn(document.querySelector('.md-bar'), '3×3 で考える').click();
+  if (![...mdBox.querySelectorAll('.md-grid3')].length) btn(document.querySelector('.md-bar'), '3×3').click();
   await sleep(300);
   // 中心のブロックへ
   btn(mdBox.querySelector('.md-crumbs'), '旅行')?.click(); await sleep(300);
@@ -492,6 +495,84 @@ const scenario = `(async () => {
   const un = await waitFor(() => [...c3(5, 3).querySelectorAll('button')].find((b) => b.textContent === '外す'));
   un.click();
   R.mdx.unlinked = await waitFor(async () => { const t = await read(R.md.rel); return !t.includes('(u.md)') && (t.match(/\\| 運動 \\|/g) || []).length >= 1; });
+
+  // 14. 検索（Obsidian と同じ書き方）: 結果はノートごと・当たった語に色・押すとその行へ
+  G.openSearch('栽培 -ハーブ');
+  await waitFor(() => document.querySelectorAll('#leftdock .sr-file').length >= 1, 8000);
+  await sleep(300);
+  R.sr = { titles: [...document.querySelectorAll('#leftdock .sr-title')].map((x) => x.textContent), status: document.querySelector('#leftdock .srch-status').textContent,
+    marks: [...document.querySelectorAll('#leftdock .sr-hit')].map((x) => x.textContent).slice(0, 3), noFilterInNotes: !document.querySelector('#leftdock .dock-panel[data-panel="notes"] .pnl-search') };
+  await shot('13-search');
+  const line = [...document.querySelectorAll('#leftdock .sr-file')].find((f) => f.querySelector('.sr-title').textContent === 'ローズマリーの栽培')?.querySelector('.sr-line');
+  const lineNo = line ? parseInt(line.title, 10) : -1;
+  if (line) line.click();
+  R.sr.opened = await waitFor(() => vimFile() === 'rs.md' && (G.state().cur || [])[0] === lineNo && lineNo, 8000);
+  if (!R.sr.opened) R.sr.openDiag = JSON.stringify({ lineNo, file: vimFile(), cur: G.state().cur, mode: G.state().mode });
+  G.openSearch('/[/');
+  R.sr.bad = await waitFor(() => { const s = document.querySelector('#leftdock .srch-status'); return s && s.classList.contains('err') && s.textContent; }, 5000);
+  G.openSearch('line:(甘い みかん)');
+  R.sr.line = await waitFor(() => { const t = [...document.querySelectorAll('#leftdock .sr-title')].map((x) => x.textContent); return t.length && t.join(','); }, 5000);
+  // クイックスイッチャーはあいまい検索（文字が順に出れば当たり）
+  G.switcher().open(); await sleep(200);
+  typeIn(document.querySelector('.qs-input'), 'ローズ栽');
+  await sleep(700);
+  R.sr.fuzzy = document.querySelector('.qs-item .qs-title')?.textContent;
+  if (!/ローズマリーの栽培/.test(R.sr.fuzzy || '')) { const q = await window.gui.query('nav.all', {}); R.sr.allDiag = JSON.stringify(q).slice(0, 300); R.sr.qsItems = [...document.querySelectorAll('.qs-item')].map((x) => x.textContent).slice(0, 4); R.sr.qsDebug = G.switcher().debug(); }
+  document.querySelector('.qs-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(200);
+  D.show('index');
+
+  // 15. 索引を曼荼羅で見る: 真ん中に索引、周りに項目、そのまわりにトピック索引の項目。「この索引へ」で入る。並び替え。10 項目なら 2 枚
+  G.openIndexMandala('gh.md');
+  const imBox = () => [...document.querySelectorAll('.mdbox')].find((x) => x.offsetParent);
+  await waitFor(() => imBox() && imBox().querySelector('.md-cell.theme .md-linktext'), 8000);
+  const cellTexts = () => [...imBox().querySelectorAll('.md-page')].map((p) => [...p.querySelectorAll('.md-cell.sub .md-linktext')].map((x) => x.textContent));
+  R.im = { theme: imBox().querySelector('.md-cell.theme .md-linktext').textContent, subs: cellTexts() };
+  btn(imBox().querySelector('.md-bar'), '9×9').click(); await sleep(300);
+  R.im.grandchildren = [...imBox().querySelectorAll('.md-grid9 .md-cell:not(.sub):not(.sub2):not(.theme) .md-linktext')].map((x) => x.textContent);
+  await shot('14-index-mandala');
+  btn(imBox().querySelector('.md-bar'), '3×3').click(); await sleep(300);
+  const rose = [...imBox().querySelectorAll('.md-cell.sub')].find((c) => c.textContent.includes('ローズマリー'));
+  btn(rose, 'この索引へ ▸▸')?.click();
+  R.im.drilled = await waitFor(() => { const t = imBox().querySelector('.md-cell.theme .md-linktext'); return t && t.textContent === 'ローズマリー' && cellTexts()[0].join(','); }, 6000);
+  G.openIndexMandala('many.md');
+  await waitFor(() => imBox() && imBox().querySelector('.md-cell.theme .md-linktext')?.textContent === '果物', 8000);
+  await sleep(300);
+  R.im.pages = imBox().querySelectorAll('.md-page').length;
+  R.im.fileOrder = cellTexts().flat();
+  const sel = imBox().querySelector('.md-sort'); sel.value = 'aiueo'; sel.dispatchEvent(new Event('change'));
+  R.im.aiueo = await waitFor(() => { const t = cellTexts().flat(); return t[0] !== R.im.fileOrder[0] && t; }, 6000);
+  // 空いた枠から索引に既存のノートを載せる（ドラッグ）
+  const emptySub = [...imBox().querySelectorAll('.md-cell.sub')].find((c) => !c.querySelector('.md-linktext'));
+  const dt2 = new DataTransfer(); dt2.setData('text/gnosis-note', 'u.md');
+  emptySub.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt2, bubbles: true, cancelable: true }));
+  emptySub.dispatchEvent(new DragEvent('drop', { dataTransfer: dt2, bubbles: true, cancelable: true }));
+  R.im.added = !!(await waitFor(async () => (await read('many.md')).includes('[運動](u.md)'), 8000));
+  await shot('15-index-mandala-sorted');
+
+  // 16. 自分の曼荼羅: 8 つの副題が埋まると、下に同じ主題の曼荼羅が続く。打てば 2 枚目の表として保存。並び替えて保存
+  G.openMandala('pick');
+  await waitFor(() => dlg());
+  await pick(0, '旅行', '旅行');
+  await okDlg();
+  const mb = () => [...document.querySelectorAll('.mdbox')].find((x) => x.offsetParent && x.querySelector('textarea'));
+  await waitFor(() => mb(), 8000);
+  btn(mb().querySelector('.md-bar'), '3×3').click(); await sleep(300);
+  const subsIn = (page) => [...mb().querySelectorAll('.md-page')[page].querySelectorAll('.md-cell.sub textarea')];
+  const names = ['準備', '持ち物', '旅行先', '宿', '交通', '予算', '食事', '土産'];
+  for (const [k, ta] of subsIn(0).entries()) { if (!ta.value.trim()) { ta.focus(); typeIn(ta, names[k] + '2'); } }
+  await sleep(300);
+  R.own = { pagesAfterFull: mb().querySelectorAll('.md-page').length };
+  const p2 = subsIn(1)[0];
+  p2.focus(); typeIn(p2, 'あいさつ');
+  R.own.saved2 = await waitFor(async () => { const t = await read(R.md.rel); return t.split('| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |').length === 3 && t.includes('あいさつ'); }, 8000);
+  R.own.theme2 = await waitFor(async () => { const t = (await read(R.md.rel)).split('\\n'); const i = t.lastIndexOf('| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |'); return t[i + 6] && t[i + 6].includes('旅行'); }, 5000);
+  await shot('16-mandala-two-pages');
+  const os = mb().querySelector('.md-sort'); os.value = 'aiueo'; os.dispatchEvent(new Event('change'));
+  await sleep(800);
+  R.own.sortedFirst = subsIn(0)[0].value;
+  btn(mb().querySelector('.md-bar'), 'この並びで保存').click();
+  R.own.savedSorted = await waitFor(async () => { const t = await read(R.md.rel); const i = t.indexOf('| 1 | 2 |'); const row4 = t.slice(i).split('\\n')[5] || ''; return row4.includes(R.own.sortedFirst) && row4; }, 8000);
   } catch (e) { R.error = String(e && e.stack || e); R.errSide = sideText().slice(0, 400); R.errScreen = G.screen().filter((x) => x.trim()).slice(-3); await shot('error'); }
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
@@ -537,11 +618,16 @@ try {
   check(R.ime?.dialogKept && R.ime.dialogClosedByEsc && R.ime.navKept, "IME: Enter/Esc while composing do not submit or close dialogs or open search hits: " + JSON.stringify(R.ime));
   check(R.md?.composingNotSaved && R.md.committedSaved, "IME: a mandala cell is not saved while composing, and is saved once confirmed: " + JSON.stringify(R.md));
   check(R.cv?.card && R.cv.cards.length >= 4 && ["まとめ", "ローズマリー", "栽培"].every((x) => R.cv.labels.includes(x)) && R.cv.file && /canvas: true/.test(R.cv.file) && /\[ハーブ\]\(h\.md\)/.test(R.cv.file), "canvas: place a note, expand its topic index as labelled arrows, saved as Markdown: " + JSON.stringify({ ...R.cv, file: !!R.cv?.file }));
-  check(JSON.stringify(R.ob?.leftTabs) === '["index","notes","features"]' && JSON.stringify(R.ob.rightTabs) === '["links","outline"]' && R.ob.ribbon.includes("switcher") && R.ob.leftClosed && R.ob.leftReopened && R.ob.rightClosed && R.ob.rightReopened, "Obsidian-like frame: ribbon, left/right docks that hide and show: " + JSON.stringify(R.ob));
+  check(JSON.stringify(R.ob?.leftTabs) === '["index","notes","search","features"]' && JSON.stringify(R.ob.rightTabs) === '["links","outline"]' && R.ob.ribbon.includes("switcher") && R.ob.leftClosed && R.ob.leftReopened && R.ob.rightClosed && R.ob.rightReopened, "Obsidian-like frame: ribbon, left/right docks that hide and show: " + JSON.stringify(R.ob));
   check(R.ob?.switcherOpen && R.ob.switched === "rs.md" && R.ob.tabTitle, "Ctrl+O in Vim's normal mode opens the quick switcher, Enter opens the note and the tab shows its title: " + JSON.stringify(R.ob));
   check(/ローズマリー/.test(R.ob?.back || "") && R.ob.palette && !R.ob.paletteInInsert, "links panel shows backlinks; Ctrl+P opens the palette in normal mode but not in insert mode: " + JSON.stringify(R.ob));
   check(/アウトライン/.test(R.ob?.featFirst || "") && R.ob.outlineShown && /ローズマリーの栽培/.test(R.ob.outline || ""), "features panel runs a command; outline lists the headings: " + JSON.stringify(R.ob));
   check(R.mdx?.picked && R.mdx.saved && R.mdx.dropped && R.mdx.unlinked, "mandala: put an existing note into a cell (picker, mirrored), drop a note onto a cell, unlink: " + JSON.stringify(R.mdx));
+  check(R.sr?.titles?.includes("ローズマリーの栽培") && !R.sr.titles.some((t) => /ハーブ/.test(t)) && R.sr.marks.includes("栽培") && R.sr.noFilterInNotes && R.sr.opened, "search like Obsidian: AND/NOT, highlighted hits, click opens the note at the line; the notes list has no title filter: " + JSON.stringify(R.sr));
+  check(R.sr?.bad && R.sr.line === "みかん" && /ローズマリーの栽培/.test(R.sr.fuzzy || ""), "search: bad regex is reported, line:( ) needs both on one line; quick switcher is fuzzy: " + JSON.stringify(R.sr));
+  check(R.im?.theme === "ハーブ" && JSON.stringify(R.im.subs?.[0]?.slice(0, 3)) === '["まとめ","ローズマリー","栽培"]' && R.im.grandchildren.includes("利用") && /栽培,利用/.test(R.im.drilled || ""), "index as mandala: entries around the index, their topic entries around them, drill into a topic index: " + JSON.stringify(R.im));
+  check(R.im?.pages === 2 && R.im.fileOrder[0] === "みかん" && R.im.aiueo && R.im.aiueo.indexOf("いちご") < R.im.aiueo.indexOf("みかん") && R.im.added, "index mandala: 10 entries make two mandalas, sort by あいうえお, drop a note on an empty slot to add it to the index: " + JSON.stringify(R.im));
+  check(R.own?.pagesAfterFull === 2 && R.own.saved2 && R.own.theme2 && R.own.savedSorted, "own mandala: when 8 sub themes are full a second mandala with the same theme follows below, saved as a second table; sorted order can be saved: " + JSON.stringify(R.own));
   check(R.un?.rows?.includes("旅行") && R.un.rows.includes("ハーブの図") && R.un.pickedGlobal && R.un.added && R.un.after, "unindexed notes are listed and can be put on the Global Index from there: " + JSON.stringify(R.un));
   // ノートの原本: 試験で作ったもの以外のノートは、載せた索引（gh.md）・完了したタスク（d1.md）・トピック索引を足したノート（rs.md）だけが変わる
   const idx = fs.readFileSync(path.join(vault, "index.md"), "utf8");

@@ -466,6 +466,8 @@ gnosis#timer_stop
 gnosis#timestamp_filename
 gnosis#timestamp_yaml
 gnosis#title_body_lines
+gnosis#title_sync_after
+gnosis#title_sync_before
 gnosis#toggle_alternate
 gnosis#toggle_checkbox
 gnosis#toggle_link_source

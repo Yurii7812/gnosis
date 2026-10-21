@@ -8,6 +8,7 @@
   - 配色・組版を Obsidian に（ダーク #1E1E1E・ライト #FFF・見出しは本文の色・行の幅 700px・ボタン/ダイアログ）。Vim の配色・起動画面・`\A` の起動画面も。
   - 試験: `web/test/workbench_e2e.mjs` に枠・スイッチャー・Ctrl+P（挿入モードでは取らない）・リンク・アウトライン・曼荼羅の既存ノートを追加。色を前提にした既存の試験（theme_check・terminal_visual・launcher/theme/look E2E など）を新しい色に合わせた。
   - 未確認: 利用者の実機での見た目（Wayland・実際のフォント）・タッチ操作。
+  - 続き（D009）: 曼荼羅の複数枚（同じ主題が下に続く）・並び替え・この並びで保存、索引を曼荼羅で見る、Obsidian と同じ書き方の全文検索（`python/obsidian_search.py`・左のバー）、ノートの一覧から絞り込みを外す、クイックスイッチャーのあいまい検索、題の同期（# と title:）。試験: `test_obsidian_search.py`・`test_mandala.py`・`test_app_model.py`・`test/title_sync_net.sh`・`workbench_core_test`・`workbench_e2e`（検索・索引の曼荼羅・2 枚目・並び替え）。
 
 ## 以前の現在地（2026-10-21 昼）
 - main は 666e4f5（feat/master-roadmap を取り込み済み）。作業中のブランチは `feat/index-workbench`（下の「`\A` の作業台」）。

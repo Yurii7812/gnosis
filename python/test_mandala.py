@@ -108,6 +108,41 @@ class MandalaTest(unittest.TestCase):
                 self.assertEqual(md.locate(text, ln, start + 2), (r, c))    # マスの中ほど
             self.assertIsNone(md.locate(p.read_text(encoding="utf-8"), 1, 1))
 
+    def test_several_pages_same_theme(self):
+        # 副題が 8 つを超えたら、同じノートに 2 枚目の 9×9 を足す（どの表も同じ主題）
+        text = md.new_text("健康", ["運動", "食事"]) + "\nあとがき。\n"
+        g1 = md.parse(text)
+        g2 = [["" for _ in range(9)] for _ in range(9)]
+        g2[3][3] = "睡眠"
+        two = md.replace_tables(text, [g1, g2])
+        self.assertTrue(two.endswith("あとがき。\n"))               # 表の外の本文はそのまま
+        self.assertEqual(len(md.parse_all(two)), 2)
+        self.assertEqual(md.parse(two)[3][3], "運動")                 # 1 枚目だけを読む古い読み方も同じ
+        new, rep = md.sync(two)
+        p2 = md.parse_all(new)[1]
+        self.assertEqual(p2[4][4], "健康")                            # 2 枚目の主題は 1 枚目から
+        self.assertEqual(p2[1][1], "睡眠")                            # 2 枚目の副題も 2 か所にそろう
+        self.assertTrue(all(x["page"] == 1 for x in rep["filled"]))
+        self.assertEqual(md.replace_tables(new, md.parse_all(new)), new)   # 読んで書き直しても変わらない
+        # 減らすと表も消える
+        self.assertEqual(len(md.parse_all(md.replace_tables(new, md.parse_all(new)[:1]))), 1)
+        # 行・桁から何枚目のどのマスかを引ける・2 枚目のマスからノートを作れる
+        lines = new.split("\n")
+        blk = md.table_blocks(lines)[1]
+        row = lines[blk[0] + 2 + 3]
+        pipes = [i for i, ch in enumerate(row) if ch == "|"]
+        self.assertEqual(md.locate_page(new, blk[0] + 2 + 3 + 1, len(row[:pipes[3] + 1].encode()) + 2), (1, 3, 3))
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+            p = Path(d) / "m.md"
+            p.write_text(new, encoding="utf-8")
+            r = md.link_cell(p, 3, 3, "note", 1)
+            self.assertTrue(r["ok"], r)
+            after = md.parse_all(p.read_text(encoding="utf-8"))
+            self.assertEqual(after[1][3][3], f"[睡眠]({r['file']})")
+            self.assertEqual(after[1][1][1], after[1][3][3])
+            self.assertEqual(after[0][3][3], "運動")                  # 1 枚目は触らない
+            self.assertIn("table class=\"mandala\"", md.to_html(after[1]))
+
     def test_too_many_subs(self):
         with self.assertRaises(ValueError):
             md.new_text("x", list("123456789"))

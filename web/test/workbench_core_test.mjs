@@ -2,7 +2,7 @@
 //   曼荼羅: 表の読み書きが python/mandala.py と同じ形・表の外の本文を変えない・副題の対・マスごとの 3-way
 //   キャンバス: gnosis-canvas のブロックとその上のリンクの行だけを書き直す・相対パス
 import assert from "node:assert/strict";
-import { parseGrid, renderTable, replaceTable, mirrorOf, mergeGrids, cellsOf, relLink, cellLink, unlinkText } from "../src/mandala.js";
+import { parseGrid, renderTable, replaceTable, mirrorOf, mergeGrids, cellsOf, relLink, cellLink, unlinkText, parseGrids, replaceTables, unitsOf, sortUnits, gridsFromUnits, mergePages } from "../src/mandala.js";
 import { parseCanvas, writeCanvas } from "../src/canvas.js";
 import { fold, rank, readings } from "../src/palette-core.js";
 
@@ -93,5 +93,43 @@ const empty = () => Array.from({ length: 9 }, () => Array(9).fill(""));
   // 入れたリンクは、表に書いて読み直しても同じ
   const g = parseGrid(renderTable(Array.from({ length: 9 }, (_, r) => Array.from({ length: 9 }, (_, c) => (r === 4 && c === 4 ? cellLink("主題", "", "t.md") : "")))).join("\n"));
   assert.equal(g[4][4], "[主題](t.md)");
+}
+// 同じ主題の曼荼羅を何枚も（2 枚目以降は同じノートの次の表）・並び替え・その順で書き直す
+{
+  const E = () => Array.from({ length: 9 }, () => Array(9).fill(""));
+  const g1 = E(), g2 = E();
+  g1[4][4] = g2[4][4] = "健康";
+  ["運動", "食事", "睡眠", "仕事", "趣味", "家族", "お金", "学び"].forEach((t, i) => { const [r, c] = [[3, 3], [3, 4], [3, 5], [4, 5], [5, 5], [5, 4], [5, 3], [4, 3]][i]; g1[r][c] = t; });
+  g1[0][0] = "走る"; g1[0][1] = "泳ぐ";            // 「運動」のブロック（左上）に 2 マス
+  g2[3][3] = "あそび";
+  const text = "---\nmandala: true\n---\n\n# 健康\n\n" + renderTable(g1).join("\n") + "\n\nあとがき\n";
+  const two = replaceTables(text, [g1, g2]);
+  assert.equal(parseGrids(two).length, 2);
+  assert.ok(two.endsWith("あとがき\n"));
+  assert.equal(parseGrids(replaceTables(two, parseGrids(two))).length, 2);
+  assert.equal(replaceTables(two, parseGrids(two)), two);
+  assert.equal(parseGrids(replaceTables(two, [g1])).length, 1);
+  const us = unitsOf([g1, g2]);
+  assert.equal(us.length, 16);
+  assert.equal(us[0].title, "運動");
+  assert.equal(us[0].children.filter(Boolean).length, 2);
+  assert.equal(us[8].title, "あそび");
+  // 埋まっている順: 「運動」（2 マス）が先、空のユニットは後ろ
+  const f = sortUnits(us, "filled");
+  assert.equal(f[0].title, "運動");
+  assert.equal(f.slice(-7).every((u) => !u.title), true);
+  // あいうえお順（添字は app_model が返す）
+  const titles = us.filter((u) => u.title).map((u) => u.title);
+  const order = titles.map((t, k) => k).sort((a, b) => titles[a].localeCompare(titles[b], "ja"));
+  assert.equal(sortUnits(us, "aiueo", order)[0].title, titles[order[0]]);
+  // この順で書き直す: 副題とそのブロックが一緒に動き、9 つ以上なら 2 枚に
+  const re = gridsFromUnits(f, [g1, g2], "健康");
+  assert.equal(re.length, 2);
+  assert.equal(re[0][3][3], "運動");
+  assert.equal(re[0][0][0], "走る");
+  assert.equal(re[1][4][4], "健康");
+  // 3-way（枚数が違ってもよい）
+  const m = mergePages([g1], [g1, g2], [g1]);
+  assert.equal(m.grids.length, 2);
 }
 console.log("workbench core: OK");

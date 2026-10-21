@@ -1230,6 +1230,8 @@ augroup gnosis_autosync
   autocmd BufWritePost *.md call gnosis#group_review_check()
   autocmd BufWritePost *.md call s:on_write_post()
   " 見出しを書き換えたら、その見出しへのリンクも直す（保存の前の見出しを控えて比べる）
+  autocmd BufWritePre *.md call gnosis#title_sync_before()
+  autocmd BufWritePost *.md call gnosis#title_sync_after()
   autocmd BufWritePre *.md call gnosis#heading_links_before()
   autocmd BufWritePost *.md call gnosis#heading_links_after()
   autocmd BufReadPost *.md call gnosis#group_review_snapshot()

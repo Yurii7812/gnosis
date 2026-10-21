@@ -200,6 +200,25 @@ class AppModelTest(unittest.TestCase):
         self.assertEqual(self.v.links("gr.md")["parents"][0]["rel"], "r.md")
         self.assertTrue(self.v.links("nai.md")["missing"])
 
+    def test_search_full_and_mandala_index(self):
+        r = self.v.search_full("栽培 -ハーブ")
+        self.assertEqual([x["rel"] for x in r["results"]], ["gr.md", "rs.md"])   # 索引「ローズマリー」の項目と、題「ローズマリーの栽培」（ハーブを含まない）
+        r = self.v.search_full("line:(水やり 📅)")
+        self.assertEqual([x["rel"] for x in r["results"]], ["d1.md"])
+        self.assertEqual(r["results"][0]["lines"][0]["line"], 10)
+        self.assertIn("error", self.v.search_full("/[/"))
+        names = [x["title"] for x in self.v.search_full("本文", sort="name-desc")["results"]]
+        self.assertEqual(names, sorted(names, reverse=True))
+        # 索引を曼荼羅で: 真ん中は索引、周りは項目、そのまわりは項目のトピック索引の項目
+        m = self.v.mandala_index("gh.md")
+        self.assertEqual([u["label"] for u in m["units"]], ["まとめ", "ローズマリー", "栽培"])
+        rose = m["units"][1]
+        self.assertEqual([c["label"] for c in rose["children"]], ["栽培", "利用"])
+        self.assertEqual(rose["drill"], "gr.md")
+        # 普通のノートなら、その BranchGroup の索引で
+        self.assertEqual(self.v.mandala_index("h.md")["rel"], "gh.md")
+        self.assertEqual(self.v.yomi_order(["みかん", "あんず", "かき"]), [1, 2, 0])
+
     def test_entries_rows(self):
         e = self.v.entries("gh.md")
         self.assertEqual([(x["label"], x["row"]) for x in e], [("まとめ", ""), ("ローズマリー", ""), ("栽培", "育てる")])

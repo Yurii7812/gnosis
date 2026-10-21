@@ -8,9 +8,9 @@ import { EXTRA_VIEWS, EXTRA_KEYS, extraTitle } from "./extra-views.js";
 import { rank } from "./palette-core.js";
 
 export const KIND_LABEL = { vim: "Vim", index: "一覧", analysis: "分析", cards: "カード", table: "テーブル", timeline: "タイムライン", graph: "グラフ", fznav: "番号ナビ", search: "検索", note: "ノート", v2: "追加ビュー", features: "機能一覧",
-  dindex: "索引ブラウザ", calendar: "カレンダー", mandala: "曼荼羅", canvas: "キャンバス" };
+  dindex: "索引ブラウザ", calendar: "カレンダー", mandala: "曼荼羅", imandala: "索引の曼荼羅", canvas: "キャンバス", search2: "検索" };
 // その場で操作できるタブ（書き出したページではなく、この画面が作る。中身は createPanes の nativeViews）
-export const NATIVE_KINDS = ["dindex", "calendar", "mandala", "canvas"];
+export const NATIVE_KINDS = ["dindex", "calendar", "mandala", "imandala", "canvas"];
 const PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
 export const VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
 

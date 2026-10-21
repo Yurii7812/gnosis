@@ -213,7 +213,7 @@ def export(root: str | Path, out: str | Path, include_private: bool = False, tit
         up = "../" * rel.count("/")
         if mandala.is_mandala((root / rel).read_text(encoding="utf-8")):
             # 曼荼羅ノートは 9×9 の格子で見せる（表のマス以外の本文は、そのあとに通常どおり出す）
-            main = f"<h1>{html.escape(node.title)}</h1>" + mandala.to_html(mandala.parse(body), node.title)
+            main = f"<h1>{html.escape(node.title)}</h1>" + "".join(mandala.to_html(g, node.title) for g in mandala.parse_all(body))
         else:
             main = md_html.render(body)
         page = _page(node.title, f'<p class="crumb"><a href="{up}index.html">一覧</a></p>{crumbs}' + main + rel_nav + f'<p class="crumb"><a href="{up}graph.html#n={urllib.parse.quote(rel)}&amp;depth=1">このノートの周りのグラフ</a></p>', up)

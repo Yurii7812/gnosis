@@ -13,7 +13,7 @@ import { createMandala } from "./mandala.js";
 import { createCanvas } from "./canvas.js";
 import { form, toast, noteSub, imeActive, popupMenu } from "./ui.js";
 import { createDocks } from "./docks.js";
-import { notesPanel, featuresPanel, linksPanel, outlinePanel } from "./panels.js";
+import { notesPanel, featuresPanel, linksPanel, outlinePanel, searchPanel } from "./panels.js";
 import { createSwitcher } from "./switcher.js";
 import { icon } from "./icons.js";
 
@@ -248,6 +248,7 @@ function followNav(s) {
     setNoteTitle(f.split("/").pop().replace(/\.md$/i, ""));
     Promise.resolve(nav.follow(f)).then(() => { const i = nav.info(); if (navFile === f && i && i.title && !i.missing) setNoteTitle(i.title, i); });
     docks && docks.follow(f);
+    rememberRecent(f);
   }
   if (s.mod !== undefined) {
     if (navMod && !s.mod) refreshAppViewsSoon();      // 保存した: 索引の情報が変わったかもしれない
@@ -293,6 +294,9 @@ const appCtx = {
   focusVim: () => term && term.focus(),
   changed: () => refreshAppViewsSoon(300),
   newNote: (title) => newNote(title),
+  menu: (x, y, items) => popupMenu(x, y, items),
+  // ノートを開いて、その行へ（検索の結果）
+  openAt: async (rel, line) => { if (await vimOpen(rel)) setTimeout(() => gotoLine(line), 200); },
   getLines: () => (guiEdit && guiEdit.isOn() ? view.view.state.doc.toString().split("\n") : curLines),
   gotoLine: (l) => gotoLine(l),
   readNote: (rel) => gui.readNote(absOf(rel)),
@@ -323,6 +327,7 @@ const nativeViews = {
   dindex: () => createIndexBrowser(appCtx),
   calendar: (p) => createCalendar(appCtx, p),
   mandala: (p) => createMandala(appCtx, p),
+  imandala: (p) => createMandala(appCtx, { index: p.rel, mode: p.mode }),
   canvas: (p) => createCanvas(appCtx, p),
 };
 
@@ -337,8 +342,17 @@ async function pickNoteOfKind(kind, title) {
   return v && v.file;
 }
 
+// 索引を曼荼羅で見る（索引か、トピック索引のあるノートのとき）
+function openIndexMandala(rel) {
+  const i = nav && nav.info();
+  rel = rel || (i && !i.missing ? (i.entries ? i.rel : (i.topics && i.topics[0] ? i.topics[0].rel : "")) : "");
+  if (!rel) { toast("索引（グループ）か、トピック索引のあるノートを開いているときに使えます", "err"); return; }
+  panes.openOrFocus("imandala", { rel }, "曼荼羅: " + (rel === (i && i.rel) ? i.title : titleOf(rel)));
+}
+
 async function openMandala(mode) {
   const i = nav && nav.info();
+  if (!mode && i && !i.missing && i.kind !== "mandala" && (i.entries || i.is_index)) { openIndexMandala(i.rel); return; }
   if (mode !== "pick" && mode !== "new" && i && i.kind === "mandala") { panes.openOrFocus("mandala", { rel: i.rel }, "曼荼羅: " + i.title); return; }
   if (mode === "pick") { const f = await pickNoteOfKind("mandala", "曼荼羅を開く"); if (f) panes.openOrFocus("mandala", { rel: f }, "曼荼羅: " + titleOf(f)); return; }
   const v = await form({
@@ -409,12 +423,13 @@ function setSidebar(on) {   // 互換: 左のバーの「索引」を出す・�
 function initDocks() {
   const ribbon = [
     { id: "switcher", icon: "file-search", title: "ノートを開く（Ctrl+O）", run: () => switcher.open() },
+    { id: "search", icon: "search", title: "検索（Ctrl+Shift+F）", run: () => openSearch() },
     { id: "new", icon: "note-plus", title: "新しいノート（Ctrl+N）", run: () => newNote() },
     { id: "today", icon: "today", title: "今日の日記を開く", run: () => appCtx.op("diary_open", {}) },
     { id: "calendar", icon: "calendar", title: "カレンダー（Alt+C）", run: () => openCalendar() },
     { id: "browser", icon: "columns", title: "索引ブラウザ（Index → ノート → トピック索引 を列で辿る）", run: () => openIndexBrowser() },
     { id: "graph", icon: "graph", title: "グラフ", run: () => panes.openView("graph") },
-    { id: "mandala", icon: "mandala", title: "曼荼羅（今のノートが曼荼羅なら開く・無ければ新しく作る）", run: () => openMandala() },
+    { id: "mandala", icon: "mandala", title: "曼荼羅（今のノートが曼荼羅なら開く・索引なら曼荼羅で見る・ほかは新しく作る）", run: () => openMandala() },
     { id: "canvas", icon: "canvas", title: "キャンバス（今のノートがキャンバスなら開く・無ければ新しく作る）", run: () => openCanvas() },
     { id: "palette", icon: "command", title: "コマンドパレット（Ctrl+P）", run: () => openPalette() },
     { id: "views", icon: "cards", title: "表示専用のビュー（カード・テーブル・時系列・検索…）", bottom: true, run: (e) => { const r = document.querySelector('[data-ribbon="views"]').getBoundingClientRect(); viewsMenu(r.right + 4, r.top); } },
@@ -422,15 +437,26 @@ function initDocks() {
   ];
   const panels = [
     { id: "index", side: "left", icon: "index", title: "索引（ダブルインデックス: Index からの道・載っている索引・トピック索引。Alt+I で索引語を探す）",
-      create: (el) => { el.id = "sidebar"; nav = createNavSidebar(el, appCtx); el.addEventListener("gnosis-open-editor", (e) => { if (e.detail === "mandala") openMandala(); else openCanvas(); }); return { refresh: () => {} }; } },
-    { id: "notes", side: "left", icon: "files", title: "ノート（最近のノート・題で探す）", create: notesPanel(appCtx) },
+      create: (el) => { el.id = "sidebar"; nav = createNavSidebar(el, appCtx); el.addEventListener("gnosis-open-editor", (e) => { if (e.detail === "mandala") openMandala(); else if (e.detail === "imandala") openIndexMandala(); else openCanvas(); }); return { refresh: () => {} }; } },
+    { id: "notes", side: "left", icon: "files", title: "ノート（全部のノート・並び替え）", create: notesPanel(appCtx) },
+    { id: "search", side: "left", icon: "search", title: "検索（Obsidian と同じ書き方の全文検索。Ctrl+Shift+F）", create: searchPanel(appCtx) },
     { id: "features", side: "left", icon: "features", title: "機能（全部の機能。押すと実行）", create: featuresPanel(async () => { if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } } return paletteItems(); }) },
     { id: "links", side: "right", icon: "link", title: "リンク（関係・バックリンク・出ていくリンク）", create: linksPanel(appCtx) },
     { id: "outline", side: "right", icon: "outline", title: "アウトライン（見出し）", create: outlinePanel(appCtx) },
   ];
   docks = createDocks({ ribbonEl: $("ribbon"), leftEl: $("leftdock"), rightEl: $("rightdock"), leftSplit: $("leftdock-split"), rightSplit: $("rightdock-split"), centerEl: $("center"), panels, ribbon, onResize: () => scheduleFit(), menu: popupMenu });
   docks.panel("index");     // 索引ナビは、隠れていても今のノートの情報（nav.info）に使う
-  switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t) => newNote(t), onClose: () => backToInputSoon() });
+  switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t) => newNote(t), onClose: () => backToInputSoon(), recent: () => recentNotes() });
+}
+// 検索のパネルを出して、欄へ（q があればそれで探す）
+function openSearch(q) { const p = docks.show("search"); if (p && p.focusSearch) p.focusSearch(q); }
+// 最近開いたノート（クイックスイッチャーの最初の一覧。この PC だけ）
+function recentNotes() { try { return JSON.parse(localStorage.getItem("gnosis.recent") || "[]"); } catch { return []; } }
+function rememberRecent(file) {
+  const rel = relOf(file);
+  if (!rel || rel.startsWith("/")) return;
+  const list = [rel, ...recentNotes().filter((x) => x !== rel)].slice(0, 40);
+  try { localStorage.setItem("gnosis.recent", JSON.stringify(list)); } catch { /* ignore */ }
 }
 let outlineTimer = null;
 function outlineSoon() {
@@ -460,6 +486,7 @@ function paletteItems() {
   add("バー", "アウトライン（右のバー）を出す", "outline headings アウトライン 見出し", () => docks.show("outline"));
   add("ノート", "ノートを開く（クイックスイッチャー）", "quick switcher open note ctrl+o 開く 探す", () => switcher.open());
   add("ノート", "新しいノート", "new note ctrl+n 新規 作る", () => newNote());
+  add("検索", "全文検索（Obsidian と同じ書き方）", "search full text ctrl+shift+f 検索 全文 探す", () => openSearch());
   add("索引", "索引語で探す", "search keyword 索引語 検索", () => { docks.show("index"); nav.focusSearch(); });
   add("索引", "索引ブラウザを開く（Index → ノート → トピック索引 を列で辿る）", "index browser miller 索引 ブラウザ", () => openIndexBrowser());
   add("索引", "今のノートを索引に載せる", "add index 載せる 索引語 \\l g", () => nav.info() && nav.actions.addToIndex(nav.info()));
@@ -469,6 +496,7 @@ function paletteItems() {
   add("時間", "今日の日記を開く", "diary today 日記", () => appCtx.op("diary_open", {}));
   add("曼荼羅", "曼荼羅を開く（今のノート）・新しい曼荼羅", "mandala 曼荼羅 マンダラート", () => openMandala());
   add("曼荼羅", "新しい曼荼羅を作る", "mandala new 曼荼羅", () => openMandala("new"));
+  add("曼荼羅", "今の索引を曼荼羅で見る", "mandala index 曼荼羅 索引 インデックス", () => openIndexMandala());
   add("曼荼羅", "曼荼羅を選んで開く", "mandala open 曼荼羅", () => openMandala("pick"));
   add("キャンバス", "キャンバスを開く（今のノート）・新しいキャンバス", "canvas whiteboard キャンバス ホワイトボード", () => openCanvas());
   add("キャンバス", "新しいキャンバスを作る", "canvas new キャンバス", () => openCanvas("new"));
@@ -585,7 +613,7 @@ function initHotkeys() {
     if (e.code === "Tab") return take(() => panes.cycle(e.shiftKey ? -1 : 1));
     if (e.shiftKey) {
       if (e.code === "KeyP") return take(() => openPalette());
-      if (e.code === "KeyF") return take(() => panes.openView("search"));
+      if (e.code === "KeyF") return take(() => openSearch());
       return;
     }
     // 打っている欄（クイックスイッチャー・パレットの中など）の中では、その欄の Ctrl+P/N（候補の上下）に任せる
@@ -604,6 +632,7 @@ function noteMenu(x, y) {
   const items = [];
   if (i && i.kind === "mandala") items.push({ label: "曼荼羅の画面で開く", run: () => openMandala() });
   if (i && i.kind === "canvas") items.push({ label: "キャンバスの画面で開く", run: () => openCanvas() });
+  if (i && !i.missing && (i.entries || (i.topics && i.topics.length))) items.push({ label: "索引を曼荼羅で見る", run: () => openIndexMandala() });
   items.push(
     { label: "索引に載せる…", disabled: !i || i.missing || i.is_index, run: () => nav.actions.addToIndex(i) },
     { label: "トピック索引を作る…", disabled: !i || i.missing || !!i.entries, run: () => nav.actions.newTopic(i) },
@@ -959,7 +988,7 @@ async function boot() {
     isViewOnly: () => viewOnly,
     setViewOnly,
     setMode, currentMode, guiEdit: () => guiEdit, panes: () => panes, openPalette,
-    nav: () => nav, appCtx, openMandala, openCanvas, openCalendar, openIndexBrowser, setSidebar, docks: () => docks, switcher: () => switcher, newNote,
+    openSearch, nav: () => nav, appCtx, openMandala, openIndexMandala, openCanvas, openCalendar, openIndexBrowser, setSidebar, docks: () => docks, switcher: () => switcher, newNote,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

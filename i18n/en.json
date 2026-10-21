@@ -639,6 +639,7 @@
     "（メモはありません）": "(No memos)",
     "トピック（空欄で未選択）: ": "Topic (empty for no topic): ",
     "見出しへのリンクを直しました（%d ノート）": "Updated links to the heading (%d notes)",
+    "題を「%s」にそろえました": "Title synced to \"%s\"",
     "まとめられる時系列記録が 2 つ以上ありません": "There are not two or more chronological records to merge",
     "時系列記録「%s」を「%s」にまとめました（その日のノート %d 件）": "Merged chronological record \"%s\" into \"%s\" (%d daily notes)",
     "まとめる元（消える方）:": "Merge from (will be removed):",

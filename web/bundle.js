@@ -34733,7 +34733,9 @@ ${h4.join(`
     dindex: "\u7D22\u5F15\u30D6\u30E9\u30A6\u30B6",
     calendar: "\u30AB\u30EC\u30F3\u30C0\u30FC",
     mandala: "\u66FC\u837C\u7F85",
-    canvas: "\u30AD\u30E3\u30F3\u30D0\u30B9"
+    imandala: "\u7D22\u5F15\u306E\u66FC\u837C\u7F85",
+    canvas: "\u30AD\u30E3\u30F3\u30D0\u30B9",
+    search2: "\u691C\u7D22"
   };
   var PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
   var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
@@ -35806,6 +35808,7 @@ ${h4.join(`
       if (info.entries) {
         const tools = h3("span", "nav-tools");
         tools.append(
+          button("\u25A6", () => root.dispatchEvent(new CustomEvent("gnosis-open-editor", { detail: "imandala" })), "nav-btn", "\u3053\u306E\u7D22\u5F15\u3092\u66FC\u837C\u7F85\u3067\u898B\u308B"),
           button("\uFF0B \u65B0\u3057\u3044\u30CE\u30FC\u30C8", () => act.newInIndex(info), "nav-btn", "\u3053\u306E\u7D22\u5F15\u306B\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u3092\u4F5C\u3063\u3066\u8F09\u305B\u308B\uFF08zn \u2192 Enter \u3068\u540C\u3058\uFF09"),
           button("\uFF0B \u65E2\u5B58", () => act.addExisting(info), "nav-btn", "\u3053\u306E\u7D22\u5F15\u306B\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u8F09\u305B\u308B")
         );
@@ -35829,7 +35832,10 @@ ${h4.join(`
         }
       }
       if (!info.entries || info.topics.length) {
-        const s15 = section(`\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\uFF08${info.topics.length}\uFF09`, info.entries ? null : button("\uFF0B \u4F5C\u308B", () => act.newTopic(info), "nav-btn", "\u3053\u306E\u30CE\u30FC\u30C8\u304B\u3089\u5206\u5C90\u3059\u308B\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u4F5C\u308B\uFF08zk \u2192 n \u3068\u540C\u3058\uFF09"));
+        const tt = h3("span", "nav-tools");
+        if (!info.entries && info.topics.length) tt.appendChild(button("\u25A6", () => root.dispatchEvent(new CustomEvent("gnosis-open-editor", { detail: "imandala" })), "nav-btn", "\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u66FC\u837C\u7F85\u3067\u898B\u308B"));
+        if (!info.entries) tt.appendChild(button("\uFF0B \u4F5C\u308B", () => act.newTopic(info), "nav-btn", "\u3053\u306E\u30CE\u30FC\u30C8\u304B\u3089\u5206\u5C90\u3059\u308B\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u4F5C\u308B\uFF08zk \u2192 n \u3068\u540C\u3058\uFF09"));
+        const s15 = section(`\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\uFF08${info.topics.length}\uFF09`, tt.childNodes.length ? tt : null);
         if (!info.topics.length) s15.appendChild(h3("div", "nav-dim", "\u3053\u306E\u30CE\u30FC\u30C8\u304C\u80B2\u3063\u305F\u3089\u3001\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u4F5C\u3063\u3066\u7D30\u304B\u3044\u540D\u524D\u3067\u7D22\u5F15\u3067\u304D\u307E\u3059"));
         for (const t3 of info.topics) {
           const th = h3("div", "nav-subhead");
@@ -36347,25 +36353,31 @@ ${h4.join(`
     const inner = m ? m[1] : line;
     return inner.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
   }
-  function parseGrid(text) {
-    const grid = Array.from({ length: N }, () => Array(N).fill(""));
-    const lines = text.split("\n");
-    const rows = [];
-    let started = false;
-    for (let i = 0; i < lines.length; i++) {
-      const ln2 = lines[i];
-      if (ROW_RE.test(ln2)) {
-        if (SEP_RE.test(ln2)) {
-          started = true;
-          continue;
-        }
-        if (started) rows.push(cellsOf(ln2));
-      } else if (started && rows.length) break;
+  var emptyGrid = () => Array.from({ length: N }, () => Array(N).fill(""));
+  function tableBlocks(lines) {
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      if (ROW_RE.test(lines[i]) && i + 1 < lines.length && SEP_RE.test(lines[i + 1])) {
+        let j2 = i + 2;
+        while (j2 < lines.length && ROW_RE.test(lines[j2]) && j2 - (i + 2) < N) j2++;
+        out.push([i, j2]);
+        i = j2;
+      } else i++;
     }
-    rows.slice(0, N).forEach((row, r) => row.slice(0, N).forEach((v2, c) => {
+    return out;
+  }
+  function gridOf(lines, [a, b2]) {
+    const grid = emptyGrid();
+    lines.slice(a + 2, b2).slice(0, N).forEach((ln2, r) => cellsOf(ln2).slice(0, N).forEach((v2, c) => {
       grid[r][c] = v2;
     }));
     return grid;
+  }
+  function parseGrids(text) {
+    const lines = text.split("\n");
+    const bl2 = tableBlocks(lines);
+    return bl2.length ? bl2.map((b2) => gridOf(lines, b2)) : [emptyGrid()];
   }
   function renderTable(grid) {
     const esc = (v2) => v2.replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -36373,20 +36385,20 @@ ${h4.join(`
     for (let r = 0; r < N; r++) out.push("| " + grid[r].map(esc).join(" | ") + " |");
     return out;
   }
-  function replaceTable(text, grid) {
+  function replaceTables(text, grids) {
     const lines = text.split("\n");
-    const idx = lines.map((ln2, i) => ROW_RE.test(ln2) ? i : -1).filter((i) => i >= 0);
-    const table = renderTable(grid);
-    if (idx.length >= N + 2) {
-      const first = idx[0];
-      let n = 0;
-      while (first + n < lines.length && ROW_RE.test(lines[first + n])) n++;
-      lines.splice(first, n, ...table);
+    const bl2 = tableBlocks(lines);
+    const tables = [];
+    grids.forEach((g, k) => {
+      if (k) tables.push("");
+      tables.push(...renderTable(g));
+    });
+    if (!bl2.length) {
+      const h1 = lines.findIndex((l) => /^#\s/.test(l));
+      lines.splice(h1 + 1, 0, "", ...tables);
       return lines.join("\n");
     }
-    const h1 = lines.findIndex((l) => /^#\s/.test(l));
-    lines.splice(h1 + 1, 0, "", ...table);
-    return lines.join("\n");
+    return [...lines.slice(0, bl2[0][0]), ...tables, ...lines.slice(bl2[bl2.length - 1][1])].join("\n");
   }
   function mergeGrids(base2, ours, disk) {
     let clashes = 0;
@@ -36399,6 +36411,20 @@ ${h4.join(`
     }));
     return { grid, clashes };
   }
+  function mergePages(base2, ours, disk) {
+    let clashes = 0;
+    const n = Math.max(ours.length, disk.length);
+    const out = [];
+    for (let p = 0; p < n; p++) {
+      const o2 = ours[p], d = disk[p], b2 = base2[p] || emptyGrid();
+      if (o2 && d) {
+        const m = mergeGrids(b2, o2, d);
+        clashes += m.clashes;
+        out.push(m.grid);
+      } else out.push(o2 || d);
+    }
+    return { grids: out, clashes };
+  }
   function mirrorOf(r, c) {
     for (let i = 0; i < 8; i++) {
       if (RING[i][0] === r && RING[i][1] === c) return BLOCK_CENTER[i];
@@ -36406,6 +36432,12 @@ ${h4.join(`
     }
     return null;
   }
+  var blockCells = (b2) => {
+    const br3 = Math.floor(b2 / 3) * 3, bc2 = b2 % 3 * 3;
+    const out = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out.push([br3 + r, bc2 + c]);
+    return out;
+  };
   function relLink(dir, rel) {
     const from = dir.split("/").filter(Boolean), to = rel.split("/");
     let i = 0;
@@ -36419,32 +36451,107 @@ ${h4.join(`
   function unlinkText(v2) {
     return v2.replace(new RegExp(LINK_RE.source, "g"), (_2, t3) => t3.replace(/\\(.)/g, "$1"));
   }
-  var blockCells = (b2) => {
-    const br3 = Math.floor(b2 / 3) * 3, bc2 = b2 % 3 * 3;
+  var CHILD_POS = [0, 1, 2, 3, 5, 6, 7, 8];
+  function unitsOf(grids) {
     const out = [];
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out.push([br3 + r, bc2 + c]);
+    grids.forEach((g, p) => {
+      for (let i = 0; i < 8; i++) {
+        const cells = blockCells(BLOCK_OF_RING[i]);
+        out.push({ p, i, title: g[RING[i][0]][RING[i][1]] || g[BLOCK_CENTER[i][0]][BLOCK_CENTER[i][1]], children: CHILD_POS.map((k) => g[cells[k][0]][cells[k][1]]) });
+      }
+    });
     return out;
-  };
+  }
+  var filledOf = (u) => u.children.filter((x) => String(x && (x.label ?? x)).trim()).length;
+  var isEmptyUnit = (u) => !String(u.title || "").trim() && filledOf(u) === 0;
+  function sortUnits(units, key, order) {
+    const filled = units.filter((u) => !isEmptyUnit(u)), empty = units.filter(isEmptyUnit);
+    const pos = new Map(units.map((u, k) => [u, k]));
+    const by = (f) => filled.slice().sort((a, b2) => f(a, b2) || pos.get(a) - pos.get(b2));
+    let s15 = filled;
+    if (key === "aiueo" && order) {
+      const rank2 = new Map(order.map((k, j2) => [filled[k], j2]));
+      s15 = by((a, b2) => rank2.get(a) - rank2.get(b2));
+    } else if (key === "filled") s15 = by((a, b2) => filledOf(b2) - filledOf(a));
+    else if (key === "empty") s15 = by((a, b2) => filledOf(a) - filledOf(b2));
+    else if (key === "new") s15 = by((a, b2) => String(b2.time || "").localeCompare(String(a.time || "")));
+    else if (key === "old") s15 = by((a, b2) => String(a.time || "").localeCompare(String(b2.time || "")));
+    return [...s15, ...empty];
+  }
+  function gridsFromUnits(units, grids, theme2) {
+    const real = units.filter((u) => !isEmptyUnit(u));
+    const pages = Math.max(1, Math.ceil(real.length / 8));
+    const out = Array.from({ length: pages }, () => {
+      const g = emptyGrid();
+      g[THEME[0]][THEME[1]] = theme2;
+      return g;
+    });
+    real.forEach((u, k) => {
+      const g = out[Math.floor(k / 8)], slot = k % 8, src = grids[u.p];
+      const sc2 = blockCells(BLOCK_OF_RING[u.i]), dc2 = blockCells(BLOCK_OF_RING[slot]);
+      for (let j2 = 0; j2 < 9; j2++) g[dc2[j2][0]][dc2[j2][1]] = src[sc2[j2][0]][sc2[j2][1]];
+      g[RING[slot][0]][RING[slot][1]] = src[RING[u.i][0]][RING[u.i][1]];
+    });
+    return out;
+  }
+  var SORTS_OWN = [["file", "\u30D5\u30A1\u30A4\u30EB\u306E\u9806"], ["aiueo", "\u3042\u3044\u3046\u3048\u304A\u9806"], ["filled", "\u57CB\u307E\u3063\u3066\u3044\u308B\u9806"], ["empty", "\u7A7A\u3044\u3066\u3044\u308B\u9806"]];
+  var SORTS_INDEX = [["file", "\u7D22\u5F15\u306E\u9806"], ["aiueo", "\u3042\u3044\u3046\u3048\u304A\u9806"], ["filled", "\u9805\u76EE\u306E\u591A\u3044\u9806"], ["empty", "\u9805\u76EE\u306E\u5C11\u306A\u3044\u9806"], ["new", "\u65B0\u3057\u3044\u9806"], ["old", "\u53E4\u3044\u9806"]];
   function createMandala(ctx, params) {
-    const rel = params.rel;
+    const indexMode = !!params.index;
+    let rel = params.rel || params.index;
     const el2 = h3("div", "viewbox mdbox keepfocus");
     const bar = h3("div", "md-bar");
     const crumbs = h3("div", "md-crumbs");
     const state = h3("span", "md-state", "");
     const body = h3("div", "md-body");
     el2.append(bar, body);
-    let text = "", hash2 = "", grid = null, base2 = null, mode = params.mode || "3", block = 4, dirty = false, saving = false, timer = null;
-    const copyGrid = (g) => g.map((row) => row.slice());
-    const b3 = button("3\xD73 \u3067\u8003\u3048\u308B", () => {
+    let text = "", hash2 = "", grids = null, base2 = null, mode = params.mode || "3", zoom = null, dirty = false, saving = false, timer = null;
+    let sortKey = "file", order = null, idx = null, trail = [];
+    const copy = (gs2) => gs2.map((g) => g.map((row) => row.slice()));
+    const b3 = button("3\xD73", () => {
       mode = "3";
+      zoom = null;
       draw();
-    }, "nav-btn");
-    const b9 = button("9\xD79 \u5168\u4F53", () => {
+    }, "nav-btn", "\u5404\u66FC\u837C\u7F85\u306E\u4E2D\u5FC3\uFF08\u4E3B\u984C\u3068 8 \u3064\u306E\u526F\u984C\uFF09\u3092\u7E26\u306B\u4E26\u3079\u308B");
+    const b9 = button("9\xD79", () => {
       mode = "9";
+      zoom = null;
       draw();
-    }, "nav-btn");
-    bar.append(crumbs, b3, b9, button("Vim \u3067\u958B\u304F", () => ctx.open(rel), "nav-btn"), state);
+    }, "nav-btn", "\u5168\u90E8\u306E\u30DE\u30B9");
+    const sortSel = h3("select", "md-sort");
+    sortSel.title = "\u4E26\u3073\u66FF\u3048\uFF08\u8868\u793A\u3060\u3051\u3002\u30D5\u30A1\u30A4\u30EB\u306F\u5909\u3048\u307E\u305B\u3093\uFF09";
+    for (const [k, t3] of indexMode ? SORTS_INDEX : SORTS_OWN) {
+      const o2 = h3("option", "", t3);
+      o2.value = k;
+      sortSel.appendChild(o2);
+    }
+    sortSel.addEventListener("change", async () => {
+      sortKey = sortSel.value;
+      await ensureOrder();
+      zoom = null;
+      draw();
+    });
+    const saveOrder = button("\u3053\u306E\u4E26\u3073\u3067\u4FDD\u5B58", () => saveSorted(), "nav-btn", "\u4ECA\u306E\u4E26\u3073\u306E\u3068\u304A\u308A\u306B\u8868\u3092\u66F8\u304D\u76F4\u3059\uFF08\u526F\u984C\u3068\u305D\u306E\u307E\u308F\u308A\u306E\u30DE\u30B9\u3092\u307E\u3068\u3081\u3066\u52D5\u304B\u3059\uFF09");
+    const openVim = button(indexMode ? "\u7D22\u5F15\u3092 Vim \u3067\u958B\u304F" : "Vim \u3067\u958B\u304F", () => ctx.open(rel), "nav-btn");
+    bar.append(crumbs, sortSel, ...indexMode ? [] : [saveOrder], b3, b9, openVim, state);
     async function load() {
+      if (indexMode) {
+        const r2 = await ctx.query("mandala.index", { file: rel });
+        if (!r2.ok || r2.result.missing) {
+          body.textContent = r2.result && r2.result.error || r2.error || "\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F";
+          return;
+        }
+        idx = r2.result;
+        if (idx.error) {
+          body.textContent = idx.error;
+          return;
+        }
+        rel = idx.rel;
+        order = null;
+        await ensureOrder();
+        draw();
+        return;
+      }
       const r = await ctx.readNote(rel);
       if (!r.ok) {
         body.textContent = r.error || "\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F";
@@ -36452,11 +36559,43 @@ ${h4.join(`
       }
       text = r.text;
       hash2 = r.hash;
-      grid = parseGrid(text);
-      base2 = copyGrid(grid);
+      grids = parseGrids(text);
+      base2 = copy(grids);
       dirty = false;
       if (!/^mandala:\s*true\s*$/m.test(text.split(/\n---\s*\n/)[0] || "")) toast("\u66FC\u837C\u7F85\u30CE\u30FC\u30C8\uFF08mandala: true\uFF09\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u8868\u306E\u5F62\u3060\u3051\u4F7F\u3044\u307E\u3059");
+      order = null;
+      await ensureOrder();
       draw();
+    }
+    const themeText = () => indexMode ? idx.title : grids[0][THEME[0]][THEME[1]] || "\uFF08\u4E3B\u984C\uFF09";
+    function ownUnits() {
+      const gs2 = grids.slice();
+      const last3 = gs2[gs2.length - 1];
+      if (RING.every(([r, c]) => String(last3[r][c]).trim())) gs2.push(emptyGrid());
+      return unitsOf(gs2);
+    }
+    function rawUnits() {
+      if (!indexMode) return ownUnits();
+      const us2 = idx.units.map((u) => ({ ...u, title: u.label, children: u.children.slice(0, 8), more: Math.max(0, u.children.length - 8) }));
+      const pad2 = 8 - us2.length % 8;
+      for (let k = 0; k < pad2; k++) us2.push({ empty: true, title: "", children: [] });
+      return us2;
+    }
+    async function ensureOrder() {
+      if (sortKey !== "aiueo" || order) return;
+      const us2 = rawUnits().filter((u) => !isEmptyUnit(u));
+      const texts = us2.map((u) => String(u.title || ""));
+      const readings2 = {};
+      if (indexMode) {
+        for (const u of us2) if (u.yomi) readings2[u.title] = u.yomi;
+      }
+      const r = await ctx.query("yomi.order", { texts, readings: readings2 });
+      order = r.ok ? r.result : texts.map((_2, k) => k);
+    }
+    function displayUnits() {
+      const us2 = rawUnits();
+      if (sortKey === "file") return us2;
+      return sortUnits(us2, sortKey, order);
     }
     function setState(t3, cls = "") {
       state.textContent = t3;
@@ -36464,9 +36603,15 @@ ${h4.join(`
     }
     function schedule() {
       dirty = true;
+      order = null;
       setState("\u672A\u4FDD\u5B58", "dirty");
       clearTimeout(timer);
       timer = setTimeout(save, 700);
+    }
+    function gridsToSave() {
+      const out = grids.slice();
+      while (out.length > 1 && out[out.length - 1].every((row, r) => row.every((v2, c) => r === THEME[0] && c === THEME[1] || !String(v2).trim()))) out.pop();
+      return out;
     }
     async function save() {
       if (saving) {
@@ -36479,8 +36624,8 @@ ${h4.join(`
       let clashes = 0;
       let r = null;
       for (let tries = 0; tries < 3; tries++) {
-        const saved = copyGrid(grid);
-        const next = replaceTable(text, saved);
+        const saved = copy(gridsToSave());
+        const next = replaceTables(text, saved);
         r = await ctx.commit(rel, next, hash2);
         if (r.ok) {
           text = r.text ?? next;
@@ -36491,10 +36636,10 @@ ${h4.join(`
         if (!r.conflict) break;
         const disk = await ctx.readNote(rel);
         if (!disk.ok) break;
-        const dg = parseGrid(disk.text);
-        const m = mergeGrids(base2, grid, dg);
+        const dg = parseGrids(disk.text);
+        const m = mergePages(base2, grids, dg);
         clashes += m.clashes;
-        grid = m.grid;
+        grids = m.grids;
         base2 = dg;
         text = disk.text;
         hash2 = disk.hash;
@@ -36509,28 +36654,69 @@ ${h4.join(`
     }
     function refreshValues() {
       for (const ta2 of body.querySelectorAll(".md-cell textarea")) {
-        const [rr2, cc2] = ta2.closest(".md-cell").dataset.rc.split(",").map(Number);
-        if (ta2 !== document.activeElement && ta2.value !== grid[rr2][cc2]) {
-          ta2.value = grid[rr2][cc2];
+        const a = ta2.closest(".md-cell")._addr;
+        if (a && ta2 !== document.activeElement && ta2.value !== valOf(a)) {
+          ta2.value = valOf(a);
           ta2.dispatchEvent(new Event("blur"));
         }
       }
     }
-    function setCell(r, c, v2) {
-      grid[r][c] = v2;
-      const m = mirrorOf(r, c);
+    async function saveSorted() {
+      if (indexMode) return;
+      if (sortKey === "file") {
+        toast("\u4E26\u3073\u66FF\u3048\u3092\u9078\u3076\u3068\u3001\u305D\u306E\u9806\u3067\u4FDD\u5B58\u3067\u304D\u307E\u3059");
+        return;
+      }
+      const us2 = displayUnits();
+      grids = gridsFromUnits(us2, grids.concat([emptyGrid()]), grids[0][THEME[0]][THEME[1]]);
+      sortKey = "file";
+      sortSel.value = "file";
+      schedule();
+      draw();
+      toast("\u3053\u306E\u4E26\u3073\u3067\u8868\u3092\u66F8\u304D\u76F4\u3057\u307E\u3057\u305F");
+    }
+    function valOf(a) {
+      if (a.theme) return themeText() === "\uFF08\u4E3B\u984C\uFF09" ? "" : themeText();
+      const g = grids[a.p];
+      return g ? g[a.r][a.c] : "";
+    }
+    function setCell(a, v2) {
+      if (a.theme) {
+        for (const g2 of grids) g2[THEME[0]][THEME[1]] = v2;
+        schedule();
+        return;
+      }
+      while (grids.length <= a.p) {
+        const g2 = emptyGrid();
+        g2[THEME[0]][THEME[1]] = grids[0][THEME[0]][THEME[1]];
+        grids.push(g2);
+      }
+      const g = grids[a.p];
+      const fullBefore = lastFull();
+      g[a.r][a.c] = v2;
+      const m = mirrorOf(a.r, a.c);
       if (m) {
-        grid[m[0]][m[1]] = v2;
-        const other = body.querySelector(`[data-rc="${m[0]},${m[1]}"] textarea`);
-        if (other && other !== document.activeElement) {
-          other.value = v2;
-          other.dispatchEvent(new Event("blur"));
+        g[m[0]][m[1]] = v2;
+        for (const cell2 of body.querySelectorAll(".md-cell")) {
+          const b2 = cell2._addr;
+          if (b2 && !b2.theme && b2.p === a.p && b2.r === m[0] && b2.c === m[1]) {
+            const ta2 = cell2.querySelector("textarea");
+            if (ta2 && ta2 !== document.activeElement) {
+              ta2.value = v2;
+              ta2.dispatchEvent(new Event("blur"));
+            }
+          }
         }
       }
       schedule();
+      if (fullBefore !== lastFull()) draw();
     }
+    const lastFull = () => {
+      const last3 = grids[grids.length - 1];
+      return RING.every(([r, c]) => String(last3[r][c]).trim());
+    };
     const dirOf = () => rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "";
-    async function putNote(r, c, target, title) {
+    async function putNote(a, target, title) {
       if (!title) {
         const q2 = await ctx.query("nav.note", { file: target });
         title = q2.ok && q2.result && !q2.result.missing ? q2.result.title : target.split("/").pop().replace(/\.md$/i, "");
@@ -36539,49 +36725,102 @@ ${h4.join(`
         toast("\u3053\u306E\u66FC\u837C\u7F85\u81EA\u8EAB\u306F\u5165\u308C\u3089\u308C\u307E\u305B\u3093", "err");
         return;
       }
-      const cur = unlinkText(grid[r][c]).trim();
+      const cur = unlinkText(valOf(a)).trim();
       const v2 = cellLink(cur || title, dirOf(), target);
-      const ta2 = body.querySelector(`[data-rc="${r},${c}"] textarea`);
-      if (ta2) ta2.value = v2;
-      setCell(r, c, v2);
-      if (ta2) ta2.dispatchEvent(new Event("blur"));
+      setCell(a, v2);
+      for (const cell2 of body.querySelectorAll(".md-cell")) if (cell2._addr === a) {
+        const ta2 = cell2.querySelector("textarea");
+        if (ta2) {
+          ta2.value = v2;
+          ta2.dispatchEvent(new Event("blur"));
+        }
+      }
       toast(`\u300C${title}\u300D\u3092\u30DE\u30B9\u306B\u5165\u308C\u307E\u3057\u305F`);
     }
-    async function pickNote(r, c) {
-      const cur = unlinkText(grid[r][c]).trim();
+    const notePicker = (q0, exclude) => ({
+      key: "file",
+      label: "\u30CE\u30FC\u30C8",
+      type: "picker",
+      placeholder: "\u984C\u3067\u63A2\u3059",
+      query: q0,
+      load: async (q2) => {
+        const res = await ctx.query("nav.notes", { q: q2 });
+        return (res.ok ? res.result : []).filter((x) => x.rel !== exclude).map((x) => ({ value: x.rel, label: x.title, sub: noteSub(x) }));
+      }
+    });
+    async function pickNote(a) {
+      const cur = unlinkText(valOf(a)).trim();
       const v2 = await form({
         title: "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u306B\u5165\u308C\u308B",
         ok: "\u5165\u308C\u308B",
         note: cur ? `\u30DE\u30B9\u306E\u6587\u5B57\u300C${cur}\u300D\u306F\u305D\u306E\u307E\u307E\u8868\u793A\u540D\u306B\u3057\u3066\u3001\u9078\u3093\u3060\u30CE\u30FC\u30C8\u3078\u306E\u30EA\u30F3\u30AF\u306B\u3057\u307E\u3059\u3002` : "\u30DE\u30B9\u306B\u306F\u9078\u3093\u3060\u30CE\u30FC\u30C8\u306E\u984C\u304C\u5165\u308A\u307E\u3059\uFF08\u3042\u3068\u304B\u3089\u76F4\u305B\u307E\u3059\uFF09\u3002",
-        fields: [{
-          key: "file",
-          label: "\u30CE\u30FC\u30C8",
-          type: "picker",
-          placeholder: "\u984C\u3067\u63A2\u3059",
-          query: cur,
-          load: async (q2) => {
-            const res = await ctx.query("nav.notes", { q: q2 });
-            return (res.ok ? res.result : []).filter((x) => x.rel !== rel).map((x) => ({ value: x.rel, label: x.title, sub: noteSub(x) }));
-          }
-        }]
+        fields: [notePicker(cur, rel)]
       });
-      if (!v2 || !v2.file) return;
-      await putNote(r, c, v2.file);
+      if (v2 && v2.file) await putNote(a, v2.file);
     }
-    function cellEl(r, c, opts = {}) {
-      const v2 = grid[r][c];
-      const isTheme = r === THEME[0] && c === THEME[1];
-      const ring = RING.findIndex(([a, b2]) => a === r && b2 === c);
-      const center = BLOCK_CENTER.findIndex(([a, b2]) => a === r && b2 === c);
-      const cell2 = h3("div", "md-cell" + (isTheme ? " theme" : ring >= 0 ? " sub" : center >= 0 ? " sub2" : "") + (opts.mid ? " mid" : ""));
-      cell2.dataset.rc = `${r},${c}`;
+    function openLink(target) {
+      ctx.open(decodeURIComponent((dirOf() + target).split("#")[0]).replace(/[^/]+\/\.\.\//g, ""));
+    }
+    async function linkCell(a, kind) {
+      if (dirty) await save();
+      const res = await ctx.op("mandala_link", { file: rel, row: a.r, col: a.c, kind, page: a.p });
+      if (!res.ok) {
+        toast(res.error || "\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F", "err");
+        return;
+      }
+      toast(kind === "mandala" ? "\u66FC\u837C\u7F85\u3092\u4F5C\u308A\u307E\u3057\u305F\uFF08\u4ECA\u65E5\u306E\u65E5\u8A18\u306B\u3082\u8F09\u308A\u307E\u3059\uFF09" : "\u30CE\u30FC\u30C8\u3092\u4F5C\u308A\u307E\u3057\u305F\uFF08\u4ECA\u65E5\u306E\u65E5\u8A18\u306B\u3082\u8F09\u308A\u307E\u3059\uFF09");
+      await load();
+    }
+    async function indexAdd(target, name2) {
+      const r = await ctx.op("index_add", { group: rel, target, name: name2, yomi: "", back: "" });
+      if (!r.ok) {
+        toast(r.error || "\u8F09\u305B\u3089\u308C\u307E\u305B\u3093\u3067\u3057\u305F", "err");
+        return;
+      }
+      toast(`\u7D22\u5F15\u306B\u300C${name2}\u300D\u3092\u8F09\u305B\u307E\u3057\u305F`);
+      setTimeout(load, 500);
+    }
+    async function indexPick() {
+      const v2 = await form({
+        title: `\u7D22\u5F15\u300C${idx.title}\u300D\u306B\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u8F09\u305B\u308B`,
+        ok: "\u8F09\u305B\u308B",
+        fields: [{ ...notePicker("", rel), onPick: (it, set) => set("name", it.label) }, { key: "name", label: "\u7D22\u5F15\u3067\u306E\u540D\u524D", required: true }]
+      });
+      if (v2 && v2.file) await indexAdd(v2.file, v2.name.trim());
+    }
+    async function indexNew() {
+      const v2 = await form({ title: `\u7D22\u5F15\u300C${idx.title}\u300D\u306B\u65B0\u3057\u3044\u30CE\u30FC\u30C8`, ok: "\u4F5C\u308B", fields: [{ key: "name", label: "\u7D22\u5F15\u3067\u306E\u540D\u524D", required: true }] });
+      if (!v2) return;
+      const r = await ctx.op("index_new", { group: rel, name: v2.name.trim(), title: "", yomi: "" });
+      if (!r.ok) {
+        toast(r.error || "\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F", "err");
+        return;
+      }
+      setTimeout(load, 500);
+    }
+    function drill(u) {
+      if (!u.drill) return;
+      trail.push(rel);
+      rel = u.drill;
+      zoom = null;
+      sortKey = "file";
+      sortSel.value = "file";
+      load();
+    }
+    function cellEl(spec, opts = {}) {
+      const cls = "md-cell" + (spec.kind === "theme" ? " theme" : spec.kind === "sub" ? " sub" : spec.kind === "sub2" ? " sub2" : "") + (opts.mid ? " mid" : "");
+      const cell2 = h3("div", cls);
+      if (spec.rc) cell2.dataset.rc = spec.rc.join(",");
+      if (indexMode) return indexCell(cell2, spec, opts);
+      const a = spec.a;
+      cell2._addr = a;
       const ta2 = h3("textarea");
-      ta2.value = v2;
+      ta2.value = valOf(a);
       ta2.rows = 2;
       ta2.spellcheck = false;
-      ta2.placeholder = isTheme ? "\u4E3B\u984C" : ring >= 0 ? `\u526F\u984C ${ring + 1}` : center >= 0 ? "\uFF08\u526F\u984C\uFF09" : "";
+      ta2.placeholder = spec.kind === "theme" ? "\u4E3B\u984C" : spec.kind === "sub" ? `\u526F\u984C ${spec.slot + 1}` : spec.kind === "sub2" ? "\uFF08\u526F\u984C\uFF09" : "";
       const take = () => {
-        setCell(r, c, ta2.value.replace(/\n/g, " "));
+        setCell(a, ta2.value.replace(/\n/g, " "));
         drawTools();
       };
       ta2.addEventListener("input", (e) => {
@@ -36601,9 +36840,9 @@ ${h4.join(`
         } else if (e.altKey && e.key === "ArrowDown" && opts.zoom) {
           e.preventDefault();
           opts.zoom();
-        } else if (e.altKey && e.key === "ArrowUp" && mode === "3" && block !== 4) {
+        } else if (e.altKey && e.key === "ArrowUp" && zoom) {
           e.preventDefault();
-          block = 4;
+          zoom = null;
           draw();
         }
       });
@@ -36632,10 +36871,10 @@ ${h4.join(`
         cell2.classList.remove("drop");
         if (!isNote(e)) return;
         e.preventDefault();
-        putNote(r, c, e.dataTransfer.getData("text/gnosis-note"));
+        putNote(a, e.dataTransfer.getData("text/gnosis-note"));
       });
       function drawDisp() {
-        const cur = grid[r][c];
+        const cur = valOf(a);
         disp.textContent = "";
         let last3 = 0;
         const re2 = new RegExp(LINK_RE.source, "g");
@@ -36652,33 +36891,85 @@ ${h4.join(`
       const tools = h3("div", "md-tools");
       let toolsKey = null;
       function drawTools() {
-        const cur = grid[r][c];
+        const cur = valOf(a);
         const lk = LINK_RE.exec(cur);
         const key = lk ? "L" + lk[2] : cur.trim() ? "T" : "";
         if (key === toolsKey) return;
         toolsKey = key;
         tools.textContent = "";
         cell2.classList.toggle("linked", !!lk);
-        if (lk) {
-          tools.appendChild(button("\u958B\u304F", () => openLink(lk[2]), "md-tool", "\u30EA\u30F3\u30AF\u5148\u3092 Vim \u3067\u958B\u304F"));
-          tools.appendChild(button("\u5916\u3059", () => {
-            const v3 = unlinkText(grid[r][c]);
-            ta2.value = v3;
-            setCell(r, c, v3);
-            drawDisp();
-            drawTools();
-          }, "md-tool", "\u30EA\u30F3\u30AF\u3092\u5916\u3057\u3066\u6587\u5B57\u3060\u3051\u6B8B\u3059"));
-        } else if (cur.trim()) {
-          tools.appendChild(button("\u30CE\u30FC\u30C8\u306B", () => linkCell(r, c, "note"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3067\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u3092\u4F5C\u308A\u3001\u30DE\u30B9\u3092\u30EA\u30F3\u30AF\u306B\u3059\u308B"));
-          tools.appendChild(button("\u65E2\u5B58\u2026", () => pickNote(r, c), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3001\u3053\u306E\u30DE\u30B9\u3092\u305D\u306E\u30CE\u30FC\u30C8\u3078\u306E\u30EA\u30F3\u30AF\u306B\u3059\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
-          tools.appendChild(button("\u66FC\u837C\u7F85\u306B", () => linkCell(r, c, "mandala"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3092\u4E3B\u984C\u306B\u3057\u305F\u5225\u306E\u66FC\u837C\u7F85\u3092\u4F5C\u308B"));
-        } else {
-          tools.appendChild(button("\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u2026", () => pickNote(r, c), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3053\u306E\u30DE\u30B9\u306B\u5165\u308C\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
+        if (spec.kind !== "theme") {
+          if (lk) {
+            tools.appendChild(button("\u958B\u304F", () => openLink(lk[2]), "md-tool", "\u30EA\u30F3\u30AF\u5148\u3092 Vim \u3067\u958B\u304F"));
+            tools.appendChild(button("\u5916\u3059", () => {
+              const v2 = unlinkText(valOf(a));
+              ta2.value = v2;
+              setCell(a, v2);
+              drawDisp();
+              drawTools();
+            }, "md-tool", "\u30EA\u30F3\u30AF\u3092\u5916\u3057\u3066\u6587\u5B57\u3060\u3051\u6B8B\u3059"));
+          } else if (cur.trim()) {
+            tools.appendChild(button("\u30CE\u30FC\u30C8\u306B", () => linkCell(a, "note"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3067\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u3092\u4F5C\u308A\u3001\u30DE\u30B9\u3092\u30EA\u30F3\u30AF\u306B\u3059\u308B"));
+            tools.appendChild(button("\u65E2\u5B58\u2026", () => pickNote(a), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3001\u3053\u306E\u30DE\u30B9\u3092\u305D\u306E\u30CE\u30FC\u30C8\u3078\u306E\u30EA\u30F3\u30AF\u306B\u3059\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
+            tools.appendChild(button("\u66FC\u837C\u7F85\u306B", () => linkCell(a, "mandala"), "md-tool", "\u3053\u306E\u30DE\u30B9\u306E\u6587\u5B57\u3092\u4E3B\u984C\u306B\u3057\u305F\u5225\u306E\u66FC\u837C\u7F85\u3092\u4F5C\u308B"));
+          } else {
+            tools.appendChild(button("\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u2026", () => pickNote(a), "md-tool", "\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u9078\u3093\u3067\u3053\u306E\u30DE\u30B9\u306B\u5165\u308C\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u5165\u308A\u307E\u3059\uFF09"));
+          }
         }
         if (opts.zoom) tools.appendChild(button("\u5E83\u3052\u308B \u25B8", opts.zoom, "md-tool zoom", "\u3053\u306E\u30DE\u30B9\u3092\u4E2D\u5FC3\u306B 8 \u30DE\u30B9\u3067\u5E83\u3052\u308B\uFF08Alt+\u2193\uFF09"));
       }
       drawTools();
       cell2.appendChild(tools);
+      return cell2;
+    }
+    function indexCell(cell2, spec, opts) {
+      const u = spec.unit;
+      const tools = h3("div", "md-tools");
+      const disp = h3("div", "md-disp show");
+      let item = null;
+      if (spec.kind === "theme") {
+        item = { label: idx.title, rel: idx.rel };
+      } else if (spec.kind === "sub" || spec.kind === "sub2") item = u && !u.empty ? { label: u.label, rel: u.rel } : null;
+      else if (u && !u.empty) item = u.children[spec.child] || null;
+      if (item) {
+        const t3 = h3("span", "md-linktext", item.label);
+        disp.appendChild(t3);
+        cell2.classList.add("linked");
+        disp.addEventListener("click", () => ctx.open(item.rel));
+        cell2.title = item.title && item.title !== item.label ? `${item.label}\uFF08${item.title}\uFF09` : item.label;
+        if (item.rel) {
+          cell2.draggable = true;
+          cell2.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/gnosis-note", item.rel);
+            e.dataTransfer.effectAllowed = "copy";
+          });
+        }
+      }
+      if ((spec.kind === "sub" || spec.kind === "sub2") && u) {
+        if (u.empty && spec.kind === "sub") {
+          tools.append(button("\uFF0B \u65B0\u3057\u3044\u30CE\u30FC\u30C8", () => indexNew(), "md-tool", "\u3053\u306E\u7D22\u5F15\u306B\u65B0\u3057\u3044\u30CE\u30FC\u30C8\u3092\u4F5C\u3063\u3066\u8F09\u305B\u308B"), button("\uFF0B \u65E2\u5B58", () => indexPick(), "md-tool", "\u3053\u306E\u7D22\u5F15\u306B\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u3092\u8F09\u305B\u308B\uFF08\u30CE\u30FC\u30C8\u3092\u3053\u3053\u3078\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u3082\u8F09\u308A\u307E\u3059\uFF09"));
+          const isNote = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("text/gnosis-note");
+          cell2.addEventListener("dragover", (e) => {
+            if (isNote(e)) {
+              e.preventDefault();
+              cell2.classList.add("drop");
+            }
+          });
+          cell2.addEventListener("dragleave", () => cell2.classList.remove("drop"));
+          cell2.addEventListener("drop", async (e) => {
+            cell2.classList.remove("drop");
+            if (!isNote(e)) return;
+            e.preventDefault();
+            const target = e.dataTransfer.getData("text/gnosis-note");
+            const q2 = await ctx.query("nav.note", { file: target });
+            await indexAdd(target, q2.ok && q2.result && q2.result.title ? q2.result.title : target);
+          });
+        }
+        if (!u.empty && u.drill && spec.kind === "sub") tools.appendChild(button("\u3053\u306E\u7D22\u5F15\u3078 \u25B8\u25B8", () => drill(u), "md-tool", "\u3053\u306E\u9805\u76EE\u306E\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u771F\u3093\u4E2D\u306B\u3057\u3066\u5165\u308B"));
+        if (!u.empty && u.more && spec.kind === "sub2") disp.appendChild(h3("span", "md-more", ` \u307B\u304B ${u.more}`));
+      }
+      if (opts.zoom) tools.appendChild(button("\u5E83\u3052\u308B \u25B8", opts.zoom, "md-tool zoom", "\u3053\u306E\u9805\u76EE\u306E\u307E\u308F\u308A\u3092 3\xD73 \u3067"));
+      cell2.append(disp, tools);
       return cell2;
     }
     function moveFocus2(cell2, k) {
@@ -36687,75 +36978,113 @@ ${h4.join(`
       const n = all[(i + k + all.length) % all.length];
       if (n) n.focus();
     }
-    function openLink(target) {
-      const dir = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "";
-      ctx.open(decodeURIComponent((dir + target).split("#")[0]));
+    function specOf(units, d, r, c) {
+      return { ...specAt(units, d, r, c), rc: [r, c] };
     }
-    async function linkCell(r, c, kind) {
-      if (dirty) await save();
-      const res = await ctx.op("mandala_link", { file: rel, row: r, col: c, kind });
-      if (!res.ok) {
-        toast(res.error || "\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F", "err");
-        return;
+    function specAt(units, d, r, c) {
+      if (r === THEME[0] && c === THEME[1]) return { kind: "theme", a: { theme: true } };
+      const ringK = RING.findIndex(([a, b2]) => a === r && b2 === c);
+      const centerK = BLOCK_CENTER.findIndex(([a, b2]) => a === r && b2 === c);
+      const blk = Math.floor(r / 3) * 3 + Math.floor(c / 3);
+      const k = ringK >= 0 ? ringK : centerK >= 0 ? centerK : BLOCK_OF_RING.indexOf(blk);
+      const u = units[d * 8 + k];
+      if (!u) return { kind: "child", a: null };
+      if (ringK >= 0 || centerK >= 0) {
+        return { kind: ringK >= 0 ? "sub" : "sub2", unit: u, slot: k, a: indexMode ? null : { p: u.p, r: (ringK >= 0 ? RING : BLOCK_CENTER)[u.i][0], c: (ringK >= 0 ? RING : BLOCK_CENTER)[u.i][1] } };
       }
-      toast(kind === "mandala" ? "\u66FC\u837C\u7F85\u3092\u4F5C\u308A\u307E\u3057\u305F\uFF08\u4ECA\u65E5\u306E\u65E5\u8A18\u306B\u3082\u8F09\u308A\u307E\u3059\uFF09" : "\u30CE\u30FC\u30C8\u3092\u4F5C\u308A\u307E\u3057\u305F\uFF08\u4ECA\u65E5\u306E\u65E5\u8A18\u306B\u3082\u8F09\u308A\u307E\u3059\uFF09");
-      await load();
+      const pos = blockCells(blk).findIndex(([a, bb]) => a === r && bb === c);
+      const child = CHILD_POS.indexOf(pos);
+      if (indexMode) return { kind: "child", unit: u, child };
+      const sc2 = blockCells(BLOCK_OF_RING[u.i])[pos];
+      return { kind: "child", unit: u, child, a: { p: u.p, r: sc2[0], c: sc2[1] } };
     }
     function draw() {
-      if (!grid) return;
+      if (indexMode ? !idx : !grids) return;
       b3.setAttribute("aria-pressed", String(mode === "3"));
       b9.setAttribute("aria-pressed", String(mode === "9"));
+      saveOrder.hidden = sortKey === "file";
+      const scroll = body.scrollTop;
+      const act = document.activeElement && body.contains(document.activeElement) && document.activeElement.closest(".md-cell");
+      const keep = act && act._addr ? { a: act._addr, s: document.activeElement.selectionStart, e: document.activeElement.selectionEnd } : null;
+      if (keep) setTimeout(() => {
+        for (const c of body.querySelectorAll(".md-cell")) {
+          const b2 = c._addr;
+          if (b2 && (b2 === keep.a || !b2.theme && !keep.a.theme && b2.p === keep.a.p && b2.r === keep.a.r && b2.c === keep.a.c)) {
+            const ta2 = c.querySelector("textarea");
+            if (ta2) {
+              ta2.focus();
+              ta2.setSelectionRange(keep.s, keep.e);
+            }
+            break;
+          }
+        }
+      }, 0);
       body.textContent = "";
       crumbs.textContent = "";
-      const theme2 = grid[THEME[0]][THEME[1]] || "\uFF08\u4E3B\u984C\uFF09";
-      if (mode === "9") {
-        crumbs.appendChild(h3("span", "md-crumb", theme2));
-        const g2 = h3("div", "md-grid9");
-        for (let b2 = 0; b2 < 9; b2++) {
-          const blk = h3("div", "md-block" + (b2 === 4 ? " center" : ""));
-          for (const [r, c] of blockCells(b2)) blk.appendChild(cellEl(r, c));
-          g2.appendChild(blk);
-        }
-        body.appendChild(g2);
-        return;
+      const theme2 = themeText();
+      if (indexMode && trail.length) {
+        crumbs.appendChild(button("\u2039 \u623B\u308B", () => {
+          rel = trail.pop();
+          zoom = null;
+          load();
+        }, "md-crumb", "\u524D\u306E\u7D22\u5F15\u3078"));
+        crumbs.appendChild(h3("span", "nav-sep", "|"));
       }
+      if (indexMode && idx.path) crumbs.appendChild(h3("span", "md-path", idx.path.replace(/ › [^›]*$/, "") + " \u203A"));
       crumbs.appendChild(button(theme2, () => {
-        block = 4;
+        zoom = null;
         draw();
       }, "md-crumb"));
-      if (block !== 4) {
+      const units = displayUnits();
+      const pages = Math.max(1, Math.ceil(units.length / 8));
+      if (zoom) {
+        const u = units[zoom.k];
         crumbs.appendChild(h3("span", "nav-sep", "\u203A"));
-        const i = BLOCK_OF_RING.indexOf(block);
-        crumbs.appendChild(h3("span", "md-crumb cur", grid[RING[i][0]][RING[i][1]] || `\u526F\u984C ${i + 1}`));
+        crumbs.appendChild(h3("span", "md-crumb cur", u && unlinkText(String(u.title || "")) || `\u526F\u984C ${zoom.k % 8 + 1}`));
+        const d = Math.floor(zoom.k / 8), slot = zoom.k % 8;
+        const g = h3("div", "md-grid3");
+        blockCells(BLOCK_OF_RING[slot]).forEach(([r, c], j2) => g.appendChild(cellEl(specOf(units, d, r, c), { mid: j2 === 4 })));
+        body.appendChild(g);
+        body.appendChild(h3("div", "nav-dim small md-help", "Alt+\u2191 \u304B\u4E0A\u306E\u4E3B\u984C\u3067\u623B\u308B\u3002"));
+        setTimeout(() => body.querySelector(".md-cell:not(.mid) textarea")?.focus(), 0);
+        return;
       }
-      const g = h3("div", "md-grid3");
-      const cells = blockCells(block);
-      cells.forEach(([r, c], k) => {
-        const opts = { mid: k === 4 };
-        if (block === 4) {
-          const i = RING.findIndex(([a, b2]) => a === r && b2 === c);
-          if (i >= 0) opts.zoom = () => {
-            block = BLOCK_OF_RING[i];
-            draw();
-            setTimeout(() => body.querySelector(".md-cell:not(.mid) textarea")?.focus(), 0);
-          };
+      for (let d = 0; d < pages; d++) {
+        const page = h3("section", "md-page");
+        const head = h3("div", "md-pagehead");
+        const pu = units.slice(d * 8, d * 8 + 8);
+        const filled = pu.filter((u) => !isEmptyUnit(u)).length;
+        head.append(h3("span", "md-pagetitle", theme2), h3("span", "md-pagenum", pages > 1 ? `${d + 1} / ${pages}` : ""), h3("span", "md-pagecount", `\u526F\u984C ${filled}/8`));
+        page.appendChild(head);
+        if (mode === "9") {
+          const g = h3("div", "md-grid9");
+          for (let b2 = 0; b2 < 9; b2++) {
+            const blk = h3("div", "md-block" + (b2 === 4 ? " center" : ""));
+            for (const [r, c] of blockCells(b2)) blk.appendChild(cellEl(specOf(units, d, r, c)));
+            g.appendChild(blk);
+          }
+          page.appendChild(g);
+        } else {
+          const g = h3("div", "md-grid3");
+          blockCells(4).forEach(([r, c], j2) => {
+            const spec = specOf(units, d, r, c);
+            const opts = { mid: j2 === 4 };
+            if (spec.kind === "sub" && !(indexMode && (!spec.unit || spec.unit.empty))) {
+              const k = d * 8 + spec.slot;
+              opts.zoom = () => {
+                zoom = { k };
+                draw();
+              };
+            }
+            g.appendChild(cellEl(spec, opts));
+          });
+          page.appendChild(g);
         }
-        g.appendChild(cellEl(r, c, opts));
-      });
-      body.appendChild(g);
-      const mini = h3("div", "md-mini");
-      for (let b2 = 0; b2 < 9; b2++) {
-        const filled = blockCells(b2).filter(([r, c]) => grid[r][c].trim()).length;
-        const label = b2 === 4 ? theme2 : grid[BLOCK_CENTER[BLOCK_OF_RING.indexOf(b2)][0]][BLOCK_CENTER[BLOCK_OF_RING.indexOf(b2)][1]] || "\u2014";
-        const mb = button("", () => {
-          block = b2;
-          draw();
-        }, "md-minib" + (b2 === block ? " cur" : ""), `${label}\uFF08${filled}/9\uFF09`);
-        mb.append(h3("span", "md-minil", label), h3("span", "md-minic", `${filled}/9`));
-        mini.appendChild(mb);
+        body.appendChild(page);
       }
-      body.appendChild(mini);
-      body.appendChild(h3("div", "nav-dim small md-help", "Enter/Tab \u3067\u6B21\u306E\u30DE\u30B9\u30FBShift+Tab \u3067\u524D\u30FB\u526F\u984C\u306E\u300C\u5E83\u3052\u308B \u25B8\u300D\uFF08Alt+\u2193\uFF09\u3067\u305D\u306E\u30D6\u30ED\u30C3\u30AF\u3078\u30FBAlt+\u2191 \u3067\u4E2D\u5FC3\u3078\u623B\u308B\u3002\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u306F\u300C\u65E2\u5B58\u2026\u300D\u304B\u3001\u5DE6\u53F3\u306E\u30D0\u30FC\u304B\u3089\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3067\u5165\u308A\u307E\u3059\u3002\u6253\u3061\u7D42\u308F\u3063\u3066\u5C11\u3057\u3059\u308B\u3068 Vim \u304C\u4FDD\u5B58\u3057\u307E\u3059\u3002"));
+      const help = indexMode ? "\u9805\u76EE\u3092\u62BC\u3059\u3068\u305D\u306E\u30CE\u30FC\u30C8\u3092 Vim \u3067\u958B\u304F\u3002\u300C\u3053\u306E\u7D22\u5F15\u3078 \u25B8\u25B8\u300D\u3067\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u771F\u3093\u4E2D\u306B\u3057\u3066\u5165\u308B\u3002\u7A7A\u3044\u305F\u67A0\u304B\u3089\u7D22\u5F15\u306B\u30CE\u30FC\u30C8\u3092\u8DB3\u305B\u308B\uFF08\u30CE\u30FC\u30C8\u306E\u30C9\u30E9\u30C3\u30B0\u3067\u3082\uFF09\u3002\u9805\u76EE\u304C 8 \u3064\u3092\u8D85\u3048\u308B\u3068\u3001\u4E0B\u306B\u540C\u3058\u7D22\u5F15\u306E\u66FC\u837C\u7F85\u304C\u7D9A\u304F\u3002" : "Enter/Tab \u3067\u6B21\u306E\u30DE\u30B9\u3002\u526F\u984C\u306E\u300C\u5E83\u3052\u308B \u25B8\u300D\uFF08Alt+\u2193\uFF09\u3067\u305D\u306E\u30D6\u30ED\u30C3\u30AF\u3078\u30028 \u3064\u306E\u526F\u984C\u304C\u57CB\u307E\u308B\u3068\u3001\u4E0B\u306B\u540C\u3058\u4E3B\u984C\u306E\u66FC\u837C\u7F85\u304C\u7D9A\u304F\u3002\u65E2\u5B58\u306E\u30CE\u30FC\u30C8\u306F\u300C\u65E2\u5B58\u2026\u300D\u304B\u3001\u5DE6\u53F3\u306E\u30D0\u30FC\u304B\u3089\u30DE\u30B9\u3078\u30C9\u30E9\u30C3\u30B0\u3002\u6253\u3061\u7D42\u308F\u3063\u3066\u5C11\u3057\u3059\u308B\u3068 Vim \u304C\u4FDD\u5B58\u3057\u307E\u3059\u3002";
+      body.appendChild(h3("div", "nav-dim small md-help", help));
+      body.scrollTop = scroll;
     }
     load();
     return { el: el2, loaded: true, onShow: () => {
@@ -37687,55 +38016,252 @@ ${h4.join(`
     else b2.addEventListener("click", () => ctx.open(x.rel));
     return draggable2(b2, x.missing ? "" : x.rel);
   }
+  var NOTE_SORTS = [["ctime-new", "\u4F5C\u3063\u305F\u65E5\u6642\uFF08\u65B0\u3057\u3044\u9806\uFF09"], ["ctime-old", "\u4F5C\u3063\u305F\u65E5\u6642\uFF08\u53E4\u3044\u9806\uFF09"], ["mtime-new", "\u66F4\u65B0\u65E5\u6642\uFF08\u65B0\u3057\u3044\u9806\uFF09"], ["mtime-old", "\u66F4\u65B0\u65E5\u6642\uFF08\u53E4\u3044\u9806\uFF09"], ["name-asc", "\u984C\uFF08A \u2192 Z\u30FB\u3042 \u2192 \u3093\uFF09"], ["name-desc", "\u984C\uFF08Z \u2192 A\u30FB\u3093 \u2192 \u3042\uFF09"]];
   function notesPanel(ctx) {
     return (el2) => {
       el2.classList.add("pnl");
-      panelHead(el2, "\u30CE\u30FC\u30C8", [button("\uFF0B", () => ctx.newNote(), "pnl-btn", "\u65B0\u3057\u3044\u30CE\u30FC\u30C8\uFF08Ctrl+N\uFF09")]);
-      const search = h3("input", "pnl-search");
-      search.type = "search";
-      search.placeholder = "\u984C\u3067\u7D5E\u308B";
-      search.setAttribute("aria-label", "\u30CE\u30FC\u30C8\u3092\u984C\u3067\u7D5E\u308B");
+      let sort = "ctime-new";
+      try {
+        sort = localStorage.getItem("gnosis.notesSort") || sort;
+      } catch {
+      }
+      const sortBtn = button("\u21C5", (e) => ctx.menu(e.clientX, e.clientY, NOTE_SORTS.map(([k, t3]) => ({ label: (k === sort ? "\u25CF " : "\u3000") + t3, run: () => {
+        sort = k;
+        try {
+          localStorage.setItem("gnosis.notesSort", k);
+        } catch {
+        }
+        load();
+      } }))), "pnl-btn", "\u4E26\u3073\u66FF\u3048");
+      panelHead(el2, "\u30CE\u30FC\u30C8", [sortBtn, button("\uFF0B", () => ctx.newNote(), "pnl-btn", "\u65B0\u3057\u3044\u30CE\u30FC\u30C8\uFF08Ctrl+N\uFF09")]);
       const list = h3("div", "pnl-body");
-      el2.append(search, list);
-      let timer = null, cur = "", my = 0;
+      el2.append(list);
+      let cur = "", my = 0;
       async function load() {
-        const q2 = search.value.trim();
         const n = ++my;
-        const r = await ctx.query("nav.notes", { q: q2, limit: q2 ? 200 : 120 });
+        const r = await ctx.query("nav.notes", { limit: 3e3, sort });
         if (n !== my) return;
         list.textContent = "";
         const res = r.ok ? r.result : [];
         if (!res.length) {
-          list.appendChild(h3("div", "nav-empty", q2 ? "\u898B\u3064\u304B\u308A\u307E\u305B\u3093" : "\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093"));
+          list.appendChild(h3("div", "nav-empty", "\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093"));
           return;
         }
-        if (!q2) list.appendChild(h3("div", "pnl-sec", "\u6700\u8FD1\u306E\u30CE\u30FC\u30C8"));
+        list.appendChild(h3("div", "pnl-sec", (NOTE_SORTS.find(([k]) => k === sort) || [, ""])[1] + `\uFF08${res.length}${res.length >= 3e3 ? "+" : ""}\uFF09`));
         for (const x of res) {
-          const row = noteRow(ctx, x, [x.path || "", x.time ? x.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 "));
+          const row = noteRow(ctx, x, x.time ? x.time.slice(0, 10) : "");
+          row.dataset.rel = x.rel;
           if (cur && cur.endsWith("/" + x.rel)) row.classList.add("cur");
           list.appendChild(row);
         }
       }
-      search.addEventListener("input", () => {
-        clearTimeout(timer);
-        timer = setTimeout(load, 140);
-      });
-      search.addEventListener("keydown", (e) => {
-        if (imeActive(e)) return;
-        if (e.key === "Enter") {
-          const f = list.querySelector(".pnl-item:not(.missing)");
-          if (f) f.click();
-        }
-        if (e.key === "Escape") {
-          search.value = "";
-          load();
-          ctx.focusVim();
-        }
-      });
       return { onShow: () => load(), refresh: () => load(), follow: (f) => {
         cur = f;
-        for (const r of list.querySelectorAll(".pnl-item")) r.classList.toggle("cur", !!cur && cur.endsWith("/" + r.title));
+        for (const r of list.querySelectorAll(".pnl-item")) r.classList.toggle("cur", !!cur && cur.endsWith("/" + r.dataset.rel));
       } };
+    };
+  }
+  var SEARCH_SORTS = [["name-asc", "\u984C\uFF08A \u2192 Z\uFF09"], ["name-desc", "\u984C\uFF08Z \u2192 A\uFF09"], ["mtime-new", "\u66F4\u65B0\u65E5\u6642\uFF08\u65B0\u3057\u3044\u9806\uFF09"], ["mtime-old", "\u66F4\u65B0\u65E5\u6642\uFF08\u53E4\u3044\u9806\uFF09"], ["ctime-new", "\u4F5C\u3063\u305F\u65E5\u6642\uFF08\u65B0\u3057\u3044\u9806\uFF09"], ["ctime-old", "\u4F5C\u3063\u305F\u65E5\u6642\uFF08\u53E4\u3044\u9806\uFF09"]];
+  var SEARCH_OPS = [
+    ["file:", "\u30D5\u30A1\u30A4\u30EB\u540D\u30FB\u984C\u3067\u63A2\u3059"],
+    ["path:", "\u30D1\u30B9\u3067\u63A2\u3059"],
+    ["content:", "\u672C\u6587\u3060\u3051\u3067\u63A2\u3059"],
+    ["tag:", "\u30BF\u30B0\u3067\u63A2\u3059"],
+    ["line:()", "\u540C\u3058\u884C\u306B\u5168\u90E8"],
+    ["block:()", "\u540C\u3058\u6BB5\u843D\u306B\u5168\u90E8"],
+    ["section:()", "\u540C\u3058\u7BC0\uFF08\u898B\u51FA\u3057\u306E\u4E0B\uFF09\u306B\u5168\u90E8"],
+    ["task:", "\u30C1\u30A7\u30C3\u30AF\u30DC\u30C3\u30AF\u30B9\u306E\u884C"],
+    ["task-todo:", "\u672A\u5B8C\u4E86\u306E\u30C1\u30A7\u30C3\u30AF\u30DC\u30C3\u30AF\u30B9"],
+    ["task-done:", "\u5B8C\u4E86\u3057\u305F\u30C1\u30A7\u30C3\u30AF\u30DC\u30C3\u30AF\u30B9"],
+    ["match-case:", "\u5927\u6587\u5B57\u3068\u5C0F\u6587\u5B57\u3092\u533A\u5225"],
+    ["ignore-case:", "\u5927\u6587\u5B57\u3068\u5C0F\u6587\u5B57\u3092\u533A\u5225\u3057\u306A\u3044"],
+    ["[]", "front matter \u306E\u9805\u76EE\uFF08[\u9805\u76EE:\u5024]\uFF09"]
+  ];
+  function markText(text, ranges) {
+    const out = [];
+    let last3 = 0;
+    for (const [a, b2] of ranges) {
+      if (a < last3) continue;
+      if (a > last3) out.push(document.createTextNode(text.slice(last3, a)));
+      out.push(h3("mark", "sr-hit", text.slice(a, b2)));
+      last3 = b2;
+    }
+    if (last3 < text.length) out.push(document.createTextNode(text.slice(last3)));
+    return out;
+  }
+  function searchPanel(ctx) {
+    return (el2) => {
+      el2.classList.add("pnl", "srch");
+      const st3 = { q: "", case: false, sort: "name-asc", explain: false, collapsed: false };
+      try {
+        Object.assign(st3, JSON.parse(localStorage.getItem("gnosis.search") || "{}"), { q: "" });
+      } catch {
+      }
+      const keep = () => {
+        try {
+          localStorage.setItem("gnosis.search", JSON.stringify({ ...st3, q: "" }));
+        } catch {
+        }
+      };
+      const caseBtn = button("Aa", () => {
+        st3.case = !st3.case;
+        caseBtn.setAttribute("aria-pressed", String(st3.case));
+        keep();
+        run();
+      }, "pnl-btn", "\u5927\u6587\u5B57\u3068\u5C0F\u6587\u5B57\u3092\u533A\u5225\u3059\u308B");
+      const exBtn = button("?", () => {
+        st3.explain = !st3.explain;
+        exBtn.setAttribute("aria-pressed", String(st3.explain));
+        keep();
+        draw();
+      }, "pnl-btn", "\u691C\u7D22\u8A9E\u306E\u8AAC\u660E\u3092\u51FA\u3059");
+      const colBtn = button("\u2261", () => {
+        st3.collapsed = !st3.collapsed;
+        colBtn.setAttribute("aria-pressed", String(st3.collapsed));
+        keep();
+        draw();
+      }, "pnl-btn", "\u7D50\u679C\u3092\u7573\u3080\uFF08\u30CE\u30FC\u30C8\u306E\u984C\u3060\u3051\uFF09");
+      const sortBtn = button("\u21C5", (e) => ctx.menu(e.clientX, e.clientY, SEARCH_SORTS.map(([k, t3]) => ({ label: (k === st3.sort ? "\u25CF " : "\u3000") + t3, run: () => {
+        st3.sort = k;
+        keep();
+        run();
+      } }))), "pnl-btn", "\u4E26\u3073\u66FF\u3048");
+      caseBtn.setAttribute("aria-pressed", String(st3.case));
+      exBtn.setAttribute("aria-pressed", String(st3.explain));
+      colBtn.setAttribute("aria-pressed", String(st3.collapsed));
+      panelHead(el2, "\u691C\u7D22", [caseBtn, exBtn, colBtn, sortBtn]);
+      const input = h3("input", "pnl-search srch-input");
+      input.type = "search";
+      input.placeholder = '\u691C\u7D22\u2026\uFF08\u4F8B: \u4EAC\u90FD -\u65C5\u884C\u30FB"\u308A\u3093\u3054 \u30B8\u30E3\u30E0"\u30FBfile:\u65E5\u8A18\u30FBline:(a b)\uFF09';
+      input.setAttribute("aria-label", "\u5168\u6587\u691C\u7D22");
+      input.spellcheck = false;
+      const ops = h3("div", "srch-ops");
+      for (const [op, t3] of SEARCH_OPS) {
+        const b2 = h3("button", "srch-op");
+        b2.type = "button";
+        b2.append(h3("code", "", op), h3("span", "", t3));
+        b2.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          const v2 = input.value.replace(/\s*$/, "");
+          const ins = op.endsWith("()") ? op : op === "[]" ? "[" : op;
+          input.value = (v2 ? v2 + " " : "") + ins;
+          const pos = op.endsWith("()") ? input.value.length - 1 : input.value.length;
+          input.focus();
+          input.setSelectionRange(pos, pos);
+          ops.hidden = true;
+        });
+        ops.appendChild(b2);
+      }
+      ops.hidden = true;
+      const status = h3("div", "srch-status", "");
+      const exBox = h3("pre", "srch-explain", "");
+      const list = h3("div", "pnl-body srch-list");
+      el2.append(input, ops, status, exBox, list);
+      let res = null, my = 0, timer = null;
+      const open = /* @__PURE__ */ new Map();
+      async function run() {
+        const q2 = input.value.trim();
+        st3.q = q2;
+        if (!q2) {
+          res = null;
+          draw();
+          return;
+        }
+        const n = ++my;
+        const r = await ctx.query("search.full", { q: q2, case: st3.case, sort: st3.sort });
+        if (n !== my) return;
+        res = r.ok ? r.result : { results: [], total: 0, error: r.error };
+        draw();
+      }
+      function draw() {
+        list.textContent = "";
+        exBox.hidden = !(st3.explain && res && res.explain);
+        exBox.textContent = res && res.explain ? res.explain : "";
+        if (!res) {
+          status.textContent = "";
+          return;
+        }
+        if (res.error) {
+          status.textContent = res.error;
+          status.className = "srch-status err";
+          return;
+        }
+        status.className = "srch-status";
+        status.textContent = res.total ? `${res.total} \u4EF6\u306E\u30CE\u30FC\u30C8` : "\u898B\u3064\u304B\u308A\u307E\u305B\u3093";
+        for (const x of res.results) {
+          const box = h3("div", "sr-file");
+          const head = h3("div", "sr-head");
+          const folded = open.has(x.rel) ? open.get(x.rel) : st3.collapsed;
+          const tw = h3("button", "sr-twisty" + (folded ? "" : " open"));
+          tw.type = "button";
+          tw.setAttribute("aria-label", "\u958B\u304F\u30FB\u7573\u3080");
+          tw.appendChild(icon("chevron", 14));
+          tw.addEventListener("click", () => {
+            open.set(x.rel, !folded);
+            draw();
+          });
+          const t3 = h3("button", "sr-title", x.title);
+          t3.type = "button";
+          t3.title = x.rel;
+          t3.addEventListener("click", () => ctx.open(x.rel));
+          head.append(tw, t3, h3("span", "pnl-count", String(x.count)));
+          draggable2(head, x.rel);
+          box.appendChild(head);
+          if (!folded) {
+            for (const ln2 of x.lines) {
+              const row = h3("button", "sr-line");
+              row.type = "button";
+              row.title = `${ln2.line} \u884C\u76EE`;
+              row.append(...markText(ln2.text, ln2.ranges));
+              row.addEventListener("click", () => ctx.openAt(x.rel, ln2.line));
+              box.appendChild(row);
+            }
+            if (x.more) box.appendChild(h3("div", "sr-more", `\u307B\u304B ${x.more} \u884C`));
+          }
+          list.appendChild(box);
+        }
+      }
+      input.addEventListener("input", () => {
+        clearTimeout(timer);
+        ops.hidden = !!input.value.trim();
+        timer = setTimeout(run, 250);
+      });
+      input.addEventListener("focus", () => {
+        ops.hidden = !!input.value.trim();
+      });
+      input.addEventListener("blur", () => setTimeout(() => {
+        ops.hidden = true;
+      }, 150));
+      input.addEventListener("keydown", (e) => {
+        if (imeActive(e)) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          clearTimeout(timer);
+          ops.hidden = true;
+          run();
+        }
+        if (e.key === "Escape") {
+          if (input.value) {
+            input.value = "";
+            run();
+          } else ctx.focusVim();
+        }
+      });
+      return {
+        onShow: () => {
+        },
+        refresh: () => {
+          if (st3.q) run();
+        },
+        focusSearch: (q2) => {
+          if (q2 != null) {
+            input.value = q2;
+            run();
+          }
+          input.focus();
+          input.select();
+        }
+      };
     };
   }
   function featuresPanel(getItems) {
@@ -37945,7 +38471,7 @@ ${h4.join(`
   }
 
   // src/switcher.js
-  function createSwitcher({ query, open, create, onClose }) {
+  function createSwitcher({ query, open, create, onClose, recent = () => [] }) {
     const back = h3("div", "qs-back");
     back.hidden = true;
     const box = h3("div", "qs");
@@ -37962,14 +38488,28 @@ ${h4.join(`
     box.append(input, list, foot);
     back.appendChild(box);
     document.body.appendChild(back);
-    let items = [], sel2 = 0, my = 0, timer = null, composing = false, loadedQ = null;
+    let items = [], sel2 = 0, my = 0, timer = null, composing = false, loadedQ = null, all = null, allP = null;
     async function load() {
       const q2 = input.value.trim();
       const n = ++my;
-      const r = await query("nav.notes", { q: q2, limit: 60 });
+      if (!all) {
+        allP = allP || query("nav.all", {}).then((r) => (r.ok ? r.result : []).map((x) => ({ ...x, label: String(x.title || x.rel), keywords: (x.yomi || "") + " " + x.rel })));
+        all = await allP;
+      }
       if (n !== my) return;
+      if (input.value.trim() !== q2) {
+        load();
+        return;
+      }
       loadedQ = q2;
-      items = (r.ok ? r.result : []).map((x) => ({ ...x, act: "open" }));
+      let found;
+      if (!q2) {
+        const byRel = new Map(all.map((x) => [x.rel, x]));
+        const rec = recent().map((r) => byRel.get(r)).filter(Boolean);
+        const seen = new Set(rec.map((x) => x.rel));
+        found = [...rec, ...all.filter((x) => !seen.has(x.rel)).sort((a, b2) => String(b2.time || "").localeCompare(String(a.time || "")))].slice(0, 50);
+      } else found = rank(all, q2, 50);
+      items = found.map((x) => ({ ...x, act: "open" }));
       if (q2 && !items.some((x) => x.title === q2)) items.push({ title: q2, act: "create" });
       sel2 = Math.min(sel2, Math.max(0, items.length - 1));
       draw();
@@ -37982,7 +38522,7 @@ ${h4.join(`
         if (it.act === "create") li2.append(h3("span", "qs-title", "\uFF0B \u65B0\u3057\u3044\u30CE\u30FC\u30C8\u300C" + it.title + "\u300D\u3092\u4F5C\u308B"));
         else {
           li2.append(h3("span", "qs-title", it.title));
-          const sub = [KIND_BADGE[it.kind] || "", it.path || "", it.time ? it.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 ");
+          const sub = [KIND_BADGE[it.kind] || "", it.rel.includes("/") ? it.rel.slice(0, it.rel.lastIndexOf("/")) : "", it.time ? it.time.slice(0, 10) : ""].filter(Boolean).join(" \xB7 ");
           if (sub) li2.append(h3("span", "qs-sub", sub));
         }
         li2.addEventListener("mousedown", (e) => {
@@ -38056,12 +38596,15 @@ ${h4.join(`
         sel2 = 0;
         items = [];
         loadedQ = null;
+        all = null;
+        allP = null;
         draw();
         load();
         setTimeout(() => input.focus(), 0);
       },
       close,
-      isOpen: () => !back.hidden
+      isOpen: () => !back.hidden,
+      debug: () => ({ loadedQ, all: all ? all.length : null, items: items.length, my })
     };
   }
 
@@ -38253,6 +38796,10 @@ ${h4.join(`
     }, 60);
   }
   var absOf = (rel) => !rel || rel.startsWith("/") || /^[A-Za-z]:[\\/]/.test(rel) ? rel : noteRoot ? noteRoot.replace(/[\\/]$/, "") + "/" + rel : rel;
+  var relOf = (file) => {
+    const r = noteRoot.replace(/[\\/]$/, "") + "/";
+    return file && noteRoot && file.startsWith(r) ? file.slice(r.length) : file;
+  };
   var navFile = "";
   var navMod = 0;
   var navTimer = null;
@@ -38279,6 +38826,7 @@ ${h4.join(`
         if (navFile === f && i && i.title && !i.missing) setNoteTitle(i.title, i);
       });
       docks && docks.follow(f);
+      rememberRecent(f);
     }
     if (s15.mod !== void 0) {
       if (navMod && !s15.mod) refreshAppViewsSoon();
@@ -38328,6 +38876,11 @@ ${h4.join(`
     focusVim: () => term && term.focus(),
     changed: () => refreshAppViewsSoon(300),
     newNote: (title) => newNote(title),
+    menu: (x, y, items) => popupMenu(x, y, items),
+    // ノートを開いて、その行へ（検索の結果）
+    openAt: async (rel, line) => {
+      if (await vimOpen(rel)) setTimeout(() => gotoLine(line), 200);
+    },
     getLines: () => guiEdit && guiEdit.isOn() ? view2.view.state.doc.toString().split("\n") : curLines,
     gotoLine: (l) => gotoLine(l),
     readNote: (rel) => gui.readNote(absOf(rel)),
@@ -38366,6 +38919,7 @@ ${h4.join(`
     dindex: () => createIndexBrowser(appCtx),
     calendar: (p) => createCalendar(appCtx, p),
     mandala: (p) => createMandala(appCtx, p),
+    imandala: (p) => createMandala(appCtx, { index: p.rel, mode: p.mode }),
     canvas: (p) => createCanvas(appCtx, p)
   };
   function titleOf(rel) {
@@ -38383,8 +38937,21 @@ ${h4.join(`
     });
     return v2 && v2.file;
   }
+  function openIndexMandala(rel) {
+    const i = nav2 && nav2.info();
+    rel = rel || (i && !i.missing ? i.entries ? i.rel : i.topics && i.topics[0] ? i.topics[0].rel : "" : "");
+    if (!rel) {
+      toast("\u7D22\u5F15\uFF08\u30B0\u30EB\u30FC\u30D7\uFF09\u304B\u3001\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u306E\u3042\u308B\u30CE\u30FC\u30C8\u3092\u958B\u3044\u3066\u3044\u308B\u3068\u304D\u306B\u4F7F\u3048\u307E\u3059", "err");
+      return;
+    }
+    panes2.openOrFocus("imandala", { rel }, "\u66FC\u837C\u7F85: " + (rel === (i && i.rel) ? i.title : titleOf(rel)));
+  }
   async function openMandala(mode) {
     const i = nav2 && nav2.info();
+    if (!mode && i && !i.missing && i.kind !== "mandala" && (i.entries || i.is_index)) {
+      openIndexMandala(i.rel);
+      return;
+    }
     if (mode !== "pick" && mode !== "new" && i && i.kind === "mandala") {
       panes2.openOrFocus("mandala", { rel: i.rel }, "\u66FC\u837C\u7F85: " + i.title);
       return;
@@ -38483,12 +39050,13 @@ ${h4.join(`
   function initDocks() {
     const ribbon = [
       { id: "switcher", icon: "file-search", title: "\u30CE\u30FC\u30C8\u3092\u958B\u304F\uFF08Ctrl+O\uFF09", run: () => switcher.open() },
+      { id: "search", icon: "search", title: "\u691C\u7D22\uFF08Ctrl+Shift+F\uFF09", run: () => openSearch() },
       { id: "new", icon: "note-plus", title: "\u65B0\u3057\u3044\u30CE\u30FC\u30C8\uFF08Ctrl+N\uFF09", run: () => newNote() },
       { id: "today", icon: "today", title: "\u4ECA\u65E5\u306E\u65E5\u8A18\u3092\u958B\u304F", run: () => appCtx.op("diary_open", {}) },
       { id: "calendar", icon: "calendar", title: "\u30AB\u30EC\u30F3\u30C0\u30FC\uFF08Alt+C\uFF09", run: () => openCalendar() },
       { id: "browser", icon: "columns", title: "\u7D22\u5F15\u30D6\u30E9\u30A6\u30B6\uFF08Index \u2192 \u30CE\u30FC\u30C8 \u2192 \u30C8\u30D4\u30C3\u30AF\u7D22\u5F15 \u3092\u5217\u3067\u8FBF\u308B\uFF09", run: () => openIndexBrowser() },
       { id: "graph", icon: "graph", title: "\u30B0\u30E9\u30D5", run: () => panes2.openView("graph") },
-      { id: "mandala", icon: "mandala", title: "\u66FC\u837C\u7F85\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\u304C\u66FC\u837C\u7F85\u306A\u3089\u958B\u304F\u30FB\u7121\u3051\u308C\u3070\u65B0\u3057\u304F\u4F5C\u308B\uFF09", run: () => openMandala() },
+      { id: "mandala", icon: "mandala", title: "\u66FC\u837C\u7F85\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\u304C\u66FC\u837C\u7F85\u306A\u3089\u958B\u304F\u30FB\u7D22\u5F15\u306A\u3089\u66FC\u837C\u7F85\u3067\u898B\u308B\u30FB\u307B\u304B\u306F\u65B0\u3057\u304F\u4F5C\u308B\uFF09", run: () => openMandala() },
       { id: "canvas", icon: "canvas", title: "\u30AD\u30E3\u30F3\u30D0\u30B9\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\u304C\u30AD\u30E3\u30F3\u30D0\u30B9\u306A\u3089\u958B\u304F\u30FB\u7121\u3051\u308C\u3070\u65B0\u3057\u304F\u4F5C\u308B\uFF09", run: () => openCanvas() },
       { id: "palette", icon: "command", title: "\u30B3\u30DE\u30F3\u30C9\u30D1\u30EC\u30C3\u30C8\uFF08Ctrl+P\uFF09", run: () => openPalette() },
       { id: "views", icon: "cards", title: "\u8868\u793A\u5C02\u7528\u306E\u30D3\u30E5\u30FC\uFF08\u30AB\u30FC\u30C9\u30FB\u30C6\u30FC\u30D6\u30EB\u30FB\u6642\u7CFB\u5217\u30FB\u691C\u7D22\u2026\uFF09", bottom: true, run: (e) => {
@@ -38511,13 +39079,15 @@ ${h4.join(`
           nav2 = createNavSidebar(el2, appCtx);
           el2.addEventListener("gnosis-open-editor", (e) => {
             if (e.detail === "mandala") openMandala();
+            else if (e.detail === "imandala") openIndexMandala();
             else openCanvas();
           });
           return { refresh: () => {
           } };
         }
       },
-      { id: "notes", side: "left", icon: "files", title: "\u30CE\u30FC\u30C8\uFF08\u6700\u8FD1\u306E\u30CE\u30FC\u30C8\u30FB\u984C\u3067\u63A2\u3059\uFF09", create: notesPanel(appCtx) },
+      { id: "notes", side: "left", icon: "files", title: "\u30CE\u30FC\u30C8\uFF08\u5168\u90E8\u306E\u30CE\u30FC\u30C8\u30FB\u4E26\u3073\u66FF\u3048\uFF09", create: notesPanel(appCtx) },
+      { id: "search", side: "left", icon: "search", title: "\u691C\u7D22\uFF08Obsidian \u3068\u540C\u3058\u66F8\u304D\u65B9\u306E\u5168\u6587\u691C\u7D22\u3002Ctrl+Shift+F\uFF09", create: searchPanel(appCtx) },
       { id: "features", side: "left", icon: "features", title: "\u6A5F\u80FD\uFF08\u5168\u90E8\u306E\u6A5F\u80FD\u3002\u62BC\u3059\u3068\u5B9F\u884C\uFF09", create: featuresPanel(async () => {
         if (!vimCmds) {
           try {
@@ -38533,7 +39103,27 @@ ${h4.join(`
     ];
     docks = createDocks({ ribbonEl: $3("ribbon"), leftEl: $3("leftdock"), rightEl: $3("rightdock"), leftSplit: $3("leftdock-split"), rightSplit: $3("rightdock-split"), centerEl: $3("center"), panels, ribbon, onResize: () => scheduleFit(), menu: popupMenu });
     docks.panel("index");
-    switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t3) => newNote(t3), onClose: () => backToInputSoon() });
+    switcher = createSwitcher({ query: (m, p) => gui.query(m, p), open: (rel) => vimOpen(rel), create: (t3) => newNote(t3), onClose: () => backToInputSoon(), recent: () => recentNotes() });
+  }
+  function openSearch(q2) {
+    const p = docks.show("search");
+    if (p && p.focusSearch) p.focusSearch(q2);
+  }
+  function recentNotes() {
+    try {
+      return JSON.parse(localStorage.getItem("gnosis.recent") || "[]");
+    } catch {
+      return [];
+    }
+  }
+  function rememberRecent(file) {
+    const rel = relOf(file);
+    if (!rel || rel.startsWith("/")) return;
+    const list = [rel, ...recentNotes().filter((x) => x !== rel)].slice(0, 40);
+    try {
+      localStorage.setItem("gnosis.recent", JSON.stringify(list));
+    } catch {
+    }
   }
   var outlineTimer = null;
   function outlineSoon() {
@@ -38572,6 +39162,7 @@ ${h4.join(`
     add("\u30D0\u30FC", "\u30A2\u30A6\u30C8\u30E9\u30A4\u30F3\uFF08\u53F3\u306E\u30D0\u30FC\uFF09\u3092\u51FA\u3059", "outline headings \u30A2\u30A6\u30C8\u30E9\u30A4\u30F3 \u898B\u51FA\u3057", () => docks.show("outline"));
     add("\u30CE\u30FC\u30C8", "\u30CE\u30FC\u30C8\u3092\u958B\u304F\uFF08\u30AF\u30A4\u30C3\u30AF\u30B9\u30A4\u30C3\u30C1\u30E3\u30FC\uFF09", "quick switcher open note ctrl+o \u958B\u304F \u63A2\u3059", () => switcher.open());
     add("\u30CE\u30FC\u30C8", "\u65B0\u3057\u3044\u30CE\u30FC\u30C8", "new note ctrl+n \u65B0\u898F \u4F5C\u308B", () => newNote());
+    add("\u691C\u7D22", "\u5168\u6587\u691C\u7D22\uFF08Obsidian \u3068\u540C\u3058\u66F8\u304D\u65B9\uFF09", "search full text ctrl+shift+f \u691C\u7D22 \u5168\u6587 \u63A2\u3059", () => openSearch());
     add("\u7D22\u5F15", "\u7D22\u5F15\u8A9E\u3067\u63A2\u3059", "search keyword \u7D22\u5F15\u8A9E \u691C\u7D22", () => {
       docks.show("index");
       nav2.focusSearch();
@@ -38588,6 +39179,7 @@ ${h4.join(`
     add("\u6642\u9593", "\u4ECA\u65E5\u306E\u65E5\u8A18\u3092\u958B\u304F", "diary today \u65E5\u8A18", () => appCtx.op("diary_open", {}));
     add("\u66FC\u837C\u7F85", "\u66FC\u837C\u7F85\u3092\u958B\u304F\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\uFF09\u30FB\u65B0\u3057\u3044\u66FC\u837C\u7F85", "mandala \u66FC\u837C\u7F85 \u30DE\u30F3\u30C0\u30E9\u30FC\u30C8", () => openMandala());
     add("\u66FC\u837C\u7F85", "\u65B0\u3057\u3044\u66FC\u837C\u7F85\u3092\u4F5C\u308B", "mandala new \u66FC\u837C\u7F85", () => openMandala("new"));
+    add("\u66FC\u837C\u7F85", "\u4ECA\u306E\u7D22\u5F15\u3092\u66FC\u837C\u7F85\u3067\u898B\u308B", "mandala index \u66FC\u837C\u7F85 \u7D22\u5F15 \u30A4\u30F3\u30C7\u30C3\u30AF\u30B9", () => openIndexMandala());
     add("\u66FC\u837C\u7F85", "\u66FC\u837C\u7F85\u3092\u9078\u3093\u3067\u958B\u304F", "mandala open \u66FC\u837C\u7F85", () => openMandala("pick"));
     add("\u30AD\u30E3\u30F3\u30D0\u30B9", "\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u958B\u304F\uFF08\u4ECA\u306E\u30CE\u30FC\u30C8\uFF09\u30FB\u65B0\u3057\u3044\u30AD\u30E3\u30F3\u30D0\u30B9", "canvas whiteboard \u30AD\u30E3\u30F3\u30D0\u30B9 \u30DB\u30EF\u30A4\u30C8\u30DC\u30FC\u30C9", () => openCanvas());
     add("\u30AD\u30E3\u30F3\u30D0\u30B9", "\u65B0\u3057\u3044\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u4F5C\u308B", "canvas new \u30AD\u30E3\u30F3\u30D0\u30B9", () => openCanvas("new"));
@@ -38782,7 +39374,7 @@ ${h4.join(`
       if (e.code === "Tab") return take(() => panes2.cycle(e.shiftKey ? -1 : 1));
       if (e.shiftKey) {
         if (e.code === "KeyP") return take(() => openPalette());
-        if (e.code === "KeyF") return take(() => panes2.openView("search"));
+        if (e.code === "KeyF") return take(() => openSearch());
         return;
       }
       if (t3 && t3.closest && t3.closest(".qs, #palette")) return;
@@ -38798,6 +39390,7 @@ ${h4.join(`
     const items = [];
     if (i && i.kind === "mandala") items.push({ label: "\u66FC\u837C\u7F85\u306E\u753B\u9762\u3067\u958B\u304F", run: () => openMandala() });
     if (i && i.kind === "canvas") items.push({ label: "\u30AD\u30E3\u30F3\u30D0\u30B9\u306E\u753B\u9762\u3067\u958B\u304F", run: () => openCanvas() });
+    if (i && !i.missing && (i.entries || i.topics && i.topics.length)) items.push({ label: "\u7D22\u5F15\u3092\u66FC\u837C\u7F85\u3067\u898B\u308B", run: () => openIndexMandala() });
     items.push(
       { label: "\u7D22\u5F15\u306B\u8F09\u305B\u308B\u2026", disabled: !i || i.missing || i.is_index, run: () => nav2.actions.addToIndex(i) },
       { label: "\u30C8\u30D4\u30C3\u30AF\u7D22\u5F15\u3092\u4F5C\u308B\u2026", disabled: !i || i.missing || !!i.entries, run: () => nav2.actions.newTopic(i) },
@@ -39287,9 +39880,11 @@ ${h4.join(`
       guiEdit: () => guiEdit,
       panes: () => panes2,
       openPalette,
+      openSearch,
       nav: () => nav2,
       appCtx,
       openMandala,
+      openIndexMandala,
       openCanvas,
       openCalendar,
       openIndexBrowser,

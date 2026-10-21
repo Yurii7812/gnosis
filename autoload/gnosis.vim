@@ -471,6 +471,74 @@ function! s:jump_to_fragment(frag) abort
   return 0
 endfunction
 
+" 題の同期（Obsidian の題と同じ操作感）: 本文の「# 見出し」（H1）か front matter の title: の片方だけを書き換えて保存すると、
+" もう片方もそろえる（保存の前に書き足す）。ほかのノートの古い題のリンクの表示名は、いつもの保存後の自動同期が直す（zt と同じ）。
+" 両方を同じに変えたとき（zt・:NT）は、それぞれの処理に任せる。front matter か H1 が無いノートは何もしない。
+function! s:title_pair(lines) abort
+  let l:r = {'title': '', 'tline': -1, 'h1': '', 'hline': -1}
+  let l:i = 0
+  if get(a:lines, 0, '') ==# '---'
+    let l:i = 1
+    while l:i < len(a:lines) && a:lines[l:i] !=# '---'
+      let l:m = matchlist(a:lines[l:i], '^title:\s*\(.\{-}\)\s*$')
+      if !empty(l:m) && l:r.tline < 0
+        let l:r.tline = l:i
+        let l:r.title = substitute(l:m[1], '^\([''"]\)\(.*\)\1$', '\2', '')
+      endif
+      let l:i += 1
+    endwhile
+    let l:i += 1
+  endif
+  let l:fence = 0
+  while l:i < len(a:lines)
+    if a:lines[l:i] =~# '^\s*\(```\|\~\~\~\)'
+      let l:fence = !l:fence
+    elseif !l:fence && a:lines[l:i] =~# '^#\s\+\S'
+      let l:r.hline = l:i
+      let l:r.h1 = trim(substitute(a:lines[l:i], '^#\s\+', '', ''))
+      break
+    endif
+    let l:i += 1
+  endwhile
+  return l:r
+endfunction
+
+function! gnosis#title_sync_before() abort
+  let b:gnosis_title_sync = {}
+  let l:path = expand('<afile>:p')
+  let l:root = s:get_pkm_root()
+  if empty(l:root) || stridx(l:path, fnamemodify(l:root, ':p')) != 0 || !filereadable(l:path)
+    return
+  endif
+  let l:disk = s:title_pair(readfile(l:path))
+  let l:buf = s:title_pair(getline(1, '$'))
+  if l:buf.tline < 0 || l:buf.hline < 0 || l:disk.tline < 0 || l:disk.hline < 0
+    return
+  endif
+  let l:new = ''
+  if l:buf.h1 !=# l:disk.h1 && l:buf.title ==# l:disk.title && l:buf.h1 !=# l:buf.title && !empty(l:buf.h1)
+    let l:new = l:buf.h1
+    call setline(l:buf.tline + 1, 'title: ' . l:new)
+  elseif l:buf.title !=# l:disk.title && l:buf.h1 ==# l:disk.h1 && l:buf.title !=# l:buf.h1 && !empty(l:buf.title)
+    let l:new = l:buf.title
+    call setline(l:buf.hline + 1, '# ' . l:new)
+  endif
+  if !empty(l:new) && l:new !=# l:disk.title
+    let b:gnosis_title_sync = {'old': l:disk.title, 'new': l:new}
+  endif
+endfunction
+
+function! gnosis#title_sync_after() abort
+  let l:t = get(b:, 'gnosis_title_sync', {})
+  let b:gnosis_title_sync = {}
+  if empty(l:t)
+    return
+  endif
+  " ほかのノートのリンクの表示名は、保存のあとの自動同期が title: の変化を見て直す（b:syn_prev_title）
+  call gnosis#clear_title_cache()
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('題を「%s」にそろえました'), l:t.new)
+endfunction
+
 " 見出しを書き換えたら、ほかのノートのその見出しへのリンク（[題#見出し](ノート.md#スラッグ)）も直す。
 " 保存の前に、ファイルにある見出しを控えておき（BufWritePre）、保存のあとで比べる（BufWritePost）。
 " 前後で同じ並びのまま文字だけ変わった見出しを「書き換え」とみなす（足した・消した見出しは触らない）。
@@ -21285,7 +21353,7 @@ endfunction
 "   diary_open  {date}                             … その日の日記を開く。無ければ作る（今日より先の日は作らない。date が空なら今日）
 "   task_add    {date, text, time}                 … 今日の日記にタスクを書く（期限 📅 は date）
 "   note_new    {title, kind: note|mandala|canvas, subs} … 新しいノート・曼荼羅・キャンバス（今日の日記の「今日のノート」に載る）
-"   mandala_link {file, row, col, kind}            … 曼荼羅のマスの文字からノート（kind=mandala なら別の曼荼羅）を作る
+"   mandala_link {file, row, col, kind, page}      … 曼荼羅のマスの文字からノート（kind=mandala なら別の曼荼羅）を作る（page は何枚目の表か）
 "   go_back / go_forward                           … ノートの履歴を戻る（⌫ と同じ）・進む（\. と同じ）
 " =============================================================================
 function! s:app_root() abort
@@ -21451,7 +21519,7 @@ function! gnosis#app_op(m) abort
   elseif l:op ==# 'mandala_link'
     let l:file = s:app_abs(l:root, get(a:m, 'file', ''))
     call s:app_edit(l:file)
-    let l:r = s:mandala_run(['link-cell', l:file, string(get(a:m, 'row', -1)), string(get(a:m, 'col', -1)), get(a:m, 'kind', 'note') ==# 'mandala' ? 'mandala' : 'note'])
+    let l:r = s:mandala_run(['link-cell', l:file, string(get(a:m, 'row', -1)), string(get(a:m, 'col', -1)), get(a:m, 'kind', 'note') ==# 'mandala' ? 'mandala' : 'note', string(get(a:m, 'page', 0))])
     silent! checktime
     if !get(l:r, 'ok', 0)
       return {'ok': 0, 'error': get(l:r, 'error', '')}

@@ -1,5 +1,6 @@
 // 左右のバーに入れるパネル（docks.js が並べる）。どれも読むだけで、書くのは Vim（ctx.op / ctx.commit）。
-//   ノート      … 最近のノート・題で探す（Obsidian のファイル一覧の代わり。フォルダ分けは強制しない）
+//   ノート      … 全部のノート（Obsidian のファイル一覧と同じく並び替えだけ。フォルダ分けは強制しない）
+//   検索        … Obsidian と同じ書き方の全文検索（当たった行に色・押すとその行へ）
 //   機能        … 全部の機能をグループごとに並べ、押すと実行する（コマンドパレットと同じ項目）
 //   リンク      … 今のノートの関係（Context・親子・Group・トピック索引）・バックリンク・出ていくリンク
 //   アウトライン … 今のノートの見出し。押すとその行へ
@@ -38,38 +39,148 @@ function noteRow(ctx, x, sub) {
   return draggable(b, x.missing ? "" : x.rel);
 }
 
-// ---------------------------------------------------------------- ノート
+// ---------------------------------------------------------------- ノート（Obsidian のファイル一覧と同じく、絞り込みは無し。探すのは「検索」で）
+const NOTE_SORTS = [["ctime-new", "作った日時（新しい順）"], ["ctime-old", "作った日時（古い順）"], ["mtime-new", "更新日時（新しい順）"], ["mtime-old", "更新日時（古い順）"], ["name-asc", "題（A → Z・あ → ん）"], ["name-desc", "題（Z → A・ん → あ）"]];
 export function notesPanel(ctx) {
   return (el) => {
     el.classList.add("pnl");
-    panelHead(el, "ノート", [button("＋", () => ctx.newNote(), "pnl-btn", "新しいノート（Ctrl+N）")]);
-    const search = h("input", "pnl-search"); search.type = "search"; search.placeholder = "題で絞る";
-    search.setAttribute("aria-label", "ノートを題で絞る");
+    let sort = "ctime-new";
+    try { sort = localStorage.getItem("gnosis.notesSort") || sort; } catch { /* ignore */ }
+    const sortBtn = button("⇅", (e) => ctx.menu(e.clientX, e.clientY, NOTE_SORTS.map(([k, t]) => ({ label: (k === sort ? "● " : "　") + t, run: () => { sort = k; try { localStorage.setItem("gnosis.notesSort", k); } catch { /* ignore */ } load(); } }))), "pnl-btn", "並び替え");
+    panelHead(el, "ノート", [sortBtn, button("＋", () => ctx.newNote(), "pnl-btn", "新しいノート（Ctrl+N）")]);
     const list = h("div", "pnl-body");
-    el.append(search, list);
-    let timer = null, cur = "", my = 0;
+    el.append(list);
+    let cur = "", my = 0;
     async function load() {
-      const q = search.value.trim();
       const n = ++my;
-      const r = await ctx.query("nav.notes", { q, limit: q ? 200 : 120 });
+      const r = await ctx.query("nav.notes", { limit: 3000, sort });
       if (n !== my) return;
       list.textContent = "";
       const res = r.ok ? r.result : [];
-      if (!res.length) { list.appendChild(h("div", "nav-empty", q ? "見つかりません" : "ノートがありません")); return; }
-      if (!q) list.appendChild(h("div", "pnl-sec", "最近のノート"));
+      if (!res.length) { list.appendChild(h("div", "nav-empty", "ノートがありません")); return; }
+      list.appendChild(h("div", "pnl-sec", (NOTE_SORTS.find(([k]) => k === sort) || [, ""])[1] + `（${res.length}${res.length >= 3000 ? "+" : ""}）`));
       for (const x of res) {
-        const row = noteRow(ctx, x, [x.path || "", x.time ? x.time.slice(0, 10) : ""].filter(Boolean).join(" · "));
+        const row = noteRow(ctx, x, x.time ? x.time.slice(0, 10) : "");
+        row.dataset.rel = x.rel;
         if (cur && cur.endsWith("/" + x.rel)) row.classList.add("cur");
         list.appendChild(row);
       }
     }
-    search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 140); });
-    search.addEventListener("keydown", (e) => {
+    return { onShow: () => load(), refresh: () => load(), follow: (f) => { cur = f; for (const r of list.querySelectorAll(".pnl-item")) r.classList.toggle("cur", !!cur && cur.endsWith("/" + r.dataset.rel)); } };
+  };
+}
+
+// ---------------------------------------------------------------- 検索（Obsidian と同じ書き方。python/obsidian_search.py）
+const SEARCH_SORTS = [["name-asc", "題（A → Z）"], ["name-desc", "題（Z → A）"], ["mtime-new", "更新日時（新しい順）"], ["mtime-old", "更新日時（古い順）"], ["ctime-new", "作った日時（新しい順）"], ["ctime-old", "作った日時（古い順）"]];
+const SEARCH_OPS = [
+  ["file:", "ファイル名・題で探す"], ["path:", "パスで探す"], ["content:", "本文だけで探す"], ["tag:", "タグで探す"],
+  ["line:()", "同じ行に全部"], ["block:()", "同じ段落に全部"], ["section:()", "同じ節（見出しの下）に全部"],
+  ["task:", "チェックボックスの行"], ["task-todo:", "未完了のチェックボックス"], ["task-done:", "完了したチェックボックス"],
+  ["match-case:", "大文字と小文字を区別"], ["ignore-case:", "大文字と小文字を区別しない"], ["[]", "front matter の項目（[項目:値]）"],
+];
+export function markText(text, ranges) {
+  const out = [];
+  let last = 0;
+  for (const [a, b] of ranges) {
+    if (a < last) continue;
+    if (a > last) out.push(document.createTextNode(text.slice(last, a)));
+    out.push(h("mark", "sr-hit", text.slice(a, b)));
+    last = b;
+  }
+  if (last < text.length) out.push(document.createTextNode(text.slice(last)));
+  return out;
+}
+export function searchPanel(ctx) {
+  return (el) => {
+    el.classList.add("pnl", "srch");
+    const st = { q: "", case: false, sort: "name-asc", explain: false, collapsed: false };
+    try { Object.assign(st, JSON.parse(localStorage.getItem("gnosis.search") || "{}"), { q: "" }); } catch { /* ignore */ }
+    const keep = () => { try { localStorage.setItem("gnosis.search", JSON.stringify({ ...st, q: "" })); } catch { /* ignore */ } };
+    const caseBtn = button("Aa", () => { st.case = !st.case; caseBtn.setAttribute("aria-pressed", String(st.case)); keep(); run(); }, "pnl-btn", "大文字と小文字を区別する");
+    const exBtn = button("?", () => { st.explain = !st.explain; exBtn.setAttribute("aria-pressed", String(st.explain)); keep(); draw(); }, "pnl-btn", "検索語の説明を出す");
+    const colBtn = button("≡", () => { st.collapsed = !st.collapsed; colBtn.setAttribute("aria-pressed", String(st.collapsed)); keep(); draw(); }, "pnl-btn", "結果を畳む（ノートの題だけ）");
+    const sortBtn = button("⇅", (e) => ctx.menu(e.clientX, e.clientY, SEARCH_SORTS.map(([k, t]) => ({ label: (k === st.sort ? "● " : "　") + t, run: () => { st.sort = k; keep(); run(); } }))), "pnl-btn", "並び替え");
+    caseBtn.setAttribute("aria-pressed", String(st.case)); exBtn.setAttribute("aria-pressed", String(st.explain)); colBtn.setAttribute("aria-pressed", String(st.collapsed));
+    panelHead(el, "検索", [caseBtn, exBtn, colBtn, sortBtn]);
+    const input = h("input", "pnl-search srch-input");
+    input.type = "search"; input.placeholder = "検索…（例: 京都 -旅行・\"りんご ジャム\"・file:日記・line:(a b)）";
+    input.setAttribute("aria-label", "全文検索"); input.spellcheck = false;
+    const ops = h("div", "srch-ops");
+    for (const [op, t] of SEARCH_OPS) {
+      const b = h("button", "srch-op"); b.type = "button";
+      b.append(h("code", "", op), h("span", "", t));
+      b.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const v = input.value.replace(/\s*$/, "");
+        const ins = op.endsWith("()") ? op : op === "[]" ? "[" : op;
+        input.value = (v ? v + " " : "") + ins;
+        const pos = op.endsWith("()") ? input.value.length - 1 : input.value.length;
+        input.focus(); input.setSelectionRange(pos, pos);
+        ops.hidden = true;
+      });
+      ops.appendChild(b);
+    }
+    ops.hidden = true;
+    const status = h("div", "srch-status", "");
+    const exBox = h("pre", "srch-explain", "");
+    const list = h("div", "pnl-body srch-list");
+    el.append(input, ops, status, exBox, list);
+    let res = null, my = 0, timer = null;
+    const open = new Map();     // rel → 畳んでいるか（ノートごと）
+    async function run() {
+      const q = input.value.trim();
+      st.q = q;
+      if (!q) { res = null; draw(); return; }
+      const n = ++my;
+      const r = await ctx.query("search.full", { q, case: st.case, sort: st.sort });
+      if (n !== my) return;
+      res = r.ok ? r.result : { results: [], total: 0, error: r.error };
+      draw();
+    }
+    function draw() {
+      list.textContent = "";
+      exBox.hidden = !(st.explain && res && res.explain);
+      exBox.textContent = res && res.explain ? res.explain : "";
+      if (!res) { status.textContent = ""; return; }
+      if (res.error) { status.textContent = res.error; status.className = "srch-status err"; return; }
+      status.className = "srch-status";
+      status.textContent = res.total ? `${res.total} 件のノート` : "見つかりません";
+      for (const x of res.results) {
+        const box = h("div", "sr-file");
+        const head = h("div", "sr-head");
+        const folded = open.has(x.rel) ? open.get(x.rel) : st.collapsed;
+        const tw = h("button", "sr-twisty" + (folded ? "" : " open")); tw.type = "button"; tw.setAttribute("aria-label", "開く・畳む");
+        tw.appendChild(icon("chevron", 14));
+        tw.addEventListener("click", () => { open.set(x.rel, !folded); draw(); });
+        const t = h("button", "sr-title", x.title); t.type = "button"; t.title = x.rel;
+        t.addEventListener("click", () => ctx.open(x.rel));
+        head.append(tw, t, h("span", "pnl-count", String(x.count)));
+        draggable(head, x.rel);
+        box.appendChild(head);
+        if (!folded) {
+          for (const ln of x.lines) {
+            const row = h("button", "sr-line"); row.type = "button"; row.title = `${ln.line} 行目`;
+            row.append(...markText(ln.text, ln.ranges));
+            row.addEventListener("click", () => ctx.openAt(x.rel, ln.line));
+            box.appendChild(row);
+          }
+          if (x.more) box.appendChild(h("div", "sr-more", `ほか ${x.more} 行`));
+        }
+        list.appendChild(box);
+      }
+    }
+    input.addEventListener("input", () => { clearTimeout(timer); ops.hidden = !!input.value.trim(); timer = setTimeout(run, 250); });
+    input.addEventListener("focus", () => { ops.hidden = !!input.value.trim(); });
+    input.addEventListener("blur", () => setTimeout(() => { ops.hidden = true; }, 150));
+    input.addEventListener("keydown", (e) => {
       if (imeActive(e)) return;
-      if (e.key === "Enter") { const f = list.querySelector(".pnl-item:not(.missing)"); if (f) f.click(); }
-      if (e.key === "Escape") { search.value = ""; load(); ctx.focusVim(); }
+      if (e.key === "Enter") { e.preventDefault(); clearTimeout(timer); ops.hidden = true; run(); }
+      if (e.key === "Escape") { if (input.value) { input.value = ""; run(); } else ctx.focusVim(); }
     });
-    return { onShow: () => load(), refresh: () => load(), follow: (f) => { cur = f; for (const r of list.querySelectorAll(".pnl-item")) r.classList.toggle("cur", !!cur && cur.endsWith("/" + r.title)); } };
+    return {
+      onShow: () => {}, refresh: () => { if (st.q) run(); },
+      focusSearch: (q) => { if (q != null) { input.value = q; run(); } input.focus(); input.select(); },
+    };
   };
 }
 
