@@ -52,11 +52,20 @@ call s:ok('ノートのつながりも出る（すべて）', s:text() =~# '3 �
 call s:ok('右にそのノートが開いている', fnamemodify(bufname(winbufnr(win_id2win(1) ? 2 : 1)), ':t') ==# 'herb.md' || index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0)
 
 " モード: 索引だけ → ノートだけ
-call s:keys('m')
+call s:keys('g')
 call s:ok('索引だけ: ミントは出ない', s:text() !~# 'ミント' && s:text() =~# '◆植物', s:text())
-call s:keys('m')
+call s:keys('n')
 call s:ok('ノートだけ: 索引は出ない', s:text() !~# '◆' && s:text() =~# 'ミント', s:text())
-call s:keys('m')
+call s:keys('a')
+call s:ok('a ですべてに戻る', s:text() =~# '◆植物' && s:text() =~# 'ミント')
+" 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
+let s:st.results = ['mint.md', 'herb.md']
+let s:st.rquery = 'ハーブ'
+call s:keys('r')
+call s:ok('検索の結果が周りに出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）', s:text())
+call s:keys('g')
+call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
+call s:keys('a')
 
 " 移動して Enter: その索引が中心になる（カーソルは曼荼羅のまま）
 call s:keys('1')
@@ -109,7 +118,7 @@ let g:gnosis_test_yomi = ['ざっき']
 execute 'edit ' . s:v . '/misc.md'
 call gnosis#mview#pick()
 let s:st = gnosis#mview#state()
-call s:ok('\g の曼荼羅は索引から始まり索引だけが出る', s:st.pick == 1 && s:st.center ==# 'index.md' && s:text() =~# '1 ◆植物' && s:text() =~# '3 ◆空の', s:text())
+call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.mode ==# 'near' && s:text() =~# '1 ◆植物' && s:text() =~# '3 ◆空の', s:text())
 call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
 let s:st.query = '空'
 call s:keys('r')

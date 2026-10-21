@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mandala_view as mv  # noqa: E402
 
 
-def note(title, attr=False, groups=(), body=()):
-    s = f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n" + ("attribute: group\n" if attr else "") + f"---\n\n# {title}\n\n"
+def note(title, attr=False, groups=(), body=(), fzid=""):
+    s = f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n" + ("attribute: group\n" if attr else "") + (f'folgezettel: "{fzid}"\n' if fzid else "") + f"---\n\n# {title}\n\n"
     if groups:
         s += "Group:\n" + "".join(f"[{t}]({f})\n" for t, f in groups) + "\n"
     return s + "".join(b + "\n" for b in body)
@@ -48,6 +48,34 @@ class T(unittest.TestCase):
     def test_index_center_skips_broken(self):
         self.assertEqual(mv.items(self.d, "index.md", "all"), ["plant.md", "cook.md"])
         self.assertTrue(self.d["nodes"]["index.md"]["g"])
+
+    def test_near_uses_fz_links_and_titles(self):
+        r = Path(self.tmp.name)
+        # 番号 1a の「ハーブ」と同じ枝（1a1）のノートが載っている索引・つながり・題が近い索引
+        (r / "herb.md").write_text(note("ハーブ", False, [("植物", "plant.md")], ["[栽培](grow.md)"], "1a"))
+        (r / "kid.md").write_text(note("ハーブの子", False, [("枝の索引", "branch.md")], [], "1a1"))
+        (r / "branch.md").write_text(note("枝の索引", True, [("Index", "index.md")], ["[ハーブの子](kid.md)"]))
+        (r / "title.md").write_text(note("ハーブの育て方", True, [("Index", "index.md")], []))
+        (r / "far.md").write_text(note("関係ない索引", True, [("Index", "index.md")], ["[他](other.md)"]))
+        (r / "other.md").write_text(note("他", False, [("関係ない索引", "far.md")], [], "9"))
+        (r / "index.md").write_text(note("Index", body=["[植物](plant.md)", "[料理](cook.md)", "[枝の索引](branch.md)", "[ハーブの育て方](title.md)", "[関係ない索引](far.md)"]))
+        got = mv.near(r, "herb.md")
+        ids = [d["id"] for d in got]
+        self.assertNotIn("plant.md", ids)  # もう載っている索引は出さない
+        self.assertNotIn("far.md", ids)    # 手がかりが無い索引は出さない
+        self.assertEqual(ids[0], "branch.md")  # 番号が同じ枝のノートが載っている
+        self.assertIn("枝の子", got[0]["why"])
+        self.assertIn("title.md", ids)
+        self.assertIn("題が近い", next(d for d in got if d["id"] == "title.md")["why"])
+
+    def test_search_title_first(self):
+        r = Path(self.tmp.name)
+        self.assertEqual(mv.search(r, ["ハーブ"])[0], "herb.md")
+        (r / "body.md").write_text(note("別の話", False, [], ["栽培のハーブについて"]))
+        hits = mv.search(r, ["ハーブ"])
+        self.assertEqual(hits[0], "herb.md")
+        self.assertIn("body.md", hits)
+        self.assertEqual(mv.search(r, ["ハーブ", "存在しない語"]), [])
 
     def test_unknown(self):
         self.assertEqual(mv.items(self.d, "x.md"), [])

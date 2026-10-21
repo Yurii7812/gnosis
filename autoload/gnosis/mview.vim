@@ -11,7 +11,8 @@
 "                    Enter  カーソルのマスを中心にする（9×9 では 1-8 はそのブロックへカーソルを置くだけ）
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
-"   m                モード（すべて → 索引だけ → ノートだけ）    f 全画面（9×9）⇔ 分割（3×3）
+"   a g n c          モード: a すべて / g 索引だけ / n ノートだけ / c 近い索引（Folgezettel・つながり・題で近い順）
+"   s                検索（題・本文。結果が周りに並ぶ）    /  今の周りを絞り込む    f 全画面（9×9）⇔ 分割（3×3）
 "   Space            ノートのウィンドウへ    r 読み直す    q 閉じる
 " 元データは python/mandala_view.py（読み取り専用）。ノートは書き換えない。
 
@@ -19,8 +20,7 @@ let s:S = {}
 let s:here = expand('<sfile>:p:h:h:h')
 " 周りの 8 マス（番号 1-8）。読む順:  1 2 3 / 4 _ 5 / 6 7 8
 let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
-let s:modes = ['all', 'groups', 'notes']
-let s:mode_label = {'all': 'すべて', 'groups': '索引だけ', 'notes': 'ノートだけ'}
+let s:mode_label = {'all': 'すべて', 'groups': '索引だけ', 'notes': 'ノートだけ', 'near': '近い索引'}
 
 function! s:root() abort
   let l:r = trim(get(g:, 'gnosis_root', ''))
@@ -85,22 +85,62 @@ function! gnosis#mview#items(data, center, mode) abort
   return l:out
 endfunction
 
-" 周辺に出すもの。索引を選ぶとき（pick）は索引だけで、/ で絞り込んだ間は、中心にかかわらず題が合う索引を並べる
-function! s:items(c) abort
-  if get(s:S, 'pick', 0)
-    if a:c ==# s:S.center && !empty(get(s:S, 'query', ''))
-      let l:q = tolower(s:S.query)
-      let l:out = []
-      for l:id in sort(keys(s:S.data.nodes))
-        if s:S.data.nodes[l:id].g && l:id !=# a:c && stridx(tolower(s:S.data.nodes[l:id].t), l:q) >= 0
-          call add(l:out, l:id)
-        endif
-      endfor
-      return l:out
-    endif
-    return gnosis#mview#items(s:S.data, a:c, 'groups')
+" 近い索引（python/mandala_view.py の near）。中心ごとに覚えておく（r で読み直し）
+function! s:near(c) abort
+  if !has_key(s:S.nearc, a:c)
+    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'near', s:S.root, a:c], 'shellescape(v:val)'), ' ')
+    try
+      let s:S.nearc[a:c] = json_decode(system(l:cmd))
+    catch
+      let s:S.nearc[a:c] = []
+    endtry
   endif
-  return gnosis#mview#items(s:S.data, a:c, s:S.mode)
+  let s:S.why = {}
+  for l:d in s:S.nearc[a:c]
+    let s:S.why[l:d.id] = join(l:d.why, '・')
+  endfor
+  if empty(s:S.nearc[a:c])
+    " 手がかりが無いときは Index の直下の索引から始める
+    let l:fb = gnosis#mview#items(s:S.data, 'index.md', 'groups')
+    call filter(l:fb, 'v:val !=# a:c')
+    for l:id in l:fb
+      let s:S.why[l:id] = 'Index'
+    endfor
+    return l:fb
+  endif
+  return map(copy(s:S.nearc[a:c]), 'v:val.id')
+endfunction
+
+" 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
+function! s:base(c) abort
+  if a:c ==# s:S.center
+    if !empty(s:S.rquery)
+      return copy(s:S.results)
+    endif
+    if s:S.mode ==# 'near'
+      return s:near(a:c)
+    endif
+  endif
+  return gnosis#mview#items(s:S.data, a:c, s:S.mode ==# 'near' ? 'all' : s:S.mode)
+endfunction
+
+" 絞り込み（/）: 索引を選ぶとき（\g）は題が合う索引を全部から、ふだんは今の周りの中から
+function! s:items(c) abort
+  let l:b = s:base(a:c)
+  if a:c !=# s:S.center || empty(s:S.query)
+    return l:b
+  endif
+  let l:q = tolower(s:S.query)
+  if get(s:S, 'pick', 0)
+    let l:out = []
+    for l:id in sort(keys(s:S.data.nodes))
+      if s:S.data.nodes[l:id].g && l:id !=# a:c && stridx(tolower(s:S.data.nodes[l:id].t), l:q) >= 0
+        call add(l:out, l:id)
+      endif
+    endfor
+    return l:out
+  endif
+  return filter(l:b, 'stridx(tolower(s:S.data.nodes[v:val].t), l:q) >= 0')
 endfunction
 
 function! s:pages(center) abort
@@ -236,13 +276,10 @@ function! s:render() abort
   " 上の見出し（今の中心・何枚目・モード）
   let l:ctitle = has_key(s:S.data.nodes, s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
   let l:pages = s:pages(s:S.center)
-  if get(s:S, 'pick', 0)
-    call add(l:lines, s:fit(printf(' 追加先の索引: %s   %d/%d   %s%s', l:ctitle, s:S.page + 1, l:pages,
-          \ l:n == 3 ? '3×3' : '9×9', empty(get(s:S, 'query', '')) ? '' : '   絞り込み: ' . s:S.query), l:W))
-  else
-    call add(l:lines, s:fit(printf(' %s   %d/%d   [%s]   %s', l:ctitle, s:S.page + 1, l:pages,
-          \ s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9'), l:W))
-  endif
+  let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
+        \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
+  call add(l:lines, s:fit(printf(' %s%s   %d/%d   [%s]   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
+        \ s:S.page + 1, l:pages, s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
@@ -255,7 +292,12 @@ function! s:render() abort
       if l:cell.n > 0 && !empty(l:txt)
         let l:txt = l:cell.n . ' ' . l:txt
       endif
-      call add(l:cellines, empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch))
+      let l:tl = empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch)
+      if !empty(l:tl) && l:ch >= 3 && l:cell.role ==# 'item' && s:S.mode ==# 'near' && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)
+        let l:rn = l:ch >= 5 ? 2 : 1
+        let l:tl = l:tl[0 : l:ch - 1 - l:rn] + s:wrap('‹' . s:S.why[l:cell.id] . '›', l:cw - 1, l:rn)
+      endif
+      call add(l:cellines, l:tl)
     endfor
     for l:k in range(l:ch)
       let l:line = l:left
@@ -285,8 +327,8 @@ function! s:render() abort
     call add(l:lines, '')
   endwhile
   call add(l:lines, s:fit(get(s:S, 'pick', 0)
-        \ ? ' hjkl 移動 1-8 その索引へ Enter 中心に（中心で Enter=ここに追加） / 絞り込み [] 前後 - 戻る f 全画面 q 取消'
-        \ : ' hjkl 移動 1-8 そのマスへ Enter 中心に [] 前後 - 戻る m モード f 全画面 Space ノート q 閉じる', l:W))
+        \ ? ' hjkl 1-8 移動 Enter 中心に（索引が中心で Enter=ここに追加） a g n c モード s 検索 / 絞り込み [] - f q 取消'
+        \ : ' hjkl 1-8 移動 Enter 中心に a g n c モード s 検索 / 絞り込み [] 前後 - 戻る f 全画面 Space ノート q 閉じる', l:W))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -398,30 +440,25 @@ function! s:enter() abort
   if empty(l:cell.id)
     return
   endif
-  if get(s:S, 'pick', 0)
-    if l:cell.id ==# s:S.center && empty(get(s:S, 'query', ''))
+  if l:cell.id ==# s:S.center && get(s:S, 'pick', 0)
+    if s:S.data.nodes[l:cell.id].g && empty(s:S.query) && empty(s:S.rquery)
       call s:decide(l:cell.id)
-      return
     endif
-    let s:S.query = ''
-    call add(s:S.hist, [s:S.center, s:S.page])
-    call s:set_center(l:cell.id, 0)
     return
   endif
   if l:cell.id ==# s:S.center
     call s:show_note(l:cell.id)
     return
   endif
+  let s:S.query = ''
+  let s:S.rquery = ''
   call add(s:S.hist, [s:S.center, s:S.page])
   call s:set_center(l:cell.id, 0)
 endfunction
 
 " 索引を選ぶ: / で題を絞り込む（空にすると解除）
 function! s:filter() abort
-  if !get(s:S, 'pick', 0)
-    return
-  endif
-  let l:q = input('索引を絞り込む（空で解除）: ', get(s:S, 'query', ''))
+  let l:q = input(get(s:S, 'pick', 0) ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
   let s:S.query = trim(l:q)
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -456,9 +493,33 @@ function! s:page(d) abort
   call s:render()
 endfunction
 
-function! s:mode() abort
-  let s:S.mode = s:modes[(index(s:modes, s:S.mode) + 1) % len(s:modes)]
+" モード（英字）: a すべて / g 索引だけ / n ノートだけ / c 近い索引
+function! s:setmode(m) abort
+  let s:S.mode = a:m
+  let s:S.query = ''
+  let s:S.rquery = ''
   let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
+
+" 検索（s）: 題か本文に語を全部含むノートを、vault 全体から探して周りに並べる
+function! s:search() abort
+  let l:q = trim(input('検索（題・本文。空で解除）: ', s:S.rquery))
+  let s:S.query = ''
+  if empty(l:q)
+    let s:S.rquery = ''
+  else
+    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'search', s:S.root] + split(l:q, '\s\+'), 'shellescape(v:val)'), ' ')
+    try
+      let s:S.results = json_decode(system(l:cmd))
+    catch
+      let s:S.results = []
+    endtry
+    let s:S.rquery = l:q
+  endif
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
 endfunction
 
@@ -545,7 +606,11 @@ function! s:setup_buffer() abort
   nnoremap <buffer><silent> [ <Cmd>call <SID>page(-1)<CR>
   nnoremap <buffer><silent> - <Cmd>call <SID>back()<CR>
   nnoremap <buffer><silent> <BS> <Cmd>call <SID>back()<CR>
-  nnoremap <buffer><silent> m <Cmd>call <SID>mode()<CR>
+  nnoremap <buffer><silent> a <Cmd>call <SID>setmode('all')<CR>
+  nnoremap <buffer><silent> g <Cmd>call <SID>setmode('groups')<CR>
+  nnoremap <buffer><silent> n <Cmd>call <SID>setmode('notes')<CR>
+  nnoremap <buffer><silent> c <Cmd>call <SID>setmode('near')<CR>
+  nnoremap <buffer><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><silent> / <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><silent> f <Cmd>call <SID>full()<CR>
   nnoremap <buffer><silent> r <Cmd>call <SID>reload()<CR>
@@ -558,6 +623,7 @@ function! s:setup_buffer() abort
 endfunction
 
 function! s:reload() abort
+  let s:S.nearc = {}
   if s:load()
     if !has_key(s:S.data.nodes, s:S.center)
       let s:S.center = 'index.md'
@@ -577,6 +643,10 @@ function! s:open(center, ...) abort
   let s:S.pick = !empty(l:pick)
   let s:S.src = l:pick
   let s:S.query = ''
+  let s:S.rquery = ''
+  let s:S.results = []
+  let s:S.nearc = {}
+  let s:S.why = {}
   if !s:load()
     echohl WarningMsg | echo 'Gnosis: vault が選ばれていません' | echohl NONE
     return
@@ -586,7 +656,10 @@ function! s:open(center, ...) abort
   let l:size = get(s:S, 'size', 3)
   let l:hist = get(s:S, 'hist', [])
   let l:buf = get(s:S, 'buf', -1)
-  let s:S.mode = l:mode
+  if !empty(l:pick)
+    let s:S.saved_mode = l:mode
+  endif
+  let s:S.mode = empty(l:pick) ? l:mode : 'near'
   let s:S.size = 3
   let s:S.hist = l:hist
   let s:S.page = 0
@@ -652,10 +725,15 @@ function! gnosis#mview#pick() abort
     echohl WarningMsg | echo 'Gnosis: 索引に載せるノートを開いて実行して' | echohl NONE
     return
   endif
-  call s:open('index.md', l:file)
+  let l:root = s:root()
+  let l:rel = stridx(l:file, l:root . '/') == 0 ? strpart(l:file, len(l:root) + 1) : ''
+  call s:open(l:rel, l:file)
 endfunction
 
 function! gnosis#mview#close() abort
+  if has_key(s:S, 'saved_mode')
+    let s:S.mode = remove(s:S, 'saved_mode')
+  endif
   let l:mw = s:mwin()
   if l:mw > 0
     call win_gotoid(l:mw)
