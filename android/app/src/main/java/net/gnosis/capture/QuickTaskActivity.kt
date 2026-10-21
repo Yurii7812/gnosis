@@ -22,6 +22,8 @@ import java.time.LocalDate
  * PC の \M で取り込むと、そのノートのタスクとして Agenda に出る（スマホでノートを直接は書かない）。
  */
 class QuickTaskActivity : ComponentActivity() {
+    companion object { const val EXTRA_DUE = "net.gnosis.capture.DUE" }   // カレンダーから: 期限の日（YYYY-MM-DD）
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)   // 画面の幅いっぱいに。縦は中身の分だけ
@@ -29,7 +31,8 @@ class QuickTaskActivity : ComponentActivity() {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxWidth()) {
                     var text by remember { mutableStateOf("") }
-                    var spec by remember { mutableStateOf(TaskSpec()) }
+                    val due = intent?.getStringExtra(EXTRA_DUE)?.takeIf { runCatching { LocalDate.parse(it) }.isSuccess } ?: ""
+                    var spec by remember { mutableStateOf(TaskSpec(due = due)) }
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("タスクを足す", style = MaterialTheme.typography.titleLarge)
                         OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("やること") }, modifier = Modifier.fillMaxWidth())

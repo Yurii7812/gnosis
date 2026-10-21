@@ -32,6 +32,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".CalendarActivity"
+            android:label="カレンダー"
+            android:exported="false" />
+        <activity
             android:name=".QuickTaskActivity"
             android:label="タスクを足す"
             android:exported="false"

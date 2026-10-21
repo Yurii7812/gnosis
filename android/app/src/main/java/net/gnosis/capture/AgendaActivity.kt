@@ -72,7 +72,10 @@ private fun AgendaScreen() {
                 if (stale != null && stale >= 3) Text("PC の予定は $stale 日前のものです。", color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(4.dp))
-            Button(onClick = { ctx.startActivity(Intent(ctx, QuickTaskActivity::class.java)) }) { Text("＋ タスクを足す") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { ctx.startActivity(Intent(ctx, QuickTaskActivity::class.java)) }) { Text("＋ タスクを足す") }
+                OutlinedButton(onClick = { ctx.startActivity(Intent(ctx, CalendarActivity::class.java)) }) { Text("カレンダー") }
+            }
         }
         if (b != null) {
             listOf("期限切れ" to b.overdue, "今日" to b.today, "7 日以内" to b.soon, "それ以降" to b.later, "期限なし" to b.undated).forEach { (label, tasks) ->
