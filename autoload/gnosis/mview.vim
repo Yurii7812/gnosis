@@ -11,18 +11,19 @@
 "                    Enter  カーソルのマスを中心にする（9×9 では 1-8 はそのブロックへカーソルを置くだけ）
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
-"   a g n c          モード: a すべて / g 索引だけ / n ノートだけ / c 近い索引（Folgezettel・つながり・題で近い順）
+"   a g n c r        モード: a 全体 / g 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   F                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
-"   Space            ノートのウィンドウへ    r 読み直す    q 閉じる
+"   Space            ノートのウィンドウへ    R 読み直す    q 閉じる
 " 元データは python/mandala_view.py（読み取り専用）。ノートは書き換えない。
 
 let s:S = {}
 let s:here = expand('<sfile>:p:h:h:h')
 " 周りの 8 マス（番号 1-8）。読む順:  1 2 3 / 4 _ 5 / 6 7 8
 let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
-let s:mode_label = {'all': 'すべて', 'groups': '索引だけ', 'notes': 'ノートだけ', 'near': '近い索引'}
+let s:mode_label = {'all': '全体', 'groups': '索引', 'notes': 'ノート', 'near': '近い索引', 'rel': '関連'}
+let s:mode_keys = [['a', 'all'], ['g', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
 
 function! s:root() abort
   let l:r = trim(get(g:, 'gnosis_root', ''))
@@ -106,7 +107,7 @@ function! s:near(c) abort
   for l:d in s:S.nearc[a:c]
     if index(l:out, l:d.id) < 0
       call add(l:out, l:d.id)
-      let s:S.why[l:d.id] = join(l:d.why, '・')
+      let s:S.why[l:d.id] = join(l:d.why[0 : 1], '・')
     endif
   endfor
   if empty(s:S.nearc[a:c])
@@ -121,6 +122,23 @@ function! s:near(c) abort
   return l:out
 endfunction
 
+" 関連（python/mandala_view.py の related）。索引でもノートでも、関連の強い順。理由は強い 2 つまで
+function! s:rel(c) abort
+  if !has_key(s:S.relc, a:c)
+    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'related', s:S.root, a:c], 'shellescape(v:val)'), ' ')
+    try
+      let s:S.relc[a:c] = json_decode(system(l:cmd))
+    catch
+      let s:S.relc[a:c] = []
+    endtry
+  endif
+  let s:S.why = {}
+  for l:d in s:S.relc[a:c]
+    let s:S.why[l:d.id] = join(l:d.why[0 : 1], '・')
+  endfor
+  return map(copy(s:S.relc[a:c]), 'v:val.id')
+endfunction
+
 " 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
 function! s:base(c) abort
   if a:c ==# s:S.center
@@ -129,9 +147,11 @@ function! s:base(c) abort
     endif
     if s:S.mode ==# 'near'
       return s:near(a:c)
+    elseif s:S.mode ==# 'rel'
+      return s:rel(a:c)
     endif
   endif
-  return gnosis#mview#items(s:S.data, a:c, s:S.mode ==# 'near' ? 'all' : s:S.mode)
+  return gnosis#mview#items(s:S.data, a:c, index(['near', 'rel'], s:S.mode) >= 0 ? 'all' : s:S.mode)
 endfunction
 
 " 絞り込み（/）: 索引を選ぶとき（\g）は題が合う索引を全部から、ふだんは今の周りの中から
@@ -267,8 +287,8 @@ endfunction
 
 " 盤面の大きさ。マスは見た目が正方形になるようにする（端末の文字は縦:横 = 2:1 くらいなので、
 " 1 マスの内側の幅 cw = 2 * 高さ ch + 1）。窓に入りきらなければ ch を小さくする。
-function! s:geometry(n, W, H) abort
-  let l:avail_h = a:H - 2 - (a:n + 1)         " 見出しと案内の 2 行・横線 n+1 本を除く
+function! s:geometry(n, W, H, chrome) abort
+  let l:avail_h = a:H - a:chrome - (a:n + 1)   " 見出し・モードの行・案内の行・横線 n+1 本を除く
   let l:ch_h = l:avail_h / a:n
   let l:wlim = (a:W - (a:n + 1)) / a:n        " 縦線 n+1 本を除いた 1 マスの最大の幅
   let l:ch_w = (l:wlim - 1) / 2
@@ -281,18 +301,68 @@ function! s:geometry(n, W, H) abort
   return [max([3, l:cw]), l:ch]
 endfunction
 
+" 案内を幅に収まるように折り返す（見切れないように）
+function! s:footer_lines(W) abort
+  let l:items = get(s:S, 'pick', 0)
+        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'a g n c r モード', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'a g n c r モード', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
+  let l:lines = []
+  let l:cur = ''
+  for l:it in l:items
+    let l:try = empty(l:cur) ? ' ' . l:it : l:cur . '  ' . l:it
+    if strdisplaywidth(l:try) > a:W && !empty(l:cur)
+      call add(l:lines, l:cur)
+      let l:cur = ' ' . l:it
+    else
+      let l:cur = l:try
+    endif
+  endfor
+  call add(l:lines, l:cur)
+  return l:lines
+endfunction
+
+" モードの行: ' モード: [a:全体]  g:索引  n:ノート  c:近い索引  r:関連'（今のモードを目立たせる位置も返す）
+function! s:mode_bar(W) abort
+  let l:str = ' モード:'
+  let l:span = []
+  for [l:k, l:m] in s:mode_keys
+    let l:str .= ' '
+    let l:cell = l:k . ':' . s:mode_label[l:m]
+    if l:m ==# s:S.mode
+      let l:cell = '[' . l:cell . ']'
+      let l:span = [2, strlen(l:str) + 1, strlen(l:cell)]
+    endif
+    let l:str .= l:cell . ' '
+  endfor
+  if strdisplaywidth(l:str) > a:W
+    " 幅が足りないときは、今のモードだけ名前を出す
+    let l:str = ' '
+    for [l:k, l:m] in s:mode_keys
+      if l:m ==# s:S.mode
+        let l:cell = '[' . l:k . ':' . s:mode_label[l:m] . ']'
+        let l:span = [2, strlen(l:str) + 1, strlen(l:cell)]
+        let l:str .= l:cell . ' '
+      else
+        let l:str .= l:k . ' '
+      endif
+    endfor
+  endif
+  return [l:str, l:span]
+endfunction
+
 function! s:render() abort
   let l:n = s:S.size
   let l:b = s:board()
   let s:S.cells = l:b
   let l:W = winwidth(0)
   let l:H = winheight(0)
-  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H)
+  let l:foot = s:footer_lines(l:W)
+  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 2 + len(l:foot))
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
   let l:gridw = l:n * (l:cw + 1) + 1
   let l:left = repeat(' ', max([0, (l:W - l:gridw) / 2]))
   let l:gridh = l:n * (l:ch + 1) + 1
-  let l:top = max([0, (l:H - 2 - l:gridh) / 2])
+  let l:top = max([0, (l:H - 2 - len(l:foot) - l:gridh) / 2])
   let l:lines = []
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
@@ -301,8 +371,10 @@ function! s:render() abort
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
-  call add(l:lines, s:fit(printf(' %s%s   %d/%d   [%s]   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
-        \ s:S.page + 1, l:pages, s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
+  call add(l:lines, s:fit(printf(' %s%s   %d/%d   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
+        \ s:S.page + 1, l:pages, l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
+  let [l:bar, s:S.modespan] = s:mode_bar(l:W)
+  call add(l:lines, s:fit(l:bar, l:W))
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
@@ -316,7 +388,7 @@ function! s:render() abort
         let l:txt = l:cell.n . ' ' . l:txt
       endif
       let l:tl = empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch)
-      if !empty(l:tl) && l:ch >= 3 && l:cell.role ==# 'item' && s:S.mode ==# 'near' && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)
+      if !empty(l:tl) && l:ch >= 3 && l:cell.role ==# 'item' && index(['near', 'rel'], s:S.mode) >= 0 && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)
         let l:rn = l:ch >= 5 ? 2 : 1
         let l:tl = l:tl[0 : l:ch - 1 - l:rn] + s:wrap('‹' . s:S.why[l:cell.id] . '›', l:cw - 1, l:rn)
       endif
@@ -346,12 +418,10 @@ function! s:render() abort
     endfor
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
-  while len(l:lines) < l:H - 1
+  while len(l:lines) < l:H - len(l:foot)
     call add(l:lines, '')
   endwhile
-  call add(l:lines, s:fit(get(s:S, 'pick', 0)
-        \ ? ' hjkl 1-8 移動 Enter 中心に（索引が中心で Enter=ここに追加） a g n c モード s 検索 / ヒットへ Tab 次 F 絞り込み [] - f q 取消'
-        \ : ' hjkl 1-8 移動 Enter 中心に a g n c モード s 検索 / ヒットへ(Tab 次) F 絞り込み [] - f 全画面 Space q', l:W))
+  call extend(l:lines, map(l:foot, 's:fit(v:val, l:W)'))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -414,6 +484,9 @@ function! s:mark() abort
       endif
     endfor
   endfor
+  if !empty(get(s:S, 'modespan', []))
+    call add(w:mview_match, matchaddpos('GnosisMviewSel', [s:S.modespan], 15))
+  endif
   " / の語は、ふつうの検索のようにハイライト
   if !empty(get(s:S, 'find', ''))
     call add(w:mview_match, matchadd('Search', '\c\V' . escape(s:S.find, '\'), 5))
@@ -733,6 +806,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><silent> g <Cmd>call <SID>setmode('groups')<CR>
   nnoremap <buffer><silent> n <Cmd>call <SID>setmode('notes')<CR>
   nnoremap <buffer><silent> c <Cmd>call <SID>setmode('near')<CR>
+  nnoremap <buffer><silent> r <Cmd>call <SID>setmode('rel')<CR>
   nnoremap <buffer><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><silent> / <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><silent> F <Cmd>call <SID>filter()<CR>
@@ -740,7 +814,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
   nnoremap <buffer><silent> f <Cmd>call <SID>full()<CR>
-  nnoremap <buffer><silent> r <Cmd>call <SID>reload()<CR>
+  nnoremap <buffer><silent> R <Cmd>call <SID>reload()<CR>
   nnoremap <buffer><silent> q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
@@ -751,6 +825,7 @@ endfunction
 
 function! s:reload() abort
   let s:S.nearc = {}
+  let s:S.relc = {}
   if s:load()
     if !has_key(s:S.data.nodes, s:S.center)
       let s:S.center = 'index.md'
@@ -774,6 +849,7 @@ function! s:open(center, ...) abort
   let s:S.results = []
   let s:S.find = ''
   let s:S.nearc = {}
+  let s:S.relc = {}
   let s:S.why = {}
   if !s:load()
     echohl WarningMsg | echo 'Gnosis: vault が選ばれていません' | echohl NONE

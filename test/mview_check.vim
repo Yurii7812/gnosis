@@ -61,7 +61,7 @@ call s:ok('a ですべてに戻る', s:text() =~# '◆植物' && s:text() =~# '�
 " 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
 let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
-call s:keys('r')
+call s:keys('R')
 call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
 call s:keys('g')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
@@ -76,7 +76,7 @@ call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~#
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 " ページ送り
 call s:keys(']')
-call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビア' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
+call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビ' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
 call s:keys(']')
 call s:ok('最後の次へは進まない', s:st.page == 1)
 call s:keys('[')
@@ -124,6 +124,16 @@ call s:keys('c')
 call s:ok('c: すでに所属している索引が先に出る', s:text() =~# '1 ◆植物' && s:text() =~# '2 ◆料理' && s:text() =~# '所属', s:text())
 call s:keys('q')
 
+" r: 関連。索引もノートも関連の強い順（herb: 本文でリンクしているミントが出る）
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call s:keys('r')
+call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '◆植物', s:text())
+call s:ok('モードの行に今のモードが出る', s:text() =~# '\[r:関連\]' && s:text() =~# 'a:全体', s:text())
+call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:text() =~# 'q 閉じる', s:text())
+call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
+call s:keys('q')
+
 " \g: 曼荼羅で索引を選んで、今のノートを載せる
 call s:mk('misc.md', '雑記', 0, [], [])
 call s:mk('empty.md', '空の索引', 1, [['Index', 'index.md']], [])
@@ -136,7 +146,7 @@ let s:st = gnosis#mview#state()
 call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.mode ==# 'near' && s:text() =~# '1 ◆植物' && s:text() =~# '3 ◆空の', s:text())
 call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
 let s:st.query = '空'
-call s:keys('r')
+call s:keys('R')
 call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 ◆空の' && s:text() !~# '◆植物', s:text())
 call s:keys('1')
 call s:keys("\<CR>")

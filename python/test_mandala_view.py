@@ -77,6 +77,22 @@ class T(unittest.TestCase):
         self.assertIn("body.md", hits)
         self.assertEqual(mv.search(r, ["ハーブ", "存在しない語"]), [])
 
+    def test_related_any_kind(self):
+        r = Path(self.tmp.name)
+        (r / "herb.md").write_text(note("ハーブ", False, [("植物", "plant.md")], ["[栽培](grow.md)"], "1a"))
+        (r / "kid.md").write_text(note("ハーブの子", False, [], [], "1a1"))
+        (r / "grow.md").write_text(note("栽培", False, [("植物", "plant.md")], ["ハーブを育てる話。水やりと土のこと"]))
+        (r / "unrelated.md").write_text(note("全然別の話", False, [], ["天気とスポーツ"], "7"))
+        got = mv.related(r, "herb.md")
+        ids = [d["id"] for d in got]
+        self.assertIn("grow.md", ids)   # 本文でリンクしている
+        self.assertIn("kid.md", ids)    # 番号の子
+        self.assertIn("plant.md", ids)  # 所属の索引も出る（索引もノートも）
+        self.assertNotIn("herb.md", ids)
+        self.assertLess(ids.index("grow.md"), ids.index("unrelated.md") if "unrelated.md" in ids else 99)
+        why = next(d for d in got if d["id"] == "kid.md")["why"]
+        self.assertIn("枝の子", why)
+
     def test_unknown(self):
         self.assertEqual(mv.items(self.d, "x.md"), [])
 

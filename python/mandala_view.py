@@ -5,6 +5,7 @@ vault の関係（gnosis_graph.py）を、Vim が一度だけ読み込んで持�
 ノートも索引も書き換えない。派生データなので、いつでも vault から作り直せる。
 
   mandala_view.py near ROOT NOTE  NOTE に近い索引を近い順に [{"id","score","why"}]（\\g の候補・c モード）
+  mandala_view.py related ROOT NOTE  NOTE に関連する索引・ノートを関連の強い順に（r モード）
   mandala_view.py search ROOT 語…  題か本文に語を全部含むノート（題に合うものが先）
   mandala_view.py dump ROOT      {"nodes": {相対パス: {"t": 題, "g": 1|0, "o": {種類: [相対パス, …]}}}}
                                   g は索引（index.md・attribute: group のノート）。o は向きのまま・ファイル順・重複なし・
@@ -202,6 +203,160 @@ def _near(g, note: str, limit: int = 60) -> list[dict]:
     return out[:limit]
 
 
+# ---- 関連（r モード。索引でもノートでも、関連の強い順） --------------------------------------
+
+# note から見て相手がどういう関係か（辺の向きで言い換える）と点数
+_OUT = {"parent_branch": ("親", 5.0), "child_branch": ("子", 5.0), "context": ("Context", 4.0), "related": ("関連", 4.0),
+        "link": ("リンク", 3.0), "backlink": ("BackLink", 3.0), "group": ("所属の索引", 3.0), "branch_group": ("所属の索引", 3.0)}
+_IN = {"parent_branch": ("子", 5.0), "child_branch": ("親", 5.0), "context": ("Context にされている", 3.0), "related": ("関連", 4.0),
+       "link": ("リンクされている", 3.0), "backlink": ("BackLink", 3.0), "group": ("索引の中身", 3.0), "branch_group": ("索引の中身", 3.0)}
+# 歩いて近さを測るときの辺の重み（向きは無視）
+_WALK = {"parent_branch": 3.0, "child_branch": 3.0, "context": 2.5, "related": 2.5, "link": 2.0, "backlink": 1.5,
+         "group": 1.5, "branch_group": 1.5, "folgezettel": 2.5}
+
+
+def _walk_scores(g, note: str, restart: float = 0.25, iters: int = 18) -> dict[str, float]:
+    """note から出発して、辺を重みに比例して歩き、確率 restart で戻る。各ノートにいる確率（近さ）を返す。"""
+    nbr: dict[str, list[tuple[str, float]]] = {n: [] for n in g.nodes}
+    for e in g.edges:
+        w = _WALK.get(e.kind)
+        if w and e.src in nbr and e.dst in nbr and e.src != e.dst:
+            nbr[e.src].append((e.dst, w))
+            nbr[e.dst].append((e.src, w))
+    tot = {n: sum(w for _d, w in v) for n, v in nbr.items()}
+    p = {note: 1.0}
+    for _ in range(iters):
+        q: dict[str, float] = {note: restart}
+        for n, pv in p.items():
+            if not tot[n]:
+                q[note] = q.get(note, 0.0) + (1 - restart) * pv
+                continue
+            share = (1 - restart) * pv / tot[n]
+            for d, w in nbr[n]:
+                q[d] = q.get(d, 0.0) + share * w
+        p = q
+    p.pop(note, None)
+    return p
+
+
+def _body_vectors(g) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """ノートごとの TF-IDF（本文と題。語はかな・漢字の 2 文字ずつと英数字の語）。珍しい語ほど重い。"""
+    import math
+    docs: dict[str, dict[str, int]] = {}
+    df: dict[str, int] = {}
+    for nid, n in g.nodes.items():
+        try:
+            text = (g.root / nid).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        toks: dict[str, int] = {}
+        for t in list(_tokens(n.title)) * 3 + list(_all_tokens(text)):
+            toks[t] = toks.get(t, 0) + 1
+        docs[nid] = toks
+        for t in toks:
+            df[t] = df.get(t, 0) + 1
+    n_docs = max(1, len(docs))
+    idf = {t: math.log(1 + n_docs / c) for t, c in df.items()}
+    vec: dict[str, dict[str, float]] = {}
+    for nid, toks in docs.items():
+        v = {t: (1 + math.log(c)) * idf[t] for t, c in toks.items() if df[t] < max(3, n_docs * 0.5)}
+        norm = math.sqrt(sum(x * x for x in v.values())) or 1.0
+        vec[nid] = {t: x / norm for t, x in v.items()}
+    return vec, idf
+
+
+def _all_tokens(text: str):
+    t = text.lower()
+    yield from _WORD.findall(t)
+    for run in _CJK_RUN.findall(t):
+        if len(run) == 1:
+            continue
+        for i in range(len(run) - 1):
+            yield run[i:i + 2]
+
+
+def related(root: str | Path, note: str, limit: int = 80) -> list[dict]:
+    """note に関連するノート・索引を関連の強い順に返す: [{"id", "score", "why"}]（r モード）。
+
+    足し算: 直接のつながり（親・子・Context・Related・リンク・BackLink・所属）、同じ索引に載っていること、
+    Folgezettel の枝、題の言葉の重なり（珍しい語ほど重い）、本文の内容の近さ（TF-IDF のコサイン類似度）、
+    つながりをたどった近さ（起点に戻りながら歩く）。理由は強い順。
+    """
+    g = gg.build(root)
+    return _related(g, note, limit)
+
+
+def _related(g, note: str, limit: int = 80) -> list[dict]:
+    if note not in g.nodes:
+        return []
+    me = g.nodes[note]
+    score: dict[str, dict[str, float]] = {}
+
+    def add(x: str, why: str, pts: float):
+        if x == note or x not in g.nodes:
+            return
+        d = score.setdefault(x, {})
+        d[why] = max(d.get(why, 0.0), pts)
+
+    my_groups = set()
+    for e in g.edges:
+        if e.src == note and e.dst in g.nodes and e.kind in _OUT:
+            add(e.dst, *_OUT[e.kind])
+            if e.kind in GROUP_KINDS:
+                my_groups.add(e.dst)
+        elif e.dst == note and e.src in g.nodes and e.kind in _IN:
+            add(e.src, *_IN[e.kind])
+            if e.kind == "link" and g.nodes[e.src].is_group:
+                my_groups.add(e.src)
+    # 同じ索引に載っているノート
+    for gid in my_groups:
+        for m in _members(g, gid):
+            add(m, "同じ索引: " + g.nodes[gid].title, 2.0)
+    # Folgezettel の枝
+    for nid, n in g.nodes.items():
+        rel = _fz_relation(me.fz, n.fz) if nid != note else None
+        if rel:
+            add(nid, rel[0], rel[1])
+    # 題の言葉（珍しい語ほど重い）
+    my_tok = _tokens(me.title)
+    if my_tok:
+        df: dict[str, int] = {}
+        toks_of = {nid: _tokens(n.title) for nid, n in g.nodes.items()}
+        for tk in toks_of.values():
+            for t in tk:
+                df[t] = df.get(t, 0) + 1
+        import math
+        for nid, tk in toks_of.items():
+            common = my_tok & tk
+            if nid != note and common:
+                pts = sum(1.5 * math.log(1 + len(g.nodes) / df[t]) / 3 for t in common)
+                add(nid, "題が近い", min(pts, 4.0))
+    # 本文の内容
+    vec, _idf = _body_vectors(g)
+    mv = vec.get(note, {})
+    if mv:
+        for nid, v in vec.items():
+            if nid == note:
+                continue
+            small, big = (mv, v) if len(mv) < len(v) else (v, mv)
+            cos = sum(x * big.get(t, 0.0) for t, x in small.items())
+            if cos >= 0.12:
+                add(nid, "内容が近い", min(10.0 * cos, 6.0))
+    # つながりをたどった近さ
+    walk = _walk_scores(g, note)
+    if walk:
+        top = max(walk.values())
+        for nid, w in walk.items():
+            if w / top >= 0.05:
+                add(nid, "つながりが近い", 5.0 * (w / top) ** 0.5)
+    out = []
+    for nid, why in score.items():
+        total = sum(why.values())
+        out.append({"id": nid, "score": round(total, 2), "why": [k for k, _v in sorted(why.items(), key=lambda kv: -kv[1])]})
+    out.sort(key=lambda d: (-d["score"], g.nodes[d["id"]].title))
+    return out[:limit]
+
+
 def search(root: str | Path, words: list[str], limit: int = 200) -> list[str]:
     """題か本文に words を全部含むノート（相対パス）。題に合うものが先。"""
     g = gg.build(root)
@@ -229,6 +384,9 @@ def main(argv: list[str]) -> int:
         return 0
     if len(argv) >= 4 and argv[1] == "near":
         json.dump(near(argv[2], argv[3]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
+        return 0
+    if len(argv) >= 4 and argv[1] == "related":
+        json.dump(related(argv[2], argv[3]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
         return 0
     if len(argv) >= 4 and argv[1] == "search":
         json.dump(search(argv[2], argv[3:]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
