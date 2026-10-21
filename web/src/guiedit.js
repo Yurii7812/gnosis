@@ -52,7 +52,7 @@ export function createGuiEdit({ view, gui, $, getLast, showError, onChange }) {
   function schedule() {
     clearTimeout(timer);
     if (paused) return;
-    timer = setTimeout(() => { save(); }, SAVE_DELAY);
+    timer = setTimeout(() => { if (view.isComposing()) schedule(); else save(); }, SAVE_DELAY);   // 日本語の変換中は待つ（未確定の文字を保存しない）
   }
 
   // 確定する。競合なら見せる。戻り値: 確定できた（または変更なし）なら true
@@ -70,7 +70,8 @@ export function createGuiEdit({ view, gui, $, getLast, showError, onChange }) {
         hash = r.hash; paused = false; ok = true;
         // 書いている間に打った分があるか。無ければ、保存時の処理で変わった内容を取り込む（記号の除去など）
         dirty = doc() !== text;
-        if (!dirty && typeof r.text === "string" && r.text !== text) view.setText(r.text);
+        // 変換中に本文を差し替えると変換が壊れるので、確定してから取り込む（dirty のまま次の保存で）
+        if (!dirty && typeof r.text === "string" && r.text !== text) { if (view.isComposing()) dirty = true; else view.setText(r.text); }
         hideConflict();
       } else if (r.conflict) {
         paused = true;
@@ -144,7 +145,7 @@ export function createGuiEdit({ view, gui, $, getLast, showError, onChange }) {
       try { await load(s.file); } catch (e) { showError(e && e.message || e); }
       return;
     }
-    if (s.lines && !dirty && !paused) {
+    if (s.lines && !dirty && !paused && !view.isComposing()) {
       const vimText = s.lines.join("\n");
       if (doc().replace(/\n$/, "") !== vimText) {       // 保存時の同期などで内容が変わった → ディスクの版を取り込む
         const r = await gui.readNote(file);
@@ -187,7 +188,7 @@ export function createGuiEdit({ view, gui, $, getLast, showError, onChange }) {
     input.value = initial;
     input.focus();
     const done = (v) => { box.hidden = true; input.onkeydown = null; box.querySelector("[data-act='ok']").onclick = null; box.querySelector("[data-act='cancel']").onclick = null; view.focus(); resolve(v); };
-    input.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); done(input.value); } else if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    input.onkeydown = (e) => { if (e.isComposing || e.keyCode === 229) return; if (e.key === "Enter") { e.preventDefault(); done(input.value); } else if (e.key === "Escape") { e.preventDefault(); done(null); } };
     box.querySelector("[data-act='ok']").onclick = () => done(input.value);
     box.querySelector("[data-act='cancel']").onclick = () => done(null);
   });

@@ -476,6 +476,7 @@ export function hide() {
 
 function onKey(e) {
   if ($("launcher").hidden) return;
+  if (e.isComposing || e.keyCode === 229) return;   // 日本語入力の変換中（確定の Enter・候補の矢印・取り消しの Esc）は変換のために使う
   const tag = (e.target && e.target.tagName) || "";
   const typing = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
   if (e.key === "Escape") {

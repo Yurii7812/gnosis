@@ -2,6 +2,9 @@
 //   h()       … 要素を作る
 //   form()    … 入力ダイアログ（文字・候補から選ぶ欄）。Enter で決定、Esc で取り消し。Promise で答え（取り消しは null）
 //   toast()   … 右下に短い知らせ
+// 日本語入力（IME）で変換中のキーか。変換の確定の Enter・候補を選ぶ矢印・変換を取り消す Esc は、画面の操作として扱わない
+export const imeActive = (e) => !!(e && (e.isComposing || e.keyCode === 229));
+
 export function h(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -68,6 +71,7 @@ export function form({ title, fields, ok = "OK", note = "" }) {
         const load = async () => { try { items = await f.load(inp.value.trim()); } catch { items = []; } sel = Math.min(sel, Math.max(0, items.length - 1)); draw(); };
         inp.addEventListener("input", () => { clearTimeout(timer); sel = 0; timer = setTimeout(load, 120); });
         inp.addEventListener("keydown", (e) => {
+          if (imeActive(e)) return;
           if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); draw(); }
           else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(sel - 1, 0); draw(); }
           else if (e.key === "Enter" && items.length && vals[f.key] !== items[sel]?.value) { e.preventDefault(); e.stopPropagation(); pick(sel); }
@@ -103,6 +107,7 @@ export function form({ title, fields, ok = "OK", note = "" }) {
     back.appendChild(box);
     back.addEventListener("mousedown", (e) => { if (e.target === back) done(null); });
     const onKey = (e) => {
+      if (imeActive(e)) return;
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(null); }
       else if (e.key === "Enter" && !e.shiftKey && e.target.tagName !== "TEXTAREA" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); submit(); }
     };

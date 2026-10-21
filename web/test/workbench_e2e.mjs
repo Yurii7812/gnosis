@@ -186,6 +186,46 @@ const scenario = `(async () => {
   window.dispatchEvent(new MouseEvent('mouseup', { button: 3, bubbles: true, cancelable: true }));
   R.hist.afterMouseBack = await waitFor(() => vimFile() === 'h.md' && vimFile(), 5000);
 
+  // 1c. 日本語入力（IME）: 変換中の Enter・Esc・矢印は、画面の操作にしない。ひらがなで打ってもカタカナのラベルが見つかる
+  const ime = (el, type, key) => el.dispatchEvent(new KeyboardEvent(type, { key, keyCode: 229, isComposing: true, bubbles: true, cancelable: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => !document.getElementById('palette').hidden, 4000);
+  const pin = document.getElementById('palette-input');
+  pin.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  typeIn(pin, 'ぐらふ');
+  await sleep(250);
+  R.ime = { first: document.querySelector('#palette-list li')?.textContent || '' };
+  const tabsBefore = G.panes().getLayout() && JSON.stringify(G.panes().getLayout()).length;
+  ime(pin, 'keydown', 'Enter'); ime(pin, 'keydown', 'ArrowDown'); ime(pin, 'keydown', 'Escape');
+  await sleep(300);
+  R.ime.openAfterComposingKeys = !document.getElementById('palette').hidden && JSON.stringify(G.panes().getLayout()).length === tabsBefore;
+  pin.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  pin.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await sleep(500);
+  R.ime.ranAfterRealEnter = document.getElementById('palette').hidden && JSON.stringify(G.panes().getLayout()).includes('"graph"');
+  G.panes().showVim();
+  // 入力ダイアログ: 変換中の Enter で決定されない・Esc で閉じない
+  const pdlg = G.openMandala('new');
+  await waitFor(() => dlg());
+  const tin = dlg().querySelector('input[data-key="title"]');
+  typeIn(tin, 'りょこう');
+  ime(tin, 'keydown', 'Enter'); ime(tin, 'keydown', 'Escape');
+  await sleep(300);
+  R.ime.dialogKept = !!dlg() && !document.querySelector('.gdlg-err')?.textContent;
+  tin.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await sleep(300);
+  R.ime.dialogClosedByEsc = !dlg();
+  await pdlg;
+  // サイドバーの検索欄: 変換中の Enter で最初の候補を開かない
+  const sin = document.querySelector('#sidebar .nav-search');
+  typeIn(sin, '栽培');
+  await waitFor(() => document.querySelectorAll('#sidebar .nav-hit').length >= 1);
+  const beforeFile = vimFile();
+  ime(sin, 'keydown', 'Enter');
+  await sleep(500);
+  R.ime.navKept = vimFile() === beforeFile;
+  typeIn(sin, ''); await sleep(300);
+
   // 2. 深いノートの道（索引の名前で出る）
   await G.appCtx.open('rs.md');
   await waitFor(() => G.nav().info() && G.nav().info().rel === 'rs.md');
@@ -303,6 +343,15 @@ const scenario = `(async () => {
   const sub = cell(3, 4);
   sub.focus(); typeIn(sub, '持ち物');
   R.md.saved = !!(await waitFor(async () => { const t = await read(mdRel); return (t.match(/持ち物/g) || []).length === 2; }));
+  // 日本語入力: 変換の途中の文字は保存しない（確定したら保存する）
+  const cm = cell(3, 5);
+  cm.focus(); cm.value = 'りょこう';
+  cm.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+  await sleep(1400);
+  R.md.composingNotSaved = !(await read(mdRel)).includes('りょこう');
+  cm.value = '旅行先';
+  cm.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  R.md.committedSaved = !!(await waitFor(async () => (await read(mdRel)).includes('旅行先')));
   // 広げる: 副題「持ち物」のブロックへ
   const zoom = [...document.querySelector('.mdbox [data-rc="3,4"]').querySelectorAll('button')].find((b) => b.textContent.startsWith('広げる'));
   zoom.click(); await sleep(300);
@@ -401,6 +450,9 @@ try {
   check(R.cal?.pastDiary?.ok && /^\d{4}-\d\d-\d\d-[A-Z]{2}$/.test(R.cal.pastTitle || ""), "a past day's diary is created and opened: " + JSON.stringify([R.cal?.pastDiary, R.cal?.pastTitle]));
   check(R.cal?.future && !R.cal.future.ok, "no diary for a future day: " + JSON.stringify(R.cal?.future));
   check(R.md?.rel && R.md.theme === "旅行" && R.md.sub0 === "準備" && R.md.saved && R.md.zoomed === "持ち物" && R.md.linked && R.md.grid9 === 81, "mandala: create, type a sub theme (mirrored), zoom, cell → note, 9×9: " + JSON.stringify(R.md));
+  check(/グラフ/.test(R.ime?.first || "") && R.ime.openAfterComposingKeys && R.ime.ranAfterRealEnter, "IME: hiragana finds a katakana label; Enter/arrows/Esc while composing do not run the palette: " + JSON.stringify(R.ime));
+  check(R.ime?.dialogKept && R.ime.dialogClosedByEsc && R.ime.navKept, "IME: Enter/Esc while composing do not submit or close dialogs or open search hits: " + JSON.stringify(R.ime));
+  check(R.md?.composingNotSaved && R.md.committedSaved, "IME: a mandala cell is not saved while composing, and is saved once confirmed: " + JSON.stringify(R.md));
   check(R.cv?.card && R.cv.cards.length >= 4 && ["まとめ", "ローズマリー", "栽培"].every((x) => R.cv.labels.includes(x)) && R.cv.file && /canvas: true/.test(R.cv.file) && /\[ハーブ\]\(h\.md\)/.test(R.cv.file), "canvas: place a note, expand its topic index as labelled arrows, saved as Markdown: " + JSON.stringify({ ...R.cv, file: !!R.cv?.file }));
   check(R.un?.rows?.includes("旅行") && R.un.rows.includes("ハーブの図") && R.un.pickedGlobal && R.un.added && R.un.after, "unindexed notes are listed and can be put on the Global Index from there: " + JSON.stringify(R.un));
   // ノートの原本: 試験で作ったもの以外のノートは、載せた索引（gh.md）・完了したタスク（d1.md）・トピック索引を足したノート（rs.md）だけが変わる

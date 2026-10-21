@@ -6,12 +6,12 @@ import { showLauncher } from "./launcher.js";
 import { createGuiEdit } from "./guiedit.js";
 import { createPanes, KIND_LABEL, VIEW_KINDS } from "./panes.js";
 import { EXTRA_VIEWS } from "./extra-views.js";
-import { rank } from "./palette-core.js";
+import { rank, readings } from "./palette-core.js";
 import { createNavSidebar, createIndexBrowser, navActions } from "./nav.js";
 import { createCalendar } from "./calendar.js";
 import { createMandala } from "./mandala.js";
 import { createCanvas } from "./canvas.js";
-import { form, toast, noteSub } from "./ui.js";
+import { form, toast, noteSub, imeActive } from "./ui.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -365,7 +365,7 @@ function initSidebar() {
 let vimCmds = null;
 function paletteItems() {
   const items = [];
-  const add = (group, label, keywords, run) => items.push({ group, label, keywords, run });
+  const add = (group, label, keywords, run) => items.push({ group, label, keywords: (keywords || "") + " " + readings(label + " " + group), run });
   add("モード", "Real Vim で編集", "vim mode 本物", () => setMode("vim"));
   add("モード", "GUI 編集モード（Vim を使わない）", "gui edit editor 編集", () => setMode("gui"));
   add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
@@ -447,13 +447,17 @@ async function runPalette(i) {
 function initPalette() {
   const input = $("palette-input");
   input.addEventListener("input", () => { palSel = 0; drawPalette(); });
+  let composing = false;
+  input.addEventListener("compositionstart", () => { composing = true; });
+  input.addEventListener("compositionend", () => { composing = false; });
   input.addEventListener("keydown", (e) => {
+    if (imeActive(e)) return;      // 変換中の Enter（確定）・矢印（候補）・Esc は、変換のために使う
     if (e.key === "ArrowDown") { e.preventDefault(); palSel = Math.min(palSel + 1, palItems.length - 1); drawPalette(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); palSel = Math.max(palSel - 1, 0); drawPalette(); }
     else if (e.key === "Enter") { e.preventDefault(); runPalette(palSel); }
     else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
   });
-  input.addEventListener("blur", () => { setTimeout(() => { if (!$("palette").hidden && document.activeElement !== input) $("palette").hidden = true; }, 150); });
+  input.addEventListener("blur", () => { setTimeout(() => { if (!composing && !$("palette").hidden && document.activeElement !== input) $("palette").hidden = true; }, 150); });
   // どこからでも Ctrl+Shift+P（Vim の画面にフォーカスがあるときは xterm の処理の前に捕まえる）
   document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") { e.preventDefault(); openPalette(); } }, true);
 }

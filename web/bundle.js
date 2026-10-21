@@ -33033,6 +33033,8 @@ ${h4.join(`
     const api = {
       view: view3,
       getText: () => view3.state.doc.toString(),
+      isComposing: () => !!(view3.composing || view3.compositionStarted),
+      // 日本語入力の変換中
       // GUI 編集モードの入り切り。入ると編集できる状態になり、Vim の状態の反映（カーソル・ビジュアル）はやめる
       setEditable(on2) {
         this.editing = !!on2;
@@ -33782,6 +33784,7 @@ ${h4.join(`
   }
   function onKey(e) {
     if ($2("launcher").hidden) return;
+    if (e.isComposing || e.keyCode === 229) return;
     const tag = e.target && e.target.tagName || "";
     const typing = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
     if (e.key === "Escape") {
@@ -34072,7 +34075,8 @@ ${h4.join(`
       clearTimeout(timer);
       if (paused) return;
       timer = setTimeout(() => {
-        save();
+        if (view3.isComposing()) schedule();
+        else save();
       }, SAVE_DELAY);
     }
     async function save({ force = false } = {}) {
@@ -34094,7 +34098,10 @@ ${h4.join(`
           paused = false;
           ok = true;
           dirty = doc2() !== text;
-          if (!dirty && typeof r.text === "string" && r.text !== text) view3.setText(r.text);
+          if (!dirty && typeof r.text === "string" && r.text !== text) {
+            if (view3.isComposing()) dirty = true;
+            else view3.setText(r.text);
+          }
           hideConflict();
         } else if (r.conflict) {
           paused = true;
@@ -34198,7 +34205,7 @@ ${h4.join(`
         }
         return;
       }
-      if (s15.lines && !dirty && !paused) {
+      if (s15.lines && !dirty && !paused && !view3.isComposing()) {
         const vimText = s15.lines.join("\n");
         if (doc2().replace(/\n$/, "") !== vimText) {
           const r = await gui2.readNote(file);
@@ -34261,6 +34268,7 @@ ${h4.join(`
         resolve(v2);
       };
       input.onkeydown = (e) => {
+        if (e.isComposing || e.keyCode === 229) return;
         if (e.key === "Enter") {
           e.preventDefault();
           done(input.value);
@@ -34590,8 +34598,91 @@ ${h4.join(`
   var extraTitle = (key) => (EXTRA_VIEWS.find((v2) => v2[0] === key) || [key, key])[1];
 
   // src/palette-core.js
+  function fold(str) {
+    return String(str).normalize("NFKC").toLowerCase().replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 96));
+  }
+  var READINGS = {
+    "\u7D22\u5F15": "\u3055\u304F\u3044\u3093",
+    "\u7D22\u5F15\u8A9E": "\u3055\u304F\u3044\u3093\u3054",
+    "\u63A2\u3059": "\u3055\u304C\u3059",
+    "\u691C\u7D22": "\u3051\u3093\u3055\u304F",
+    "\u8F09\u305B\u308B": "\u306E\u305B\u308B",
+    "\u4F5C\u308B": "\u3064\u304F\u308B",
+    "\u65B0\u3057\u3044": "\u3042\u305F\u3089\u3057\u3044",
+    "\u65E5\u8A18": "\u306B\u3063\u304D",
+    "\u4E88\u5B9A": "\u3088\u3066\u3044",
+    "\u66FC\u837C\u7F85": "\u307E\u3093\u3060\u3089 \u307E\u3093\u3060\u3089\u30FC\u3068",
+    "\u6A5F\u80FD": "\u304D\u306E\u3046",
+    "\u4E00\u89A7": "\u3044\u3061\u3089\u3093",
+    "\u756A\u53F7": "\u3070\u3093\u3054\u3046",
+    "\u5206\u6790": "\u3076\u3093\u305B\u304D",
+    "\u6642\u9593": "\u3058\u304B\u3093",
+    "\u6642\u7CFB\u5217": "\u3058\u3051\u3044\u308C\u3064",
+    "\u968E\u5C64": "\u304B\u3044\u305D\u3046",
+    "\u5730\u56F3": "\u3061\u305A",
+    "\u6210\u9577": "\u305B\u3044\u3061\u3087\u3046",
+    "\u4EEE\u8AAC": "\u304B\u305B\u3064",
+    "\u5B9F\u9A13": "\u3058\u3063\u3051\u3093",
+    "\u8A18\u61B6": "\u304D\u304A\u304F",
+    "\u5BAE\u6BBF": "\u304D\u3085\u3046\u3067\u3093",
+    "\u8FF7\u8DEF": "\u3081\u3044\u308D",
+    "\u601D\u8003": "\u3057\u3053\u3046",
+    "\u5BFE\u6226": "\u305F\u3044\u305B\u3093",
+    "\u6BD4\u8F03": "\u3072\u304B\u304F",
+    "\u5B64\u7ACB": "\u3053\u308A\u3064",
+    "\u672A\u53C2\u7167": "\u307F\u3055\u3093\u3057\u3087\u3046",
+    "\u672A\u7D22\u5F15": "\u307F\u3055\u304F\u3044\u3093",
+    "\u623B\u308B": "\u3082\u3069\u308B",
+    "\u9032\u3080": "\u3059\u3059\u3080",
+    "\u958B\u304F": "\u3072\u3089\u304F",
+    "\u9589\u3058\u305F": "\u3068\u3058\u305F",
+    "\u518D\u958B": "\u3055\u3044\u304B\u3044",
+    "\u5206\u5272": "\u3076\u3093\u304B\u3064",
+    "\u89E3\u9664": "\u304B\u3044\u3058\u3087",
+    "\u53F3": "\u307F\u304E",
+    "\u4E0B": "\u3057\u305F",
+    "\u66F4\u65B0": "\u3053\u3046\u3057\u3093",
+    "\u6700\u65B0": "\u3055\u3044\u3057\u3093",
+    "\u7DE8\u96C6": "\u3078\u3093\u3057\u3085\u3046",
+    "\u95B2\u89A7": "\u3048\u3064\u3089\u3093",
+    "\u5C02\u7528": "\u305B\u3093\u3088\u3046",
+    "\u672C\u7269": "\u307B\u3093\u3082\u306E",
+    "\u592A\u5B57": "\u3075\u3068\u3058",
+    "\u659C\u4F53": "\u3057\u3083\u305F\u3044",
+    "\u53D6\u308A\u6D88\u3057\u7DDA": "\u3068\u308A\u3051\u3057\u305B\u3093",
+    "\u898B\u51FA\u3057": "\u307F\u3060\u3057",
+    "\u7B87\u6761\u66F8\u304D": "\u304B\u3058\u3087\u3046\u304C\u304D",
+    "\u756A\u53F7\u3064\u304D": "\u3070\u3093\u3054\u3046\u3064\u304D",
+    "\u5F15\u7528": "\u3044\u3093\u3088\u3046",
+    "\u5207\u308A\u66FF\u3048": "\u304D\u308A\u304B\u3048",
+    "\u4FDD\u5B58": "\u307B\u305E\u3093",
+    "\u5143\u306B\u623B\u3059": "\u3082\u3068\u306B\u3082\u3069\u3059",
+    "\u30EA\u30F3\u30AF": "\u308A\u3093\u304F",
+    "\u6587\u8108": "\u3076\u3093\u307F\u3083\u304F",
+    "\u89AA": "\u304A\u3084",
+    "\u4ECA\u65E5": "\u304D\u3087\u3046",
+    "\u4ECA": "\u3044\u307E",
+    "\u5168\u90E8": "\u305C\u3093\u3076",
+    "\u8868\u793A": "\u3072\u3087\u3046\u3058",
+    "\u96A0\u3059": "\u304B\u304F\u3059",
+    "\u51FA\u3059": "\u3060\u3059",
+    "\u8D77\u70B9": "\u304D\u3066\u3093",
+    "\u9805\u76EE": "\u3053\u3046\u3082\u304F",
+    "\u8FFD\u52A0": "\u3064\u3044\u304B",
+    "\u65E2\u5B58": "\u304D\u305E\u3093",
+    "\u9078\u3093\u3067": "\u3048\u3089\u3093\u3067",
+    "\u984C": "\u3060\u3044",
+    "\u5922": "\u3086\u3081",
+    "\u8A18\u9332": "\u304D\u308D\u304F"
+  };
+  var READING_KEYS = Object.keys(READINGS).sort((a, b2) => b2.length - a.length);
+  function readings(label) {
+    const out = [];
+    for (const k of READING_KEYS) if (label.includes(k)) out.push(READINGS[k]);
+    return out.join(" ");
+  }
   function score(query, text) {
-    const q2 = query.toLowerCase(), s15 = text.toLowerCase();
+    const q2 = fold(query), s15 = fold(text);
     if (!q2) return 0;
     let pos = 0, total = 0, prev = -2;
     for (const ch of q2) {
@@ -35232,6 +35323,7 @@ ${h4.join(`
   }
 
   // src/ui.js
+  var imeActive = (e) => !!(e && (e.isComposing || e.keyCode === 229));
   function h3(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -35328,6 +35420,7 @@ ${h4.join(`
             timer = setTimeout(load, 120);
           });
           inp.addEventListener("keydown", (e) => {
+            if (imeActive(e)) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
               sel2 = Math.min(sel2 + 1, items.length - 1);
@@ -35386,6 +35479,7 @@ ${h4.join(`
         if (e.target === back) done(null);
       });
       const onKey2 = (e) => {
+        if (imeActive(e)) return;
         if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
@@ -35727,6 +35821,7 @@ ${h4.join(`
       }, 140);
     });
     search.addEventListener("keydown", (e) => {
+      if (imeActive(e)) return;
       if (e.key === "Escape") {
         search.value = "";
         draw();
@@ -36377,11 +36472,16 @@ ${h4.join(`
       ta2.rows = 2;
       ta2.spellcheck = false;
       ta2.placeholder = isTheme ? "\u4E3B\u984C" : ring >= 0 ? `\u526F\u984C ${ring + 1}` : center >= 0 ? "\uFF08\u526F\u984C\uFF09" : "";
-      ta2.addEventListener("input", () => {
+      const take = () => {
         setCell(r, c, ta2.value.replace(/\n/g, " "));
         drawTools();
+      };
+      ta2.addEventListener("input", (e) => {
+        if (!e.isComposing) take();
       });
+      ta2.addEventListener("compositionend", take);
       ta2.addEventListener("keydown", (e) => {
+        if (imeActive(e)) return;
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           moveFocus2(cell2, 1);
@@ -36905,6 +37005,10 @@ ${h4.join(`
       };
       ta2.addEventListener("blur", done, { once: true });
       ta2.addEventListener("keydown", (e) => {
+        if (imeActive(e)) {
+          e.stopPropagation();
+          return;
+        }
         if (e.key === "Escape" || e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           ta2.blur();
@@ -37461,7 +37565,7 @@ ${h4.join(`
   var vimCmds = null;
   function paletteItems() {
     const items = [];
-    const add = (group, label, keywords2, run) => items.push({ group, label, keywords: keywords2, run });
+    const add = (group, label, keywords2, run) => items.push({ group, label, keywords: (keywords2 || "") + " " + readings(label + " " + group), run });
     add("\u30E2\u30FC\u30C9", "Real Vim \u3067\u7DE8\u96C6", "vim mode \u672C\u7269", () => setMode("vim"));
     add("\u30E2\u30FC\u30C9", "GUI \u7DE8\u96C6\u30E2\u30FC\u30C9\uFF08Vim \u3092\u4F7F\u308F\u306A\u3044\uFF09", "gui edit editor \u7DE8\u96C6", () => setMode("gui"));
     add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
@@ -37597,7 +37701,15 @@ ${h4.join(`
       palSel = 0;
       drawPalette();
     });
+    let composing = false;
+    input.addEventListener("compositionstart", () => {
+      composing = true;
+    });
+    input.addEventListener("compositionend", () => {
+      composing = false;
+    });
     input.addEventListener("keydown", (e) => {
+      if (imeActive(e)) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         palSel = Math.min(palSel + 1, palItems.length - 1);
@@ -37616,7 +37728,7 @@ ${h4.join(`
     });
     input.addEventListener("blur", () => {
       setTimeout(() => {
-        if (!$3("palette").hidden && document.activeElement !== input) $3("palette").hidden = true;
+        if (!composing && !$3("palette").hidden && document.activeElement !== input) $3("palette").hidden = true;
       }, 150);
     });
     document.addEventListener("keydown", (e) => {

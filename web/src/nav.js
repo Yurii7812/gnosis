@@ -4,7 +4,7 @@
 //   - ボタン: 索引に載せる（\l の g）・トピック索引を作る（zk → n）・この索引に新しいノート（グループの上の zn → Enter）。
 //     書くのは Vim（gnosis#app_op）。この画面はノートを直接書き換えない。
 // データは python/app_model.py（ctx.query）。
-import { h, button, form, toast, byRow, KIND_BADGE, noteSub } from "./ui.js";
+import { h, button, form, toast, byRow, KIND_BADGE, noteSub, imeActive } from "./ui.js";
 
 // ---------------------------------------------------------------- 共通の操作（サイドバー・索引ブラウザ・パレットから同じものを呼ぶ）
 export function navActions(ctx) {
@@ -274,6 +274,7 @@ export function createNavSidebar(root, ctx) {
     timer = setTimeout(() => { if (qs) drawSearch(qs); else draw(); }, 140);
   });
   search.addEventListener("keydown", (e) => {
+    if (imeActive(e)) return;
     if (e.key === "Escape") { search.value = ""; draw(); ctx.focusVim && ctx.focusVim(); }
     if (e.key === "Enter") { const first = body.querySelector(".nav-hit"); if (first) first.click(); }
   });

@@ -625,6 +625,7 @@ export function createView(opts) {
   const api = {
     view,
     getText: () => view.state.doc.toString(),
+    isComposing: () => !!(view.composing || view.compositionStarted),   // 日本語入力の変換中
     // GUI 編集モードの入り切り。入ると編集できる状態になり、Vim の状態の反映（カーソル・ビジュアル）はやめる
     setEditable(on) {
       this.editing = !!on;

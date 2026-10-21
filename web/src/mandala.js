@@ -4,7 +4,7 @@
 //   副題は中心のブロックと周りのブロックの真ん中の 2 か所にある。片方を直せばもう片方も同じにする（mandala.py の sync と同じ対応）。
 //   マスの文字から「ノートにする」「曼荼羅にする」（Vim の gnosis#app_op → mandala.py link-cell）。
 //   保存は Vim（:write）。読んだときの内容と違えば上書きせず読み直す。
-import { h, button, toast } from "./ui.js";
+import { h, button, toast, imeActive } from "./ui.js";
 
 const N = 9;
 const RING = [[3, 3], [3, 4], [3, 5], [4, 5], [5, 5], [5, 4], [5, 3], [4, 3]];          // 上から時計回り
@@ -168,8 +168,12 @@ export function createMandala(ctx, params) {
     cell.dataset.rc = `${r},${c}`;
     const ta = h("textarea"); ta.value = v; ta.rows = 2; ta.spellcheck = false;
     ta.placeholder = isTheme ? "主題" : ring >= 0 ? `副題 ${ring + 1}` : center >= 0 ? "（副題）" : "";
-    ta.addEventListener("input", () => { setCell(r, c, ta.value.replace(/\n/g, " ")); drawTools(); });
+    // 変換の途中の文字は、まだ内容ではない（保存しない）。確定したら（compositionend）取り込む
+    const take = () => { setCell(r, c, ta.value.replace(/\n/g, " ")); drawTools(); };
+    ta.addEventListener("input", (e) => { if (!e.isComposing) take(); });
+    ta.addEventListener("compositionend", take);
     ta.addEventListener("keydown", (e) => {
+      if (imeActive(e)) return;
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); moveFocus(cell, 1); }
       else if (e.key === "Tab") { e.preventDefault(); moveFocus(cell, e.shiftKey ? -1 : 1); }
       else if (e.key === "Escape") { ta.blur(); }

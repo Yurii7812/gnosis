@@ -8,7 +8,7 @@
 //   ```
 // この画面が書き換えるのは、上の 2 つ（コードブロックと、その直前に続くリンクだけの行）だけ。ほかの本文は残す。
 // 保存は Vim（:write）。読んだときと内容が違えば上書きせず読み直す。
-import { h, button, form, toast, noteSub } from "./ui.js";
+import { h, button, form, toast, noteSub, imeActive } from "./ui.js";
 
 const FENCE = "```gnosis-canvas";
 const COLORS = ["", "#d4a72c", "#57ab5a", "#539bf5", "#e5534b", "#b083f0", "#768390"];
@@ -277,7 +277,7 @@ export function createCanvas(ctx, params) {
     t.replaceWith(ta); ta.focus();
     const done = () => { n.text = ta.value; const nt = h("div", "cv-ctext", n.text); ta.replaceWith(nt); schedule(); };
     ta.addEventListener("blur", done, { once: true });
-    ta.addEventListener("keydown", (e) => { if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); ta.blur(); } e.stopPropagation(); });
+    ta.addEventListener("keydown", (e) => { if (imeActive(e)) { e.stopPropagation(); return; } if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); ta.blur(); } e.stopPropagation(); });
   }
 
   function colorMenu(n, x, y) {

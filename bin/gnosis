@@ -328,6 +328,14 @@ run_app() {
   if [ "$(uname -s)" = Darwin ]; then
     exec "$ELECTRON" "$GNOSIS_DIR/web"
   fi
+  # 日本語入力: XWayland の Electron は GTK の入力メソッド経由で fcitx5 / ibus と話す。XMODIFIERS だけだと変換が不安定
+  # （候補が出ない・確定の Enter が効かないなど）なので、GTK_IM_MODULE を合わせる（利用者が決めていればそのまま）。
+  if [ -z "${GTK_IM_MODULE:-}" ]; then
+    case "${XMODIFIERS:-}" in
+      *@im=fcitx*) GTK_IM_MODULE=fcitx; export GTK_IM_MODULE ;;
+      *@im=ibus*) GTK_IM_MODULE=ibus; export GTK_IM_MODULE ;;
+    esac
+  fi
   # --no-sandbox: 環境によってはサンドボックスで起動できない
   # --ozone-platform=x11 --disable-gpu: KDE Wayland で窓が出ないことがある問題の回避（XWayland）
   exec "$ELECTRON" "$GNOSIS_DIR/web" --no-sandbox --ozone-platform=x11 --disable-gpu

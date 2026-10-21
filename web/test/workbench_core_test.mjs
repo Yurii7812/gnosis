@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { parseGrid, renderTable, replaceTable, mirrorOf, mergeGrids, cellsOf } from "../src/mandala.js";
 import { parseCanvas, writeCanvas } from "../src/canvas.js";
+import { fold, rank, readings } from "../src/palette-core.js";
 
 const empty = () => Array.from({ length: 9 }, () => Array(9).fill(""));
 
@@ -65,5 +66,20 @@ const empty = () => Array.from({ length: 9 }, () => Array(9).fill(""));
   assert.ok(t4.includes("本文\n\n[h](sub/h.md)\n```gnosis-canvas\n"));
   // 壊れた JSON は壊れたと分かる（空として扱い、保存で書き直す）
   assert.equal(parseCanvas("```gnosis-canvas\n{こわれ\n```\n").broken, true);
+}
+// ---- 検索（コマンドパレット・機能一覧）: ひらがな・カタカナ・全角半角の違いを越えて見つかる ----
+{
+  assert.equal(fold("グラフ"), "ぐらふ");
+  assert.equal(fold("ＡＢＣ１２３ｶﾒﾗ"), "abc123かめら");
+  const items = [{ label: "グラフを開く", keywords: "graph", group: "ビュー" }, { label: "カレンダーを開く", keywords: "calendar", group: "時間" }, { label: "索引ブラウザを開く", keywords: "", group: "索引" }];
+  assert.equal(rank(items, "ぐらふ")[0].label, "グラフを開く");          // ひらがなで打っても
+  assert.equal(rank(items, "かれんだー")[0].label, "カレンダーを開く");   // 長音も
+  assert.equal(rank(items, "ｶﾚﾝﾀﾞｰ")[0].label, "カレンダーを開く");       // 半角カナでも
+  // 漢字のラベルは、読み（palette-core の辞書）を足して、ひらがなでも見つかる
+  const withRead = items.map((it) => ({ ...it, keywords: it.keywords + " " + readings(it.label + " " + it.group) }));
+  assert.equal(rank(withRead, "さくいん")[0].label, "索引ブラウザを開く");
+  assert.equal(rank(withRead, "ひらく")[0].label !== undefined, true);
+  for (const w of ["きょう", "にっき", "ひらく"]) assert.ok(readings("今日の日記を開く").includes(w), w);
+  assert.equal(rank(items, "GRAPH")[0].label, "グラフを開く");
 }
 console.log("workbench core: OK");
