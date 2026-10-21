@@ -396,7 +396,9 @@ try {
   {
     check(/新しく設定する/.test(R.eMenu1 || "") && !/プリセット/.test(R.eMenu1 || ""), "\\e detail: first time shows only 'new settings': " + R.eMenu1);
     check(/^T_\d+\.md$/.test(R.eAfterSave?.file || "") && /^T_\d+\.md$/.test(R.eAfterSave2?.file || ""), "\\e detail: expansion files are opened after saving: " + JSON.stringify([R.eAfterSave, R.eAfterSave2]));
-    check(/プリセットを呼び出す/.test(R.eMenu2 || "") && /プリセットを削除する/.test(R.eMenu2 || "") && /前回の設定で展開/.test(R.eMenu2 || ""), "\\e detail: menu offers last/recall/delete once presets exist: " + R.eMenu2);
+    // 画面の行を | でつないだ文字。索引ナビで Vim の幅が狭いと案内が折り返すので、つなぎ目を除いて探す
+    const eMenu2 = (R.eMenu2 || "").replace(/\s*\|/g, "");
+    check(/プリセットを呼び出す/.test(eMenu2) && /プリセットを削除する/.test(eMenu2) && /前回の設定で展開/.test(eMenu2), "\\e detail: menu offers last/recall/delete once presets exist: " + R.eMenu2);
     check(/テスト設定.*文中3 Context1 Group1 BL\/Rel1 日記t/.test(R.eDeleteList || ""), "\\e detail: preset list shows names and their 5 settings: " + R.eDeleteList);
     const pre = JSON.parse(fs.readFileSync(path.join(vault, ".pkm_expand_presets.json"), "utf8")).presets;
     check(!("テスト設定" in pre) && JSON.stringify(pre["残す設定"]) === JSON.stringify({ body: 2, context: 0, group: 1, br: 2, diary: false }),
