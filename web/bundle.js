@@ -36557,7 +36557,7 @@ ${h4.join(`
     const dir = canvasRel.includes("/") ? canvasRel.slice(0, canvasRel.lastIndexOf("/")) : "";
     const esc = (s16) => String(s16).replace(/([\\[\]])/g, "\\$1");
     const files = [...new Set(data2.nodes.filter((n) => n.type === "note" && n.file).map((n) => n.file))];
-    const links = files.map((f) => `[${esc(titles[f] || f.replace(/\.md$/, ""))}](${encodeURI(relFrom(dir, f))})`);
+    const links = files.map((f) => `[${esc(titles[f] || f.split("/").pop().replace(/\.md$/, ""))}](${encodeURI(relFrom(dir, f))})`);
     const json = JSON.stringify({ nodes: data2.nodes, edges: data2.edges });
     let a = lines.findIndex((l) => l.trim() === FENCE);
     if (a < 0) {

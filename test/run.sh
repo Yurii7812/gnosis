@@ -36,6 +36,7 @@ python3 "$REPO/python/test_capture_diag.py"
 python3 "$REPO/python/test_gnosis_graph.py"
 python3 "$REPO/python/test_graph_analysis.py"
 python3 "$REPO/python/test_tasks.py"
+python3 "$REPO/python/test_app_model.py"
 python3 "$REPO/python/test_vault_index.py"
 python3 "$REPO/python/test_srs.py"
 python3 "$REPO/python/test_local_ai.py"
@@ -261,3 +262,5 @@ node "$REPO/web/test/noteio_test.cjs"
 # `\A` のタブ配置と追加ビュー（23 種）の純関数の試験（追加ビューの一覧が export_views2.py と一致するか）
 node "$REPO/web/test/layout_test.mjs"
 node "$REPO/web/test/extra_views_test.mjs"
+# `\A` の曼荼羅・キャンバスの保存形式（表の差し替え・3-way・キャンバスのブロック）の純関数の試験
+node "$REPO/web/test/workbench_core_test.mjs"

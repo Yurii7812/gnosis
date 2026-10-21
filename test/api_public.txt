@@ -17,6 +17,7 @@ gnosis#agenda
 gnosis#ai
 gnosis#ai_complete
 gnosis#apk_install
+gnosis#app_op
 gnosis#at_add
 gnosis#at_add_reverse
 gnosis#autosync_log

@@ -39,7 +39,7 @@ export function writeCanvas(text, data, titles, canvasRel) {
   const dir = canvasRel.includes("/") ? canvasRel.slice(0, canvasRel.lastIndexOf("/")) : "";
   const esc = (s) => String(s).replace(/([\\[\]])/g, "\\$1");
   const files = [...new Set(data.nodes.filter((n) => n.type === "note" && n.file).map((n) => n.file))];
-  const links = files.map((f) => `[${esc(titles[f] || f.replace(/\.md$/, ""))}](${encodeURI(relFrom(dir, f))})`);
+  const links = files.map((f) => `[${esc(titles[f] || f.split("/").pop().replace(/\.md$/, ""))}](${encodeURI(relFrom(dir, f))})`);
   const json = JSON.stringify({ nodes: data.nodes, edges: data.edges });
   let a = lines.findIndex((l) => l.trim() === FENCE);
   if (a < 0) {
