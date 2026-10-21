@@ -1,6 +1,6 @@
 " 曼荼羅ビュー（<Space>）の回帰網（test/mview_net.sh から呼ぶ）。
 " 結果は $MV_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
-set nomore
+set nomore columns=160 lines=50
 let s:work = $MV_WORK
 let s:v = s:work . '/vault'
 let s:res = []
@@ -60,21 +60,22 @@ call s:keys('m')
 
 " 移動して Enter: その索引が中心になる（カーソルは曼荼羅のまま）
 call s:keys('1')
-call s:keys("\<CR>")
-call s:ok('Enter で植物が中心', s:st.center ==# 'plant.md', s:st.center)
+call s:ok('数字キー 1 でそのまま植物が中心になる', s:st.center ==# 'plant.md', s:st.center)
 call s:ok('カーソルは曼荼羅に残る', &filetype ==# 'gnosis-mandala')
-call s:ok('索引の中身が 8 つ周りに出る', s:text() =~# '1 ハーブ' && s:text() =~# '8 サルビア', s:text())
+call s:ok('索引の周りに所属する Index が最初に出る', s:text() =~# '1 ◆Index', s:text())
+call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '8 タイム', s:text())
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 " ページ送り
 call s:keys(']')
-call s:ok('] で 2 枚目: ラベンダーと水やり', s:text() =~# '1 ラベンダー' && s:text() =~# '2 水やり' && s:text() =~# '2/2', s:text())
+call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビア' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
 call s:keys(']')
 call s:ok('最後の次へは進まない', s:st.page == 1)
 call s:keys('[')
-" ノートのマスで Enter: 右にそのノートが開く
-call s:keys('3')
-call s:keys("\<CR>")
-call s:ok('ノートのマスで中心が栽培に', s:st.center ==# 'grow.md', s:st.center)
+" 1 2 3 / 4 _ 5 / 6 7 8 の並び（4 は中心の左・5 は右）
+call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *◆植物"')) == 1 && s:text() =~# '5 ローズ', s:text())
+" 数字キーでそのままノートのマスへ進む: 右にそのノートが開く
+call s:keys('4')
+call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:st.center)
 call s:ok('右に栽培が開く', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'grow.md') >= 0)
 call s:ok('栽培の周りに所属の植物', s:text() =~# '1 ◆植物', s:text())
 " 戻る
@@ -83,8 +84,11 @@ call s:ok('- で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
 " 全画面 9×9
 call s:keys('f')
 call s:ok('f で 9×9', s:st.size == 9 && winnr('$') == 1, s:st.size . ' wins=' . winnr('$'))
-call s:ok('9×9 は 9 行 9 列', len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "^┃\\|^│"')) >= 18)
-call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハーブ' && s:text() =~# 'ミント', s:text())
+call s:ok('9×9 は 9 行 9 列', len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "┃"')) >= 9 && s:text() =~# '╋')
+call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハ' && s:text() =~# 'ミ', s:text())
+call s:ok('9×9 にも番号が出る', s:text() =~# '1 ◆' && s:text() =~# '8 ', s:text())
+call s:keys('6')
+call s:ok('9×9 の数字は中心を変えずカーソルだけ動く', s:st.center ==# 'plant.md' && s:st.cur == [7, 1], string(s:st.cur) . ' ' . s:st.center)
 call s:keys('f')
 call s:ok('もう一度 f で 3×3 に戻る', s:st.size == 3 && winnr('$') == 2)
 " Space でノートへ、もう一度で曼荼羅へ
@@ -105,11 +109,11 @@ let g:gnosis_test_yomi = ['ざっき']
 execute 'edit ' . s:v . '/misc.md'
 call gnosis#mview#pick()
 let s:st = gnosis#mview#state()
-call s:ok('\g の曼荼羅は索引から始まり索引だけが出る', s:st.pick == 1 && s:st.center ==# 'index.md' && s:text() =~# '◆植物' && s:text() =~# '◆空の索引', s:text())
+call s:ok('\g の曼荼羅は索引から始まり索引だけが出る', s:st.pick == 1 && s:st.center ==# 'index.md' && s:text() =~# '1 ◆植物' && s:text() =~# '3 ◆空の', s:text())
 call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
 let s:st.query = '空'
 call s:keys('r')
-call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 ◆空の索引' && s:text() !~# '◆植物', s:text())
+call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 ◆空の' && s:text() !~# '◆植物', s:text())
 call s:keys('1')
 call s:keys("\<CR>")
 call s:ok('絞り込んだ索引へ進むと絞り込みは解ける', s:st.center ==# 'empty.md' && s:st.query ==# '', s:st.center)

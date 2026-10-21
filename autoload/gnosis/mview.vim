@@ -4,9 +4,11 @@
 "   中心が索引（グループ） … 載っているノート。8 つを超えたら 2 枚目以降の曼荼羅（[ ] で前後）
 "   中心がノート           … 所属する索引（Group: / BranchGroup:）。モードでノート同士のつながりも出せる
 " 画面の大きさは、分割しているときは 3×3、全画面（f）では 9×9（周りの 8 マスがそれぞれ自分の曼荼羅を持つ）。
+" 分割は左右半々。マスは見た目が正方形で、盤面は窓の中央に置く。
 "
 " キー（曼荼羅のウィンドウ）
-"   h j k l / 矢印   マスを動く      1-8 そのマス（時計回り）・0 中心      Enter  そのマスを中心にする
+"   h j k l / 矢印   マスを動く      1-8 そのマスを中心にする（1 2 3 / 4 _ 5 / 6 7 8）・0 中心のノートを開く
+"                    Enter  カーソルのマスを中心にする（9×9 では 1-8 はそのブロックへカーソルを置くだけ）
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
 "   m                モード（すべて → 索引だけ → ノートだけ）    f 全画面（9×9）⇔ 分割（3×3）
@@ -15,7 +17,8 @@
 
 let s:S = {}
 let s:here = expand('<sfile>:p:h:h:h')
-let s:pos = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0]]
+" 周りの 8 マス（番号 1-8）。読む順:  1 2 3 / 4 _ 5 / 6 7 8
+let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
 let s:modes = ['all', 'groups', 'notes']
 let s:mode_label = {'all': 'すべて', 'groups': '索引だけ', 'notes': 'ノートだけ'}
 
@@ -53,7 +56,12 @@ function! gnosis#mview#items(data, center, mode) abort
   let l:o = l:c.o
   let l:out = []
   if l:c.g
-    let l:kinds = [['link', a:mode ==# 'all' ? -1 : (a:mode ==# 'groups' ? 1 : 0)]]
+    " 索引の周り: 所属する索引（Index も）→ 載っているノート
+    let l:kinds = []
+    if a:mode !=# 'notes'
+      let l:kinds += [['group', -1], ['branch_group', -1]]
+    endif
+    let l:kinds += [['link', a:mode ==# 'all' ? -1 : (a:mode ==# 'groups' ? 1 : 0)]]
   else
     let l:kinds = []
     if a:mode ==# 'groups' || a:mode ==# 'all'
@@ -116,40 +124,41 @@ function! s:board() abort
   let l:n = s:S.size
   let l:b = []
   for l:i in range(l:n)
-    call add(l:b, repeat([{'id': '', 'role': 'empty'}], l:n))
+    call add(l:b, repeat([{'id': '', 'role': 'empty', 'n': 0}], l:n))
   endfor
   let l:ring = s:ring(s:S.center, s:S.page)
   if l:n == 3
-    let l:b[1][1] = {'id': s:S.center, 'role': 'center'}
+    let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 0}
     for l:i in range(8)
       if !empty(l:ring[l:i])
-        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item'}
+        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': l:i + 1}
       endif
     endfor
     return l:b
   endif
-  " 9×9: 真ん中の 3×3 が今の曼荼羅。周りの 8 ブロックは、その周辺の各ノートを中心にした曼荼羅の 1 枚目
-  let l:b[4][4] = {'id': s:S.center, 'role': 'center'}
+  " 9×9: 真ん中の 3×3 が今の曼荼羅。周りの 8 ブロックは、その周辺の各ノートを中心にした曼荼羅の 1 枚目。
+  " ブロックの真ん中のマスにも、周りのマスと同じ番号を付ける
+  let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 0}
   for l:i in range(8)
     let l:id = l:ring[l:i]
     if empty(l:id)
       continue
     endif
-    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'role': 'item'}
+    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'role': 'item', 'n': l:i + 1}
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
-    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'role': 'center'}
+    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'role': 'center', 'n': l:i + 1}
     let l:sub = s:ring(l:id, 0)
     for l:j in range(8)
       if !empty(l:sub[l:j])
-        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j], 'role': 'sub'}
+        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j], 'role': 'sub', 'n': 0}
       endif
     endfor
   endfor
-  " 真ん中のブロックの周りの 8 マスは、上で 'item' として置いた（ブロックの中心 (1,1) 以外は周辺そのもの）
+  " 真ん中のブロックの周り 8 マスは、周りのブロックの上書きで消えないように置き直す
   for l:i in range(8)
     if !empty(l:ring[l:i])
-      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item'}
+      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': l:i + 1}
     endif
   endfor
   return l:b
@@ -186,7 +195,7 @@ function! s:pad(s, w) abort
   return a:s . repeat(' ', max([0, a:w - strdisplaywidth(a:s)]))
 endfunction
 
-function! s:label(cell, n) abort
+function! s:label(cell) abort
   if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
     return ''
   endif
@@ -194,14 +203,34 @@ function! s:label(cell, n) abort
   return (l:nd.g ? '◆' : '') . l:nd.t
 endfunction
 
+" 盤面の大きさ。マスは見た目が正方形になるようにする（端末の文字は縦:横 = 2:1 くらいなので、
+" 1 マスの内側の幅 cw = 2 * 高さ ch + 1）。窓に入りきらなければ ch を小さくする。
+function! s:geometry(n, W, H) abort
+  let l:avail_h = a:H - 2 - (a:n + 1)         " 見出しと案内の 2 行・横線 n+1 本を除く
+  let l:ch_h = l:avail_h / a:n
+  let l:wlim = (a:W - (a:n + 1)) / a:n        " 縦線 n+1 本を除いた 1 マスの最大の幅
+  let l:ch_w = (l:wlim - 1) / 2
+  let l:ch = max([1, min([l:ch_h, l:ch_w, 9])])
+  let l:cw = min([l:wlim, 2 * l:ch + 1])
+  " 9×9 は題が読めないほど狭くなるなら、正方形をあきらめて幅を確保する
+  if a:n == 9
+    let l:cw = max([l:cw, min([l:wlim, 8])])
+  endif
+  return [max([3, l:cw]), l:ch]
+endfunction
+
 function! s:render() abort
   let l:n = s:S.size
   let l:b = s:board()
   let s:S.cells = l:b
   let l:W = winwidth(0)
-  let l:cw = max([4, (l:W - (l:n + 1)) / l:n])
-  let l:ch = l:n == 3 ? 3 : 2
+  let l:H = winheight(0)
+  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
+  let l:gridw = l:n * (l:cw + 1) + 1
+  let l:left = repeat(' ', max([0, (l:W - l:gridw) / 2]))
+  let l:gridh = l:n * (l:ch + 1) + 1
+  let l:top = max([0, (l:H - 2 - l:gridh) / 2])
   let l:lines = []
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
@@ -214,37 +243,50 @@ function! s:render() abort
     call add(l:lines, s:fit(printf(' %s   %d/%d   [%s]   %s', l:ctitle, s:S.page + 1, l:pages,
           \ s:mode_label[s:S.mode], l:n == 3 ? '3×3' : '9×9'), l:W))
   endif
+  for l:k in range(l:top)
+    call add(l:lines, '')
+  endfor
   for l:r in range(l:n)
-    call add(l:lines, s:hline(l:n, l:cw, l:r, l:heavy))
+    call add(l:lines, l:left . s:hline(l:n, l:cw, l:r, l:heavy))
     let l:cellines = []
     for l:c in range(l:n)
       let l:cell = l:b[l:r][l:c]
-      let l:txt = s:label(l:cell, l:n)
-      if l:n == 3 && l:cell.role ==# 'item'
-        let l:idx = index(map(copy(s:pos), 'v:val[0] == l:r && v:val[1] == l:c'), 1) + 1
-        let l:txt = l:idx . ' ' . l:txt
+      let l:txt = s:label(l:cell)
+      if l:cell.n > 0 && !empty(l:txt)
+        let l:txt = l:cell.n . ' ' . l:txt
       endif
-      call add(l:cellines, empty(l:txt) ? repeat([''], l:ch) : s:wrap(l:txt, l:cw - 1, l:ch))
+      call add(l:cellines, empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch))
     endfor
     for l:k in range(l:ch)
-      let l:line = ''
+      let l:line = l:left
       for l:c in range(l:n)
         let l:sep = (l:n == 3 || has_key(l:heavy, l:c)) ? '┃' : '│'
         let l:line .= l:sep
-        let l:txt = get(l:cellines[l:c], l:k, '')
-        let l:cellstr = ' ' . s:pad(l:txt, l:cw - 1)
-        if l:k == 0
-          let s:S.spans[l:r . ',' . l:c] = [len(l:lines) + 1, strlen(l:line) + 1, strlen(l:cellstr)]
+        " 文字はマスの真ん中（縦も横も）に置く
+        let l:tl = l:cellines[l:c]
+        let l:txt = get(l:tl, l:k - (l:ch - len(l:tl)) / 2, '')
+        if l:k < (l:ch - len(l:tl)) / 2
+          let l:txt = ''
         endif
+        let l:lead = max([0, (l:cw - strdisplaywidth(l:txt)) / 2])
+        let l:cellstr = s:pad(repeat(' ', l:lead) . l:txt, l:cw)
+        let l:key = l:r . ',' . l:c
+        if !has_key(s:S.spans, l:key)
+          let s:S.spans[l:key] = []
+        endif
+        call add(s:S.spans[l:key], [len(l:lines) + 1, strlen(l:line) + 1, strlen(l:cellstr)])
         let l:line .= l:cellstr
       endfor
       call add(l:lines, l:line . '┃')
     endfor
   endfor
-  call add(l:lines, s:hline(l:n, l:cw, l:n, l:heavy))
+  call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
+  while len(l:lines) < l:H - 1
+    call add(l:lines, '')
+  endwhile
   call add(l:lines, s:fit(get(s:S, 'pick', 0)
-        \ ? ' hjkl 移動 Enter 中心に（中心で Enter=ここに追加） / 絞り込み [] 前後 - 戻る f 全画面 q 取消'
-        \ : ' hjkl 移動 Enter 中心に [] 前後 - 戻る m モード f 全画面 Space ノート q 閉じる', l:W))
+        \ ? ' hjkl 移動 1-8 その索引へ Enter 中心に（中心で Enter=ここに追加） / 絞り込み [] 前後 - 戻る f 全画面 q 取消'
+        \ : ' hjkl 移動 1-8 そのマスへ Enter 中心に [] 前後 - 戻る m モード f 全画面 Space ノート q 閉じる', l:W))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -301,15 +343,15 @@ function! s:mark() abort
         continue
       endif
       if l:r == s:S.cur[0] && l:c == s:S.cur[1]
-        call add(w:mview_match, matchaddpos('GnosisMviewSel', [[l:sp[0], l:sp[1], l:sp[2]]], 20))
+        call add(w:mview_match, matchaddpos('GnosisMviewSel', l:sp, 20))
       elseif l:cell.role ==# 'center'
-        call add(w:mview_match, matchaddpos('GnosisMviewCenter', [[l:sp[0], l:sp[1], l:sp[2]]], 10))
+        call add(w:mview_match, matchaddpos('GnosisMviewCenter', l:sp, 10))
       endif
     endfor
   endfor
   let l:sp = get(s:S.spans, s:S.cur[0] . ',' . s:S.cur[1], [])
   if !empty(l:sp)
-    call cursor(l:sp[0], l:sp[1])
+    call cursor(l:sp[0][0], l:sp[0][1])
   endif
 endfunction
 
@@ -330,15 +372,17 @@ function! s:move(dr, dc) abort
   call s:mark()
 endfunction
 
-" 数字キー: 3×3 では周辺のマス（1-8 時計回り）と中心（0）、9×9 ではそのブロックの中心
+" 数字キー（1 2 3 / 4 _ 5 / 6 7 8）: 3×3 ではそのマスへ移って中心にする（0 は中心のノートを右に出す）。
+" 9×9 ではそのブロックの真ん中にカーソルを置くだけ（中心は変えない）
 function! s:digit(d) abort
-  if a:d == 0
-    let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
-  else
-    let l:p = s:pos[a:d - 1]
-    let s:S.cur = s:S.size == 3 ? copy(l:p) : [l:p[0] * 3 + 1, l:p[1] * 3 + 1]
+  if s:S.size == 9
+    let s:S.cur = a:d == 0 ? [4, 4] : [s:pos[a:d - 1][0] * 3 + 1, s:pos[a:d - 1][1] * 3 + 1]
+    call s:mark()
+    return
   endif
+  let s:S.cur = a:d == 0 ? [1, 1] : copy(s:pos[a:d - 1])
   call s:mark()
+  call s:enter()
 endfunction
 
 function! s:set_center(id, page) abort
@@ -457,7 +501,7 @@ function! s:ensure_note_win() abort
   vertical rightbelow new
   let l:nw = win_getid()
   call win_gotoid(l:mw)
-  execute 'vertical resize ' . (&columns * 2 / 5)
+  execute 'vertical resize ' . (&columns / 2)
   return l:nw
 endfunction
 
@@ -567,7 +611,7 @@ function! s:open(center, ...) abort
       let s:S.buf = bufnr('%')
       call s:setup_buffer()
     endif
-    execute 'vertical resize ' . (&columns * 3 / 5)
+    execute 'vertical resize ' . (&columns / 2)
   endif
   let s:S.buf = bufnr('%')
   call s:render()

@@ -40,8 +40,9 @@ class T(unittest.TestCase):
         self.assertEqual(mv.items(self.d, "herb.md", "all"), ["plant.md", "cook.md", "grow.md"])
 
     def test_group_center(self):
-        self.assertEqual(mv.items(self.d, "plant.md", "all"), ["herb.md", "grow.md", "sub.md"])
-        self.assertEqual(mv.items(self.d, "plant.md", "groups"), ["sub.md"])
+        # 所属する索引（Index）が先、そのあとに載っているノート
+        self.assertEqual(mv.items(self.d, "plant.md", "all"), ["index.md", "herb.md", "grow.md", "sub.md"])
+        self.assertEqual(mv.items(self.d, "plant.md", "groups"), ["index.md", "sub.md"])
         self.assertEqual(mv.items(self.d, "plant.md", "notes"), ["herb.md", "grow.md"])
 
     def test_index_center_skips_broken(self):

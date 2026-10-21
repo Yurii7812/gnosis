@@ -9,7 +9,8 @@ vault の関係（gnosis_graph.py）を、Vim が一度だけ読み込んで持�
                                   自分自身と壊れたリンクは含めない（Folgezettel の派生の辺も含めない）。
 
 どの辺を周辺に出すかは `items()` が決める（Vim 側の autoload/gnosis/mview.vim も同じ規則を持つ。試験で食い違いを防ぐ）:
-  中心が索引   … 載っているノート（本文のリンク）。groups=索引だけ / notes=索引でないもの / all=全部
+  中心が索引   … 所属する索引（Group: / BranchGroup:。Index を含む）のあとに、載っているノート（本文のリンク）。
+                 groups=索引だけ / notes=載っているノートのうち索引でないもの / all=全部
   中心がノート … groups=Group: と BranchGroup:（所属の索引） / notes=ParentBranch・ChildBranch・Context・Related・BackLink・本文のリンク
                  / all=groups のあとに notes
 """
@@ -61,12 +62,14 @@ def items(data: dict, center: str, mode: str = "all") -> list[str]:
                 out.append(t)
 
     if c["g"]:
-        # 索引の中身は本文のリンク。親の索引（Group:）は周辺に出さない
+        # 索引の周りは、所属する索引（Group: / BranchGroup:。Index も）→ 載っているノート（本文のリンク）の順
         if mode == "groups":
+            add(GROUP_KINDS)
             add(("link",), True)
         elif mode == "notes":
             add(("link",), False)
         else:
+            add(GROUP_KINDS)
             add(("link",))
     else:
         if mode in ("groups", "all"):
