@@ -13,7 +13,7 @@
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
 "   + -              曼荼羅だけの文字サイズ（開いている間だけ端末の大きさを変え、閉じたら戻す。Konsole・kitty・Alacritty・GUI 版 Vim）
-"   a g n c r        モード: a 全体 / g 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
+"   a i n c r        モード: a 全体 / i 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -27,7 +27,7 @@ let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
 " 番号はテンキーと同じ並び（1 2 3 / 4 5 6 / 7 8 9）。真ん中が 5
 let s:nums = [1, 2, 3, 4, 6, 7, 8, 9]
 let s:mode_label = {'all': '全体', 'groups': '索引', 'notes': 'ノート', 'near': '近い索引', 'rel': '関連'}
-let s:mode_keys = [['a', 'all'], ['g', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
+let s:mode_keys = [['a', 'all'], ['i', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
 
 function! s:root() abort
   let l:r = trim(get(g:, 'gnosis_root', ''))
@@ -55,7 +55,7 @@ endfunction
 
 " python/mandala_view.py の items() と同じ規則（ダブルインデックスの道に沿う）
 "   ノートが中心 … 進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:）→ ほかのつながり
-"   索引が中心   … この索引を持つノート（BranchGroup: を逆に）→ 所属する索引（Group:）→ 載っているノート
+"   索引が中心   … この索引を持つノート（BranchGroup: を逆に）→ 所属する索引（Group:）→ 索引の項目すべて（i）
 function! gnosis#mview#items(data, center, mode) abort
   let l:nodes = a:data.nodes
   if !has_key(l:nodes, a:center)
@@ -74,7 +74,8 @@ function! gnosis#mview#items(data, center, mode) abort
     if a:mode !=# 'notes'
       call add(l:plan, [get(l:o, 'group', []), -1])
     endif
-    call add(l:plan, [get(l:o, 'link', []), a:mode ==# 'all' ? -1 : (a:mode ==# 'groups' ? 1 : 0)])
+    " 索引の項目: n は索引でない普通のノートだけ、a と i はすべて
+    call add(l:plan, [get(l:o, 'link', []), a:mode ==# 'notes' ? 0 : -1])
   else
     if a:mode ==# 'groups' || a:mode ==# 'all'
       call add(l:plan, [get(l:o, 'branch_group', []), -1])
@@ -343,7 +344,9 @@ function! s:label(cell) abort
   if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
     return ''
   endif
-  return s:kinds[a:cell.kind][0] . s:S.data.nodes[a:cell.id].t
+  " 中心の索引に書かれたリンクの文字（索引語）があればそれを名前にする
+  let l:name = get(get(get(s:S.data.nodes, get(a:cell, 'of', s:S.center), {}), 'nm', {}), a:cell.id, '')
+  return s:kinds[a:cell.kind][0] . (empty(l:name) || a:cell.id ==# get(a:cell, 'of', s:S.center) ? s:S.data.nodes[a:cell.id].t : l:name)
 endfunction
 
 " 盤面の大きさ。マスは見た目が正方形になるようにする（端末の文字は縦:横 = 2:1 くらいなので、
@@ -396,8 +399,8 @@ function! s:footer_lines(W) abort
     return [s:fit(' ? で案内を表示', a:W)]
   endif
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -413,7 +416,7 @@ function! s:footer_lines(W) abort
   return l:lines
 endfunction
 
-" モードの行: ' モード: [全体:a] 索引:g ノート:n 近い索引:c 関連:r'（今のモードを目立たせる位置も返す）
+" モードの行: ' モード: [全体:a] 索引:i ノート:n 近い索引:c 関連:r'（今のモードを目立たせる位置も返す）
 function! s:mode_bar(W) abort
   " ' モード: [a:全体] g:索引 …' を幅に収まるように折り返す。[行, 色を付ける位置] を返す
   let l:lines = []
@@ -910,7 +913,7 @@ function! s:page(d) abort
   call s:render()
 endfunction
 
-" モード（英字）: a すべて / g 索引だけ / n ノートだけ / c 近い索引
+" モード（英字）: a 全体 / i 索引 / n ノート / c 近い索引 / r 関連
 function! s:setmode(m) abort
   let s:S.mode = a:m
   let s:S.find = ''
@@ -1045,7 +1048,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> b <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
-  nnoremap <buffer><nowait><silent> g <Cmd>call <SID>setmode('groups')<CR>
+  nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>setmode('notes')<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>setmode('near')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>setmode('rel')<CR>

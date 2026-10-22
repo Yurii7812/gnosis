@@ -42,7 +42,8 @@ class T(unittest.TestCase):
     def test_group_center(self):
         # 所属する索引（Index）が先、そのあとに載っているノート
         self.assertEqual(mv.items(self.d, "plant.md", "all"), ["index.md", "herb.md", "grow.md", "sub.md"])
-        self.assertEqual(mv.items(self.d, "plant.md", "groups"), ["index.md", "sub.md"])
+        # i（索引）モード: 所属する索引のあと、索引の項目すべて（索引でないノートも）
+        self.assertEqual(mv.items(self.d, "plant.md", "groups"), ["index.md", "herb.md", "grow.md", "sub.md"])
         self.assertEqual(mv.items(self.d, "plant.md", "notes"), ["herb.md", "grow.md"])
 
     def test_index_center_skips_broken(self):
@@ -107,7 +108,18 @@ class T(unittest.TestCase):
         got = mv.items(d, "topic.md", "all")
         self.assertEqual(got[0], "first.md")
         self.assertIn("item.md", got)
-        self.assertNotIn("first.md", mv.items(d, "topic.md", "groups"))
+        # i モードでも項目は全部出る。戻る道のノートは n / a のときだけ
+        self.assertEqual(mv.items(d, "topic.md", "groups"), ["item.md"])
+        self.assertEqual(mv.items(d, "topic.md", "notes")[0], "first.md")
+
+    def test_entry_names_are_index_words(self):
+        """索引の項目の名前は、その索引に書かれたリンクの文字（索引語）。題と違うものだけ nm に入る。"""
+        r = Path(self.tmp.name)
+        (r / "kw.md").write_text(note("アイコンどれがいいのか"))
+        (r / "idx2.md").write_text(note("索引2", True, [], ["[アイコン](kw.md)", "[ハーブ](herb.md)"]))
+        d = mv.dump(r)
+        self.assertEqual(d["nodes"]["idx2.md"]["nm"]["kw.md"], "アイコン")
+        self.assertNotIn("herb.md", d["nodes"]["idx2.md"].get("nm", {}))  # 題と同じなら持たない
 
     def test_unknown(self):
         self.assertEqual(mv.items(self.d, "x.md"), [])

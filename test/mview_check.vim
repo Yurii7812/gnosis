@@ -56,7 +56,7 @@ call s:ok('ノートのつながりも出る（すべて）', s:text() =~# '3 �
 call s:ok('右にそのノートが開いている', fnamemodify(bufname(winbufnr(win_id2win(1) ? 2 : 1)), ':t') ==# 'herb.md' || index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0)
 
 " モード: 索引だけ → ノートだけ
-call s:keys('g')
+call s:keys('i')
 call s:ok('索引だけ: ミントは出ない', s:text() !~# 'ミント' && s:text() =~# '◆植物', s:text())
 call s:keys('n')
 call s:ok('ノートだけ: 索引は出ない', s:grid() !~# '◆' && s:text() =~# 'ミント', s:text())
@@ -67,7 +67,7 @@ let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
 call s:keys('u')
 call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
-call s:keys('g')
+call s:keys('i')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
 call s:keys('a')
 
@@ -194,13 +194,25 @@ call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1
 call s:keys('q')
 
 " 題を変えたら（zt など）閉じなくても曼荼羅が更新される: 書き換えて読み直す（保存や読み込みで少し待って呼ばれる）
-execute 'edit ' . s:v . '/plant.md'
+" （ノートが中心のときは題で出る。索引が中心のときは、その索引に書かれた索引語で出る）
+execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('a')
-call s:ok('更新前は古い題', s:text() =~# '栽培' && s:text() !~# '新しい題', s:text())
-call s:mk('grow.md', '栽培の新しい題', 0, [['植物', 'plant.md']], [])
+call s:ok('更新前は古い題', s:text() =~# '◆植物' && s:text() !~# '新しい題', s:text())
+call s:mk('plant.md', '植物の新しい題', 1, [['Index', 'index.md']], map(copy(s:files), '"[" . s:members[v:key] . "](" . v:val . ".md)"'))
 call gnosis#mview#refresh()
 call s:ok('refresh で新しい題が出る（閉じなくてよい）', s:text() =~# '新しい' && &filetype ==# 'gnosis-mandala', s:text())
+call s:mk('plant.md', '植物', 1, [['Index', 'index.md']], map(copy(s:files), '"[" . s:members[v:key] . "](" . v:val . ".md)"'))
+call gnosis#mview#refresh()
+call s:keys('q')
+
+" 索引（グループ）が中心のときの名前は、その索引に書かれた索引語
+call s:mk('kw.md', 'キーワードの長い正式な題', 0, [['語の索引', 'kwidx.md']], [])
+call s:mk('kwidx.md', '語の索引', 1, [], ['[短い索引語](kw.md)'])
+execute 'edit ' . s:v . '/kwidx.md'
+call s:keys(' ')
+call s:keys('i')
+call s:ok('i: 索引の項目は索引語の名前で出る（ノートの題ではない）', s:text() =~# '短い' && s:text() !~# '正式', s:text())
 call s:keys('q')
 
 " + - : 曼荼羅だけの文字サイズを保存する（端末が許せばその場で反映。試験では保存だけ確かめる）

@@ -15,8 +15,9 @@ vault の関係（gnosis_graph.py）を、Vim が一度だけ読み込んで持�
 ダブルインデックスの道（Global Index → 最初のノート → BranchGroup のトピック索引 → ノート）に沿う:
   中心がノート … groups=進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:） /
                  notes=ParentBranch・ChildBranch・Context・Related・BackLink・本文のリンク / all=groups のあとに notes
-  中心が索引   … all=この索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 載っているノート /
-                 groups=所属する索引と、載っている索引 / notes=この索引を持つノートと、載っているノートのうち索引でないもの
+  中心が索引   … all=この索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 索引の項目すべて /
+                 groups(i)=所属する索引と、索引の項目すべて / notes=この索引を持つノートと、項目のうち索引でない普通のノート
+                 項目の名前は、その索引に書かれたリンクの文字（索引語）。dump の nm に入れる（題と違うものだけ）
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import folgezettel as fz  # noqa: E402
 import gnosis_graph as gg  # noqa: E402
+import note_format_v2 as nf  # noqa: E402
 
 GROUP_KINDS = ("group", "branch_group")
 NOTE_KINDS = ("parent_branch", "child_branch", "context", "related", "backlink", "link")
@@ -35,8 +37,44 @@ KEPT = GROUP_KINDS + NOTE_KINDS
 MODES = ("all", "groups", "notes")
 
 
+_LINK_TEXT = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
+
+
+def _entry_names(g, root: Path, gid: str) -> dict[str, str]:
+    """索引（グループ）gid の本文に書かれた項目の名前（リンクの文字＝索引語）: {項目の相対パス: 名前}。"""
+    try:
+        text = (root / gid).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    d = nf._simple_parse_text(root / gid, text)
+    by_name = _BY_NAME.get(str(root))
+    if by_name is None:
+        by_name = _BY_NAME[str(root)] = nf._index(root)
+    out: dict[str, str] = {}
+    for ln in d["body"]:
+        for m in _LINK_TEXT.finditer(ln):
+            name = re.sub(r"\\(.)", r"\1", m.group(1)).strip()
+            t = m.group(2).split(" ", 1)[0].strip("<>")
+            if not name or "://" in t or t.startswith(("mailto:", "#", "memo:")):
+                continue
+            hit = nf._resolve(t, (root / gid).parent, root, by_name)
+            if hit is None:
+                continue
+            try:
+                rel = hit.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            out.setdefault(rel, name)
+    return out
+
+
+_BY_NAME: dict[str, dict] = {}
+
+
 def dump(root: str | Path) -> dict:
     g = gg.build(root)
+    root = Path(root).resolve()
+    _BY_NAME.pop(str(root), None)
     nodes: dict[str, dict] = {}
     for nid, n in g.nodes.items():
         nodes[nid] = {"t": n.title, "g": 1 if (n.is_group or nid == "index.md") else 0, "o": {}}
@@ -50,6 +88,12 @@ def dump(root: str | Path) -> dict:
             back = nodes[e.dst].setdefault("r", {}).setdefault("branch_group", [])
             if e.src not in back:
                 back.append(e.src)
+    # 索引の項目の名前（索引語）。題と違うものだけ持つ（nm）
+    for nid, nd in nodes.items():
+        if nd["g"]:
+            nm = {k: v for k, v in _entry_names(g, root, nid).items() if k in nodes and v != nodes[k]["t"]}
+            if nm:
+                nd["nm"] = nm
     return {"nodes": nodes}
 
 
@@ -58,7 +102,7 @@ def items(data: dict, center: str, mode: str = "all") -> list[str]:
     （Global Index → 最初のノート → そのノートの BranchGroup のトピック索引 → ノート）に沿う。
 
       中心がノート … 進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:。戻る方向）→ ほかのつながり
-      中心が索引   … その索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 載っているノート
+      中心が索引   … その索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 索引の項目すべて
     """
     nodes = data["nodes"]
     c = nodes.get(center)
@@ -85,12 +129,10 @@ def items(data: dict, center: str, mode: str = "all") -> list[str]:
             add_ids(origin)                       # この索引を持つ最初のノート（戻る道）
         if mode != "notes":
             add(("group",))                      # 所属する索引（Index も）
-        if mode == "groups":
-            add(("link",), True)
-        elif mode == "notes":
-            add(("link",), False)
+        if mode == "notes":
+            add(("link",), False)                # 項目のうち、索引でない普通のノート
         else:
-            add(("link",))
+            add(("link",))                       # 索引の項目（索引語の名前で出す）をすべて
     else:
         if mode in ("groups", "all"):
             add(("branch_group",))               # 進む先のトピック索引
