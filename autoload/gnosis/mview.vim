@@ -220,6 +220,10 @@ function! s:set_kinds(b) abort
       let l:cell = a:b[l:r][l:c]
       let l:of = get(l:cell, 'of', s:S.center)
       let l:cell.kind = empty(l:cell.id) ? 'note' : s:kind(l:cell.id, l:of)
+      " 関連モードで出た、直接のつながりのないもの（Related: の欄ではなく、関連の強さで選ばれたもの）
+      if l:cell.kind ==# 'note' && s:S.mode ==# 'rel' && empty(s:S.rquery) && get(l:cell, 'role', '') ==# 'item' && has_key(s:S.why, l:cell.id)
+        let l:cell.kind = 'related'
+      endif
     endfor
   endfor
 endfunction
@@ -300,10 +304,10 @@ function! s:pad(s, w) abort
 endfunction
 
 " マスの種類（色と記号で一目で分かるように）: 索引・親・子・Context・関連・BackLink・ふつうのノート
-let s:kinds = {'group': ['◆', '索引', 'GnosisMvGroup'], 'parent': ['▲', '親', 'GnosisMvParent'], 'child': ['▼', '子', 'GnosisMvChild'],
-      \ 'context': ['◇', 'Context', 'GnosisMvContext'], 'related': ['≈', '関連', 'GnosisMvRelated'], 'back': ['←', 'BackLink', 'GnosisMvBack'],
-      \ 'note': ['', 'ノート', '']}
-let s:kind_legend = ['group', 'parent', 'child', 'context', 'related', 'back', 'note']
+let s:kinds = {'index': ['■', '索引', 'GnosisMvIndex'], 'group': ['◆', 'グループ', 'GnosisMvGroup'], 'parent': ['▲', '親', 'GnosisMvParent'],
+      \ 'child': ['▼', '子', 'GnosisMvChild'], 'context': ['◇', '文脈', 'GnosisMvContext'], 'related': ['≈', '関連', 'GnosisMvRelated'],
+      \ 'back': ['←', 'BackLink', 'GnosisMvBack'], 'note': ['', 'ノート', '']}
+let s:kind_legend = ['index', 'group', 'parent', 'child', 'context', 'related', 'back', 'note']
 
 " マス a:id が、a:of（そのマスの中心）から見てどういうものか
 function! s:kind(id, of) abort
@@ -311,7 +315,9 @@ function! s:kind(id, of) abort
     return 'note'
   endif
   let l:nd = s:S.data.nodes[a:id]
-  if l:nd.g
+  if a:id ==# 'index.md'
+    return 'index'
+  elseif l:nd.g
     return 'group'
   endif
   if empty(a:of) || !has_key(s:S.data.nodes, a:of)
@@ -329,8 +335,6 @@ function! s:kind(id, of) abort
     return 'child'
   elseif index(get(l:o, 'context', []), a:id) >= 0 || index(get(l:r, 'context', []), a:of) >= 0
     return 'context'
-  elseif index(get(l:o, 'related', []), a:id) >= 0 || index(get(l:r, 'related', []), a:of) >= 0
-    return 'related'
   elseif index(get(l:o, 'backlink', []), a:id) >= 0
     return 'back'
   endif
@@ -615,9 +619,12 @@ function! s:mark() abort
         continue
       endif
       if l:r == s:S.cur[0] && l:c == s:S.cur[1]
-        call s:addpos('GnosisMviewSel', l:sp, 20)
+        " 選んでいるマス: 種類の色を残して背景だけ変える
+        let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
+        call s:addpos(empty(l:hg) ? 'GnosisMviewSel' : l:hg . 'S', l:sp, 20)
       elseif l:cell.role ==# 'center'
-        call s:addpos('GnosisMviewCenter', l:sp, 10)
+        let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
+        call s:addpos(empty(l:hg) ? 'GnosisMviewCenter' : l:hg . 'C', l:sp, 10)
       elseif !empty(get(s:kinds, get(l:cell, 'kind', 'note'), ['', '', ''])[2])
         call s:addpos(s:kinds[l:cell.kind][2], l:sp, 8)
       endif
@@ -1113,12 +1120,14 @@ function! s:reload() abort
 endfunction
 
 function! s:hl() abort
-  highlight default GnosisMvGroup   guifg=#e5a64a ctermfg=178
-  highlight default GnosisMvParent  guifg=#61afef ctermfg=75
-  highlight default GnosisMvChild   guifg=#56b6c2 ctermfg=73
-  highlight default GnosisMvContext guifg=#c678dd ctermfg=176
-  highlight default GnosisMvRelated guifg=#98c379 ctermfg=108
-  highlight default GnosisMvBack    guifg=#7f848e ctermfg=245
+  " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字・下線にした C つき
+  let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#e5a64a', 178], 'Parent': ['#61afef', 75], 'Child': ['#56b6c2', 73],
+        \ 'Context': ['#c678dd', 176], 'Related': ['#98c379', 108], 'Back': ['#7f848e', 245]}
+  for [l:k, l:c] in items(l:cols)
+    execute printf('highlight default GnosisMv%s guifg=%s ctermfg=%d', l:k, l:c[0], l:c[1])
+    execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold,underline cterm=bold,underline', l:k, l:c[0], l:c[1])
+    execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
+  endfor
   highlight default link GnosisMviewSel Visual
   highlight default link GnosisMviewCenter Title
 endfunction
