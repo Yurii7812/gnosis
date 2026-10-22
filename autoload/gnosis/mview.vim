@@ -346,7 +346,7 @@ function! s:geometry(n, W, H, chrome) abort
   if a:n == 9
     let l:cw = max([l:cw, min([l:wlim, 8])])
   endif
-  return [max([3, l:cw]), l:ch]
+  return [max([1, l:cw]), l:ch]
 endfunction
 
 " 凡例（色つき）: ' ◆索引 ▲親 ▼子 ◇Context ≈関連 ←BackLink ノート'。色を付ける位置も返す
@@ -363,7 +363,7 @@ endfunction
 
 " カーソルのマスの説明を 1 行で（題・種類・理由）
 function! s:info() abort
-  if !has_key(s:S, 'info_line')
+  if get(s:S, 'info_line', 0) <= 0
     return
   endif
   let l:cell = s:cur_cell()
@@ -380,8 +380,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -436,15 +436,28 @@ function! s:render() abort
   let s:S.cells = l:b
   let l:W = winwidth(0)
   let l:H = winheight(0)
+  " 窓が低いときは、盤面を優先して案内→凡例と説明→モードの行の順に減らす（どんな大きさでも盤面が窓に収まる）
   let l:foot = s:footer_lines(l:W)
   let [l:bar, s:S.modespan] = s:mode_bar(l:W)
-  let l:legend = s:legend(l:W)
-  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 2 + len(l:bar) + 1 + len(l:foot))
+  let l:show_ref = 1
+  let l:min_grid = l:n * 2 + 1
+  if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
+    let l:foot = l:foot[0 : 0]
+  endif
+  if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
+    let l:show_ref = 0
+  endif
+  if 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot) + l:min_grid > l:H
+    let l:bar = l:bar[0 : 0]
+  endif
+  let l:fixed = 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot)
+  let l:legend = l:show_ref ? s:legend(l:W) : {'text': '', 'spans': []}
+  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, l:fixed)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
   let l:gridw = l:n * (l:cw + 1) + 1
   let l:left = repeat(' ', max([0, (l:W - l:gridw) / 2]))
   let l:gridh = l:n * (l:ch + 1) + 1
-  let l:top = max([0, (l:H - 2 - len(l:bar) - 1 - len(l:foot) - l:gridh) / 2])
+  let l:top = max([0, (l:H - l:fixed - l:gridh) / 2])
   let l:lines = []
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
@@ -456,7 +469,9 @@ function! s:render() abort
   call add(l:lines, s:fit(printf(' %s%s   %d/%d   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
         \ s:S.page + 1, l:pages, l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
   call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
-  call add(l:lines, l:legend.text)
+  if l:show_ref
+    call add(l:lines, l:legend.text)
+  endif
   let s:S.legend_spans = l:legend.spans
   let s:S.legend_line = len(l:lines)
   for l:k in range(l:top)
@@ -471,7 +486,7 @@ function! s:render() abort
       if l:cell.n > 0 && !empty(l:txt)
         let l:txt = l:cell.n . ' ' . l:txt
       endif
-      call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch), 'r': ''})
+      call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, max([1, l:cw - 1]), l:ch), 'r': ''})
     endfor
     for l:k in range(l:ch)
       let l:line = l:left
@@ -499,16 +514,21 @@ function! s:render() abort
     endfor
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
-  while len(l:lines) < l:H - len(l:foot) - 1
+  while len(l:lines) < l:H - len(l:foot) - (l:show_ref ? 1 : 0)
     call add(l:lines, '')
   endwhile
-  call add(l:lines, '')
-  let s:S.info_line = len(l:lines)
+  if l:show_ref
+    call add(l:lines, '')
+    let s:S.info_line = len(l:lines)
+  else
+    let s:S.info_line = 0
+  endif
   call extend(l:lines, map(l:foot, 's:fit(v:val, l:W)'))
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
   setlocal nomodifiable nomodified
+  call winrestview({'topline': 1, 'leftcol': 0})
   call s:mark()
 endfunction
 
@@ -638,6 +658,13 @@ function! s:digit(d) abort
   else
     call s:preview()
   endif
+endfunction
+
+" z: 中央にする（盤面を今の窓の大きさに合わせて中央に描き直し、スクロールのずれを戻し、カーソルを中心のマスへ）
+function! s:recenter() abort
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+  call s:preview()
 endfunction
 
 function! s:toggle_digit() abort
@@ -923,7 +950,7 @@ endfunction
 
 function! s:setup_buffer() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
-  setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala
+  setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=0 sidescrolloff=0
   nnoremap <buffer><nowait><silent> h <Cmd>call <SID>move(0, -1)<CR>
   nnoremap <buffer><nowait><silent> <Left> <Cmd>call <SID>move(0, -1)<CR>
   nnoremap <buffer><nowait><silent> l <Cmd>call <SID>move(0, 1)<CR>
@@ -953,6 +980,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
+  nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>resize(-1)<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call <SID>resize(1)<CR>
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload()<CR>

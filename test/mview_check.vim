@@ -119,6 +119,19 @@ call s:keys('>')
 call s:keys('>')
 call s:ok('> で曼荼羅が広くなる', winwidth(0) > s:w0, s:w0 . ' -> ' . winwidth(0))
 call s:keys('<')
+" どんな大きさでも盤面が窓に収まる。z で中央に戻る
+for [s:ww, s:hh] in [[24, 14], [40, 12], [100, 30]]
+  execute 'vertical resize ' . s:ww
+  execute 'resize ' . s:hh
+  call s:keys('l')
+  call s:keys('z')
+  let s:bl = getbufline(s:st.buf, 1, '$')
+  call s:ok('窓 ' . s:ww . 'x' . s:hh . ': どの行も幅に収まり、行数も高さに収まる', len(filter(copy(s:bl), 'strdisplaywidth(v:val) > winwidth(0)')) == 0 && len(s:bl) <= winheight(0), winwidth(0) . 'x' . winheight(0) . ' lines=' . len(s:bl))
+  call s:ok('z でカーソルは中心のマスへ戻る', s:st.cur == [1, 1], string(s:st.cur))
+endfor
+execute 'vertical resize ' . (&columns / 2)
+execute 'resize ' . (&lines - 2)
+call s:keys('z')
 " 全画面 9×9
 call s:keys('f')
 call s:ok('f で 9×9', s:st.size == 9 && winnr('$') == 1, s:st.size . ' wins=' . winnr('$'))
