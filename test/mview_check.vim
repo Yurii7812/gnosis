@@ -269,5 +269,29 @@ call s:keys("\<CR>")
 call s:ok('中心で Enter すると載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
 call s:ok('載せたあとは元のノートに戻り曼荼羅は閉じる', fnamemodify(expand('%:p'), ':t') ==# 'misc.md' && winnr('$') == 1, expand('%:p') . ' ' . winnr('$'))
 
+" 安定化: 全画面で q → 開いていたノートに戻り、曼荼羅の窓設定が残らない
+%bwipeout!
+execute 'edit ' . s:v . '/misc.md'
+call gnosis#mview#toggle()
+call s:keys('f')
+call s:ok('全画面は窓が 1 つ', winnr('$') == 1)
+call s:keys('q')
+call s:ok('全画面で q すると元のノートに戻る', fnamemodify(expand('%:p'), ':t') ==# 'misc.md' && &filetype !=# 'gnosis-mandala', expand('%:p') . ' ' . &filetype)
+call s:ok('戻ったノートに曼荼羅の窓設定（nowrap）が残らない', &wrap == 1, string(&wrap))
+call s:ok('戻ったノートに曼荼羅の色づけが残らない', empty(filter(getmatches(), 'v:val.group =~# "Gnosis"')), string(getmatches()))
+" 全画面で Space → 分割に戻ってノートの窓へ
+call gnosis#mview#toggle()
+call s:keys('f')
+call s:keys(' ')
+call s:ok('全画面で Space すると分割に戻りノートの窓へ', gnosis#mview#state().size == 3 && winnr('$') == 2 && &filetype !=# 'gnosis-mandala', string(gnosis#mview#state().size) . ' ' . winnr('$'))
+" ノートの窓にいるまま画面の大きさが変わっても、曼荼羅は今の窓の大きさで描き直される
+let s:mw = bufwinid(gnosis#mview#state().buf)
+let s:before = join(getbufline(gnosis#mview#state().buf, 1, '$'), "\n")
+call win_execute(s:mw, 'vertical resize 40')
+call gnosis#mview#rerender()
+let s:after = join(getbufline(gnosis#mview#state().buf, 1, '$'), "\n")
+call s:ok('別の窓にいても曼荼羅が描き直される', s:before !=# s:after && max(map(getbufline(gnosis#mview#state().buf, 1, '$'), 'strdisplaywidth(v:val)')) <= 40, string(max(map(getbufline(gnosis#mview#state().buf, 1, '$'), 'strdisplaywidth(v:val)'))))
+call gnosis#mview#close()
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

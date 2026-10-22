@@ -35,19 +35,32 @@ endfunction
 
 " ---- データ -----------------------------------------------------------------
 
+" python/mandala_view.py を呼んで JSON を返す。失敗（終了コード≠0・JSON でない）は v:null。
+" 標準エラーは混ぜない（警告が混ざると JSON として読めず、時々だけ失敗する）
+function! s:py(args) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py'] + a:args, 'shellescape(v:val)'), ' ') . ' 2>/dev/null'
+  let l:out = system(l:cmd)
+  if v:shell_error
+    return v:null
+  endif
+  try
+    return json_decode(l:out)
+  catch
+    return v:null
+  endtry
+endfunction
+
 function! s:load() abort
   let l:root = s:root()
   if empty(l:root)
     return 0
   endif
-  let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'dump', l:root], 'shellescape(v:val)'), ' ')
-  let l:out = system(l:cmd)
-  try
-    let s:S.data = json_decode(l:out)
-  catch
+  let l:d = s:py(['dump', l:root])
+  if type(l:d) != v:t_dict || type(get(l:d, 'nodes', 0)) != v:t_dict
     echohl WarningMsg | echo 'Gnosis: 曼荼羅のデータを読めませんでした' | echohl NONE
     return 0
-  endtry
+  endif
+  let s:S.data = l:d
   let s:S.root = l:root
   return 1
 endfunction
@@ -119,12 +132,13 @@ endfunction
 " 近い索引（python/mandala_view.py の near）。中心ごとに覚えておく（r で読み直し）
 function! s:near(c) abort
   if !has_key(s:S.nearc, a:c)
-    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'near', s:S.root, a:c], 'shellescape(v:val)'), ' ')
-    try
-      let s:S.nearc[a:c] = json_decode(system(l:cmd))
-    catch
-      let s:S.nearc[a:c] = []
-    endtry
+    let l:d = s:py(['near', s:S.root, a:c])
+    if type(l:d) != v:t_list
+      " 失敗は覚えない（次の描き直しでもう一度試す）
+      let s:S.why = {}
+      return gnosis#mview#items(s:S.data, a:c, 'groups')
+    endif
+    let s:S.nearc[a:c] = l:d
   endif
   " 先にすでに所属している索引（Index も）、そのあとに「近いのにまだ載っていない」索引
   let s:S.why = {}
@@ -153,12 +167,12 @@ endfunction
 " 関連（python/mandala_view.py の related）。索引でもノートでも、関連の強い順。理由は強い 2 つまで
 function! s:rel(c) abort
   if !has_key(s:S.relc, a:c)
-    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'related', s:S.root, a:c], 'shellescape(v:val)'), ' ')
-    try
-      let s:S.relc[a:c] = json_decode(system(l:cmd))
-    catch
-      let s:S.relc[a:c] = []
-    endtry
+    let l:d = s:py(['related', s:S.root, a:c])
+    if type(l:d) != v:t_list
+      let s:S.why = {}
+      return []
+    endif
+    let s:S.relc[a:c] = l:d
   endif
   let s:S.why = {}
   for l:d in s:S.relc[a:c]
@@ -477,6 +491,11 @@ endfunction
 
 function! s:render() abort
   let l:n = s:S.size
+  " 読み直しや絞り込みで枚数・盤面が変わっても範囲外にならないように
+  let s:S.page = max([0, min([s:S.page, s:pages(s:S.center) - 1])])
+  if s:S.cur[0] < 0 || s:S.cur[0] >= l:n || s:S.cur[1] < 0 || s:S.cur[1] >= l:n
+    let s:S.cur = l:n == 3 ? [1, 1] : [4, 4]
+  endif
   let l:b = s:board()
   let s:S.cells = l:b
   let l:W = winwidth(0)
@@ -920,6 +939,12 @@ function! s:back() abort
     return
   endif
   let [l:id, l:pg] = remove(s:S.hist, -1)
+  while !has_key(s:S.data.nodes, l:id) && !empty(s:S.hist)
+    let [l:id, l:pg] = remove(s:S.hist, -1)
+  endwhile
+  if !has_key(s:S.data.nodes, l:id)
+    return
+  endif
   call s:set_center(l:id, l:pg)
 endfunction
 
@@ -952,12 +977,8 @@ function! s:search() abort
   if empty(l:q)
     let s:S.rquery = ''
   else
-    let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_view.py', 'search', s:S.root] + split(l:q, '\s\+'), 'shellescape(v:val)'), ' ')
-    try
-      let s:S.results = json_decode(system(l:cmd))
-    catch
-      let s:S.results = []
-    endtry
+    let l:d = s:py(['search', s:S.root] + split(l:q, '\s\+'))
+    let s:S.results = type(l:d) == v:t_list ? l:d : []
     let s:S.rquery = l:q
   endif
   let s:S.page = 0
@@ -970,7 +991,11 @@ function! s:full() abort
   if s:S.size == 3
     let s:S.size = 9
     let s:S.width = winwidth(0)
-    only
+    let l:nw = s:note_win()
+    if l:nw > 0
+      call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
+    endif
+    silent! only
   else
     let s:S.size = 3
     call s:ensure_note_win()
@@ -1017,6 +1042,9 @@ function! s:ensure_note_win() abort
     return
   endif
   let l:mw = s:mwin()
+  if l:mw < 0
+    return -1
+  endif
   call win_gotoid(l:mw)
   vertical rightbelow new
   let l:nw = win_getid()
@@ -1046,6 +1074,7 @@ function! s:show_note(id) abort
   endif
   call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
   call win_execute(l:nw, 'silent! hide edit ' . fnameescape(l:path))
+  let s:S.note = l:path
 endfunction
 
 " ---- 入口 -------------------------------------------------------------------
@@ -1091,7 +1120,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
-    autocmd VimResized,WinResized * if &filetype ==# 'gnosis-mandala' | call s:render() | endif
+    autocmd VimResized,WinResized * call gnosis#mview#rerender()
   augroup END
 endfunction
 
@@ -1106,6 +1135,23 @@ function! s:touched() abort
   let s:sync_timer = timer_start(600, {-> gnosis#mview#refresh()})
 endfunction
 
+" 窓の大きさが変わったとき、曼荼羅の窓を今の大きさで描き直す（今いる窓は変えない）
+function! gnosis#mview#rerender() abort
+  let l:mw = s:mwin()
+  if l:mw < 0 || !has_key(s:S, 'data') || !has_key(s:S, 'cells')
+    return
+  endif
+  try
+    call win_execute(l:mw, 'call gnosis#mview#render_here()')
+  catch
+  endtry
+  redraw!
+endfunction
+
+function! gnosis#mview#render_here() abort
+  call s:render()
+endfunction
+
 " 読み直す（開いている曼荼羅の中身・近さを今の vault から作り直す。今の中心・枚・カーソルはそのまま）
 function! gnosis#mview#refresh() abort
   if exists('s:sync_timer')
@@ -1113,6 +1159,11 @@ function! gnosis#mview#refresh() abort
   endif
   let l:mw = s:mwin()
   if l:mw < 0
+    return
+  endif
+  " input() やコマンド行の最中に窓を動かさない。少し待ってもう一度
+  if !empty(getcmdtype()) || (mode() =~# '^[iR]' || mode() =~# '^c[^ve]')
+    let s:sync_timer = timer_start(600, {-> gnosis#mview#refresh()})
     return
   endif
   let l:back = win_getid()
@@ -1154,6 +1205,10 @@ function! s:open(center, ...) abort
     autocmd VimLeavePre * call s:save_state()
   augroup END
   let l:pick = a:0 ? a:1 : ''
+  " 閉じたときに戻るノート（全画面で閉じると窓が 1 つだけになるため）
+  if filereadable(expand('%:p'))
+    let s:S.note = expand('%:p')
+  endif
   let s:S.digit = get(s:S, 'digit', 'jump')
   let s:S.pick = !empty(l:pick)
   let s:S.src = l:pick
@@ -1219,12 +1274,17 @@ endfunction
 " <Space>: ノートから曼荼羅へ、曼荼羅からノートへ
 function! gnosis#mview#toggle() abort
   if &filetype ==# 'gnosis-mandala'
+    if s:S.size != 3
+      " 全画面（9×9）にノートの窓は無い。分割に戻して、そのマスのノートを右に出す
+      let s:S.size = 3
+      let s:S.cur = [1, 1]
+      call s:ensure_note_win()
+      call s:render()
+      call s:show_note(s:S.center)
+    endif
     let l:nw = s:note_win()
     if l:nw > 0
       call win_gotoid(l:nw)
-    else
-      call s:ensure_note_win()
-      call win_gotoid(s:note_win())
     endif
     return
   endif
@@ -1262,15 +1322,28 @@ function! gnosis#mview#close() abort
   let l:mw = s:mwin()
   if l:mw > 0
     call win_gotoid(l:mw)
+    " 窓ごとの色づけ・設定を残さない（残ると次に開く物が変な見た目になる）
+    for l:m in get(w:, 'mview_match', [])
+      silent! call matchdelete(l:m)
+    endfor
+    let w:mview_match = []
     if winnr('$') > 1
       close
     else
-      enew
+      " 全画面（窓が 1 つ）のとき: 曼荼羅の設定を元に戻して、開いていたノートに戻る
+      setlocal wrap< list< number< relativenumber< cursorline< spell< foldenable< colorcolumn< signcolumn< scrolloff< sidescrolloff<
+      let l:n = get(s:S, 'note', '')
+      if !empty(l:n) && filereadable(l:n)
+        execute 'silent! edit ' . fnameescape(l:n)
+      else
+        enew
+      endif
     endif
   endif
   if s:note_win() > 0
     call win_gotoid(s:note_win())
   endif
+  redraw!
 endfunction
 
 " 試験用: 状態を返す

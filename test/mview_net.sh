@@ -14,8 +14,8 @@ LINES=60 COLUMNS=160 MV_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= D
 if [ ! -s "$WORK/result.txt" ]; then
   echo "NG: mview の結果が無い（Vim のエラー）" >&2; cat "$WORK/out.txt" "$WORK/err.txt" >&2; exit 1
 fi
-if grep -q '^NG' "$WORK/result.txt"; then
-  grep -v '^OK' "$WORK/result.txt" >&2
+if grep -aq '^NG' "$WORK/result.txt"; then
+  grep -av '^OK' "$WORK/result.txt" >&2
   echo "NG: mview" >&2; exit 1
 fi
-echo "mview OK ($(grep -c '^OK' "$WORK/result.txt") 項目)"
+echo "mview OK ($(grep -ac '^OK' "$WORK/result.txt") 項目)"

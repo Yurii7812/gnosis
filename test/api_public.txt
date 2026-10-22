@@ -227,6 +227,8 @@ gnosis#mview#entries
 gnosis#mview#items
 gnosis#mview#pick
 gnosis#mview#refresh
+gnosis#mview#render_here
+gnosis#mview#rerender
 gnosis#mview#state
 gnosis#mview#toggle
 gnosis#new_child
