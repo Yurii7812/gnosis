@@ -18459,7 +18459,7 @@ endfunction
 "   cipher     : 暗号箱パス（conf があればそれ、無ければ新規候補）
 "   has_cipher : gocryptfs.conf が読めるか
 "   mounted    : FUSE マウント中か
-"   plain_flat : 直置き型で中身がある（＝平文 vault。旧暗号箱が残っていても暗号扱いしない）
+"   plain_flat : 直置き型で中身がある（＝平文 vault。旧暗号箱が残っていても暗号扱いしない）。暗号箱ありでマウントなしのときだけ調べる（ほかは 0）
 "   encrypted  : :GnosisSetPassword 用。マウント中 or 暗号箱あり（plain_flat を除く）
 "   locked     : ロック中（暗号箱あり・未マウント・平文再作成でない）
 function! s:vault_status() abort
@@ -18473,7 +18473,11 @@ function! s:vault_status() abort
   let l:st.cipher = gnosis#cipher_dir()
   let l:st.has_cipher = !empty(l:st.cipher) && filereadable(l:st.cipher . s:sep() . 'gocryptfs.conf')
   let l:st.mounted = (gnosis#vault_mounted() == 1)
-  let l:st.plain_flat = (l:st.layout ==# 'flat' && s:dir_has_content(l:root))
+  " plain_flat は暗号箱があり未マウントのときだけ答えに効く。それ以外で調べると vault 全体の一覧を読むので
+  " （暗号化 vault は FUSE 越しで遅い。ロック判定は遷移のたびに何度も呼ばれる）、調べない
+  if l:st.has_cipher && !l:st.mounted
+    let l:st.plain_flat = (l:st.layout ==# 'flat' && s:dir_has_content(l:root))
+  endif
   let l:st.encrypted = l:st.mounted || (l:st.has_cipher && !l:st.plain_flat)
   let l:st.locked = l:st.has_cipher && !l:st.mounted && !l:st.plain_flat
   return l:st

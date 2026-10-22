@@ -8,6 +8,7 @@
   - 曼荼羅ビュー（`<Space>`）・`\g`（索引を曼荼羅で選んで載せる）。試験: `python/test_mandala_view.py`・`test/mview_net.sh`・`test/tabs_board_net.sh`。
   - 未確認: 実機の端末での見た目と手触り（Konsole・日本語入力中の挙動）。`\g` の `\gi` との待ち時間。近い Folgezettel 的な関連のモードは未実装。
 
+- 2026-10-22 軽量化（未 push・未マージ・実機未確認）: ①リンク解決を速くした（`gnosis_graph.build` が相対パスを文字列で正規化して知っているノート id に当たれば `realpath` を呼ばない。辺・壊れたリンクは従来と同一を確認。3000 ノートで build 約 3.3→0.6 秒、曼荼羅の c/r モード・中心の移動は 1.5→0.8 秒）。②`vault_status()` が毎回 vault 全体の一覧（`readdir`）を読んでいたのをやめた（暗号箱ありでマウントなしのときだけ。リンクの遷移のたびに何度も呼ばれ、暗号化 vault では FUSE 越しで遅かった）。③曼荼羅が開いている間、ノートを開くだけ（BufReadPost）で全ノートを読み直していたのをやめた（保存したときだけ）。④マスの題を空白で折り返す（「Gnosis 操作ガイド」が「ガイ／ド」と切れない）。試験: `test/run.sh` 全部 OK・`python/test_gnosis_graph.py` に速い解決の試験。貼られた「盤面が途中で崩れる」画面は再現できず（重い再描画の途中を写した可能性）。
 - 2026-10-22 曼荼羅ビューの安定化（未 push・未マージ・実機未確認）: 窓の大きさが変わったとき曼荼羅の窓を直接描き直す（`gnosis#mview#rerender`。ノート側にいても）、全画面で `q` したら開いていたノートに戻り窓設定・色づけを残さない、全画面で Space は分割に戻す、Python の stderr を混ぜない（`s:py`）、失敗を空結果として覚えない、ページ・カーソルの範囲外ガード、入力中は自動の読み直しを待つ。試験: `test/mview_net.sh` 79 項目 OK。`test/run.sh` は `requests_1020_net.sh`（元から不安定・単独は OK）で 1 回止まり、最後まで通っていない。
 - 2026-10-22 続き: 曼荼羅ビューの既存モードをダブルインデックスの道に沿わせた・索引モードのキーを `i` に（索引語の名前で項目をすべて）。`python/index_migrate.py` で古い名残（Index 直下のグループ 6 件）を本物の vault で移行済み。試験: `python/test_index_migrate.py`・`test_mandala_view.py`・`test/mview_net.sh`。
 

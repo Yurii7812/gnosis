@@ -25,6 +25,7 @@ CLI（JSON を標準出力へ）:
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 import sys
 from collections import deque
@@ -253,6 +254,12 @@ def build(root: str | Path) -> Graph:
         t = _target(raw)
         if "://" in t or t.startswith(("mailto:", "#", "memo:")):
             return None, False  # 外部リンク・同じノート内は辺にしない
+        # 速い道: 相対パスを文字列だけで正規化し、ノートとして知っている id に当たればそれ（realpath を呼ばない）
+        tp = t.split("#", 1)[0].strip()
+        if tp.lower().endswith(".md") and not tp.startswith("/"):
+            fast = posixpath.normpath(posixpath.join(posixpath.dirname(src_rel), tp))
+            if fast in g.nodes:
+                return fast, False
         hit = nf._resolve(t, (root / src_rel).parent, root, by_name)
         if hit is None:
             return None, bool(t.split("#", 1)[0].strip())

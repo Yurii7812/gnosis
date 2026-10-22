@@ -309,20 +309,40 @@ function! s:board_cells() abort
   return l:b
 endfunction
 
-" 文字列を表示幅 w の行に折り返す（最大 h 行。あふれたら … ）
+" 文字列を表示幅 w の行に折り返す（最大 h 行。あふれたら … ）。空白で区切れるところは空白で折り返し
+" （「Gnosis 操作ガイド」が「ガイ／ド」と語の途中で切れない）、1 語が w より長いときだけ文字で折り返す
 function! s:wrap(text, w, h) abort
   let l:lines = []
   let l:cur = ''
   let l:cw = 0
-  for l:ch in split(a:text, '\zs')
-    let l:d = strdisplaywidth(l:ch)
-    if l:cw + l:d > a:w
-      call add(l:lines, l:cur)
-      let l:cur = ''
-      let l:cw = 0
+  for l:word in split(a:text, ' ')
+    let l:ww = strdisplaywidth(l:word)
+    if !empty(l:cur) && l:cw + 1 + l:ww <= a:w
+      let l:cur .= ' ' . l:word
+      let l:cw += 1 + l:ww
+      continue
     endif
-    let l:cur .= l:ch
-    let l:cw += l:d
+    if !empty(l:cur) && l:ww <= a:w
+      call add(l:lines, l:cur)
+      let l:cur = l:word
+      let l:cw = l:ww
+      continue
+    endif
+    " 長い語は、今の行の続きに文字で詰めて折り返す
+    if !empty(l:cur)
+      let l:cur .= ' '
+      let l:cw += 1
+    endif
+    for l:ch in split(l:word, '\zs')
+      let l:d = strdisplaywidth(l:ch)
+      if l:cw + l:d > a:w
+        call add(l:lines, l:cur)
+        let l:cur = ''
+        let l:cw = 0
+      endif
+      let l:cur .= l:ch
+      let l:cw += l:d
+    endfor
   endfor
   call add(l:lines, l:cur)
   if len(l:lines) > a:h
@@ -1201,7 +1221,7 @@ function! s:open(center, ...) abort
   call s:hl()
   augroup gnosis_mview_sync
     autocmd!
-    autocmd BufWritePost,BufReadPost,FileChangedShellPost *.md call s:touched()
+    autocmd BufWritePost,FileChangedShellPost *.md call s:touched()
     autocmd VimLeavePre * call s:save_state()
   augroup END
   let l:pick = a:0 ? a:1 : ''

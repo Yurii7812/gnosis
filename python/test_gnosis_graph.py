@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """gnosis_graph: 型付き有向多重グラフ・壊れたリンク・Folgezettel の見取り図。"""
+import os
 import sys
 import tempfile
 import unittest
@@ -91,6 +92,34 @@ class GraphTest(unittest.TestCase):
         self.assertEqual([c["id"] for c in t1["children"][0]["children"]], ["1a1"])
         self.assertEqual([t["id"] for t in tree][:2], ["1", "2"])
         self.assertIn("3a1", [t["id"] for t in tree])         # 親(3)が無い枝も落とさず最上位に出す
+
+    def test_fast_resolve_matches_slow(self):
+        """相対パスの速い解決（realpath を呼ばない）が、従来の解決と同じ辺・壊れたリンクを返す。"""
+        import tempfile
+        import note_format_v2 as nf
+        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        os.makedirs(base, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as d:
+            r = Path(d)
+            (r / "a" / "b").mkdir(parents=True)
+            (r / "y.md").write_text("---\ntitle: Y\n---\n# Y\n[x](a/x.md)\n[壊れ](none.md)\n")
+            (r / "a" / "x.md").write_text("---\ntitle: X\n---\n# X\n[上](../y.md)\n[同](./w.md)\n[奥](b/../b/z.md#h)\n[名前だけ](z)\n[外](https://e.com/a.md)\n")
+            (r / "a" / "w.md").write_text("---\ntitle: W\n---\n# W\n")
+            (r / "a" / "b" / "z.md").write_text("---\ntitle: Z\n---\n# Z\n[y](../../y.md)\n")
+            os.symlink(r / "y.md", r / "link.md")
+            (r / "a" / "s.md").write_text("---\ntitle: S\n---\n# S\n[l](../link.md)\n")
+            g = gg.build(r)
+            got = sorted((e.src, e.dst) for e in g.edges)
+            self.assertIn(("y.md", "a/x.md"), got)
+            self.assertIn(("a/x.md", "y.md"), got)
+            self.assertIn(("a/x.md", "a/w.md"), got)
+            self.assertIn(("a/x.md", "a/b/z.md"), got)       # b/../b/z.md#h
+            self.assertIn(("a/b/z.md", "y.md"), got)
+            self.assertIn(("a/s.md", "y.md"), got)           # 記号リンクは実体の id に解決される
+            self.assertEqual([b["target"] for b in g.broken], ["none.md"])
+            for e in g.edges:                                 # どの辺も従来の解決と同じ先
+                self.assertIn(e.dst, g.nodes)
+
 
     def test_read_only(self):
         before = {p.name: p.read_bytes() for p in self.root.glob("*.md")}
