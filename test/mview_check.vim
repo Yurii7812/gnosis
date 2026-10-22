@@ -9,6 +9,8 @@ let g:gnosis_autosync = 0
 let g:gnosis_skip_interactive_mount = 1
 let g:gnosis_diary_auto = 0
 let g:gnosis_test_review_skip = 1
+" 開くたびに今のノートが中心（覚えた位置は専用の試験でだけ使う）
+let g:gnosis_mview_restore = 0
 
 function! s:ok(name, cond, ...) abort
   call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
@@ -50,6 +52,9 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
+call s:ok('ふだんは曼荼羅だけ（モード・凡例・案内は出ない）', s:text() !~# 'モード' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
+call s:keys('?')
+call s:ok('? でモード・凡例・案内が出る', s:text() =~# 'モード' && s:text() =~# 'q 閉じる', s:text())
 call s:ok('中心は今のノート', s:st.center ==# 'herb.md', s:st.center)
 call s:ok('周りに所属の索引が出る', s:text() =~# '1 植物' && s:text() =~# '2 料理', s:text())
 call s:ok('ノートのつながりも出る（すべて）', s:text() =~# '3 ミント')
@@ -80,9 +85,9 @@ call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~#
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 call s:ok('ページ (1/2) が中央のマスの上に出る', s:text() =~# '(1/2)' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *(1/2) *┃"')) == 1, s:text())
 call s:keys('?')
-call s:ok('? で下の案内が隠れる（1 行だけ残る）', s:text() =~# '? で案内を表示' && s:text() !~# 'q 閉じる', s:text())
+call s:ok('? で曼荼羅だけに戻る（ページ (1/2) は盤面に残る）', s:text() !~# 'モード' && s:text() !~# 'q 閉じる' && s:text() =~# '(1/2)', s:text())
 call s:keys('?')
-call s:ok('もう一度 ? で案内が出る', s:text() =~# 'q 閉じる')
+call s:ok('もう一度 ? でモード・案内が出る', s:text() =~# 'q 閉じる' && s:text() =~# 'モード')
 " ページ送り
 call s:keys(']')
 call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビ' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
@@ -224,16 +229,27 @@ call s:keys('i')
 call s:ok('同じノートの 2 つの索引語が、別々のマスに出る', s:text() =~# '1 アイコン' && s:text() =~# '2 デザイン' && s:text() !~# 'ひとつだけ', s:text())
 call s:keys('q')
 
-" + - : 曼荼羅だけの文字サイズを保存する（端末が許せばその場で反映。試験では保存だけ確かめる）
-let s:fs0 = gnosis#termfont#load().fontSize
+" 位置などを覚える: 閉じて、別のノートから開き直しても、前回の中心・モード・幅のまま
+let g:gnosis_mview_restore = 1
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
-call s:keys('+')
-call s:ok('+ で曼荼羅の文字サイズが 1 つ大きく保存される', gnosis#termfont#load().mandalaFontSize == s:fs0 + 1, gnosis#termfont#load().mandalaFontSize . ' / ' . s:fs0)
-call s:keys('-')
-call s:keys('-')
-call s:ok('- で小さく保存される', gnosis#termfont#load().mandalaFontSize == s:fs0 - 1)
+call s:keys('1')
+call s:keys('i')
+call s:keys('<')
+let s:st = gnosis#mview#state()
+let s:saved = [s:st.center, s:st.mode, s:st.tenths]
 call s:keys('q')
+call s:ok('閉じると位置を保存する（mandala.json）', filereadable(gnosis#home#path('mandala.json')))
+execute 'edit ' . s:v . '/curry.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:ok('開き直すと前回の位置のまま（今のノートではなく）', [s:st.center, s:st.mode, s:st.tenths] == s:saved && s:st.center !=# 'curry.md', string([s:st.center, s:st.mode, s:st.tenths]) . ' / ' . string(s:saved))
+call s:ok('右は今のノートのまま', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'curry.md') >= 0)
+" . : 右のノートを中心にする
+call s:keys('.')
+call s:ok('. で右のノート（curry）が中心になる', s:st.center ==# 'curry.md', s:st.center)
+call s:keys('q')
+let g:gnosis_mview_restore = 0
 
 " \g: 曼荼羅で索引を選んで、今のノートを載せる
 call s:mk('misc.md', '雑記', 0, [], [])

@@ -16,8 +16,7 @@
 "   GUI 版 Vim      guifont                              guifont
 "
 " 保存先は Gnosis ホームの terminal.json（vault の外。暗号化 vault を開く前のランチャーも読める）:
-"   {"fontSize": 16, "fontFamily": "", "lineSpacing": 2, "terminal": "", "mandalaFontSize": 0}
-"   mandalaFontSize … 曼荼羅ビューを開いている間だけの文字サイズ（0 なら fontSize のまま）。閉じると fontSize に戻す
+"   {"fontSize": 16, "fontFamily": "", "lineSpacing": 2, "terminal": ""}
 "   fontFamily が空なら、その端末の等幅フォント（fc-match monospace）
 "   terminal が空なら、デスクトップに合った端末を自動で選ぶ（ランチャー）
 " ふだんの端末の設定・プロファイルは書き換えない。
@@ -31,7 +30,7 @@ let s:min = 6
 let s:max = 48
 
 function! gnosis#termfont#defaults() abort
-  return {'fontSize': 16, 'fontFamily': '', 'lineSpacing': 2, 'terminal': '', 'mandalaFontSize': 0}
+  return {'fontSize': 16, 'fontFamily': '', 'lineSpacing': 2, 'terminal': ''}
 endfunction
 
 " フォントの選択肢（設定画面の一覧）: 入っているものだけ。おすすめ（読みやすい・日本語向け）を先に、
@@ -104,9 +103,6 @@ function! gnosis#termfont#load() abort
     endif
   endfor
   let l:d.fontSize = gnosis#termfont#clamp(l:d.fontSize)
-  if l:d.mandalaFontSize > 0
-    let l:d.mandalaFontSize = gnosis#termfont#clamp(l:d.mandalaFontSize)
-  endif
   let l:d.lineSpacing = max([0, min([12, l:d.lineSpacing])])
   return l:d
 endfunction

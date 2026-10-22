@@ -12,7 +12,6 @@
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
-"   + -              曼荼羅だけの文字サイズ（開いている間だけ端末の大きさを変え、閉じたら戻す。Konsole・kitty・Alacritty・GUI 版 Vim）
 "   a i n c r        モード: a 全体 / i 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
@@ -425,12 +424,9 @@ endfunction
 
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
-  if !get(s:S, 'help', 1)
-    return [s:fit(' ? で案内を表示', a:W)]
-  endif
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', '. 今のノートへ', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', '. 今のノートへ', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -485,22 +481,31 @@ function! s:render() abort
   let s:S.cells = l:b
   let l:W = winwidth(0)
   let l:H = winheight(0)
-  " 窓が低いときは、盤面を優先して案内→凡例と説明→モードの行の順に減らす（どんな大きさでも盤面が窓に収まる）
-  let l:foot = s:footer_lines(l:W)
-  let [l:bar, s:S.modespan] = s:mode_bar(l:W)
-  let l:show_ref = 1
-  let l:min_grid = l:n * 2 + 1
-  if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
-    let l:foot = l:foot[0 : 0]
+  " ふだんは曼荼羅（盤面）だけ。? を押したときだけ、見出し・モード・凡例・説明・案内を出す。
+  " 出すときも、窓が低ければ盤面を優先して 案内→凡例と説明→モードの行 の順に減らす（どんな大きさでも盤面が窓に収まる）
+  let l:help = get(s:S, 'help', 0)
+  let l:show_ref = 0
+  let l:foot = []
+  let l:bar = []
+  let s:S.modespan = []
+  if l:help
+    let l:foot = s:footer_lines(l:W)
+    let [l:bar, s:S.modespan] = s:mode_bar(l:W)
+    let l:show_ref = 1
+    let l:min_grid = l:n * 2 + 1
+    if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
+      let l:foot = l:foot[0 : 0]
+    endif
+    if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
+      let l:show_ref = 0
+    endif
+    if 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot) + l:min_grid > l:H
+      let l:bar = l:bar[0 : 0]
+    endif
   endif
-  if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
-    let l:show_ref = 0
-  endif
-  if 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot) + l:min_grid > l:H
-    let l:bar = l:bar[0 : 0]
-  endif
-  let l:fixed = 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot)
+  let l:fixed = (l:help ? 1 : 0) + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot)
   let l:legend = l:show_ref ? s:legend(l:W) : {'text': '', 'spans': []}
+  let s:S.legend_line = 0
   let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, l:fixed)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
   let l:gridw = l:n * (l:cw + 1) + 1
@@ -518,14 +523,16 @@ function! s:render() abort
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
-  call add(l:lines, s:fit(printf(' %s%s   %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
-        \ (l:pages > 1 && empty(l:ptop)) ? (s:S.page + 1) . '/' . l:pages . '   ' : '', l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
-  call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
+  if l:help
+    call add(l:lines, s:fit(printf(' %s%s   %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
+          \ (l:pages > 1 && empty(l:ptop)) ? (s:S.page + 1) . '/' . l:pages . '   ' : '', l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
+    call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
+  endif
   if l:show_ref
     call add(l:lines, l:legend.text)
+    let s:S.legend_line = len(l:lines)
   endif
-  let s:S.legend_spans = l:legend.spans
-  let s:S.legend_line = len(l:lines)
+  let s:S.legend_spans = l:show_ref ? l:legend.spans : []
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
@@ -691,6 +698,7 @@ function! s:move(dr, dc) abort
   let s:S.cur = [l:r, l:c]
   call s:mark()
   call s:preview()
+  call s:save_soon()
 endfunction
 
 " カーソルのマスのノートを右に出す（曼荼羅の中心は変えない）
@@ -727,62 +735,74 @@ function! s:recenter() abort
   call s:preview()
 endfunction
 
-" ---- 曼荼羅だけの文字サイズ --------------------------------------------------------
-" 端末の文字サイズは窓ごとには変えられないので、曼荼羅を開いている間だけ端末全体の大きさを変え、閉じたら戻す。
-" 大きさは Gnosis ホームの terminal.json の mandalaFontSize（0 なら ふだんの fontSize のまま）。
-" その場で変えられるのは Konsole・kitty・Alacritty・GUI 版 Vim（gnosis#termfont）。ほかの端末は保存だけ。
+" ---- 位置などを覚える（次に開いたとき、前回の位置のまま） --------------------------------
+" Gnosis ホームの mandala.json に vault ごと: 中心のノート・何枚目・カーソル・モード・数字キーの動き・曼荼羅の幅・案内の表示。
+" 試験では g:gnosis_mview_restore = 0 で、開くたびに今のノートが中心（覚えた位置は使わない）。
 
-function! s:font_apply(size) abort
-  let l:d = gnosis#termfont#load()
-  let l:d.fontSize = a:size
-  return gnosis#termfont#apply_live(l:d)
-endfunction
-
-" 曼荼羅を開いたとき: 曼荼羅用の大きさがあれば端末に反映する
-function! s:font_enter() abort
-  let l:d = gnosis#termfont#load()
-  if l:d.mandalaFontSize > 0 && l:d.mandalaFontSize != l:d.fontSize && s:font_apply(l:d.mandalaFontSize)
-    let s:S.font_changed = 1
-    augroup gnosis_mview_font
-      autocmd!
-      autocmd VimLeavePre * call s:font_leave()
-    augroup END
-  endif
-endfunction
-
-" 閉じるとき: ふだんの大きさに戻す
-function! s:font_leave() abort
-  if get(s:S, 'font_changed', 0)
-    let s:S.font_changed = 0
-    call s:font_apply(gnosis#termfont#load().fontSize)
-  endif
-endfunction
-
-" + / - : 曼荼羅の文字サイズを 1 つ大きく・小さく（保存して、できればその場で反映）
-function! s:font_step(d) abort
-  let l:d = gnosis#termfont#load()
-  let l:cur = l:d.mandalaFontSize > 0 ? l:d.mandalaFontSize : l:d.fontSize
-  let l:d.mandalaFontSize = gnosis#termfont#clamp(l:cur + a:d)
+function! s:state_all() abort
   try
-    call gnosis#termfont#save(l:d)
+    let l:d = gnosis#home#read_json(gnosis#home#path('mandala.json'), {})
+    return type(l:d) == v:t_dict ? l:d : {}
+  catch
+    return {}
+  endtry
+endfunction
+
+function! s:save_state() abort
+  if get(s:S, 'pick', 0) || !has_key(s:S, 'center') || !has_key(s:S, 'root')
+    return
+  endif
+  let l:all = s:state_all()
+  let l:all[s:S.root] = {'center': s:S.center, 'page': s:S.page, 'cur': s:S.cur, 'mode': s:S.mode,
+        \ 'digit': s:S.digit, 'tenths': get(s:S, 'tenths', 5), 'help': get(s:S, 'help', 0)}
+  try
+    call gnosis#home#write_json(gnosis#home#path('mandala.json'), l:all)
   catch
   endtry
-  if gnosis#termfont#detect().live && s:font_apply(l:d.mandalaFontSize)
-    let s:S.font_changed = 1
-    echo '曼荼羅の文字サイズ: ' . l:d.mandalaFontSize
-  else
-    echo '曼荼羅の文字サイズ ' . l:d.mandalaFontSize . ' を保存しました（この端末はその場で変えられません。次に曼荼羅を開くとき、または Konsole・kitty・Alacritty・GUI 版 Vim で反映されます）'
+endfunction
+
+" 動くたびに書かないよう、少し待ってまとめて書く
+function! s:save_soon() abort
+  if exists('s:save_timer')
+    call timer_stop(s:save_timer)
   endif
+  let s:save_timer = timer_start(400, {-> s:save_now()})
+endfunction
+
+function! s:save_now() abort
+  if exists('s:save_timer')
+    unlet s:save_timer
+  endif
+  call s:save_state()
+endfunction
+
+" . : 右のウィンドウで開いているノートを中心にする
+function! s:here() abort
+  let l:nw = s:note_win()
+  if l:nw < 0
+    return
+  endif
+  let l:f = fnamemodify(bufname(winbufnr(l:nw)), ':p')
+  let l:rel = stridx(l:f, s:S.root . '/') == 0 ? strpart(l:f, len(s:S.root) + 1) : ''
+  if !has_key(s:S.data.nodes, l:rel) || l:rel ==# s:S.center
+    return
+  endif
+  let s:S.query = ''
+  let s:S.rquery = ''
+  call add(s:S.hist, [s:S.center, s:S.page])
+  call s:set_center(l:rel, 0)
 endfunction
 
 function! s:toggle_help() abort
-  let s:S.help = !get(s:S, 'help', 1)
+  let s:S.help = !get(s:S, 'help', 0)
   call s:render()
+  call s:save_state()
 endfunction
 
 function! s:toggle_digit() abort
   let s:S.digit = s:S.digit ==# 'jump' ? 'cursor' : 'jump'
   call s:render()
+  call s:save_soon()
 endfunction
 
 function! s:set_center(id, page) abort
@@ -792,6 +812,7 @@ function! s:set_center(id, page) abort
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:show_note(a:id)
   call s:render()
+  call s:save_soon()
 endfunction
 
 function! s:enter() abort
@@ -893,6 +914,7 @@ function! s:jump(dir, ...) abort
   let s:S.page = l:hits[l:target][0]
   let s:S.cur = [l:hits[l:target][1], l:hits[l:target][2]]
   call s:render()
+  echo '/' . s:S.find . '  ' . s:S.hit_i . '/' . s:S.hit_n
 endfunction
 
 function! s:find_prompt() abort
@@ -948,6 +970,7 @@ function! s:page(d) abort
   let s:S.page = l:p
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
+  call s:save_soon()
 endfunction
 
 " モード（英字）: a 全体 / i 索引 / n ノート / c 近い索引 / r 関連
@@ -959,6 +982,7 @@ function! s:setmode(m) abort
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
+  call s:save_soon()
 endfunction
 
 " 検索（s）: 題か本文に語を全部含むノートを、vault 全体から探して周りに並べる
@@ -1011,6 +1035,7 @@ function! s:resize(d) abort
   let s:S.tenths = min([8, max([2, get(s:S, 'tenths', 5) + a:d])])
   execute 'vertical resize ' . s:win_width()
   call s:render()
+  call s:save_soon()
 endfunction
 
 function! s:mwin() abort
@@ -1094,8 +1119,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
-  nnoremap <buffer><nowait><silent> + <Cmd>call <SID>font_step(1)<CR>
-  nnoremap <buffer><nowait><silent> - <Cmd>call <SID>font_step(-1)<CR>
+  nnoremap <buffer><nowait><silent> . <Cmd>call <SID>here()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
@@ -1168,6 +1192,7 @@ function! s:open(center, ...) abort
   augroup gnosis_mview_sync
     autocmd!
     autocmd BufWritePost,BufReadPost,FileChangedShellPost *.md call s:touched()
+    autocmd VimLeavePre * call s:save_state()
   augroup END
   let l:pick = a:0 ? a:1 : ''
   let s:S.digit = get(s:S, 'digit', 'jump')
@@ -1197,6 +1222,19 @@ function! s:open(center, ...) abort
   let s:S.hist = l:hist
   let s:S.page = 0
   let l:c = a:center
+  " 前回の位置を覚えていれば、それを使う（索引を選ぶ \\g のときは、今のノートが中心）
+  let l:restored = 0
+  if empty(l:pick) && get(g:, 'gnosis_mview_restore', 1)
+    let l:st = get(s:state_all(), s:S.root, {})
+    if type(l:st) == v:t_dict && has_key(get(s:S.data, 'nodes', {}), get(l:st, 'center', ''))
+      let l:c = l:st.center
+      let s:S.mode = index(map(copy(s:mode_keys), 'v:val[1]'), get(l:st, 'mode', '')) >= 0 ? l:st.mode : s:S.mode
+      let s:S.digit = get(l:st, 'digit', s:S.digit) ==# 'cursor' ? 'cursor' : 'jump'
+      let s:S.tenths = min([8, max([2, get(l:st, 'tenths', 5)])])
+      let s:S.help = get(l:st, 'help', 0) ? 1 : 0
+      let l:restored = 1
+    endif
+  endif
   if !has_key(s:S.data.nodes, l:c)
     let l:c = has_key(s:S.data.nodes, 'index.md') ? 'index.md' : ''
   endif
@@ -1206,6 +1244,12 @@ function! s:open(center, ...) abort
   endif
   let s:S.center = l:c
   let s:S.cur = [1, 1]
+  if l:restored
+    let l:pg = get(l:st, 'page', 0)
+    let s:S.page = l:pg >= 0 && l:pg < s:pages(l:c) ? l:pg : 0
+    let l:cu = get(l:st, 'cur', [1, 1])
+    let s:S.cur = type(l:cu) == v:t_list && len(l:cu) == 2 && l:cu[0] >= 0 && l:cu[0] < 3 && l:cu[1] >= 0 && l:cu[1] < 3 ? l:cu : [1, 1]
+  endif
   " 曼荼羅のウィンドウ（左）。あれば使い回す
   if l:buf > 0 && bufwinid(l:buf) > 0
     call win_gotoid(bufwinid(l:buf))
@@ -1220,9 +1264,10 @@ function! s:open(center, ...) abort
     execute 'vertical resize ' . s:win_width()
   endif
   let s:S.buf = bufnr('%')
-  call s:font_enter()
   call s:render()
-  call s:show_note(l:c)
+  if !l:restored
+    call s:show_note(l:c)
+  endif
   call win_gotoid(s:mwin())
 endfunction
 
@@ -1265,7 +1310,7 @@ function! gnosis#mview#pick() abort
 endfunction
 
 function! gnosis#mview#close() abort
-  call s:font_leave()
+  call s:save_state()
   if has_key(s:S, 'saved_mode')
     let s:S.mode = remove(s:S, 'saved_mode')
   endif
