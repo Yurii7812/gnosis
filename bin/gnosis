@@ -296,6 +296,17 @@ run_tui() {
       fi
       unset GNOSIS_ORIG_XDG_STATE_HOME
     fi
+    # 窓は開いた直後に最大化などで大きさが変わる。変わる前の大きさで Vim が起動すると、
+    # 通知を取りこぼして初期状態だけ画面が崩れるので、大きさが落ち着く（0.4 秒変わらない）まで待ってから起動する。最長 3 秒
+    if have stty; then
+      prev=""; stable=0; waited=0
+      while [ "$waited" -lt 30 ] && [ "$stable" -lt 4 ]; do
+        cur=$(stty size 2>/dev/null) || break
+        if [ "$cur" = "$prev" ]; then stable=$((stable + 1)); else stable=0; prev=$cur; fi
+        sleep 0.1
+        waited=$((waited + 1))
+      done
+    fi
     # すぐ閉じてしまうと原因が見えないので、Vim が起動できなかったら知らせて待つ
     status=0
     "$vim" -u "$VIMRC" "$@" || status=$?

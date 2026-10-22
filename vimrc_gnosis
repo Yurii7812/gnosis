@@ -75,6 +75,14 @@ set statusline=%!gnosis#ui#statusline()
 set background=dark
 " 背景色つきの行末消去（BCE）を止める。端末によって空白・残像の原因になるため。
 set t_ut=
+" 端末の窓は起動の直後に最大化などで大きさが変わる。その通知（SIGWINCH）を Vim が取りこぼすと、
+" 初期状態だけ画面の大きさが古いまま崩れる（フォントを -/+ で変えると直る）。起動後に何度か大きさを読み直す
+if !has('gui_running')
+  augroup gnosis_size_sync
+    autocmd!
+    autocmd VimEnter * for s:ms in [200, 700, 1500, 3000] | call timer_start(s:ms, {-> execute('silent! mode | silent! call gnosis#mview#rerender()')}) | endfor
+  augroup END
+endif
 silent! colorscheme gnosis
 " 画面に入りきらない長い行（チャットの取り込みなど）も、入るところまで本文を見せる
 " （空のままだと、行が丸ごと「@」の行になる）。smoothscroll で長い行の中も画面の 1 行ずつ動ける

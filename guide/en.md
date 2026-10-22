@@ -60,7 +60,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 
 ## Titles and display names
 
-- `zt` / `zT` … change the title (from empty / editing the current one)
+- `zr` / `zR` … change the title (from empty / editing the current one)
 - `zl` / `zL` … change a link's display name (from empty / editing the current one)
 - `zo` … choose a heading (outline) of the .md link under the cursor and add `#slug` to the link (the first item "(no heading)" removes it; the title and Context/Group/Related/BackLink are not listed)
 - `zy` / `zY` … change the **reading (yomi)** of the **current note** (`zy`=from empty / `zY`=keep the current one; with `zY`, delete everything and press Enter to remove it; Esc cancels). If `yomi:` has several display names, choose one by number
@@ -313,5 +313,5 @@ The canonical name of every command starts with `:Gnosis` (press Tab after `:Gno
 - `1`〜`9` `0` jump to links by number (if there is no such link, the digit works as a count)
 - `p` / `P` are standard Vim. Paste the PC clipboard with `\v` / `\V`
 - `_` toggles with the previous note. `,` (f/t repeat) is standard
-- `zt` changes the title (not Vim's "scroll to top"). `zA` adds links with a display name
+- `zr` changes the title (`zt` / `zz` / `zb` stay Vim's scroll). `zA` adds links with a display name
 - Two-key plugin commands use the `z` / `g` / `\` prefixes (so plain keys never wait)

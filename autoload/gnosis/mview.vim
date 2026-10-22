@@ -17,6 +17,7 @@
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
 "   Space            ノートのウィンドウへ    u 読み直す    q 閉じる
+" 罫線は既定で文字。空白の背景色で描くなら let g:gnosis_mview_border = 'color'
 " 元データは python/mandala_view.py（読み取り専用）。ノートは書き換えない。
 
 let s:S = {}
@@ -27,6 +28,12 @@ let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
 let s:nums = [1, 2, 3, 4, 6, 7, 8, 9]
 let s:mode_label = {'all': '全体', 'groups': '索引', 'notes': 'ノート', 'near': '近い索引', 'rel': '関連'}
 let s:mode_keys = [['a', 'all'], ['i', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
+
+" 罫線の描き方。既定 'line' は罫線の文字。'color' は罫線の文字を使わず、空白に背景色を付けて線にする
+" （端末のフォントや大きさで罫線の文字がずれるのを避けたいとき用）
+function! s:bar_color() abort
+  return get(g:, 'gnosis_mview_border', 'line') ==# 'color'
+endfunction
 
 function! s:root() abort
   let l:r = trim(get(g:, 'gnosis_root', ''))
@@ -552,6 +559,7 @@ function! s:render() abort
   let l:gridh = l:n * (l:ch + 1) + 1
   let l:top = max([0, (l:H - l:fixed - l:gridh) / 2])
   let l:lines = []
+  let s:S.bars = []   " 色の線にする位置 [グループ, 行, 開始バイト, バイト長]
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
   let l:ctitle = has_key(s:S.data.nodes, s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
@@ -577,6 +585,7 @@ function! s:render() abort
   endfor
   for l:r in range(l:n)
     call add(l:lines, l:left . s:hline(l:n, l:cw, l:r, l:heavy))
+    call add(s:S.bars, [(l:n == 3 || has_key(l:heavy, l:r)) ? 'GnosisMviewBarH' : 'GnosisMviewBarL', len(l:lines), strlen(l:left) + 1, l:gridw])
     let l:cellines = []
     for l:c in range(l:n)
       let l:cell = l:b[l:r][l:c]
@@ -590,7 +599,8 @@ function! s:render() abort
     for l:k in range(l:ch)
       let l:line = l:left
       for l:c in range(l:n)
-        let l:sep = (l:n == 3 || has_key(l:heavy, l:c)) ? '┃' : '│'
+        let l:sep = s:bar_color() ? ' ' : ((l:n == 3 || has_key(l:heavy, l:c)) ? '┃' : '│')
+        call add(s:S.bars, [(l:n == 3 || has_key(l:heavy, l:c)) ? 'GnosisMviewBarH' : 'GnosisMviewBarL', len(l:lines) + 1, strlen(l:line) + 1, strlen(l:sep)])
         let l:line .= l:sep
         " 題はマスの真ん中（縦も横も）、理由は一番下の行
         let l:tl = l:cellines[l:c].t
@@ -613,10 +623,13 @@ function! s:render() abort
         call add(s:S.spans[l:key], [len(l:lines) + 1, strlen(l:line) + 1, strlen(l:cellstr)])
         let l:line .= l:cellstr
       endfor
-      call add(l:lines, l:line . '┃')
+      let l:vend = s:bar_color() ? ' ' : '┃'
+      call add(s:S.bars, ['GnosisMviewBarH', len(l:lines) + 1, strlen(l:line) + 1, strlen(l:vend)])
+      call add(l:lines, l:line . l:vend)
     endfor
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
+  call add(s:S.bars, ['GnosisMviewBarH', len(l:lines), strlen(l:left) + 1, l:gridw])
   while len(l:lines) < l:H - len(l:foot) - (l:show_ref ? 1 : 0)
     call add(l:lines, '')
   endwhile
@@ -664,7 +677,7 @@ function! s:hline(n, cw, r, heavy) abort
     endif
     let l:line .= l:j . (l:c < a:n ? repeat(l:h, a:cw) : '')
   endfor
-  return l:line
+  return s:bar_color() ? repeat(' ', strdisplaywidth(l:line)) : l:line
 endfunction
 
 " 選んでいるマスと、中心を色で示す
@@ -702,6 +715,11 @@ function! s:mark() abort
       endif
     endfor
   endfor
+  if s:bar_color()
+    for l:g in ['GnosisMviewBarH', 'GnosisMviewBarL']
+      call s:addpos(l:g, map(filter(copy(get(s:S, 'bars', [])), 'v:val[0] ==# l:g'), 'v:val[1 : 3]'), 3)
+    endfor
+  endif
   if !empty(get(s:S, 'modespan', []))
     call s:addpos('GnosisMviewSel', [s:S.modespan], 15)
   endif
@@ -1141,10 +1159,13 @@ function! s:setup_buffer() abort
   augroup gnosis_mview_buf
     autocmd! * <buffer>
     autocmd VimResized,WinResized * call gnosis#mview#rerender()
+    autocmd BufEnter,WinEnter <buffer> call gnosis#mview#cursor(0)
+    autocmd BufLeave,WinLeave <buffer> call gnosis#mview#cursor(1)
+    autocmd VimLeavePre <buffer> call gnosis#mview#cursor(1)
   augroup END
 endfunction
 
-" ノートを保存・読み込みしたら（題を zt で変えたときなど）、曼荼羅が開いていれば少し待って読み直す
+" ノートを保存・読み込みしたら（題を zr で変えたときなど）、曼荼羅が開いていれば少し待って読み直す
 function! s:touched() abort
   if empty(get(s:S, 'buf', 0)) || s:mwin() < 0 || &filetype ==# 'gnosis-mandala'
     return
@@ -1153,6 +1174,26 @@ function! s:touched() abort
     call timer_stop(s:sync_timer)
   endif
   let s:sync_timer = timer_start(600, {-> gnosis#mview#refresh()})
+endfunction
+
+" 端末のカーソルの表示。曼荼羅では出さない（選んでいるマスは背景色で分かる）。show=0 で隠し、1 で戻す
+function! gnosis#mview#cursor(show) abort
+  if has('gui_running')
+    return
+  endif
+  if a:show
+    if exists('s:t_ve')
+      let &t_ve = s:t_ve
+      unlet s:t_ve
+    endif
+    call echoraw("\<Esc>[?25h")
+  else
+    if !exists('s:t_ve')
+      let s:t_ve = &t_ve
+    endif
+    let &t_ve = "\<Esc>[?25l"
+    call echoraw("\<Esc>[?25l")
+  endif
 endfunction
 
 " 窓の大きさが変わったとき、曼荼羅の窓を今の大きさで描き直す（今いる窓は変えない）
@@ -1213,6 +1254,9 @@ function! s:hl() abort
     execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
     execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
   endfor
+  " 罫線の色（空白の背景色で線にする）。太い線（3×3 の境目）と細い線
+  highlight default GnosisMviewBarH guibg=#6b7280 ctermbg=243
+  highlight default GnosisMviewBarL guibg=#3f4551 ctermbg=239
   highlight default link GnosisMviewSel Visual
   highlight default link GnosisMviewCenter Title
 endfunction
@@ -1289,6 +1333,8 @@ function! s:open(center, ...) abort
   call s:render()
   call s:show_note(l:c)
   call win_gotoid(s:mwin())
+  " 窓の出入りで戻ってしまうことがあるので、開いた最後にもう一度隠す
+  call gnosis#mview#cursor(0)
 endfunction
 
 " <Space>: ノートから曼荼羅へ、曼荼羅からノートへ

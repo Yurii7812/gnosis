@@ -11,6 +11,8 @@ let g:gnosis_diary_auto = 0
 let g:gnosis_test_review_skip = 1
 " 開くたびに今のノートが中心（覚えた位置は専用の試験でだけ使う）
 let g:gnosis_mview_restore = 0
+" 既存の試験は罫線の文字で盤面を読む（色の線は専用の試験で確かめる）
+let g:gnosis_mview_border = 'line'
 
 function! s:ok(name, cond, ...) abort
   call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
@@ -198,7 +200,7 @@ call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:t
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
 
-" 題を変えたら（zt など）閉じなくても曼荼羅が更新される: 書き換えて読み直す（保存や読み込みで少し待って呼ばれる）
+" 題を変えたら（zr など）閉じなくても曼荼羅が更新される: 書き換えて読み直す（保存や読み込みで少し待って呼ばれる）
 " （ノートが中心のときは題で出る。索引が中心のときは、その索引に書かれた索引語で出る）
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
@@ -292,6 +294,19 @@ call gnosis#mview#rerender()
 let s:after = join(getbufline(gnosis#mview#state().buf, 1, '$'), "\n")
 call s:ok('別の窓にいても曼荼羅が描き直される', s:before !=# s:after && max(map(getbufline(gnosis#mview#state().buf, 1, '$'), 'strdisplaywidth(v:val)')) <= 40, string(max(map(getbufline(gnosis#mview#state().buf, 1, '$'), 'strdisplaywidth(v:val)'))))
 call gnosis#mview#close()
+
+" 罫線の文字を使わず、空白の背景色で線にする（端末のフォント・大きさに左右されない）
+let g:gnosis_mview_border = 'color'
+call gnosis#mview#toggle()
+let s:cb = gnosis#mview#state().buf
+let s:ctext = join(getbufline(s:cb, 1, '$'), "\n")
+call s:ok('色の線では罫線の文字を使わない', s:ctext !~# '[┃━┏┓┗┛┣┫┳┻╋│─]', s:ctext[0 : 80])
+let s:bw = bufwinid(s:cb)
+let s:hg = filter(getmatches(s:bw), 'v:val.group =~# "^GnosisMviewBar"')
+call s:ok('色の線の位置にハイライトが付く', len(s:hg) > 0 && len(filter(copy(s:hg), 'v:val.group ==# "GnosisMviewBarH"')) > 0, string(len(s:hg)))
+call s:ok('色の線でも題が盤面に出る', s:ctext =~# '雑記', s:ctext[0 : 80])
+call gnosis#mview#close()
+let g:gnosis_mview_border = 'line'
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

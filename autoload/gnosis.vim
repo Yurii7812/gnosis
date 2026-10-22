@@ -16506,7 +16506,7 @@ function! gnosis#rename_yomi_with_default(default) abort
   call s:yomi_input(l:note, l:name, a:default)
 endfunction
 
-" zY … 現在のよみ（未登録なら pykakasi 推測）を残して編集（zT と同じ流儀）。
+" zY … 現在のよみ（未登録なら pykakasi 推測）を残して編集（zR と同じ流儀）。
 "      表示名の選択は zy と同じ（`yomi:` に複数あれば番号で選ぶ）。
 function! gnosis#rename_yomi(args) abort
   let [l:name, l:note] = s:yomi_target()

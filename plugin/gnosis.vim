@@ -788,19 +788,19 @@ nnoremap <nowait> <silent> zA  <Cmd>call gnosis#add_clipboard_before_up_note_nam
 " シンプル（深さ1つ）/ 詳細（親・子・文中・関連を別々の深さ、前回設定を再利用可）を選ぶ。
 " 「p」は素の貼り付けと1文字目が被り、素の p が timeoutlen 待ちになるため \ 側へ移した。
 nnoremap <nowait> <silent> \e  <Cmd>call gnosis#v2_expand()<CR>
-" zt: タイトル変更（空欄から開始）
-nnoremap <nowait> <silent> zt  <Cmd>call gnosis#rename_title_with_default('')<CR>
-" zT: 現在タイトルを残して編集
-nnoremap <nowait> <silent> zT  <Cmd>call gnosis#rename_title('')<CR>
+" zr: タイトル変更（空欄から開始）
+nnoremap <nowait> <silent> zr  <Cmd>call gnosis#rename_title_with_default('')<CR>
+" zR: 現在タイトルを残して編集
+nnoremap <nowait> <silent> zR  <Cmd>call gnosis#rename_title('')<CR>
 " zl: リンク表示名変更（空欄から開始）
 nnoremap <nowait> <silent> zl  <Cmd>call gnosis#rename_link_text_with_default('')<CR>
 " zL: 現在のリンク表示名を残して編集
 nnoremap <nowait> <silent> zL  <Cmd>call gnosis#rename_link_text('')<CR>
 " zy: 今開いているノートのタイトルのよみを
-"     空欄から変更する（zt と同じ流儀。Esc で中止）。
+"     空欄から変更する（zr と同じ流儀。Esc で中止）。
 "     よみは \S / :SortYomi の表示名ソートで使う。
 nnoremap <nowait> <silent> zy  <Cmd>call gnosis#rename_yomi_with_default('')<CR>
-" zY: 現在のよみ（未登録なら pykakasi 推測）を残して編集（zT と同じ流儀。
+" zY: 現在のよみ（未登録なら pykakasi 推測）を残して編集（zR と同じ流儀。
 "     全部消して Enter でよみを削除）。
 nnoremap <nowait> <silent> zY  <Cmd>call gnosis#rename_yomi('')<CR>
 " zd: Child: のリンク表示名をリンク先 YAML title に更新
