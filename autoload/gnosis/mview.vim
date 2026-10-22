@@ -11,7 +11,8 @@
 "   1-9              そのマスへ（1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で「移動して中心に」⇔「カーソルだけ」
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
-"   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    - / <BS> 一つ前に戻る
+"   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
+"   + -              曼荼羅だけの文字サイズ（開いている間だけ端末の大きさを変え、閉じたら戻す。Konsole・kitty・Alacritty・GUI 版 Vim）
 "   a g n c r        モード: a 全体 / g 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
@@ -383,8 +384,8 @@ function! s:footer_lines(W) abort
     return [s:fit(' ? で案内を表示', a:W)]
   endif
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', '+ - 文字サイズ', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -676,6 +677,54 @@ function! s:recenter() abort
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
   call s:preview()
+endfunction
+
+" ---- 曼荼羅だけの文字サイズ --------------------------------------------------------
+" 端末の文字サイズは窓ごとには変えられないので、曼荼羅を開いている間だけ端末全体の大きさを変え、閉じたら戻す。
+" 大きさは Gnosis ホームの terminal.json の mandalaFontSize（0 なら ふだんの fontSize のまま）。
+" その場で変えられるのは Konsole・kitty・Alacritty・GUI 版 Vim（gnosis#termfont）。ほかの端末は保存だけ。
+
+function! s:font_apply(size) abort
+  let l:d = gnosis#termfont#load()
+  let l:d.fontSize = a:size
+  return gnosis#termfont#apply_live(l:d)
+endfunction
+
+" 曼荼羅を開いたとき: 曼荼羅用の大きさがあれば端末に反映する
+function! s:font_enter() abort
+  let l:d = gnosis#termfont#load()
+  if l:d.mandalaFontSize > 0 && l:d.mandalaFontSize != l:d.fontSize && s:font_apply(l:d.mandalaFontSize)
+    let s:S.font_changed = 1
+    augroup gnosis_mview_font
+      autocmd!
+      autocmd VimLeavePre * call s:font_leave()
+    augroup END
+  endif
+endfunction
+
+" 閉じるとき: ふだんの大きさに戻す
+function! s:font_leave() abort
+  if get(s:S, 'font_changed', 0)
+    let s:S.font_changed = 0
+    call s:font_apply(gnosis#termfont#load().fontSize)
+  endif
+endfunction
+
+" + / - : 曼荼羅の文字サイズを 1 つ大きく・小さく（保存して、できればその場で反映）
+function! s:font_step(d) abort
+  let l:d = gnosis#termfont#load()
+  let l:cur = l:d.mandalaFontSize > 0 ? l:d.mandalaFontSize : l:d.fontSize
+  let l:d.mandalaFontSize = gnosis#termfont#clamp(l:cur + a:d)
+  try
+    call gnosis#termfont#save(l:d)
+  catch
+  endtry
+  if gnosis#termfont#detect().live && s:font_apply(l:d.mandalaFontSize)
+    let s:S.font_changed = 1
+    echo '曼荼羅の文字サイズ: ' . l:d.mandalaFontSize
+  else
+    echo '曼荼羅の文字サイズ ' . l:d.mandalaFontSize . ' を保存しました（この端末はその場で変えられません。次に曼荼羅を開くとき、または Konsole・kitty・Alacritty・GUI 版 Vim で反映されます）'
+  endif
 endfunction
 
 function! s:toggle_help() abort
@@ -981,7 +1030,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>enter()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
   nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>page(-1)<CR>
-  nnoremap <buffer><nowait><silent> - <Cmd>call <SID>back()<CR>
+  nnoremap <buffer><nowait><silent> b <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
   nnoremap <buffer><nowait><silent> g <Cmd>call <SID>setmode('groups')<CR>
@@ -993,6 +1042,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
+  nnoremap <buffer><nowait><silent> + <Cmd>call <SID>font_step(1)<CR>
+  nnoremap <buffer><nowait><silent> - <Cmd>call <SID>font_step(-1)<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
@@ -1114,6 +1165,7 @@ function! s:open(center, ...) abort
     execute 'vertical resize ' . s:win_width()
   endif
   let s:S.buf = bufnr('%')
+  call s:font_enter()
   call s:render()
   call s:show_note(l:c)
   call win_gotoid(s:mwin())
@@ -1158,6 +1210,7 @@ function! gnosis#mview#pick() abort
 endfunction
 
 function! gnosis#mview#close() abort
+  call s:font_leave()
   if has_key(s:S, 'saved_mode')
     let s:S.mode = remove(s:S, 'saved_mode')
   endif

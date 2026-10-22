@@ -3,7 +3,7 @@
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
 ## 現在地（2026-10-22）
-- ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main ae01c51 から）。**main へは未マージ・push 未**。DECISIONS D010・USER_GUIDE §5/§6。
+- ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main ae01c51 から）。2026-10-22 に main へ ff-only マージ。DECISIONS D010・USER_GUIDE §5/§6。
   - GUI（作業台・Obsidian 風）とスマホの予定・カレンダーをアーカイブ（タグ `archive/gui-workbench-2026-10-21`）。タブを `\q` / `\Q` の別ボードに。起動を `\c` に。
   - 曼荼羅ビュー（`<Space>`）・`\g`（索引を曼荼羅で選んで載せる）。試験: `python/test_mandala_view.py`・`test/mview_net.sh`・`test/tabs_board_net.sh`。
   - 未確認: 実機の端末での見た目と手触り（Konsole・日本語入力中の挙動）。`\g` の `\gi` との待ち時間。近い Folgezettel 的な関連のモードは未実装。

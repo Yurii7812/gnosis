@@ -105,8 +105,8 @@ call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:s
 call s:ok('右に栽培が開く', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'grow.md') >= 0)
 call s:ok('栽培の周りに所属の植物', s:text() =~# '1 ◆植物', s:text())
 " 戻る
-call s:keys('-')
-call s:ok('- で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
+call s:keys('b')
+call s:ok('b で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
 " カーソルを動かすだけで右のノートが切り替わる（曼荼羅の中心は変わらない）
 call s:keys('k')
 call s:ok('k で右のノートが切り替わる（ハーブ）', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0 && s:st.center ==# 'plant.md', s:st.center)
@@ -188,6 +188,17 @@ call s:ok('更新前は古い題', s:text() =~# '栽培' && s:text() !~# '新し
 call s:mk('grow.md', '栽培の新しい題', 0, [['植物', 'plant.md']], [])
 call gnosis#mview#refresh()
 call s:ok('refresh で新しい題が出る（閉じなくてよい）', s:text() =~# '新しい' && &filetype ==# 'gnosis-mandala', s:text())
+call s:keys('q')
+
+" + - : 曼荼羅だけの文字サイズを保存する（端末が許せばその場で反映。試験では保存だけ確かめる）
+let s:fs0 = gnosis#termfont#load().fontSize
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call s:keys('+')
+call s:ok('+ で曼荼羅の文字サイズが 1 つ大きく保存される', gnosis#termfont#load().mandalaFontSize == s:fs0 + 1, gnosis#termfont#load().mandalaFontSize . ' / ' . s:fs0)
+call s:keys('-')
+call s:keys('-')
+call s:ok('- で小さく保存される', gnosis#termfont#load().mandalaFontSize == s:fs0 - 1)
 call s:keys('q')
 
 " \g: 曼荼羅で索引を選んで、今のノートを載せる
