@@ -11,7 +11,7 @@
 "   1-9              そのマスへ（1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で「移動して中心に」⇔「カーソルだけ」
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
-"   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
+"   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    - / <BS> 一つ前に戻る
 "   a g n c r        モード: a 全体 / g 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
@@ -379,9 +379,12 @@ endfunction
 
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
+  if !get(s:S, 'help', 1)
+    return [s:fit(' ? で案内を表示', a:W)]
+  endif
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 案内を隠す', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -463,11 +466,14 @@ function! s:render() abort
   " 上の見出し（今の中心・何枚目・モード）
   let l:ctitle = has_key(s:S.data.nodes, s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
   let l:pages = s:pages(s:S.center)
+  " ページ（1/2）は中央のマスの一番上に。マスが小さくて入らないときだけ見出しに出す
+  let l:mid = l:n == 3 ? 1 : 4
+  let l:ptop = (l:pages > 1 && l:ch >= 3) ? '(' . (s:S.page + 1) . '/' . l:pages . ')' : ''
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
-  call add(l:lines, s:fit(printf(' %s%s   %d/%d   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
-        \ s:S.page + 1, l:pages, l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
+  call add(l:lines, s:fit(printf(' %s%s   %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
+        \ (l:pages > 1 && empty(l:ptop)) ? (s:S.page + 1) . '/' . l:pages . '   ' : '', l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
   call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
   if l:show_ref
     call add(l:lines, l:legend.text)
@@ -486,7 +492,8 @@ function! s:render() abort
       if l:cell.n > 0 && !empty(l:txt)
         let l:txt = l:cell.n . ' ' . l:txt
       endif
-      call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, max([1, l:cw - 1]), l:ch), 'r': ''})
+      let l:tp = (l:r == l:mid && l:c == l:mid) ? l:ptop : ''
+      call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, max([1, l:cw - 1]), empty(l:tp) ? l:ch : l:ch - 1), 'r': '', 'p': l:tp})
     endfor
     for l:k in range(l:ch)
       let l:line = l:left
@@ -495,9 +502,13 @@ function! s:render() abort
         let l:line .= l:sep
         " 題はマスの真ん中（縦も横も）、理由は一番下の行
         let l:tl = l:cellines[l:c].t
-        let l:body_h = empty(l:cellines[l:c].r) ? l:ch : l:ch - 1
-        let l:off = (l:body_h - len(l:tl)) / 2
+        let l:ph = empty(l:cellines[l:c].p) ? 0 : 1
+        let l:body_h = l:ch - l:ph - (empty(l:cellines[l:c].r) ? 0 : 1)
+        let l:off = l:ph + (l:body_h - len(l:tl)) / 2
         let l:txt = (l:k >= l:off && l:k - l:off < len(l:tl)) ? l:tl[l:k - l:off] : ''
+        if l:ph && l:k == 0
+          let l:txt = l:cellines[l:c].p
+        endif
         if l:k == l:ch - 1 && !empty(l:cellines[l:c].r)
           let l:txt = l:cellines[l:c].r
         endif
@@ -665,6 +676,11 @@ function! s:recenter() abort
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
   call s:preview()
+endfunction
+
+function! s:toggle_help() abort
+  let s:S.help = !get(s:S, 'help', 1)
+  call s:render()
 endfunction
 
 function! s:toggle_digit() abort
@@ -976,6 +992,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> / <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
+  nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
