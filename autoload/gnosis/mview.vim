@@ -53,7 +53,9 @@ function! s:load() abort
   return 1
 endfunction
 
-" python/mandala_view.py の items() と同じ規則
+" python/mandala_view.py の items() と同じ規則（ダブルインデックスの道に沿う）
+"   ノートが中心 … 進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:）→ ほかのつながり
+"   索引が中心   … この索引を持つノート（BranchGroup: を逆に）→ 所属する索引（Group:）→ 載っているノート
 function! gnosis#mview#items(data, center, mode) abort
   let l:nodes = a:data.nodes
   if !has_key(l:nodes, a:center)
@@ -61,25 +63,31 @@ function! gnosis#mview#items(data, center, mode) abort
   endif
   let l:c = l:nodes[a:center]
   let l:o = l:c.o
+  let l:origin = get(get(l:c, 'r', {}), 'branch_group', [])
   let l:out = []
+  " [ids, want] の並び。want: -1 すべて / 1 索引だけ / 0 索引でないものだけ
+  let l:plan = []
   if l:c.g
-    " 索引の周り: 所属する索引（Index も）→ 載っているノート
-    let l:kinds = []
-    if a:mode !=# 'notes'
-      let l:kinds += [['group', -1], ['branch_group', -1]]
+    if a:mode ==# 'notes' || a:mode ==# 'all'
+      call add(l:plan, [l:origin, -1])
     endif
-    let l:kinds += [['link', a:mode ==# 'all' ? -1 : (a:mode ==# 'groups' ? 1 : 0)]]
+    if a:mode !=# 'notes'
+      call add(l:plan, [get(l:o, 'group', []), -1])
+    endif
+    call add(l:plan, [get(l:o, 'link', []), a:mode ==# 'all' ? -1 : (a:mode ==# 'groups' ? 1 : 0)])
   else
-    let l:kinds = []
     if a:mode ==# 'groups' || a:mode ==# 'all'
-      let l:kinds += [['group', -1], ['branch_group', -1]]
+      call add(l:plan, [get(l:o, 'branch_group', []), -1])
+      call add(l:plan, [get(l:o, 'group', []), -1])
     endif
     if a:mode ==# 'notes' || a:mode ==# 'all'
-      let l:kinds += map(['parent_branch', 'child_branch', 'context', 'related', 'backlink', 'link'], '[v:val, -1]')
+      for l:k in ['parent_branch', 'child_branch', 'context', 'related', 'backlink', 'link']
+        call add(l:plan, [get(l:o, l:k, []), -1])
+      endfor
     endif
   endif
-  for [l:k, l:want] in l:kinds
-    for l:t in get(l:o, l:k, [])
+  for [l:ids, l:want] in l:plan
+    for l:t in l:ids
       if l:t ==# a:center || index(l:out, l:t) >= 0 || !has_key(l:nodes, l:t)
         continue
       endif
@@ -307,6 +315,10 @@ function! s:kind(id, of) abort
   endif
   if empty(a:of) || !has_key(s:S.data.nodes, a:of)
     return 'note'
+  endif
+  " この索引（トピック索引）を BranchGroup: に持つノートは、戻る道（親）
+  if index(get(get(s:S.data.nodes[a:of], 'r', {}), 'branch_group', []), a:id) >= 0
+    return 'parent'
   endif
   let l:o = s:S.data.nodes[a:of].o
   let l:r = l:nd.o

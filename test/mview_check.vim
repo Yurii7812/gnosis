@@ -170,6 +170,19 @@ call s:keys('h')
 call s:ok('カーソルのマスの説明が下の 1 行に出る（索引・所属）', s:text() =~# '▶ 植物  \[索引\]  所属', s:text())
 call s:keys('q')
 
+" ダブルインデックスの道: Index → 最初のノート → BranchGroup のトピック索引 → ノート
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 最初のノート', '---', '', '# 最初のノート', '', 'BranchGroup:', '[トピック](topic.md)', '', 'Group:', '[Index](index.md)', '', '本文'], s:v . '/first.md')
+call s:mk('topic.md', 'トピック', 1, [], ['[中身のノート](item.md)'])
+call s:mk('item.md', '中身のノート', 0, [['トピック', 'topic.md']], [])
+execute 'edit ' . s:v . '/first.md'
+call s:keys(' ')
+call s:keys('a')
+call s:ok('最初のノートが中心: 進む先のトピック索引が先、戻る方向の Index が後', s:text() =~# '1 ◆トピック' && s:text() =~# '2 ◆Index', s:text())
+call s:keys('1')
+call s:ok('トピック索引が中心: その索引を持つ最初のノートに戻れる（▲）', s:st.center ==# 'topic.md' && s:text() =~# '1 ▲最初', s:text())
+call s:ok('トピック索引が中心: 載っているノートも出る', s:text() =~# '中身のノ', s:text())
+call s:keys('q')
+
 " r: 関連。索引もノートも関連の強い順（herb: 本文でリンクしているミントが出る）
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')

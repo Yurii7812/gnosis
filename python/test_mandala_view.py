@@ -93,6 +93,22 @@ class T(unittest.TestCase):
         why = next(d for d in got if d["id"] == "kid.md")["why"]
         self.assertIn("枝の子", why)
 
+    def test_double_index_path(self):
+        """Index → 最初のノート → BranchGroup のトピック索引 → ノート。進む先と戻る道が周りに出る。"""
+        r = Path(self.tmp.name)
+        (r / "first.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: 最初のノート\n---\n\n# 最初のノート\n\nBranchGroup:\n[トピック](topic.md)\n\nGroup:\n[Index](index.md)\n\n本文\n")
+        (r / "topic.md").write_text(note("トピック", True, [], ["[中身のノート](item.md)"]))
+        (r / "item.md").write_text(note("中身のノート", False, [("トピック", "topic.md")], []))
+        (r / "index.md").write_text(note("Index", True, [], ["[最初](first.md)"]))
+        d = mv.dump(r)
+        # ノートが中心: 進む先のトピック索引が先、戻る方向の Index が後
+        self.assertEqual(mv.items(d, "first.md", "groups"), ["topic.md", "index.md"])
+        # 索引（トピック索引）が中心: その索引を持つノートに戻れる。載っているノートも出る
+        got = mv.items(d, "topic.md", "all")
+        self.assertEqual(got[0], "first.md")
+        self.assertIn("item.md", got)
+        self.assertNotIn("first.md", mv.items(d, "topic.md", "groups"))
+
     def test_unknown(self):
         self.assertEqual(mv.items(self.d, "x.md"), [])
 

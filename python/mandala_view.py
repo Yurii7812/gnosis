@@ -11,11 +11,12 @@ vault の関係（gnosis_graph.py）を、Vim が一度だけ読み込んで持�
                                   g は索引（index.md・attribute: group のノート）。o は向きのまま・ファイル順・重複なし・
                                   自分自身と壊れたリンクは含めない（Folgezettel の派生の辺も含めない）。
 
-どの辺を周辺に出すかは `items()` が決める（Vim 側の autoload/gnosis/mview.vim も同じ規則を持つ。試験で食い違いを防ぐ）:
-  中心が索引   … 所属する索引（Group: / BranchGroup:。Index を含む）のあとに、載っているノート（本文のリンク）。
-                 groups=索引だけ / notes=載っているノートのうち索引でないもの / all=全部
-  中心がノート … groups=Group: と BranchGroup:（所属の索引） / notes=ParentBranch・ChildBranch・Context・Related・BackLink・本文のリンク
-                 / all=groups のあとに notes
+どの辺を周辺に出すかは `items()` が決める（Vim 側の autoload/gnosis/mview.vim も同じ規則を持つ。試験で食い違いを防ぐ）。
+ダブルインデックスの道（Global Index → 最初のノート → BranchGroup のトピック索引 → ノート）に沿う:
+  中心がノート … groups=進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:） /
+                 notes=ParentBranch・ChildBranch・Context・Related・BackLink・本文のリンク / all=groups のあとに notes
+  中心が索引   … all=この索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 載っているノート /
+                 groups=所属する索引と、載っている索引 / notes=この索引を持つノートと、載っているノートのうち索引でないもの
 """
 from __future__ import annotations
 
@@ -45,40 +46,55 @@ def dump(root: str | Path) -> dict:
         lst = nodes[e.src]["o"].setdefault(e.kind, [])
         if e.dst not in lst:
             lst.append(e.dst)
+        if e.kind == "branch_group":
+            back = nodes[e.dst].setdefault("r", {}).setdefault("branch_group", [])
+            if e.src not in back:
+                back.append(e.src)
     return {"nodes": nodes}
 
 
 def items(data: dict, center: str, mode: str = "all") -> list[str]:
-    """中心 center の周辺に出すノート（相対パス）を、出す順に返す。"""
+    """中心 center の周辺に出すノート（相対パス）を、出す順に返す。ダブルインデックスの道
+    （Global Index → 最初のノート → そのノートの BranchGroup のトピック索引 → ノート）に沿う。
+
+      中心がノート … 進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:。戻る方向）→ ほかのつながり
+      中心が索引   … その索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 載っているノート
+    """
     nodes = data["nodes"]
     c = nodes.get(center)
     if c is None:
         return []
     o = c["o"]
+    origin = c.get("r", {}).get("branch_group", [])
     out: list[str] = []
+
+    def add_ids(ids, want=None):
+        for t in ids:
+            if t == center or t in out or t not in nodes:
+                continue
+            if want is not None and bool(nodes[t]["g"]) != want:
+                continue
+            out.append(t)
 
     def add(kinds, want=None):
         for k in kinds:
-            for t in o.get(k, []):
-                if t == center or t in out or t not in nodes:
-                    continue
-                if want is not None and bool(nodes[t]["g"]) != want:
-                    continue
-                out.append(t)
+            add_ids(o.get(k, []), want)
 
     if c["g"]:
-        # 索引の周りは、所属する索引（Group: / BranchGroup:。Index も）→ 載っているノート（本文のリンク）の順
+        if mode in ("notes", "all"):
+            add_ids(origin)                       # この索引を持つ最初のノート（戻る道）
+        if mode != "notes":
+            add(("group",))                      # 所属する索引（Index も）
         if mode == "groups":
-            add(GROUP_KINDS)
             add(("link",), True)
         elif mode == "notes":
             add(("link",), False)
         else:
-            add(GROUP_KINDS)
             add(("link",))
     else:
         if mode in ("groups", "all"):
-            add(GROUP_KINDS)
+            add(("branch_group",))               # 進む先のトピック索引
+            add(("group",))                      # 所属する索引（戻る方向）
         if mode in ("notes", "all"):
             add(NOTE_KINDS)
     return out
