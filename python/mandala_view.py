@@ -17,7 +17,7 @@ vault の関係（gnosis_graph.py）を、Vim が一度だけ読み込んで持�
                  notes=ParentBranch・ChildBranch・Context・Related・BackLink・本文のリンク / all=groups のあとに notes
   中心が索引   … all=この索引を持つノート（BranchGroup: を逆にたどる）→ 所属する索引（Group:）→ 索引の項目すべて /
                  groups(i)=所属する索引と、索引の項目すべて / notes=この索引を持つノートと、項目のうち索引でない普通のノート
-                 項目の名前は、その索引に書かれたリンクの文字（索引語）。dump の nm に入れる（題と違うものだけ）
+                 項目の名前は、その索引に書かれたリンクの文字（索引語）。dump の en（[[項目, 名前], …]。同じノートが別の名前で何回載っていても全部）
 """
 from __future__ import annotations
 
@@ -40,17 +40,18 @@ MODES = ("all", "groups", "notes")
 _LINK_TEXT = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 
 
-def _entry_names(g, root: Path, gid: str) -> dict[str, str]:
-    """索引（グループ）gid の本文に書かれた項目の名前（リンクの文字＝索引語）: {項目の相対パス: 名前}。"""
+def _entries(g, root: Path, gid: str) -> list[list[str]]:
+    """索引（グループ）gid の本文に書かれた項目 [[項目の相対パス, 名前（リンクの文字＝索引語）], …]。
+    ファイルの順。同じノートが別の名前で何回載っていても、載っている回数だけ入れる（同じ名前の重複は 1 つ）。"""
     try:
         text = (root / gid).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return {}
+        return []
     d = nf._simple_parse_text(root / gid, text)
     by_name = _BY_NAME.get(str(root))
     if by_name is None:
         by_name = _BY_NAME[str(root)] = nf._index(root)
-    out: dict[str, str] = {}
+    out: list[list[str]] = []
     for ln in d["body"]:
         for m in _LINK_TEXT.finditer(ln):
             name = re.sub(r"\\(.)", r"\1", m.group(1)).strip()
@@ -64,7 +65,8 @@ def _entry_names(g, root: Path, gid: str) -> dict[str, str]:
                 rel = hit.relative_to(root).as_posix()
             except ValueError:
                 continue
-            out.setdefault(rel, name)
+            if rel != gid and [rel, name] not in out:
+                out.append([rel, name])
     return out
 
 
@@ -88,12 +90,12 @@ def dump(root: str | Path) -> dict:
             back = nodes[e.dst].setdefault("r", {}).setdefault("branch_group", [])
             if e.src not in back:
                 back.append(e.src)
-    # 索引の項目の名前（索引語）。題と違うものだけ持つ（nm）
+    # 索引の項目（en）: [[項目, 名前（索引語）], …]。同じノートが別の名前で何回載っていても全部。名前が題と同じなら ""
     for nid, nd in nodes.items():
         if nd["g"]:
-            nm = {k: v for k, v in _entry_names(g, root, nid).items() if k in nodes and v != nodes[k]["t"]}
-            if nm:
-                nd["nm"] = nm
+            en = [[k, "" if v == nodes[k]["t"] else v] for k, v in _entries(g, root, nid) if k in nodes]
+            if en:
+                nd["en"] = en
     return {"nodes": nodes}
 
 
@@ -129,10 +131,10 @@ def items(data: dict, center: str, mode: str = "all") -> list[str]:
             add_ids(origin)                       # この索引を持つ最初のノート（戻る道）
         if mode != "notes":
             add(("group",))                      # 所属する索引（Index も）
-        if mode == "notes":
-            add(("link",), False)                # 項目のうち、索引でない普通のノート
-        else:
-            add(("link",))                       # 索引の項目（索引語の名前で出す）をすべて
+        # 索引の項目: 同じノートが別の名前で何回載っていても、載っている回数だけ（n は索引でない普通のノートだけ）
+        for dst, _name in c.get("en") or [[t, ""] for t in o.get("link", [])]:
+            if dst in nodes and dst != center and not (mode == "notes" and nodes[dst]["g"]):
+                out.append(dst)
     else:
         if mode in ("groups", "all"):
             add(("branch_group",))               # 進む先のトピック索引

@@ -56,7 +56,13 @@ endfunction
 " python/mandala_view.py の items() と同じ規則（ダブルインデックスの道に沿う）
 "   ノートが中心 … 進む先のトピック索引（BranchGroup:）→ 所属する索引（Group:）→ ほかのつながり
 "   索引が中心   … この索引を持つノート（BranchGroup: を逆に）→ 所属する索引（Group:）→ 索引の項目すべて（i）
+" 周りに出すもの [[ノートの相対パス, 表示名（索引に書かれた索引語。題と同じなら ""）], …]。
+" 同じノートが同じ索引に別の名前で何回載っていても、載っている回数だけ入る
 function! gnosis#mview#items(data, center, mode) abort
+  return map(gnosis#mview#entries(a:data, a:center, a:mode), 'v:val[0]')
+endfunction
+
+function! gnosis#mview#entries(data, center, mode) abort
   let l:nodes = a:data.nodes
   if !has_key(l:nodes, a:center)
     return []
@@ -65,7 +71,8 @@ function! gnosis#mview#items(data, center, mode) abort
   let l:o = l:c.o
   let l:origin = get(get(l:c, 'r', {}), 'branch_group', [])
   let l:out = []
-  " [ids, want] の並び。want: -1 すべて / 1 索引だけ / 0 索引でないものだけ
+  let l:seen = {}
+  " [ids, want] の並び。want: -1 すべて / 0 索引でないものだけ
   let l:plan = []
   if l:c.g
     if a:mode ==# 'notes' || a:mode ==# 'all'
@@ -74,8 +81,8 @@ function! gnosis#mview#items(data, center, mode) abort
     if a:mode !=# 'notes'
       call add(l:plan, [get(l:o, 'group', []), -1])
     endif
-    " 索引の項目: n は索引でない普通のノートだけ、a と i はすべて
-    call add(l:plan, [get(l:o, 'link', []), a:mode ==# 'notes' ? 0 : -1])
+    " 索引の項目: 同じノートが別の名前で何回載っていても全部。n は索引でない普通のノートだけ
+    call add(l:plan, [map(copy(get(l:c, 'en', map(copy(get(l:o, 'link', [])), '[v:val, ""]'))), 'v:val'), a:mode ==# 'notes' ? 0 : -1])
   else
     if a:mode ==# 'groups' || a:mode ==# 'all'
       call add(l:plan, [get(l:o, 'branch_group', []), -1])
@@ -89,13 +96,22 @@ function! gnosis#mview#items(data, center, mode) abort
   endif
   for [l:ids, l:want] in l:plan
     for l:t in l:ids
-      if l:t ==# a:center || index(l:out, l:t) >= 0 || !has_key(l:nodes, l:t)
+      " 項目は [ノート, 名前]、それ以外はノートだけ
+      let l:id = type(l:t) == v:t_list ? l:t[0] : l:t
+      let l:name = type(l:t) == v:t_list ? l:t[1] : ''
+      let l:key = l:id . "\x01" . l:name
+      if l:id ==# a:center || has_key(l:seen, l:key) || !has_key(l:nodes, l:id)
         continue
       endif
-      if l:want >= 0 && l:nodes[l:t].g != l:want
+      " ノートだけ（名前なし）の重複は 1 つにする
+      if empty(l:name) && !empty(filter(copy(l:out), 'v:val[0] ==# l:id && empty(v:val[1])'))
         continue
       endif
-      call add(l:out, l:t)
+      if l:want >= 0 && l:nodes[l:id].g != l:want
+        continue
+      endif
+      let l:seen[l:key] = 1
+      call add(l:out, [l:id, l:name])
     endfor
   endfor
   return l:out
@@ -156,15 +172,23 @@ endfunction
 function! s:base(c) abort
   if a:c ==# s:S.center
     if !empty(s:S.rquery)
-      return copy(s:S.results)
+      return map(copy(s:S.results), '[v:val, ""]')
     endif
     if s:S.mode ==# 'near'
-      return s:near(a:c)
+      return map(s:near(a:c), '[v:val, ""]')
     elseif s:S.mode ==# 'rel'
-      return s:rel(a:c)
+      return map(s:rel(a:c), '[v:val, ""]')
     endif
   endif
-  return gnosis#mview#items(s:S.data, a:c, index(['near', 'rel'], s:S.mode) >= 0 ? 'all' : s:S.mode)
+  return gnosis#mview#entries(s:S.data, a:c, index(['near', 'rel'], s:S.mode) >= 0 ? 'all' : s:S.mode)
+endfunction
+
+" 絞り込みや検索で照らす文字: 索引に書かれた名前があればそれ、無ければ題
+function! s:entry_text(e) abort
+  if !empty(a:e[1])
+    return tolower(a:e[1])
+  endif
+  return has_key(s:S.data.nodes, a:e[0]) ? tolower(s:S.data.nodes[a:e[0]].t) : ''
 endfunction
 
 " 絞り込み（/）: 索引を選ぶとき（\g）は題が合う索引を全部から、ふだんは今の周りの中から
@@ -178,12 +202,12 @@ function! s:items(c) abort
     let l:out = []
     for l:id in sort(keys(s:S.data.nodes))
       if s:S.data.nodes[l:id].g && l:id !=# a:c && stridx(tolower(s:S.data.nodes[l:id].t), l:q) >= 0
-        call add(l:out, l:id)
+        call add(l:out, [l:id, ''])
       endif
     endfor
     return l:out
   endif
-  return filter(l:b, 'stridx(tolower(s:S.data.nodes[v:val].t), l:q) >= 0')
+  return filter(l:b, 'stridx(s:entry_text(v:val), l:q) >= 0')
 endfunction
 
 function! s:pages(center) abort
@@ -195,7 +219,7 @@ function! s:ring(c, page) abort
   let l:all = s:items(a:c)
   let l:r = l:all[a:page * 8 : a:page * 8 + 7]
   while len(l:r) < 8
-    call add(l:r, '')
+    call add(l:r, ['', ''])
   endwhile
   return l:r
 endfunction
@@ -238,8 +262,8 @@ function! s:board_cells() abort
   if l:n == 3
     let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 5}
     for l:i in range(8)
-      if !empty(l:ring[l:i])
-        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': s:nums[l:i]}
+      if !empty(l:ring[l:i][0])
+        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
       endif
     endfor
     return l:b
@@ -248,25 +272,25 @@ function! s:board_cells() abort
   " ブロックの真ん中のマスにも、周りのマスと同じ番号を付ける
   let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 5}
   for l:i in range(8)
-    let l:id = l:ring[l:i]
+    let l:id = l:ring[l:i][0]
     if empty(l:id)
       continue
     endif
-    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'role': 'item', 'n': s:nums[l:i]}
+    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
-    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'role': 'center', 'n': s:nums[l:i]}
+    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'center', 'n': s:nums[l:i]}
     let l:sub = s:ring(l:id, 0)
     for l:j in range(8)
-      if !empty(l:sub[l:j])
-        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j], 'role': 'sub', 'n': 0, 'of': l:id}
+      if !empty(l:sub[l:j][0])
+        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j][0], 'name': l:sub[l:j][1], 'role': 'sub', 'n': 0, 'of': l:id}
       endif
     endfor
   endfor
   " 真ん中のブロックの周り 8 マスは、周りのブロックの上書きで消えないように置き直す
   for l:i in range(8)
-    if !empty(l:ring[l:i])
-      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': s:nums[l:i]}
+    if !empty(l:ring[l:i][0])
+      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
     endif
   endfor
   return l:b
@@ -304,9 +328,9 @@ function! s:pad(s, w) abort
 endfunction
 
 " マスの種類（色と記号で一目で分かるように）: 索引・親・子・Context・関連・BackLink・ふつうのノート
-let s:kinds = {'index': ['■', '索引', 'GnosisMvIndex'], 'group': ['◆', 'グループ', 'GnosisMvGroup'], 'parent': ['▲', '親', 'GnosisMvParent'],
-      \ 'child': ['▼', '子', 'GnosisMvChild'], 'context': ['◇', '文脈', 'GnosisMvContext'], 'related': ['≈', '関連', 'GnosisMvRelated'],
-      \ 'back': ['←', 'BackLink', 'GnosisMvBack'], 'note': ['', 'ノート', '']}
+let s:kinds = {'index': ['', '索引', 'GnosisMvIndex'], 'group': ['', 'グループ', 'GnosisMvGroup'], 'parent': ['', '親', 'GnosisMvParent'],
+      \ 'child': ['', '子', 'GnosisMvChild'], 'context': ['', '文脈', 'GnosisMvContext'], 'related': ['', '関連', 'GnosisMvRelated'],
+      \ 'back': ['', 'BackLink', 'GnosisMvBack'], 'note': ['', 'ノート', '']}
 let s:kind_legend = ['index', 'group', 'parent', 'child', 'context', 'related', 'back', 'note']
 
 " マス a:id が、a:of（そのマスの中心）から見てどういうものか
@@ -315,13 +339,15 @@ function! s:kind(id, of) abort
     return 'note'
   endif
   let l:nd = s:S.data.nodes[a:id]
-  if a:id ==# 'index.md'
-    return 'index'
-  elseif l:nd.g
+  if l:nd.g
     return 'group'
   endif
   if empty(a:of) || !has_key(s:S.data.nodes, a:of)
     return 'note'
+  endif
+  " 索引 = グループに載っているノート（そのグループの項目）
+  if s:S.data.nodes[a:of].g && index(get(s:S.data.nodes[a:of].o, 'link', []), a:id) >= 0
+    return 'index'
   endif
   " この索引（トピック索引）を BranchGroup: に持つノートは、戻る道（親）
   if index(get(get(s:S.data.nodes[a:of], 'r', {}), 'branch_group', []), a:id) >= 0
@@ -348,9 +374,9 @@ function! s:label(cell) abort
   if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
     return ''
   endif
-  " 中心の索引に書かれたリンクの文字（索引語）があればそれを名前にする
-  let l:name = get(get(get(s:S.data.nodes, get(a:cell, 'of', s:S.center), {}), 'nm', {}), a:cell.id, '')
-  return s:kinds[a:cell.kind][0] . (empty(l:name) || a:cell.id ==# get(a:cell, 'of', s:S.center) ? s:S.data.nodes[a:cell.id].t : l:name)
+  " 索引に載っている表示名（索引語）があればそれを名前にする
+  let l:name = get(a:cell, 'name', '')
+  return s:kinds[a:cell.kind][0] . (empty(l:name) ? s:S.data.nodes[a:cell.id].t : l:name)
 endfunction
 
 " 盤面の大きさ。マスは見た目が正方形になるようにする（端末の文字は縦:横 = 2:1 くらいなので、
@@ -795,13 +821,17 @@ function! s:title_of(id) abort
   return has_key(s:S.data.nodes, a:id) ? tolower(s:S.data.nodes[a:id].t) : ''
 endfunction
 
+function! s:cell_text(cell) abort
+  return s:entry_text([a:cell.id, get(a:cell, 'name', '')])
+endfunction
+
 " ヒットの一覧 [[枚, 行, 列], …]（読む順）。ほかの枚は周りの 8 マスだけ、今の枚は見えているマス全部
 function! s:hit_list() abort
   let l:q = tolower(s:S.find)
   let l:out = []
   let l:ring = s:items(s:S.center)
   for l:i in range(len(l:ring))
-    if stridx(s:title_of(l:ring[l:i]), l:q) >= 0
+    if stridx(s:entry_text(l:ring[l:i]), l:q) >= 0
       let l:p = s:pos[l:i % 8]
       let l:o = s:S.size == 3 ? 0 : 3
       call add(l:out, [l:i / 8, l:o + l:p[0], l:o + l:p[1]])
@@ -811,7 +841,7 @@ function! s:hit_list() abort
   for l:r in range(s:S.size)
     for l:c in range(s:S.size)
       let l:cell = s:S.cells[l:r][l:c]
-      if (l:cell.role ==# 'sub' || (l:r == l:mid && l:c == l:mid)) && !empty(l:cell.id) && stridx(s:title_of(l:cell.id), l:q) >= 0
+      if (l:cell.role ==# 'sub' || (l:r == l:mid && l:c == l:mid)) && !empty(l:cell.id) && stridx(s:cell_text(l:cell), l:q) >= 0
         call add(l:out, [s:S.page, l:r, l:c])
       endif
     endfor

@@ -118,8 +118,18 @@ class T(unittest.TestCase):
         (r / "kw.md").write_text(note("アイコンどれがいいのか"))
         (r / "idx2.md").write_text(note("索引2", True, [], ["[アイコン](kw.md)", "[ハーブ](herb.md)"]))
         d = mv.dump(r)
-        self.assertEqual(d["nodes"]["idx2.md"]["nm"]["kw.md"], "アイコン")
-        self.assertNotIn("herb.md", d["nodes"]["idx2.md"].get("nm", {}))  # 題と同じなら持たない
+        en = dict(d["nodes"]["idx2.md"]["en"])
+        self.assertEqual(en["kw.md"], "アイコン")
+        self.assertEqual(en["herb.md"], "")  # 題と同じなら空（題で出す）
+
+    def test_same_note_listed_twice_in_a_group(self):
+        """同じノートが同じ索引に別の索引語で載っていれば、載っている回数だけ周りに出る。"""
+        r = Path(self.tmp.name)
+        (r / "kw2.md").write_text(note("ひとつのノート"))
+        (r / "idx3.md").write_text(note("索引3", True, [], ["[アイコン](kw2.md)", "[デザイン](kw2.md)", "[アイコン](kw2.md)"]))
+        d = mv.dump(r)
+        self.assertEqual(d["nodes"]["idx3.md"]["en"], [["kw2.md", "アイコン"], ["kw2.md", "デザイン"]])  # 同じ名前の重複は 1 つ
+        self.assertEqual(mv.items(d, "idx3.md", "all"), ["kw2.md", "kw2.md"])
 
     def test_unknown(self):
         self.assertEqual(mv.items(self.d, "x.md"), [])
