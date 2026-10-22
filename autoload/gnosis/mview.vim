@@ -7,15 +7,16 @@
 " 分割は左右半々。マスは見た目が正方形で、盤面は窓の中央に置く。
 "
 " キー（曼荼羅のウィンドウ）
-"   h j k l / 矢印   マスを動く      1-8 そのマスを中心にする（1 2 3 / 4 _ 5 / 6 7 8）・0 中心のノートを開く
-"                    Enter  カーソルのマスを中心にする（9×9 では 1-8 はそのブロックへカーソルを置くだけ）
+"   h j k l / 矢印   マスを動く（右のノートがそのマスのノートに切り替わる。中心は変わらない）
+"   1-8              そのマスへ（1 2 3 / 4 _ 5 / 6 7 8）。t で「移動して中心に」⇔「カーソルだけ」・0 は中心のノート
+"                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
 "   a g n c r        モード: a 全体 / g 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
-"   F                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
-"   Space            ノートのウィンドウへ    R 読み直す    q 閉じる
+"   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
+"   Space            ノートのウィンドウへ    u 読み直す    q 閉じる
 " 元データは python/mandala_view.py（読み取り専用）。ノートは書き換えない。
 
 let s:S = {}
@@ -377,8 +378,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -416,6 +417,13 @@ function! s:mode_bar(W) abort
     endif
     let l:cur .= l:cell
   endfor
+  " 数字キーの動き（t で切り替え）
+  let l:d = '数字:' . (s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(t)'
+  if strdisplaywidth(l:cur . '  ' . l:d) > a:W
+    call add(l:lines, l:cur)
+    let l:cur = '        '
+  endif
+  let l:cur .= '  ' . l:d
   call add(l:lines, l:cur)
   return [l:lines, l:span]
 endfunction
@@ -600,19 +608,38 @@ function! s:move(dr, dc) abort
   endif
   let s:S.cur = [l:r, l:c]
   call s:mark()
+  call s:preview()
 endfunction
 
-" 数字キー（1 2 3 / 4 _ 5 / 6 7 8）: 3×3 ではそのマスへ移って中心にする（0 は中心のノートを右に出す）。
-" 9×9 ではそのブロックの真ん中にカーソルを置くだけ（中心は変えない）
+" カーソルのマスのノートを右に出す（曼荼羅の中心は変えない）
+function! s:preview() abort
+  let l:cell = s:cur_cell()
+  if !empty(l:cell.id)
+    call s:show_note(l:cell.id)
+  endif
+endfunction
+
+" 数字キー（1 2 3 / 4 _ 5 / 6 7 8）。t で切り替える:
+"   移動     … そのマスへ移って中心にする（0 は中心のノートを開く）
+"   カーソル … そのマスにカーソルを置くだけ（右のノートは切り替わる。中心は変わらない）
+" 9×9 ではそのブロックの真ん中のマスが対象
 function! s:digit(d) abort
   if s:S.size == 9
     let s:S.cur = a:d == 0 ? [4, 4] : [s:pos[a:d - 1][0] * 3 + 1, s:pos[a:d - 1][1] * 3 + 1]
-    call s:mark()
-    return
+  else
+    let s:S.cur = a:d == 0 ? [1, 1] : copy(s:pos[a:d - 1])
   endif
-  let s:S.cur = a:d == 0 ? [1, 1] : copy(s:pos[a:d - 1])
   call s:mark()
-  call s:enter()
+  if s:S.digit ==# 'jump'
+    call s:enter()
+  else
+    call s:preview()
+  endif
+endfunction
+
+function! s:toggle_digit() abort
+  let s:S.digit = s:S.digit ==# 'jump' ? 'cursor' : 'jump'
+  call s:render()
 endfunction
 
 function! s:set_center(id, page) abort
@@ -866,6 +893,10 @@ function! s:show_note(id) abort
   if l:nw < 0
     return
   endif
+  if fnamemodify(bufname(winbufnr(l:nw)), ':p') ==# fnamemodify(l:path, ':p')
+    return
+  endif
+  call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
   call win_execute(l:nw, 'silent! hide edit ' . fnameescape(l:path))
 endfunction
 
@@ -897,12 +928,13 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>setmode('rel')<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> / <Cmd>call <SID>find_prompt()<CR>
-  nnoremap <buffer><nowait><silent> F <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
-  nnoremap <buffer><nowait><silent> R <Cmd>call <SID>reload()<CR>
+  nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload()<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
@@ -966,6 +998,7 @@ function! s:open(center, ...) abort
     autocmd BufWritePost,BufReadPost,FileChangedShellPost *.md call s:touched()
   augroup END
   let l:pick = a:0 ? a:1 : ''
+  let s:S.digit = get(s:S, 'digit', 'jump')
   let s:S.pick = !empty(l:pick)
   let s:S.src = l:pick
   let s:S.query = ''

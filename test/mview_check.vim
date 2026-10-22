@@ -65,7 +65,7 @@ call s:ok('a ですべてに戻る', s:text() =~# '◆植物' && s:text() =~# '�
 " 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
 let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
-call s:keys('R')
+call s:keys('u')
 call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
 call s:keys('g')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
@@ -102,14 +102,27 @@ call s:ok('栽培の周りに所属の植物', s:text() =~# '1 ◆植物', s:tex
 " 戻る
 call s:keys('-')
 call s:ok('- で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
+" カーソルを動かすだけで右のノートが切り替わる（曼荼羅の中心は変わらない）
+call s:keys('k')
+call s:ok('k で右のノートが切り替わる（ハーブ）', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0 && s:st.center ==# 'plant.md', s:st.center)
+call s:keys('j')
+" 数字キー: 既定は移動して中心に。t でカーソルだけ（右のノートは切り替わる）
+call s:keys('t')
+call s:keys('3')
+call s:ok('カーソルだけ: 中心は変わらず、右のノートは切り替わる', s:st.center ==# 'plant.md' && s:st.cur == [0, 2] && index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'rose.md') >= 0, string(s:st.cur) . s:st.center)
+call s:keys('t')
 " 全画面 9×9
 call s:keys('f')
 call s:ok('f で 9×9', s:st.size == 9 && winnr('$') == 1, s:st.size . ' wins=' . winnr('$'))
 call s:ok('9×9 は 9 行 9 列', len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "┃"')) >= 9 && s:text() =~# '╋')
 call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハ' && s:text() =~# 'ミ', s:text())
 call s:ok('9×9 にも番号が出る', s:text() =~# '1 ◆' && s:text() =~# '8 ', s:text())
+call s:keys('t')
+call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor' && s:text() =~# '数字:カーソルだけ(t)', s:text())
 call s:keys('6')
-call s:ok('9×9 の数字は中心を変えずカーソルだけ動く', s:st.center ==# 'plant.md' && s:st.cur == [7, 1], string(s:st.cur) . ' ' . s:st.center)
+call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [7, 1], string(s:st.cur) . ' ' . s:st.center)
+call s:keys('t')
+call s:ok('もう一度 t で数字は移動に戻る', s:st.digit ==# 'jump')
 call s:keys('f')
 call s:ok('もう一度 f で 3×3 に戻る', s:st.size == 3 && winnr('$') == 2)
 " Space でノートへ、もう一度で曼荼羅へ
@@ -163,7 +176,7 @@ let s:st = gnosis#mview#state()
 call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.mode ==# 'near' && s:text() =~# '1 ◆植物' && s:text() =~# '3 ◆空の', s:text())
 call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
 let s:st.query = '空'
-call s:keys('R')
+call s:keys('u')
 call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 ◆空の' && s:text() !~# '◆植物', s:text())
 call s:keys('1')
 call s:keys("\<CR>")
