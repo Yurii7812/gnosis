@@ -76,7 +76,7 @@ call s:keys('1')
 call s:ok('数字キー 1 でそのまま植物が中心になる', s:st.center ==# 'plant.md', s:st.center)
 call s:ok('カーソルは曼荼羅に残る', &filetype ==# 'gnosis-mandala')
 call s:ok('索引の周りに所属する Index が最初に出る', s:text() =~# '1 ◆Index', s:text())
-call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '8 タイム', s:text())
+call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '9 タイム', s:text())
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 " ページ送り
 call s:keys(']')
@@ -92,8 +92,8 @@ call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダ
 call s:keys("\<Esc>")
 call s:ok('Esc で検索のハイライトを解く', s:st.find ==# '')
 call s:keys('[')
-" 1 2 3 / 4 _ 5 / 6 7 8 の並び（4 は中心の左・5 は右）
-call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *◆植物"')) == 1 && s:text() =~# '5 ローズ', s:text())
+" 1 2 3 / 4 5 6 / 7 8 9 の並び（真ん中が 5。4 は中心の左・6 は右）
+call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *5 ◆植物"')) == 1 && s:text() =~# '6 ローズ', s:text())
 " 数字キーでそのままノートのマスへ進む: 右にそのノートが開く
 call s:keys('4')
 call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:st.center)
@@ -128,7 +128,7 @@ call s:ok('9×9 にも番号が出る', s:text() =~# '1 ◆' && s:text() =~# '8 
 call s:keys('t')
 call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor' && s:text() =~# '数字:カーソルだけ(t)', s:text())
 call s:keys('6')
-call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [7, 1], string(s:st.cur) . ' ' . s:st.center)
+call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [4, 7], string(s:st.cur) . ' ' . s:st.center)
 call s:keys('t')
 call s:ok('もう一度 t で数字は移動に戻る', s:st.digit ==# 'jump')
 call s:keys('f')

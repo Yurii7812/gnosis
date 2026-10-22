@@ -8,7 +8,7 @@
 "
 " キー（曼荼羅のウィンドウ）
 "   h j k l / 矢印   マスを動く（右のノートがそのマスのノートに切り替わる。中心は変わらない）
-"   1-8              そのマスへ（1 2 3 / 4 _ 5 / 6 7 8）。t で「移動して中心に」⇔「カーソルだけ」・0 は中心のノート
+"   1-9              そのマスへ（1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で「移動して中心に」⇔「カーソルだけ」
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅    - / <BS> 一つ前に戻る
@@ -21,8 +21,10 @@
 
 let s:S = {}
 let s:here = expand('<sfile>:p:h:h:h')
-" 周りの 8 マス（番号 1-8）。読む順:  1 2 3 / 4 _ 5 / 6 7 8
+" 周りの 8 マス（読む順）
 let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
+" 番号はテンキーと同じ並び（1 2 3 / 4 5 6 / 7 8 9）。真ん中が 5
+let s:nums = [1, 2, 3, 4, 6, 7, 8, 9]
 let s:mode_label = {'all': '全体', 'groups': '索引', 'notes': 'ノート', 'near': '近い索引', 'rel': '関連'}
 let s:mode_keys = [['a', 'all'], ['g', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
 
@@ -220,26 +222,26 @@ function! s:board_cells() abort
   endfor
   let l:ring = s:ring(s:S.center, s:S.page)
   if l:n == 3
-    let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 0}
+    let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 5}
     for l:i in range(8)
       if !empty(l:ring[l:i])
-        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': l:i + 1}
+        let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': s:nums[l:i]}
       endif
     endfor
     return l:b
   endif
   " 9×9: 真ん中の 3×3 が今の曼荼羅。周りの 8 ブロックは、その周辺の各ノートを中心にした曼荼羅の 1 枚目。
   " ブロックの真ん中のマスにも、周りのマスと同じ番号を付ける
-  let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 0}
+  let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 5}
   for l:i in range(8)
     let l:id = l:ring[l:i]
     if empty(l:id)
       continue
     endif
-    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'role': 'item', 'n': l:i + 1}
+    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'role': 'item', 'n': s:nums[l:i]}
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
-    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'role': 'center', 'n': l:i + 1}
+    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'role': 'center', 'n': s:nums[l:i]}
     let l:sub = s:ring(l:id, 0)
     for l:j in range(8)
       if !empty(l:sub[l:j])
@@ -250,7 +252,7 @@ function! s:board_cells() abort
   " 真ん中のブロックの周り 8 マスは、周りのブロックの上書きで消えないように置き直す
   for l:i in range(8)
     if !empty(l:ring[l:i])
-      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': l:i + 1}
+      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i], 'role': 'item', 'n': s:nums[l:i]}
     endif
   endfor
   return l:b
@@ -378,8 +380,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -619,15 +621,16 @@ function! s:preview() abort
   endif
 endfunction
 
-" 数字キー（1 2 3 / 4 _ 5 / 6 7 8）。t で切り替える:
+" 数字キー（テンキーと同じ 1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で切り替える:
 "   移動     … そのマスへ移って中心にする（0 は中心のノートを開く）
 "   カーソル … そのマスにカーソルを置くだけ（右のノートは切り替わる。中心は変わらない）
 " 9×9 ではそのブロックの真ん中のマスが対象
 function! s:digit(d) abort
+  let l:i = index(s:nums, a:d)
   if s:S.size == 9
-    let s:S.cur = a:d == 0 ? [4, 4] : [s:pos[a:d - 1][0] * 3 + 1, s:pos[a:d - 1][1] * 3 + 1]
+    let s:S.cur = l:i < 0 ? [4, 4] : [s:pos[l:i][0] * 3 + 1, s:pos[l:i][1] * 3 + 1]
   else
-    let s:S.cur = a:d == 0 ? [1, 1] : copy(s:pos[a:d - 1])
+    let s:S.cur = l:i < 0 ? [1, 1] : copy(s:pos[l:i])
   endif
   call s:mark()
   if s:S.digit ==# 'jump'
