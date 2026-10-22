@@ -1150,12 +1150,13 @@ function! s:reload() abort
 endfunction
 
 function! s:hl() abort
-  " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字・下線にした C つき
+  " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字にした C つき
   let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#e5a64a', 178], 'Parent': ['#61afef', 75], 'Child': ['#56b6c2', 73],
         \ 'Context': ['#c678dd', 176], 'Related': ['#98c379', 108], 'Back': ['#7f848e', 245]}
   for [l:k, l:c] in items(l:cols)
     execute printf('highlight default GnosisMv%s guifg=%s ctermfg=%d', l:k, l:c[0], l:c[1])
-    execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold,underline cterm=bold,underline', l:k, l:c[0], l:c[1])
+    " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）
+    execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
     execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
   endfor
   highlight default link GnosisMviewSel Visual

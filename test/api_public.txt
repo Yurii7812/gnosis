@@ -223,6 +223,7 @@ gnosis#multi
 gnosis#multi_apply
 gnosis#multi_clear
 gnosis#mview#close
+gnosis#mview#entries
 gnosis#mview#items
 gnosis#mview#pick
 gnosis#mview#refresh
