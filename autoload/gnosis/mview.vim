@@ -4,7 +4,7 @@
 "   中心が索引（グループ） … 載っているノート。8 つを超えたら 2 枚目以降の曼荼羅（[ ] で前後）
 "   中心がノート           … 所属する索引（Group: / BranchGroup:）。モードでノート同士のつながりも出せる
 " 画面の大きさは、分割しているときは 3×3、全画面（f）では 9×9（周りの 8 マスがそれぞれ自分の曼荼羅を持つ）。
-" 分割は左右半々。マスは見た目が正方形で、盤面は窓の中央に置く。
+" 分割は左右半々（< > で曼荼羅の幅を変えられる）。マスは見た目が正方形で、盤面は窓の中央に置く。
 "
 " キー（曼荼羅のウィンドウ）
 "   h j k l / 矢印   マスを動く（右のノートがそのマスのノートに切り替わる。中心は変わらない）
@@ -378,8 +378,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-8 そのマスへ（t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', '< > 曼荼羅の幅', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -850,6 +850,22 @@ endfunction
 
 " ---- ウィンドウ -------------------------------------------------------------
 
+" 曼荼羅のウィンドウの幅（画面の何割か。< > で変える。既定は半々）
+function! s:win_width() abort
+  return &columns * get(s:S, 'tenths', 5) / 10
+endfunction
+
+" < で曼荼羅を狭く、> で広く（1 回で画面の幅の 1/10）。分割しているときだけ
+function! s:resize(d) abort
+  if s:S.size != 3 || s:note_win() < 0
+    return
+  endif
+  " 割合は 10 分率の整数で持つ（5 = 半々）。小数と整数を混ぜると Vim はエラーにする
+  let s:S.tenths = min([8, max([2, get(s:S, 'tenths', 5) + a:d])])
+  execute 'vertical resize ' . s:win_width()
+  call s:render()
+endfunction
+
 function! s:mwin() abort
   let l:b = get(s:S, 'buf', -1)
   return l:b > 0 ? bufwinid(l:b) : -1
@@ -873,7 +889,7 @@ function! s:ensure_note_win() abort
   vertical rightbelow new
   let l:nw = win_getid()
   call win_gotoid(l:mw)
-  execute 'vertical resize ' . (&columns / 2)
+  execute 'vertical resize ' . s:win_width()
   return l:nw
 endfunction
 
@@ -934,6 +950,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
+  nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>resize(-1)<CR>
+  nnoremap <buffer><nowait><silent> > <Cmd>call <SID>resize(1)<CR>
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload()<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
@@ -1045,7 +1063,7 @@ function! s:open(center, ...) abort
       let s:S.buf = bufnr('%')
       call s:setup_buffer()
     endif
-    execute 'vertical resize ' . (&columns / 2)
+    execute 'vertical resize ' . s:win_width()
   endif
   let s:S.buf = bufnr('%')
   call s:render()
