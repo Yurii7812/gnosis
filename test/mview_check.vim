@@ -229,25 +229,22 @@ call s:keys('i')
 call s:ok('同じノートの 2 つの索引語が、別々のマスに出る', s:text() =~# '1 アイコン' && s:text() =~# '2 デザイン' && s:text() !~# 'ひとつだけ', s:text())
 call s:keys('q')
 
-" 位置などを覚える: 閉じて、別のノートから開き直しても、前回の中心・モード・幅のまま
+" 曼荼羅の幅を覚える: < > で変えた幅が、閉じて開き直しても、別のノートから開いても、そのまま（中心は今のノート）
 let g:gnosis_mview_restore = 1
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
-call s:keys('1')
-call s:keys('i')
+call s:keys('<')
 call s:keys('<')
 let s:st = gnosis#mview#state()
-let s:saved = [s:st.center, s:st.mode, s:st.tenths]
+let s:t0 = s:st.tenths
 call s:keys('q')
-call s:ok('閉じると位置を保存する（mandala.json）', filereadable(gnosis#home#path('mandala.json')))
+call s:ok('幅を保存する（mandala.json）', filereadable(gnosis#home#path('mandala.json')) && join(readfile(gnosis#home#path('mandala.json')), '') =~# '"tenths"')
+unlet s:st.tenths
 execute 'edit ' . s:v . '/curry.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
-call s:ok('開き直すと前回の位置のまま（今のノートではなく）', [s:st.center, s:st.mode, s:st.tenths] == s:saved && s:st.center !=# 'curry.md', string([s:st.center, s:st.mode, s:st.tenths]) . ' / ' . string(s:saved))
-call s:ok('右は今のノートのまま', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'curry.md') >= 0)
-" . : 右のノートを中心にする
-call s:keys('.')
-call s:ok('. で右のノート（curry）が中心になる', s:st.center ==# 'curry.md', s:st.center)
+call s:ok('開き直すと前回の幅のまま', s:st.tenths == s:t0 && s:t0 == 3, string(get(s:st, 'tenths', 'none')) . ' / ' . s:t0)
+call s:ok('中心は今のノート（位置は覚えない）', s:st.center ==# 'curry.md', s:st.center)
 call s:keys('q')
 let g:gnosis_mview_restore = 0
 

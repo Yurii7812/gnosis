@@ -425,8 +425,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', '. 今のノートへ', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', '. 今のノートへ', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -698,7 +698,6 @@ function! s:move(dr, dc) abort
   let s:S.cur = [l:r, l:c]
   call s:mark()
   call s:preview()
-  call s:save_soon()
 endfunction
 
 " カーソルのマスのノートを右に出す（曼荼羅の中心は変えない）
@@ -735,9 +734,9 @@ function! s:recenter() abort
   call s:preview()
 endfunction
 
-" ---- 位置などを覚える（次に開いたとき、前回の位置のまま） --------------------------------
-" Gnosis ホームの mandala.json に vault ごと: 中心のノート・何枚目・カーソル・モード・数字キーの動き・曼荼羅の幅・案内の表示。
-" 試験では g:gnosis_mview_restore = 0 で、開くたびに今のノートが中心（覚えた位置は使わない）。
+" ---- 曼荼羅の幅を覚える（< > で変えた幅が、次に開いたときもそのまま） -----------------------
+" Gnosis ホームの mandala.json: {"tenths": 画面の何割か（2-8。5 = 半々）}。中心のノート・ページ・カーソル・モードは覚えない
+" （開くたびに今のノートが中心）。試験では g:gnosis_mview_restore = 0 で、覚えた幅を使わない。
 
 function! s:state_all() abort
   try
@@ -749,48 +748,13 @@ function! s:state_all() abort
 endfunction
 
 function! s:save_state() abort
-  if get(s:S, 'pick', 0) || !has_key(s:S, 'center') || !has_key(s:S, 'root')
+  if !has_key(s:S, 'tenths')
     return
   endif
-  let l:all = s:state_all()
-  let l:all[s:S.root] = {'center': s:S.center, 'page': s:S.page, 'cur': s:S.cur, 'mode': s:S.mode,
-        \ 'digit': s:S.digit, 'tenths': get(s:S, 'tenths', 5), 'help': get(s:S, 'help', 0)}
   try
-    call gnosis#home#write_json(gnosis#home#path('mandala.json'), l:all)
+    call gnosis#home#write_json(gnosis#home#path('mandala.json'), {'tenths': s:S.tenths})
   catch
   endtry
-endfunction
-
-" 動くたびに書かないよう、少し待ってまとめて書く
-function! s:save_soon() abort
-  if exists('s:save_timer')
-    call timer_stop(s:save_timer)
-  endif
-  let s:save_timer = timer_start(400, {-> s:save_now()})
-endfunction
-
-function! s:save_now() abort
-  if exists('s:save_timer')
-    unlet s:save_timer
-  endif
-  call s:save_state()
-endfunction
-
-" . : 右のウィンドウで開いているノートを中心にする
-function! s:here() abort
-  let l:nw = s:note_win()
-  if l:nw < 0
-    return
-  endif
-  let l:f = fnamemodify(bufname(winbufnr(l:nw)), ':p')
-  let l:rel = stridx(l:f, s:S.root . '/') == 0 ? strpart(l:f, len(s:S.root) + 1) : ''
-  if !has_key(s:S.data.nodes, l:rel) || l:rel ==# s:S.center
-    return
-  endif
-  let s:S.query = ''
-  let s:S.rquery = ''
-  call add(s:S.hist, [s:S.center, s:S.page])
-  call s:set_center(l:rel, 0)
 endfunction
 
 function! s:toggle_help() abort
@@ -802,7 +766,6 @@ endfunction
 function! s:toggle_digit() abort
   let s:S.digit = s:S.digit ==# 'jump' ? 'cursor' : 'jump'
   call s:render()
-  call s:save_soon()
 endfunction
 
 function! s:set_center(id, page) abort
@@ -812,7 +775,6 @@ function! s:set_center(id, page) abort
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:show_note(a:id)
   call s:render()
-  call s:save_soon()
 endfunction
 
 function! s:enter() abort
@@ -970,7 +932,6 @@ function! s:page(d) abort
   let s:S.page = l:p
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
-  call s:save_soon()
 endfunction
 
 " モード（英字）: a 全体 / i 索引 / n ノート / c 近い索引 / r 関連
@@ -982,7 +943,6 @@ function! s:setmode(m) abort
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
-  call s:save_soon()
 endfunction
 
 " 検索（s）: 題か本文に語を全部含むノートを、vault 全体から探して周りに並べる
@@ -1035,7 +995,7 @@ function! s:resize(d) abort
   let s:S.tenths = min([8, max([2, get(s:S, 'tenths', 5) + a:d])])
   execute 'vertical resize ' . s:win_width()
   call s:render()
-  call s:save_soon()
+  call s:save_state()
 endfunction
 
 function! s:mwin() abort
@@ -1119,7 +1079,6 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
-  nnoremap <buffer><nowait><silent> . <Cmd>call <SID>here()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
@@ -1222,17 +1181,11 @@ function! s:open(center, ...) abort
   let s:S.hist = l:hist
   let s:S.page = 0
   let l:c = a:center
-  " 前回の位置を覚えていれば、それを使う（索引を選ぶ \\g のときは、今のノートが中心）
-  let l:restored = 0
-  if empty(l:pick) && get(g:, 'gnosis_mview_restore', 1)
-    let l:st = get(s:state_all(), s:S.root, {})
-    if type(l:st) == v:t_dict && has_key(get(s:S.data, 'nodes', {}), get(l:st, 'center', ''))
-      let l:c = l:st.center
-      let s:S.mode = index(map(copy(s:mode_keys), 'v:val[1]'), get(l:st, 'mode', '')) >= 0 ? l:st.mode : s:S.mode
-      let s:S.digit = get(l:st, 'digit', s:S.digit) ==# 'cursor' ? 'cursor' : 'jump'
-      let s:S.tenths = min([8, max([2, get(l:st, 'tenths', 5)])])
-      let s:S.help = get(l:st, 'help', 0) ? 1 : 0
-      let l:restored = 1
+  " 曼荼羅の幅は前回のまま（< > で変えた幅）。中心は今のノート
+  if !has_key(s:S, 'tenths') && get(g:, 'gnosis_mview_restore', 1)
+    let l:t = get(s:state_all(), 'tenths', 0)
+    if type(l:t) == v:t_number && l:t >= 2 && l:t <= 8
+      let s:S.tenths = l:t
     endif
   endif
   if !has_key(s:S.data.nodes, l:c)
@@ -1244,12 +1197,6 @@ function! s:open(center, ...) abort
   endif
   let s:S.center = l:c
   let s:S.cur = [1, 1]
-  if l:restored
-    let l:pg = get(l:st, 'page', 0)
-    let s:S.page = l:pg >= 0 && l:pg < s:pages(l:c) ? l:pg : 0
-    let l:cu = get(l:st, 'cur', [1, 1])
-    let s:S.cur = type(l:cu) == v:t_list && len(l:cu) == 2 && l:cu[0] >= 0 && l:cu[0] < 3 && l:cu[1] >= 0 && l:cu[1] < 3 ? l:cu : [1, 1]
-  endif
   " 曼荼羅のウィンドウ（左）。あれば使い回す
   if l:buf > 0 && bufwinid(l:buf) > 0
     call win_gotoid(bufwinid(l:buf))
@@ -1265,9 +1212,7 @@ function! s:open(center, ...) abort
   endif
   let s:S.buf = bufnr('%')
   call s:render()
-  if !l:restored
-    call s:show_note(l:c)
-  endif
+  call s:show_note(l:c)
   call win_gotoid(s:mwin())
 endfunction
 
