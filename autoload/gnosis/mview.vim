@@ -304,8 +304,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'a g n c r モード', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'a g n c r モード', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'a g n c r = モード切替（全体・索引・ノート・近い索引・関連）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'a g n c r = モード切替（全体・索引・ノート・近い索引・関連）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -323,31 +323,28 @@ endfunction
 
 " モードの行: ' モード: [a:全体]  g:索引  n:ノート  c:近い索引  r:関連'（今のモードを目立たせる位置も返す）
 function! s:mode_bar(W) abort
-  let l:str = ' モード:'
+  " ' モード: [a:全体] g:索引 …' を幅に収まるように折り返す。[行, 色を付ける位置] を返す
+  let l:lines = []
+  let l:cur = ' モード:'
   let l:span = []
   for [l:k, l:m] in s:mode_keys
-    let l:str .= ' '
     let l:cell = l:k . ':' . s:mode_label[l:m]
-    if l:m ==# s:S.mode
+    let l:on = l:m ==# s:S.mode
+    if l:on
       let l:cell = '[' . l:cell . ']'
-      let l:span = [2, strlen(l:str) + 1, strlen(l:cell)]
     endif
-    let l:str .= l:cell . ' '
+    if strdisplaywidth(l:cur . ' ' . l:cell) > a:W && l:cur !~# '^ モード:$'
+      call add(l:lines, l:cur)
+      let l:cur = '        '
+    endif
+    let l:cur .= ' '
+    if l:on
+      let l:span = [len(l:lines) + 2, strlen(l:cur) + 1, strlen(l:cell)]
+    endif
+    let l:cur .= l:cell
   endfor
-  if strdisplaywidth(l:str) > a:W
-    " 幅が足りないときは、今のモードだけ名前を出す
-    let l:str = ' '
-    for [l:k, l:m] in s:mode_keys
-      if l:m ==# s:S.mode
-        let l:cell = '[' . l:k . ':' . s:mode_label[l:m] . ']'
-        let l:span = [2, strlen(l:str) + 1, strlen(l:cell)]
-        let l:str .= l:cell . ' '
-      else
-        let l:str .= l:k . ' '
-      endif
-    endfor
-  endif
-  return [l:str, l:span]
+  call add(l:lines, l:cur)
+  return [l:lines, l:span]
 endfunction
 
 function! s:render() abort
@@ -357,12 +354,13 @@ function! s:render() abort
   let l:W = winwidth(0)
   let l:H = winheight(0)
   let l:foot = s:footer_lines(l:W)
-  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 2 + len(l:foot))
+  let [l:bar, s:S.modespan] = s:mode_bar(l:W)
+  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 1 + len(l:bar) + len(l:foot))
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
   let l:gridw = l:n * (l:cw + 1) + 1
   let l:left = repeat(' ', max([0, (l:W - l:gridw) / 2]))
   let l:gridh = l:n * (l:ch + 1) + 1
-  let l:top = max([0, (l:H - 2 - len(l:foot) - l:gridh) / 2])
+  let l:top = max([0, (l:H - 1 - len(l:bar) - len(l:foot) - l:gridh) / 2])
   let l:lines = []
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
@@ -373,8 +371,7 @@ function! s:render() abort
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
   call add(l:lines, s:fit(printf(' %s%s   %d/%d   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
         \ s:S.page + 1, l:pages, l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
-  let [l:bar, s:S.modespan] = s:mode_bar(l:W)
-  call add(l:lines, s:fit(l:bar, l:W))
+  call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
