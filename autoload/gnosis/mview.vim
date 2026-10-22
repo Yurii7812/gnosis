@@ -304,8 +304,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'a g n c r = モード切替（全体・索引・ノート・近い索引・関連）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'a g n c r = モード切替（全体・索引・ノート・近い索引・関連）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-8 そのマスへ', 'Enter 中心に', 'モード切替（全体:a 索引:g ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'F 絞り込み', '[ ] 前後', '- 戻る', 'f 全画面', 'R 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -321,14 +321,14 @@ function! s:footer_lines(W) abort
   return l:lines
 endfunction
 
-" モードの行: ' モード: [a:全体]  g:索引  n:ノート  c:近い索引  r:関連'（今のモードを目立たせる位置も返す）
+" モードの行: ' モード: [全体:a] 索引:g ノート:n 近い索引:c 関連:r'（今のモードを目立たせる位置も返す）
 function! s:mode_bar(W) abort
   " ' モード: [a:全体] g:索引 …' を幅に収まるように折り返す。[行, 色を付ける位置] を返す
   let l:lines = []
   let l:cur = ' モード:'
   let l:span = []
   for [l:k, l:m] in s:mode_keys
-    let l:cell = l:k . ':' . s:mode_label[l:m]
+    let l:cell = s:mode_label[l:m] . ':' . l:k
     let l:on = l:m ==# s:S.mode
     if l:on
       let l:cell = '[' . l:cell . ']'

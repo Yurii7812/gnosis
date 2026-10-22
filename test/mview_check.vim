@@ -129,7 +129,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('r')
 call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '◆植物', s:text())
-call s:ok('モードの行に今のモードが出る', s:text() =~# '\[r:関連\]' && s:text() =~# 'a:全体', s:text())
+call s:ok('モードの行に今のモードが出る', s:text() =~# '\[関連:r\]' && s:text() =~# '全体:a', s:text())
 call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:text() =~# 'q 閉じる', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
