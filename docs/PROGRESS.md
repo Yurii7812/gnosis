@@ -8,6 +8,8 @@
   - 曼荼羅ビュー（`<Space>`）・`\g`（索引を曼荼羅で選んで載せる）。試験: `python/test_mandala_view.py`・`test/mview_net.sh`・`test/tabs_board_net.sh`。
   - 未確認: 実機の端末での見た目と手触り（Konsole・日本語入力中の挙動）。`\g` の `\gi` との待ち時間。近い Folgezettel 的な関連のモードは未実装。
 
+- 2026-10-22 続き: 曼荼羅ビューの既存モードをダブルインデックスの道に沿わせた・索引モードのキーを `i` に（索引語の名前で項目をすべて）。`python/index_migrate.py` で古い名残（Index 直下のグループ 6 件）を本物の vault で移行済み。試験: `python/test_index_migrate.py`・`test_mandala_view.py`・`test/mview_net.sh`。
+
 ## 以前の現在地（2026-10-21 夕）
 - ブランチ `feat/obsidian-layout`（worktree `~/src/gnosis-obs`、main 18c8c82 から）。**main へは未マージ・push 未**。DECISIONS D008・USER_GUIDE §5/§6。
   - `\A` を Obsidian の枠に（リボン・開け閉めできる左右のバー・ノートの見出し・クイックスイッチャー・Ctrl+P/O/N/W/Tab）、曼荼羅に既存のノートを入れる・外す、右のバーのリンク（`nav.links`）とアウトライン。
