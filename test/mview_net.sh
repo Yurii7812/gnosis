@@ -9,7 +9,7 @@ REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/vault" "$WORK/home"
-MV_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= DISPLAY= \
+LINES=60 COLUMNS=160 MV_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= DISPLAY= \
   timeout 60 vim -u "$REPO/vimrc_gnosis" -N -es -S "$REPO/test/mview_check.vim" </dev/null >"$WORK/out.txt" 2>"$WORK/err.txt" || true
 if [ ! -s "$WORK/result.txt" ]; then
   echo "NG: mview の結果が無い（Vim のエラー）" >&2; cat "$WORK/out.txt" "$WORK/err.txt" >&2; exit 1

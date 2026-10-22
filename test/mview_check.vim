@@ -1,6 +1,6 @@
 " 曼荼羅ビュー（<Space>）の回帰網（test/mview_net.sh から呼ぶ）。
 " 結果は $MV_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
-set nomore columns=160 lines=50
+set nomore
 let s:work = $MV_WORK
 let s:v = s:work . '/vault'
 let s:res = []
@@ -18,6 +18,10 @@ function! s:keys(k) abort
 endfunction
 function! s:text() abort
   return join(getbufline(gnosis#mview#state().buf, 1, '$'), "\n")
+endfunction
+" 盤面だけ（凡例の行を除く）
+function! s:grid() abort
+  return join(filter(getbufline(gnosis#mview#state().buf, 1, '$'), 'v:val =~# "┃"'), "\n")
 endfunction
 function! s:note() abort
   return fnamemodify(bufname(winbufnr(win_id2win(win_getid()))), ':t')
@@ -55,7 +59,7 @@ call s:ok('右にそのノートが開いている', fnamemodify(bufname(winbufn
 call s:keys('g')
 call s:ok('索引だけ: ミントは出ない', s:text() !~# 'ミント' && s:text() =~# '◆植物', s:text())
 call s:keys('n')
-call s:ok('ノートだけ: 索引は出ない', s:text() !~# '◆' && s:text() =~# 'ミント', s:text())
+call s:ok('ノートだけ: 索引は出ない', s:grid() !~# '◆' && s:text() =~# 'ミント', s:text())
 call s:keys('a')
 call s:ok('a ですべてに戻る', s:text() =~# '◆植物' && s:text() =~# 'ミント')
 " 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
@@ -121,7 +125,10 @@ call s:ok('q で閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('c')
-call s:ok('c: すでに所属している索引が先に出る', s:text() =~# '1 ◆植物' && s:text() =~# '2 ◆料理' && s:text() =~# '所属', s:text())
+call s:ok('c: すでに所属している索引が先に出る', s:text() =~# '1 ◆植物' && s:text() =~# '2 ◆料理', s:text())
+call s:keys('k')
+call s:keys('h')
+call s:ok('カーソルのマスの説明が下の 1 行に出る（索引・所属）', s:text() =~# '▶ 植物  \[索引\]  所属', s:text())
 call s:keys('q')
 
 " r: 関連。索引もノートも関連の強い順（herb: 本文でリンクしているミントが出る）
@@ -132,6 +139,16 @@ call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミ�
 call s:ok('モードの行に今のモードが出る', s:text() =~# '\[関連:r\]' && s:text() =~# '全体:a', s:text())
 call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:text() =~# 'q 閉じる', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
+call s:keys('q')
+
+" 題を変えたら（zt など）閉じなくても曼荼羅が更新される: 書き換えて読み直す（保存や読み込みで少し待って呼ばれる）
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+call s:keys('a')
+call s:ok('更新前は古い題', s:text() =~# '栽培' && s:text() !~# '新しい題', s:text())
+call s:mk('grow.md', '栽培の新しい題', 0, [['植物', 'plant.md']], [])
+call gnosis#mview#refresh()
+call s:ok('refresh で新しい題が出る（閉じなくてよい）', s:text() =~# '新しい' && &filetype ==# 'gnosis-mandala', s:text())
 call s:keys('q')
 
 " \g: 曼荼羅で索引を選んで、今のノートを載せる

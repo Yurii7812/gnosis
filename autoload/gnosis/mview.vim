@@ -107,7 +107,7 @@ function! s:near(c) abort
   for l:d in s:S.nearc[a:c]
     if index(l:out, l:d.id) < 0
       call add(l:out, l:d.id)
-      let s:S.why[l:d.id] = join(l:d.why[0 : 1], '・')
+      let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
     endif
   endfor
   if empty(s:S.nearc[a:c])
@@ -134,7 +134,7 @@ function! s:rel(c) abort
   endif
   let s:S.why = {}
   for l:d in s:S.relc[a:c]
-    let s:S.why[l:d.id] = join(l:d.why[0 : 1], '・')
+    let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
   endfor
   return map(copy(s:S.relc[a:c]), 'v:val.id')
 endfunction
@@ -192,11 +192,23 @@ endfunction
 
 function! s:board() abort
   let l:b = s:board_cells()
+  call s:set_kinds(l:b)
   if !empty(s:S.rquery)
     let l:c = s:S.size == 3 ? 1 : 4
     let l:b[l:c][l:c] = {'id': '', 'role': 'center', 'n': 0, 'text': '検索: ' . s:S.rquery}
   endif
   return l:b
+endfunction
+
+function! s:set_kinds(b) abort
+  let l:n = s:S.size
+  for l:r in range(l:n)
+    for l:c in range(l:n)
+      let l:cell = a:b[l:r][l:c]
+      let l:of = get(l:cell, 'of', s:S.center)
+      let l:cell.kind = empty(l:cell.id) ? 'note' : s:kind(l:cell.id, l:of)
+    endfor
+  endfor
 endfunction
 
 function! s:board_cells() abort
@@ -230,7 +242,7 @@ function! s:board_cells() abort
     let l:sub = s:ring(l:id, 0)
     for l:j in range(8)
       if !empty(l:sub[l:j])
-        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j], 'role': 'sub', 'n': 0}
+        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j], 'role': 'sub', 'n': 0, 'of': l:id}
       endif
     endfor
   endfor
@@ -274,6 +286,40 @@ function! s:pad(s, w) abort
   return a:s . repeat(' ', max([0, a:w - strdisplaywidth(a:s)]))
 endfunction
 
+" マスの種類（色と記号で一目で分かるように）: 索引・親・子・Context・関連・BackLink・ふつうのノート
+let s:kinds = {'group': ['◆', '索引', 'GnosisMvGroup'], 'parent': ['▲', '親', 'GnosisMvParent'], 'child': ['▼', '子', 'GnosisMvChild'],
+      \ 'context': ['◇', 'Context', 'GnosisMvContext'], 'related': ['≈', '関連', 'GnosisMvRelated'], 'back': ['←', 'BackLink', 'GnosisMvBack'],
+      \ 'note': ['', 'ノート', '']}
+let s:kind_legend = ['group', 'parent', 'child', 'context', 'related', 'back', 'note']
+
+" マス a:id が、a:of（そのマスの中心）から見てどういうものか
+function! s:kind(id, of) abort
+  if empty(a:id) || !has_key(s:S.data.nodes, a:id)
+    return 'note'
+  endif
+  let l:nd = s:S.data.nodes[a:id]
+  if l:nd.g
+    return 'group'
+  endif
+  if empty(a:of) || !has_key(s:S.data.nodes, a:of)
+    return 'note'
+  endif
+  let l:o = s:S.data.nodes[a:of].o
+  let l:r = l:nd.o
+  if index(get(l:o, 'parent_branch', []), a:id) >= 0 || index(get(l:r, 'child_branch', []), a:of) >= 0
+    return 'parent'
+  elseif index(get(l:o, 'child_branch', []), a:id) >= 0 || index(get(l:r, 'parent_branch', []), a:of) >= 0
+    return 'child'
+  elseif index(get(l:o, 'context', []), a:id) >= 0 || index(get(l:r, 'context', []), a:of) >= 0
+    return 'context'
+  elseif index(get(l:o, 'related', []), a:id) >= 0 || index(get(l:r, 'related', []), a:of) >= 0
+    return 'related'
+  elseif index(get(l:o, 'backlink', []), a:id) >= 0
+    return 'back'
+  endif
+  return 'note'
+endfunction
+
 function! s:label(cell) abort
   if has_key(a:cell, 'text')
     return a:cell.text
@@ -281,8 +327,7 @@ function! s:label(cell) abort
   if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
     return ''
   endif
-  let l:nd = s:S.data.nodes[a:cell.id]
-  return (l:nd.g ? '◆' : '') . l:nd.t
+  return s:kinds[a:cell.kind][0] . s:S.data.nodes[a:cell.id].t
 endfunction
 
 " 盤面の大きさ。マスは見た目が正方形になるようにする（端末の文字は縦:横 = 2:1 くらいなので、
@@ -299,6 +344,34 @@ function! s:geometry(n, W, H, chrome) abort
     let l:cw = max([l:cw, min([l:wlim, 8])])
   endif
   return [max([3, l:cw]), l:ch]
+endfunction
+
+" 凡例（色つき）: ' ◆索引 ▲親 ▼子 ◇Context ≈関連 ←BackLink ノート'。色を付ける位置も返す
+function! s:legend(W) abort
+  let l:str = ' '
+  let l:spans = []
+  for l:k in s:kind_legend
+    let l:cell = (empty(s:kinds[l:k][0]) ? '' : s:kinds[l:k][0]) . s:kinds[l:k][1]
+    call add(l:spans, [l:k, strlen(l:str) + 1, strlen(l:cell)])
+    let l:str .= l:cell . '  '
+  endfor
+  return {'text': s:fit(l:str, a:W), 'spans': l:spans}
+endfunction
+
+" カーソルのマスの説明を 1 行で（題・種類・理由）
+function! s:info() abort
+  if !has_key(s:S, 'info_line')
+    return
+  endif
+  let l:cell = s:cur_cell()
+  let l:txt = ''
+  if !empty(l:cell.id) && has_key(s:S.data.nodes, l:cell.id)
+    let l:why = (index(['near', 'rel'], s:S.mode) >= 0 && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)) ? '  ' . s:S.why[l:cell.id] : ''
+    let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:why
+  endif
+  setlocal modifiable
+  call setline(s:S.info_line, s:fit(l:txt, winwidth(0)))
+  setlocal nomodifiable nomodified
 endfunction
 
 " 案内を幅に収まるように折り返す（見切れないように）
@@ -355,12 +428,13 @@ function! s:render() abort
   let l:H = winheight(0)
   let l:foot = s:footer_lines(l:W)
   let [l:bar, s:S.modespan] = s:mode_bar(l:W)
-  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 1 + len(l:bar) + len(l:foot))
+  let l:legend = s:legend(l:W)
+  let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, 2 + len(l:bar) + 1 + len(l:foot))
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
   let l:gridw = l:n * (l:cw + 1) + 1
   let l:left = repeat(' ', max([0, (l:W - l:gridw) / 2]))
   let l:gridh = l:n * (l:ch + 1) + 1
-  let l:top = max([0, (l:H - 1 - len(l:bar) - len(l:foot) - l:gridh) / 2])
+  let l:top = max([0, (l:H - 2 - len(l:bar) - 1 - len(l:foot) - l:gridh) / 2])
   let l:lines = []
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
@@ -372,6 +446,9 @@ function! s:render() abort
   call add(l:lines, s:fit(printf(' %s%s   %d/%d   %s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
         \ s:S.page + 1, l:pages, l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
   call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
+  call add(l:lines, l:legend.text)
+  let s:S.legend_spans = l:legend.spans
+  let s:S.legend_line = len(l:lines)
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
@@ -384,23 +461,20 @@ function! s:render() abort
       if l:cell.n > 0 && !empty(l:txt)
         let l:txt = l:cell.n . ' ' . l:txt
       endif
-      let l:tl = empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch)
-      if !empty(l:tl) && l:ch >= 3 && l:cell.role ==# 'item' && index(['near', 'rel'], s:S.mode) >= 0 && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)
-        let l:rn = l:ch >= 5 ? 2 : 1
-        let l:tl = l:tl[0 : l:ch - 1 - l:rn] + s:wrap('‹' . s:S.why[l:cell.id] . '›', l:cw - 1, l:rn)
-      endif
-      call add(l:cellines, l:tl)
+      call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, l:cw - 1, l:ch), 'r': ''})
     endfor
     for l:k in range(l:ch)
       let l:line = l:left
       for l:c in range(l:n)
         let l:sep = (l:n == 3 || has_key(l:heavy, l:c)) ? '┃' : '│'
         let l:line .= l:sep
-        " 文字はマスの真ん中（縦も横も）に置く
-        let l:tl = l:cellines[l:c]
-        let l:txt = get(l:tl, l:k - (l:ch - len(l:tl)) / 2, '')
-        if l:k < (l:ch - len(l:tl)) / 2
-          let l:txt = ''
+        " 題はマスの真ん中（縦も横も）、理由は一番下の行
+        let l:tl = l:cellines[l:c].t
+        let l:body_h = empty(l:cellines[l:c].r) ? l:ch : l:ch - 1
+        let l:off = (l:body_h - len(l:tl)) / 2
+        let l:txt = (l:k >= l:off && l:k - l:off < len(l:tl)) ? l:tl[l:k - l:off] : ''
+        if l:k == l:ch - 1 && !empty(l:cellines[l:c].r)
+          let l:txt = l:cellines[l:c].r
         endif
         let l:lead = max([0, (l:cw - strdisplaywidth(l:txt)) / 2])
         let l:cellstr = s:pad(repeat(' ', l:lead) . l:txt, l:cw)
@@ -415,9 +489,11 @@ function! s:render() abort
     endfor
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
-  while len(l:lines) < l:H - len(l:foot)
+  while len(l:lines) < l:H - len(l:foot) - 1
     call add(l:lines, '')
   endwhile
+  call add(l:lines, '')
+  let s:S.info_line = len(l:lines)
   call extend(l:lines, map(l:foot, 's:fit(v:val, l:W)'))
   setlocal modifiable
   silent! %delete _
@@ -459,6 +535,13 @@ function! s:hline(n, cw, r, heavy) abort
 endfunction
 
 " 選んでいるマスと、中心を色で示す
+" matchaddpos は 1 回に 8 か所までなので分けて足す
+function! s:addpos(group, pos, prio) abort
+  for l:i in range(0, len(a:pos) - 1, 8)
+    call add(w:mview_match, matchaddpos(a:group, a:pos[l:i : l:i + 7], a:prio))
+  endfor
+endfunction
+
 function! s:mark() abort
   if exists('w:mview_match')
     for l:m in w:mview_match
@@ -475,15 +558,22 @@ function! s:mark() abort
         continue
       endif
       if l:r == s:S.cur[0] && l:c == s:S.cur[1]
-        call add(w:mview_match, matchaddpos('GnosisMviewSel', l:sp, 20))
+        call s:addpos('GnosisMviewSel', l:sp, 20)
       elseif l:cell.role ==# 'center'
-        call add(w:mview_match, matchaddpos('GnosisMviewCenter', l:sp, 10))
+        call s:addpos('GnosisMviewCenter', l:sp, 10)
+      elseif !empty(get(s:kinds, get(l:cell, 'kind', 'note'), ['', '', ''])[2])
+        call s:addpos(s:kinds[l:cell.kind][2], l:sp, 8)
       endif
     endfor
   endfor
   if !empty(get(s:S, 'modespan', []))
-    call add(w:mview_match, matchaddpos('GnosisMviewSel', [s:S.modespan], 15))
+    call s:addpos('GnosisMviewSel', [s:S.modespan], 15)
   endif
+  for [l:k, l:col, l:len] in get(s:S, 'legend_spans', [])
+    if !empty(s:kinds[l:k][2])
+      call s:addpos(s:kinds[l:k][2], [[s:S.legend_line, l:col, l:len]], 15)
+    endif
+  endfor
   " / の語は、ふつうの検索のようにハイライト
   if !empty(get(s:S, 'find', ''))
     call add(w:mview_match, matchadd('Search', '\c\V' . escape(s:S.find, '\'), 5))
@@ -492,6 +582,7 @@ function! s:mark() abort
   if !empty(l:sp)
     call cursor(l:sp[0][0], l:sp[0][1])
   endif
+  call s:info()
 endfunction
 
 " ---- 操作 -------------------------------------------------------------------
@@ -783,41 +874,67 @@ endfunction
 function! s:setup_buffer() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala
-  nnoremap <buffer><silent> h <Cmd>call <SID>move(0, -1)<CR>
-  nnoremap <buffer><silent> <Left> <Cmd>call <SID>move(0, -1)<CR>
-  nnoremap <buffer><silent> l <Cmd>call <SID>move(0, 1)<CR>
-  nnoremap <buffer><silent> <Right> <Cmd>call <SID>move(0, 1)<CR>
-  nnoremap <buffer><silent> k <Cmd>call <SID>move(-1, 0)<CR>
-  nnoremap <buffer><silent> <Up> <Cmd>call <SID>move(-1, 0)<CR>
-  nnoremap <buffer><silent> j <Cmd>call <SID>move(1, 0)<CR>
-  nnoremap <buffer><silent> <Down> <Cmd>call <SID>move(1, 0)<CR>
+  nnoremap <buffer><nowait><silent> h <Cmd>call <SID>move(0, -1)<CR>
+  nnoremap <buffer><nowait><silent> <Left> <Cmd>call <SID>move(0, -1)<CR>
+  nnoremap <buffer><nowait><silent> l <Cmd>call <SID>move(0, 1)<CR>
+  nnoremap <buffer><nowait><silent> <Right> <Cmd>call <SID>move(0, 1)<CR>
+  nnoremap <buffer><nowait><silent> k <Cmd>call <SID>move(-1, 0)<CR>
+  nnoremap <buffer><nowait><silent> <Up> <Cmd>call <SID>move(-1, 0)<CR>
+  nnoremap <buffer><nowait><silent> j <Cmd>call <SID>move(1, 0)<CR>
+  nnoremap <buffer><nowait><silent> <Down> <Cmd>call <SID>move(1, 0)<CR>
   for l:d in range(10)
-    execute printf('nnoremap <buffer><silent> %d <Cmd>call <SID>digit(%d)<CR>', l:d, l:d)
+    execute printf('nnoremap <buffer><nowait><silent> %d <Cmd>call <SID>digit(%d)<CR>', l:d, l:d)
   endfor
-  nnoremap <buffer><silent> <CR> <Cmd>call <SID>enter()<CR>
-  nnoremap <buffer><silent> ] <Cmd>call <SID>page(1)<CR>
-  nnoremap <buffer><silent> [ <Cmd>call <SID>page(-1)<CR>
-  nnoremap <buffer><silent> - <Cmd>call <SID>back()<CR>
-  nnoremap <buffer><silent> <BS> <Cmd>call <SID>back()<CR>
-  nnoremap <buffer><silent> a <Cmd>call <SID>setmode('all')<CR>
-  nnoremap <buffer><silent> g <Cmd>call <SID>setmode('groups')<CR>
-  nnoremap <buffer><silent> n <Cmd>call <SID>setmode('notes')<CR>
-  nnoremap <buffer><silent> c <Cmd>call <SID>setmode('near')<CR>
-  nnoremap <buffer><silent> r <Cmd>call <SID>setmode('rel')<CR>
-  nnoremap <buffer><silent> s <Cmd>call <SID>search()<CR>
-  nnoremap <buffer><silent> / <Cmd>call <SID>find_prompt()<CR>
-  nnoremap <buffer><silent> F <Cmd>call <SID>filter()<CR>
-  nnoremap <buffer><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
-  nnoremap <buffer><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
-  nnoremap <buffer><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
-  nnoremap <buffer><silent> f <Cmd>call <SID>full()<CR>
-  nnoremap <buffer><silent> R <Cmd>call <SID>reload()<CR>
-  nnoremap <buffer><silent> q <Cmd>call gnosis#mview#close()<CR>
-  nnoremap <buffer><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
+  nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>enter()<CR>
+  nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
+  nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>page(-1)<CR>
+  nnoremap <buffer><nowait><silent> - <Cmd>call <SID>back()<CR>
+  nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
+  nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
+  nnoremap <buffer><nowait><silent> g <Cmd>call <SID>setmode('groups')<CR>
+  nnoremap <buffer><nowait><silent> n <Cmd>call <SID>setmode('notes')<CR>
+  nnoremap <buffer><nowait><silent> c <Cmd>call <SID>setmode('near')<CR>
+  nnoremap <buffer><nowait><silent> r <Cmd>call <SID>setmode('rel')<CR>
+  nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
+  nnoremap <buffer><nowait><silent> / <Cmd>call <SID>find_prompt()<CR>
+  nnoremap <buffer><nowait><silent> F <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
+  nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
+  nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
+  nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
+  nnoremap <buffer><nowait><silent> R <Cmd>call <SID>reload()<CR>
+  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#close()<CR>
+  nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
     autocmd VimResized,WinResized * if &filetype ==# 'gnosis-mandala' | call s:render() | endif
   augroup END
+endfunction
+
+" ノートを保存・読み込みしたら（題を zt で変えたときなど）、曼荼羅が開いていれば少し待って読み直す
+function! s:touched() abort
+  if empty(get(s:S, 'buf', 0)) || s:mwin() < 0 || &filetype ==# 'gnosis-mandala'
+    return
+  endif
+  if exists('s:sync_timer')
+    call timer_stop(s:sync_timer)
+  endif
+  let s:sync_timer = timer_start(600, {-> gnosis#mview#refresh()})
+endfunction
+
+" 読み直す（開いている曼荼羅の中身・近さを今の vault から作り直す。今の中心・枚・カーソルはそのまま）
+function! gnosis#mview#refresh() abort
+  if exists('s:sync_timer')
+    unlet s:sync_timer
+  endif
+  let l:mw = s:mwin()
+  if l:mw < 0
+    return
+  endif
+  let l:back = win_getid()
+  noautocmd call win_gotoid(l:mw)
+  call s:reload()
+  noautocmd call win_gotoid(l:back)
 endfunction
 
 function! s:reload() abort
@@ -832,12 +949,22 @@ function! s:reload() abort
 endfunction
 
 function! s:hl() abort
+  highlight default GnosisMvGroup   guifg=#e5a64a ctermfg=178
+  highlight default GnosisMvParent  guifg=#61afef ctermfg=75
+  highlight default GnosisMvChild   guifg=#56b6c2 ctermfg=73
+  highlight default GnosisMvContext guifg=#c678dd ctermfg=176
+  highlight default GnosisMvRelated guifg=#98c379 ctermfg=108
+  highlight default GnosisMvBack    guifg=#7f848e ctermfg=245
   highlight default link GnosisMviewSel Visual
   highlight default link GnosisMviewCenter Title
 endfunction
 
 function! s:open(center, ...) abort
   call s:hl()
+  augroup gnosis_mview_sync
+    autocmd!
+    autocmd BufWritePost,BufReadPost,FileChangedShellPost *.md call s:touched()
+  augroup END
   let l:pick = a:0 ? a:1 : ''
   let s:S.pick = !empty(l:pick)
   let s:S.src = l:pick

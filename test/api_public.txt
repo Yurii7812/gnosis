@@ -225,6 +225,7 @@ gnosis#multi_clear
 gnosis#mview#close
 gnosis#mview#items
 gnosis#mview#pick
+gnosis#mview#refresh
 gnosis#mview#state
 gnosis#mview#toggle
 gnosis#new_child
