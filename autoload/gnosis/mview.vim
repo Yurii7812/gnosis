@@ -517,6 +517,8 @@ function! s:mode_bar(W) abort
 endfunction
 
 function! s:render() abort
+  " 色の定義が消えていたら戻す（default なので、利用者の指定は上書きしない）
+  call s:hl()
   let l:n = s:S.size
   " 読み直しや絞り込みで枚数・盤面が変わっても範囲外にならないように
   let s:S.page = max([0, min([s:S.page, s:pages(s:S.center) - 1])])
@@ -1040,6 +1042,10 @@ function! s:full() abort
   endif
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
+  " 全画面で閉じた右のノートを、分割に戻したときに出し直す（中心のノート）
+  if s:S.size == 3
+    call s:show_note(s:S.center)
+  endif
 endfunction
 
 " ---- ウィンドウ -------------------------------------------------------------
@@ -1086,6 +1092,9 @@ function! s:ensure_note_win() abort
   call win_gotoid(l:mw)
   vertical rightbelow new
   let l:nw = win_getid()
+  " 窓を分けると曼荼羅の色づけ（matchaddpos）も新しい窓に写るので、ノートの窓には残さない
+  call clearmatches(l:nw)
+  unlet! w:mview_match
   call win_gotoid(l:mw)
   execute 'vertical resize ' . s:win_width()
   return l:nw
@@ -1267,6 +1276,8 @@ function! s:open(center, ...) abort
     autocmd!
     autocmd BufWritePost,FileChangedShellPost *.md call s:touched()
     autocmd VimLeavePre * call s:save_state()
+    " 配色が読み込み直されると（ノートを開き直したときなど）色の定義が全部消えるので、定義し直す
+    autocmd ColorScheme * call s:hl()
   augroup END
   let l:pick = a:0 ? a:1 : ''
   " 閉じたときに戻るノート（全画面で閉じると窓が 1 つだけになるため）

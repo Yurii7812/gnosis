@@ -308,5 +308,17 @@ call s:ok('色の線でも題が盤面に出る', s:ctext =~# '雑記', s:ctext[
 call gnosis#mview#close()
 let g:gnosis_mview_border = 'line'
 
+" f で全画面にして f で戻すと、右のノートが残り、配色が読み込み直されても選択の色が消えない
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call s:keys('f')
+call s:keys('f')
+let s:wn = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")')
+call s:ok('f → f で右のノートが残る', index(s:wn, 'herb.md') >= 0, string(s:wn))
+silent! colorscheme gnosis
+call s:keys('k')
+call s:ok('配色を読み込み直しても選択の色の定義が残る', len(filter(map(['Index', 'Group', 'Parent', 'Child', 'Context', 'Related', 'Back'], 'execute("highlight GnosisMv" . v:val . "S")'), 'v:val =~# "cleared"')) == 0, 'cleared')
+call gnosis#mview#close()
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
