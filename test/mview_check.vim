@@ -378,6 +378,7 @@ let s:st = gnosis#mview#state()
 let s:st.query = '植'
 let s:st.find = 'ミ'
 let s:st.stamp = {'query': 1, 'find': 2}
+execute 'vertical resize 110'
 call s:keys('z')
 call s:ok('かかっているものと q の案内が上の行に出る', s:text() =~# 'q でハイライトをやめる', s:text())
 call s:keys('q')
