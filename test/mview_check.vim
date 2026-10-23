@@ -497,5 +497,19 @@ call s:ok('開いたノートは右の窓に出る', index(s:nm, 'guard.md') >= 
 call s:ok('曼荼羅の中心も開いたノートに合う', s:st.center ==# 'guard.md', s:st.center)
 call s:keys('Q')
 
+" 起動時に曼荼羅を左半分に出す（設定 mandalaOnStart・既定オン。g:gnosis_mandala_on_start で止められる）
+%bwipeout!
+execute 'edit ' . s:v . '/herb.md'
+let g:gnosis_mandala_on_start = 0
+call gnosis#mview#start()
+call s:ok('止めていれば出ない', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
+let g:gnosis_mandala_on_start = 1
+call gnosis#mview#start()
+call s:ok('オンなら左に曼荼羅、右にノート', &filetype ==# 'gnosis-mandala' && winnr('$') == 2 && winnr() == 1)
+call gnosis#mview#start()
+call s:ok('すでに出ていれば二重に出さない', winnr('$') == 2)
+call s:keys('Q')
+unlet g:gnosis_mandala_on_start
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
