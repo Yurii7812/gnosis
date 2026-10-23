@@ -18492,7 +18492,8 @@ function! s:clear_mountpoint_garbage(root) abort
   if empty(a:root) || !isdirectory(a:root)
     return
   endif
-  for l:name in ['.state', '.undo']
+  " .gnosis は、曼荼羅のキャッシュなどがロック中に作ってしまったもの（マウント前の中身はゴミ。本物は暗号化された中にある）
+  for l:name in ['.state', '.undo', '.gnosis']
     let l:dir = a:root . s:sep() . l:name
     if isdirectory(l:dir)
       call system('rm -rf ' . shellescape(l:dir))

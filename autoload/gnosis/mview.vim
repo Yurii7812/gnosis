@@ -75,9 +75,19 @@ function! s:pyc(args) abort
 endfunction
 
 " キャッシュを更新して、読み込み済みのノートを捨てる。force=1 は全体を走査（u）。ふだんは直近に走査していれば省く
+" 暗号化 vault がロック中（gocryptfs のマウント前）は、vault の場所に何も作らない。
+" マウントポイントに .gnosis/cache を作ると「空でないマウントポイント」になり、正しいパスワードでもマウントできなくなる
+function! s:locked() abort
+  try
+    return exists('*gnosis#vault_locked_flag') && gnosis#vault_locked_flag() == 1
+  catch
+    return 0
+  endtry
+endfunction
+
 function! s:load(...) abort
   let l:root = s:root()
-  if empty(l:root)
+  if empty(l:root) || s:locked()
     return 0
   endif
   let l:first = !filereadable(l:root . '/.gnosis/cache/mandala.sqlite')
@@ -2415,7 +2425,7 @@ function! gnosis#mview#start() abort
   if l:on == 1 && !exists('g:gnosis_mandala_on_start') && get(s:state_all(), 'open', 1) == 0
     return
   endif
-  if !l:on || empty(s:root()) || &filetype ==# 'gnosis-mandala' || s:mwin() > 0 || empty(expand('%:p'))
+  if !l:on || empty(s:root()) || s:locked() || &filetype ==# 'gnosis-mandala' || s:mwin() > 0 || empty(expand('%:p'))
     return
   endif
   call gnosis#mview#toggle()
