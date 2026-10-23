@@ -35,6 +35,8 @@ function vimrcPath() {
 }
 const EXPLICIT_ROOT = env("ROOT") ? path.resolve(env("ROOT")) : "";
 const OPEN = env("FILE");
+// 紙のスキャンの番号付けだけの窓（Vim の \\F から。Vim は起動せず、この画面だけを出す）
+const SCAN_ONLY = !!env("SCAN_ONLY");
 
 // ログ: <Gnosis ホーム>/logs/app.log（画面のエラー・Vim の標準エラー・終了など）。
 const LOG_FILE = path.join(cfg.gnosisHome(), "logs", "app.log");
@@ -232,7 +234,8 @@ function createWindow() {
     else if (input.key === "0" && !input.shift) { wc.setZoomLevel(0); e.preventDefault(); }
   });
   win.once("ready-to-show", () => { applyWindow(s, true); win.show(); win.focus(); });
-  win.loadFile(path.join(WEB, "index.html"));
+  if (SCAN_ONLY && EXPLICIT_ROOT) noteRootDir = EXPLICIT_ROOT;
+  win.loadFile(path.join(WEB, "index.html"), SCAN_ONLY ? { query: { scan: "1" } } : undefined);
   win.on("page-title-updated", (e) => e.preventDefault());
 
   // テスト用: GNOSIS_TEST_SCRIPT の JS を画面で実行し、結果を GNOSIS_TEST_OUT に書いて終了する

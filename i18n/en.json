@@ -673,7 +673,8 @@
     "マージ": "merge",
     "やめる": "cancel",
     "どこに置く？": "Where to put it?",
-    "Gnosis: 紙のスキャンを %d 枚受け取りました（\\F で番号を付けます）": "Gnosis: received %d paper scans (number them with \\F)"
+    "Gnosis: 紙のスキャンを %d 枚受け取りました（\\F で番号を付けます）": "Gnosis: received %d paper scans (number them with \\F)",
+    "Gnosis: 番号付けの窓を開きました（キーボードだけで操作。終わると自動で閉じます）": "Gnosis: opened the numbering window (keyboard only; it closes by itself when you finish)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

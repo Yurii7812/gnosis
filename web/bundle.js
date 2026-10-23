@@ -34588,7 +34588,20 @@ ${h3.join(`
       el2.hidden = true;
     }, 12e3);
   }
+  async function bootScanOnly() {
+    document.body.classList.remove("launching");
+    $3("stage").hidden = true;
+    $3("statusbar").hidden = true;
+    $3("launcher").hidden = true;
+    scan = createScan($3("scan"), {
+      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
+      onClose: () => gui.quit()
+    });
+    window.__gui = { scan, state: () => ({}) };
+    await scan.open();
+  }
   async function boot() {
+    if (new URLSearchParams(location.search).get("scan") === "1") return bootScanOnly();
     window.addEventListener("error", (e) => showError(e.message || e.error));
     window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
     view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });

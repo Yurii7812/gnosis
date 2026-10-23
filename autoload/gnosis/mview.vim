@@ -847,7 +847,7 @@ function! s:help_lines() abort
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
         \ ' 並べる     v 外向き(リンクを内側から外側へ 1 つずつ最大 80 個)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
         \ ' プリセット  gp 設定に名前をつけて保存・呼び出し・名前変更・消す',
-        \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
+        \ ' 画面       f 全画面(9×9)⇔分割   p 右のノートを隠す・出す   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
         \ ' 色         ']
@@ -910,7 +910,7 @@ function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
         \ . ' t:数字' . (get(s:S, 'digit', 'jump') ==# 'jump' ? '移動' : 'カーソルだけ')
         \ . (get(s:S, 'nums', 1) ? '' : ' #:数字なし')
-        \ . (get(s:S, 'pv', 0) ? ' p:本文' : '')
+        \ . (get(s:S, 'nv', 1) ? '' : ' p:本文なし')
         \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
         \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 && !get(s:S, 'out_on', 0) ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
@@ -1208,7 +1208,7 @@ endfunction
 
 " 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
 " 閉じても、Vim を再起動しても、前回のまま
-let s:mode_keys = ['nums', 'size', 'pv', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit']
+let s:mode_keys = ['nums', 'size', 'nv', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit']
 let s:saved_json = ''
 
 function! s:save_state() abort
@@ -1641,25 +1641,26 @@ endfunction
 
 " 全画面（9×9）⇔ 分割（3×3）
 function! s:full() abort
+  " 9×9 ⇔ 3×3。右のノートの窓は、どちらでも出したまま（p で隠す・出す）
   if s:S.size == 3
     let s:S.size = 9
-    let s:S.width = winwidth(0)
     let l:nw = s:note_win()
     if l:nw > 0
       call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
     endif
-    if !get(s:S, 'pv', 0)
+    if !get(s:S, 'nv', 1)
       silent! only
     endif
   else
     let s:S.size = 3
     let s:S.out_on = 0
+  endif
+  if get(s:S, 'nv', 1)
     call s:ensure_note_win()
   endif
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
-  " 全画面で閉じた右のノートを、分割に戻したときに出し直す（中心のノート）。p が入っていれば、右の窓をそのまま使う
-  if s:S.size == 3 || get(s:S, 'pv', 0)
+  if get(s:S, 'nv', 1)
     call s:show_note(s:S.center)
   endif
 endfunction
@@ -1722,12 +1723,9 @@ endfunction
 
 " p: 全画面（9×9）の右に、中心のノートの題と本文を出す / 消す（右の窓。Space で入って、ふつうに動かせる）
 function! s:toggle_preview() abort
-  if s:S.size == 3
-    echo 'Gnosis: 3×3 では右のノートがいつも出ています（p は全画面 9×9 用）'
-    return
-  endif
-  let s:S.pv = !get(s:S, 'pv', 0)
-  if s:S.pv
+  " p: 右のノートの窓を隠す / 出す（3×3 も 9×9 も）
+  let s:S.nv = !get(s:S, 'nv', 1)
+  if s:S.nv
     call s:ensure_note_win()
     call s:render()
     call s:show_note(s:S.center)
@@ -1810,7 +1808,7 @@ function! s:show_note(id) abort
   if !filereadable(l:path)
     return
   endif
-  if s:S.size != 3 && !get(s:S, 'pv', 0)
+  if !get(s:S, 'nv', 1)
     return
   endif
   call s:ensure_note_win()
@@ -2174,7 +2172,7 @@ function! s:open(center, ...) abort
     let l:all = s:state_all()
     if !get(s:S, 'modes_restored', 0)
       let s:S.modes_restored = 1
-      for l:k in ['nums', 'pv', 'out_on', 'rank_on', 'near_on', 'rel_on']
+      for l:k in ['nums', 'nv', 'out_on', 'rank_on', 'near_on', 'rel_on']
         if has_key(l:all, l:k) && (type(l:all[l:k]) == v:t_number) && !has_key(s:S, l:k)
           let s:S[l:k] = l:all[l:k] ? 1 : 0
         endif
@@ -2231,10 +2229,9 @@ endfunction
 " <Space>: ノートから曼荼羅へ、曼荼羅からノートへ
 function! gnosis#mview#toggle() abort
   if &filetype ==# 'gnosis-mandala'
-    if s:S.size != 3 && !get(s:S, 'pv', 0)
-      " 全画面（9×9）にノートの窓は無い。分割に戻して、そのマスのノートを右に出す
-      let s:S.size = 3
-      let s:S.cur = [1, 1]
+    if !get(s:S, 'nv', 1)
+      " 右のノートの窓を隠してある。出して、そのマスのノートを右に出す
+      let s:S.nv = 1
       call s:ensure_note_win()
       call s:render()
       call s:show_note(s:S.center)
@@ -2401,7 +2398,7 @@ function! gnosis#mview#gui_state() abort
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
-        \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
+        \           'mode': s:S.mode, 'nv': get(s:S, 'nv', 1), 'dbasis': get(s:S, 'dbasis', 'center')},
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
 
@@ -2500,7 +2497,7 @@ function! gnosis#mview#preset_apply(name) abort
   if empty(l:d) || !exists('s:S') || !has_key(s:S, 'cells')
     return 0
   endif
-  for l:k in ['nums', 'pv', 'out_on', 'rank_on', 'near_on', 'rel_on']
+  for l:k in ['nums', 'nv', 'out_on', 'rank_on', 'near_on', 'rel_on']
     if has_key(l:d, l:k)
       let s:S[l:k] = l:d[l:k] ? 1 : 0
     endif

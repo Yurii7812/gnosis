@@ -318,7 +318,22 @@ function showError(msg) {
 
 // ---------------------------------------------------------------- 起動
 
+// 紙のスキャンの番号付けだけの窓（Vim の \F から。Vim も端末も起動しない）
+async function bootScanOnly() {
+  document.body.classList.remove("launching");
+  $("stage").hidden = true;
+  $("statusbar").hidden = true;
+  $("launcher").hidden = true;
+  scan = createScan($("scan"), {
+    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
+    onClose: () => gui.quit(),
+  });
+  window.__gui = { scan, state: () => ({}) };
+  await scan.open();
+}
+
 async function boot() {
+  if (new URLSearchParams(location.search).get("scan") === "1") return bootScanOnly();
   window.addEventListener("error", (e) => showError(e.message || e.error));
   window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
   view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });

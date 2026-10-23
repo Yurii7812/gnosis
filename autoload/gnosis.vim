@@ -16190,6 +16190,22 @@ function! gnosis#paper_index() abort
 endfunction
 
 " スキャン画像の番号付け GUI を起動する。移動先は今開いているノートのフォルダ。
+function! s:paper_scan_app(root) abort
+  if !exists('g:gnosis_python') || empty(g:gnosis_python) || has('win32')
+    return 0
+  endif
+  let l:webdir = fnamemodify(g:gnosis_python, ':h:h') . '/web'
+  let l:launcher = fnamemodify(l:webdir, ':h') . '/bin/gnosis'
+  if !executable(l:launcher) || !filereadable(l:webdir . '/electron/main.cjs') || !executable(l:webdir . '/node_modules/.bin/electron')
+    return 0
+  endif
+  let l:env = {'GNOSIS_HOME': gnosis#home#dir(), 'GNOSIS_ROOT': fnamemodify(a:root, ':p'), 'GNOSIS_SCAN_ONLY': '1'}
+  call job_start([l:launcher, '--app'], {'out_io': 'null', 'err_io': 'null', 'env': l:env, 'stoponexit': '',
+        \ 'exit_cb': function('s:paper_scan_done')})
+  echo gnosis#i18n#tr('Gnosis: 番号付けの窓を開きました（キーボードだけで操作。終わると自動で閉じます）')
+  return 1
+endfunction
+
 function! gnosis#paper_scan() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !filereadable(s:index_path(l:root))
@@ -16202,6 +16218,10 @@ function! gnosis#paper_scan() abort
       silent! update
     endif
     call GnosisGuiScan()
+    return
+  endif
+  " ふつうの端末の Vim からは、番号付けだけの大きな窓（アプリの画面。Vim は起動しない）を開く。アプリが無ければ従来の窓
+  if s:paper_scan_app(l:root)
     return
   endif
   let l:dest = expand('%:p:h')
