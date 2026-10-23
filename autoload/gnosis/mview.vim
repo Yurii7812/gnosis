@@ -363,8 +363,7 @@ function! s:rank_map(basis) abort
 endfunction
 
 function! s:order(list, c) abort
-  " 近さ順は r（予測関連）がオンのときだけ
-  if !get(s:S, 'rel_on', 0) || len(a:list) < 2
+  if !get(s:S, 'rank_on', 0) || len(a:list) < 2
     return a:list
   endif
   let l:basis = (a:c ==# s:S.center || get(s:S, 'dbasis', 'center') ==# 'self') ? a:c : s:S.center
@@ -400,7 +399,7 @@ function! s:items_raw(c) abort
 endfunction
 
 function! s:pages(center) abort
-  " 外向きモード（w）の中心は 1 枚に 80 件（9×9 の中心以外のマス全部）
+  " 外向きモード（v）の中心は 1 枚に 80 件（9×9 の中心以外のマス全部）
   let l:per = (get(s:S, 'out_on', 0) && s:S.size == 9 && a:center ==# s:S.center) ? 80 : 8
   return max([1, (len(s:items(a:center)) + l:per - 1) / l:per])
 endfunction
@@ -415,8 +414,8 @@ function! s:ring(c, page) abort
   return l:r
 endfunction
 
-" 外向きモード（w）: 中心のリンクを、9×9 の中心以外の 80 マスに、内側から外側へ 1 つずつ並べる（周りの曼荼羅は作らない）。
-" 並べる順はふつうの順（r がオンのときだけ近さ順）。マスの順は、中心に近い輪から、輪の中は上から時計回り
+" 外向きモード（v）: 中心のリンクを、9×9 の中心以外の 80 マスに、内側から外側へ 1 つずつ並べる（周りの曼荼羅は作らない）。
+" 並べる順はふつうの順（w の近さ順がオンなら近さ順）。マスの順は、中心に近い輪から、輪の中は上から時計回り
 function! s:spiral() abort
   if !exists('s:spiral_cache')
     let l:cells = []
@@ -815,7 +814,7 @@ endfunction
 " ---- Tab / Shift-Tab: 順次表示。1 2 3 4 6 7 8 9（5 の中心は飛ばす）、次の曼荼羅の 1 へ、最後まで行ったら最初に戻る ----------
 function! s:seq(dir) abort
   " Tab / S-Tab: 今いるマスの 3×3（9×9 では外側のブロックの中も）の 1 〜 9 を順に。最後（9）・最初（1）で止まる（ループしない）。
-  " ページ（[ ]）は動かさない。外向きモード（w）では、内側から外側への順に 1 つずつ（中心 → 80 番目。止まる）
+  " ページ（[ ]）は動かさない。外向きモード（v）では、内側から外側への順に 1 つずつ（中心 → 80 番目。止まる）
   if get(s:S, 'out_on', 0) && s:S.size == 9
     " 並んでいる（リンクのある）マスだけ
     let l:slots = [[4, 4]] + filter(copy(s:spiral()), 'get(s:S.cells[v:val[0]][v:val[1]], "id", "") !=# ""')
@@ -846,12 +845,12 @@ function! s:help_lines() abort
         \ '',
         \ ' 動く      h j k l / 矢印    1-9 そのマスへ(5 が中心)   t 数字の動き切替   z 中央に',
         \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
-        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 1 → 9（9×9 では外側のブロックの中。外向き w では内側から外側へ。最後で止まる）',
+        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 1 → 9（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
         \ ' モード     a 全体   i グループ・索引だけ',
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
-        \ ' 並べる     w 外向き(リンクを内側から外側へ 1 つずつ最大 80 個。ふつうの順・r がオンのときだけ近さ順)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' 並べる     v 外向き(リンクを内側から外側へ 1 つずつ最大 80 個)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
         \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
@@ -913,8 +912,8 @@ endfunction
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
-        \ . (get(s:S, 'out_on', 0) ? ' w:外向き' : '')
-        \ . (get(s:S, 'rel_on', 0) ? ' 近さ順' . (s:S.size == 9 && get(s:S, 'dbasis', 'center') ==# 'self' ? '(外側は自分)' : '') : '')
+        \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
+        \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 && !get(s:S, 'out_on', 0) ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
   return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
         \ (a:pages > 1 && empty(a:ptop) && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
@@ -1703,11 +1702,18 @@ function! s:toggle_preview() abort
   endif
 endfunction
 
-" d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）。近さ順は r（予測関連）がオンのとき
+" w: 近さ順（中心に近いものを先に）のオン/オフ。d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）
+function! s:toggle_rank() abort
+  let s:S.rank_on = !get(s:S, 'rank_on', 0)
+  let s:S.page = 0
+  let s:S.opage = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
 
 function! s:toggle_dbasis() abort
-  if s:S.size != 9 || !get(s:S, 'rel_on', 0)
-    echo 'Gnosis: d は 9×9 で r（予測関連・近さ順）がオンのときの、外側の並びの切り替えです'
+  if s:S.size != 9 || !get(s:S, 'rank_on', 0)
+    echo 'Gnosis: d は 9×9 で近さ順（w）がオンのときの、外側の並びの切り替えです'
     return
   endif
   let s:S.dbasis = get(s:S, 'dbasis', 'center') ==# 'center' ? 'self' : 'center'
@@ -1810,7 +1816,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> ( <Cmd>call <SID>stretch(-1)<CR>
   nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
-  nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_out()<CR>
+  nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
+  nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
@@ -2296,7 +2303,7 @@ function! gnosis#mview#gui_state() abort
         \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, 1, '', '')),
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
-        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rel_on', 0), 'out': get(s:S, 'out_on', 0),
+        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
         \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
