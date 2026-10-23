@@ -2,7 +2,14 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-22）
+## 現在地（2026-10-23）
+- ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main 2705598 から）。**main 未マージ・push 未**（最後にまとめて ff-only マージ → push）。DECISIONS D011・USER_GUIDE §6。
+  - 曼荼羅ビューの作り直し（モード a/i + 重ね c/r・色 7 種・`x` `m` `n` `N` `gs` `o` `Tab`・`q` `Q`・`?` ポップアップ・起動時に左半分・窓の保護）、`\l` → `e` → `g`（`\g` 廃止。`I` `t`）、SQLite キャッシュ（`python/mandala_cache.py`。10 万件 38 秒 → 0.3 秒未満、100 万件も実測）、題は H1（`note_title.py`・`title_migrate.py`）、よみは JSON（`YomiStore`・`yomi_migrate.py`）、`\zz` の隠す窓（`hide.vim`）、時系列の木の ChildBranch: と親の手削除（`note_format_v2.py`）。
+  - 試験: `python/test_mandala_cache.py`・`test_title_migrate.py`・`test_sort_yomi.py`（JSON・移行）・`test_branch_ops.py`（時系列・手削除）・`test/mview_check.vim`（116 項目）・`test/hide_net.sh`。`test_nav.py` は日付で結果が変わるのを直した。
+  - 実測（疑似 vault。`~/Desktop/test/bench-*`）: 10 万件 構築 6 秒・再走査 0.75 秒・`ring` 0.06 秒・near 0.22 秒。100 万件 構築 103 秒・再走査 8 秒・DB 348MB・Vim で開く 0.26 秒（裏で更新）。
+  - **未実施**: 全体の回帰 `sh test/run.sh` の最終の通し・Electron E2E・実機の端末での見た目と手触り（曼荼羅の色・ポップアップ・起動時の左半分・`gs` の fzf）・本物の vault への移行（題・よみ・時系列の ChildBranch:）。本物の vault はバックアップしてから、`title_migrate.py` / `yomi_migrate.py` を `--dry-run` で件数を見て適用する。
+
+## 以前の現在地（2026-10-22）
 - ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main ae01c51 から）。2026-10-22 に main へ ff-only マージ。DECISIONS D010・USER_GUIDE §5/§6。
   - GUI（作業台・Obsidian 風）とスマホの予定・カレンダーをアーカイブ（タグ `archive/gui-workbench-2026-10-21`）。タブを `\q` / `\Q` の別ボードに。起動を `\c` に。
   - 曼荼羅ビュー（`<Space>`）・`\g`（索引を曼荼羅で選んで載せる）。試験: `python/test_mandala_view.py`・`test/mview_net.sh`・`test/tabs_board_net.sh`。

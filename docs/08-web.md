@@ -4,8 +4,8 @@
 `v` / ボタンで vault の一覧（登録・新規作成・一覧から外す）、`s` / ボタンで設定画面（言語・最大化・ウィンドウサイズ・文字サイズ・
 ライト/ダーク・テーマ・Plug でテーマ追加・カスタム配色。`<vault>/.gnosis/settings.json`）。Enter で、その vault の Vim を起動する。
 vault を開いたあとは、Vim が読み込んだテーマの色を画面にも使う。
-**アプリ（`\A`）の配色は通常の Vim の配色とは別の設定**（`appTheme` / `appCustomThemes`）。既定は白に近い背景（`#FAFAFA`・本文 `#1F1F1F`・リンク `#21538C` 下線つき・見出し `#603510`。どれもカラーパレットにある色）。設定画面の「配色を作る・直す」で、色（HEX・カラーピッカー・8×9 のパレット）を変えると、保存する前でも日本語のサンプル（見出し・リンク・選択範囲・カーソル行）にすぐ反映される。「保存して使う」まで設定は書き換えない。キャンセルで元の配色に戻る。通常の Vim の配色も同じ画面で別に編集できる。`Ctrl` + `+`/`-`/`0` は画面全体の拡大縮小（その場だけ）。
-リンクを `Alt` + クリックすると、開かずにカーソルだけを動かす。Vim の `\A` から開いたときは、起動画面を出さずにその vault で始める。
+**アプリ（`\c`）の配色は通常の Vim の配色とは別の設定**（`appTheme` / `appCustomThemes`）。既定は白に近い背景（`#FAFAFA`・本文 `#1F1F1F`・リンク `#21538C` 下線つき・見出し `#603510`。どれもカラーパレットにある色）。設定画面の「配色を作る・直す」で、色（HEX・カラーピッカー・8×9 のパレット）を変えると、保存する前でも日本語のサンプル（見出し・リンク・選択範囲・カーソル行）にすぐ反映される。「保存して使う」まで設定は書き換えない。キャンセルで元の配色に戻る。通常の Vim の配色も同じ画面で別に編集できる。`Ctrl` + `+`/`-`/`0` は画面全体の拡大縮小（その場だけ）。
+リンクを `Alt` + クリックすると、開かずにカーソルだけを動かす。Vim の `\c` から開いたときは、起動画面を出さずにその vault で始める。
 実装: `web/electron/config.cjs`（Vim 側と同じ規則の登録簿・設定・テーマ）、`web/src/launcher.js`（画面）、`web/vim/gui.vim`（色・文字サイズ・vault を送る、設定の読み直しを受ける）。
 
 SYN を、**マークダウンのビューアの見た目**で使うデスクトップアプリ（Electron）。
@@ -19,7 +19,7 @@ SYN を、**マークダウンのビューアの見た目**で使うデスクト
 
 ## 起動
 
-- Vim から: `\A` または `:GnosisWeb`。今の root と、今開いているノートを渡して起動する。
+- Vim から: `\c` または `:GnosisWeb`。今の root と、今開いているノートを渡して起動する。
 - 直接: `bin/gnosis --app [VAULT_DIR]`（引数なしなら Vim が前回の root を使う）。
   アプリメニュー: `~/.local/share/applications/simple-yurii-note.desktop`。
 - 初回だけ `cd web && npm install && npm run build`。
@@ -68,10 +68,10 @@ Windows でも動くように作ってあります（Linux は今のまま）。
    `rebuild:pty` は `node-pty`（Windows の擬似端末 ConPTY）を、Electron 用に作り直す。
 3. Vim の設定は Windows 用に用意する。`GNOSIS_VIMRC` で vimrc の場所を指定できる。SYN のプラグインの
    `runtimepath` は、Windows のパスで書く。
-4. 起動: `bin\gnosis.cmd --app [VAULT_DIR]`、または Vim で `\A`（`:GnosisWeb`）。
+4. 起動: `bin\gnosis.cmd --app [VAULT_DIR]`、または Vim で `\c`（`:GnosisWeb`）。
 
 環境変数: `GNOSIS_VIM`（Vim の実行ファイル。既定は PATH の `vim`）、`GNOSIS_PTY`（`node-pty` / `python`。
 既定は Windows だけ `node-pty`）。`node-pty` の経路は、Linux でも `GNOSIS_PTY=node-pty` で動くことを確認済み。
 
 ## ライトの見え方（2026-10-20〜）
-`\A` のライト（白）は、ブラウザの **Markdown Viewer 拡張（GitHub スタイル）と同じ見え方**にする。配色が明るいとき `html.theme-light` が付き、`web/styles.css` の該当ブロックが効く: 本文の幅 980px・余白 45px・行間 1.5・GitHub のフォント・見出し（h1/h2 に下線・本文と同じ色）・インラインコードの背景・コードブロック・引用の左線・表の罫線と偶数行・太い水平線・リンクは通常は下線なし。色は配色（palette）に従う。ダークは従来どおり。試験: `web/test/look_e2e.mjs`（計算済みスタイルの検査。`LOOK_SHOT=フォルダ` で目視用の画像も保存）。
+`\c` のライト（白）は、ブラウザの **Markdown Viewer 拡張（GitHub スタイル）と同じ見え方**にする。配色が明るいとき `html.theme-light` が付き、`web/styles.css` の該当ブロックが効く: 本文の幅 980px・余白 45px・行間 1.5・GitHub のフォント・見出し（h1/h2 に下線・本文と同じ色）・インラインコードの背景・コードブロック・引用の左線・表の罫線と偶数行・太い水平線・リンクは通常は下線なし。色は配色（palette）に従う。ダークは従来どおり。試験: `web/test/look_e2e.mjs`（計算済みスタイルの検査。`LOOK_SHOT=フォルダ` で目視用の画像も保存）。

@@ -3,7 +3,7 @@
 - 原本の要求仕様: `Gnosis_Claude_Implementation_Master_Prompt.md`（全機能が対象。縮小・格下げ禁止）
 - 現在地と次の作業: `docs/PROGRESS.md`（**作業の前に読み、終わったら必ず更新**）
 - 機能台帳: `docs/FEATURES.md` ／ 順序: `docs/ROADMAP.md` ／ 判断の記録: `docs/DECISIONS.md`
-- 不変条件: `docs/PHILOSOPHY.md`（ダブルインデックス・実 Vim・`\A` 拡張のみ・`\M` 重複禁止）
+- 不変条件: `docs/PHILOSOPHY.md`（ダブルインデックス・実 Vim・`\c` 拡張のみ・`\M` 重複禁止）
 
 ## 作業規則
 - 返答・コミット・文書は日本語。コミットは小さく、末尾に Co-Authored-By を付ける。
