@@ -33909,8 +33909,8 @@ ${h3.join(`
   ];
   var DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa" };
   var LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d" };
-  var BG_DARK = ["#2d3b52", "#43304f", "#2f4a3a", "#4f3f2b", "#4f2f36", "#2b4a4d", "#4a4a2b", "#3d3d4a"];
-  var BG_LIGHT = ["#e3edfb", "#f1e6f7", "#e4f3e8", "#f8eddc", "#f8e3e8", "#dff1f2", "#f3f1d6", "#e9e9ee"];
+  var BG_DARK = Array(8).fill("#262b36");
+  var BG_LIGHT = Array(8).fill("#f1f3f6");
   function createMandala(root, { onCell }) {
     let last3 = null;
     root.classList.add("mandala");

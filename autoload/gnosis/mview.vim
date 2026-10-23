@@ -1965,8 +1965,8 @@ function! s:hl() abort
     " 中心と同じノート（外側）: 種類の色を背景に、文字は暗く
     execute printf('highlight default GnosisMv%sD guifg=#1a1a1a ctermfg=234 guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
   endfor
-  " 9×9 の背景: 真ん中の周りの 8 マスと、それぞれの曼荼羅の中心のマスを、同じ薄い色で塗る（8 色）。種類の色（文字）はそのまま
-  let l:bgs = [['#2d3b52', 24], ['#43304f', 53], ['#2f4a3a', 22], ['#4f3f2b', 94], ['#4f2f36', 52], ['#2b4a4d', 23], ['#4a4a2b', 58], ['#3d3d4a', 60]]
+  " 9×9 の背景: 真ん中の周りの 8 マスと、それぞれの曼荼羅の中心のマスを、全部同じごく薄い色で塗る（読みづらくならないように）。種類の色（文字）はそのまま
+  let l:bgs = repeat([['#262b36', 236]], 8)
   for l:i in range(8)
     let [l:gb, l:cb] = l:bgs[l:i]
     execute printf('highlight default GnosisMvBg%d guibg=%s ctermbg=%d', l:i, l:gb, l:cb)
