@@ -33996,13 +33996,27 @@ ${h3.join(`
   function createScan(root, { api, onClose }) {
     root.className = "scan";
     root.innerHTML = `
-    <div class="scan-count"></div>
-    <div class="scan-img"><img alt=""><div class="scan-empty"></div></div>
-    <div class="scan-prev"></div>
-    <div class="scan-label"></div>
-    <input class="scan-input" type="text" autocomplete="off" spellcheck="false" aria-label="">
-    <div class="scan-msg"></div>
-    <div class="scan-keys"></div>`;
+    <div class="scan-stage scan-source" hidden>
+      <div class="scan-title"></div>
+      <div class="scan-choice c-out"></div>
+      <div class="scan-choice c-in"></div>
+      <div class="scan-keys k-source"></div>
+    </div>
+    <div class="scan-stage scan-folder" hidden>
+      <div class="scan-title"></div>
+      <div class="scan-path"></div>
+      <div class="scan-list"></div>
+      <div class="scan-keys k-folder"></div>
+    </div>
+    <div class="scan-stage scan-number" hidden>
+      <div class="scan-count"></div>
+      <div class="scan-img"><img alt=""><div class="scan-empty"></div></div>
+      <div class="scan-prev"></div>
+      <div class="scan-label"></div>
+      <input class="scan-input" type="text" autocomplete="off" spellcheck="false" aria-label="">
+      <div class="scan-msg"></div>
+      <div class="scan-keys k-number"></div>
+    </div>`;
     const $4 = (s15) => root.querySelector(s15);
     const img = $4(".scan-img img"), empty = $4(".scan-empty"), input = $4(".scan-input");
     const en2 = document.documentElement.lang === "en";
@@ -34017,7 +34031,17 @@ ${h3.join(`
       busy: "Working\u2026",
       keys: "Enter: set and go next   \u2191 \u2193: back / forth   d: paper diary   t: topic   Tab: put the previous number   Esc: finish",
       done: (id2) => `Saved as ${id2}`,
-      bad: (e) => e
+      bad: (e) => e,
+      title: "Which scans do you want to number?",
+      out: "Enter   A folder outside the vault (photos on this computer)",
+      in: (n) => `v   Inside the vault (unnumbered scans taken in with \\M)  ${n} scans`,
+      srcKeys: "Enter / v: choose   Esc: close",
+      folderTitle: "Choose the folder with the scans",
+      use: (n) => `\u25B6 Use this folder (${n} photos)`,
+      up: "\u2191 (go up)",
+      folderKeys: "\u2191 \u2193: choose   Enter: open / use   \u2190 Backspace: up   Esc: back",
+      moving: "Moving the photos\u2026",
+      emptyFolder: "There are no photos in that folder."
     } : {
       count: (i, n) => `${i} / ${n}`,
       none: "\u756A\u53F7\u306E\u306A\u3044\u30B9\u30AD\u30E3\u30F3\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
@@ -34029,11 +34053,94 @@ ${h3.join(`
       busy: "\u6574\u7406\u3057\u3066\u3044\u307E\u3059\u2026",
       keys: "Enter \u6C7A\u3081\u3066\u6B21\u3078\u3000\u2191 \u2193 \u524D\u5F8C\u3000d \u65E5\u8A18\u3000t \u30C8\u30D4\u30C3\u30AF\u3000Tab \u524D\u306E\u756A\u53F7\u3092\u5165\u308C\u308B\u3000Esc \u7D42\u4E86",
       done: (id2) => `${id2} \u306B\u3057\u307E\u3057\u305F`,
-      bad: (e) => e
+      bad: (e) => e,
+      title: "\u3069\u306E\u30B9\u30AD\u30E3\u30F3\u306B\u756A\u53F7\u3092\u4ED8\u3051\u308B\uFF1F",
+      out: "Enter\u3000vault \u306E\u5916\u306E\u30D5\u30A9\u30EB\u30C0\uFF08\u30D1\u30BD\u30B3\u30F3\u306E\u4E2D\u306E\u5199\u771F\uFF09",
+      in: (n) => `v\u3000vault \u306E\u4E2D\uFF08\\M \u3067\u53D6\u308A\u8FBC\u3093\u3060\u3001\u756A\u53F7\u306E\u306A\u3044\u3082\u306E\uFF09\u3000${n} \u679A`,
+      srcKeys: "Enter / v \u3067\u9078\u3076\u3000Esc \u9589\u3058\u308B",
+      folderTitle: "\u30B9\u30AD\u30E3\u30F3\u304C\u5165\u3063\u3066\u3044\u308B\u30D5\u30A9\u30EB\u30C0\u3092\u9078\u3076",
+      use: (n) => `\u25B6 \u3053\u306E\u30D5\u30A9\u30EB\u30C0\u3092\u4F7F\u3046\uFF08\u5199\u771F ${n} \u679A\uFF09`,
+      up: "\u2191 \u4E0A\u306E\u30D5\u30A9\u30EB\u30C0\u3078",
+      folderKeys: "\u2191 \u2193 \u9078\u3076\u3000Enter \u958B\u304F / \u4F7F\u3046\u3000\u2190 Backspace \u4E0A\u3078\u3000Esc \u623B\u308B",
+      moving: "\u5199\u771F\u3092\u79FB\u3057\u3066\u3044\u307E\u3059\u2026",
+      emptyFolder: "\u305D\u306E\u30D5\u30A9\u30EB\u30C0\u306B\u5199\u771F\u304C\u3042\u308A\u307E\u305B\u3093\u3002"
     };
-    let scans = [], idx = 0, last3 = "", mode = "id", pendingTopicId = "", changed = 0, busy = false, url = "";
+    let stage = "source", scans = [], idx = 0, last3 = "", mode = "id", pendingTopicId = "", changed = 0, busy = false, url = "";
+    let dirInfo = null, sel2 = 0, inCount = 0;
+    const show = (name2) => {
+      stage = name2;
+      for (const st3 of ["source", "folder", "number"]) $4(".scan-" + st3).hidden = st3 !== name2;
+      if (name2 === "number") input.focus();
+      else root.focus();
+    };
+    const msg = (t3, bad) => {
+      const m = $4(".scan-msg");
+      m.textContent = t3 || "";
+      m.classList.toggle("bad", !!bad);
+    };
+    async function openSource() {
+      const r = await api.run("list", []);
+      scans = r.ok ? r.scans : [];
+      last3 = r.ok ? r.last || "" : "";
+      inCount = scans.length;
+      $4(".scan-source .scan-title").textContent = T.title;
+      $4(".c-out").textContent = T.out;
+      $4(".c-in").textContent = T.in(inCount);
+      $4(".c-in").classList.toggle("dim", !inCount);
+      $4(".k-source").textContent = T.srcKeys;
+      show("source");
+    }
+    async function openFolder(dir) {
+      const d = await api.ls(dir || localStorage.getItem("scanDir") || "");
+      if (!d.ok) {
+        dirInfo = null;
+        return;
+      }
+      dirInfo = d;
+      sel2 = 0;
+      $4(".scan-folder .scan-title").textContent = T.folderTitle;
+      $4(".k-folder").textContent = T.folderKeys;
+      drawFolder();
+      show("folder");
+    }
+    function folderRows() {
+      const rows = [{ kind: "use", text: T.use(dirInfo.images) }];
+      if (dirInfo.parent) rows.push({ kind: "up", text: T.up });
+      for (const n of dirInfo.dirs) rows.push({ kind: "dir", name: n, text: "\u{1F4C1} " + n });
+      return rows;
+    }
+    function drawFolder() {
+      $4(".scan-path").textContent = dirInfo.dir;
+      const list = $4(".scan-list");
+      list.textContent = "";
+      folderRows().forEach((r, i) => {
+        const el2 = document.createElement("div");
+        el2.className = "scan-row" + (i === sel2 ? " sel" : "") + (r.kind === "use" ? " use" : "");
+        el2.textContent = r.text;
+        list.appendChild(el2);
+      });
+      list.children[sel2]?.scrollIntoView({ block: "nearest" });
+    }
+    const join = (a, b2) => (a.endsWith("/") ? a : a + "/") + b2;
+    async function folderEnter() {
+      const r = folderRows()[sel2];
+      if (r.kind === "dir") return openFolder(join(dirInfo.dir, r.name));
+      if (r.kind === "up") return openFolder(dirInfo.parent);
+      if (!dirInfo.images) {
+        $4(".scan-path").textContent = T.emptyFolder;
+        return;
+      }
+      localStorage.setItem("scanDir", dirInfo.dir);
+      $4(".scan-path").textContent = T.moving;
+      const m = await api.run("importmove", [dirInfo.dir]);
+      if (!m.ok) {
+        $4(".scan-path").textContent = m.error || "error";
+        return;
+      }
+      await startNumbering();
+    }
     const label = () => ({ id: T.id, date: T.date, topicId: T.topicId, topicName: T.topicName })[mode];
-    async function show() {
+    async function showScan() {
       const n = scans.length;
       $4(".scan-count").textContent = n ? T.count(idx + 1, n) : "";
       $4(".scan-prev").textContent = last3 ? T.prev(last3) : "";
@@ -34041,7 +34148,7 @@ ${h3.join(`
       input.hidden = !n;
       $4(".scan-img").classList.toggle("none", !n);
       empty.textContent = n ? "" : T.none;
-      $4(".scan-keys").textContent = T.keys;
+      $4(".k-number").textContent = T.keys;
       if (url) {
         URL.revokeObjectURL(url);
         url = "";
@@ -34049,6 +34156,7 @@ ${h3.join(`
       if (!n) {
         img.removeAttribute("src");
         img.hidden = true;
+        root.focus();
         return;
       }
       img.hidden = false;
@@ -34059,17 +34167,23 @@ ${h3.join(`
       } else img.removeAttribute("src");
       input.focus();
     }
-    const msg = (t3, bad) => {
-      const m = $4(".scan-msg");
-      m.textContent = t3 || "";
-      m.classList.toggle("bad", !!bad);
-    };
     const setMode = (m) => {
       mode = m;
       input.value = "";
       msg("");
       $4(".scan-label").textContent = label();
     };
+    async function startNumbering() {
+      const r = await api.run("list", []);
+      scans = r.ok ? r.scans : [];
+      last3 = r.ok ? r.last || "" : "";
+      idx = 0;
+      mode = "id";
+      input.value = "";
+      msg(r.ok ? "" : r.error, !r.ok);
+      show("number");
+      await showScan();
+    }
     async function commit() {
       const v2 = input.value.trim();
       if (!v2 || busy || !scans.length) return;
@@ -34096,7 +34210,7 @@ ${h3.join(`
       scans.splice(idx, 1);
       if (idx >= scans.length) idx = Math.max(0, scans.length - 1);
       setMode("id");
-      await show();
+      await showScan();
     }
     async function close() {
       if (busy) return;
@@ -34124,7 +34238,7 @@ ${h3.join(`
         if (!scans.length) return;
         idx = (idx + (k === "ArrowDown" ? 1 : -1) + scans.length) % scans.length;
         setMode("id");
-        await show();
+        await showScan();
       } else if (k === "Tab") {
         e.preventDefault();
         if (last3 && mode === "id") input.value = last3;
@@ -34133,10 +34247,43 @@ ${h3.join(`
         setMode(k === "d" ? "date" : "topicId");
       }
     });
-    root.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !scans.length) {
+    root.addEventListener("keydown", async (e) => {
+      if (e.target === input || e.isComposing) return;
+      const k = e.key;
+      if (stage === "source") {
+        if (k === "Enter") {
+          e.preventDefault();
+          await openFolder("");
+        } else if (k === "v" || k === "V") {
+          e.preventDefault();
+          if (inCount) await startNumbering();
+        } else if (k === "Escape") {
+          e.preventDefault();
+          await close();
+        }
+      } else if (stage === "folder") {
+        const n = folderRows().length;
+        if (k === "ArrowDown") {
+          e.preventDefault();
+          sel2 = Math.min(n - 1, sel2 + 1);
+          drawFolder();
+        } else if (k === "ArrowUp") {
+          e.preventDefault();
+          sel2 = Math.max(0, sel2 - 1);
+          drawFolder();
+        } else if (k === "Enter" || k === "ArrowRight") {
+          e.preventDefault();
+          await folderEnter();
+        } else if ((k === "ArrowLeft" || k === "Backspace") && dirInfo.parent) {
+          e.preventDefault();
+          await openFolder(dirInfo.parent);
+        } else if (k === "Escape") {
+          e.preventDefault();
+          await openSource();
+        }
+      } else if (stage === "number" && k === "Escape" && !scans.length) {
         e.preventDefault();
-        close();
+        await close();
       }
     });
     root.tabIndex = -1;
@@ -34146,14 +34293,7 @@ ${h3.join(`
         changed = 0;
         idx = 0;
         mode = "id";
-        msg(T.busy);
-        const r = await api.run("list", []);
-        scans = r.ok ? r.scans : [];
-        last3 = r.ok ? r.last || "" : "";
-        input.value = "";
-        msg(r.ok ? "" : r.error, !r.ok);
-        await show();
-        (scans.length ? input : root).focus();
+        await openSource();
       },
       isOpen: () => !root.hidden
     };
@@ -34445,7 +34585,7 @@ ${h3.join(`
     view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
     mandala = createMandala($3("mandala"), { onCell: onMandalaCell });
     scan = createScan($3("scan"), {
-      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n) },
+      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
       // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
       onClose: (changed) => {
         if (changed) gui.write("\x1B:checktime|redraw\r");

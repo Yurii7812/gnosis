@@ -324,7 +324,7 @@ async function boot() {
   view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
   mandala = createMandala($("mandala"), { onCell: onMandalaCell });
   scan = createScan($("scan"), {
-    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n) },
+    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
     // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
     onClose: (changed) => { if (changed) gui.write("\x1b:checktime|redraw\r"); term.focus(); },
   });

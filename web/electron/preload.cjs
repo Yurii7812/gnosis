@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("gui", {
   onExit: (cb) => ipcRenderer.on("vim:exit", (_e, code) => cb(code)),
   readImage: (file, src) => ipcRenderer.invoke("img:read", file, src),
   scan: (cmd, args) => ipcRenderer.invoke("scan:run", cmd, args || []),
+  scanLs: (dir) => ipcRenderer.invoke("scan:ls", dir || ""),
   scanImage: (name) => ipcRenderer.invoke("scan:image", name),
   quit: () => ipcRenderer.send("app:quit"),
 });

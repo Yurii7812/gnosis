@@ -7,6 +7,7 @@
 
     scan_inbox.py list ROOT
     scan_inbox.py import ROOT SRC...           # フォルダまたは画像ファイルを受け皿へ（名前を paper-scan-… に揃える）
+    scan_inbox.py importmove ROOT DIR          # vault の外のフォルダの写真を、受け皿へ移す（元のフォルダからは無くなる）
     scan_inbox.py assign ROOT NAME ID [TOPIC]  # 番号（トピック名つきならトピックのノート）
     scan_inbox.py diary ROOT NAME DATE         # 紙の日記として登録
     scan_inbox.py finish ROOT                  # Index・Folgezettel-Index などを作り直す
@@ -67,7 +68,7 @@ def _next_name(d: Path, when: datetime, suffix: str) -> str:
         n += 1
 
 
-def import_files(root: Path, sources: list[str]) -> dict:
+def import_files(root: Path, sources: list[str], move: bool = False) -> dict:
     """フォルダ（直下の画像）または画像ファイルを受け皿へ。すでに paper-scan- の名前ならそのまま、違えば付け替える。"""
     d = inbox(root)
     files: list[Path] = []
@@ -90,7 +91,7 @@ def import_files(root: Path, sources: list[str]) -> dict:
             imported.add(name)
         else:
             name = _next_name(d, pp.image_datetime(f) or datetime.fromtimestamp(f.stat().st_mtime), suffix)
-        shutil.copy2(f, d / name)
+        (shutil.move if move else shutil.copy2)(str(f), str(d / name))
         added.append(name)
     if added:
         st["imported"] = sorted(imported)
@@ -175,6 +176,8 @@ def main(argv: list[str]) -> int:
             out = list_scans(Path(a[0]))
         elif cmd == "import":
             out = import_files(Path(a[0]), a[1:])
+        elif cmd == "importmove":
+            out = import_files(Path(a[0]), a[1:], move=True)
         elif cmd == "assign":
             out = assign(Path(a[0]), a[1], a[2], a[3] if len(a) > 3 else "")
         elif cmd == "diary":

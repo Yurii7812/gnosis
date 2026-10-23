@@ -358,7 +358,7 @@ ipcMain.on("app:quit", () => app.quit());
 
 // ---- 紙のスキャンの番号付け画面（python/scan_inbox.py。受け皿は <vault>/.gnosis/scans/）----
 const SCAN_PY = path.join(REPO, "python", "scan_inbox.py");
-const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0 }; // 名前 → 必要な引数の数（vault のあとに）
+const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0, importmove: 1 }; // 名前 → 必要な引数の数（vault のあとに）
 ipcMain.handle("scan:run", (_e, cmd, args) => new Promise((resolve) => {
   if (!noteRootDir || !(cmd in SCAN_CMDS) || !Array.isArray(args)) return resolve({ ok: false, error: "vault が開かれていません" });
   const list = args.map(String);
@@ -369,6 +369,16 @@ ipcMain.handle("scan:run", (_e, cmd, args) => new Promise((resolve) => {
   child.on("error", (e) => resolve({ ok: false, error: String(e.message || e) }));
   child.on("close", () => { try { resolve(JSON.parse(out.trim().split("\n").pop())); } catch { resolve({ ok: false, error: out.slice(0, 200) || "scan_inbox.py の出力を読めません" }); } });
 }));
+// vault の外のフォルダを選ぶ画面用: フォルダの中のフォルダと、写真の枚数（キーボードだけで辿る）
+ipcMain.handle("scan:ls", async (_e, dir) => {
+  try {
+    const d = path.resolve(dir || os.homedir());
+    const ents = await fs.promises.readdir(d, { withFileTypes: true });
+    const dirs = ents.filter((x) => x.isDirectory() && !x.name.startsWith(".")).map((x) => x.name).sort((a, b) => a.localeCompare(b, "ja"));
+    const images = ents.filter((x) => x.isFile() && /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(x.name)).length;
+    return { ok: true, dir: d, parent: path.dirname(d) === d ? "" : path.dirname(d), dirs, images };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+});
 ipcMain.handle("scan:image", async (_e, name) => {
   try {
     if (!noteRootDir || /[\\/]/.test(name) || name.startsWith(".")) return null;

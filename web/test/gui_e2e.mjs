@@ -49,6 +49,9 @@ const TINY_PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108
 fs.mkdirSync(path.join(vault, ".gnosis", "scans"), { recursive: true });
 for (const [i, n] of ["paper-scan-20261024-100000-01.png", "paper-scan-20261024-100000-02.png", "paper-scan-20261024-100000-03.png"].entries())
   fs.writeFileSync(path.join(vault, ".gnosis", "scans", n), Buffer.concat([TINY_PNG, Buffer.from(String(i))]));
+const outside = path.join(tmp, "outside-scans");
+fs.mkdirSync(outside, { recursive: true });
+for (const n of ["x1.png", "x2.png"]) fs.writeFileSync(path.join(outside, n), Buffer.concat([TINY_PNG, Buffer.from(n)]));
 execFileSync("python3", ["-c", "import sys; sys.path.insert(0, sys.argv[1]); import paper_pkm as pp; from pathlib import Path; pp.create_paper_index(Path(sys.argv[2]))", path.join(web, "..", "python"), vault]);
 
 const scenario = `(async () => {
@@ -95,8 +98,11 @@ const scenario = `(async () => {
     const inp = scanEl.querySelector('.scan-input');
     const key = async (k, wait = 700) => { inp.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); await sleep(wait); };
     const typeIn = async (v) => { inp.value = v; await sleep(50); };
+    const rootKey = async (k, wait = 800) => { scanEl.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); await sleep(wait); };
     await press(':call GnosisGuiScan()\\r', 1500);
-    const sc = { opened: !scanEl.hidden, count1: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
+    const choose = { shown: !scanEl.querySelector('.scan-source').hidden, inText: scanEl.querySelector('.c-in').textContent, outText: scanEl.querySelector('.c-out').textContent };
+    await rootKey('v', 1200);
+    const sc = { choose, opened: !scanEl.hidden, count1: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
     await typeIn('1a2'); await key('Enter', 1500);
     sc.afterFirst = { count: scanEl.querySelector('.scan-count').textContent, prev: scanEl.querySelector('.scan-prev').textContent };
     await key('d', 400);
@@ -110,6 +116,16 @@ const scenario = `(async () => {
     sc.empty = scanEl.querySelector('.scan-empty').textContent;
     await key('Escape', 6000);
     sc.closed = scanEl.hidden;
+    // vault の外のフォルダ: Enter → フォルダを選ぶ → Enter で使う → 番号付け
+    localStorage.setItem('scanDir', ${JSON.stringify(outside)});
+    await press(':call GnosisGuiScan()\\r', 1500);
+    await rootKey('Enter', 1000);
+    sc.folder = { shown: !scanEl.querySelector('.scan-folder').hidden, path: scanEl.querySelector('.scan-path').textContent, rows: scanEl.querySelector('.scan-row.use')?.textContent };
+    await rootKey('Enter', 2500);
+    sc.outside = { count: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
+    await typeIn('9'); await key('Enter', 1200);
+    await typeIn('9a'); await key('Enter', 1200);
+    await key('Escape', 6000);
     R.scan = sc;
   }
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
@@ -144,6 +160,9 @@ try {
   check(R.screenWidth && R.screenWidth.w1 !== R.screenWidth.w0, "< should change the screen width: " + JSON.stringify(R.screenWidth));
   {
     const sc = R.scan || {};
+    check(sc.choose?.shown && /vault/.test(sc.choose.outText) && /3/.test(sc.choose.inText), "\\F first asks where the scans are (Enter = outside the vault, v = inside): " + JSON.stringify(sc.choose));
+    check(sc.folder?.shown && /2/.test(sc.folder.rows || "") && sc.outside && /1 \/ 2/.test(sc.outside.count) && sc.outside.imgShown, "outside folder: pick the folder with the keyboard and number its photos: " + JSON.stringify([sc.folder, sc.outside]));
+    check(fs.existsSync(path.join(vault, "9.png")) && fs.existsSync(path.join(vault, "9a.png")) && fs.readdirSync(outside).length === 0, "outside photos are moved into the vault as numbered scans");
     check(sc.opened && /1 \/ 3/.test(sc.count1) && sc.imgShown, "scan screen should open with 3 unnumbered scans and show the image: " + JSON.stringify(sc));
     check(/2 ?\/ ?2|1 \/ 2/.test(sc.afterFirst?.count || "") && /1a2/.test(sc.afterFirst?.prev || ""), "after Enter the next scan is shown and the previous number is displayed: " + JSON.stringify(sc.afterFirst));
     check(/YYYY/.test(sc.dateLabel || "") && /1 \/ 1/.test(sc.afterDiary || ""), "d should ask for a date and register the diary: " + JSON.stringify(sc));

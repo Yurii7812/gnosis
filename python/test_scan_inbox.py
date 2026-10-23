@@ -80,6 +80,12 @@ class ScanInboxTest(unittest.TestCase):
         self.assertTrue((self.root / "2a.jpg").is_file())
         self.assertEqual(si.list_scans(self.root)["scans"], ["paper-scan-20261024-090000-02.jpg"])
 
+    def test_importmove_moves_photos_from_outside_the_vault(self):
+        r = si.import_files(self.root, [str(self.src)], move=True)
+        self.assertEqual(len(r["added"]), 3)
+        self.assertEqual(list(self.src.iterdir()), [])
+        self.assertEqual(si.main(["importmove", str(self.root), str(self.src)]), 0)
+
     def test_diary(self):
         names = si.import_files(self.root, [str(self.src)])["added"]
         r = si.diary(self.root, names[0], "2026/10/24")
