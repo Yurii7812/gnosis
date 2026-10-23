@@ -21294,7 +21294,8 @@ function! gnosis#index_add(src, group, ...) abort
     let l:link = substitute(l:link, '\](\([^)#]*\)', '](\1#' . escape(a:1, '\&~') , '')
   endif
   let l:n = 0
-  if s:body_has_link(l:link)
+  " まったく同じリンク行がすでにあるときだけ載せない（同じノートを別の索引語で載せるのはできる。表示名は聞く）
+  if index(getline(1, '$'), l:link) >= 0
     echohl WarningMsg | echo 'Gnosis: この索引にはもう載っています' | echohl NONE
   else
     let l:n = s:group_add_links_named([l:link])

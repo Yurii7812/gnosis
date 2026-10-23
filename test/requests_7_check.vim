@@ -18,16 +18,16 @@ call assert_equal([], g:gnosis_test_display_name)
 call assert_equal([], g:gnosis_test_yomi)
 call assert_true(index(F('g.md'), '[aaa](a.md)') >= 0)
 call assert_true(index(F('g.md'), '[別名](a.md)') >= 0)
-call assert_true(join(F('a.md'), "\n") =~# 'べつめい')
-" g: 外からも同じグループに再追加できる。
+" よみはノートの YAML ではなく vault の .gnosis/yomi/（JSON Lines）に入る
+call assert_true(join(systemlist('cat ' . shellescape($D . '/v/.gnosis/yomi') . '/*.jsonl 2>/dev/null'), "\n") =~# 'べつめい')
+" 外からも同じグループに再追加できる（\l → e → g の決定と同じ gnosis#index_add）。
 execute 'edit ' . fnameescape($D . '/v/a.md')
-let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['bbb']
 let g:gnosis_test_yomi = ['びー']
-call gnosis#insert_links_pick(['[G](g.md)'], getpos('.'))
+call gnosis#index_add($D . '/v/a.md', $D . '/v/g.md')
+execute 'silent! edit ' . fnameescape($D . '/v/a.md')
 call assert_equal([], g:gnosis_test_display_name)
 call assert_true(index(F('g.md'), '[bbb](a.md)') >= 0)
-call assert_true(index(getline(1, '$'), '[G:aaa,別名,bbb](g.md)') >= 0)
 " 確認画面でも同じファイルの別名を独立に編集・削除できる。
 execute 'edit ' . fnameescape($D . '/v/g.md')
 GnosisYomiReview
