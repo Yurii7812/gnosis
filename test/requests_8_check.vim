@@ -81,12 +81,12 @@ call assert_equal([], PB($D . '/v/modeoff.md'))
 let s:off = New(s:b, "\r", '設定オフ')
 call assert_equal([], PB(s:off))
 GnosisGroupParent on
-" 外から za g でグループを選ぶ場合も同じ。
+" 外から \l → e → g でグループを選ぶ場合（gnosis#index_add）も同じ。
 execute 'edit ' . fnameescape($D . '/v/joiner.md')
-let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['外から追加']
 let g:gnosis_test_yomi = ['そと']
-call gnosis#insert_links_pick(['[B](' . fnamemodify(s:b, ':t') . ')'], getpos('.'))
+call gnosis#index_add($D . '/v/joiner.md', s:b)
+execute 'silent! edit ' . fnameescape($D . '/v/joiner.md')
 call assert_equal(['[A](a.md)'], PB($D . '/v/joiner.md'))
 " 起点の未保存編集がある場合は何も作らず、グループにも登録しない。
 execute 'edit ' . fnameescape(s:a)
