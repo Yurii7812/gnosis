@@ -382,7 +382,47 @@ function! s:order(list, c) abort
 endfunction
 
 function! s:items(c) abort
-  return s:order(s:items_raw(a:c), a:c)
+  return s:order(s:outward(s:items_raw(a:c), a:c), a:c)
+endfunction
+
+" v: 外向きモード。中心から外へ向かうリンクだけにする（親と BackLink＝戻る道は出さない）。
+" 9×9 の外側のブロックでは、さらに中心と中心の周りのノートも出さない（同じノートが何度も出て見づらくなるのを避ける）
+function! s:outward(list, c) abort
+  if !get(s:S, 'out_on', 0) || empty(a:list)
+    return a:list
+  endif
+  call s:fetch(map(copy(a:list), 'v:val[0]'))
+  let l:skip = {}
+  if a:c !=# s:S.center
+    let l:skip[s:S.center] = 1
+    let l:saved = s:S.out_on
+    let s:S.out_on = 0
+    let l:cb = s:base(s:S.center)
+    let s:S.out_on = l:saved
+    call s:fetch(map(copy(l:cb), 'v:val[0]'))
+    for l:e in l:cb
+      if index(['parent', 'back'], s:kind(l:e[0], s:S.center)) < 0
+        let l:skip[l:e[0]] = 1
+      endif
+    endfor
+  endif
+  let l:out = []
+  for l:e in a:list
+    if empty(l:e[0]) || has_key(l:skip, l:e[0]) || index(['parent', 'back'], s:kind(l:e[0], a:c)) >= 0
+      continue
+    endif
+    call add(l:out, l:e)
+  endfor
+  return l:out
+endfunction
+
+" v: 外向きモードの入り切り
+function! s:toggle_out() abort
+  let s:S.out_on = !get(s:S, 'out_on', 0)
+  let s:S.page = 0
+  let s:S.opage = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
 endfunction
 
 function! s:items_raw(c) abort
@@ -786,7 +826,7 @@ function! s:help_lines() abort
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
-        \ ' 並べる     w 近さ順(中心に近いものを先に)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' 並べる     v 外向き(中心から外へ向かうリンクだけ)   w 近さ順(内側から外側へ。中心に近いものを先に)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
         \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
@@ -848,6 +888,7 @@ endfunction
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
+        \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
         \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
   return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
@@ -1750,6 +1791,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
   nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
+  nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
@@ -2235,7 +2277,7 @@ function! gnosis#mview#gui_state() abort
         \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, 1, '', '')),
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
-        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0),
+        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
         \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction

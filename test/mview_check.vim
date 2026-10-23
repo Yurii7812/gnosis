@@ -528,6 +528,31 @@ call s:keys('w')
 call s:ok('もう一度 w でオフ（元の並び）', s:st.rank_on == 0 && s:text() =~# '1 Index', s:text())
 call s:keys('q')
 
+" v: 外向き（親・BackLink を出さない）。9×9 でも、外側のブロックに中心と中心の周りのノートが出ない
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:kinds0 = map(filter(copy(s:st.cells[0] + s:st.cells[1] + s:st.cells[2]), 'v:val.id !=# ""'), 'v:val.kind')
+call s:keys('v')
+let s:kinds1 = map(filter(copy(s:st.cells[0] + s:st.cells[1] + s:st.cells[2]), 'v:val.id !=# ""'), 'v:val.kind')
+call s:ok('v: 外向きがオンになり、状態の行にも出る', s:st.out_on == 1 && s:text() =~# 'v:外向き', s:text())
+call s:ok('v: 親と BackLink が出ない', index(s:kinds1, 'parent') < 0 && index(s:kinds1, 'back') < 0, string([s:kinds0, s:kinds1]))
+call s:keys('f')
+let s:st = gnosis#mview#state()
+let s:ids9 = []
+for s:row in s:st.cells
+  for s:cell in s:row
+    if s:cell.role ==# 'sub' && s:cell.id !=# ''
+      call add(s:ids9, s:cell.id)
+    endif
+  endfor
+endfor
+call s:ok('v: 9×9 の外側に中心のノート自身が出ない', index(s:ids9, 'plant.md') < 0, string(s:ids9))
+call s:keys('f')
+call s:keys('v')
+call s:ok('もう一度 v でオフ', s:st.out_on == 0, '')
+call s:keys('q')
+
 " # : 数字（マスの番号・ページ）を出す / 隠す
 execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
