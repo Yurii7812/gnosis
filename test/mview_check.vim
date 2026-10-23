@@ -482,5 +482,20 @@ let s:cur = getcurpos(win_getid(s:nw))
 call s:ok('カーソルは先頭から数えて窓の高さの行（画面のいちばん下）', s:cur[1] == winheight(s:nw), string(s:cur) . ' h=' . winheight(s:nw))
 call s:keys('q')
 
+" 曼荼羅の窓が選ばれたまま \i などでノートを開いても、曼荼羅の窓は壊れず、右の窓に開く
+call s:mk('guard.md', '守る', 0, [], [])
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:ok('曼荼羅の窓にいる', &filetype ==# 'gnosis-mandala')
+execute 'edit ' . fnameescape(s:v . '/guard.md')
+sleep 100m
+let s:ft = map(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype")')
+let s:nm = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")')
+call s:ok('曼荼羅の窓は曼荼羅のまま', index(s:ft, 'gnosis-mandala') >= 0, string(s:ft))
+call s:ok('開いたノートは右の窓に出る', index(s:nm, 'guard.md') >= 0, string(s:nm))
+call s:ok('曼荼羅の中心も開いたノートに合う', s:st.center ==# 'guard.md', s:st.center)
+call s:keys('Q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

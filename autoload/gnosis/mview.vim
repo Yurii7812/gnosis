@@ -1660,6 +1660,47 @@ function! s:touched(path) abort
   let s:sync_timer = timer_start(600, {-> gnosis#mview#refresh()})
 endfunction
 
+" ---- 曼荼羅の窓にほかのバッファが入ろうとしたら、右のノートの窓に開く -------------------------------------
+" \i（Index を開く）など、今の窓にノートを開く操作はたくさんある。曼荼羅の窓が選ばれたまま実行されても、
+" 曼荼羅の窓を壊さず、開いたノートは右の窓に出す（曼荼羅の中心もそのノートに合わせる）
+function! s:guard() abort
+  if empty(get(s:S, 'buf', 0)) || &filetype ==# 'gnosis-mandala' || &buftype !=# ''
+    return
+  endif
+  if win_getid() != get(s:S, 'win', -1)
+    return
+  endif
+  call timer_start(0, function('s:guard_move', [bufnr('%')]))
+endfunction
+
+function! s:guard_move(buf, timer) abort
+  let l:mw = get(s:S, 'win', -1)
+  if l:mw < 0 || empty(getwininfo(l:mw)) || winbufnr(l:mw) != a:buf
+    return
+  endif
+  let l:path = fnamemodify(bufname(a:buf), ':p')
+  call win_execute(l:mw, 'silent! buffer ' . s:S.buf)
+  if s:S.size != 3
+    call s:full()
+  endif
+  call s:ensure_note_win()
+  let l:nw = s:note_win()
+  if l:nw < 0
+    return
+  endif
+  call win_gotoid(l:nw)
+  execute 'silent! buffer ' . a:buf
+  " 曼荼羅の中心も、開いたノートに合わせる（選ぶモードの最中は動かさない）
+  let l:rel = s:rel_of(l:path)
+  if !empty(l:rel) && empty(get(s:S, 'pick', '')) && l:rel !=# s:S.center && s:has(l:rel)
+    call add(s:S.hist, [s:S.center, s:S.page])
+    let s:S.center = l:rel
+    let s:S.page = 0
+    let s:S.cur = [1, 1]
+    call win_execute(l:mw, 'call gnosis#mview#render_here()')
+  endif
+endfunction
+
 " 端末のカーソルの表示。曼荼羅では出さない（選んでいるマスは背景色で分かる）。show=0 で隠し、1 で戻す
 function! gnosis#mview#cursor(show) abort
   if has('gui_running')
@@ -1784,6 +1825,7 @@ function! s:open(center, ...) abort
     autocmd VimLeavePre * call s:save_state()
     " 配色が読み込み直されると（ノートを開き直したときなど）色の定義が全部消えるので、定義し直す
     autocmd ColorScheme * call s:hl()
+    autocmd BufWinEnter * call s:guard()
   augroup END
   let l:pick = a:0 ? a:1 : ''
   " 閉じたときに戻るノート（全画面で閉じると窓が 1 つだけになるため）
@@ -1851,6 +1893,7 @@ function! s:open(center, ...) abort
     execute 'vertical resize ' . s:win_width()
   endif
   let s:S.buf = bufnr('%')
+  let s:S.win = win_getid()
   call s:render()
   call s:show_note(l:c)
   call win_gotoid(s:mwin())
