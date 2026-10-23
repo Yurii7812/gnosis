@@ -657,7 +657,22 @@
     "時系列記録「%s」を「%s」にまとめました（その日のノート %d 件）": "Merged chronological record \"%s\" into \"%s\" (%d daily notes)",
     "まとめる元（消える方）:": "Merge from (will be removed):",
     "まとめる先（残る方）:": "Merge into (will remain):",
-    "最初の Context を親（Branch）にしました: %d 件（飛ばしたもの %d 件）": "Made the first Context the parent (Branch): %d notes (%d skipped)"
+    "最初の Context を親（Branch）にしました: %d 件（飛ばしたもの %d 件）": "Made the first Context the parent (Branch): %d notes (%d skipped)",
+    "本文に置く": "Put in the body",
+    "本文の最後": "end of the body",
+    "行の中": "inside the line",
+    "カーソル直下": "right below the cursor",
+    "見出しの下": "under a heading",
+    "関係を結ぶ": "Make a relation",
+    "Parent(親)": "Parent",
+    "Branch(子)": "Branch (child)",
+    "Context(リンク先に今のノート)": "Context (this note goes into the other note)",
+    "Context(今のノートにリンク先)": "Context (the other note goes into this note)",
+    "Related(相互)": "Related (both ways)",
+    "グループに入れる": "put into a group",
+    "マージ": "merge",
+    "やめる": "cancel",
+    "どこに置く？": "Where to put it?"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

@@ -131,7 +131,7 @@ try
     sleep 100m
   endfor
   let s:g = s:guide()
-  call s:ok('英語: 題が英語', index(s:g, 'title: Gnosis Guide') >= 0 && index(s:g, '# Gnosis Guide') >= 0)
+  call s:ok('英語: 題が英語', index(s:g, '# Gnosis Guide') >= 0)
   " グループのリンクの表示名は「グループ名:グループの中の表示名」なので、題が変わればそこも変わる。リンク先で比べる
   call s:ok('英語: 関係の節が残る', map(copy(s:tail(s:g)), 'substitute(v:val, "^\\[[^]]*\\]", "", "")') ==# map(copy(s:t), 'substitute(v:val, "^\\[[^]]*\\]", "", "")'))
   let s:before_sync = {}

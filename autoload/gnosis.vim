@@ -14122,8 +14122,9 @@ function! s:insert_links_core(links, ...) abort
   let l:can_g = exists('*gnosis#mview#group_pick') && !empty(get(g:, 'gnosis_root', ''))
   " m（マージ）は \l で 1 つだけ選んだとき
   let l:can_m = !empty(s:inline_pos) && len(l:links) == 1
-  echo gnosis#insert_prompt_text(a:0 > 0, l:can_g, l:can_m)
+  let l:pw = s:place_popup(a:0 > 0, l:can_g, l:can_m)
   let l:ch = s:getkey()
+  call s:place_popup_close(l:pw)
   redraw
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
@@ -14419,6 +14420,49 @@ function! gnosis#insert_prompt_text(has_t, has_g, ...) abort
         \ . (a:has_g ? gnosis#i18n#tr('g=グループ ') : '')
         \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=相手Ctx a=自分Ctx r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
+endfunction
+
+" \l / za の置き場所の案内を、用途別に分けたポップアップで出す（選ぶまで。キーは getkey で受ける）。
+" ポップアップが使えない Vim では、従来の 1 行を出す。
+function! gnosis#insert_prompt_lines(has_t, has_g, ...) abort
+  let l:has_m = a:0 && a:1
+  let l:body = [gnosis#i18n#tr('本文に置く')]
+  call add(l:body, '  Enter  ' . gnosis#i18n#tr('本文の最後'))
+  call add(l:body, '  i      ' . gnosis#i18n#tr('行の中'))
+  call add(l:body, '  h      ' . gnosis#i18n#tr('カーソル直下'))
+  if a:has_t
+    call add(l:body, '  t      ' . gnosis#i18n#tr('見出しの下'))
+  endif
+  let l:rel = [gnosis#i18n#tr('関係を結ぶ')]
+  call add(l:rel, '  p      ' . gnosis#i18n#tr('Parent(親)'))
+  call add(l:rel, '  b      ' . gnosis#i18n#tr('Branch(子)'))
+  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
+  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  r      ' . gnosis#i18n#tr('Related(相互)'))
+  if a:has_g
+    call add(l:rel, '  g      ' . gnosis#i18n#tr('グループに入れる'))
+  endif
+  if l:has_m
+    call add(l:rel, '  m      ' . gnosis#i18n#tr('マージ'))
+  endif
+  return l:body + [''] + l:rel + ['', '  Esc    ' . gnosis#i18n#tr('やめる')]
+endfunction
+
+function! s:place_popup(has_t, has_g, has_m) abort
+  if !exists('*popup_create')
+    echo gnosis#insert_prompt_text(a:has_t, a:has_g, a:has_m)
+    return 0
+  endif
+  let l:id = popup_create(gnosis#insert_prompt_lines(a:has_t, a:has_g, a:has_m),
+        \ {'title': ' ' . gnosis#i18n#tr('どこに置く？') . ' ', 'pos': 'center', 'border': [], 'padding': [0, 2, 0, 1], 'zindex': 200})
+  redraw
+  return l:id
+endfunction
+
+function! s:place_popup_close(id) abort
+  if a:id > 0
+    call popup_close(a:id)
+  endif
 endfunction
 
 " グループの表示名（タイトル。空ならファイル名）
