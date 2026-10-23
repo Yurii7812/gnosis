@@ -17,7 +17,7 @@ if [ ! -s "$WORK/result.txt" ]; then
 fi
 V="$WORK/vault"
 # 旧形式のまま置いたノート（Vim で触っていない）を控える
-printf -- '---\ntime: 2026-01-01 00:00:00\ntitle: 旧\n---\n\n# 旧\n\n本文。\n\n### Context\n[ノートF](f.md)\n' > "$V/legacy-untouched.md"
+printf -- '---\ntime: 2026-01-01 00:00:00\n---\n\n# 旧\n\n本文。\n\n### Context\n[ノートF](f.md)\n' > "$V/legacy-untouched.md"
 cp "$V/legacy-untouched.md" "$WORK/legacy.before"
 python3 "$REPO/python/note_format_v2.py" update "$V" >/dev/null
 python3 "$REPO/python/note_format_v2.py" update "$V" >/dev/null

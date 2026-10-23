@@ -155,7 +155,7 @@ stopinsert
 let s:ng = s:newest_except(s:before)
 let s:gl = s:file('gz.md')
 call s:ok('グループの zn Enter: 入力した表示名でグループに登録', !empty(s:ng) && index(s:gl, '[いちご](' . s:ng . ')') >= 0, string(s:gl))
-call s:ok('グループの zn Enter: 表示名でタイトル・ファイル名を変えない', s:has(s:ng, '^title: ' . fnamemodify(s:ng, ':r') . '$') && s:ng =~# '^\d\{12}\.md$')
+call s:ok('グループの zn Enter: 表示名でタイトル・ファイル名を変えない', s:has(s:ng, '^# ' . fnamemodify(s:ng, ':r') . '$') && s:ng =~# '^\d\{12}\.md$')
 call s:ok('グループの zn Enter: 新ノートの Group: にグループ・Context と Branch は無い', index(s:file(s:ng), 'Group:') >= 0 && s:has(s:ng, '^\[グループZ\](gz\.md)$')
       \ && empty(gnosis#context#find_block(s:file(s:ng))) && index(s:file(s:ng), 'ParentBranch:') < 0 && !s:has('gz.md', '^ChildBranch:$'), string(s:file(s:ng)))
 call s:ok('グループの zn Enter: 新ノートを開く', fnamemodify(expand('%:p'), ':t') ==# s:ng)

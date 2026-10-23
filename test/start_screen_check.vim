@@ -46,7 +46,9 @@ function! s:back(t) abort
   call timer_start(1500, function('s:second'))
 endfunction
 function! s:second(t) abort
-  call s:ok('Enter: vault の Index が開く', expand('%:t') ==# 'index.md' && stridx(expand('%:p'), $START_VAULT) == 0, expand('%:p'))
+  " Index が開く（曼荼羅が左半分に出るので、Index は右の窓。どの窓でもよい）
+  let l:paths = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":p")')
+  call s:ok('Enter: vault の Index が開く', !empty(filter(copy(l:paths), 'fnamemodify(v:val, ":t") ==# "index.md" && stridx(v:val, $START_VAULT) == 0')), string(l:paths))
   call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && tolower(s:hl('bg')) ==# '#1e1e1e', &background . ' ' . s:hl('bg'))
   call s:ok('Enter: vault の言語（英語）', gnosis#i18n#lang() ==# 'en', execute('messages'))
   call writefile(s:res, s:w . '/result.txt')

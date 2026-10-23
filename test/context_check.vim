@@ -69,7 +69,7 @@ stopinsert
 let s:n = s:newest_except(s:before)
 let s:nl = s:file(s:n)
 let s:h1 = index(s:nl, '# ' . fnamemodify(s:n, ':r'))
-call s:ok('新規ノート: YAML・空行・H1', s:nl[0] ==# '---' && s:nl[3] ==# '---' && s:nl[4] ==# '' && s:h1 == 5, string(s:nl))
+call s:ok('新規ノート: YAML（time だけ）・空行・H1', s:nl[0] ==# '---' && s:nl[2] ==# '---' && s:nl[3] ==# '' && s:h1 == 4, string(s:nl))
 call s:ok('新規ノート（zn Enter）: H1 の次は空行 1 行 → ParentBranch:（Context: は無い）', s:nl[s:h1 + 1] ==# '' && s:nl[s:h1 + 2] ==# 'ParentBranch:'
       \ && s:nl[s:h1 + 3] ==# '[ノートA](a.md)' && empty(gnosis#context#find_block(s:nl)) && index(s:nl, 'Context:') < 0, string(s:nl))
 call s:ok('新規ノート: ブロックの後ろに空行 3 行（真ん中がカーソル）', s:nl[s:h1 + 4 : s:h1 + 6] ==# ['', '', ''], string(s:nl))
