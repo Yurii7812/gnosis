@@ -112,7 +112,7 @@ call s:ok('ガイド: 解析に使う見出しは翻訳しない', match(s:g, '#
 call writefile(['---', 'title: simple-yurii-note 操作ガイド', '---'], s:legacy_a . '/note/simple-yurii-note-guide.md')
 let g:gnosis_root = s:legacy_a . '/note/'
 silent call gnosis#write_guide()
-call s:ok('ガイド: 旧 vault は旧ファイル名のまま更新', !filereadable(s:legacy_a . '/note/gnosis-guide.md') && match(readfile(s:legacy_a . '/note/simple-yurii-note-guide.md'), '^title: Gnosis 操作ガイド$') >= 0)
+call s:ok('ガイド: 旧 vault は旧ファイル名のまま更新', !filereadable(s:legacy_a . '/note/gnosis-guide.md') && match(readfile(s:legacy_a . '/note/simple-yurii-note-guide.md'), '^# Gnosis 操作ガイド$') >= 0)
 
 " ---- 文言（日英で同じキーがそろう）
 call gnosis#i18n#set_lang('en')

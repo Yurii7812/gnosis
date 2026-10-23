@@ -60,14 +60,17 @@ try
   let s:py = (str2nr(s:today[0:3]) - 1) . ''
   call writefile(['---', 'title: 日誌', 'attribute: group', '---', '', '# 日誌', '', 'Group:', '[時系列記録](' . s:rec . ')', '', '[' . s:py . '-12-日誌](j-old.md)'], s:v . '/j-kind.md')
   call writefile(['---', 'title: ' . s:py . '-12-日誌', 'attribute: group', '---', '', '# ' . s:py . '-12-日誌', '', 'Group:', '[日誌](j-kind.md)', ''], s:v . '/j-old.md')
-  call writefile(s:file(s:rec) + ['[日誌](j-kind.md)'], s:v . '/' . s:rec)
+  " 時系列記録のノートは ChildBranch: を持つので、リンクは本文（節の手前）に足す
+  let s:rl = s:file(s:rec)
+  let s:ci = index(s:rl, 'ChildBranch:')
+  call writefile(s:ci >= 0 ? insert(s:rl, '[日誌](j-kind.md)', max([s:ci - 1, 0])) : s:rl + ['[日誌](j-kind.md)'], s:v . '/' . s:rec)
   call gnosis#record_open('日誌')
   let s:oy = s:title(s:py . '-日誌')
   let s:ny = s:title(s:today[0:3] . '-日誌')
   let s:nm = s:title(s:today[0:6] . '-日誌')
   call s:ok('年越し: 前の年の月は前の年のグループへ、今月は今年のグループの中', !empty(s:oy) && !empty(s:ny) && !empty(s:nm)
         \ && s:has(s:oy, '](j-old.md)') && !s:has('j-kind.md', '](j-old.md)') && s:has('j-old.md', '^\[' . s:py . '-日誌\](' . s:oy . ')$')
-        \ && s:has(s:ny, '](' . s:nm . ')') && s:has('j-kind.md', '](' . s:ny . ')') && s:has('j-kind.md', '](' . s:oy . ')'), string(s:file('j-kind.md')))
+        \ && s:has(s:ny, '](' . s:nm . ')') && s:has('j-kind.md', '](' . s:ny . ')') && s:has('j-kind.md', '](' . s:oy . ')'), string([s:oy, s:ny, s:nm]) . string(s:file('j-kind.md')))
   " 移行: 夢日記（旧）→ 時系列記録「旧夢」
   call s:ok('移行の前: 旧夢日記は Index の直下', s:has('index.md', '^\[夢日記\](old-dream.md)$'))
   call gnosis#record_migrate('夢日記', '旧夢')
