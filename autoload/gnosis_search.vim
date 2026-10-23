@@ -278,6 +278,15 @@ function! s:search_open_sink(lines) abort
   endfor
 endfunction
 
+function! s:search_call_sink(Fn, lines) abort
+  for l:line in a:lines
+    let l:r = s:parse_note_line(l:line)
+    if empty(l:r.path) || !filereadable(l:r.path) | continue | endif
+    call a:Fn(fnamemodify(l:r.path, ':p'), l:r.line)
+    return
+  endfor
+endfunction
+
 " \l の確定: 選んだノートへの Markdown リンクを、za と同じ置き場所キーで入れる。
 " ここは fzf の exit_cb（ターミナルを閉じた直後）から呼ばれる。置き場所キーの質問は getchar() で
 " 待つので、ここで直接聞くと、Vim が画面を再描画する前に待ちに入って、fzf のターミナルが
@@ -371,9 +380,11 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
 endfunction
 
 " gs … vault を全文検索（タイトル優先）。左はタイトル、右はヒット箇所をハイライト。
-function! gnosis_search#search_global() abort
+" 引数に Funcref を渡すと、選んだノートを開く代わりに、それを (絶対パス, ヒット行) で呼ぶ（曼荼羅の中の gs 用）
+function! gnosis_search#search_global(...) abort
   if !s:fzf_ok() | return | endif
-  if s:note_search_run('Search> ', '2', function('s:search_open_sink'))
+  let l:Sink = a:0 > 0 ? function('s:search_call_sink', [a:1]) : function('s:search_open_sink')
+  if s:note_search_run('Search> ', '2', l:Sink)
     return
   endif
   " フォールバック（note_search.py が無い時）: タイトル＋本文の全件リスト

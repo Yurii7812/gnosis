@@ -1085,6 +1085,50 @@ function! s:enter() abort
   call s:set_center(l:cell.id, 0)
 endfunction
 
+" ---- gs : 全文検索（fzf）で選んだノートを中心にする ------------------------------------------
+" ふつうの gs は今の窓にノートを開くので、曼荼羅の窓の中では壊してしまう。ここでは「中心にする」に差し替える
+" （索引選び・q でやめるものなど、今のモードは途切れさせない）
+function! s:gs() abort
+  if !exists('*gnosis_search#search_global')
+    return
+  endif
+  call gnosis_search#search_global(function('s:gs_done'))
+endfunction
+
+function! s:gs_done(path, line) abort
+  call timer_start(0, function('s:gs_center', [a:path]))
+endfunction
+
+function! s:gs_center(path, timer) abort
+  let l:mw = s:mwin()
+  if l:mw < 0 || !has_key(s:S, 'root')
+    return
+  endif
+  call win_gotoid(l:mw)
+  let l:root = s:S.root
+  if stridx(a:path, l:root . '/') != 0
+    return
+  endif
+  let l:id = strpart(a:path, len(l:root) + 1)
+  if !s:has(l:id)
+    " 作ったばかりのノートかもしれない: 読み直してもう一度
+    call s:pyc(['refresh', l:root, '--only', l:id])
+    let s:S.missing = {}
+    silent! call remove(s:S.data.nodes, l:id)
+  endif
+  if !s:has(l:id)
+    echohl WarningMsg | echo 'Gnosis: 曼荼羅に載っていないノートです: ' . l:id | echohl NONE
+    return
+  endif
+  if l:id !=# s:S.center
+    let s:S.query = ''
+    let s:S.rquery = ''
+    let s:S.results = []
+    call add(s:S.hist, [s:S.center, s:S.page])
+    call s:set_center(l:id, 0)
+  endif
+endfunction
+
 " ---- / : ふつうの検索のように、語をハイライトしてヒットしたマスへ飛ぶ ----------------------
 
 function! s:title_of(id) abort
@@ -1400,6 +1444,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
+  nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
@@ -1717,6 +1762,11 @@ function! gnosis#mview#close() abort
     call win_gotoid(s:note_win())
   endif
   redraw!
+endfunction
+
+" 試験用: gs で選んだあとの処理を直接呼ぶ
+function! gnosis#mview#gs_done(path, line) abort
+  call s:gs_done(a:path, a:line)
 endfunction
 
 " 試験用: 状態を返す

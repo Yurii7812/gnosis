@@ -401,5 +401,21 @@ call s:keys('q')
 call s:ok('q で絞り込みを解く', s:st.query ==# '' && s:grid() =~# 'タイム', s:grid())
 call s:keys('q')
 
+" gs: 全文検索で選んだノートを、曼荼羅の中心にする（fzf の画面は試験できないので、選んだ後の処理を呼ぶ）
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:gs_done = function('gnosis#mview#gs_done')
+call s:gs_done(s:v . '/cook.md', 1)
+sleep 50m
+call s:ok('gs で選んだノートが中心になる', s:st.center ==# 'cook.md' && &filetype ==# 'gnosis-mandala', s:st.center)
+call s:keys('b')
+call s:ok('b で戻れる', s:st.center ==# 'herb.md', s:st.center)
+call s:mk('brandnew.md', '作ったばかり', 0, [], [])
+call s:gs_done(s:v . '/brandnew.md', 1)
+sleep 50m
+call s:ok('載っていない新しいノートも読み直して中心になる', s:st.center ==# 'brandnew.md', s:st.center)
+call s:keys('q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
