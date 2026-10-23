@@ -1,5 +1,8 @@
 package net.gnosis.capture
 
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.draw.clip
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -71,8 +74,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         promptState.value = intent?.getBooleanExtra(Alarm.EXTRA_PROMPT, false) == true
         setContent {
-            MaterialTheme(colorScheme = GnosisColors) {
-                Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
+            // 長押しを短めに（標準は約 0.5 秒。メモの長押しが遅く感じるため）
+            val vc = LocalViewConfiguration.current
+            val quick = remember(vc) { object : ViewConfiguration by vc { override val longPressTimeoutMillis: Long get() = 280L } }
+            CompositionLocalProvider(LocalViewConfiguration provides quick) {
+                MaterialTheme(colorScheme = GnosisColors) {
+                    Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
+                }
             }
         }
     }
@@ -188,6 +196,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var flash by remember { mutableStateOf<String?>(null) }
     var insertMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var scanOpen by remember { mutableStateOf(false) }             // 紙のスキャンの画面
     var bigInput by remember { mutableStateOf(false) }             // 入力欄を大きくしている
     var focusTick by remember { mutableStateOf(0) }                // 増やすと入力欄を選んでキーボードを出す
     var rangeAnchor by remember { mutableStateOf<String?>(null) }  // 範囲選択の起点（最後に選んだメモ）
@@ -198,7 +207,8 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var relEditFor by remember { mutableStateOf<String?>(null) }   // 文脈・親を編集しているメモ
     var contextFor by remember { mutableStateOf<String?>(null) }   // 文脈をつなぐ相手を選んでいる途中のメモ
     var editing by remember { mutableStateOf<String?>(null) }
-    var sheetFor by remember { mutableStateOf<String?>(null) }
+    val sheetForState = remember { mutableStateOf<String?>(null) }   // 長押しのシートを開いているメモ（読むのは MemoSheet の中だけ）
+    var sheetFor by sheetForState
     var topicDialogFor by remember { mutableStateOf<String?>(null) }
     var addTopicOpen by remember { mutableStateOf(false) }
     var moveToNewTopic by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -213,6 +223,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var pickDate by remember { mutableStateOf(false) }
     var renameFor by remember { mutableStateOf<String?>(null) }    // 名前を変えるトピック
     var deleteTopicFor by remember { mutableStateOf<String?>(null) } // 消すトピック
+    if (scanOpen) { ScanScreen(onClose = { scanOpen = false }); return }
     val prompt by promptState
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -505,6 +516,9 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                                 leadingIcon = { Icon(if (settings.expandAll) Icons.Filled.UnfoldLess else Icons.Filled.UnfoldMore, null) }, onClick = {
                                 moreMenu = false; settings = settings.copy(expandAll = !settings.expandAll); store.saveSettings(settings); expanded.clear()
                             })
+                            DropdownMenuItem(text = { Text("紙のスキャン") }, leadingIcon = { Icon(Icons.Filled.CameraAlt, null) }, onClick = {
+                                moreMenu = false; scanOpen = true
+                            })
                             DropdownMenuItem(text = { Text("取り込み済みのメモを消す") }, leadingIcon = { Icon(Icons.Filled.DeleteSweep, null) }, onClick = {
                                 moreMenu = false; cleanImportedOpen = true
                             })
@@ -710,42 +724,25 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         }
     }
 
-    // 長押しのボタン（大きく、片手で押せるように 2 列）
-    val target = sheetFor?.let { byId[it] }
-    if (target != null) {
-        ModalBottomSheet(onDismissRequest = { sheetFor = null }) {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                Text(short(target.text, 60), fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
-                val acts = buildList<Triple<ImageVector, String, () -> Unit>> {
-                    add(Triple(Icons.Filled.SubdirectoryArrowRight, "続けて書く\n（このメモの子）") { replyTo = target.id; contextFor = null })
-                    add(Triple(Icons.Filled.Link, "文脈につなぐ\n（相手を続けてタップ）") { contextFor = target.id; replyTo = null })
-                    add(Triple(Icons.Filled.Edit, "書き直す") { editing = target.id; input = target.text })
-                    add(Triple(Icons.Filled.Checklist, "複数選択") { selecting = true; selected.clear(); selected.add(target.id); rangeAnchor = target.id; rangeMode = false; contextFor = null; keyboard?.hide() })
-                    add(Triple(Icons.Filled.Label, "トピックを変える") { topicDialogFor = target.id })
-                    add(Triple(Icons.Filled.ContentCopy, "コピー") {
-                        ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", target.text))
-                    })
-                    add(Triple(Icons.Filled.AccountTree, "文脈・親を\n編集") { relEditFor = target.id })
-                    add(Triple(Icons.Filled.Delete, "消す") { deleteFor = target.id })
-                }
-                acts.chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                        row.forEach { (icon, label, act) ->
-                            OutlinedButton(onClick = {
-                                act(); sheetFor = null
-                                // 書く操作のあとだけ入力欄を選ぶ（コピー・トピックを変えるなどでは選ばない）
-                                if (replyTo != null || editing != null) focusTick++
-                            },
-                                modifier = Modifier.weight(1f).heightIn(min = 64.dp), shape = RoundedCornerShape(14.dp)) {
-                                Icon(icon, null); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp)
-                            }
-                        }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
-                    }
-                }
+    // 長押しのシート（画面の下に大きな行。1 行 1 つで、何をするか一言ずつ書く）。
+    // 状態の読み取りはシートの中だけにして、長押しのたびに画面全体を組み直さない（遅さの原因）
+    MemoSheet(sheetForState, byId,
+        actions = { target ->
+            buildList<SheetAct> {
+                add(SheetAct(Icons.Filled.Edit, "書き直す", "このメモの文章を直す") { editing = target.id; input = target.text })
+                add(SheetAct(Icons.Filled.SubdirectoryArrowRight, "続けて書く", "このメモの子として書く") { replyTo = target.id; contextFor = null })
+                add(SheetAct(Icons.Filled.Link, "文脈につなぐ", "つなぐ相手のメモを続けてタップ") { contextFor = target.id; replyTo = null })
+                add(SheetAct(Icons.Filled.AccountTree, "文脈・親を編集", "つながりを確かめて外す") { relEditFor = target.id })
+                add(SheetAct(Icons.Filled.Label, "トピックを変える", "別のトピックへ移す") { topicDialogFor = target.id })
+                add(SheetAct(Icons.Filled.Checklist, "複数選択", "まとめて移す・消す") { selecting = true; selected.clear(); selected.add(target.id); rangeAnchor = target.id; rangeMode = false; contextFor = null; keyboard?.hide() })
+                add(SheetAct(Icons.Filled.ContentCopy, "コピー", "文章をクリップボードへ") {
+                    ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("memo", target.text))
+                })
+                add(SheetAct(Icons.Filled.Delete, "消す", "このメモを消す", danger = true) { deleteFor = target.id })
             }
-        }
-    }
+        },
+        // 書く操作のあとだけ入力欄を選ぶ（コピー・トピックを変えるなどでは選ばない）
+        onAfter = { if (replyTo != null || editing != null) focusTick++ })
 
     if (topicDialogFor != null || moveSelectedOpen) {
         val ids = topicDialogFor?.let { listOf(it) } ?: selected.toList()
@@ -1165,6 +1162,34 @@ private fun TopicDestinationDialog(topics: List<String>, modes: Map<String, Topi
         } }, confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } })
 }
 
+/** 長押しのシートの 1 行分。 */
+class SheetAct(val icon: ImageVector, val label: String, val hint: String, val danger: Boolean = false, val run: () -> Unit)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MemoSheet(state: MutableState<String?>, byId: Map<String, Entry>, actions: (Entry) -> List<SheetAct>, onAfter: () -> Unit) {
+    val target = state.value?.let { byId[it] } ?: return
+    ModalBottomSheet(onDismissRequest = { state.value = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(short(target.text, 40), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(bottom = 8.dp))
+            actions(target).forEach { a ->
+                val color = if (a.danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).clip(RoundedCornerShape(14.dp))
+                    .clickable { a.run(); state.value = null; onAfter() }.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(a.icon, null, Modifier.size(28.dp), tint = color)
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(a.label, fontSize = 20.sp, fontWeight = FontWeight.Medium, color = color)
+                        Text(a.hint, fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Store, selecting: Boolean, selected: Boolean, selectionMode: Boolean,
@@ -1176,7 +1201,7 @@ private fun Bubble(e: Entry, done: Boolean, byId: Map<String, Entry>, store: Sto
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (alignStart) Arrangement.Start else Arrangement.End) {
         Card(colors = colors, shape = RoundedCornerShape(14.dp),
             border = if (selecting) CardDefaults.outlinedCardBorder() else null,
-            modifier = Modifier.widthIn(max = 340.dp).combinedClickable(onClick = onTap, onLongClick = onLong)) {
+            modifier = Modifier.widthIn(max = 340.dp).combinedClickable(onClick = onTap, onLongClick = onLong)) {   // 長押しの時間は MainActivity で短くしてある
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 if (selectionMode) Checkbox(checked = selected, onCheckedChange = { onTap() })
                 // 押すとそのメモへ飛ぶ

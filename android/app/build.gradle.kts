@@ -40,4 +40,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")   // 紙のスキャン（Google の文書スキャナー。端末の Google Play 開発者サービスが使う）
 }

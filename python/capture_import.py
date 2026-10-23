@@ -111,7 +111,7 @@ def adb_pull(outdir: str) -> int:
     if r.returncode == 0:
         (out / "scans").mkdir(exist_ok=True)
         for n in r.stdout.decode("utf-8", "replace").split():
-            if "/" in n or n.startswith(".") or not n.startswith("paper-scan-"):
+            if "/" in n or n.startswith(".") or not (n.startswith("paper-scan-") or n == "scans.json"):
                 continue
             g = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/scans/" + n],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)

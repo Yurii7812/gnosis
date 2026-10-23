@@ -66,6 +66,20 @@ class ScanInboxTest(unittest.TestCase):
         self.assertEqual(again["added"], [])
         self.assertEqual(si.list_scans(self.root)["scans"], [])
 
+    def test_numbers_made_on_the_phone_are_applied(self):
+        import json
+        phone = Path(self.tmp.name) / "phone2"
+        phone.mkdir()
+        for i in (1, 2):
+            (phone / f"paper-scan-20261024-090000-0{i}.jpg").write_bytes(PNG + bytes([i]))
+        (phone / "scans.json").write_text(json.dumps([
+            {"name": "paper-scan-20261024-090000-01.jpg", "id": "2a"},
+            {"name": "paper-scan-20261024-090000-02.jpg", "id": ""}]))
+        r = si.import_files(self.root, [str(phone)])
+        self.assertEqual(r["numbered"], ["paper-scan-20261024-090000-01.jpg"])
+        self.assertTrue((self.root / "2a.jpg").is_file())
+        self.assertEqual(si.list_scans(self.root)["scans"], ["paper-scan-20261024-090000-02.jpg"])
+
     def test_diary(self):
         names = si.import_files(self.root, [str(self.src)])["added"]
         r = si.diary(self.root, names[0], "2026/10/24")

@@ -392,25 +392,34 @@ call s:ok('i は索引だけ（ノートは出ない）', s:grid() !~# '引用�
 call s:keys('a')
 call s:keys('q')
 
-" Tab / Shift-Tab: 順次表示（1 2 3 4 6 7 8 9 → 次の曼荼羅の 1 …、最後まで行ったら最初に戻る）
+" Tab / Shift-Tab: 今いる 3×3 の 1 → 9 を順に。[ ] のページは動かさない。最後（9）・最初（1）で止まる（ループしない）
 execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
 call s:keys('a')
 let s:st = gnosis#mview#state()
 call s:ok('Tab 前は中心のマス', s:st.cur == [1, 1] && s:st.page == 0, string(s:st.cur))
+call s:keys("\<S-Tab>")
+call s:keys("\<S-Tab>")
+call s:keys("\<S-Tab>")
+call s:keys("\<S-Tab>")
+call s:keys("\<S-Tab>")
+call s:ok('Shift-Tab は 3×3 の 1 番で止まる', s:st.cur == [0, 0], string(s:st.cur))
 let s:path = []
 for s:i in range(9)
   call s:keys("\<Tab>")
-  call add(s:path, [s:st.page, s:st.cur])
+  call add(s:path, s:st.cur)
 endfor
-call s:ok('Tab は 1 2 3 4 6 7 8 9 の順（5 の中心は飛ばす）', s:path[0 : 7] ==# [[0, [0, 0]], [0, [0, 1]], [0, [0, 2]], [0, [1, 0]], [0, [1, 2]], [0, [2, 0]], [0, [2, 1]], [0, [2, 2]]], string(s:path))
-call s:ok('次の曼荼羅の 1 へ進む', s:path[8] ==# [1, [0, 0]], string(s:path[8]))
-call s:keys("\<S-Tab>")
-call s:ok('Shift-Tab で戻る（前の曼荼羅の最後 9）', s:st.page == 0 && s:st.cur == [2, 2], string(s:st.cur) . s:st.page)
-for s:i in range(20)
-  call s:keys("\<Tab>")
-endfor
-call s:ok('最後まで行ったら最初へ戻って回り続ける', s:st.page >= 0 && s:st.page <= 1 && &filetype ==# 'gnosis-mandala')
+call s:ok('Tab は 1 → 9 の順（中心の 5 も通る）', s:path ==# [[0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2], [2, 2]], string(s:path))
+call s:ok('9 番で止まる（次の曼荼羅へも最初へも行かない。ページも動かない）', s:st.cur == [2, 2] && s:st.page == 0, string([s:st.cur, s:st.page]))
+call s:keys('f')
+call s:keys('4')
+let s:st = gnosis#mview#state()
+let s:blk = [s:st.cur[0] / 3, s:st.cur[1] / 3]
+let s:was = copy(s:st.cur)
+call s:keys("\<Tab>")
+let s:st = gnosis#mview#state()
+call s:ok('9×9: 外側のマスにいるときは、そのブロックの中で動く', [s:st.cur[0] / 3, s:st.cur[1] / 3] == s:blk && s:st.cur != s:was, string([s:was, s:st.cur]))
+call s:keys('f')
 call s:keys('q')
 
 " q は新しいほうから 1 つずつ。何もなければ閉じる。Q はすぐ閉じる
@@ -515,42 +524,58 @@ call s:ok('すでに出ていれば二重に出さない', winnr('$') == 2)
 call s:keys('Q')
 unlet g:gnosis_mandala_on_start
 
-" w: 近さ順（点の高いものを先に）。点は「予測関連」と同じ計算（ここでは点を直接入れて確かめる）
+" r がオンのときだけ近さ順（点の高いものを先に）。点は「予測関連」と同じ計算（ここでは点を直接入れて確かめる）
 execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 let s:st.rankc = {'plant.md': {'sage.md': 9.0, 'lav.md': 5.0, 'water.md': 5.0}}
-call s:keys('w')
+call s:keys('r')
 let s:ring1 = map(copy(gnosis#mview#items(s:st.data, 'plant.md', 'all')), 'v:val')
-call s:ok('w: 近さ順がオンになる（状態の行にも出る）', s:st.rank_on == 1 && s:text() =~# 'w:近さ', s:text())
-call s:ok('w: 点の高いものが先に来る（sage → lav / water の順。同じ点は元の並び）', s:text() =~# '1 サルビア' && s:text() =~# '2 ラベンダー' && s:text() =~# '3 水やり', s:text())
-call s:keys('w')
-call s:ok('もう一度 w でオフ（元の並び）', s:st.rank_on == 0 && s:text() =~# '1 Index', s:text())
+call s:ok('r: 近さ順がオンになる（状態の行にも出る）', s:st.rel_on == 1 && s:text() =~# '近さ順', s:text())
+call s:ok('r: 点の高いものが先に来る（sage → lav / water の順。同じ点は元の並び）', s:text() =~# '1 サルビア' && s:text() =~# '2 ラベンダー' && s:text() =~# '3 水やり', s:text())
+call s:keys('r')
+call s:ok('もう一度 r でオフ（元の並び）', s:st.rel_on == 0 && s:text() =~# '1 Index', s:text())
 call s:keys('q')
 
-" v: 外向き（親・BackLink を出さない）。9×9 でも、外側のブロックに中心と中心の周りのノートが出ない
-execute 'edit ' . s:v . '/plant.md'
+" w: 外向き。中心のリンクを、9×9 の中心以外のマスに内側から外側へ 1 つずつ並べる（最大 80）
+let s:big = ['---', 'time: 2026-01-01 00:00:00', '---', '', '# 多い', '']
+for s:k in range(1, 30)
+  call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# ノート' . s:k], s:v . '/mm' . s:k . '.md')
+  call add(s:big, '本文で[ノート' . s:k . '](mm' . s:k . '.md)に触れる')
+endfor
+call writefile(s:big, s:v . '/big.md')
+execute 'edit ' . s:v . '/big.md'
 call s:keys(' ')
+call s:keys('u')
+call s:keys('w')
 let s:st = gnosis#mview#state()
-let s:kinds0 = map(filter(copy(s:st.cells[0] + s:st.cells[1] + s:st.cells[2]), 'v:val.id !=# ""'), 'v:val.kind')
-call s:keys('v')
-let s:kinds1 = map(filter(copy(s:st.cells[0] + s:st.cells[1] + s:st.cells[2]), 'v:val.id !=# ""'), 'v:val.kind')
-call s:ok('v: 外向きがオンになり、状態の行にも出る', s:st.out_on == 1 && s:text() =~# 'v:外向き', s:text())
-call s:ok('v: 親と BackLink が出ない', index(s:kinds1, 'parent') < 0 && index(s:kinds1, 'back') < 0, string([s:kinds0, s:kinds1]))
-call s:keys('f')
-let s:st = gnosis#mview#state()
-let s:ids9 = []
-for s:row in s:st.cells
-  for s:cell in s:row
-    if s:cell.role ==# 'sub' && s:cell.id !=# ''
-      call add(s:ids9, s:cell.id)
+call s:ok('w: 外向き（9×9 になり、状態の行に出る）', s:st.size == 9 && s:st.out_on == 1 && s:text() =~# 'w:外向き', string([s:st.size, get(s:st, 'out_on', -1)]))
+let s:filled = []
+for s:r in range(9)
+  for s:c in range(9)
+    if s:st.cells[s:r][s:c].role ==# 'item'
+      call add(s:filled, [max([abs(s:r - 4), abs(s:c - 4)]), s:r, s:c])
     endif
   endfor
 endfor
-call s:ok('v: 9×9 の外側に中心のノート自身が出ない', index(s:ids9, 'plant.md') < 0, string(s:ids9))
-call s:keys('f')
-call s:keys('v')
-call s:ok('もう一度 v でオフ', s:st.out_on == 0, '')
+call s:ok('w: 29 個のリンクが全部、周りの曼荼羅を作らずに並ぶ', len(s:filled) == len(gnosis#mview#items(s:st.data, 'big.md', 'all')) && len(filter(copy(s:filled), 'v:val[0] == 0')) == 0, string(len(s:filled)))
+call s:ok('w: 内側の輪（8 マス）→ 次の輪（16 マス）の順に埋まる', len(filter(copy(s:filled), 'v:val[0] == 1')) == 8 && len(filter(copy(s:filled), 'v:val[0] == 2')) == 16 && len(filter(copy(s:filled), 'v:val[0] == 3')) == len(s:filled) - 24, string(map(copy(s:filled), 'v:val[0]')))
+call s:ok('w: 最初のリンクは中心のすぐ上（輪の上から時計回り）', s:st.cells[3][4].role ==# 'item' && s:st.cells[3][4].n == 1, string(s:st.cells[3][4]))
+" Tab は内側から外側へ 1 つずつ。最後で止まる（ループしない）
+call s:keys("\<Tab>")
+let s:st = gnosis#mview#state()
+call s:ok('w: Tab で中心から最初のリンクへ', s:st.cur == [3, 4], string(s:st.cur))
+for s:i in range(60)
+  call s:keys("\<Tab>")
+endfor
+let s:st = gnosis#mview#state()
+let s:endcur = copy(s:st.cur)
+call s:keys("\<Tab>")
+let s:st = gnosis#mview#state()
+call s:ok('w: Tab は最後のリンクで止まる（ループしない）', s:st.cur == s:endcur && s:st.cur != [4, 4], string([s:endcur, s:st.cur]))
+call s:keys('w')
+let s:st = gnosis#mview#state()
+call s:ok('もう一度 w でオフ（ふつうの曼荼羅に戻る）', s:st.out_on == 0, '')
 call s:keys('q')
 
 " # : 数字（マスの番号・ページ）を出す / 隠す

@@ -95,7 +95,24 @@ def import_files(root: Path, sources: list[str]) -> dict:
     if added:
         st["imported"] = sorted(imported)
         save_state(root, st)
-    return {"ok": True, "added": added}
+    # スマホで番号を付けたもの（scans.json の名前 → 番号）は、そのまま番号ノートにする（同じ番号は上書き）
+    numbered: list[str] = []
+    errors: list[str] = []
+    for src in sources:
+        idx = Path(src) / "scans.json"
+        if not idx.is_file():
+            continue
+        try:
+            mapping = {o["name"]: str(o.get("id", "")).strip() for o in json.loads(idx.read_text("utf-8"))}
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        for name in added:
+            fid = mapping.get(name, "")
+            if not fid:
+                continue
+            r = assign(root, name, fid)
+            (numbered if r.get("ok") else errors).append(name if r.get("ok") else f"{name}: {r.get('error')}")
+    return {"ok": True, "added": added, "numbered": numbered, "errors": errors}
 
 
 def _keep_old(root: Path, dest: Path, display: str) -> None:

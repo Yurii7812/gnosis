@@ -363,7 +363,8 @@ function! s:rank_map(basis) abort
 endfunction
 
 function! s:order(list, c) abort
-  if !get(s:S, 'rank_on', 0) || len(a:list) < 2
+  " 近さ順は r（予測関連）がオンのときだけ
+  if !get(s:S, 'rel_on', 0) || len(a:list) < 2
     return a:list
   endif
   let l:basis = (a:c ==# s:S.center || get(s:S, 'dbasis', 'center') ==# 'self') ? a:c : s:S.center
@@ -382,47 +383,7 @@ function! s:order(list, c) abort
 endfunction
 
 function! s:items(c) abort
-  return s:order(s:outward(s:items_raw(a:c), a:c), a:c)
-endfunction
-
-" v: 外向きモード。中心から外へ向かうリンクだけにする（親と BackLink＝戻る道は出さない）。
-" 9×9 の外側のブロックでは、さらに中心と中心の周りのノートも出さない（同じノートが何度も出て見づらくなるのを避ける）
-function! s:outward(list, c) abort
-  if !get(s:S, 'out_on', 0) || empty(a:list)
-    return a:list
-  endif
-  call s:fetch(map(copy(a:list), 'v:val[0]'))
-  let l:skip = {}
-  if a:c !=# s:S.center
-    let l:skip[s:S.center] = 1
-    let l:saved = s:S.out_on
-    let s:S.out_on = 0
-    let l:cb = s:base(s:S.center)
-    let s:S.out_on = l:saved
-    call s:fetch(map(copy(l:cb), 'v:val[0]'))
-    for l:e in l:cb
-      if index(['parent', 'back'], s:kind(l:e[0], s:S.center)) < 0
-        let l:skip[l:e[0]] = 1
-      endif
-    endfor
-  endif
-  let l:out = []
-  for l:e in a:list
-    if empty(l:e[0]) || has_key(l:skip, l:e[0]) || index(['parent', 'back'], s:kind(l:e[0], a:c)) >= 0
-      continue
-    endif
-    call add(l:out, l:e)
-  endfor
-  return l:out
-endfunction
-
-" v: 外向きモードの入り切り
-function! s:toggle_out() abort
-  let s:S.out_on = !get(s:S, 'out_on', 0)
-  let s:S.page = 0
-  let s:S.opage = 0
-  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
-  call s:render()
+  return s:order(s:items_raw(a:c), a:c)
 endfunction
 
 function! s:items_raw(c) abort
@@ -439,7 +400,9 @@ function! s:items_raw(c) abort
 endfunction
 
 function! s:pages(center) abort
-  return max([1, (len(s:items(a:center)) + 7) / 8])
+  " 外向きモード（w）の中心は 1 枚に 80 件（9×9 の中心以外のマス全部）
+  let l:per = (get(s:S, 'out_on', 0) && s:S.size == 9 && a:center ==# s:S.center) ? 80 : 8
+  return max([1, (len(s:items(a:center)) + l:per - 1) / l:per])
 endfunction
 
 " 中心 c の page 枚目の周辺 8 マス（足りない所は ''）
@@ -450,6 +413,48 @@ function! s:ring(c, page) abort
     call add(l:r, ['', ''])
   endwhile
   return l:r
+endfunction
+
+" 外向きモード（w）: 中心のリンクを、9×9 の中心以外の 80 マスに、内側から外側へ 1 つずつ並べる（周りの曼荼羅は作らない）。
+" 並べる順はふつうの順（r がオンのときだけ近さ順）。マスの順は、中心に近い輪から、輪の中は上から時計回り
+function! s:spiral() abort
+  if !exists('s:spiral_cache')
+    let l:cells = []
+    for l:r in range(9)
+      for l:c in range(9)
+        if [l:r, l:c] != [4, 4]
+          let l:dy = l:r - 4
+          let l:dx = l:c - 4
+          let l:ring = max([abs(l:dy), abs(l:dx)])
+          " 上（真上）から時計回りの角度（0〜2π）
+          let l:ang = atan2(l:dx, -l:dy)
+          if l:ang < 0
+            let l:ang += 6.283185307
+          endif
+          call add(l:cells, [l:ring, l:ang, l:r, l:c])
+        endif
+      endfor
+    endfor
+    call sort(l:cells, {a, b -> a[0] != b[0] ? a[0] - b[0] : (a[1] > b[1] ? 1 : (a[1] < b[1] ? -1 : 0))})
+    let s:spiral_cache = map(l:cells, '[v:val[2], v:val[3]]')
+  endif
+  return s:spiral_cache
+endfunction
+
+function! s:toggle_out() abort
+  if get(s:S, 'out_on', 0)
+    let s:S.out_on = 0
+  else
+    if s:S.size == 3
+      call s:full()
+    endif
+    let s:S.out_on = 1
+  endif
+  let s:S.page = 0
+  let s:S.opage = 0
+  let s:S.cur = [4, 4]
+  call s:render()
+  call s:preview()
 endfunction
 
 " ---- 盤面 -------------------------------------------------------------------
@@ -495,6 +500,20 @@ function! s:board_cells() abort
   for l:i in range(l:n)
     call add(l:b, repeat([{'id': '', 'role': 'empty', 'n': 0}], l:n))
   endfor
+  if l:n == 9 && get(s:S, 'out_on', 0)
+    let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 5}
+    let l:all = s:items(s:S.center)
+    let l:slots = s:spiral()
+    let l:from = s:S.page * 80
+    call s:fetch(map(l:all[l:from : l:from + 79], 'v:val[0]'))
+    for l:i in range(80)
+      let l:e = get(l:all, l:from + l:i, ['', ''])
+      if !empty(l:e[0])
+        let l:b[l:slots[l:i][0]][l:slots[l:i][1]] = {'id': l:e[0], 'name': l:e[1], 'role': 'item', 'n': l:from + l:i + 1}
+      endif
+    endfor
+    return l:b
+  endif
   let l:ring = s:ring(s:S.center, s:S.page)
   if l:n == 9
     call s:fetch(map(copy(l:ring), 'v:val[0]'))
@@ -795,22 +814,28 @@ endfunction
 
 " ---- Tab / Shift-Tab: 順次表示。1 2 3 4 6 7 8 9（5 の中心は飛ばす）、次の曼荼羅の 1 へ、最後まで行ったら最初に戻る ----------
 function! s:seq(dir) abort
-  let l:total = len(s:items(s:S.center))
-  if l:total == 0
+  " Tab / S-Tab: 今いるマスの 3×3（9×9 では外側のブロックの中も）の 1 〜 9 を順に。最後（9）・最初（1）で止まる（ループしない）。
+  " ページ（[ ]）は動かさない。外向きモード（w）では、内側から外側への順に 1 つずつ（中心 → 80 番目。止まる）
+  if get(s:S, 'out_on', 0) && s:S.size == 9
+    " 並んでいる（リンクのある）マスだけ
+    let l:slots = [[4, 4]] + filter(copy(s:spiral()), 'get(s:S.cells[v:val[0]][v:val[1]], "id", "") !=# ""')
+    let l:i = index(l:slots, s:S.cur) + a:dir
+    if l:i < 0 || l:i >= len(l:slots)
+      return
+    endif
+    let s:S.cur = l:slots[l:i]
+    call s:mark()
+    call s:preview()
     return
   endif
-  let l:o = s:S.size == 3 ? 0 : 3
-  let l:here = -1
-  for l:i in range(8)
-    if s:S.cur == [l:o + s:pos[l:i][0], l:o + s:pos[l:i][1]]
-      let l:here = s:S.page * 8 + l:i
-    endif
-  endfor
-  let l:next = l:here < 0 ? (a:dir > 0 ? 0 : l:total - 1) : (l:here + a:dir + l:total) % l:total
-  let s:S.page = l:next / 8
-  let l:p = s:pos[l:next % 8]
-  let s:S.cur = [l:o + l:p[0], l:o + l:p[1]]
-  call s:render()
+  let l:r0 = s:S.cur[0] / 3 * 3
+  let l:c0 = s:S.cur[1] / 3 * 3
+  let l:i = (s:S.cur[0] - l:r0) * 3 + (s:S.cur[1] - l:c0) + a:dir
+  if l:i < 0 || l:i > 8
+    return
+  endif
+  let s:S.cur = [l:r0 + l:i / 3, l:c0 + l:i % 3]
+  call s:mark()
   call s:preview()
 endfunction
 
@@ -821,12 +846,12 @@ function! s:help_lines() abort
         \ '',
         \ ' 動く      h j k l / 矢印    1-9 そのマスへ(5 が中心)   t 数字の動き切替   z 中央に',
         \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
-        \ ' 順に見る   Tab / S-Tab  1 2 3 4 6 7 8 9 → 次の曼荼羅の 1 …(最後は最初へ)',
+        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 1 → 9（9×9 では外側のブロックの中。外向き w では内側から外側へ。最後で止まる）',
         \ ' モード     a 全体   i グループ・索引だけ',
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
-        \ ' 並べる     v 外向き(中心から外へ向かうリンクだけ)   w 近さ順(内側から外側へ。中心に近いものを先に)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' 並べる     w 外向き(リンクを内側から外側へ 1 つずつ最大 80 個。ふつうの順・r がオンのときだけ近さ順)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
         \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
@@ -888,8 +913,8 @@ endfunction
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
-        \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
-        \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
+        \ . (get(s:S, 'out_on', 0) ? ' w:外向き' : '')
+        \ . (get(s:S, 'rel_on', 0) ? ' 近さ順' . (s:S.size == 9 && get(s:S, 'dbasis', 'center') ==# 'self' ? '(外側は自分)' : '') : '')
   let l:cancel = s:cancel_hint()
   return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
         \ (a:pages > 1 && empty(a:ptop) && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
@@ -1050,7 +1075,8 @@ function! s:mark() abort
     for l:c in range(l:n)
       let l:cell = s:S.cells[l:r][l:c]
       let l:sp = get(s:S.spans, l:r . ',' . l:c, [])
-      if empty(l:sp) || (empty(l:cell.id) && !has_key(l:cell, 'text'))
+      " 文字の無いマスも、選んでいるときは色を付ける（どこにいるか分かるように）
+      if empty(l:sp) || (empty(l:cell.id) && !has_key(l:cell, 'text') && !(l:r == s:S.cur[0] && l:c == s:S.cur[1]))
         continue
       endif
       if l:r == s:S.cur[0] && l:c == s:S.cur[1]
@@ -1589,6 +1615,7 @@ function! s:full() abort
     endif
   else
     let s:S.size = 3
+    let s:S.out_on = 0
     call s:ensure_note_win()
   endif
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -1676,18 +1703,11 @@ function! s:toggle_preview() abort
   endif
 endfunction
 
-" w: 近さ順（中心に近いものを先に）のオン/オフ。d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）
-function! s:toggle_rank() abort
-  let s:S.rank_on = !get(s:S, 'rank_on', 0)
-  let s:S.page = 0
-  let s:S.opage = 0
-  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
-  call s:render()
-endfunction
+" d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）。近さ順は r（予測関連）がオンのとき
 
 function! s:toggle_dbasis() abort
-  if s:S.size != 9 || !get(s:S, 'rank_on', 0)
-    echo 'Gnosis: d は 9×9 で近さ順（w）がオンのときの、外側の並びの切り替えです'
+  if s:S.size != 9 || !get(s:S, 'rel_on', 0)
+    echo 'Gnosis: d は 9×9 で r（予測関連・近さ順）がオンのときの、外側の並びの切り替えです'
     return
   endif
   let s:S.dbasis = get(s:S, 'dbasis', 'center') ==# 'center' ? 'self' : 'center'
@@ -1790,8 +1810,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> ( <Cmd>call <SID>stretch(-1)<CR>
   nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
-  nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
-  nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
+  nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
@@ -2277,7 +2296,7 @@ function! gnosis#mview#gui_state() abort
         \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, 1, '', '')),
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
-        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
+        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rel_on', 0), 'out': get(s:S, 'out_on', 0),
         \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
