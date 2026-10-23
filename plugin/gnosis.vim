@@ -1323,6 +1323,11 @@ if has('gui_running') || has('gui')
   nnoremap <silent> <C-0> <Cmd>call gnosis#settings#gui_zoom(0)<CR>
 endif
 
+" 文字サイズ: \+ \- でその場だけ大きく・小さく（保存しない）、\= で保存してある大きさに戻す（どの画面でも）
+nnoremap <silent> \+ <Cmd>call gnosis#termfont#bump(1)<CR>
+nnoremap <silent> \- <Cmd>call gnosis#termfont#bump(-1)<CR>
+nnoremap <silent> \= <Cmd>call gnosis#termfont#restore()<CR>
+
 " 起動: 起動画面（Chnoubis・vault の選択）を出すか、そのまま vault を開く。
 " vault を開く処理（マウント・ロック掃除・状態の移行・Index・操作ガイド・描き直し）は
 " gnosis#startup_sequence() が順に行う（起動画面のときは Enter を押したあと）。

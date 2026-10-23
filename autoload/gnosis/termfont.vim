@@ -285,6 +285,32 @@ endfunction
 
 " 文字サイズを変えて保存し、できればその場で反映する。
 " 戻り値 {'size': 大きさ, 'saved': 保存できたか, 'applied': その場で変わったか, 'terminal': detect()}
+" 一時的な大きさ（保存しない）。\+ \- で変え、\= で保存してある大きさに戻す。
+" 端末側の Ctrl + + / Ctrl + - で変えたあとでも、\= は保存した大きさを端末に送り直すので、戻る（その場で変えられる端末のとき）
+let s:temp = 0
+
+function! gnosis#termfont#bump(d) abort
+  let l:d = gnosis#termfont#load()
+  let s:temp += a:d
+  let l:d.fontSize = gnosis#termfont#clamp(l:d.fontSize + s:temp)
+  if gnosis#termfont#apply_live(l:d)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('文字サイズ %d（一時的。\= で保存してある大きさに戻す）'), l:d.fontSize)
+  else
+    let s:temp -= a:d
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('この端末では、その場で文字の大きさを変えられません（端末の設定で変える）') | echohl NONE
+  endif
+endfunction
+
+function! gnosis#termfont#restore() abort
+  let s:temp = 0
+  let l:d = gnosis#termfont#load()
+  if gnosis#termfont#apply_live(l:d)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('文字サイズを保存してある大きさ（%d）に戻しました'), l:d.fontSize)
+  else
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('この端末では、その場で文字の大きさを変えられません（端末の Ctrl + 0 で戻す）') | echohl NONE
+  endif
+endfunction
+
 function! gnosis#termfont#set_size(n) abort
   let l:d = gnosis#termfont#load()
   let l:d.fontSize = gnosis#termfont#clamp(a:n)

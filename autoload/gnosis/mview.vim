@@ -81,13 +81,17 @@ function! s:load(...) abort
     return 0
   endif
   let l:first = !filereadable(l:root . '/.gnosis/cache/mandala.sqlite')
+  let l:force = a:0 && a:1
+  let l:st = l:first ? v:null : s:pyc(['status', l:root])
+  " 古い版のキャッシュ（スキーマが違う）は空に見える: 作り直しになるので、初回と同じ案内を出す
+  if !l:first && type(l:st) == v:t_dict && get(l:st, 'notes', 0) == 0
+    let l:first = 1
+  endif
   if l:first
     echo 'Gnosis: 曼荼羅の索引を作っています（初回だけ時間がかかります）…'
     redraw
   endif
-  let l:force = a:0 && a:1
   " 走査が重い vault（1 秒を超える）では、開くのを待たせず、走査は裏で行う。終わって変わっていれば描き直す
-  let l:st = l:first ? v:null : s:pyc(['status', l:root])
   if !l:first && !l:force && type(l:st) == v:t_dict && get(l:st, 'scan_sec', 0) > 1.0 && has('job')
     call s:refresh_async(l:root)
     let l:r = {}
@@ -345,7 +349,43 @@ function! s:entry_text(e) abort
 endfunction
 
 " 絞り込み（/）: 索引を選ぶとき（\g）は題が合う索引を全部から、ふだんは今の周りの中から
+" 近さ順（w）: basis のノートに近いもの（予測関連の点）を先に並べる。同じ点は元の並びのまま。
+" 中心の周り・3×3 は中心に近い順。9×9 の外側のブロックは、既定は中心に近い順（d で、そのブロックの中心のノート自身に近い順）
+function! s:rank_map(basis) abort
+  if !has_key(s:S, 'rankc')
+    let s:S.rankc = {}
+  endif
+  if !has_key(s:S.rankc, a:basis)
+    let l:d = s:pyc(['rank', s:S.root, a:basis])
+    let s:S.rankc[a:basis] = type(l:d) == v:t_dict ? l:d : {}
+  endif
+  return s:S.rankc[a:basis]
+endfunction
+
+function! s:order(list, c) abort
+  if !get(s:S, 'rank_on', 0) || len(a:list) < 2
+    return a:list
+  endif
+  let l:basis = (a:c ==# s:S.center || get(s:S, 'dbasis', 'center') ==# 'self') ? a:c : s:S.center
+  let l:m = s:rank_map(l:basis)
+  if empty(l:m)
+    return a:list
+  endif
+  let l:dec = []
+  let l:i = 0
+  for l:e in a:list
+    call add(l:dec, [get(l:m, l:e[0], 0.0), l:i, l:e])
+    let l:i += 1
+  endfor
+  call sort(l:dec, {x, y -> x[0] == y[0] ? x[1] - y[1] : (y[0] > x[0] ? 1 : -1)})
+  return map(l:dec, 'v:val[2]')
+endfunction
+
 function! s:items(c) abort
+  return s:order(s:items_raw(a:c), a:c)
+endfunction
+
+function! s:items_raw(c) abort
   let l:b = s:base(a:c)
   if a:c !=# s:S.center || empty(s:S.query)
     return l:b
@@ -440,10 +480,16 @@ function! s:board_cells() abort
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
     let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'center', 'n': s:nums[l:i], 'bgi': l:i}
-    let l:sub = s:ring(l:id, 0)
+    let l:np = s:pages(l:id)
+    let l:op = min([get(s:S, 'opage', 0), l:np - 1])
+    let l:sub = s:ring(l:id, l:op)
+    if l:np > 1
+      let l:b[l:br + 1][l:bc + 1].ptxt = (l:op + 1) . '/' . l:np
+    endif
     for l:j in range(8)
       if !empty(l:sub[l:j][0])
-        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j][0], 'name': l:sub[l:j][1], 'role': 'sub', 'n': 0, 'of': l:id}
+        let l:b[l:br + s:pos[l:j][0]][l:bc + s:pos[l:j][1]] = {'id': l:sub[l:j][0], 'name': l:sub[l:j][1], 'role': 'sub', 'n': 0, 'of': l:id,
+              \ 'dup': l:sub[l:j][0] ==# s:S.center ? 1 : 0}
       endif
     endfor
   endfor
@@ -580,6 +626,8 @@ function! s:geometry(n, W, H, chrome) abort
   " 9×9 は題が読めないほど狭くなるなら、正方形をあきらめて幅を確保する
   if a:n == 9
     let l:cw = max([l:cw, min([l:wlim, 8])])
+    " < > で横に伸ばす（= で正方形に戻す）
+    let l:cw = min([l:wlim, max([1, float2nr(round(l:cw * get(s:S, 'stretch', 1.0)))])])
   endif
   return [max([1, l:cw]), l:ch]
 endfunction
@@ -738,7 +786,8 @@ function! s:help_lines() abort
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
-        \ ' 画面       f 全画面(9×9)⇔分割    < > 曼荼羅の幅    u 読み直し    Space ノートへ',
+        \ ' 並べる     w 近さ順(中心に近いものを先に)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 幅・横の伸ばし   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
         \ ' 色         ']
@@ -799,9 +848,10 @@ endfunction
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
+        \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
   return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
-        \ (a:pages > 1 && empty(a:ptop)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
+        \ (a:pages > 1 && empty(a:ptop) && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
         \ s:S.mode ==# 'all' ? 'a' : 'i', l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
 endfunction
 
@@ -838,7 +888,7 @@ function! s:render() abort
   let l:pages = s:pages(s:S.center)
   " ページ（1/2）は中央のマスの一番上に。マスが小さくて入らないときだけ見出しに出す
   let l:mid = l:n == 3 ? 1 : 4
-  let l:ptop = (l:pages > 1 && l:ch >= 3) ? '(' . (s:S.page + 1) . '/' . l:pages . ')' : ''
+  let l:ptop = (l:pages > 1 && l:ch >= 3 && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . l:pages : ''
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
@@ -854,10 +904,10 @@ function! s:render() abort
     for l:c in range(l:n)
       let l:cell = l:b[l:r][l:c]
       let l:txt = s:label(l:cell)
-      if l:cell.n > 0 && !empty(l:txt)
+      if l:cell.n > 0 && !empty(l:txt) && get(s:S, 'nums', 1)
         let l:txt = l:cell.n . ' ' . l:txt
       endif
-      let l:tp = (l:r == l:mid && l:c == l:mid) ? l:ptop : ''
+      let l:tp = (l:r == l:mid && l:c == l:mid) ? l:ptop : ((get(s:S, 'nums', 1) && l:ch >= 3) ? get(l:cell, 'ptxt', '') : '')
       call add(l:cellines, {'t': empty(l:txt) ? [] : s:wrap(l:txt, max([1, l:cw - 1]), empty(l:tp) ? l:ch : l:ch - 1), 'r': '', 'p': l:tp})
     endfor
     for l:k in range(l:ch)
@@ -974,6 +1024,9 @@ function! s:mark() abort
         else
           call s:addpos(empty(l:hg) ? 'GnosisMviewCenter' : l:hg . 'C', l:sp, 10)
         endif
+      elseif get(l:cell, 'dup', 0)
+        " 中心と同じノートが外側にも出ている: 種類の色を背景にして目立たせる（その種類＝中心との関係も分かる）
+        call s:addpos(s:kinds[get(l:cell, 'kind', 'note')][2] . 'D', l:sp, 9)
       elseif get(l:cell, 'bgi', -1) >= 0
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         call s:addpos(empty(l:hg) ? 'GnosisMvBg' . l:cell.bgi : l:hg . 'B' . l:cell.bgi, l:sp, 8)
@@ -1087,6 +1140,7 @@ function! s:toggle_digit() abort
 endfunction
 
 function! s:set_center(id, page) abort
+  let s:S.opage = 0
   let s:S.find = ''
   let s:S.center = a:id
   let s:S.page = a:page
@@ -1489,15 +1543,17 @@ function! s:full() abort
     if l:nw > 0
       call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
     endif
-    silent! only
+    if !get(s:S, 'pv', 0)
+      silent! only
+    endif
   else
     let s:S.size = 3
     call s:ensure_note_win()
   endif
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
-  " 全画面で閉じた右のノートを、分割に戻したときに出し直す（中心のノート）
-  if s:S.size == 3
+  " 全画面で閉じた右のノートを、分割に戻したときに出し直す（中心のノート）。p が入っていれば、右の窓をそのまま使う
+  if s:S.size == 3 || get(s:S, 'pv', 0)
     call s:show_note(s:S.center)
   endif
 endfunction
@@ -1511,7 +1567,15 @@ endfunction
 
 " < で曼荼羅を狭く、> で広く（1 回で画面の幅の 1/10）。分割しているときだけ
 function! s:resize(d) abort
-  if s:S.size != 3 || s:note_win() < 0
+  if s:S.size != 3
+    " 全画面（9×9）: < > で横に伸ばす・縮める（= で正方形に戻す）
+    " （min() / max() は小数を整数にしてしまうので、使わない）
+    let l:v = get(s:S, 'stretch', 1.0) + a:d * 0.15
+    let s:S.stretch = l:v > 3.0 ? 3.0 : (l:v < 0.5 ? 0.5 : l:v)
+    call s:render()
+    return
+  endif
+  if s:note_win() < 0
     return
   endif
   " 割合は 10 分率の整数で持つ（5 = 半々）。小数と整数を混ぜると Vim はエラーにする
@@ -1535,6 +1599,87 @@ function! s:note_win() abort
   return -1
 endfunction
 
+" =: 3×3 は画面を分ける線を半々に戻す。9×9 は横の伸ばしを戻して正方形に
+function! s:equalize() abort
+  if s:S.size != 3
+    let s:S.stretch = 1.0
+    call s:render()
+    return
+  endif
+  if s:note_win() < 0
+    return
+  endif
+  let s:S.tenths = 5
+  execute 'vertical resize ' . s:win_width()
+  call s:render()
+  call s:save_state()
+endfunction
+
+" p: 全画面（9×9）の右に、中心のノートの題と本文を出す / 消す（右の窓。Space で入って、ふつうに動かせる）
+function! s:toggle_preview() abort
+  if s:S.size == 3
+    echo 'Gnosis: 3×3 では右のノートがいつも出ています（p は全画面 9×9 用）'
+    return
+  endif
+  let s:S.pv = !get(s:S, 'pv', 0)
+  if s:S.pv
+    call s:ensure_note_win()
+    call s:render()
+    call s:show_note(s:S.center)
+  else
+    let l:nw = s:note_win()
+    if l:nw > 0
+      call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
+    endif
+    silent! only
+    call s:render()
+  endif
+endfunction
+
+" w: 近さ順（中心に近いものを先に）のオン/オフ。d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）
+function! s:toggle_rank() abort
+  let s:S.rank_on = !get(s:S, 'rank_on', 0)
+  let s:S.page = 0
+  let s:S.opage = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
+
+function! s:toggle_dbasis() abort
+  if s:S.size != 9 || !get(s:S, 'rank_on', 0)
+    echo 'Gnosis: d は 9×9 で近さ順（w）がオンのときの、外側の並びの切り替えです'
+    return
+  endif
+  let s:S.dbasis = get(s:S, 'dbasis', 'center') ==# 'center' ? 'self' : 'center'
+  let s:S.opage = 0
+  call s:render()
+endfunction
+
+" { }: 外側のブロックのページを前後に（[ ] は中心の周り）
+function! s:opage(d) abort
+  if s:S.size != 9
+    return
+  endif
+  let l:max = 0
+  for l:e in s:ring(s:S.center, s:S.page)
+    if !empty(l:e[0])
+      let l:max = max([l:max, s:pages(l:e[0]) - 1])
+    endif
+  endfor
+  let l:p = get(s:S, 'opage', 0) + a:d
+  if l:p < 0 || l:p > l:max
+    return
+  endif
+  let s:S.opage = l:p
+  call s:render()
+endfunction
+
+" #: 数字（マスの番号・ページの n/m）を出す / 隠す
+function! s:toggle_nums() abort
+  let s:S.nums = !get(s:S, 'nums', 1)
+  call s:render()
+endfunction
+
 function! s:ensure_note_win() abort
   if s:note_win() > 0
     return
@@ -1546,6 +1691,8 @@ function! s:ensure_note_win() abort
   call win_gotoid(l:mw)
   vertical rightbelow new
   let l:nw = win_getid()
+  " 右のノートでは、YAML と上下の「名前:」系を、\zz の設定に関わらず隠す
+  let w:gnosis_hide_force = 1
   " 窓を分けると曼荼羅の色づけ（matchaddpos）も新しい窓に写るので、ノートの窓には残さない
   call clearmatches(l:nw)
   unlet! w:mview_match
@@ -1560,7 +1707,7 @@ function! s:show_note(id) abort
   if !filereadable(l:path)
     return
   endif
-  if s:S.size != 3
+  if s:S.size != 3 && !get(s:S, 'pv', 0)
     return
   endif
   call s:ensure_note_win()
@@ -1595,6 +1742,13 @@ function! s:setup_buffer() abort
     execute printf('nnoremap <buffer><nowait><silent> %d <Cmd>call <SID>digit(%d)<CR>', l:d, l:d)
   endfor
   nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>enter()<CR>
+  nnoremap <buffer><nowait><silent> { <Cmd>call <SID>opage(-1)<CR>
+  nnoremap <buffer><nowait><silent> } <Cmd>call <SID>opage(1)<CR>
+  nnoremap <buffer><nowait><silent> = <Cmd>call <SID>equalize()<CR>
+  nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
+  nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
+  nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
+  nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page(1)<CR>
   nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>page(-1)<CR>
   nnoremap <buffer><nowait><silent> b <Cmd>call <SID>back()<CR>
@@ -1805,6 +1959,8 @@ function! s:hl() abort
     " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）
     execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
     execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
+    " 中心と同じノート（外側）: 種類の色を背景に、文字は暗く
+    execute printf('highlight default GnosisMv%sD guifg=#1a1a1a ctermfg=234 guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
   endfor
   " 9×9 の背景: 真ん中の周りの 8 マスと、それぞれの曼荼羅の中心のマスを、同じ薄い色で塗る（8 色）。種類の色（文字）はそのまま
   let l:bgs = [['#2d3b52', 24], ['#43304f', 53], ['#2f4a3a', 22], ['#4f3f2b', 94], ['#4f2f36', 52], ['#2b4a4d', 23], ['#4a4a2b', 58], ['#3d3d4a', 60]]
@@ -1911,7 +2067,7 @@ endfunction
 " <Space>: ノートから曼荼羅へ、曼荼羅からノートへ
 function! gnosis#mview#toggle() abort
   if &filetype ==# 'gnosis-mandala'
-    if s:S.size != 3
+    if s:S.size != 3 && !get(s:S, 'pv', 0)
       " 全画面（9×9）にノートの窓は無い。分割に戻して、そのマスのノートを右に出す
       let s:S.size = 3
       let s:S.cur = [1, 1]

@@ -87,8 +87,8 @@ call s:ok('カーソルは曼荼羅に残る', &filetype ==# 'gnosis-mandala')
 call s:ok('索引の周りに所属する Index が最初に出る', s:text() =~# '1 Index', s:text())
 call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '9 タイム', s:text())
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
-call s:ok('ページ (1/2) が中央のマスの上に出る', s:text() =~# '(1/2)' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *(1/2) *┃"')) == 1, s:text())
-call s:ok('ページ (1/2) は盤面に残る', s:text() =~# '(1/2)', s:text())
+call s:ok('ページ 1/2 が中央のマスの上に出る', s:text() =~# '1/2' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *1/2 *┃"')) == 1, s:text())
+call s:ok('ページ 1/2 は盤面に残る', s:text() =~# '1/2', s:text())
 " ページ送り
 call s:keys(']')
 call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビ' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
@@ -483,7 +483,7 @@ sleep 100m
 let s:nw = filter(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype") !=# "gnosis-mandala"')[0]
 let s:info = getwininfo(win_getid(s:nw))[0]
 let s:cur = getcurpos(win_getid(s:nw))
-call s:ok('カーソルは先頭から数えて窓の高さの行（画面のいちばん下）', s:cur[1] == winheight(s:nw), string(s:cur) . ' h=' . winheight(s:nw))
+call s:ok('カーソルは画面のいちばん下の行（先頭の YAML などを畳んでいるので、窓の高さ以上の行）', s:cur[1] >= winheight(s:nw), string(s:cur) . ' h=' . winheight(s:nw))
 call s:keys('q')
 
 " 曼荼羅の窓が選ばれたまま \i などでノートを開いても、曼荼羅の窓は壊れず、右の窓に開く
@@ -514,6 +514,54 @@ call gnosis#mview#start()
 call s:ok('すでに出ていれば二重に出さない', winnr('$') == 2)
 call s:keys('Q')
 unlet g:gnosis_mandala_on_start
+
+" w: 近さ順（点の高いものを先に）。点は「予測関連」と同じ計算（ここでは点を直接入れて確かめる）
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:st.rankc = {'plant.md': {'sage.md': 9.0, 'lav.md': 5.0, 'water.md': 5.0}}
+call s:keys('w')
+let s:ring1 = map(copy(gnosis#mview#items(s:st.data, 'plant.md', 'all')), 'v:val')
+call s:ok('w: 近さ順がオンになる（状態の行にも出る）', s:st.rank_on == 1 && s:text() =~# 'w:近さ', s:text())
+call s:ok('w: 点の高いものが先に来る（sage → lav / water の順。同じ点は元の並び）', s:text() =~# '1 サルビア' && s:text() =~# '2 ラベンダー' && s:text() =~# '3 水やり', s:text())
+call s:keys('w')
+call s:ok('もう一度 w でオフ（元の並び）', s:st.rank_on == 0 && s:text() =~# '1 Index', s:text())
+call s:keys('q')
+
+" # : 数字（マスの番号・ページ）を出す / 隠す
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:ok('# の前は番号とページが出ている', s:text() =~# '1 Index' && s:text() =~# '1/2', s:text())
+call s:keys('#')
+call s:ok('# で番号とページが消える', s:text() !~# '1 Index' && s:text() !~# '1/2' && s:text() =~# 'Index', s:text())
+call s:keys('#')
+call s:ok('もう一度 # で戻る', s:text() =~# '1 Index' && s:text() =~# '1/2', s:text())
+
+" 9×9: < > で横に伸ばす・= で正方形・p で右に本文・{ } で外側のページ
+call s:keys('f')
+let s:w0 = len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "┃"')[0])
+call s:keys('>')
+call s:keys('>')
+call s:ok('9×9: > で横に伸びる', s:st.stretch > 1.0, string(get(s:st, 'stretch', 'none')))
+call s:keys('=')
+call s:ok('9×9: = で正方形（伸ばしが 1 に戻る）', s:st.stretch == 1.0, string(s:st.stretch))
+call s:keys('p')
+call s:ok('9×9: p で右にノートの窓が出る（本物の窓）', winnr('$') == 2 && get(s:st, 'pv', 0) == 1, string(winnr('$')))
+call s:keys(' ')
+call s:ok('p がオンの間、Space は右の窓へ（3×3 に戻らない）', &filetype !=# 'gnosis-mandala' && s:st.size == 9, &filetype . ' size=' . s:st.size)
+call s:keys(' ')
+call s:ok('もう一度 Space で曼荼羅へ', &filetype ==# 'gnosis-mandala')
+let s:hide = 0
+for s:wi in range(1, winnr('$'))
+  if getwinvar(s:wi, 'gnosis_hide_force', 0) | let s:hide += 1 | endif
+endfor
+call s:ok('右のノートの窓は YAML・上下の : 系を常に隠す設定', s:hide == 1, string(s:hide))
+call s:keys('p')
+call s:ok('もう一度 p で右の窓が消える', winnr('$') == 1 && get(s:st, 'pv', 0) == 0)
+call s:keys('}')
+call s:ok('} で外側のブロックのページ（ページが 1 つしか無ければ動かない）', s:st.opage >= 0)
+call s:keys('Q')
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

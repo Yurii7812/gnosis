@@ -432,6 +432,7 @@ gnosis#template_insert
 gnosis#template_new
 gnosis#templates
 gnosis#termfont#apply_live
+gnosis#termfont#bump
 gnosis#termfont#clamp
 gnosis#termfont#command
 gnosis#termfont#defaults
@@ -440,6 +441,7 @@ gnosis#termfont#detect
 gnosis#termfont#file
 gnosis#termfont#font_choices
 gnosis#termfont#load
+gnosis#termfont#restore
 gnosis#termfont#restore_on_exit
 gnosis#termfont#save
 gnosis#termfont#set

@@ -48,6 +48,17 @@ def connect(root: str | Path, create: bool = False) -> sqlite3.Connection | None
         (p.parent / ".gitignore").write_text("*\n", encoding="utf-8")   # 同期（git）に入れない
     db = sqlite3.connect(str(p), timeout=60)
     db.execute("PRAGMA synchronous=OFF")
+    # 古い版のキャッシュ（スキーマが違う）は、表を作る前に見分ける（古い表に新しい列の索引を張ろうとして落ちるため）
+    try:
+        v = db.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
+    except sqlite3.OperationalError:
+        v = None
+    if v is not None and int(v[0]) != SCHEMA:
+        db.close()
+        if not create:
+            return None
+        p.unlink()
+        return connect(root, True)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
         CREATE TABLE IF NOT EXISTS files(id INTEGER PRIMARY KEY, path TEXT UNIQUE, name TEXT, stem TEXT,
@@ -64,16 +75,9 @@ def connect(root: str | Path, create: bool = False) -> sqlite3.Connection | None
         CREATE TABLE IF NOT EXISTS ents(grp INTEGER, dst INTEGER, name TEXT);
         CREATE INDEX IF NOT EXISTS ents_grp ON ents(grp);
     """)
-    v = db.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
     if v is None:
         db.execute("INSERT INTO meta VALUES('schema', ?)", (str(SCHEMA),))
         db.commit()
-    elif int(v[0]) != SCHEMA:
-        db.close()
-        if not create:
-            return None
-        p.unlink()
-        return connect(root, True)
     return db
 
 
@@ -675,7 +679,7 @@ def _local_walk(db: sqlite3.Connection, fid: int, restart: float = 0.25, iters: 
     return p
 
 
-def related(root: str | Path, rel: str, limit: int = 80) -> list[dict]:
+def related(root: str | Path, rel: str, limit: int = 80, body: bool = True) -> list[dict]:
     """予測関連（r）。小さな vault と同じ手がかり: つながり・同じ索引・Folgezettel の枝・題の言葉・歩いた近さ・本文の内容。
     全体を読まず、キャッシュと狭い候補（近所・同じ索引・番号が近い・題が重なる）だけで求める。"""
     import math
@@ -737,7 +741,7 @@ def related(root: str | Path, rel: str, limit: int = 80) -> list[dict]:
                     add(i, "つながりが近い", 5.0 * (w / top_w) ** 0.5)
         # 本文の内容（候補の上位だけ読む。語の重さは候補の中で測る）
         cand = [x for x, _w in sorted(score.items(), key=lambda kv: -sum(kv[1].values()))[:150]]
-        if cand:
+        if cand and body:
             pm = _paths(db, cand + [fid])
             root_p = Path(root)
             docs: dict[int, dict[str, int]] = {}
@@ -848,6 +852,9 @@ def main(argv: list[str]) -> int:
         out = ring(argv[2], argv[3])
     elif len(argv) >= 4 and argv[1] == "nodes":
         out = nodes(argv[2], argv[3:])
+    elif len(argv) >= 4 and argv[1] == "rank":
+        # 近さ順（w）用: {ノート: 点}。basis のノートに近いものほど点が高い
+        out = {d["id"]: d["score"] for d in related(argv[2], argv[3], limit=5000, body=False)}
     elif len(argv) >= 4 and argv[1] == "near":
         out = near(argv[2], argv[3])
     elif len(argv) >= 4 and argv[1] == "related":

@@ -121,5 +121,27 @@ class T(unittest.TestCase):
             mc.BIG_VAULT = old
 
 
+    def test_old_schema_cache_is_rebuilt(self):
+        """古い版のキャッシュ（スキーマ 3。fz の列と ttok が無い）があっても、落ちずに作り直す。"""
+        import sqlite3
+        d = self.r / ".gnosis" / "cache"
+        d.mkdir(parents=True)
+        db = sqlite3.connect(str(d / "mandala.sqlite"))
+        db.executescript("""
+            CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT);
+            CREATE TABLE files(id INTEGER PRIMARY KEY, path TEXT UNIQUE, name TEXT, stem TEXT, mtime INTEGER, size INTEGER, title TEXT, g INTEGER);
+            CREATE TABLE edges(src INTEGER, kind INTEGER, dst INTEGER);
+            CREATE TABLE ents(grp INTEGER, dst INTEGER, name TEXT);
+            INSERT INTO meta VALUES('schema', '3');
+            INSERT INTO files(path,name,stem,mtime,size,title,g) VALUES('old.md','old.md','old',1,1,'古い',0);
+        """)
+        db.commit()
+        db.close()
+        self.assertEqual(mc.status(self.r)["notes"], 0)     # 読むだけの呼び出しは落ちず、空に見える
+        mc.refresh(self.r)
+        self.same_as_dump()
+        self.assertIsNone(mc.node(self.r, "old.md"))
+
+
 if __name__ == "__main__":
     unittest.main()
