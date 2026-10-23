@@ -415,27 +415,20 @@ function! s:ring(c, page) abort
 endfunction
 
 " 外向きモード（v）: 中心のリンクを、9×9 の中心以外の 80 マスに、内側から外側へ 1 つずつ並べる（周りの曼荼羅は作らない）。
-" 並べる順はふつうの順（w の近さ順がオンなら近さ順）。マスの順は、中心に近い輪から、輪の中は上から時計回り
+" 並べる順はふつうの順（w の近さ順がオンなら近さ順）。マスの順は、中心に近い輪から、輪の中は読む順（1 2 3 / 4 _ 6 / 7 8 9 と同じ）
 function! s:spiral() abort
   if !exists('s:spiral_cache')
     let l:cells = []
     for l:r in range(9)
       for l:c in range(9)
         if [l:r, l:c] != [4, 4]
-          let l:dy = l:r - 4
-          let l:dx = l:c - 4
-          let l:ring = max([abs(l:dy), abs(l:dx)])
-          " 上（真上）から時計回りの角度（0〜2π）
-          let l:ang = atan2(l:dx, -l:dy)
-          if l:ang < 0
-            let l:ang += 6.283185307
-          endif
-          call add(l:cells, [l:ring, l:ang, l:r, l:c])
+          call add(l:cells, [max([abs(l:r - 4), abs(l:c - 4)]), l:r, l:c])
         endif
       endfor
     endfor
-    call sort(l:cells, {a, b -> a[0] != b[0] ? a[0] - b[0] : (a[1] > b[1] ? 1 : (a[1] < b[1] ? -1 : 0))})
-    let s:spiral_cache = map(l:cells, '[v:val[2], v:val[3]]')
+    " 内側の輪から。輪の中は、読む順（上の行の左から右、次の行…）。1 2 3 / 4 _ 6 / 7 8 9 と同じ並び
+    call sort(l:cells, {a, b -> a[0] != b[0] ? a[0] - b[0] : (a[1] != b[1] ? a[1] - b[1] : a[2] - b[2])})
+    let s:spiral_cache = map(l:cells, '[v:val[1], v:val[2]]')
   endif
   return s:spiral_cache
 endfunction
@@ -508,7 +501,7 @@ function! s:board_cells() abort
     for l:i in range(80)
       let l:e = get(l:all, l:from + l:i, ['', ''])
       if !empty(l:e[0])
-        let l:b[l:slots[l:i][0]][l:slots[l:i][1]] = {'id': l:e[0], 'name': l:e[1], 'role': 'item', 'n': l:from + l:i + 1}
+        let l:b[l:slots[l:i][0]][l:slots[l:i][1]] = {'id': l:e[0], 'name': l:e[1], 'role': 'item', 'n': (l:from == 0 && l:i < 8) ? s:nums[l:i] : l:from + l:i + 2}
       endif
     endfor
     return l:b
@@ -915,7 +908,8 @@ function! s:status(ctitle, pages, ptop, extra) abort
         \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
         \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 && !get(s:S, 'out_on', 0) ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
-  return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
+  " 中心のノートの題は上に出さない（盤面の真ん中のマスに出ている）
+  return printf(' %s%s%s  [%s] %s%s%s', s:pick_label(),
         \ (a:pages > 1 && empty(a:ptop) && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
         \ s:S.mode ==# 'all' ? 'a' : 'i', l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
 endfunction
@@ -1020,6 +1014,7 @@ function! s:render() abort
   setlocal nomodifiable nomodified
   call winrestview({'topline': 1, 'leftcol': 0})
   call s:mark()
+  call s:save_state()
 endfunction
 
 function! s:fit(s, w) abort
@@ -1157,7 +1152,10 @@ endfunction
 " 9×9 ではそのブロックの真ん中のマスが対象
 function! s:digit(d) abort
   let l:i = index(s:nums, a:d)
-  if s:S.size == 9
+  if s:S.size == 9 && get(s:S, 'out_on', 0)
+    " 外向き: 1〜9 は中心の周りの 8 マス（5 は中心）
+    let s:S.cur = l:i < 0 ? [4, 4] : [3 + s:pos[l:i][0], 3 + s:pos[l:i][1]]
+  elseif s:S.size == 9
     let s:S.cur = l:i < 0 ? [4, 4] : [s:pos[l:i][0] * 3 + 1, s:pos[l:i][1] * 3 + 1]
   else
     let s:S.cur = l:i < 0 ? [1, 1] : copy(s:pos[l:i])
@@ -1190,12 +1188,28 @@ function! s:state_all() abort
   endtry
 endfunction
 
+" 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
+" 閉じても、Vim を再起動しても、前回のまま
+let s:mode_keys = ['nums', 'size', 'pv', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit']
+let s:saved_json = ''
+
 function! s:save_state() abort
-  if !has_key(s:S, 'tenths') && !has_key(s:S, 'stretch')
+  if !has_key(s:S, 'tenths') && !has_key(s:S, 'stretch') && !has_key(s:S, 'size')
+    return
+  endif
+  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0)}
+  for l:k in s:mode_keys
+    if has_key(s:S, l:k) && !(l:k ==# 'mode' && get(s:S, 'pick', '') !=# '') && !(l:k ==# 'near_on' && !empty(get(s:S, 'saved_mode', [])) && get(s:S, 'src', '') !=# '')
+      let l:d[l:k] = s:S[l:k]
+    endif
+  endfor
+  let l:j = string(l:d)
+  if l:j ==# s:saved_json
     return
   endif
   try
-    call gnosis#home#write_json(gnosis#home#path('mandala.json'), {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0)})
+    call gnosis#home#write_json(gnosis#home#path('mandala.json'), l:d)
+    let s:saved_json = l:j
   catch
   endtry
 endfunction
@@ -2109,6 +2123,31 @@ function! s:open(center, ...) abort
       let s:S.stretch = l:sv + 0.0
     endif
   endif
+  " モード（# f p v w d c r a/i t）も前回のまま。最初に開くときだけ読む（同じ Vim の中では s:S がそのまま残る）
+  let l:want_size = 3
+  if get(g:, 'gnosis_mview_restore', 1) && empty(l:pick)
+    let l:all = s:state_all()
+    if !get(s:S, 'modes_restored', 0)
+      let s:S.modes_restored = 1
+      for l:k in ['nums', 'pv', 'out_on', 'rank_on', 'near_on', 'rel_on']
+        if has_key(l:all, l:k) && (type(l:all[l:k]) == v:t_number) && !has_key(s:S, l:k)
+          let s:S[l:k] = l:all[l:k] ? 1 : 0
+        endif
+      endfor
+      if get(l:all, 'dbasis', '') =~# '^\(center\|self\)$' && !has_key(s:S, 'dbasis')
+        let s:S.dbasis = l:all.dbasis
+      endif
+      if get(l:all, 'digit', '') =~# '^\(jump\|move\)$'
+        let s:S.digit = l:all.digit
+      endif
+      if get(l:all, 'mode', '') =~# '^\(all\|groups\)$' && !has_key(s:S, 'mode_set')
+        let s:S.mode = l:all.mode
+      endif
+    endif
+    if get(l:all, 'size', 3) == 9
+      let l:want_size = 9
+    endif
+  endif
   if !s:has(l:c)
     let l:c = s:has('index.md') ? 'index.md' : ''
   endif
@@ -2138,6 +2177,10 @@ function! s:open(center, ...) abort
   call win_gotoid(s:mwin())
   " 窓の出入りで戻ってしまうことがあるので、開いた最後にもう一度隠す
   call gnosis#mview#cursor(0)
+  " 前回、全画面（9×9）で閉じていたら、全画面で開く
+  if l:want_size == 9 && s:S.size == 3
+    call s:full()
+  endif
 endfunction
 
 " <Space>: ノートから曼荼羅へ、曼荼羅からノートへ
@@ -2330,4 +2373,10 @@ endfunction
 " 試験用: 状態を返す
 function! gnosis#mview#state() abort
   return s:S
+endfunction
+
+" 試験用: Vim を再起動した状態（s:S が空）にする
+function! gnosis#mview#reset_for_test() abort
+  let s:S = {}
+  let s:saved_json = ''
 endfunction
