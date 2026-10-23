@@ -54,9 +54,11 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
-call s:ok('ふだんは曼荼羅だけ（モード・凡例・案内は出ない）', s:text() !~# 'モード' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
+call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] c:オフ r:オフ' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
 call s:keys('?')
-call s:ok('? でモード・凡例・案内が出る', s:text() =~# 'モード' && s:text() =~# 'q 閉じる', s:text())
+call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab / S-Tab', string(popup_list()))
+call s:keys('q')
+call s:ok('q でポップアップが閉じる（曼荼羅は閉じない）', len(popup_list()) == 0 && &filetype ==# 'gnosis-mandala', string(popup_list()))
 call s:ok('中心は今のノート', s:st.center ==# 'herb.md', s:st.center)
 call s:ok('周りに所属の索引が出る', s:text() =~# '1 植物' && s:text() =~# '2 料理', s:text())
 call s:ok('ノートのつながりも出る（すべて）', s:text() =~# '3 ミント')
@@ -86,10 +88,7 @@ call s:ok('索引の周りに所属する Index が最初に出る', s:text() =~
 call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '9 タイム', s:text())
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 call s:ok('ページ (1/2) が中央のマスの上に出る', s:text() =~# '(1/2)' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *(1/2) *┃"')) == 1, s:text())
-call s:keys('?')
-call s:ok('? で曼荼羅だけに戻る（ページ (1/2) は盤面に残る）', s:text() !~# 'モード' && s:text() !~# 'q 閉じる' && s:text() =~# '(1/2)', s:text())
-call s:keys('?')
-call s:ok('もう一度 ? でモード・案内が出る', s:text() =~# 'q 閉じる' && s:text() =~# 'モード')
+call s:ok('ページ (1/2) は盤面に残る', s:text() =~# '(1/2)', s:text())
 " ページ送り
 call s:keys(']')
 call s:ok('] で 2 枚目: サルビア・ラベンダー・水やり', s:text() =~# '1 サルビ' && s:text() =~# '3 水やり' && s:text() =~# '2/2', s:text())
@@ -98,11 +97,11 @@ call s:ok('最後の次へは進まない', s:st.page == 1)
 call s:keys('[')
 " / : ふつうの検索のようにヒットへ飛ぶ（複数枚あるときは別の枚へも）。入力そのものは試験できないので状態を入れる
 let s:st.find = 'ラベンダー'
-call s:keys("\<Tab>")
-call s:ok('Tab で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 1] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
+call s:keys('n')
+call s:ok('n で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 1] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
 call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダー 1/1', s:text())
-call s:keys("\<Esc>")
-call s:ok('Esc で検索のハイライトを解く', s:st.find ==# '')
+call s:keys('q')
+call s:ok('q でハイライトをやめる（曼荼羅は閉じない）', s:st.find ==# '' && &filetype ==# 'gnosis-mandala')
 call s:keys('[')
 " 1 2 3 / 4 5 6 / 7 8 9 の並び（真ん中が 5。4 は中心の左・6 は右）
 call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *5 植物"')) == 1 && s:text() =~# '6 ローズ', s:text())
@@ -151,7 +150,7 @@ call s:ok('9×9 は 9 行 9 列', len(filter(getbufline(s:st.buf, 1, '$'), 'v:va
 call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハ' && s:text() =~# 'ミ', s:text())
 call s:ok('9×9 にも番号が出る', s:text() =~# '1 Index' && s:text() =~# '8 ', s:text())
 call s:keys('t')
-call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor' && s:text() =~# '数字:カーソルだけ(t)', s:text())
+call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor', s:st.digit)
 call s:keys('6')
 call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [4, 7], string(s:st.cur) . ' ' . s:st.center)
 call s:keys('t')
@@ -195,8 +194,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('r')
 call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '植物', s:text())
-call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[全体:a\]' && s:text() =~# '予測関連:r\[オン\]' && s:text() =~# '近いグループ:c\[', s:text())
-call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:text() =~# 'q 閉じる', s:text())
+call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[a\] c:オン r:オン', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
 
@@ -268,7 +266,9 @@ call s:keys('1')
 call s:keys("\<CR>")
 call s:ok('絞り込んだ索引へ進むと絞り込みは解ける', s:st.center ==# 'empty.md' && s:st.query ==# '', s:st.center)
 call s:keys("\<CR>")
-call s:ok('中心で Enter すると載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
+call s:ok('Enter は辿るだけで、まだ載らない', join(readfile(s:v . '/empty.md'), "\n") !~# '\[雑記\]', 'x')
+call s:keys('e')
+call s:ok('e で載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
 call s:ok('載せたあとは元のノートに戻り曼荼羅は閉じる', fnamemodify(expand('%:p'), ':t') ==# 'misc.md' && winnr('$') == 1, expand('%:p') . ' ' . winnr('$'))
 
 " 安定化: 全画面で q → 開いていたノートに戻り、曼荼羅の窓設定が残らない
@@ -348,6 +348,56 @@ call s:keys('r')
 call s:keys('i')
 call s:ok('i は索引だけ（ノートは出ない）', s:grid() !~# '引用先' && s:grid() !~# '文脈', s:grid())
 call s:keys('a')
+call s:keys('q')
+
+" Tab / Shift-Tab: 順次表示（1 2 3 4 6 7 8 9 → 次の曼荼羅の 1 …、最後まで行ったら最初に戻る）
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+call s:keys('a')
+let s:st = gnosis#mview#state()
+call s:ok('Tab 前は中心のマス', s:st.cur == [1, 1] && s:st.page == 0, string(s:st.cur))
+let s:path = []
+for s:i in range(9)
+  call s:keys("\<Tab>")
+  call add(s:path, [s:st.page, s:st.cur])
+endfor
+call s:ok('Tab は 1 2 3 4 6 7 8 9 の順（5 の中心は飛ばす）', s:path[0 : 7] ==# [[0, [0, 0]], [0, [0, 1]], [0, [0, 2]], [0, [1, 0]], [0, [1, 2]], [0, [2, 0]], [0, [2, 1]], [0, [2, 2]]], string(s:path))
+call s:ok('次の曼荼羅の 1 へ進む', s:path[8] ==# [1, [0, 0]], string(s:path[8]))
+call s:keys("\<S-Tab>")
+call s:ok('Shift-Tab で戻る（前の曼荼羅の最後 9）', s:st.page == 0 && s:st.cur == [2, 2], string(s:st.cur) . s:st.page)
+for s:i in range(20)
+  call s:keys("\<Tab>")
+endfor
+call s:ok('最後まで行ったら最初へ戻って回り続ける', s:st.page >= 0 && s:st.page <= 1 && &filetype ==# 'gnosis-mandala')
+call s:keys('q')
+
+" q は新しいほうから 1 つずつ。何もなければ閉じる。Q はすぐ閉じる
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:st.query = '植'
+let s:st.find = 'ミ'
+let s:st.stamp = {'query': 1, 'find': 2}
+call s:keys('z')
+call s:ok('かかっているものと q の案内が上の行に出る', s:text() =~# 'q でハイライトをやめる', s:text())
+call s:keys('q')
+call s:ok('q は新しいほう（ハイライト）から', s:st.find ==# '' && s:st.query ==# '植' && &filetype ==# 'gnosis-mandala', string([s:st.find, s:st.query]))
+call s:keys('q')
+call s:ok('次の q で絞り込みをやめる', s:st.query ==# '' && &filetype ==# 'gnosis-mandala', s:st.query)
+let s:st.find = 'ミ'
+let s:st.query = '植'
+call s:keys('Q')
+call s:ok('Q は何がかかっていても閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1, &filetype)
+
+" x: 絞り込み（入力は試験できないので状態を入れる）。q で解除
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:st.query = 'ラベ'
+call s:keys('z')
+call s:ok('x の絞り込み: 題が合うものだけ', s:grid() =~# 'ラベンダー' && s:grid() !~# 'タイム', s:grid())
+call s:keys('q')
+call s:ok('q で絞り込みを解く', s:st.query ==# '' && s:grid() =~# 'タイム', s:grid())
 call s:keys('q')
 
 call writefile(s:res, s:work . '/result.txt')

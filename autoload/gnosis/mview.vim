@@ -579,18 +579,6 @@ function! s:geometry(n, W, H, chrome) abort
   return [max([1, l:cw]), l:ch]
 endfunction
 
-" 凡例（色つき）: ' ◆索引 ▲親 ▼子 ◇Context ≈関連 ←BackLink ノート'。色を付ける位置も返す
-function! s:legend(W) abort
-  let l:str = ' '
-  let l:spans = []
-  for l:k in s:kind_legend
-    let l:cell = (empty(s:kinds[l:k][0]) ? '' : s:kinds[l:k][0]) . s:kinds[l:k][1]
-    call add(l:spans, [l:k, strlen(l:str) + 1, strlen(l:cell)])
-    let l:str .= l:cell . '  '
-  endfor
-  return {'text': s:fit(l:str, a:W), 'spans': l:spans}
-endfunction
-
 " カーソルのマスの説明を 1 行で（題・種類・理由）
 function! s:info() abort
   if get(s:S, 'info_line', 0) <= 0
@@ -605,26 +593,6 @@ function! s:info() abort
   setlocal modifiable
   call setline(s:S.info_line, s:fit(l:txt, winwidth(0)))
   setlocal nomodifiable nomodified
-endfunction
-
-" 案内を幅に収まるように折り返す（見切れないように）
-function! s:footer_lines(W) abort
-  let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード（全体:a 索引:i）  重ねる（近いグループ:c 予測関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード（全体:a 索引:i）  重ねる（近いグループ:c 予測関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'Space ノート', 'q 閉じる']
-  let l:lines = []
-  let l:cur = ''
-  for l:it in l:items
-    let l:try = empty(l:cur) ? ' ' . l:it : l:cur . '  ' . l:it
-    if strdisplaywidth(l:try) > a:W && !empty(l:cur)
-      call add(l:lines, l:cur)
-      let l:cur = ' ' . l:it
-    else
-      let l:cur = l:try
-    endif
-  endfor
-  call add(l:lines, l:cur)
-  return l:lines
 endfunction
 
 " モードの行: ' モード: [全体:a] 索引:i   近いグループ:c[オン] 予測関連:r[オフ]'（今のモードを目立たせる位置も返す）
@@ -664,6 +632,162 @@ function! s:mode_bar(W) abort
   return [l:lines, l:span]
 endfunction
 
+" ---- q: かかっているもの（ハイライト・絞り込み・検索結果・索引選び）を、新しいほうから 1 つずつやめる ----------
+" 何もかかっていなければ曼荼羅を閉じる。Q は何がかかっていても閉じる
+
+function! s:tick(name) abort
+  let s:S.stamp = get(s:S, 'stamp', {})
+  let s:S.tick = get(s:S, 'tick', 0) + 1
+  let s:S.stamp[a:name] = s:S.tick
+endfunction
+
+let s:layer_label = {'find': 'ハイライト', 'query': '絞り込み', 'rquery': '検索結果', 'pick': '索引選び'}
+
+function! s:newest() abort
+  let l:act = []
+  if !empty(get(s:S, 'find', '')) | call add(l:act, 'find') | endif
+  if !empty(get(s:S, 'query', '')) | call add(l:act, 'query') | endif
+  if !empty(get(s:S, 'rquery', '')) | call add(l:act, 'rquery') | endif
+  if get(s:S, 'pick', 0) | call add(l:act, 'pick') | endif
+  let l:best = ''
+  let l:bt = -1
+  for l:n in l:act
+    let l:t = get(get(s:S, 'stamp', {}), l:n, 0)
+    if l:t >= l:bt
+      let l:best = l:n
+      let l:bt = l:t
+    endif
+  endfor
+  return l:best
+endfunction
+
+function! s:cancel_hint() abort
+  let l:n = s:newest()
+  return empty(l:n) ? '' : 'q で' . s:layer_label[l:n] . 'をやめる'
+endfunction
+
+function! s:end_pick() abort
+  let s:S.pick = 0
+  if has_key(s:S, 'saved_mode')
+    let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
+  endif
+endfunction
+
+function! s:quit() abort
+  let l:n = s:newest()
+  if empty(l:n)
+    call gnosis#mview#close()
+    return
+  endif
+  if l:n ==# 'find'
+    let s:S.find = ''
+  elseif l:n ==# 'query'
+    let s:S.query = ''
+    let s:S.page = 0
+    let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  elseif l:n ==# 'rquery'
+    let s:S.rquery = ''
+    let s:S.results = []
+    let s:S.page = 0
+    let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  elseif l:n ==# 'pick'
+    call s:end_pick()
+    call s:render()
+    call s:show_note(s:S.center)
+    return
+  endif
+  call s:render()
+endfunction
+
+" ---- Tab / Shift-Tab: 順次表示。1 2 3 4 6 7 8 9（5 の中心は飛ばす）、次の曼荼羅の 1 へ、最後まで行ったら最初に戻る ----------
+function! s:seq(dir) abort
+  let l:total = len(s:items(s:S.center))
+  if l:total == 0
+    return
+  endif
+  let l:o = s:S.size == 3 ? 0 : 3
+  let l:here = -1
+  for l:i in range(8)
+    if s:S.cur == [l:o + s:pos[l:i][0], l:o + s:pos[l:i][1]]
+      let l:here = s:S.page * 8 + l:i
+    endif
+  endfor
+  let l:next = l:here < 0 ? (a:dir > 0 ? 0 : l:total - 1) : (l:here + a:dir + l:total) % l:total
+  let s:S.page = l:next / 8
+  let l:p = s:pos[l:next % 8]
+  let s:S.cur = [l:o + l:p[0], l:o + l:p[1]]
+  call s:render()
+  call s:preview()
+endfunction
+
+" ---- ? : 案内のポップアップ（画面の中央。q で閉じる） ----------------------------------------------
+function! s:help_lines() abort
+  let l:t = [
+        \ '曼荼羅ビュー',
+        \ '',
+        \ ' 動く      h j k l / 矢印    1-9 そのマスへ(5 が中心)   t 数字の動き切替   z 中央に',
+        \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
+        \ ' 順に見る   Tab / S-Tab  1 2 3 4 6 7 8 9 → 次の曼荼羅の 1 …(最後は最初へ)',
+        \ ' モード     a 全体   i グループ・索引だけ',
+        \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
+        \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
+        \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
+        \ ' 画面       f 全画面(9×9)⇔分割    < > 曼荼羅の幅    u 読み直し    Space ノートへ',
+        \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
+        \ '',
+        \ ' 色         ']
+  return l:t
+endfunction
+
+function! s:help_filter(id, key) abort
+  if a:key ==# 'q' || a:key ==# "\<Esc>" || a:key ==# '?'
+    call popup_close(a:id)
+    unlet! s:S.popup
+    return 1
+  endif
+  return 1
+endfunction
+
+function! s:toggle_help() abort
+  if exists('s:S.popup') && !empty(popup_getpos(s:S.popup))
+    call popup_close(s:S.popup)
+    unlet! s:S.popup
+    return
+  endif
+  let l:lines = s:help_lines()
+  " 色の凡例（色つき）を最後の行に
+  let l:str = l:lines[-1]
+  let l:props = []
+  for l:k in s:kind_legend
+    let l:cell = s:kinds[l:k][1]
+    if !empty(s:kinds[l:k][2])
+      call s:ensure_prop(l:k)
+      call add(l:props, {'col': strlen(l:str) + 1, 'length': strlen(l:cell), 'type': 'gnosis_mv_' . l:k})
+    endif
+    let l:str .= l:cell . '  '
+  endfor
+  let l:lines[-1] = l:str
+  let l:items = map(copy(l:lines[0 : -2]), '{"text": v:val}') + [{'text': l:str, 'props': l:props}]
+  let s:S.popup = popup_create(l:items, {'title': ' ガイド（q で閉じる） ', 'pos': 'center', 'border': [], 'padding': [1, 2, 1, 2],
+        \ 'zindex': 300, 'mapping': 0, 'filter': function('s:help_filter'), 'wrap': 0,
+        \ 'maxheight': max([6, &lines - 4]), 'maxwidth': max([20, &columns - 4])})
+endfunction
+
+function! s:ensure_prop(kind) abort
+  if empty(prop_type_get('gnosis_mv_' . a:kind))
+    call prop_type_add('gnosis_mv_' . a:kind, {'highlight': s:kinds[a:kind][2]})
+  endif
+endfunction
+
+" 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
+function! s:status(ctitle, pages, ptop, extra) abort
+  let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
+  let l:cancel = s:cancel_hint()
+  return printf(' %s%s  %s%s  [%s] %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', a:ctitle,
+        \ (a:pages > 1 && empty(a:ptop)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
+        \ s:S.mode ==# 'all' ? 'a' : 'i', l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
+endfunction
+
 function! s:render() abort
   " 色の定義が消えていたら戻す（default なので、利用者の指定は上書きしない）
   call s:hl()
@@ -677,30 +801,11 @@ function! s:render() abort
   let s:S.cells = l:b
   let l:W = winwidth(0)
   let l:H = winheight(0)
-  " ふだんは曼荼羅（盤面）だけ。? を押したときだけ、見出し・モード・凡例・説明・案内を出す。
-  " 出すときも、窓が低ければ盤面を優先して 案内→凡例と説明→モードの行 の順に減らす（どんな大きさでも盤面が窓に収まる）
-  let l:help = get(s:S, 'help', 0)
-  let l:show_ref = 0
+  " 上に状態の 1 行（中心・モード・重ねるもの・かかっているもの）、下にカーソルのマスの説明 1 行。案内は ? のポップアップ
   let l:foot = []
-  let l:bar = []
+  let l:show_ref = 1
   let s:S.modespan = []
-  if l:help
-    let l:foot = s:footer_lines(l:W)
-    let [l:bar, s:S.modespan] = s:mode_bar(l:W)
-    let l:show_ref = 1
-    let l:min_grid = l:n * 2 + 1
-    if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
-      let l:foot = l:foot[0 : 0]
-    endif
-    if 1 + len(l:bar) + 2 + len(l:foot) + l:min_grid > l:H
-      let l:show_ref = 0
-    endif
-    if 1 + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot) + l:min_grid > l:H
-      let l:bar = l:bar[0 : 0]
-    endif
-  endif
-  let l:fixed = (l:help ? 1 : 0) + len(l:bar) + (l:show_ref ? 2 : 0) + len(l:foot)
-  let l:legend = l:show_ref ? s:legend(l:W) : {'text': '', 'spans': []}
+  let l:fixed = 2
   let s:S.legend_line = 0
   let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, l:fixed)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
@@ -720,16 +825,8 @@ function! s:render() abort
   let l:extra = (empty(s:S.rquery) ? '' : '   検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
         \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
         \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
-  if l:help
-    call add(l:lines, s:fit(printf(' %s%s   %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', l:ctitle,
-          \ (l:pages > 1 && empty(l:ptop)) ? (s:S.page + 1) . '/' . l:pages . '   ' : '', l:n == 3 ? '3×3' : '9×9', l:extra), l:W))
-    call extend(l:lines, map(copy(l:bar), 's:fit(v:val, l:W)'))
-  endif
-  if l:show_ref
-    call add(l:lines, l:legend.text)
-    let s:S.legend_line = len(l:lines)
-  endif
-  let s:S.legend_spans = l:show_ref ? l:legend.spans : []
+  call add(l:lines, s:fit(s:status(l:ctitle, l:pages, l:ptop, l:extra), l:W))
+  let s:S.legend_spans = []
   for l:k in range(l:top)
     call add(l:lines, '')
   endfor
@@ -780,16 +877,11 @@ function! s:render() abort
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
   call add(s:S.bars, ['GnosisMviewBarH', len(l:lines), strlen(l:left) + 1, l:gridw])
-  while len(l:lines) < l:H - len(l:foot) - (l:show_ref ? 1 : 0)
+  while len(l:lines) < l:H - 1
     call add(l:lines, '')
   endwhile
-  if l:show_ref
-    call add(l:lines, '')
-    let s:S.info_line = len(l:lines)
-  else
-    let s:S.info_line = 0
-  endif
-  call extend(l:lines, map(l:foot, 's:fit(v:val, l:W)'))
+  call add(l:lines, '')
+  let s:S.info_line = len(l:lines)
   setlocal modifiable
   silent! %delete _
   call setline(1, l:lines)
@@ -964,12 +1056,6 @@ function! s:save_state() abort
   endtry
 endfunction
 
-function! s:toggle_help() abort
-  let s:S.help = !get(s:S, 'help', 0)
-  call s:render()
-  call s:save_state()
-endfunction
-
 function! s:toggle_digit() abort
   let s:S.digit = s:S.digit ==# 'jump' ? 'cursor' : 'jump'
   call s:render()
@@ -987,12 +1073,6 @@ endfunction
 function! s:enter() abort
   let l:cell = s:cur_cell()
   if empty(l:cell.id)
-    return
-  endif
-  if l:cell.id ==# s:S.center && get(s:S, 'pick', 0)
-    if s:nd(l:cell.id).g && empty(s:S.query) && empty(s:S.rquery)
-      call s:decide(l:cell.id)
-    endif
     return
   endif
   if l:cell.id ==# s:S.center
@@ -1083,11 +1163,12 @@ function! s:jump(dir, ...) abort
   let s:S.page = l:hits[l:target][0]
   let s:S.cur = [l:hits[l:target][1], l:hits[l:target][2]]
   call s:render()
-  echo '/' . s:S.find . '  ' . s:S.hit_i . '/' . s:S.hit_n
+  echo 'ハイライト: ' . s:S.find . '  ' . s:S.hit_i . '/' . s:S.hit_n
 endfunction
 
 function! s:find_prompt() abort
-  let s:S.find = trim(input('/', get(s:S, 'find', '')))
+  let s:S.find = trim(input('ハイライト: ', get(s:S, 'find', '')))
+  call s:tick('find')
   let s:S.hit_n = 0
   let s:S.hit_i = 0
   if empty(s:S.find)
@@ -1097,20 +1178,31 @@ function! s:find_prompt() abort
   endif
 endfunction
 
-function! s:find_clear() abort
-  if !empty(get(s:S, 'find', ''))
-    let s:S.find = ''
-    call s:render()
-  endif
-endfunction
-
-" 索引を選ぶ: F で題を絞り込む（空にすると解除）
+" x: 題で絞り込む（空にすると解除）。索引を選ぶとき（\l）は索引を全部から、ふだんは今の周りの中から
 function! s:filter() abort
   let l:q = input(get(s:S, 'pick', 0) ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
   let s:S.query = trim(l:q)
+  call s:tick('query')
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
+endfunction
+
+" e: 索引を選んでいる最中に、中心の索引に決める（索引でなければ何もしない）
+function! s:decide_here() abort
+  if !get(s:S, 'pick', 0)
+    return
+  endif
+  let l:id = s:S.center
+  if !s:nd(l:id).g
+    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+    return
+  endif
+  if !empty(s:S.query) || !empty(s:S.rquery)
+    echohl WarningMsg | echo 'Gnosis: 絞り込み・検索をやめてから決めてください（q）' | echohl NONE
+    return
+  endif
+  call s:decide(l:id)
 endfunction
 
 " 中心の索引に決める: 曼荼羅を閉じ、元のノートを載せる
@@ -1177,6 +1269,7 @@ function! s:search() abort
     let l:d = s:py(['search', s:S.root] + split(l:q, '\s\+'))
     let s:S.results = type(l:d) == v:t_list ? l:d : []
     let s:S.rquery = l:q
+    call s:tick('rquery')
   endif
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -1307,19 +1400,22 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
-  nnoremap <buffer><nowait><silent> / <Cmd>call <SID>find_prompt()<CR>
-  nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
+  nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
+  nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
+  nnoremap <buffer><nowait><silent> x <Cmd>call <SID>filter()<CR>
+  nnoremap <buffer><nowait><silent> e <Cmd>call <SID>decide_here()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
-  nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>jump(1)<CR>
-  nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>jump(-1)<CR>
-  nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>find_clear()<CR>
+  nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>seq(1)<CR>
+  nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>seq(-1)<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>resize(-1)<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call <SID>resize(1)<CR>
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload(1)<CR>
-  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#close()<CR>
+  nnoremap <buffer><nowait><silent> q <Cmd>call <SID>quit()<CR>
+  nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
@@ -1483,6 +1579,7 @@ function! s:open(center, ...) abort
   endif
   let s:S.digit = get(s:S, 'digit', 'jump')
   let s:S.pick = !empty(l:pick)
+  call s:tick('pick')
   let s:S.src = l:pick
   let s:S.query = ''
   let s:S.rquery = ''
