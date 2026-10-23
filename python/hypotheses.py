@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tasks as tk  # noqa: E402
+from note_title import title_of_text  # noqa: E402
 
 HEAD = re.compile(r"^\s*(?:[-*+]\s+)?(?:仮説|Hypothesis)\s*[:：]\s*(.+?)\s*$", re.I)
 PRO = re.compile(r"^\s*[+＋]\s*(?:証拠|evidence)\s*[:：]\s*(.+?)\s*$", re.I)
@@ -109,7 +110,7 @@ def collect(root: str | Path) -> list[dict]:
         if "仮説" not in text and "ypothesis" not in text:
             continue
         rel = p.relative_to(root).as_posix()
-        title = next((ln.split(":", 1)[1].strip() for ln in text.split("\n")[:12] if ln.startswith("title:")), p.stem)
+        title = title_of_text(text, p.stem)
         for n, h in enumerate(parse_text(text, rel), 1):
             h.update({"note_title": title, "n": n, "suggest": suggest(h), "id": f"{rel}#{n}",
                       "pro": len(h["evidence"]), "con": len(h["counter"]), "state_known": h["status"] in STATES})

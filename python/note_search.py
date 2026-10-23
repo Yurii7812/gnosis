@@ -42,19 +42,28 @@ def split_tokens(query: str) -> list[str]:
 
 
 def title_of(text: str, path: str) -> tuple[str, int]:
-    """(タイトル, タイトル行 1 始まり)。YAML title → 先頭 # 見出し → ファイル名。"""
+    """(タイトル, タイトル行 1 始まり)。先頭の # 見出し（H1）→ 古いノートの YAML title: → ファイル名。"""
     lines = text.split("\n")
+    start = 0
+    ytitle, yline = "", 1
     if lines and lines[0].strip() == "---":
         for i in range(1, min(len(lines), 40)):
             if lines[i].strip() in ("---", "..."):
+                start = i + 1
                 break
             m = re.match(r"\s*title\s*:\s*(.+)", lines[i])
-            if m:
-                return m.group(1).strip().strip("\"'"), i + 1
-    for i, ln in enumerate(lines):
-        m = re.match(r"#\s+(.+)", ln)
+            if m and not ytitle:
+                ytitle, yline = m.group(1).strip().strip("\"'"), i + 1
+    fence = False
+    for i in range(start, len(lines)):
+        if re.match(r"\s{0,3}(`{3,}|~{3,})", lines[i]):
+            fence = not fence
+            continue
+        m = None if fence else re.match(r"#\s+(.+)", lines[i])
         if m:
             return m.group(1).strip(), i + 1
+    if ytitle:
+        return ytitle, yline
     return os.path.splitext(os.path.basename(path))[0], 1
 
 

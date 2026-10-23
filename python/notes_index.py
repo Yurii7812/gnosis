@@ -18,19 +18,27 @@ MAX_BYTES = 2_000_000
 
 
 def title_of(text: str, path: str) -> str:
+    """先頭の # 見出し（H1）→ 古いノートの YAML title: → ファイル名。"""
     lines = text.split("\n")
+    start = 0
+    ytitle = ""
     if lines and lines[0].strip() == "---":
         for i in range(1, min(len(lines), 40)):
             if lines[i].strip() in ("---", "..."):
+                start = i + 1
                 break
             m = re.match(r"\s*title\s*:\s*(.+)", lines[i])
-            if m:
-                return m.group(1).strip().strip("\"'")
-    for ln in lines:
-        m = re.match(r"#\s+(.+)", ln)
+            if m and not ytitle:
+                ytitle = m.group(1).strip().strip("\"'")
+    fence = False
+    for ln in lines[start:]:
+        if re.match(r"\s{0,3}(`{3,}|~{3,})", ln):
+            fence = not fence
+            continue
+        m = None if fence else re.match(r"#\s+(.+)", ln)
         if m:
             return m.group(1).strip()
-    return os.path.splitext(os.path.basename(path))[0]
+    return ytitle or os.path.splitext(os.path.basename(path))[0]
 
 
 def main() -> int:

@@ -68,8 +68,8 @@ def _is_group(text: str) -> bool:
 
 
 def _title(path: Path, text: str) -> str:
-    fm, _ = nf._split_front_matter(text.split("\n"))
-    return nf._fm_title(fm) or path.stem
+    fm, rest = nf._split_front_matter(text.split("\n"))
+    return nf._title_of(fm, rest, path.stem)
 
 
 def _block_links(lines: list[str], head: str) -> list[str]:

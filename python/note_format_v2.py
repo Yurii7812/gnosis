@@ -199,6 +199,16 @@ def _split_front_matter(lines: list[str]) -> tuple[list[str], list[str]]:
     return [], list(lines)
 
 
+def _title_of(fm: list[str], rest: list[str], stem: str) -> str:
+    """題。先頭の `# 見出し`（H1）が正。H1 が無い古いノートだけ、front matter の title: を使う（無ければファイル名）。"""
+    for ln, fz in zip(rest, _fenced(rest)):
+        if not fz:
+            m = re.match(r"^#\s+(\S.*?)\s*#*\s*$", ln)
+            if m:
+                return m.group(1).strip()
+    return _fm_title(fm) or stem
+
+
 def _fm_title(fm: list[str]) -> str:
     for ln in fm:
         m = re.match(r"^\s*title\s*:\s*(.+?)\s*$", ln)
@@ -372,7 +382,7 @@ def parse_note(path, text: str | None = None) -> Note:
         text = p.read_text(encoding="utf-8")
     raw = text.split("\n")
     fm, rest = _split_front_matter(raw)
-    title = _fm_title(fm) or p.stem
+    title = _title_of(fm, rest, p.stem)
 
     stripped = [ln.strip() for ln in rest]
 
@@ -427,7 +437,7 @@ def migrate_note(text: str, path: str = "note.md") -> str | None:
             LEGACY_UP_MARK2 in stripped and LEGACY_DOWN_MARK2 in stripped) or (
             LEGACY_UP_MARK in stripped and LEGACY_DOWN_MARK in stripped):
         return None
-    title = _fm_title(fm) or Path(path).stem
+    title = _title_of(fm, rest, Path(path).stem)
     div_idx = [i for i, s in enumerate(stripped) if DIVIDER_RE.match(s)]
 
     if len(div_idx) >= 2 and (
@@ -1555,7 +1565,7 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # 末尾の改行で生じる空要素は本文に入れない（残すと `### Parent` の上に空行が増える）。
     # `### Parent` より前の空行（本文の途中の余白）は残る。
     fm, rest = _split_front_matter(text.rstrip("\n").split("\n"))
-    title = _fm_title(fm) or path.stem
+    title = _title_of(fm, rest, path.stem)
     # Group / BranchGroup の後ろに Context がある形式でも、先頭のブロックを
     # 順に取り除いてから Context を読む。旧 ThisNoteGroup も受け付ける。
     # 先頭のブロック（ParentBranch: / BranchGroup: / Group:）は、ファイルで先に現れるものから順に取る。
@@ -1936,11 +1946,29 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
     return top + ([""] if top and rest else []) + rest
 
 
+_YAML_TITLE_LINE = re.compile(r"^\s*title\s*:")
+
+
+def _drop_yaml_title(n: dict) -> dict:
+    """front matter の title: を消す（題は先頭の # 見出し）。H1 が無いノートは、title: の題を H1 として本文の先頭に入れる。"""
+    if not any(_YAML_TITLE_LINE.match(ln) for ln in n["fm"]):
+        return n
+    n = dict(n)
+    n["fm"] = [ln for ln in n["fm"] if not _YAML_TITLE_LINE.match(ln)]
+    body = list(n.get("body") or [])
+    if not any(not fz and re.match(r"^#\s+\S", ln) for ln, fz in zip(body, _fenced(body))):
+        n["body"] = ["# " + n["title"], ""] + body
+    return n
+
+
 def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back: list[Path], titles: dict,
                    group_lines: list[str] | None = None) -> str:
     """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
     中身が空の節は見出しごと出さない（新しいノートは本文だけ）。"""
-    lines = list(n["fm"]) if n["fm"] else ["---", "title: " + n["title"], "---"]
+    n = _drop_yaml_title(n)
+    lines = list(n["fm"])
+    if lines == ["---", "---"]:
+        lines = []   # 中身の無い front matter は書かない（題は先頭の # 見出し）
     # Context は本文の冒頭（H1 の直後）の `Context:` ブロック。新形式のノート（既にブロックがある・旧節が無い）はこれ。
     # 旧形式の `### Context` 節だけのノートは、勝手に移行せず旧形式のまま書く。
     use_block = n.get("ctx_at", -1) >= 0 or not n["parent"]
@@ -2067,7 +2095,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                           [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
     import folgezettel as fz
     for p, ident in fz.allocation(root, notes).items():
-        fm = notes[p]["fm"] or ["---", "title: " + notes[p]["title"], "---"]
+        fm = notes[p]["fm"] or ["---", "---"]
         updated = fz.set_value("\n".join(fm), ident) if ident else fz.remove_value("\n".join(fm))
         notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
     # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
@@ -2524,7 +2552,7 @@ def make_new(path, title: str = "") -> Path:
     t = title.strip() or p.stem
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        f"---\ntime: {ts}\ntitle: {t}\n---\n\n# {t}\n\n\n",
+        f"---\ntime: {ts}\n---\n\n# {t}\n\n\n",
         encoding="utf-8",
     )
     return p

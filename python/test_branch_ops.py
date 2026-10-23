@@ -23,7 +23,7 @@ TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
 
 
 def note(title: str, body: str = "", extra_fm: str = "", sections: str = "") -> str:
-    fm = f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n{extra_fm}---\n"
+    fm = f"---\ntime: 2026-01-01 00:00:00\n{extra_fm}---\n"
     return fm + f"\n# {title}\n\n{body}\n" + sections
 
 
@@ -298,7 +298,7 @@ class TestSync(Base):
         self.w("a.md", note("A"))
         self.w("b.md", note("B"))
         self.assertTrue(self.add("a.md", "b.md")["ok"])
-        self.w("b.md", self.r("b.md").replace("title: B", "title: B改"))
+        self.w("b.md", self.r("b.md").replace("# B\n", "# B改\n"))
         self.sync()
         self.assertIn("[B改](b.md)", self.r("a.md"))
         (self.root / "b.md").unlink()

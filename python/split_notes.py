@@ -29,6 +29,9 @@ import sys
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from note_title import title_of_lines  # noqa: E402
+
 HEAD = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 REL_HEADS = ("ParentBranch:", "ChildBranch:", "BranchGroup:", "Group:", "Context:", "Related:", "BackLink:")
 
@@ -129,7 +132,7 @@ def split(root: str | Path, src: str, heading: str, newfile: str, now: dt.dateti
         body.pop()
     if not body:
         raise ValueError("その節は中身が空なので分割しません")
-    src_title = next((m.group(1) for ln in lines if (m := re.match(r"^title:\s*(.*)$", ln))), sp.stem)
+    src_title = title_of_lines(lines, sp.stem)
     link_new = quote(np_.name)
     new_text = (f"---\ntime: {now:%Y-%m-%d %H:%M:%S}\ntitle: {title}\n---\n\n# {title}\n\n" + "\n".join(body) +
                 f"\n\nRelated:\n[{src_title}]({quote(sp.name)})\n")

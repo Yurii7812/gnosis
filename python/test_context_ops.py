@@ -19,7 +19,7 @@ TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
 
 
 def fm(title: str) -> str:
-    return f"---\ntime: 2026-01-01 00:00:00\ntitle: {title}\n---\n"
+    return "---\ntime: 2026-01-01 00:00:00\n---\n"
 
 
 class Base(unittest.TestCase):

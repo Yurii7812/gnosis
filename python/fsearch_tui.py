@@ -76,6 +76,10 @@ def parse_file(fpath: str):
                 if m:
                     date = parse_date(m.group(1).strip().strip('"\''))
 
+    # 題は先頭の # 見出し（H1）が正。古いノートの title: は H1 が無いときだけ使う
+    from note_title import title_of_lines
+    title = title_of_lines(lines, title) or title
+
     if not date:
         try:
             date = datetime.date.fromtimestamp(os.path.getmtime(fpath))

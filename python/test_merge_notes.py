@@ -9,7 +9,7 @@ import note_format_v2 as nf
 
 
 def put(root, name, title, body, extra=""):
-    (root / name).write_text(f"---\ntime: 2026-10-20 10:00:00\ntitle: {title}\n{extra}---\n\n# {title}\n\n" + "\n".join(body) + "\n",
+    (root / name).write_text(f"---\ntime: 2026-10-20 10:00:00\n{extra}---\n\n# {title}\n\n" + "\n".join(body) + "\n",
                              encoding="utf-8")
 
 

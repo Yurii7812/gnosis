@@ -231,6 +231,15 @@ def parse_note(text: str) -> tuple[list[str], list[str]]:
     return [], lines
 
 
+def title_of(fm: list[str], body: list[str], default: str = "") -> str:
+    """題。先頭の # 見出し（H1）が正。H1 が無い古いノートだけ front matter の title:。"""
+    for ln in body:
+        m = re.match(r"^#\s+(\S.*?)\s*#*\s*$", ln)
+        if m:
+            return m.group(1).strip()
+    return fm_value(fm, "title") or default
+
+
 def read_note(path: Path) -> tuple[list[str], list[str]]:
     return parse_note(path.read_text(encoding="utf-8"))
 
@@ -436,7 +445,7 @@ def make_note_info(path: Path) -> Optional[NoteInfo]:
             norm = _norm_link(path.parent, lm.group(1))
             if norm:
                 links.append(norm)
-    return NoteInfo(path, fm, body, (fm_value(fm, "title") or path.stem).strip(),
+    return NoteInfo(path, fm, body, title_of(fm, body, path.stem).strip(),
                     (fm_value(fm, "attribute") or "").strip() == "group", images, links)
 
 
@@ -956,8 +965,8 @@ def find_group(root: Path, keyword: str, index_path: Optional[Path] = None,
 
 
 def index_title(index_path: Path) -> str:
-    fm, _ = read_note(index_path)
-    return fm_value(fm, "title") or DEFAULT_INDEX_TITLE
+    fm, body = read_note(index_path)
+    return title_of(fm, body, DEFAULT_INDEX_TITLE)
 
 
 def _time_line(when: Optional[datetime] = None) -> str:
@@ -1350,7 +1359,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
         id_index = id_index_paths.get(fid) or find_id_index(root, fid)
         if id_index is not None:
             fm_g, _bg = read_note(id_index)
-            gd = fm_value(fm_g, "title") or id_index.stem
+            gd = title_of(fm_g, _bg, id_index.stem)
             inner.append(markdown_link(gd, id_index, path.parent))
         inner += [CONTEXT_HEAD,
                   markdown_link(FOLGE_INDEX[:-3], root / FOLGE_INDEX, path.parent)]
@@ -1687,7 +1696,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             # 紙の日記は 年・月別のグループにまとめる（年グループは年が変わってから）。
             # 一番上の「日記」グループには、月グループ（年が変わったあとは年グループ）を並べる
             top_children, diary_structure = build_diary_hierarchy(root, diaries, load_notes(root))
-            top_links = [markdown_link(fm_value(read_note(p)[0], "title") or p.stem, p, group_path.parent)
+            top_links = [markdown_link(title_of(*read_note(p), p.stem), p, group_path.parent)
                          for p in top_children]
             inner += top_links
             old_group_body_extra = (diary_structure, list(zip(top_children, top_links)))
@@ -1695,7 +1704,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
         fm, old_group_body = read_note(group_path)
-        old_title = fm_value(fm, "title") or ""
+        old_title = title_of(fm, old_group_body, "")
         if old_title in (OLD_DIARY_GROUP_TITLE,) and entry.get("diary"):
             old_group_body = [f"# {group_title}" if ln.strip() == f"# {old_title}" else ln for ln in old_group_body]
         if old_group_body_extra:
@@ -1724,7 +1733,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             inner.append(markdown_link(display, target, index_path.parent))
 
     fm, old_index_body = read_note(index_path)
-    fm = _fm_title_attr(fm, fm_value(fm, "title") or DEFAULT_INDEX_TITLE)
+    fm = _fm_title_attr(fm, title_of(fm, old_index_body, DEFAULT_INDEX_TITLE))
     fixed_links = [f"[{INDEX_WRITE[:-3]}]({INDEX_WRITE})", f"[{FOLGE_INDEX[:-3]}]({FOLGE_INDEX})"]
     body = [f"# {index_display}", "", *fixed_links, *inner]
     merged = merge_note_body(old_index_body, body)
@@ -1903,18 +1912,18 @@ def create_paper_index(root: Path) -> Path:
         if index_path.exists():
             # 固定名に同名のノートがある（題が Paper-Zettelkasten-Index のときだけ Index として使う。別のノートなら止める）
             fm0, body0 = read_note(index_path)
-            if fm_value(fm0, "title") != DEFAULT_INDEX_TITLE:
+            if title_of(fm0, body0, "") != DEFAULT_INDEX_TITLE:
                 raise RuntimeError(f"{PAPER_INDEX_NAME} は紙PKM Index ではない別のノートです。名前を変えてから実行してください")
             write_note(index_path, fm0, body0, keep_trailing_blank=True)
         else:
             _write_new_paper_index(index_path)
     else:
         fm, body = read_note(index_path)
-        old_title = fm_value(fm, "title")
+        old_title = title_of(fm, body, "")
         if old_title != DEFAULT_INDEX_TITLE:
             fm = [f"title: {DEFAULT_INDEX_TITLE}" if ln.startswith("title:") else ln
                   for ln in fm]
-            body = [DEFAULT_INDEX_TITLE if ln.strip() == "#" + old_title else ln
+            body = [f"# {DEFAULT_INDEX_TITLE}" if ln.strip() == f"# {old_title}" else ln
                     for ln in body]
             write_note(index_path, fm, body)
 

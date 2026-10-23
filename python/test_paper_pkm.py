@@ -166,7 +166,7 @@ def test_create_and_regen() -> None:
         if dedicated.is_file():
             d_text = dedicated.read_text(encoding="utf-8")
             check("## [1](" in d_text and "## [1a](" in d_text, "専用ノートに ID 見出し（リンク）")
-            check("folgezettel_index" not in d_text and "title: folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
+            check("folgezettel_index" not in d_text and "# folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
             check("[Paper-Zettelkasten-Index:" in d_text
@@ -213,7 +213,7 @@ def test_topic_index() -> None:
         check(notes.get("1") is not None and notes.get("1-仏教") is not None,
               "通常IDとトピック表示名のノート")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        check("paper_topic" not in topic_text and "topic_parent" not in topic_text and "title: 1-仏教" in topic_text,
+        check("paper_topic" not in topic_text and "topic_parent" not in topic_text and "# 1-仏教" in topic_text,
               "トピックノートの fm は title だけ（paper_topic / topic_parent を持たない）")
         pp.regen(root)
         check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
@@ -269,13 +269,13 @@ def test_index_has_fixed_file_name() -> None:
         check(path.name == "Paper-Zettelkasten-Index.md" and path.is_file(), f"固定名で作られる: {path.name}")
         check(pp.find_paper_index(root) == path, "find_paper_index は固定名を返す")
         text = path.read_text(encoding="utf-8")
-        check("paper_index" not in text and "title: Paper-Zettelkasten-Index" in text and "attribute: group" in text,
+        check("paper_index" not in text and "# Paper-Zettelkasten-Index" in text and "attribute: group" in text,
               "題と attribute: group（paper_index マーカーは無い）")
         before = sorted(p.name for p in root.glob("*.md"))
         pp.regen(root)
         pp.create_paper_index(root)
         check(sorted(p.name for p in root.glob("*.md")) == before, "regen / create を繰り返しても新しい Index は増えない")
-        check(sum(1 for p in root.glob("*.md") if "title: Paper-Zettelkasten-Index\n" in p.read_text(encoding="utf-8")) == 1,
+        check(sum(1 for p in root.glob("*.md") if "# Paper-Zettelkasten-Index\n" in p.read_text(encoding="utf-8")) == 1,
               "Index は 1 つだけ")
         parent = (root / "index.md").read_text(encoding="utf-8")
         check("(Paper-Zettelkasten-Index.md)" in parent, "index.md から固定名でリンクされる")
@@ -370,7 +370,7 @@ def test_diary_register_and_keyword() -> None:
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         # デジタル日記のグループ（題「日記」）。紙の日記はこれと別のノートになる
-        _write(root / "digital.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 日記\nattribute: group\n---\n\n# 日記\n")
+        _write(root / "digital.md", "---\ntime: 2026-10-01 00:00:00\nattribute: group\n---\n\n# 日記\n")
         digital_before = (root / "digital.md").read_bytes()
 
         def img(name: str) -> Path:
@@ -384,13 +384,13 @@ def test_diary_register_and_keyword() -> None:
         notes = pp.scan_diary_notes(root)
         check(set(notes) == {"2026-10-07", "2026-09-30"}, "日記が書かれた日付ごとに 1 ノート")
         n7 = notes["2026-10-07"].read_text(encoding="utf-8")
-        check("paper_diary" not in n7 and "title: 2026-10-07-WE" in n7, "日記の題（front matter の目印は持たない）")
+        check("paper_diary" not in n7 and "# 2026-10-07-WE" in n7, "日記の題（front matter の目印は持たない）")
         check("![](paper-diary-20261007-1.jpg)" in n7 and "![](paper-diary-20261007-2.jpg)" in n7, "複数ページの画像が並ぶ")
         check((root / "paper-diary-20261007-1.jpg").is_file() and (root / "paper-diary-20260930-1.png").is_file(), "画像が dest へ移る")
         import re as _re
         t7 = _re.search(r"^time: (.+)$", n7, _re.M).group(1)
         from datetime import datetime as _dt
-        check(t7.startswith(_dt.now().strftime("%Y-%m-%d")) and "title: 2026-10-07-WE" in n7,
+        check(t7.startswith(_dt.now().strftime("%Y-%m-%d")) and "# 2026-10-07-WE" in n7,
               f"time はスキャンした日時（今）で、日記の日付（題の 2026-10-07）とは別: {t7}")
 
         pp.regen(root)
@@ -399,7 +399,7 @@ def test_diary_register_and_keyword() -> None:
         group = pp.find_diary_group(root, idx)
         check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
         gtext = group.read_text(encoding="utf-8")
-        check("title: 日記\n" in gtext and "attribute: group" in gtext and "紙の日記" not in gtext, "題は「日記」（デジタル日記と同じ題。区別はリンク階層）")
+        check("# 日記\n" in gtext and "attribute: group" in gtext and "紙の日記" not in gtext, "題は「日記」（デジタル日記と同じ題。区別はリンク階層）")
         check("paper_keyword" not in gtext, "日記グループに paper_keyword: 日記 の行は付けない")
         check("[2026-09](" in gtext and "[2026-10](" in gtext and gtext.index("[2026-09](") < gtext.index("[2026-10](")
               and "2026-10-07-WE" not in gtext, "「日記」の直下には月グループが古い順に並ぶ（年が変わるまで年グループは作らない）")
@@ -414,7 +414,7 @@ def test_diary_register_and_keyword() -> None:
               f"日記グループ: # の次に空行 1 つ、Group: ブロック、空行 1 つ、月のリンクが連続: {body_lines}")
         m10 = _month(root, "2026-10")
         mtext = m10.read_text(encoding="utf-8")
-        check("title: 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
+        check("# 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         link = f"({group.name})"
         check(link in index_text, "Index の「日記」は紙の日記グループを指す")
@@ -443,7 +443,7 @@ def test_diary_register_and_keyword() -> None:
         check(y25 is not None and y26 is not None, "年をまたいだら、すべての年に年グループができる")
         t25 = y25.read_text(encoding="utf-8")
         t26 = y26.read_text(encoding="utf-8")
-        check("title: 2025\n" in t25 and "[2025-12](" in t25 and "[2026-09](" in t26 and "[2026-10](" in t26, "年グループに月グループが並ぶ")
+        check("# 2025\n" in t25 and "[2025-12](" in t25 and "[2026-09](" in t26 and "[2026-10](" in t26, "年グループに月グループが並ぶ")
         gtext = group.read_text(encoding="utf-8")
         check("[2025](" in gtext and "[2026](" in gtext and "[2026-09](" not in gtext and gtext.index("[2025](") < gtext.index("[2026](")
               and gtext.count("[2025](") == 1, f"「日記」の直下は年グループ（古い順・重複なし）に替わる: {gtext}")
@@ -500,7 +500,7 @@ def test_diary_weekday_is_computed() -> None:
         (root / "paper-diary-20261001-1.jpg").write_bytes(b"x")
         pp.regen(root)
         text = old.read_text(encoding="utf-8")
-        check("title: 2026-10-01-TH\n" in text and "# 2026-10-01-TH\n" in text and "paper-diary-20261001-1.jpg" in text and "paper_diary" not in text,
+        check("# 2026-10-01-TH\n" in text and "paper-diary-20261001-1.jpg" in text and "paper_diary" not in text,
               "旧い題（曜日つきの紙の日記など）は YYYY-MM-DD-TH に直り、画像はそのまま。paper_diary: は外れる")
         month = _month(root, "2026-10").read_text(encoding="utf-8")
         check("[2026-10-01-TH](261001000000.md)" in month and "(木) 紙の日記](" not in month, "月グループの一覧のリンクも同じ題（曜日つきの旧題は残らない）")
@@ -573,7 +573,7 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         for _ in range(3):
             pp.regen(root)
-        groups = [n for n in root.glob("*.md") if "title: 日記\n" in n.read_text(encoding="utf-8")]
+        groups = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
         check(len(groups) == 1, f"「日記」のグループは 1 つだけ: {[g.name for g in groups]}")
         check("paper_keyword" not in groups[0].read_text(encoding="utf-8"), "paper_keyword の行は無い")
         # 旧い版が作った paper_keyword: 日記 つきのグループ（Index からリンクされている）は、同じノートを使い、目印の行だけ外す
@@ -581,7 +581,7 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         t = g.read_text(encoding="utf-8").replace("attribute: group", "paper_keyword: 日記\nattribute: group", 1)
         g.write_text(t, encoding="utf-8")
         pp.regen(root)
-        groups2 = [n for n in root.glob("*.md") if "title: 日記\n" in n.read_text(encoding="utf-8")]
+        groups2 = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
         check(groups2 == [g] and "paper_keyword" not in g.read_text(encoding="utf-8"), "旧い目印つきのグループも、同じノートのまま目印だけ外れる")
         # Index のリンクが無くなっても（題 + attribute: group で）同じノートを見つける
         itext = idx.read_text(encoding="utf-8")
@@ -589,7 +589,7 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         fi = root / "Folgezettel-Index.md"
         fi.write_text("\n".join(ln for ln in fi.read_text(encoding="utf-8").split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
         pp.regen(root)
-        groups3 = [n for n in root.glob("*.md") if "title: 日記\n" in n.read_text(encoding="utf-8")]
+        groups3 = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
         check(groups3 == [g] and idx.read_text(encoding="utf-8").count("[日記](") == 1, "リンクを消しても同じグループを見つけて、リンクが戻る")
 
 
@@ -653,7 +653,7 @@ def test_title_is_the_id() -> None:
         # ID検索は title だけ
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "title だけでIDを取れる")
         # 普通のノート（IDらしい title だが画像を参照しない）は誤認しない
-        _write(root / "plain.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 5\n---\n\n# 5\n\n普通のメモ\n")
+        _write(root / "plain.md", "---\ntime: 2026-10-01 00:00:00\n---\n\n# 5\n\n普通のメモ\n")
         _write(root / "plain2.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 6\n---\n\n# 6\n\n![](other.jpg)\n")
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "IDらしい title の普通のノート／別の画像を参照するノートはスキャンノートではない")
         before = (root / "plain.md").read_bytes()
@@ -709,7 +709,7 @@ def test_legacy_migration() -> None:
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")
         check("![](1.jpg)" in snap["261001000001.md"] and "[1a](261001000002.md)" in snap["261001000001.md"], "本文の画像とリンクは残る")
-        check("title: 日記\n" in snap["261001000005.md"] and "紙の日記" not in snap["261001000005.md"], "旧い題「紙の日記」は「日記」に直る")
+        check("# 日記\n" in snap["261001000005.md"] and "紙の日記" not in snap["261001000005.md"], "旧い題「紙の日記」は「日記」に直る")
         pp.regen(root)
         pp.regen(root)
         again = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
@@ -742,7 +742,7 @@ def test_group_notes_format() -> None:
             pp.regen(root)
         it = idx.read_text(encoding="utf-8").split("\n")
         header_end = it.index("---", 1)
-        check("title: Paper-Zettelkasten-Index" in it[1:header_end]
+        check("# Paper-Zettelkasten-Index" in it
               and "attribute: group" in it[1:header_end]
               and it[header_end + 1:header_end + 3] == ["", "# Paper-Zettelkasten-Index"],
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
@@ -760,13 +760,13 @@ def test_group_notes_format() -> None:
         check(not any("[diary](" in ln for ln in fi), "[diary] 表記は無い")
         top = pp.find_diary_group(root, idx)
         tt = top.read_text(encoding="utf-8").split("\n")
-        check("title: 日記" in tt and "attribute: group" in tt and "紙の日記" not in "".join(tt), "日記グループの題は「日記」")
+        check("# 日記" in tt and "attribute: group" in tt and "紙の日記" not in "".join(tt), "日記グループの題は「日記」")
         gi = tt.index("Group:")
         check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]) and any("Folgezettel-Index" in ln for ln in tt[gi:gi + 4]), "日記グループの Group: に Paper-Zettelkasten-Index と Folgezettel-Index")
         month = _month(root, "2026-10").read_text(encoding="utf-8").split("\n")
         i = month.index("# 2026-10")
-        check(month[:5] == ["---", month[1], "title: 2026-10", "attribute: group", "---"] and month[5] == "" and i == 6 and month[7] == ""
-              and month[8] == "Group:" and month[9].startswith("[日記:2026-10](") and month[10] == "" and month[11].startswith("[2026-10-13-TU]("),
+        check(month[:4] == ["---", month[1], "attribute: group", "---"] and month[4] == "" and i == 5 and month[6] == ""
+              and month[7] == "Group:" and month[8].startswith("[日記:2026-10](") and month[9] == "" and month[10].startswith("[2026-10-13-TU]("),
               f"月グループ: --- / 空行 / # / 空行 / Group: / 所属 / 空行 / リンク: {month}")
 
 
@@ -774,9 +774,9 @@ def test_digital_diary_not_confused() -> None:
     print("デジタル日記と紙の日記: 同じ題「日記」でも混同しない")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
-        _write(root / "dig_top.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 日記\nattribute: group\n---\n\n# 日記\n\n[2026-10](dig_month.md)\n")
-        _write(root / "dig_month.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 2026-10\nattribute: group\n---\n\n# 2026-10\n\n[2026-10-12-MO](dig_day.md)\n")
-        _write(root / "dig_day.md", "---\ntime: 2026-10-12 00:00:00\ntitle: 2026-10-12-MO\n---\n\n# 2026-10-12-MO\n\n今日のこと\n")
+        _write(root / "dig_top.md", "---\ntime: 2026-10-01 00:00:00\nattribute: group\n---\n\n# 日記\n\n[2026-10](dig_month.md)\n")
+        _write(root / "dig_month.md", "---\ntime: 2026-10-01 00:00:00\nattribute: group\n---\n\n# 2026-10\n\n[2026-10-12-MO](dig_day.md)\n")
+        _write(root / "dig_day.md", "---\ntime: 2026-10-12 00:00:00\n---\n\n# 2026-10-12-MO\n\n今日のこと\n")
         import note_format_v2 as _nf
         _nf.simple_sync(root)  # デジタル日記の側の同期済みの形を基準にする
         snap = {n: (root / n).read_bytes() for n in ("dig_top.md", "dig_month.md", "dig_day.md")}
@@ -832,7 +832,7 @@ def test_simple_sync_keeps_format_and_trash_images() -> None:
         nf.simple_sync(root)
         check(a == {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}, "simple_sync の後も書式が変わらない")
         # 画像を持たない「1」という題の普通のノートを消しても、他の画像は動かない
-        _write(root / "plain.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 1\n---\n\n# 1\n\nただのメモ\n")
+        _write(root / "plain.md", "---\ntime: 2026-10-01 00:00:00\n---\n\n# 1\n\nただのメモ\n")
         nf.simple_sync(root)
         (root / "plain.md").unlink()
         nf.simple_sync(root)

@@ -29,6 +29,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from note_title import title_of_lines  # noqa: E402
+
 STATE_NAME = "capture_imported.json"
 
 
@@ -135,7 +138,7 @@ def record_note(root: Path, kind: str, date: str) -> str:
             head = p.read_text(encoding="utf-8").split("\n", 15)[:15]
         except OSError:
             continue
-        if want in head and any(ln.startswith("title: " + date + "-") for ln in head):
+        if want in head and title_of_lines(p.read_text(encoding="utf-8").split("\n")[:40], "").startswith(date + "-"):
             return p.name
     return ""
 

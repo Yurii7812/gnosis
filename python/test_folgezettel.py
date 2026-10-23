@@ -106,8 +106,8 @@ class FolgezettelTest(unittest.TestCase):
         self.note('m', '3')
         late = self.note('late', body='ParentBranch:\n[m](m.md)')
         early = self.note('early', body='ParentBranch:\n[m](m.md)')
-        late.write_text(late.read_text().replace('title: late', 'title: 2026-10-02-FR').replace('---\n', '---\ntime: 2026-10-02 10:00:00\n', 1))
-        early.write_text(early.read_text().replace('title: early', 'title: 2026-10-01-TH').replace('---\n', '---\ntime: 2026-10-20 10:00:00\n', 1))
+        late.write_text(late.read_text().replace('title: late', 'title: 2026-10-02-FR').replace('# late', '# 2026-10-02-FR').replace('---\n', '---\ntime: 2026-10-02 10:00:00\n', 1))
+        early.write_text(early.read_text().replace('title: early', 'title: 2026-10-01-TH').replace('# early', '# 2026-10-01-TH').replace('---\n', '---\ntime: 2026-10-20 10:00:00\n', 1))
         nf.simple_sync(self.root)
         self.assertEqual([self.ident(early), self.ident(late)], ['3a', '3b'])
 

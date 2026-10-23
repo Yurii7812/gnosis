@@ -50,20 +50,9 @@ _RANK = {PB: 0, nf.PARENT_BRANCH_MARK_LEGACY: 0, nf.CONTEXT_MARK: 1, nf.UP_MARK:
 # ---------------------------------------------------------------------------
 
 def note_title(text: str, path: Path) -> str:
-    """タイトル: front matter の title → 最初の H1（コードブロック外）→ ファイル名（拡張子なし）。"""
-    lines = text.split("\n")
-    fm, rest = nf._split_front_matter(lines)
-    t = nf._fm_title(fm)
-    if t:
-        return t
-    for ln, fz in zip(rest, nf._fenced(rest)):
-        if fz:
-            continue
-        if ln.startswith("# "):
-            h = ln[2:].strip()
-            if h:
-                return h
-    return path.stem
+    """タイトル: 先頭の H1（コードブロック外）→ 古いノートの front matter の title → ファイル名（拡張子なし）。"""
+    fm, rest = nf._split_front_matter(text.split("\n"))
+    return nf._title_of(fm, rest, path.stem)
 
 
 def _resolve(target: str, base: Path, known: set[str]) -> Path | None:

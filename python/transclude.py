@@ -23,6 +23,7 @@ from urllib.parse import unquote
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import blocks as bk  # noqa: E402
 import tasks as tk  # noqa: E402
+from note_title import title_of_lines  # noqa: E402
 
 INC = re.compile(r"^\s*\{\{include:\s*(.+?)\s*\}\}\s*$")
 REL_HEADS = bk.REL_HEADS
@@ -100,7 +101,7 @@ def _expand(root: Path, note: Path, depth: int, max_depth: int, stack: tuple[Pat
         body = [bk.BLOCK_ID.sub("", x) for x in body]                      # 取り込み先の ^id の印は表示に出さない
         # 取り込んだ本文の中の {{include}} も展開(入れ子)。一時ファイルを作らず、本文だけ再帰的に処理する
         inner = _expand_lines(root, dest, body, depth + 1, max_depth, stack + (note,), problems)
-        title = next((re.sub(r"^title:\s*", "", x) for x in dlines[:12] if x.startswith("title:")), dest.stem)
+        title = title_of_lines(dlines, dest.stem)
         link = dest.relative_to(root).as_posix().replace(" ", "%20") + (("#" + anchor) if anchor else "")
         out += ["> " + x if x.strip() else ">" for x in inner] + [f"> — 出典: [{title}]({link})"]
     return out

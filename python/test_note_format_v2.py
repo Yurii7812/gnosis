@@ -59,9 +59,10 @@ def note(path: Path, title: str, up: str = "", down: str = "") -> None:
 
 
 def retitle(path: Path, new_title: str) -> None:
-    """front matter の title だけ書き換える（sync 済みの関係セクションは触らない）。"""
+    """題を書き換える（先頭の # 見出しが題。古い形の front matter の title: があればそれも。sync 済みの関係セクションは触らない）。"""
     txt = path.read_text(encoding="utf-8")
     txt = re.sub(r"^title:.*$", f"title: {new_title}", txt, count=1, flags=re.M)
+    txt = re.sub(r"^# .*$", f"# {new_title}", txt, count=1, flags=re.M)
     path.write_text(txt, encoding="utf-8")
 
 
@@ -1286,7 +1287,7 @@ def test_simple_sync_empty_sections_are_not_written() -> None:
     print("simple_sync: 中身が空の Context / Group / Related / BackLink は見出しごと書かない")
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\n---\n\n# Index\n", encoding="utf-8")
+        (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\n---\n\n# Index\n", encoding="utf-8")
         v2.make_new(root / "a.md", "A")
         v2.make_new(root / "b.md", "B")
         raw = (root / "a.md").read_text(encoding="utf-8")
