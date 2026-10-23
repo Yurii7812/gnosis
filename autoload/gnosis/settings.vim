@@ -15,7 +15,9 @@
 "                               "link": …, "heading": …, "selection": …, "cursorline": …}},
 "     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
-"     "mandalaOnStart": true   ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
+"     "mandalaOnStart": true,  ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
+"     "hide": {"yaml": false, "top": false, "bottom": false}   ← ノートで隠すもの（\zz の窓で切り替える。
+"                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系。オンにするまで保たれる。\c のアプリも同じ）
 "   }
 "   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
 "   \c のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
@@ -52,6 +54,7 @@ function! gnosis#settings#defaults() abort
         \ 'appTheme': {'kind': 'builtin'},
         \ 'appCustomThemes': {},
         \ 'mandalaOnStart': v:true,
+        \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false},
         \ }
 endfunction
 
@@ -95,6 +98,13 @@ function! gnosis#settings#validate(s) abort
   let l:w.width = max([480, min([10000, type(l:w.width) == v:t_number ? l:w.width : float2nr(l:w.width)])])
   let l:w.height = max([360, min([10000, type(l:w.height) == v:t_number ? l:w.height : float2nr(l:w.height)])])
   let l:w.maximized = l:w.maximized ? v:true : v:false
+  let l:s.mandalaOnStart = get(l:s, 'mandalaOnStart', v:true) ? v:true : v:false
+  if type(get(l:s, 'hide', 0)) != v:t_dict
+    let l:s.hide = {}
+  endif
+  for l:k in ['yaml', 'top', 'bottom']
+    let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
+  endfor
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0
     let l:s.theme = {'kind': 'builtin'}
   endif

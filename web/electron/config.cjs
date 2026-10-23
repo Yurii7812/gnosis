@@ -171,6 +171,9 @@ function defaultSettings() {
     // \c のアプリ（Electron）の配色。通常の Vim の配色（theme / customThemes）とは別の設定
     appTheme: { kind: "builtin" },
     appCustomThemes: {},
+    // 起動時に曼荼羅ビューを左半分に出す・ノートで隠すもの（\zz の窓で切り替える。Vim と同じ設定）
+    mandalaOnStart: true,
+    hide: { yaml: false, top: false, bottom: false },
   };
 }
 
@@ -191,6 +194,9 @@ function validateSettings(s) {
   const at = out.appTheme && typeof out.appTheme === "object" ? out.appTheme : {};
   out.appTheme = at.kind === "custom" && typeof at.name === "string" ? { kind: "custom", name: at.name } : { kind: "builtin" };
   out.appCustomThemes = cleanCustomThemes(out.appCustomThemes);
+  out.mandalaOnStart = out.mandalaOnStart !== false;
+  const hd = out.hide && typeof out.hide === "object" ? out.hide : {};
+  out.hide = { yaml: !!hd.yaml, top: !!hd.top, bottom: !!hd.bottom };
   return out;
 }
 

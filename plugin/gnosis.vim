@@ -460,6 +460,13 @@ nnoremap <silent> <C-t> i<C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> \T   <Cmd>call gnosis#time_mode_toggle()<CR>
 command! GnosisTimeMode call gnosis#time_mode_toggle()
 " 時刻モードはそのノートだけ: 開いたときに決め（時系列記録のノートはオン）、閉じる・ほかのノートへ移ると取りやめる。書き始めた行の頭に時刻
+" 隠すもの（YAML・上の「名前:」系・下の「名前:」系）。\zz の窓で切り替える。設定は vault に保存され、オンにするまで保たれる
+nnoremap <silent> \zz <Cmd>call gnosis#hide#window()<CR>
+augroup gnosis_hide
+  autocmd!
+  autocmd BufWinEnter,FileType markdown,vimwiki call gnosis#hide#apply()
+augroup END
+
 " 保存したノートを曼荼羅のキャッシュに控える（曼荼羅が閉じていても。次に開くとき、そのノートだけ読み直す）
 augroup gnosis_mview_saved
   autocmd!
