@@ -16174,6 +16174,11 @@ endfunction
 
 " sort_yomi.py の場所（:SortYomi / \S / \zy が使う）
 function! s:sort_yomi_script() abort
+  " よみは vault の .gnosis/yomi/ に書く。Python は、ノートの上のフォルダに .gnosis が無くても、この vault を使う
+  let l:root = s:get_pkm_root()
+  if !empty(l:root)
+    let $GNOSIS_ROOT = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
+  endif
   return fnamemodify(g:gnosis_python, ':h') . s:sep() . 'sort_yomi.py'
 endfunction
 

@@ -5,7 +5,7 @@ function! s:ok(name, passed, ...) abort
 endfunction
 function! s:title(t) abort
   for l:f in glob(s:v . '/*.md', 0, 1)
-    if index(readfile(l:f, '', 12), 'title: ' . a:t) >= 0 | return fnamemodify(l:f, ':t') | endif
+    if index(readfile(l:f, '', 12), '# ' . a:t) >= 0 | return fnamemodify(l:f, ':t') | endif
   endfor
   return ''
 endfunction
@@ -71,9 +71,9 @@ try
   " 移行: 夢日記（旧）→ 時系列記録「旧夢」
   call s:ok('移行の前: 旧夢日記は Index の直下', s:has('index.md', '^\[夢日記\](old-dream.md)$'))
   call gnosis#record_migrate('夢日記', '旧夢')
-  call s:ok('移行: 題を改めて時系列記録の中へ', s:has('old-dream.md', '^title: 旧夢$') && s:has('old-dream.md', '^# 旧夢$') && !s:has('index.md', 'old-dream.md')
+  call s:ok('移行: 題を改めて時系列記録の中へ', s:has('old-dream.md', '^# 旧夢$') && s:has('old-dream.md', '^# 旧夢$') && !s:has('index.md', 'old-dream.md')
         \ && s:has(s:rec, '^\[旧夢\](old-dream.md)$') && s:has('old-dream.md', '^\[時系列記録\](' . s:rec . ')$'))
-  call s:ok('移行: 月のグループは 2026-10-旧夢（日記の 2026-10 と分ける）', s:has('old-month.md', '^title: 2026-10-旧夢$') && s:has('old-dream.md', '^\[2026-10-旧夢\](old-month.md)$') && s:has('old-day.md', '^\[2026-10-旧夢\%(:[^]]*\)\=\](old-month.md)$'), string(s:file('old-day.md')) . string(s:file('old-dream.md')))
+  call s:ok('移行: 月のグループは 2026-10-旧夢（日記の 2026-10 と分ける）', s:has('old-month.md', '^# 2026-10-旧夢$') && s:has('old-dream.md', '^\[2026-10-旧夢\](old-month.md)$') && s:has('old-day.md', '^\[2026-10-旧夢\%(:[^]]*\)\=\](old-month.md)$'), string(s:file('old-day.md')) . string(s:file('old-dream.md')))
   call s:ok('移行: その日のノートに record と、その日の日記の上にリンク・今日のノートから外す',
         \ s:has('old-day.md', '^record: "旧夢"$') && s:has('old-diary.md', '^\[2026-10-12-MO-夢-病院\](old-day.md)$')
         \ && len(filter(s:file('old-diary.md'), 'v:val =~# "^\\[.*\\](old-day\\.md)$"')) == 1, string(s:file('old-diary.md')))
@@ -95,7 +95,7 @@ try
         \ && len(filter(s:file(s:diary), 'stridx(v:val, "](" . s:day . ")") >= 0')) == 1 && !s:has(s:diary, s:ymd), string(s:file(s:diary)))
   call s:ok('まとめる: 元の記録は時系列記録から消える', empty(s:title('ゆめ')) && !s:has(s:rec, 'ゆめ'))
   call gnosis#record_merge('旧夢', '夢')
-  call s:ok('まとめる: 無い日のノートは record を改めて、先の月のグループへ（題に記録名が無ければ題はそのまま）', s:has('old-day.md', '^title: 2026-10-12-MO-夢-病院$') && s:has('old-day.md', '^record: "夢"$')
+  call s:ok('まとめる: 無い日のノートは record を改めて、先の月のグループへ（題に記録名が無ければ題はそのまま）', s:has('old-day.md', '^# 2026-10-12-MO-夢-病院$') && s:has('old-day.md', '^record: "夢"$')
         \ && s:has(s:title('2026-10-夢'), '](old-day.md)') && s:has('old-diary.md', '^\[2026-10-12-MO-夢-病院\](old-day.md)$')
         \ && !filereadable(s:v . '/old-dream.md') && !filereadable(s:v . '/old-month.md'), string(s:file('old-day.md')))
 catch

@@ -15,7 +15,7 @@ REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home
   timeout 120 vim -u NONE -N -es -S "$REPO/test/group_review_check.vim" </dev/null 2>"$D/err" || true
 WANT="screen1 0
 after1 ['[あひる](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
-yomi ['  \"筋トレ\": \"きんとれ\"'] 0
+yomi ['{\"n\":\"k.md\",\"k\":\"筋トレ\",\"y\":\"きんとれ\"}'] 0
 cancel ['[あひる](a.md)', '[イルカ](i.md)', '[筋トレ](k.md)']
 screen2 1 n=4
 after2 ['[あひる](a.md)', '[イルカ](i.md)', '[ウシ](u.md)', '[筋トレ](k.md)']

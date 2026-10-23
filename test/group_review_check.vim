@@ -30,7 +30,8 @@ call gnosis#add_clipboard_before_up_note()
 call add(g:R, 'screen1 ' . WaitScreen(1))
 unlet g:gnosis_test_display_name g:gnosis_test_yomi
 call add(g:R, 'after1 ' . string(Members()))
-call add(g:R, 'yomi ' . string(filter(readfile($D . '/v/k.md'), 'v:val =~# "きんとれ"')) . ' ' . len(filter(readfile($D . '/v/a.md'), 'v:val =~# "yomi"')))
+" よみはノートの YAML ではなく vault の .gnosis/yomi/（JSON Lines）に入る
+call add(g:R, 'yomi ' . string(filter(systemlist('cat ' . shellescape($D . '/v/.gnosis/yomi') . '/*.jsonl 2>/dev/null'), 'v:val =~# "きんとれ"')) . ' ' . len(filter(readfile($D . '/v/a.md'), 'v:val =~# "yomi"')))
 " Esc で取り消すと何も入らない
 call setreg('"', "[ウシ](u.md)\n")
 let g:gnosis_test_display_name = ["\x1b"]

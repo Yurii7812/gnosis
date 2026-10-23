@@ -56,13 +56,13 @@ execute "normal! v$\<Esc>"
 call gnosis#linkify_selection_new_note()
 call add(g:R, 'L-esc ' . (len(glob($D . '/v/*.md', 0, 1)) == s:before) . ' ' . fnamemodify(bufname('%'), ':t'))
 
-" 4) A の BranchGroup: にあるグループ G へ、\l → g で A を入れる（表示名・よみ）。A の Group: には重ねない
+" 4) A の BranchGroup: にあるグループ G へ、A を入れる（\l → e → g の決定と同じ gnosis#index_add。表示名・よみ）
 " 保存は自動保存と同じ方法で（保存のあとの同期がファイルを書き換えていても止まらない）
 call gnosis#conflict#safe_update()
-let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['えー']
 let g:gnosis_test_yomi = ['えー']
-call gnosis#insert_links_pick(['[G](g.md)'], getpos('.'))
+call gnosis#index_add($D . '/v/a.md', $D . '/v/g.md')
+execute 'silent! edit ' . fnameescape($D . '/v/a.md')
 unlet! g:gnosis_test_display_name g:gnosis_test_yomi
 call add(g:R, 'join ' . Has('g.md', '^\[えー\](a.md)$') . ' ' . Has('a.md', '^\[G\](g.md)$') . ' ' . Has('a.md', 'えー'))
 call add(g:R, 'sorted ' . string(F('g.md')[-5:]))
@@ -77,10 +77,10 @@ unlet! g:gnosis_test_display_name g:gnosis_test_yomi
 call add(g:R, 'empty-za ' . string(F('e.md')[-4:]))
 " 外から \l → g で入れる（別の空のグループ）も同じ形
 execute 'edit ' . fnameescape($D . '/v/a.md')
-let g:gnosis_test_keys = ['g']
 let g:gnosis_test_display_name = ['E2-A']
 let g:gnosis_test_yomi = ['えー']
-call gnosis#insert_links_pick(['[E2](e2.md)'], getpos('.'))
+call gnosis#index_add($D . '/v/a.md', $D . '/v/e2.md')
+execute 'silent! edit ' . fnameescape($D . '/v/a.md')
 unlet! g:gnosis_test_display_name g:gnosis_test_yomi
 call add(g:R, 'empty-g ' . string(F('e2.md')[-4:]))
 

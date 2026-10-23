@@ -90,11 +90,11 @@ call s:ok('二重の節: Group: は先頭のまま', index(s:ul, 'Group:') >= 0 
 " ------------------------------------------------------------------ 月・日記のグループ: 子のリンクは本文（Group: の下に空行を挟む）。Context: を作らない
 function! s:find_title(title) abort
   for l:f in glob(s:v . '/*.md', 1, 1)
-    if index(readfile(l:f), 'title: ' . a:title) >= 0 | return l:f | endif
+    if index(readfile(l:f), '# ' . a:title) >= 0 | return l:f | endif
   endfor
   return ''
 endfunction
-let s:d_month = matchstr(get(filter(readfile(s:v . '/' . s:d), 'v:val =~# "^title: "'), 0, ''), '\d\{4}-\d\d')
+let s:d_month = matchstr(get(filter(readfile(s:v . '/' . s:d), 'v:val =~# "^# "'), 0, ''), '\d\{4}-\d\d')
 let s:mf = s:find_title(s:d_month)
 let s:ml2 = filereadable(s:mf) ? readfile(s:mf) : []
 let s:gi = index(s:ml2, 'ParentBranch:')

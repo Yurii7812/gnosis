@@ -219,7 +219,12 @@ def find_root(path) -> "Path | None":
     if key in _ROOT_MEMO:
         return _ROOT_MEMO[key]
     found = None
-    for q in [d, *d.parents]:
+    env = os.environ.get("GNOSIS_ROOT", "")   # Vim が渡す vault（ノートの上に .gnosis がまだ無い新しい vault でも、よみをここに書く）
+    if env:
+        er = Path(os.path.abspath(env))
+        if er == d or er in d.parents:
+            found = er
+    for q in ([] if found else [d, *d.parents]):
         if (q / ".gnosis").is_dir():
             found = q
             break
