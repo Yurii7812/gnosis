@@ -110,7 +110,7 @@ function! s:refresh_async(root) abort
     return
   endif
   let s:S.async_out = ''
-  let s:S.job = job_start([gnosis#python_cmd(), s:here . '/python/mandala_cache.py', 'refresh', a:root],
+  let s:S.job = job_start(split(gnosis#python_cmd()) + [s:here . '/python/mandala_cache.py', 'refresh', a:root],
         \ {'out_mode': 'raw', 'err_io': 'null', 'in_io': 'null',
         \  'out_cb': {_c, m -> execute('let s:S.async_out .= m', '')},
         \  'exit_cb': {_j, _s -> timer_start(0, {-> s:after_async()})}})
@@ -227,7 +227,8 @@ function! gnosis#mview#entries(data, center, mode) abort
     if a:mode ==# 'notes' || a:mode ==# 'all'
       call add(l:plan, [get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []), -1])
       call add(l:plan, [get(l:o, 'context', []) + get(l:in, 'context', []), -1])
-      call add(l:plan, [get(l:o, 'link', []) + get(l:o, 'backlink', []), -1])
+      call add(l:plan, [get(l:o, 'link', []), -1])
+      call add(l:plan, [get(l:o, 'backlink', []), -1])
       call add(l:plan, [get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', []), -1])
       call add(l:plan, [get(l:o, 'related', []) + get(l:in, 'related', []), -1])
     endif
@@ -508,9 +509,10 @@ endfunction
 
 " マスの種類（色と記号で一目で分かるように）: 索引・親・子・Context・関連・BackLink・ふつうのノート
 let s:kinds = {'index': ['', '索引', 'GnosisMvIndex'], 'group': ['', 'グループ', 'GnosisMvGroup'], 'parent': ['', '親', 'GnosisMvParent'],
-      \ 'context': ['', '文脈', 'GnosisMvContext'], 'cite': ['', '引用', 'GnosisMvCite'], 'child': ['', '子', 'GnosisMvChild'],
-      \ 'related': ['', '関連', 'GnosisMvRelated'], 'pred': ['', '予測関連', 'GnosisMvPred'], 'note': ['', 'ノート', '']}
-let s:kind_legend = ['index', 'group', 'parent', 'context', 'cite', 'child', 'related', 'pred', 'note']
+      \ 'context': ['', '文脈', 'GnosisMvContext'], 'cite': ['', '引用', 'GnosisMvCite'], 'back': ['', 'BackLink', 'GnosisMvBack'],
+      \ 'child': ['', '子', 'GnosisMvChild'], 'related': ['', '関連', 'GnosisMvRelated'], 'pred': ['', '予測関連', 'GnosisMvPred'],
+      \ 'note': ['', 'ノート', 'GnosisMvNote']}
+let s:kind_legend = ['index', 'group', 'parent', 'context', 'cite', 'back', 'child', 'related', 'pred', 'note']
 
 " マス a:id が、a:of（そのマスの中心）から見てどういうものか
 function! s:kind(id, of) abort
@@ -544,9 +546,12 @@ function! s:kind(id, of) abort
     return 'context'
   elseif index(get(l:o, 'related', []), a:id) >= 0 || index(get(l:r, 'related', []), a:of) >= 0 || index(get(l:oi, 'related', []), a:id) >= 0
     return 'related'
-  elseif index(get(l:o, 'link', []), a:id) >= 0 || index(get(l:o, 'backlink', []), a:id) >= 0 || index(get(l:r, 'link', []), a:of) >= 0
-    " 文中で引用されている（リンクだけがあって、ブランチ・文脈・関連ではない）
+  elseif index(get(l:o, 'link', []), a:id) >= 0
+    " 文中で引用している（リンクだけがあって、ブランチ・文脈・関連ではない）
     return 'cite'
+  elseif index(get(l:o, 'backlink', []), a:id) >= 0 || index(get(l:r, 'link', []), a:of) >= 0
+    " このノートを引用しているノート（BackLink:）
+    return 'back'
   endif
   return 'note'
 endfunction
@@ -1791,8 +1796,10 @@ endfunction
 
 function! s:hl() abort
   " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字にした C つき
-  let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#e5a64a', 178], 'Parent': ['#61afef', 75], 'Child': ['#56b6c2', 73],
-        \ 'Context': ['#c678dd', 176], 'Cite': ['#d19a66', 173], 'Related': ['#98c379', 108], 'Pred': ['#7f848e', 245]}
+  " 種類ごとに、はっきり違う色（索引=ピンク・グループ=黄・親=青・文脈=紫・引用=橙・バックリンク=灰白・子=青緑・関連=緑・予測関連=ベージュ・ノート=灰）
+  let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#f2d13d', 220], 'Parent': ['#61afef', 75], 'Child': ['#2ec4b6', 43],
+        \ 'Context': ['#c678dd', 176], 'Cite': ['#ff9e4a', 215], 'Back': ['#d8dee9', 253], 'Related': ['#8fd14f', 113],
+        \ 'Pred': ['#d2b48c', 180], 'Note': ['#9aa0aa', 247]}
   for [l:k, l:c] in items(l:cols)
     execute printf('highlight default GnosisMv%s guifg=%s ctermfg=%d', l:k, l:c[0], l:c[1])
     " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）

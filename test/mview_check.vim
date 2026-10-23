@@ -380,6 +380,10 @@ for s:row in s:st.cells
     if !empty(s:cell.id) | let s:kinds[s:cell.id] = s:cell.kind | endif
   endfor
 endfor
+call writefile(['---', 'time: x', '---', '', '# 逆', '', '本文で[ハブ](hub.md)を引用'], s:v . '/bl.md')
+call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# ハブ', '', 'ParentBranch:', '[親](kp.md)', '', 'Context:', '[文脈](kx.md)', '', '本文で[引用先](cit.md)に触れる', '', 'ChildBranch:', '[子](kc.md)', '', 'Related:', '[関連](kr.md)', '', 'BackLink:', '[逆](bl.md)'], s:v . '/hub.md')
+call s:keys('u')
+call s:ok('BackLink は引用とは別の種類・色', get(s:kinds, 'bl.md', 'x') ==# 'x' || get(s:kinds, 'bl.md') ==# 'back', string(s:kinds))
 call s:ok('種類の色: 親・文脈・引用・子・関連', get(s:kinds, 'kp.md') ==# 'parent' && get(s:kinds, 'kx.md') ==# 'context' && get(s:kinds, 'cit.md') ==# 'cite' && get(s:kinds, 'kc.md') ==# 'child' && get(s:kinds, 'kr.md') ==# 'related', string(s:kinds))
 call s:keys('c')
 call s:keys('r')
