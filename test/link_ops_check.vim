@@ -267,57 +267,15 @@ let &columns = 200
 call s:ok('\l の案内: 選択先がグループのときだけ g を出す', gnosis#insert_prompt_text(1, 1) =~# 'g=' && gnosis#insert_prompt_text(1, 0) !~# 'g=')
 let &columns = s:cols_save
 
-" ------------------------------------------------------------------ \l → 選ぶ → g（選んだグループに、今のノートを入れる → 今のノートの Group: に出る）
+" ------------------------------------------------------------------ \l → 選ぶ → g（選んだノートを入れるグループを、曼荼羅で選ぶ）
+" （グループへの追加そのものは test/mview_check.vim。ここでは g が曼荼羅の選ぶモードを始めることだけ）
 call s:mk('jg4.md', 'ノートJG4', ['JG4 の本文。'])
-call s:mk('jg5.md', 'ノートJG5', ['JG5 の本文。'])
-call s:mk('jg6.md', 'ノートJG6', ['JG6 の本文。'])
-call s:mk('plain.md', 'ふつうのノート', ['グループではない。'])
 execute 'edit ' . fnameescape(s:v . '/jg4.md')
-sleep 1100m
-let g:gnosis_test_keys = ["\<CursorHold>", "\<CursorHold>", 'g']
-let g:gnosis_test_display_name = ['']
-call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-call s:ok('\l g: 選んだグループの本文に今のノートが入る（空 Enter はタイトルが表示名）', s:has('g.md', '^\[ノートJG4\](jg4\.md)$'), string(s:file('g.md')))
-let s:group_lines = s:file('g.md')
-let s:added_at = index(s:group_lines, '[ノートJG4](jg4.md)')
-call s:ok('\l g Enter: 既存リンクとの間に空行を足さない', s:added_at > 0 && s:group_lines[s:added_at - 1] ==# '[ノートA](a.md)', string(s:group_lines))
-call s:ok('\l g: 今のノートの Group: にグループが出る（保存前でもバッファに）', index(getline(1, '$'), 'Group:') >= 0 && index(getline(1, '$'), '[グループG:ノートJG4](g.md)') >= 0, string(getline(1, '$')))
-call s:ok('\l g: 今のノートの本文にグループへのリンクは置かない', count(getline(1, '$'), '[グループG:ノートJG4](g.md)') == 1)
-call s:ok('\l g: 保存されている', s:has('jg4.md', '^\[グループG:ノートJG4\](g\.md)$'))
-execute 'edit ' . fnameescape(s:v . '/jg5.md')
 let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['好きな*名前_']
-call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-call s:ok('\l g 表示名入力: 入力した文字が、グループの本文での表示名', s:has('g.md', '^\[好きな\*名前_\](jg5\.md)$'), string(s:file('g.md')))
-call s:ok('\l g 表示名入力: 今のノートのタイトルは変わらない', s:has('jg5.md', '^title: ノートJG5$'))
-execute 'edit ' . fnameescape(s:v . '/jg6.md')
-let s:jg6 = getline(1, '$')
-let s:g_before2 = s:file('g.md')
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ["\x1b"]
-call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-call s:ok('\l g 表示名で Esc: 何も変えない', getline(1, '$') ==# s:jg6 && s:file('g.md') ==# s:g_before2)
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['']
-call gnosis#insert_links_pick(['[ふつうのノート](plain.md)'], getpos('.'))
-call s:ok('\l g: 選んだノートがグループでなければ何もしない', getline(1, '$') ==# s:jg6 && s:file('plain.md') ==# ['---', 'time: 2026-01-01 00:00:00', 'title: ふつうのノート', '---', '', '# ふつうのノート', '', 'グループではない。'])
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['']
-call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-let s:g_after = s:file('g.md')
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['別名JG6']
-call gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
-call s:ok('\l g: 同じグループに別名でも追加できる', count(s:file('g.md'), '[ノートJG6](jg6.md)') == 1 && count(s:file('g.md'), '[別名JG6](jg6.md)') == 1)
-" ------------------------------------------------------------------ za → g（クリップボードのグループに、今のノートを入れる）
-call s:mk('jg7.md', 'ノートJG7', ['JG7 の本文。'])
-execute 'edit ' . fnameescape(s:v . '/jg7.md')
-let @" = '[グループG](g.md)'
-let @0 = @"
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['']
-call gnosis#add_clipboard_before_up_note()
-call s:ok('za g: グループの本文に今のノート、今のノートの Group: にグループ', s:has('g.md', '^\[ノートJG7\](jg7\.md)$') && index(getline(1, '$'), '[グループG:ノートJG7](g.md)') >= 0, string(s:file('g.md')))
+let s:ret = gnosis#insert_links_pick(['[ノートJG4](jg4.md)'], getpos('.'))
+let s:mst = gnosis#mview#state()
+call s:ok('\l g: 入れ先のグループを選ぶモードが始まる', get(s:mst, 'pick', '') ==# 'group' && s:mst.src ==# fnamemodify(s:v . '/jg4.md', ':p'), string(get(s:mst, 'pick', '')) . ' ' . string(get(s:mst, 'src', '')))
+call gnosis#mview#close()
 
 " ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
 let s:cols_save = &columns
