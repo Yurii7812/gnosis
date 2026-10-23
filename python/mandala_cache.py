@@ -29,7 +29,7 @@ from pathlib import Path
 KINDS = ("group", "branch_group", "parent_branch", "child_branch", "context", "related", "backlink", "link")
 _KID = {k: i for i, k in enumerate(KINDS)}
 INCOMING = ("parent_branch", "child_branch", "context", "related")   # node の "i"（向かってくる辺）に入れる種類
-SCHEMA = 3
+SCHEMA = 4
 _LINK_TEXT = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 FULL_FLOOR = 0     # 秒。直近の全体の走査から、走査にかかった時間の 20 倍（最低この秒数）が経つまでは、開くときの全体の走査を省く
 
@@ -51,7 +51,11 @@ def connect(root: str | Path, create: bool = False) -> sqlite3.Connection | None
     db.executescript("""
         CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
         CREATE TABLE IF NOT EXISTS files(id INTEGER PRIMARY KEY, path TEXT UNIQUE, name TEXT, stem TEXT,
-            mtime INTEGER, size INTEGER, title TEXT, g INTEGER);
+            mtime INTEGER, size INTEGER, title TEXT, g INTEGER, fz TEXT DEFAULT '');
+        CREATE INDEX IF NOT EXISTS files_fz ON files(fz);
+        CREATE TABLE IF NOT EXISTS ttok(tok TEXT, id INTEGER);
+        CREATE INDEX IF NOT EXISTS ttok_tok ON ttok(tok);
+        CREATE INDEX IF NOT EXISTS ttok_id ON ttok(id);
         CREATE INDEX IF NOT EXISTS files_name ON files(name);
         CREATE INDEX IF NOT EXISTS files_stem ON files(stem);
         CREATE TABLE IF NOT EXISTS edges(src INTEGER, kind INTEGER, dst INTEGER);
@@ -147,7 +151,8 @@ def _parse_one(rel: str):
                 dst = resolve(rel, t)
                 if dst is not None and dst != rel and (dst, name) not in ents:
                     ents.append((dst, name))
-    return rel, d["title"], int(is_group), edges, ents
+    import folgezettel as fzm
+    return rel, d["title"], int(is_group), edges, ents, fzm.value(text), sorted(_tokens(d["title"]))[:16]
 
 
 def _walk(root: Path) -> dict[str, tuple[int, int]]:
@@ -197,23 +202,24 @@ def _write(db: sqlite3.Connection, root: Path, rels: list[str], stats: dict, res
     for rel, row in zip(rels, rows):
         if row is None:
             continue
-        _rel, title, g, _e, _n = row
+        _rel, title, g, _e, _n, fzv, _tk = row
         st = stats[rel]
-        db.execute("INSERT INTO files(path,name,stem,mtime,size,title,g) VALUES(?,?,?,?,?,?,?) "
-                   "ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,title=excluded.title,g=excluded.g",
-                   (rel, posixpath.basename(rel), posixpath.splitext(posixpath.basename(rel))[0], st[0], st[1], title, g))
+        db.execute("INSERT INTO files(path,name,stem,mtime,size,title,g,fz) VALUES(?,?,?,?,?,?,?,?) "
+                   "ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,title=excluded.title,g=excluded.g,fz=excluded.fz",
+                   (rel, posixpath.basename(rel), posixpath.splitext(posixpath.basename(rel))[0], st[0], st[1], title, g, fzv))
     need = {r[0] for r in rows if r is not None}
     for r in rows:
         if r is not None:
             need.update(d for _k, d in r[3])
             need.update(d for d, _n in r[4])
     ids = dict(db.execute("SELECT path, id FROM files")) if len(need) > 5000 else _ids(db, need)
-    e_rows, n_rows = [], []
+    e_rows, n_rows, t_rows = [], [], []
     for row in rows:
         if row is None:
             continue
-        rel, _t, _g, edges, ents = row
+        rel, _t, _g, edges, ents, _fz, toks = row
         src = ids[rel]
+        t_rows.extend((tk, src) for tk in toks)
         for kind, dst in edges:
             if dst in ids:
                 e_rows.append((src, _KID[kind], ids[dst]))
@@ -222,6 +228,7 @@ def _write(db: sqlite3.Connection, root: Path, rels: list[str], stats: dict, res
                 n_rows.append((src, ids[dst], name))
     db.executemany("INSERT INTO edges VALUES(?,?,?)", e_rows)
     db.executemany("INSERT INTO ents VALUES(?,?,?)", n_rows)
+    db.executemany("INSERT INTO ttok VALUES(?,?)", t_rows)
 
 
 def _forget(db: sqlite3.Connection, ids: list[int], drop_in: bool) -> None:
@@ -229,6 +236,7 @@ def _forget(db: sqlite3.Connection, ids: list[int], drop_in: bool) -> None:
         q = ",".join("?" * len(chunk))
         db.execute(f"DELETE FROM edges WHERE src IN ({q})", chunk)
         db.execute(f"DELETE FROM ents WHERE grp IN ({q})", chunk)
+        db.execute(f"DELETE FROM ttok WHERE id IN ({q})", chunk)
         if drop_in:   # ファイルが消えた: 向かってくる辺・索引の項目も消す
             db.execute(f"DELETE FROM edges WHERE dst IN ({q})", chunk)
             db.execute(f"DELETE FROM ents WHERE dst IN ({q})", chunk)
@@ -424,7 +432,8 @@ def find(root: str | Path, words: list[str], limit: int = 500) -> list[str]:
 
 # ---- 大きな vault 用の近い索引・関連・検索（全体を読まず、キャッシュと狭い候補だけで求める） ----------------------------
 # ノートが BIG_VAULT を超えたら mandala_view.py の near / related / search はこちらを使う（小さな vault は従来の全体計算のまま）。
-# 従来の計算との違い: Folgezettel の枝・本文の内容（TF-IDF）・歩いた近さは使わない。つながりと題の言葉だけ。
+# 手がかりは小さな vault と同じ（番号・つながり・題の言葉・歩いた近さ・本文の内容）だが、全体を読まず、番号と題の言葉の索引（files.fz・ttok）と
+# 狭い候補（近所・同じ索引・番号が近い・題が重なる）だけで求める。本文の内容は上位の候補だけ読み、語の重さは候補の中で測る。
 BIG_VAULT = 20000
 _CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]+")
 _WORDS = re.compile(r"[a-z0-9]{2,}")
@@ -462,43 +471,145 @@ def _neighbors(db: sqlite3.Connection, fid: int) -> dict[int, set[str]]:
     return out
 
 
+_FZ_SCORE = {"同じ番号": 6.0, "枝の親": 5.0, "枝の子": 5.0, "枝の兄弟": 3.0, "同じ枝": 2.0}
+
+
+def _fz_parent(ident: str) -> str:
+    return "".join(re.findall(r"\d+|[a-z]+", ident)[:-1])
+
+
+def _fz_chain(ident: str) -> list[str]:
+    out = []
+    while ident:
+        out.append(ident)
+        ident = _fz_parent(ident)
+    return out
+
+
+def _fz_relation(a: str, b: str):
+    """Folgezettel 番号 a から見た番号 b の関係と近さ（mandala_view._fz_relation と同じ）。"""
+    if not a or not b:
+        return None
+    if a == b:
+        return "同じ番号", _FZ_SCORE["同じ番号"]
+    if _fz_parent(a) == b:
+        return "枝の親", _FZ_SCORE["枝の親"]
+    if _fz_parent(b) == a:
+        return "枝の子", _FZ_SCORE["枝の子"]
+    if _fz_parent(a) == _fz_parent(b) and _fz_parent(a):
+        return "枝の兄弟", _FZ_SCORE["枝の兄弟"]
+    if b in _fz_chain(a) or a in _fz_chain(b):
+        return "同じ枝", _FZ_SCORE["同じ枝"]
+    return None
+
+
+def _fz_relatives(db: sqlite3.Connection, fid: int, ident: str) -> dict[int, tuple[str, float]]:
+    """番号が近いノート {id: (関係, 点)}。番号の索引（files.fz）から、同じ番号・先祖・子孫・兄弟だけを引く。"""
+    out: dict[int, tuple[str, float]] = {}
+    if not ident:
+        return out
+
+    def take(rows) -> None:
+        for i, z in rows:
+            if i == fid or not z:
+                continue
+            r = _fz_relation(ident, z)
+            if r and (i not in out or r[1] > out[i][1]):
+                out[i] = r
+    anc = _fz_chain(ident)
+    take(db.execute(f"SELECT id,fz FROM files WHERE fz IN ({','.join('?' * len(anc))}) LIMIT 500", anc))
+    take(db.execute("SELECT id,fz FROM files WHERE fz>? AND fz<? LIMIT 800", (ident, ident + "\uffff")))
+    par = _fz_parent(ident)
+    if par:
+        take(db.execute("SELECT id,fz FROM files WHERE fz>? AND fz<? LIMIT 800", (par, par + "\uffff")))
+    return out
+
+
+def _my_tokens(db: sqlite3.Connection, fid: int) -> list[str]:
+    return [t for t, in db.execute("SELECT tok FROM ttok WHERE id=?", (fid,))]
+
+
+def _groups_of(db: sqlite3.Connection, ids: list[int]) -> dict[int, set[int]]:
+    """ノート → それが載っている索引の集まり（索引の link ・ノートの group / branch_group）。"""
+    out: dict[int, set[int]] = {}
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        q = ",".join("?" * len(chunk))
+        for g, m in db.execute(f"SELECT src,dst FROM edges WHERE kind=? AND dst IN ({q}) AND src IN (SELECT id FROM files WHERE g=1)", [_KID["link"], *chunk]):
+            out.setdefault(m, set()).add(g)
+        for m, g in db.execute(f"SELECT src,dst FROM edges WHERE kind IN (?,?) AND src IN ({q})", [_KID["group"], _KID["branch_group"], *chunk]):
+            out.setdefault(m, set()).add(g)
+    return out
+
+
 def near(root: str | Path, rel: str, limit: int = 60) -> list[dict]:
+    """近いグループ（c）。小さな vault と同じ手がかり: 番号（Folgezettel）・つながり・題の言葉。キャッシュと狭い候補だけで求める。"""
     db = connect(root)
     if db is None:
         return []
     try:
-        row = db.execute("SELECT id,title FROM files WHERE path=?", (rel,)).fetchone()
+        row = db.execute("SELECT id,title,fz FROM files WHERE path=?", (rel,)).fetchone()
         if row is None:
             return []
-        fid, title = row
+        fid, title, ident = row
         nb = _neighbors(db, fid)
-        mine = {d for d, ks in nb.items() if "group" in ks or "branch_group" in ks}   # すでに所属している索引
-        mine |= {s for s, in db.execute("SELECT src FROM edges WHERE dst=? AND kind=? AND src IN (SELECT id FROM files WHERE g=1)", (fid, _KID["link"]))}
-        score: dict[int, float] = {}
+        mine = {d for d, ks in nb.items() if "group" in ks or "branch_group" in ks}
+        mine |= set(_groups_of(db, [fid]).get(fid, set()))
         why: dict[int, dict[str, float]] = {}
-        nbl = list(nb)
-        for i in range(0, len(nbl), 500):
-            chunk = nbl[i:i + 500]
-            q = ",".join("?" * len(chunk))
-            # 近所のノートが載っている索引（索引 → ノート の link、ノート → 索引 の group / branch_group）
-            for g, c in db.execute(f"SELECT src, COUNT(*) FROM edges WHERE kind=? AND dst IN ({q}) AND src IN (SELECT id FROM files WHERE g=1) GROUP BY src", [_KID["link"], *chunk]):
-                score[g] = score.get(g, 0.0) + 2.0 * min(c, 5)
-                why.setdefault(g, {})[f"つながり {c}"] = 2.0 * min(c, 5)
-            for g, c in db.execute(f"SELECT dst, COUNT(*) FROM edges WHERE kind IN (?,?) AND src IN ({q}) GROUP BY dst", [_KID["group"], _KID["branch_group"], *chunk]):
-                score[g] = score.get(g, 0.0) + 2.0 * min(c, 5)
-                why.setdefault(g, {})[f"つながり {c}"] = 2.0 * min(c, 5)
-        mt = _tokens(title)
-        if mt:
-            for g, gt in db.execute("SELECT id,title FROM files WHERE g=1"):
-                common = _tokens(gt) & mt
-                if common:
-                    pts = 2.0 * min(len(common), 2)
-                    score[g] = score.get(g, 0.0) + pts
-                    why.setdefault(g, {})["題が近い"] = pts
-        for g in list(score):
-            if g == fid or g in mine:
-                del score[g]
-        top = sorted(score.items(), key=lambda kv: -kv[1])[:limit]
+
+        def add(g: int, k: str, pts: float) -> None:
+            d = why.setdefault(g, {})
+            d[k] = max(d.get(k, 0.0), pts)
+        # つながり: 近所のノートが載っている索引
+        gmap = _groups_of(db, list(nb)[:3000])
+        cnt: dict[int, int] = {}
+        for gs in gmap.values():
+            for g in gs:
+                cnt[g] = cnt.get(g, 0) + 1
+        for g, c in cnt.items():
+            add(g, f"つながり {c}", 2.0 * min(c, 5))
+        # 番号: 同じ枝のノートが載っている索引・索引自身の番号
+        rels = _fz_relatives(db, fid, ident)
+        gm = _groups_of(db, list(rels))
+        best: dict[int, tuple[str, float]] = {}
+        tot: dict[int, float] = {}
+        for m, (lab, pts) in rels.items():
+            for g in gm.get(m, ()):
+                tot[g] = tot.get(g, 0.0) + pts
+                if g not in best or pts > best[g][1]:
+                    best[g] = (lab, pts)
+        for g, (lab, _p) in best.items():
+            add(g, lab, min(tot[g], 10.0))
+        for g, (_p, _t, isg) in _paths(db, list(rels)).items():
+            if isg:   # 番号が近い索引そのもの
+                add(g, rels[g][0], min(rels[g][1] * 1.5, 10.0))
+        # 題の言葉: 索引の題と重なる語 / 載っているノートの題と重なる語
+        toks = _my_tokens(db, fid)
+        if toks:
+            q = ",".join("?" * len(toks))
+            for g, c in db.execute(f"SELECT t.id, COUNT(*) FROM ttok t JOIN files f ON f.id=t.id AND f.g=1 WHERE t.tok IN ({q}) GROUP BY t.id", toks):
+                add(g, "題が近い", 2.0 * min(c, 2))
+            sharing: dict[int, int] = {}
+            for t in toks:
+                n_t = db.execute("SELECT COUNT(*) FROM ttok WHERE tok=?", (t,)).fetchone()[0]
+                if n_t > 1500:
+                    continue
+                for i, in db.execute("SELECT id FROM ttok WHERE tok=? LIMIT 800", (t,)):
+                    if i != fid:
+                        sharing[i] = sharing.get(i, 0) + 1
+            gmem = _groups_of(db, list(sharing)[:1500])
+            gc: dict[int, int] = {}
+            for i, gs in gmem.items():
+                for g in gs:
+                    gc[g] = gc.get(g, 0) + 1
+            for g, c in gc.items():
+                if "題が近い" not in why.get(g, {}):
+                    add(g, "題が近い", 0.5 * min(c, 6))
+                else:
+                    why[g]["題が近い"] = why[g]["題が近い"] + 0.5 * min(c, 6)
+        score = {g: sum(w.values()) for g, w in why.items() if g != fid and g not in mine}
+        titles = {g: v[1] for g, v in _paths(db, list(score)).items()}
+        top = sorted(score.items(), key=lambda kv: (-kv[1], titles.get(kv[0], "")))[:limit]
         pm = _paths(db, [g for g, _v in top])
         return [{"id": pm[g][0], "score": round(v, 2),
                  "why": [k for k, _x in sorted(why[g].items(), key=lambda kv: -kv[1])]} for g, v in top if g in pm]
@@ -508,17 +619,75 @@ def near(root: str | Path, rel: str, limit: int = 60) -> list[dict]:
 
 _REL_OUT = {"parent_branch": ("親", 5.0), "child_branch": ("子", 5.0), "context": ("Context", 4.0), "related": ("関連", 4.0),
             "link": ("リンク", 3.0), "backlink": ("BackLink", 3.0), "group": ("所属の索引", 3.0), "branch_group": ("所属の索引", 3.0)}
+_WALK_W = {"parent_branch": 3.0, "child_branch": 3.0, "context": 2.5, "related": 2.5, "link": 2.0, "backlink": 1.5,
+           "group": 1.5, "branch_group": 1.5}
+
+
+def _all_tokens(text: str):
+    t = text.lower()
+    yield from _WORDS.findall(t)
+    for run in _CJK.findall(t):
+        if len(run) == 1:
+            continue
+        for i in range(len(run) - 1):
+            yield run[i:i + 2]
+
+
+def _local_walk(db: sqlite3.Connection, fid: int, restart: float = 0.25, iters: int = 18, depth: int = 3, cap: int = 3000) -> dict[int, float]:
+    """fid から 3 歩までの狭いグラフで、起点に戻りながら歩いた近さ（mandala_view._walk_scores と同じ）。"""
+    nbr: dict[int, list[tuple[int, float]]] = {}
+    frontier = [fid]
+    seen = {fid}
+    for _d in range(depth):
+        nxt = []
+        for n in frontier:
+            lst = nbr.setdefault(n, [])
+            for dst, k in db.execute("SELECT dst,kind FROM edges WHERE src=? LIMIT 300", (n,)):
+                w = _WALK_W.get(KINDS[k])
+                if w and dst != n:
+                    lst.append((dst, w))
+                    nbr.setdefault(dst, []).append((n, w))
+                    if dst not in seen and len(seen) < cap:
+                        seen.add(dst)
+                        nxt.append(dst)
+            for src, k in db.execute("SELECT src,kind FROM edges WHERE dst=? LIMIT 300", (n,)):
+                w = _WALK_W.get(KINDS[k])
+                if w and src != n:
+                    lst.append((src, w))
+                    nbr.setdefault(src, []).append((n, w))
+                    if src not in seen and len(seen) < cap:
+                        seen.add(src)
+                        nxt.append(src)
+        frontier = nxt
+    tot = {n: sum(w for _d, w in v) for n, v in nbr.items()}
+    p = {fid: 1.0}
+    for _ in range(iters):
+        q: dict[int, float] = {fid: restart}
+        for n, pv in p.items():
+            if not tot.get(n):
+                q[fid] = q.get(fid, 0.0) + (1 - restart) * pv
+                continue
+            share = (1 - restart) * pv / tot[n]
+            for d, w in nbr.get(n, ()):
+                q[d] = q.get(d, 0.0) + share * w
+        p = q
+    p.pop(fid, None)
+    return p
 
 
 def related(root: str | Path, rel: str, limit: int = 80) -> list[dict]:
+    """予測関連（r）。小さな vault と同じ手がかり: つながり・同じ索引・Folgezettel の枝・題の言葉・歩いた近さ・本文の内容。
+    全体を読まず、キャッシュと狭い候補（近所・同じ索引・番号が近い・題が重なる）だけで求める。"""
+    import math
     db = connect(root)
     if db is None:
         return []
     try:
-        row = db.execute("SELECT id,title FROM files WHERE path=?", (rel,)).fetchone()
+        row = db.execute("SELECT id,title,fz FROM files WHERE path=?", (rel,)).fetchone()
         if row is None:
             return []
-        fid, title = row
+        fid, title, ident = row
+        n_all = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
         nb = _neighbors(db, fid)
         score: dict[int, dict[str, float]] = {}
 
@@ -535,28 +704,75 @@ def related(root: str | Path, rel: str, limit: int = 80) -> list[dict]:
             if "group" in ks or "branch_group" in ks:
                 groups.add(d)
             if "in:link" in ks:
-                row = db.execute("SELECT g FROM files WHERE id=?", (d,)).fetchone()
-                if row and row[0]:
+                r2 = db.execute("SELECT g FROM files WHERE id=?", (d,)).fetchone()
+                if r2 and r2[0]:
                     groups.add(d)
         # 同じ索引に載っているノート
         for g in list(groups)[:20]:
             gname = db.execute("SELECT title FROM files WHERE id=?", (g,)).fetchone()
+            label = "同じ索引: " + (gname[0] if gname else "")
             for m, in db.execute("SELECT dst FROM edges WHERE src=? AND kind=? LIMIT 300", (g, _KID["link"])):
-                add(m, "同じ索引: " + (gname[0] if gname else ""), 2.0)
+                add(m, label, 2.0)
             for m, in db.execute("SELECT src FROM edges WHERE dst=? AND kind IN (?,?) LIMIT 300", (g, _KID["group"], _KID["branch_group"])):
-                add(m, "同じ索引: " + (gname[0] if gname else ""), 2.0)
-        # 近所の近所（2 歩先）
-        for d in list(nb)[:50]:
-            for x, in db.execute("SELECT dst FROM edges WHERE src=? LIMIT 50", (d,)):
-                add(x, "つながりが近い", 1.5)
-        # 題の言葉（候補の中だけ）
-        mt = _tokens(title)
-        if mt and score:
-            pm = _paths(db, list(score))
-            for x, (_p, t, _g) in pm.items():
-                common = _tokens(t) & mt
-                if common:
-                    add(x, "題が近い", min(1.5 * len(common), 4.0))
+                add(m, label, 2.0)
+        # Folgezettel の枝
+        for m, (lab, pts) in _fz_relatives(db, fid, ident).items():
+            add(m, lab, pts)
+        # 題の言葉（珍しい語ほど重い）
+        for t in _my_tokens(db, fid):
+            df = db.execute("SELECT COUNT(*) FROM ttok WHERE tok=?", (t,)).fetchone()[0]
+            if df < 2 or df > 3000:
+                continue
+            pts = 1.5 * math.log(1 + n_all / df) / 3
+            for i, in db.execute("SELECT id FROM ttok WHERE tok=? LIMIT 2000", (t,)):
+                if i != fid:
+                    d = score.setdefault(i, {})
+                    d["題が近い"] = min(d.get("題が近い", 0.0) + pts, 4.0)
+        # 歩いた近さ（3 歩までの狭いグラフ）
+        walk = _local_walk(db, fid)
+        if walk:
+            top_w = max(walk.values())
+            for i, w in walk.items():
+                if w / top_w >= 0.05:
+                    add(i, "つながりが近い", 5.0 * (w / top_w) ** 0.5)
+        # 本文の内容（候補の上位だけ読む。語の重さは候補の中で測る）
+        cand = [x for x, _w in sorted(score.items(), key=lambda kv: -sum(kv[1].values()))[:150]]
+        if cand:
+            pm = _paths(db, cand + [fid])
+            root_p = Path(root)
+            docs: dict[int, dict[str, int]] = {}
+            for x in cand + [fid]:
+                if x not in pm:
+                    continue
+                try:
+                    text = (root_p / pm[x][0]).read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    text = ""
+                toks: dict[str, int] = {}
+                for tk in list(_tokens(pm[x][1])) * 3 + list(_all_tokens(text)):
+                    toks[tk] = toks.get(tk, 0) + 1
+                docs[x] = toks
+            df: dict[str, int] = {}
+            for toks in docs.values():
+                for tk in toks:
+                    df[tk] = df.get(tk, 0) + 1
+            nd = max(1, len(docs))
+            idf = {tk: math.log(1 + nd / c) for tk, c in df.items()}
+
+            def vec(toks):
+                v = {tk: (1 + math.log(c)) * idf[tk] for tk, c in toks.items() if df[tk] < max(3, nd * 0.5)}
+                nrm = math.sqrt(sum(x * x for x in v.values())) or 1.0
+                return {tk: x / nrm for tk, x in v.items()}
+            mv = vec(docs.get(fid, {}))
+            if mv:
+                for x in cand:
+                    if x not in docs:
+                        continue
+                    v = vec(docs[x])
+                    small, big = (mv, v) if len(mv) < len(v) else (v, mv)
+                    cos = sum(a * big.get(tk, 0.0) for tk, a in small.items())
+                    if cos >= 0.12:
+                        add(x, "内容が近い", min(10.0 * cos, 6.0))
         top = sorted(((x, sum(w.values()), w) for x, w in score.items()), key=lambda r: -r[1])[:limit]
         pm = _paths(db, [x for x, _s, _w in top])
         return [{"id": pm[x][0], "score": round(sc, 2), "why": [k for k, _v in sorted(w.items(), key=lambda kv: -kv[1])]}
