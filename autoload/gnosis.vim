@@ -160,6 +160,33 @@ function! gnosis#clear_title_cache() abort
   let s:filename_resolve_cache = {}
 endfunction
 
+" 行のリストから題を求める。先頭の「# 見出し」（H1。コードブロックの外・front matter の後ろ）が正。
+" H1 が無い古いノートだけ front matter の title:。どちらも無ければ ''。
+function! s:title_from_lines(lines) abort
+  let l:start = 0
+  let l:yaml = ''
+  if get(a:lines, 0, '') =~# '^---\s*$'
+    for l:i in range(1, len(a:lines) - 1)
+      if a:lines[l:i] =~# '^\%(---\|\.\.\.\)\s*$'
+        let l:start = l:i + 1
+        break
+      endif
+      let l:m = matchlist(a:lines[l:i], '^title\s*:\s*\(.\{-}\)\s*$')
+      if !empty(l:m) && empty(l:yaml)
+        let l:yaml = substitute(l:m[1], '^\([''"]\)\(.*\)\1$', '\2', '')
+      endif
+    endfor
+  endif
+  let l:body = a:lines[l:start :]
+  let l:fl = s:fence_flags(l:body)
+  for l:i in range(len(l:body))
+    if !l:fl[l:i] && l:body[l:i] =~# '^#\s\+\S'
+      return trim(substitute(l:body[l:i], '^#\s\+', '', ''))
+    endif
+  endfor
+  return l:yaml
+endfunction
+
 function! s:get_title(filepath) abort
   let l:fp = fnamemodify(a:filepath, ':p')
   if !s:is_markdown_file(l:fp)
@@ -171,33 +198,13 @@ function! s:get_title(filepath) abort
   if !filereadable(l:fp)
     return ''
   endif
-  let l:lines = readfile(l:fp, '', 30)
-  let l:in_yaml = 0
-  for l:line in l:lines
-    if l:line =~# '^---\s*$'
-      if l:in_yaml | break | endif
-      let l:in_yaml = 1
-      continue
-    endif
-    if l:in_yaml && l:line =~? '^title:\s*'
-      let l:title = trim(matchstr(l:line, ':\s*\zs.*'))
-      let l:title = substitute(l:title, '^[\"'']\|[\"'']$', '', 'g')
-      let s:title_cache[l:fp] = l:title
-      return l:title
-    endif
-    if !l:in_yaml && l:line =~# '^#\+\s\+'
-      let l:title = trim(substitute(l:line, '^#\+\s\+', '', ''))
-      let s:title_cache[l:fp] = l:title
-      return l:title
-    endif
-  endfor
-  let l:stem = fnamemodify(l:fp, ':t:r')
-  let s:title_cache[l:fp] = l:stem
-  return l:stem
+  let l:t = s:title_from_lines(readfile(l:fp, '', 200))
+  let s:title_cache[l:fp] = empty(l:t) ? fnamemodify(l:fp, ':t:r') : l:t
+  return s:title_cache[l:fp]
 endfunction
 
 " ノートのタイトル（一覧・作業タブ \q の表示用）。優先順位:
-"   1. YAML front matter の title   2. 最初の H1 見出し（コードブロックの外）   3. ファイル名（拡張子なし）
+"   1. 最初の H1 見出し（コードブロックの外）   2. 古いノートの YAML front matter の title   3. ファイル名（拡張子なし）
 " ファイル名やリンク先は変えない（表示だけ）。読むのは先頭 200 行まで。キャッシュは使わない
 " （タイトルを変えた直後でも古い表示にならない）。ファイルが無いときもファイル名を返す。
 function! gnosis#note_title(path) abort
@@ -206,56 +213,21 @@ function! gnosis#note_title(path) abort
   if !filereadable(l:fp)
     return l:stem
   endif
-  let l:lines = readfile(l:fp, '', 200)
-  let l:start = 0
-  if get(l:lines, 0, '') =~# '^---\s*$'
-    for l:i in range(1, len(l:lines) - 1)
-      if l:lines[l:i] =~# '^\%(---\|\.\.\.\)\s*$'
-        let l:start = l:i + 1
-        break
-      endif
-      let l:m = matchlist(l:lines[l:i], '^title\s*:\s*\(.\{-}\)\s*$')
-      if !empty(l:m)
-        let l:t = substitute(l:m[1], '^\([''"]\)\(.*\)\1$', '\2', '')
-        if !empty(l:t)
-          return l:t
-        endif
-      endif
-    endfor
-  endif
-  let l:body = l:lines[l:start :]
-  let l:fl = s:fence_flags(l:body)
-  for l:i in range(len(l:body))
-    if !l:fl[l:i] && l:body[l:i] =~# '^#\s\+\S'
-      return trim(substitute(l:body[l:i], '^#\s\+', '', ''))
-    endif
-  endfor
-  return l:stem
+  let l:t = s:title_from_lines(readfile(l:fp, '', 200))
+  return empty(l:t) ? l:stem : l:t
 endfunction
 
 " ---------------------------------------------------------------------------
 " Current file helpers
 " ---------------------------------------------------------------------------
 
+" ノートの題（先頭の # 見出し → 古いノートの title:）。どちらも無ければ ''（名前は昔のまま。今は H1 が正）
 function! s:get_yaml_title(filepath) abort
   let l:fp = fnamemodify(a:filepath, ':p')
   if !s:is_markdown_file(l:fp) || !filereadable(l:fp)
     return ''
   endif
-  let l:lines = readfile(l:fp, '', 30)
-  let l:in_yaml = 0
-  for l:line in l:lines
-    if l:line =~# '^---\s*$'
-      if l:in_yaml | break | endif
-      let l:in_yaml = 1
-      continue
-    endif
-    if l:in_yaml && l:line =~? '^title:\s*'
-      let l:title = trim(matchstr(l:line, ':\s*\zs.*'))
-      return substitute(l:title, '^[\"'']\|[\"'']$', '', 'g')
-    endif
-  endfor
-  return ''
+  return s:title_from_lines(readfile(l:fp, '', 200))
 endfunction
 
 function! gnosis#current_file() abort
@@ -263,23 +235,8 @@ function! gnosis#current_file() abort
 endfunction
 
 function! gnosis#current_title() abort
-  let l:lines = getline(1, min([30, line('$')]))
-  let l:in_yaml = 0
-  for l:line in l:lines
-    if l:line =~# '^---\s*$'
-      if l:in_yaml | break | endif
-      let l:in_yaml = 1
-      continue
-    endif
-    if l:in_yaml && l:line =~? '^title:\s*'
-      let l:t = trim(matchstr(l:line, ':\s*\zs.*'))
-      return substitute(l:t, '^[\"'']\|[\"'']$', '', 'g')
-    endif
-    if !l:in_yaml && l:line =~# '^#\+\s\+'
-      return trim(substitute(l:line, '^#\+\s\+', '', ''))
-    endif
-  endfor
-  return expand('%:t:r')
+  let l:t = s:title_from_lines(getline(1, min([200, line('$')])))
+  return empty(l:t) ? expand('%:t:r') : l:t
 endfunction
 
 function! s:outline_collect() abort
@@ -1178,7 +1135,6 @@ function! s:index_template(...) abort
   let l:head = [
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: Index',
         \ ] + (l:v2 ? ['attribute: group'] : []) + [
         \ '---',
         \ '',
@@ -1234,7 +1190,6 @@ function! s:guide_template(...) abort
   return [
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: ' . l:title,
         \ '---',
         \ '',
         \ '# ' . l:title,
@@ -1289,12 +1244,8 @@ function! s:guide_merge(old, new) abort
   if get(a:old, 0, '') ==# '---'
     let l:end = index(a:old, '---', 1)
     if l:end > 0
-      let l:fm = copy(a:old[0 : l:end])
-      let l:title = get(filter(copy(a:new[1 : index(a:new, '---', 1) - 1]), 'v:val =~# "^title:"'), 0, '')
-      call map(l:fm, 'v:val =~# "^title:" ? l:title : v:val')
-      if empty(filter(copy(l:fm), 'v:val =~# "^title:"'))
-        call insert(l:fm, l:title, len(l:fm) - 1)
-      endif
+      " 題は本文の先頭の # 見出し（新しいガイドの方）。古い title: の行は引き継がない
+      let l:fm = filter(copy(a:old[0 : l:end]), 'v:val !~# "^title:"')
       let l:out = l:fm + a:new[index(a:new, '---', 1) + 1 :]
     endif
   endif
@@ -1381,7 +1332,7 @@ function! s:refresh_guide(root) abort
       call s:ensure_guide_index_group(a:root)
       return
     endif
-    let l:old_title = trim(substitute(get(filter(copy(l:old), 'v:val =~# "^title:"'), 0, ''), '^title:', '', ''))
+    let l:old_title = s:title_from_lines(l:old)
   endif
   call s:syn_writefile(l:new, l:guide)
   call s:ensure_guide_index_group(a:root)
@@ -5726,7 +5677,7 @@ function! gnosis#capture_import(...) abort
       " 親・文脈がまとめるトピックの中の節なら、本文の下にその見出しへのリンクの行を置く
       let l:body = split(l:it.text, "\n", 1) + s:capture_rel_lines(l:it, l:titles, extend(copy(l:sections), map(copy(l:anchors), '1')))
       " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
-      let l:lines = ['---', 'time: ' . l:it.time, 'title: ' . l:title, 'capture: ' . l:it.topic, 'capture_id: ' . l:it.id, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
+      let l:lines = ['---', 'time: ' . l:it.time, 'capture: ' . l:it.topic, 'capture_id: ' . l:it.id, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
       try
         if filereadable(l:root . '/' . l:name)
@@ -7281,14 +7232,7 @@ function! s:note_title(path) abort
   if !empty(l:c) && l:c[0] == l:t
     return l:c[1]
   endif
-  let l:title = ''
-  for l:ln in readfile(a:path, '', 15)
-    let l:m = matchlist(l:ln, '^title:\s*\(.\+\)$')
-    if !empty(l:m)
-      let l:title = trim(l:m[1], " '\"")
-      break
-    endif
-  endfor
+  let l:title = s:title_from_lines(readfile(a:path, '', 200))
   if empty(l:title)
     let l:title = fnamemodify(a:path, ':t:r')
   endif
@@ -8175,13 +8119,7 @@ function! gnosis#seal_guard() abort
   if empty(l:d) || l:d <= strftime('%Y-%m-%d')
     return
   endif
-  let l:title = ''
-  for l:ln in getline(1, min([line('$'), 30]))
-    if l:ln =~# '^title:'
-      let l:title = substitute(l:ln, '^title:\s*', '', '')
-      break
-    endif
-  endfor
+  let l:title = s:title_from_lines(getline(1, min([line('$'), 200])))
   let l:file = expand('%:p')
   silent %delete _
   call setline(1, [empty(l:title) ? '' : '# ' . l:title, '', printf(gnosis#i18n#tr('封印中です。%s まで開けません。'), l:d), '',
@@ -9084,7 +9022,7 @@ function! s:capture_topic_note(root, topic) abort
     let l:n += 1
   endwhile
   let l:title = substitute(a:topic, '[\[\]]', '', 'g')
-  call s:write_new_note(['---', 'time: ' . gnosis#timestamp_yaml(), 'title: ' . l:title, 'topic: ' . json_encode(a:topic),
+  call s:write_new_note(['---', 'time: ' . gnosis#timestamp_yaml(), 'topic: ' . json_encode(a:topic),
         \ 'capture_topic: ' . json_encode(a:topic), '---', '', '# ' . l:title, ''], a:root . '/' . l:name)
   let l:map[a:topic] = l:name
   call mkdir(a:root . '/.state', 'p')
@@ -9750,7 +9688,6 @@ function! s:k_note_template(title) abort
     return [
           \ '---',
           \ 'time: ' . gnosis#timestamp_yaml(),
-          \ 'title: ' . a:title,
           \ '---',
           \ '',
           \ '# ' . a:title,
@@ -9761,7 +9698,6 @@ function! s:k_note_template(title) abort
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
         \ 'filetype: K',
-        \ 'title: ' . a:title,
         \ '---',
         \ '',
         \ '# ' . a:title,
@@ -9825,7 +9761,6 @@ function! gnosis#note_template(title, ...) abort
   let l:header = [
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: ' . a:title,
         \ ]
   if l:is_cat
     call add(l:header, 'attribute: group')
@@ -10868,7 +10803,6 @@ function! gnosis#v2_new_group_visual() abort range
   let l:content = [
         \ '---',
         \ 'time: ' . gnosis#timestamp_yaml(),
-        \ 'title: ' . l:ts,
         \ 'attribute: group',
         \ '---',
         \ '',
@@ -12867,22 +12801,11 @@ function! s:sync_problem(msg) abort
   endtry
 endfunction
 
-" バッファのタイトル（Python の _simple_parse_text と同じ規則: frontmatter の title、
-" 無ければファイル名）。タイトル変更前後の比較用。
+" バッファのタイトル（Python の _simple_parse_text と同じ規則: 先頭の # 見出し、無ければ古い front matter の title、
+" それも無ければファイル名）。タイトル変更前後の比較用。
 function! s:fm_title() abort
-  let l:lines = getline(1, min([40, line('$')]))
-  if !empty(l:lines) && l:lines[0] =~# '^---\s*$'
-    for l:ln in l:lines[1:]
-      if l:ln =~# '^---\s*$'
-        break
-      endif
-      if l:ln =~# '^title:\s*\S'
-        let l:t = trim(matchstr(l:ln, ':\s*\zs.*'))
-        return substitute(l:t, '^[\"'']\|[\"'']$', '', 'g')
-      endif
-    endfor
-  endif
-  return expand('%:t:r')
+  let l:t = s:title_from_lines(getline(1, min([200, line('$')])))
+  return empty(l:t) ? expand('%:t:r') : l:t
 endfunction
 
 " 読み込み・保存の時点のタイトルを覚えておく。次の保存でタイトルが変わっていたら、
@@ -13296,35 +13219,26 @@ function! gnosis#rename_title_with_default(default) abort
     endif
   endfor
 
+  " 題は先頭の # 見出し。front matter の title: は（古いノートに残っていれば）消す
   if l:yaml_start == 0 && l:yaml_end > 0
-    let l:done = 0
-    for l:i in range(l:yaml_start + 1, l:yaml_end - 1)
-      if l:lines[l:i] =~# '^title:\s*'
-        let l:lines[l:i] = 'title: ' . l:title
-        let l:done = 1
-        break
-      endif
-    endfor
-    if !l:done
-      call insert(l:lines, 'title: ' . l:title, l:yaml_start + 1)
-    endif
-  else
-    let l:header = ['---', 'time: ' . gnosis#timestamp_yaml(),
-          \ 'title: ' . l:title, '---', '']
-    let l:lines = l:header + l:lines
+    call filter(l:lines, {i, v -> !(i > l:yaml_start && i < l:yaml_end && v =~# '^title:\s*')})
+    let l:yaml_end = index(l:lines, '---', 1)
   endif
 
-  " H1 も更新
   let l:found_h1 = 0
-  for l:i in range(len(l:lines))
-    if l:lines[l:i] =~# '^#\s\+'
+  let l:fence = 0
+  for l:i in range(max([l:yaml_end + 1, 0]), len(l:lines) - 1)
+    if l:lines[l:i] =~# '^\s*\(```\|\~\~\~\)'
+      let l:fence = !l:fence
+    elseif !l:fence && l:lines[l:i] =~# '^#\s\+'
       let l:lines[l:i] = '# ' . l:title
       let l:found_h1 = 1
       break
     endif
   endfor
   if !l:found_h1
-    call add(l:lines, '# ' . l:title)
+    let l:at = (l:yaml_start == 0 && l:yaml_end > 0) ? l:yaml_end + 1 : 0
+    call extend(l:lines, ['', '# ' . l:title], l:at)
   endif
 
   call setline(1, l:lines)
@@ -13567,7 +13481,6 @@ function! s:new_note_no_title(prefix) abort
       let l:content = [
             \ '---',
             \ 'time: ' . gnosis#timestamp_yaml(),
-            \ 'title: ' . l:title,
             \ '---',
             \ '',
             \ '# ' . l:title,
@@ -13592,7 +13505,6 @@ function! s:new_note_no_title(prefix) abort
     let l:content = [
           \ '---',
           \ 'time: ' . gnosis#timestamp_yaml(),
-          \ 'title: ' . l:title,
           \ '---',
           \ '',
           \ '# ' . l:title,
@@ -13687,7 +13599,6 @@ function! s:visual_new_note(prefix, mode, ...) abort
       let l:content = [
             \ '---',
             \ 'time: ' . gnosis#timestamp_yaml(),
-            \ 'title: ' . l:title,
             \ '---',
             \ '',
             \ '# ' . l:title,
@@ -13715,7 +13626,6 @@ function! s:visual_new_note(prefix, mode, ...) abort
       let l:content = [
             \ '---',
             \ 'time: ' . gnosis#timestamp_yaml(),
-            \ 'title: ' . l:title,
             \ '---',
             \ '',
             \ '# ' . l:title,
@@ -13965,7 +13875,6 @@ function! gnosis#new_quick(args) abort
       let l:content = [
             \ '---',
             \ 'time: ' . gnosis#timestamp_yaml(),
-            \ 'title: ' . l:title,
             \ '---',
             \ '',
             \ '# ' . l:title,
@@ -13988,7 +13897,6 @@ function! gnosis#new_quick(args) abort
     let l:content = [
           \ '---',
           \ 'time: ' . gnosis#timestamp_yaml(),
-          \ 'title: ' . l:title,
           \ '---',
           \ '',
           \ '# ' . l:title,
@@ -14734,11 +14642,9 @@ function! s:group_path_reviewable(path) abort
   if l:t !=# 'index.md' && s:v2_path_attr(a:path) !=# 'group'
     return 0
   endif
-  for l:ln in readfile(a:path, '', 12)
-    if l:ln =~# '^title:\s*\%(\d\{4}\%(-\d\d\)\?\|日記\)\s*$'
-      return 0
-    endif
-  endfor
+  if s:get_yaml_title(a:path) =~# '^\%(\d\{4}\%(-\d\d\)\?\|日記\)$'
+    return 0
+  endif
   return 1
 endfunction
 
@@ -15204,8 +15110,7 @@ function! s:zap_add_child_link(rel_target) abort
     return
   endif
   " このノートのタイトル（相手のリンクの表示名）
-  let l:mine = filter(getline(1, 12), 'v:val =~# "^title:"')
-  let l:title = empty(l:mine) ? fnamemodify(l:self, ':t:r') : trim(substitute(l:mine[0], '^title:\s*', '', ''))
+  let l:title = gnosis#current_title()
   let l:link = s:make_link_from_dir(l:self, l:title, fnamemodify(l:parent_file, ':h'))
   let l:relself = matchstr(l:link, '](\zs[^)]*\ze)')
   let l:lines = readfile(l:parent_file)
@@ -15767,7 +15672,6 @@ function! gnosis#linkify_selection_new_note() abort range
     let l:new_content = [
           \ '---',
           \ 'time: ' . gnosis#timestamp_yaml(),
-          \ 'title: ' . l:title,
           \ '---',
           \ '',
           \ '# ' . l:title,
@@ -16154,7 +16058,7 @@ endfunction
 let s:paper_index_name = 'Paper-Zettelkasten-Index.md'
 
 function! s:is_paper_index_head(lines) abort
-  return index(a:lines, 'title: Paper-Zettelkasten-Index') >= 0 || index(a:lines, 'paper_index: true') >= 0
+  return index(a:lines, '# Paper-Zettelkasten-Index') >= 0 || index(a:lines, 'title: Paper-Zettelkasten-Index') >= 0 || index(a:lines, 'paper_index: true') >= 0
 endfunction
 
 function! s:paper_index_path(root) abort
@@ -19647,6 +19551,7 @@ function! s:diary_head(lines) abort
   " scan: スキャン由来のノート（front matter の source: scan。紙の日記・スキャンノート・トピック）。「今日のノート」に載せない
   " tree: 日記・時系列記録の木のノート（時系列記録 / 日記 / 夢 / 年 / 月。front matter の timeline: true）
   let l:r = {'title': '', 'time': '', 'group': 0, 'paper': 0, 'scan': 0, 'links': [], 'record': '', 'tree': 0}
+  let l:h1 = ''
   let l:fence = 0
   for l:ln in a:lines
     if l:ln ==# '---'
@@ -19655,6 +19560,9 @@ function! s:diary_head(lines) abort
       continue
     endif
     if l:fence >= 2
+      if empty(l:h1) && l:ln =~# '^#\s\+\S'
+        let l:h1 = trim(substitute(l:ln, '^#\s\+', '', ''))
+      endif
       if l:ln =~# '^!\[\%(\\.\|[^\]\\]\)*\](paper-diary-\d\{8}-\d\+\.\w\+)\s*$'
         let l:r.paper = 1
       endif
@@ -19686,6 +19594,10 @@ function! s:diary_head(lines) abort
       let l:r.record = trim(substitute(l:ln, '^record:\s*', '', ''), '" ')
     endif
   endfor
+  " 題は先頭の # 見出しが正（古いノートの title: は H1 が無いときだけ）
+  if !empty(l:h1)
+    let l:r.title = l:h1
+  endif
   return l:r
 endfunction
 
@@ -19802,7 +19714,7 @@ function! s:diary_new_lines(title, is_tree, parent_link, ...) abort
     call map(l:lines, {_, v -> v =~# '^time: ' ? 'time: ' . a:1 : v})
   endif
   if a:is_tree
-    let l:t = index(l:lines, 'title: ' . a:title)
+    let l:t = match(l:lines, '^time:')
     call insert(l:lines, 'timeline: true', l:t >= 0 ? l:t + 1 : 1)
     while len(l:lines) > 1 && l:lines[-1] ==# '' && l:lines[-2] ==# ''
       call remove(l:lines, -1)
@@ -20848,7 +20760,7 @@ function! s:record_day(root, notes, kg, kind, date) abort
   let l:title = a:date . '-' . s:diary_weekday(a:date) . '-' . a:kind
   let l:file = s:diary_new_filename(a:root)
   let l:lines = s:diary_new_lines(l:title, 0, s:diary_link(l:mg, l:month))
-  let l:t = index(l:lines, 'title: ' . l:title)
+  let l:t = match(l:lines, '^time:')
   call insert(l:lines, 'record: ' . json_encode(a:kind), l:t >= 0 ? l:t + 1 : 1)
   call s:syn_writefile(l:lines, l:dir . l:file)
   call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
@@ -21177,7 +21089,7 @@ function! s:record_op_mark(lines, kind) abort
   if match(l:lines, '^record:') >= 0
     return l:lines
   endif
-  let l:t = match(l:lines, '^title:')
+  let l:t = match(l:lines, '^time:')
   call insert(l:lines, 'record: ' . json_encode(a:kind), l:t >= 0 ? l:t + 1 : 1)
   return l:lines
 endfunction

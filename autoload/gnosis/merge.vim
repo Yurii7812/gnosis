@@ -42,13 +42,7 @@ function! s:warn(msg) abort
 endfunction
 
 function! s:title(path) abort
-  for l:ln in readfile(a:path, '', 12)
-    let l:m = matchstr(l:ln, '^title:\s*\zs.*')
-    if !empty(l:m)
-      return trim(l:m)
-    endif
-  endfor
-  return fnamemodify(a:path, ':t:r')
+  return gnosis#note_title(a:path)
 endfunction
 
 " 開いているノートを読み直す（未保存の変更があるバッファは触らない）。消えたノートのバッファは閉じる
