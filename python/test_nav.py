@@ -31,7 +31,8 @@ class NavTest(unittest.TestCase):
         note(r, "b.md", "乙", "🕰 2026-10-15\n普通の文。\n🕰 2027-01-01")
         note(r, "c.md", "丙", "```\n? コードの中の問い\n仮説: コード内\n```\n[リンク](a.md)? これは問いではない")
         note(r, "new.md", "新しい", "", "2026-10-20 08:00:00")
-        old = time.time() - 400 * 86400
+        # TODAY は固定。TODAY の 400 日前に触った、とする（実行する日で結果が変わらないように）
+        old = time.mktime(dt.datetime.combine(TODAY, dt.time(12, 0)).timetuple()) - 400 * 86400
         os.utime(r / "a.md", (old, old))
         self.before = {p.name: hashlib.md5(p.read_bytes()).hexdigest() for p in r.glob("*.md")}
 
