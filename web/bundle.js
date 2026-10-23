@@ -11337,8 +11337,8 @@ ${h3.join(`
     for (let i = 1; i < specs.length; i++) {
       if (specs[i].filter === false)
         filter = false;
-      let seq2 = !!specs[i].sequential;
-      s15 = mergeTransaction(s15, resolveTransactionInner(state, specs[i], seq2 ? s15.changes.newLength : state.doc.length), seq2);
+      let seq = !!specs[i].sequential;
+      s15 = mergeTransaction(s15, resolveTransactionInner(state, specs[i], seq ? s15.changes.newLength : state.doc.length), seq);
     }
     let tr2 = Transaction.create(state, s15.changes, s15.selection, s15.effects, s15.annotations, s15.scrollIntoView);
     return extendTransaction(filter ? filterTransaction(tr2) : tr2);
@@ -12258,11 +12258,11 @@ ${h3.join(`
     return shared;
   }
   var LayerCursor = class {
-    constructor(layer, skip, minPoint, rank2 = 0) {
+    constructor(layer, skip, minPoint, rank = 0) {
       this.layer = layer;
       this.skip = skip;
       this.minPoint = minPoint;
-      this.rank = rank2;
+      this.rank = rank;
     }
     get startSide() {
       return this.value ? this.value.startSide : 0;
@@ -12437,12 +12437,12 @@ ${h3.join(`
       this.minActive = findMinIndex(this.active, this.activeTo);
     }
     addActive(trackOpen) {
-      let i = 0, { value, to, rank: rank2 } = this.cursor;
-      while (i < this.activeRank.length && (rank2 - this.activeRank[i] || to - this.activeTo[i]) > 0)
+      let i = 0, { value, to, rank } = this.cursor;
+      while (i < this.activeRank.length && (rank - this.activeRank[i] || to - this.activeTo[i]) > 0)
         i++;
       insert(this.active, i, value);
       insert(this.activeTo, i, to);
-      insert(this.activeRank, i, rank2);
+      insert(this.activeRank, i, rank);
       if (trackOpen)
         insert(trackOpen, i, this.cursor.from);
       this.minActive = findMinIndex(this.active, this.activeTo);
@@ -13188,11 +13188,11 @@ ${h3.join(`
       ranges.push(from, to);
   }
   var BlockWrapper = class _BlockWrapper extends RangeValue {
-    constructor(tagName, attributes, rank2) {
+    constructor(tagName, attributes, rank) {
       super();
       this.tagName = tagName;
       this.attributes = attributes;
-      this.rank = rank2;
+      this.rank = rank;
     }
     eq(other) {
       return other == this || other instanceof _BlockWrapper && this.tagName == other.tagName && attrsEq(this.attributes, other.attributes);
@@ -14870,11 +14870,11 @@ ${h3.join(`
     }
   };
   var OpenWrapper = class {
-    constructor(from, to, wrapper, rank2) {
+    constructor(from, to, wrapper, rank) {
       this.from = from;
       this.to = to;
       this.wrapper = wrapper;
-      this.rank = rank2;
+      this.rank = rank;
     }
   };
   var TileBuilder = class {
@@ -15057,8 +15057,8 @@ ${h3.join(`
           this.wrappers.splice(i, 1);
       for (let cur = this.blockWrappers; cur.value && cur.from <= this.pos; cur.next())
         if (cur.to >= this.pos) {
-          let rank2 = cur.rank * 102 + cur.value.rank;
-          let wrap = new OpenWrapper(cur.from, cur.to, cur.value, rank2), i = this.wrappers.length;
+          let rank = cur.rank * 102 + cur.value.rank;
+          let wrap = new OpenWrapper(cur.from, cur.to, cur.value, rank), i = this.wrappers.length;
           while (i > 0 && (this.wrappers[i - 1].rank - wrap.rank || this.wrappers[i - 1].to - wrap.to) < 0)
             i--;
           this.wrappers.splice(i, 0, wrap);
@@ -15724,8 +15724,8 @@ ${h3.join(`
       let line = this.lineAt(cursor.head, cursor.assoc);
       if (!line)
         return;
-      let lineStart2 = line.posAtStart;
-      if (cursor.head == lineStart2 || cursor.head == lineStart2 + line.length)
+      let lineStart = line.posAtStart;
+      if (cursor.head == lineStart || cursor.head == lineStart + line.length)
         return;
       let before = this.coordsAt(cursor.head, -1), after = this.coordsAt(cursor.head, 1);
       if (!before || !after || before.bottom > after.top)
@@ -18838,9 +18838,9 @@ ${h3.join(`
         let gap = find(current, (gap2) => gap2.from >= line.from && gap2.to <= line.to && Math.abs(gap2.from - from) < halfMargin && Math.abs(gap2.to - to) < halfMargin && !avoid.some((pos) => gap2.from < pos && gap2.to > pos));
         if (!gap) {
           if (to < line.to && mayMeasure && wrapping && mayMeasure.visibleRanges.some((r) => r.from <= to && r.to >= to)) {
-            let lineStart2 = mayMeasure.moveToLineBoundary(EditorSelection.cursor(to), false, true).head;
-            if (lineStart2 > from)
-              to = lineStart2;
+            let lineStart = mayMeasure.moveToLineBoundary(EditorSelection.cursor(to), false, true).head;
+            if (lineStart > from)
+              to = lineStart;
           }
           let size = this.gapSize(line, from, to, structure);
           let displaySize = wrapping || size < 2e6 ? size : 2e6;
@@ -24749,13 +24749,13 @@ ${h3.join(`
       return null;
     let sim = context.options.simulateBreak;
     let openLine = context.state.doc.lineAt(openToken.from);
-    let lineEnd3 = sim == null || sim <= openLine.from ? openLine.to : Math.min(openLine.to, sim);
+    let lineEnd2 = sim == null || sim <= openLine.from ? openLine.to : Math.min(openLine.to, sim);
     for (let pos = openToken.to; ; ) {
       let next = tree.childAfter(pos);
       if (!next || next == last3)
         return null;
       if (!next.type.isSkipped) {
-        if (next.from >= lineEnd3)
+        if (next.from >= lineEnd2)
           return null;
         let space4 = /^ */.exec(openLine.text.slice(openToken.to - openLine.from))[0].length;
         return { from: openToken.from, to: openToken.to + space4 };
@@ -25304,20 +25304,20 @@ ${h3.join(`
       this.fieldPositions = fieldPositions;
     }
     instantiate(state, pos) {
-      let text = [], lineStart2 = [pos];
+      let text = [], lineStart = [pos];
       let lineObj = state.doc.lineAt(pos), baseIndent = /^\s*/.exec(lineObj.text)[0];
       for (let line of this.lines) {
         if (text.length) {
           let indent = baseIndent, tabs = /^\t*/.exec(line)[0].length;
           for (let i = 0; i < tabs; i++)
             indent += state.facet(indentUnit);
-          lineStart2.push(pos + indent.length - tabs);
+          lineStart.push(pos + indent.length - tabs);
           line = indent + line.slice(tabs);
         }
         text.push(line);
         pos += line.length + 1;
       }
-      let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart2[pos2.line] + pos2.from, lineStart2[pos2.line] + pos2.to));
+      let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart[pos2.line] + pos2.from, lineStart[pos2.line] + pos2.to));
       return { text, ranges };
     }
     static parse(template) {
@@ -25325,19 +25325,19 @@ ${h3.join(`
       let lines = [], positions = [], m;
       for (let line of template.split(/\r\n?|\n/)) {
         while (m = /[#$]\{(?:(\d+)(?::([^{}]*))?|((?:\\[{}]|[^{}])*))\}/.exec(line)) {
-          let seq2 = m[1] ? +m[1] : null, rawName = m[2] || m[3] || "", found = -1;
-          if (seq2 === 0)
-            seq2 = 1e9;
+          let seq = m[1] ? +m[1] : null, rawName = m[2] || m[3] || "", found = -1;
+          if (seq === 0)
+            seq = 1e9;
           let name2 = rawName.replace(/\\[{}]/g, (m2) => m2[1]);
           for (let i = 0; i < fields.length; i++) {
-            if (seq2 != null ? fields[i].seq == seq2 : name2 ? fields[i].name == name2 : false)
+            if (seq != null ? fields[i].seq == seq : name2 ? fields[i].name == name2 : false)
               found = i;
           }
           if (found < 0) {
             let i = 0;
-            while (i < fields.length && (seq2 == null || fields[i].seq != null && fields[i].seq < seq2))
+            while (i < fields.length && (seq == null || fields[i].seq != null && fields[i].seq < seq))
               i++;
-            fields.splice(i, 0, { seq: seq2, name: name2 });
+            fields.splice(i, 0, { seq, name: name2 });
             found = i;
             for (let pos of positions)
               if (pos.field >= found)
@@ -27166,7 +27166,7 @@ ${h3.join(`
       this.cursor = null;
       this.fragmentEnd = -1;
     }
-    moveTo(pos, lineStart2) {
+    moveTo(pos, lineStart) {
       while (this.fragment && this.fragment.to <= pos)
         this.nextFragment();
       if (!this.fragment || this.fragment.from > (pos ? pos - 1 : 0))
@@ -27188,7 +27188,7 @@ ${h3.join(`
           return false;
       for (; ; ) {
         if (c.from >= rPos)
-          return this.fragment.from <= lineStart2;
+          return this.fragment.from <= lineStart;
         if (!c.childAfter(rPos))
           return false;
       }
@@ -27572,13 +27572,13 @@ ${h3.join(`
     /**
     @internal
     */
-    constructor(p, stack, state, reducePos, pos, score2, buffer, bufferBase, curContext, lookAhead = 0, parent) {
+    constructor(p, stack, state, reducePos, pos, score, buffer, bufferBase, curContext, lookAhead = 0, parent) {
       this.p = p;
       this.stack = stack;
       this.state = state;
       this.reducePos = reducePos;
       this.pos = pos;
-      this.score = score2;
+      this.score = score;
       this.buffer = buffer;
       this.bufferBase = bufferBase;
       this.curContext = curContext;
@@ -32970,6 +32970,22 @@ ${h3.join(`
     { tag: tags.comment, color: "var(--fg-dim)" },
     { tag: tags.quote, color: "var(--fg-dim)" }
   ]);
+  var setHide = StateEffect.define();
+  var hideField = StateField.define({
+    create: () => [],
+    update(v2, tr2) {
+      for (const e of tr2.effects) if (e.is(setHide)) return e.value;
+      return v2;
+    },
+    provide: (f) => EditorView.decorations.compute([f, "doc"], (state) => {
+      const mark = Decoration.line({ class: "cm-hide-line" });
+      const lines = /* @__PURE__ */ new Set();
+      for (const [from, to] of state.field(f)) for (let l = from; l <= Math.min(to, state.doc.lines); l++) lines.add(l);
+      const out = [];
+      for (const l of [...lines].sort((a, b2) => a - b2)) out.push(mark.range(state.doc.line(l).from));
+      return Decoration.set(out);
+    })
+  });
   function createView(opts) {
     const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
     const editableC = new Compartment();
@@ -33005,6 +33021,7 @@ ${h3.join(`
         EditorView.lineWrapping,
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(mdHighlight),
+        hideField,
         vimField,
         vimDecorations,
         vtextField,
@@ -33120,6 +33137,10 @@ ${h3.join(`
       // 仮想テキスト（リンクの数字のしるしなど）を反映する
       setVtext(list) {
         view3.dispatch({ effects: setVtext.of(list || []) });
+      },
+      // 隠す行（YAML・上下の「名前:」系）。[[開始行, 終了行], …]（1 始まり）。setText のあとに呼ぶ
+      setHide(ranges) {
+        view3.dispatch({ effects: setHide.of(ranges || []) });
       },
       // Vim のカーソル（行・バイト列）、モード、ビジュアルの始点を反映する
       setVim({ cur, mode, vis }) {
@@ -33873,1303 +33894,102 @@ ${h3.join(`
     render();
   }
 
-  // src/editcmds.js
-  function lineStart(doc2, pos) {
-    const i = doc2.lastIndexOf("\n", pos - 1);
-    return i < 0 ? 0 : i + 1;
-  }
-  function lineEnd2(doc2, pos) {
-    const i = doc2.indexOf("\n", pos);
-    return i < 0 ? doc2.length : i;
-  }
-  function toggleWrap(doc2, from, to, open, close = open) {
-    const before = doc2.slice(Math.max(0, from - open.length), from);
-    const after = doc2.slice(to, to + close.length);
-    if (from !== to && before === open && after === close) {
-      return { changes: [{ from: from - open.length, to: from, insert: "" }, { from: to, to: to + close.length, insert: "" }], anchor: from - open.length, head: to - open.length };
-    }
-    const sel2 = doc2.slice(from, to);
-    if (from !== to && sel2.startsWith(open) && sel2.endsWith(close) && sel2.length >= open.length + close.length) {
-      const inner = sel2.slice(open.length, sel2.length - close.length);
-      return { changes: [{ from, to, insert: inner }], anchor: from, head: from + inner.length };
-    }
-    if (from === to) return { changes: [{ from, to, insert: open + close }], anchor: from + open.length, head: from + open.length };
-    return { changes: [{ from, to, insert: open + sel2 + close }], anchor: from + open.length, head: from + open.length + sel2.length };
-  }
-  function setHeading(doc2, pos, level) {
-    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
-    const line = doc2.slice(a, b2);
-    const m = /^(#{1,6})\s+/.exec(line);
-    const prefix = "#".repeat(level) + " ";
-    let insert2, delta;
-    if (m && m[1].length === level) {
-      insert2 = line.slice(m[0].length);
-      delta = -m[0].length;
-    } else if (m) {
-      insert2 = prefix + line.slice(m[0].length);
-      delta = prefix.length - m[0].length;
-    } else {
-      insert2 = prefix + line;
-      delta = prefix.length;
-    }
-    const p = Math.max(a, pos + delta);
-    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: p, head: p };
-  }
-  var PREFIXES = { bullet: /^(\s*)[-*+]\s+(?!\[[ xX]\])/, task: /^(\s*)[-*+]\s+\[[ xX]\]\s+/, quote: /^(\s*)>\s?/, number: /^(\s*)\d+[.)]\s+/ };
-  var MAKE = { bullet: (ind) => ind + "- ", task: (ind) => ind + "- [ ] ", quote: (ind) => ind + "> ", number: (ind, n) => ind + (n + 1) + ". " };
-  function toggleLinePrefix(doc2, from, to, kind) {
-    const re2 = PREFIXES[kind];
-    const a = lineStart(doc2, from), b2 = lineEnd2(doc2, to > from && doc2[to - 1] === "\n" ? to - 1 : to);
-    const lines = doc2.slice(a, b2).split("\n");
-    const allHave = lines.filter((l) => l.trim()).every((l) => re2.test(l));
-    const out = lines.map((l, i) => {
-      if (!l.trim()) return l;
-      if (allHave) return l.replace(re2, "$1");
-      const stripped = l.replace(PREFIXES.bullet, "$1").replace(PREFIXES.task, "$1").replace(PREFIXES.number, "$1").replace(PREFIXES.quote, "$1");
-      const ind = /^\s*/.exec(stripped)[0];
-      return MAKE[kind](ind, i) + stripped.slice(ind.length);
-    });
-    const insert2 = out.join("\n");
-    if (insert2 === doc2.slice(a, b2)) return null;
-    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: a, head: a + insert2.length };
-  }
-  function toggleTaskAt(doc2, pos) {
-    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
-    const line = doc2.slice(a, b2);
-    const m = /^(\s*[-*+]\s+\[)([ xX])(\])/.exec(line);
-    if (!m) return null;
-    const at2 = a + m[1].length;
-    return { changes: [{ from: at2, to: at2 + 1, insert: m[2] === " " ? "x" : " " }], anchor: pos, head: pos };
-  }
-  function makeLink(doc2, from, to, url) {
-    const sel2 = doc2.slice(from, to);
-    const insert2 = `[${sel2}](${url})`;
-    const inner = from + 1;
-    return { changes: [{ from, to, insert: insert2 }], anchor: sel2 ? from + insert2.length : inner, head: sel2 ? from + insert2.length : inner };
-  }
-  function enterInList(doc2, pos) {
-    const a = lineStart(doc2, pos), b2 = lineEnd2(doc2, pos);
-    if (pos !== b2) return null;
-    const line = doc2.slice(a, b2);
-    const m = /^(\s*)([-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?(.*)$/.exec(line);
-    if (!m) return null;
-    if (m[4].trim() === "") {
-      return { changes: [{ from: a, to: b2, insert: m[1] }], anchor: a + m[1].length, head: a + m[1].length };
-    }
-    const bullet = /^\d/.test(m[2]) ? parseInt(m[2], 10) + 1 + m[2].slice(-1) : m[2];
-    const prefix = m[1] + bullet + " " + (m[3] ? "[ ] " : "");
-    return { changes: [{ from: pos, to: pos, insert: "\n" + prefix }], anchor: pos + 1 + prefix.length, head: pos + 1 + prefix.length };
-  }
-  function indentLines(doc2, from, to, dir) {
-    const a = lineStart(doc2, from), b2 = lineEnd2(doc2, to);
-    const lines = doc2.slice(a, b2).split("\n");
-    let changed = false;
-    const out = lines.map((l) => {
-      if (!/^\s*([-*+]|\d+[.)])\s/.test(l)) return l;
-      if (dir > 0) {
-        changed = true;
-        return "  " + l;
-      }
-      const m = /^( {1,2}|\t)/.exec(l);
-      if (!m) return l;
-      changed = true;
-      return l.slice(m[0].length);
-    });
-    if (!changed) return null;
-    const insert2 = out.join("\n");
-    return { changes: [{ from: a, to: b2, insert: insert2 }], anchor: a, head: a + insert2.length };
-  }
-
-  // src/history.js
-  function createHistory({ limit = 200, group = 700 } = {}) {
-    let undo = [];
-    let redo = [];
-    let lastTime = 0;
-    return {
-      // 変更の前の文書 prev を覚える（ユーザーの編集のたびに呼ぶ）
-      // prev は文字列、または文字列を返す関数（まとめる編集のときは呼ばない。毎回の入力で文書全体を文字列にしないため）
-      record(prev, now = Date.now()) {
-        if (undo.length && now - lastTime < group) {
-          lastTime = now;
-          return;
-        }
-        undo.push({ doc: typeof prev === "function" ? prev() : prev });
-        if (undo.length > limit) undo.shift();
-        redo = [];
-        lastTime = now;
-      },
-      canUndo: () => undo.length > 0,
-      canRedo: () => redo.length > 0,
-      // 戻る。今の文書 current を redo に積み、戻り先の文書を返す（無ければ null）
-      undo(current) {
-        const s15 = undo.pop();
-        if (!s15) return null;
-        redo.push({ doc: current });
-        lastTime = 0;
-        return s15.doc;
-      },
-      redo(current) {
-        const s15 = redo.pop();
-        if (!s15) return null;
-        undo.push({ doc: current });
-        lastTime = 0;
-        return s15.doc;
-      },
-      // 文書が入れ替わったとき（別のノートを開いた・読み直した）は履歴を捨てる
-      reset() {
-        undo = [];
-        redo = [];
-        lastTime = 0;
-      },
-      size: () => undo.length
-    };
-  }
-
-  // src/guiedit.js
-  var SAVE_DELAY = 1e3;
-  function createGuiEdit({ view: view3, gui: gui2, $: $4, getLast, showError: showError2, onChange }) {
-    let on2 = false;
-    let file = "";
-    let hash2 = "";
-    let dirty = false;
-    let saving = false;
-    let again = false;
-    let timer = null;
-    let paused = false;
-    let loading = false;
-    const hist = createHistory();
-    const sel2 = () => view3.selection();
-    const doc2 = () => view3.getText();
-    function status() {
-      const el2 = $4("save-state");
-      if (el2) {
-        el2.textContent = !on2 ? "" : paused ? "\u7AF6\u5408: \u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" : saving ? "\u4FDD\u5B58\u4E2D\u2026" : dirty ? "\u672A\u4FDD\u5B58" : "\u4FDD\u5B58\u6E08\u307F";
-        el2.className = "save-state" + (paused ? " conflict" : dirty ? " dirty" : "");
-      }
-      const d = $4("dirty");
-      if (d && on2) d.textContent = dirty ? "\u25CF" : "";
-      for (const b2 of document.querySelectorAll("#edit-tools [data-cmd='undo']")) b2.disabled = !hist.canUndo();
-      for (const b2 of document.querySelectorAll("#edit-tools [data-cmd='redo']")) b2.disabled = !hist.canRedo();
-      onChange?.(on2);
-    }
-    async function load(f) {
-      loading = true;
-      try {
-        const r = await gui2.readNote(f);
-        if (!r.ok) throw new Error(r.error || "\u8AAD\u307F\u8FBC\u3081\u307E\u305B\u3093");
-        file = f;
-        hash2 = r.hash;
-        dirty = false;
-        paused = false;
-        view3.setText(r.text);
-        hist.reset();
-      } finally {
-        loading = false;
-        status();
-      }
-    }
-    function schedule() {
-      clearTimeout(timer);
-      if (paused) return;
-      timer = setTimeout(() => {
-        save();
-      }, SAVE_DELAY);
-    }
-    async function save({ force = false } = {}) {
-      clearTimeout(timer);
-      if (!on2 || !file) return true;
-      if (saving) {
-        again = true;
-        return false;
-      }
-      if (!dirty && !force) return true;
-      saving = true;
-      status();
-      const text = doc2();
-      let ok = false;
-      try {
-        const r = await gui2.commitNote(file, text, hash2, force);
-        if (r.ok) {
-          hash2 = r.hash;
-          paused = false;
-          ok = true;
-          dirty = doc2() !== text;
-          if (!dirty && typeof r.text === "string" && r.text !== text) view3.setText(r.text);
-          hideConflict();
-        } else if (r.conflict) {
-          paused = true;
-          showConflict(r.disk);
-        } else {
-          showError2(r.error || "\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
-        }
-      } catch (e) {
-        showError2(e && e.message || e);
-      }
-      saving = false;
-      status();
-      if ((again || dirty) && ok && !paused) {
-        again = false;
-        schedule();
-      }
-      return ok;
-    }
-    function hideConflict() {
-      const c = $4("conflict");
-      if (c) c.hidden = true;
-    }
-    function showConflict(disk) {
-      const c = $4("conflict");
-      if (!c) return;
-      c.hidden = false;
-      c.querySelector(".msg").textContent = "\u3053\u306E\u30CE\u30FC\u30C8\u306F\u3001\u7DE8\u96C6\u4E2D\u306B\u5225\u306E\u3082\u306E\uFF08\u5225\u306E Vim\u30FB\u30B9\u30DE\u30DB\u53D6\u308A\u8FBC\u307F\u306A\u3069\uFF09\u304C\u66F8\u304D\u63DB\u3048\u307E\u3057\u305F\u3002\u3069\u3061\u3089\u3092\u6B8B\u3057\u307E\u3059\u304B\uFF1F \u3069\u3061\u3089\u3092\u9078\u3093\u3067\u3082\u3001\u6368\u3066\u308B\u5074\u306F\u9000\u907F\u3057\u307E\u3059\u3002";
-      c.querySelector("[data-act='mine']").onclick = async () => {
-        hideConflict();
-        paused = false;
-        await save({ force: true });
-      };
-      c.querySelector("[data-act='theirs']").onclick = async () => {
-        try {
-          await gui2.asideNote(file, doc2());
-          loading = true;
-          hash2 = disk.hash;
-          view3.setText(disk.text);
-          hist.reset();
-          dirty = false;
-          paused = false;
-          loading = false;
-        } catch (e) {
-          showError2(e && e.message || e);
-        }
-        hideConflict();
-        status();
-      };
-      c.querySelector("[data-act='later']").onclick = () => {
-        hideConflict();
-      };
-    }
-    async function enter() {
-      if (on2) return true;
-      const last3 = getLast();
-      if (!last3.file || last3.bt) {
-        showError2("\u3053\u306E\u30D0\u30C3\u30D5\u30A1\u306F GUI \u7DE8\u96C6\u306B\u3067\u304D\u307E\u305B\u3093\uFF08\u30CE\u30FC\u30C8\u3092\u958B\u3044\u3066\u304F\u3060\u3055\u3044\uFF09");
-        return false;
-      }
-      const r = await gui2.enterEdit();
-      if (!r.ok) {
-        showError2(r.error || "Vim \u306E\u672A\u4FDD\u5B58\u306E\u5909\u66F4\u3092\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
-        return false;
-      }
-      try {
-        await load(r.file || last3.file);
-      } catch (e) {
-        showError2(e && e.message || e);
-        return false;
-      }
-      on2 = true;
-      view3.setEditable(true);
-      document.body.classList.add("gui-edit");
-      view3.focus();
-      status();
-      return true;
-    }
-    async function leave() {
-      if (!on2) return true;
-      clearTimeout(timer);
-      if (dirty && !await save()) {
-        showError2("\u4FDD\u5B58\u3067\u304D\u3066\u3044\u306A\u3044\u306E\u3067\u3001GUI \u7DE8\u96C6\u306E\u307E\u307E\u306B\u3057\u307E\u3059");
-        return false;
-      }
-      on2 = false;
-      view3.setEditable(false);
-      document.body.classList.remove("gui-edit");
-      hideConflict();
-      await gui2.leaveEdit();
-      status();
-      return true;
-    }
-    async function onVimState(s15) {
-      if (!on2 || loading || saving) return;
-      if (s15.file && s15.file !== file && !s15.bt) {
-        if (dirty) await save();
-        try {
-          await load(s15.file);
-        } catch (e) {
-          showError2(e && e.message || e);
-        }
-        return;
-      }
-      if (s15.lines && !dirty && !paused) {
-        const vimText = s15.lines.join("\n");
-        if (doc2().replace(/\n$/, "") !== vimText) {
-          const r = await gui2.readNote(file);
-          if (r.ok && r.hash !== hash2 && !dirty) {
-            hash2 = r.hash;
-            view3.setText(r.text);
-            hist.reset();
-            status();
-          }
-        }
-      }
-    }
-    function onUserChange(u) {
-      if (!on2 || loading) return;
-      hist.record(() => u.startState.doc.toString());
-      dirty = true;
-      schedule();
-      status();
-    }
-    function apply(result) {
-      return view3.applyEdit(result);
-    }
-    async function openLink(href) {
-      const r = await gui2.resolveLink(file, href);
-      if (!r.ok) {
-        showError2(r.error || "\u30EA\u30F3\u30AF\u3092\u89E3\u6C7A\u3067\u304D\u307E\u305B\u3093");
-        return;
-      }
-      if (r.external) {
-        showError2("\u5916\u90E8\u306E\u30EA\u30F3\u30AF\u3067\u3059: " + r.external);
-        return;
-      }
-      if (r.self || !r.file) {
-        if (r.missing) showError2("\u30EA\u30F3\u30AF\u5148\u306E\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093: " + href);
-        return;
-      }
-      if (dirty && !await save()) return;
-      const o2 = await gui2.openNote(r.file);
-      if (!o2.ok) showError2(o2.error || "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F");
-    }
-    async function openAt(pos, href) {
-      const h3 = href || view3.linkAt(pos);
-      if (h3) await openLink(h3);
-      return !!h3;
-    }
-    const ask = (label, initial = "") => new Promise((resolve) => {
-      const box = $4("ask");
-      if (!box) return resolve(null);
-      box.hidden = false;
-      box.querySelector("label").textContent = label;
-      const input = box.querySelector("input");
-      input.value = initial;
-      input.focus();
-      const done = (v2) => {
-        box.hidden = true;
-        input.onkeydown = null;
-        box.querySelector("[data-act='ok']").onclick = null;
-        box.querySelector("[data-act='cancel']").onclick = null;
-        view3.focus();
-        resolve(v2);
-      };
-      input.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          done(input.value);
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          done(null);
-        }
-      };
-      box.querySelector("[data-act='ok']").onclick = () => done(input.value);
-      box.querySelector("[data-act='cancel']").onclick = () => done(null);
-    });
-    const commands = {
-      undo() {
-        const prev = hist.undo(doc2());
-        if (prev == null) return false;
-        view3.replaceAll(prev);
-        dirty = true;
-        schedule();
-        status();
-        return true;
-      },
-      redo() {
-        const next = hist.redo(doc2());
-        if (next == null) return false;
-        view3.replaceAll(next);
-        dirty = true;
-        schedule();
-        status();
-        return true;
-      },
-      async save() {
-        return save({ force: false });
-      },
-      bold: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "**")),
-      italic: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "*")),
-      strike: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "~~")),
-      code: () => apply(toggleWrap(doc2(), sel2().from, sel2().to, "`")),
-      h1: () => apply(setHeading(doc2(), sel2().head, 1)),
-      h2: () => apply(setHeading(doc2(), sel2().head, 2)),
-      h3: () => apply(setHeading(doc2(), sel2().head, 3)),
-      bullet: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "bullet")),
-      number: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "number")),
-      task: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "task")),
-      quote: () => apply(toggleLinePrefix(doc2(), sel2().from, sel2().to, "quote")),
-      checkbox: () => apply(toggleTaskAt(doc2(), sel2().head)),
-      async link() {
-        const s15 = sel2();
-        const url = await ask("\u30EA\u30F3\u30AF\u5148\uFF08\u30CE\u30FC\u30C8\u306E\u30D5\u30A1\u30A4\u30EB\u540D\u30FBURL\uFF09", "");
-        if (url == null || !url.trim()) return false;
-        return apply(makeLink(doc2(), s15.from, s15.to, url.trim()));
-      },
-      async openLink() {
-        return openAt(sel2().head, "");
-      },
-      enter() {
-        return apply(enterInList(doc2(), sel2().head)) || false;
-      },
-      // false を返すと CodeMirror が普通の改行をする
-      indent() {
-        return apply(indentLines(doc2(), sel2().from, sel2().to, 1)) || false;
-      },
-      outdent() {
-        return apply(indentLines(doc2(), sel2().from, sel2().to, -1)) || false;
-      }
-    };
-    function run(id2) {
-      const f = commands[id2];
-      if (!on2 || !f) return false;
-      return f();
-    }
-    return { enter, leave, isOn: () => on2, onVimState, onUserChange, openAt, run, commands, save, state: () => ({ on: on2, file, hash: hash2, dirty, saving, paused }) };
-  }
-
-  // src/layout.js
-  var seq = 0;
-  var nid = (p) => `${p}${++seq}`;
-  function newTab(kind, { title = "", params = {}, pinned = false } = {}) {
-    return { id: nid("t"), kind, title: title || kind, params, pinned };
-  }
-  function newLayout() {
-    const vim = newTab("vim", { title: "Vim" });
-    return { type: "tabs", id: nid("p"), tabs: [vim], active: vim.id };
-  }
-  function walk(node, fn2) {
-    fn2(node);
-    if (node.type === "split") {
-      walk(node.a, fn2);
-      walk(node.b, fn2);
-    }
-  }
-  function panes(layout) {
-    const out = [];
-    walk(layout, (n) => {
-      if (n.type === "tabs") out.push(n);
-    });
-    return out;
-  }
-  function findTab(layout, tabId) {
-    for (const p of panes(layout)) {
-      const i = p.tabs.findIndex((t3) => t3.id === tabId);
-      if (i >= 0) return { pane: p, index: i, tab: p.tabs[i] };
-    }
-    return null;
-  }
-  function findPane(layout, paneId) {
-    return panes(layout).find((p) => p.id === paneId) || null;
-  }
-  function vimTab(layout) {
-    for (const p of panes(layout)) {
-      const t3 = p.tabs.find((x) => x.kind === "vim");
-      if (t3) return t3;
-    }
-    return null;
-  }
-  function mapNode(node, id2, f) {
-    if (node.id === id2) return f(node);
-    if (node.type !== "split") return node;
-    const a = mapNode(node.a, id2, f), b2 = mapNode(node.b, id2, f);
-    if (a === null) return b2;
-    if (b2 === null) return a;
-    return a === node.a && b2 === node.b ? node : { ...node, a, b: b2 };
-  }
-  function openTab(layout, paneId, tab) {
-    const pane = findPane(layout, paneId) || panes(layout)[0];
-    const same = pane.tabs.find((t3) => t3.kind === tab.kind && JSON.stringify(t3.params) === JSON.stringify(tab.params) && tab.kind !== "vim");
-    if (same) return mapNode(layout, pane.id, (n) => ({ ...n, active: same.id }));
-    return mapNode(layout, pane.id, (n) => ({ ...n, tabs: [...n.tabs, tab], active: tab.id }));
-  }
-  function activateTab(layout, tabId) {
-    const f = findTab(layout, tabId);
-    return f ? mapNode(layout, f.pane.id, (n) => ({ ...n, active: tabId })) : layout;
-  }
-  function closeTab(layout, tabId, { force = false } = {}) {
-    const f = findTab(layout, tabId);
-    if (!f || f.tab.kind === "vim" || f.tab.pinned && !force) return { layout, closed: null };
-    const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
-    const closed = { tab: f.tab, index: f.index, paneId: f.pane.id };
-    if (rest.length === 0) return { layout: mapNode(layout, f.pane.id, () => null), closed };
-    const active = f.pane.active === tabId ? rest[Math.min(f.index, rest.length - 1)].id : f.pane.active;
-    return { layout: mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: rest, active })), closed };
-  }
-  function setPinned(layout, tabId, pinned) {
-    const f = findTab(layout, tabId);
-    if (!f) return layout;
-    return mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: n.tabs.map((t3) => t3.id === tabId ? { ...t3, pinned: !!pinned } : t3) }));
-  }
-  function moveTab(layout, tabId, toPaneId, index) {
-    const f = findTab(layout, tabId);
-    const dest = findPane(layout, toPaneId);
-    if (!f || !dest) return layout;
-    if (f.pane.id === dest.id) {
-      const tabs2 = f.pane.tabs.filter((t3) => t3.id !== tabId);
-      const i = index == null ? tabs2.length : Math.max(0, Math.min(index, tabs2.length));
-      tabs2.splice(i, 0, f.tab);
-      return mapNode(layout, dest.id, (n) => ({ ...n, tabs: pinFirst(tabs2) }));
-    }
-    const removed = closeTab(layout, tabId, { force: true });
-    if (!removed.closed && f.tab.kind === "vim") {
-      const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
-      let lay = rest.length ? mapNode(layout, f.pane.id, (n) => ({ ...n, tabs: rest, active: n.active === tabId ? rest[0].id : n.active })) : mapNode(layout, f.pane.id, () => null);
-      const d2 = findPane(lay, toPaneId);
-      const tabs2 = [...d2.tabs];
-      tabs2.splice(index == null ? tabs2.length : index, 0, f.tab);
-      return mapNode(lay, d2.id, (n) => ({ ...n, tabs: pinFirst(tabs2), active: tabId }));
-    }
-    const d = findPane(removed.layout, toPaneId);
-    if (!d) return layout;
-    const tabs = [...d.tabs];
-    tabs.splice(index == null ? tabs.length : Math.max(0, Math.min(index, tabs.length)), 0, f.tab);
-    return mapNode(removed.layout, d.id, (n) => ({ ...n, tabs: pinFirst(tabs), active: tabId }));
-  }
-  function pinFirst(tabs) {
-    return [...tabs.filter((t3) => t3.pinned), ...tabs.filter((t3) => !t3.pinned)];
-  }
-  function splitPane(layout, paneId, dir, tab, side = "after") {
-    const pane = findPane(layout, paneId);
-    if (!pane || !tab) return layout;
-    const fresh = { type: "tabs", id: nid("p"), tabs: [tab], active: tab.id };
-    return mapNode(layout, pane.id, (n) => ({ type: "split", id: nid("s"), dir, ratio: 0.5, a: side === "before" ? fresh : n, b: side === "before" ? n : fresh }));
-  }
-  function splitWithTab(layout, paneId, dir, tabId, side = "after") {
-    const f = findTab(layout, tabId);
-    if (!f) return layout;
-    if (f.pane.id === paneId && f.pane.tabs.length === 1) return layout;
-    let lay = layout;
-    if (f.tab.kind === "vim") {
-      const rest = f.pane.tabs.filter((t3) => t3.id !== tabId);
-      lay = rest.length ? mapNode(lay, f.pane.id, (n) => ({ ...n, tabs: rest, active: n.active === tabId ? rest[0].id : n.active })) : mapNode(lay, f.pane.id, () => null);
-    } else {
-      lay = closeTab(lay, tabId, { force: true }).layout;
-    }
-    const target = findPane(lay, paneId) || panes(lay)[0];
-    return splitPane(lay, target.id, dir, f.tab, side);
-  }
-  function setRatio(layout, splitId, ratio) {
-    const r = Math.max(0.1, Math.min(0.9, Number(ratio) || 0.5));
-    return mapNode(layout, splitId, (n) => n.type === "split" ? { ...n, ratio: r } : n);
-  }
-  function unsplit(layout, paneId) {
-    const p = findPane(layout, paneId);
-    if (!p || p.id === layout.id) return layout;
-    const all = panes(layout);
-    const other = all.find((x) => x.id !== paneId);
-    if (!other) return layout;
-    const moved = p.tabs;
-    let lay = mapNode(layout, p.id, () => null);
-    const sib = panes(lay).find((x) => x.id === other.id) || panes(lay)[0];
-    return mapNode(lay, sib.id, (n) => ({ ...n, tabs: pinFirst([...n.tabs, ...moved.filter((t3) => !n.tabs.some((u) => u.kind === t3.kind && u.kind !== "vim" && JSON.stringify(u.params) === JSON.stringify(t3.params)))]), active: n.active }));
-  }
-  function createClosedStack(limit = 20) {
-    const st3 = [];
-    return {
-      push(c) {
-        if (c && c.tab && c.tab.kind !== "vim") {
-          st3.push(c);
-          if (st3.length > limit) st3.shift();
-        }
-      },
-      pop() {
-        return st3.pop() || null;
-      },
-      size: () => st3.length,
-      toJSON: () => st3.map((c) => ({ tab: c.tab })),
-      load(list) {
-        st3.length = 0;
-        for (const c of Array.isArray(list) ? list : []) if (c && c.tab && typeof c.tab.kind === "string") st3.push({ tab: c.tab });
-      }
-    };
-  }
-  function reopen(layout, closed, paneId) {
-    if (!closed) return layout;
-    const tab = { ...closed.tab, id: nid("t") };
-    return openTab(layout, paneId || panes(layout)[0].id, tab);
-  }
-  var KINDS = /* @__PURE__ */ new Set(["vim", "index", "analysis", "cards", "table", "timeline", "graph", "fznav", "search", "note", "v2", "features"]);
-  function restore(text) {
-    let raw;
-    try {
-      raw = typeof text === "string" ? JSON.parse(text) : text;
-    } catch {
-      return newLayout();
-    }
-    const fix = (n) => {
-      if (!n || typeof n !== "object") return null;
-      if (n.type === "tabs") {
-        const tabs = (Array.isArray(n.tabs) ? n.tabs : []).filter((t3) => t3 && typeof t3.kind === "string" && KINDS.has(t3.kind)).map((t3) => ({ id: typeof t3.id === "string" ? t3.id : nid("t"), kind: t3.kind, title: String(t3.title || t3.kind), params: t3.params && typeof t3.params === "object" ? t3.params : {}, pinned: !!t3.pinned }));
-        if (!tabs.length) return null;
-        return { type: "tabs", id: typeof n.id === "string" ? n.id : nid("p"), tabs, active: tabs.some((t3) => t3.id === n.active) ? n.active : tabs[0].id };
-      }
-      if (n.type === "split") {
-        const a = fix(n.a), b2 = fix(n.b);
-        if (!a) return b2;
-        if (!b2) return a;
-        return { type: "split", id: typeof n.id === "string" ? n.id : nid("s"), dir: n.dir === "col" ? "col" : "row", ratio: Math.max(0.1, Math.min(0.9, Number(n.ratio) || 0.5)), a, b: b2 };
-      }
-      return null;
-    };
-    let lay = fix(raw);
-    if (!lay) return newLayout();
-    let seen = false;
-    const dedup = (n) => {
-      if (n.type === "split") return { ...n, a: dedup(n.a), b: dedup(n.b) };
-      const tabs = n.tabs.filter((t3) => {
-        if (t3.kind !== "vim") return true;
-        if (seen) return false;
-        seen = true;
-        return true;
-      });
-      return { ...n, tabs, active: tabs.some((t3) => t3.id === n.active) ? n.active : tabs[0] ? tabs[0].id : "" };
-    };
-    lay = dedup(lay);
-    const prune = (n) => {
-      if (n.type === "split") {
-        const a = prune(n.a), b2 = prune(n.b);
-        if (!a) return b2;
-        if (!b2) return a;
-        return { ...n, a, b: b2 };
-      }
-      return n.tabs.length ? n : null;
-    };
-    lay = prune(lay) || newLayout();
-    if (!vimTab(lay)) {
-      const first = panes(lay)[0];
-      lay = mapNode(lay, first.id, (n) => {
-        const v2 = newTab("vim", { title: "Vim" });
-        return { ...n, tabs: [v2, ...n.tabs], active: v2.id };
-      });
-    }
-    walk(lay, (n) => {
-      const m = /^[tps](\d+)$/.exec(n.id || "");
-      if (m) seq = Math.max(seq, Number(m[1]));
-      if (n.type === "tabs") for (const t3 of n.tabs) {
-        const k = /^t(\d+)$/.exec(t3.id);
-        if (k) seq = Math.max(seq, Number(k[1]));
-      }
-    });
-    return lay;
-  }
-
-  // src/extra-views.js
-  var EXTRA_VIEWS = [
-    ["tree", "\u968E\u5C64\u30C4\u30EA\u30FC"],
-    ["mindmap", "\u30DE\u30A4\u30F3\u30C9\u30DE\u30C3\u30D7"],
-    ["sunburst", "Sunburst"],
-    ["treemap", "Treemap"],
-    ["matrix", "\u96A3\u63A5\u884C\u5217"],
-    ["sankey", "Sankey"],
-    ["compare", "\u6BD4\u8F03"],
-    ["orphans", "\u5B64\u7ACB\u30FB\u672A\u53C2\u7167\u30FB\u672A\u7D22\u5F15"],
-    ["kanban", "\u30AB\u30F3\u30D0\u30F3"],
-    ["growth", "\u6210\u9577"],
-    ["river", "\u30B9\u30C8\u30FC\u30EA\u30FC\u30EA\u30D0\u30FC"],
-    ["map", "\u5730\u56F3"],
-    ["graph3d", "3D \u30B0\u30E9\u30D5"],
-    ["slides", "\u30B9\u30E9\u30A4\u30C9"],
-    ["whiteboard", "\u30DB\u30EF\u30A4\u30C8\u30DC\u30FC\u30C9"],
-    ["gallery", "\u30AE\u30E3\u30E9\u30EA\u30FC"],
-    ["museum", "\u77E5\u8B58\u306E\u535A\u7269\u9928"],
-    ["palace", "\u8A18\u61B6\u306E\u5BAE\u6BBF"],
-    ["maze", "\u601D\u8003\u306E\u8FF7\u8DEF"],
-    ["timelapse", "\u6210\u9577\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3"],
-    ["ideas", "\u30A2\u30A4\u30C7\u30A2\u5408\u6210\u5668"],
-    ["hypotheses", "\u4EEE\u8AAC\u5B9F\u9A13\u5BA4"],
-    ["debate", "\u601D\u8003\u306E\u5BFE\u6226"]
+  // src/mandala.js
+  var KINDS = [
+    ["index", "\u7D22\u5F15"],
+    ["group", "\u30B0\u30EB\u30FC\u30D7"],
+    ["parent", "\u89AA"],
+    ["context", "\u6587\u8108"],
+    ["cite", "\u5F15\u7528"],
+    ["back", "BackLink"],
+    ["child", "\u5B50"],
+    ["related", "\u95A2\u9023"],
+    ["pred", "\u4E88\u6E2C\u95A2\u9023"],
+    ["note", "\u30CE\u30FC\u30C8"]
   ];
-  var EXTRA_KEYS = new Set(EXTRA_VIEWS.map((v2) => v2[0]));
-  var extraTitle = (key) => (EXTRA_VIEWS.find((v2) => v2[0] === key) || [key, key])[1];
-
-  // src/palette-core.js
-  function score(query, text) {
-    const q2 = query.toLowerCase(), s15 = text.toLowerCase();
-    if (!q2) return 0;
-    let pos = 0, total = 0, prev = -2;
-    for (const ch of q2) {
-      const k = s15.indexOf(ch, pos);
-      if (k < 0) return -1;
-      total += 10 + (k === prev + 1 ? 15 : 0) + (k === 0 || /[\s:_\-/（(]/.test(s15[k - 1]) ? 10 : 0);
-      prev = k;
-      pos = k + 1;
-    }
-    return total - Math.floor(s15.length / 4);
-  }
-  function rank(items, query, limit = 60) {
-    const terms = query.trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return items.slice(0, limit);
-    const out = [];
-    items.forEach((it, i) => {
-      const hay = it.label + " " + (it.keywords || "") + " " + (it.group || "");
-      let sum = 0;
-      for (const t3 of terms) {
-        const a = score(t3, it.label), b2 = score(t3, hay);
-        const best = Math.max(a >= 0 ? a + 20 : -1, b2);
-        if (best < 0) {
-          sum = -1;
-          break;
-        }
-        sum += best;
+  var DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa" };
+  var LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d" };
+  var BG_DARK = ["#2d3b52", "#43304f", "#2f4a3a", "#4f3f2b", "#4f2f36", "#2b4a4d", "#4a4a2b", "#3d3d4a"];
+  var BG_LIGHT = ["#e3edfb", "#f1e6f7", "#e4f3e8", "#f8eddc", "#f8e3e8", "#dff1f2", "#f3f1d6", "#e9e9ee"];
+  function createMandala(root, { onCell }) {
+    let last3 = null;
+    root.classList.add("mandala");
+    const head = document.createElement("div");
+    head.className = "m-head";
+    const board = document.createElement("div");
+    board.className = "m-board";
+    const foot = document.createElement("div");
+    foot.className = "m-foot";
+    const legend = document.createElement("div");
+    legend.className = "m-legend";
+    root.append(head, board, foot, legend);
+    const light = () => document.documentElement.classList.contains("theme-light");
+    const colors = () => light() ? LIGHT : DARK;
+    function drawLegend() {
+      legend.textContent = "";
+      const c = colors();
+      for (const [k, label] of KINDS) {
+        const s15 = document.createElement("span");
+        s15.textContent = label;
+        s15.style.color = c[k];
+        legend.appendChild(s15);
       }
-      if (sum >= 0) out.push({ it, sum, i });
-    });
-    return out.sort((x, y) => y.sum - x.sum || x.i - y.i).slice(0, limit).map((o2) => o2.it);
-  }
-
-  // src/panes.js
-  var KIND_LABEL = { vim: "Vim", index: "\u4E00\u89A7", analysis: "\u5206\u6790", cards: "\u30AB\u30FC\u30C9", table: "\u30C6\u30FC\u30D6\u30EB", timeline: "\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3", graph: "\u30B0\u30E9\u30D5", fznav: "\u756A\u53F7\u30CA\u30D3", search: "\u691C\u7D22", note: "\u30CE\u30FC\u30C8", v2: "\u8FFD\u52A0\u30D3\u30E5\u30FC", features: "\u6A5F\u80FD\u4E00\u89A7" };
-  var PAGES = { index: "index.html", analysis: "analysis.html", cards: "cards.html", table: "table.html", timeline: "timeline.html", graph: "graph.html", fznav: "fznav.html", search: "search.html" };
-  var VIEW_KINDS = ["cards", "table", "timeline", "graph", "fznav", "analysis", "search", "index"];
-  function pageFor(tab) {
-    const p = tab.params || {};
-    if (tab.kind === "note") return (p.rel || "index.md").replace(/\.md$/i, ".html").split("/").map(encodeURIComponent).join("/");
-    if (tab.kind === "v2") return EXTRA_KEYS.has(p.key) ? `${p.key}.html` : "views.html";
-    const base2 = PAGES[tab.kind] || "index.html";
-    if (tab.kind === "graph" && p.n) return `${base2}#n=${encodeURIComponent(p.n)}&depth=${p.depth || 1}`;
-    if (tab.kind === "fznav" && p.id) return `${base2}#id=${encodeURIComponent(p.id)}`;
-    if (tab.kind === "search" && p.q) return `${base2}#q=${encodeURIComponent(p.q)}`;
-    return base2;
-  }
-  function createPanes({ root, stageEl, gui: gui2, onNote, onResize, onChange, featureItems }) {
-    let layout = newLayout();
-    const closed = createClosedStack();
-    let focusPane = panes(layout)[0].id;
-    let siteUrl = "";
-    let sig = "";
-    let saveTimer = null;
-    const els = /* @__PURE__ */ new Map();
-    const paneEls = /* @__PURE__ */ new Map();
-    const splitEls = /* @__PURE__ */ new Map();
-    const h3 = (tag, cls, text) => {
-      const e = document.createElement(tag);
-      if (cls) e.className = cls;
-      if (text != null) e.textContent = text;
-      return e;
-    };
-    function save() {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        gui2.saveWorkspace(JSON.stringify({ version: 1, layout, closed: closed.toJSON() }));
-      }, 500);
     }
-    function changed() {
-      render2();
-      save();
-      onChange && onChange(layout);
-    }
-    async function ensureSite(force) {
-      const r = await gui2.viewSite(!!force);
-      if (!r.ok) throw new Error(r.error || "\u30D3\u30E5\u30FC\u306E\u5143\u306B\u306A\u308B\u30B5\u30A4\u30C8\u3092\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F");
-      siteUrl = r.url;
-      return siteUrl;
-    }
-    function makeEl(tab) {
-      if (tab.kind === "vim") return { el: stageEl, loaded: true };
-      if (tab.kind === "features") return makeFeatures(tab);
-      const el2 = h3("div", "viewbox");
-      const strip = h3("div", "viewstrip");
-      const refresh2 = h3("button", "", "\u66F4\u65B0");
-      refresh2.type = "button";
-      refresh2.title = "\u30CE\u30FC\u30C8\u306E\u6700\u65B0\u306E\u72B6\u614B\u3067\u30D3\u30E5\u30FC\u3092\u4F5C\u308A\u76F4\u3059";
-      refresh2.addEventListener("click", async () => {
-        try {
-          await ensureSite(true);
-          reloadAll();
-        } catch (e) {
-          setMsg(entry, String(e.message || e));
+    function render2(m) {
+      last3 = m;
+      const n = m.size;
+      head.textContent = m.status || "";
+      foot.textContent = m.info || "";
+      board.textContent = "";
+      board.style.setProperty("--n", String(n));
+      board.classList.toggle("n9", n === 9);
+      const c = colors();
+      const bgs = light() ? BG_LIGHT : BG_DARK;
+      m.cells.forEach((row, r) => row.forEach((cell2, col) => {
+        const el2 = document.createElement("div");
+        el2.className = "m-cell role-" + cell2.role;
+        el2.dataset.r = String(r);
+        el2.dataset.c = String(col);
+        if (n === 9) {
+          if (col % 3 === 0) el2.classList.add("bl");
+          if (r % 3 === 0) el2.classList.add("bt");
+          if (col === 8) el2.classList.add("br");
+          if (r === 8) el2.classList.add("bb");
         }
-      });
-      strip.appendChild(refresh2);
-      if (tab.kind === "note") {
-        const edit = h3("button", "", "\u7DE8\u96C6\uFF08Vim\uFF09\u3067\u958B\u304F");
-        edit.type = "button";
-        edit.addEventListener("click", () => onNote && onNote((tab.params.rel || "").replace(/\.html$/i, ".md")));
-        strip.appendChild(edit);
-      }
-      const msg = h3("div", "viewmsg", "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026");
-      const frame = document.createElement("iframe");
-      frame.className = "viewframe";
-      frame.name = tab.kind === "note" ? "gnosis:read" : "gnosis:open";
-      frame.setAttribute("title", KIND_LABEL[tab.kind] || tab.kind);
-      el2.append(strip, msg, frame);
-      const entry = { el: el2, frame, msg, loaded: false, tab };
-      return entry;
-    }
-    function makeFeatures(tab) {
-      const el2 = h3("div", "viewbox featbox");
-      const head = h3("div", "feathead");
-      const input = document.createElement("input");
-      input.type = "search";
-      input.className = "featsearch";
-      input.placeholder = "\u6A5F\u80FD\u3092\u691C\u7D22\uFF08\u4F8B: \u30B0\u30E9\u30D5 / \u5206\u5272 / \u30B9\u30DE\u30DB / \u30BF\u30B9\u30AF\uFF09";
-      input.setAttribute("aria-label", "\u6A5F\u80FD\u3092\u691C\u7D22");
-      const hint = h3("div", "feathint", "\u9805\u76EE\u3092\u30AF\u30EA\u30C3\u30AF\u3059\u308B\u3068\u5B9F\u884C\u3057\u307E\u3059\u3002\u30D3\u30E5\u30FC\u306F\u65B0\u3057\u3044\u30BF\u30D6\u3067\u958B\u304D\u3001Vim \u306E\u30B3\u30DE\u30F3\u30C9\u306F Vim \u306B\u5165\u529B\u3057\u307E\u3059\u3002\uFF08\u30B3\u30DE\u30F3\u30C9\u30D1\u30EC\u30C3\u30C8\u306F Ctrl+Shift+P\uFF09");
-      head.append(input, hint);
-      const list = h3("div", "featlist");
-      el2.append(head, list);
-      let items = [];
-      function draw() {
-        const q2 = input.value.trim();
-        const shown = q2 ? rank(items, q2, 2e3) : items;
-        list.textContent = "";
-        const groups = /* @__PURE__ */ new Map();
-        for (const it of shown) {
-          if (!groups.has(it.group)) groups.set(it.group, []);
-          groups.get(it.group).push(it);
-        }
-        if (!shown.length) list.appendChild(h3("div", "featnone", "\u898B\u3064\u304B\u308A\u307E\u305B\u3093"));
-        for (const [g, its] of groups) {
-          const d = document.createElement("details");
-          d.className = "featgroup";
-          d.open = !!q2 || g !== "Vim";
-          d.appendChild(h3("summary", "", `${g}\uFF08${its.length}\uFF09`));
-          const grid = h3("div", "featgrid");
-          for (const it of its) {
-            const b2 = h3("button", "featitem", it.label);
-            b2.type = "button";
-            b2.title = it.label;
-            b2.addEventListener("click", async () => {
-              try {
-                await it.run();
-                hint.textContent = "\u5B9F\u884C\u3057\u307E\u3057\u305F: " + it.label;
-              } catch (e) {
-                hint.textContent = "\u5B9F\u884C\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e);
-              }
-            });
-            grid.appendChild(b2);
+        const sel2 = m.cur && m.cur[0] === r && m.cur[1] === col;
+        if (sel2) el2.classList.add("sel");
+        if (cell2.role === "center") el2.classList.add("ctr");
+        if (cell2.t) {
+          const color = c[cell2.k] || c.note;
+          if (cell2.dup) {
+            el2.style.background = color;
+            el2.style.color = light() ? "#fff" : "#1a1a1a";
+            el2.classList.add("dup");
+          } else {
+            el2.style.color = color;
+            if (cell2.bgi >= 0) el2.style.background = bgs[cell2.bgi];
           }
-          d.appendChild(grid);
-          list.appendChild(d);
-        }
-      }
-      async function refresh2() {
-        try {
-          items = featureItems ? await featureItems() : [];
-        } catch {
-          items = [];
-        }
-        draw();
-      }
-      input.addEventListener("input", draw);
-      refresh2();
-      return { el: el2, loaded: true, tab, features: true, refresh: refresh2 };
-    }
-    function setMsg(entry, text) {
-      entry.msg.textContent = text;
-      entry.msg.hidden = !text;
-    }
-    async function load(tab) {
-      const entry = els.get(tab.id);
-      if (!entry || entry.loaded || tab.kind === "vim" || tab.kind === "features") return;
-      entry.loaded = true;
-      try {
-        const base2 = await ensureSite(false);
-        entry.frame.src = base2 + pageFor(tab);
-        entry.frame.addEventListener("load", () => setMsg(entry, ""), { once: true });
-      } catch (e) {
-        entry.loaded = false;
-        setMsg(entry, "\u30D3\u30E5\u30FC\u3092\u4F5C\u308C\u307E\u305B\u3093\u3067\u3057\u305F: " + String(e && e.message || e));
-      }
-    }
-    function reloadAll() {
-      for (const [id2, e] of els) {
-        if (e.frame && e.loaded) {
-          const f = findTab(layout, id2);
-          if (f) e.frame.src = siteUrl + pageFor(f.tab);
-        }
-      }
-    }
-    window.addEventListener("message", (e) => {
-      const d = e.data;
-      if (!d || d.gnosis !== "open" || typeof d.url !== "string") return;
-      let ok = false;
-      for (const [, v2] of els) if (v2.frame && v2.frame.contentWindow === e.source) ok = true;
-      if (!ok || !siteUrl || !d.url.startsWith(siteUrl)) return;
-      const rel = decodeURIComponent(d.url.slice(siteUrl.length).split("#")[0]).replace(/\.html$/i, ".md");
-      if (rel && !rel.includes("..")) onNote && onNote(rel);
-    });
-    const structureSig = (n) => n.type === "split" ? `S${n.id}${n.dir}(${structureSig(n.a)}|${structureSig(n.b)})` : `P${n.id}`;
-    function rebuild() {
-      for (const [, e] of els) if (e.el.parentNode) e.el.parentNode.removeChild(e.el);
-      root.textContent = "";
-      paneEls.clear();
-      splitEls.clear();
-      root.appendChild(build(layout));
-    }
-    function build(n) {
-      if (n.type === "tabs") {
-        const pane = h3("div", "pane");
-        pane.dataset.paneId = n.id;
-        const bar = h3("div", "tabbar");
-        const body = h3("div", "panebody");
-        const zone = h3("div", "dropzone");
-        zone.hidden = true;
-        body.appendChild(zone);
-        pane.append(bar, body);
-        paneEls.set(n.id, { pane, bar, body, zone });
-        pane.addEventListener("mousedown", () => {
-          focusPane = n.id;
-          markFocus();
-        }, true);
-        wireDrop(n.id, bar, body, zone);
-        return pane;
-      }
-      const split = h3("div", "split " + n.dir);
-      const a = build(n.a), b2 = build(n.b);
-      const splitter = h3("div", "splitter " + n.dir);
-      splitter.dataset.splitId = n.id;
-      split.append(a, splitter, b2);
-      splitEls.set(n.id, { split, a, b: b2, splitter });
-      wireSplitter(n, split, splitter);
-      return split;
-    }
-    function markFocus() {
-      for (const [id2, p] of paneEls) p.pane.classList.toggle("focus", id2 === focusPane && paneEls.size > 1);
-    }
-    function render2() {
-      const s15 = structureSig(layout);
-      if (s15 !== sig) {
-        rebuild();
-        sig = s15;
-      }
-      if (!paneEls.has(focusPane)) focusPane = panes(layout)[0].id;
-      const solo = paneEls.size === 1 && panes(layout)[0].tabs.length === 1;
-      root.classList.toggle("solo", solo);
-      walk(layout, (n) => {
-        if (n.type !== "split") return;
-        const e = splitEls.get(n.id);
-        if (!e) return;
-        e.a.style.flex = `0 0 calc(${n.ratio * 100}% - 3px)`;
-        e.b.style.flex = "1 1 0";
-      });
-      for (const pane of panes(layout)) {
-        const pe2 = paneEls.get(pane.id);
-        renderBar(pane, pe2);
-        for (const tab of pane.tabs) {
-          let ent = els.get(tab.id);
-          if (!ent) {
-            ent = makeEl(tab);
-            els.set(tab.id, ent);
+          if (cell2.pt && m.nums) {
+            const p = document.createElement("div");
+            p.className = "m-pt";
+            p.textContent = cell2.pt;
+            el2.appendChild(p);
           }
-          if (ent.el.parentNode !== pe2.body) pe2.body.appendChild(ent.el);
-          const visible = pane.active === tab.id;
-          ent.el.style.display = visible ? "" : "none";
-          if (tab.kind === "vim") {
-            ent.el.classList.toggle("hidden-tab", !visible);
-          }
-          if (visible) load(tab);
+          const t3 = document.createElement("div");
+          t3.className = "m-t";
+          t3.textContent = (cell2.n > 0 && m.nums ? cell2.n + " " : "") + cell2.t;
+          el2.appendChild(t3);
         }
-      }
-      const live = new Set(panes(layout).flatMap((p) => p.tabs.map((t3) => t3.id)));
-      for (const [id2, e] of els) if (!live.has(id2)) {
-        if (e.el !== stageEl && e.el.parentNode) e.el.parentNode.removeChild(e.el);
-        if (e.el !== stageEl) els.delete(id2);
-      }
-      markFocus();
-      onResize && requestAnimationFrame(() => onResize());
-    }
-    function renderBar(pane, pe2) {
-      pe2.bar.textContent = "";
-      for (const tab of pane.tabs) {
-        const t3 = h3("div", "tab" + (pane.active === tab.id ? " active" : "") + (tab.pinned ? " pinned" : ""));
-        t3.draggable = true;
-        t3.dataset.tabId = tab.id;
-        t3.title = KIND_LABEL[tab.kind] || tab.kind;
-        t3.appendChild(h3("span", "tabtitle", (tab.pinned ? "\u{1F4CC} " : "") + (tab.title || KIND_LABEL[tab.kind] || tab.kind)));
-        if (tab.kind !== "vim") {
-          const x = h3("button", "tabclose", "\xD7");
-          x.type = "button";
-          x.title = tab.pinned ? "\u56FA\u5B9A\u3055\u308C\u3066\u3044\u307E\u3059\uFF08\u53F3\u30AF\u30EA\u30C3\u30AF\u3067\u89E3\u9664\uFF09" : "\u9589\u3058\u308B";
-          x.disabled = !!tab.pinned;
-          x.addEventListener("click", (e) => {
-            e.stopPropagation();
-            closeTab2(tab.id);
-          });
-          t3.appendChild(x);
-        }
-        t3.addEventListener("click", () => {
-          focusPane = pane.id;
-          layout = activateTab(layout, tab.id);
-          changed();
-        });
-        t3.addEventListener("auxclick", (e) => {
-          if (e.button === 1) closeTab2(tab.id);
-        });
-        t3.addEventListener("contextmenu", (e) => {
+        el2.addEventListener("click", () => onCell(r, col, false));
+        el2.addEventListener("dblclick", (e) => {
           e.preventDefault();
-          menu(e.clientX, e.clientY, tabMenu(tab, pane));
+          onCell(r, col, true);
         });
-        t3.addEventListener("dragstart", (e) => {
-          e.dataTransfer.setData("text/gnosis-tab", tab.id);
-          e.dataTransfer.effectAllowed = "move";
-        });
-        pe2.bar.appendChild(t3);
-      }
-      const plus2 = h3("button", "tabplus", "\uFF0B");
-      plus2.type = "button";
-      plus2.title = "\u30D3\u30E5\u30FC\u3092\u958B\u304F";
-      plus2.addEventListener("click", (e) => {
-        const r = plus2.getBoundingClientRect();
-        menu(r.left, r.bottom, [{ label: "\u2630 \u6A5F\u80FD\u4E00\u89A7", run: () => {
-          focusPane = pane.id;
-          openFeatures();
-        } }, "-", ...VIEW_KINDS.map((k) => ({ label: KIND_LABEL[k], run: () => {
-          focusPane = pane.id;
-          openView(k);
-        } })), "-", { label: "\u305D\u306E\u4ED6\u306E\u30D3\u30E5\u30FC\u2026", run: () => {
-          focusPane = pane.id;
-          extraMenu(r.left, r.bottom);
-        } }]);
-        e.stopPropagation();
-      });
-      pe2.bar.appendChild(plus2);
+        board.appendChild(el2);
+      }));
+      drawLegend();
     }
-    function menu(x, y, items) {
-      document.querySelectorAll(".ctxmenu").forEach((m2) => m2.remove());
-      const m = h3("div", "ctxmenu");
-      m.style.left = x + "px";
-      m.style.top = y + "px";
-      for (const it of items) {
-        if (it === "-") {
-          m.appendChild(h3("div", "sep"));
-          continue;
-        }
-        const b2 = h3("button", "", it.label);
-        b2.type = "button";
-        b2.disabled = !!it.disabled;
-        b2.addEventListener("click", () => {
-          m.remove();
-          it.run();
-        });
-        m.appendChild(b2);
-      }
-      document.body.appendChild(m);
-      m.style.maxHeight = window.innerHeight - 16 + "px";
-      const r = m.getBoundingClientRect();
-      if (r.bottom > window.innerHeight - 8) m.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
-      if (r.right > window.innerWidth - 8) m.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
-      const away = (e) => {
-        if (!m.contains(e.target)) {
-          m.remove();
-          document.removeEventListener("mousedown", away, true);
-        }
-      };
-      setTimeout(() => document.addEventListener("mousedown", away, true), 0);
-    }
-    function tabMenu(tab, pane) {
-      const others = panes(layout).filter((p) => p.id !== pane.id);
-      return [
-        { label: tab.pinned ? "\u56FA\u5B9A\u3092\u89E3\u9664" : "\u30BF\u30D6\u3092\u56FA\u5B9A", run: () => {
-          layout = setPinned(layout, tab.id, !tab.pinned);
-          changed();
-        } },
-        { label: "\u9589\u3058\u308B", disabled: tab.kind === "vim" || tab.pinned, run: () => closeTab2(tab.id) },
-        "-",
-        { label: "\u53F3\u306B\u5206\u5272", disabled: pane.tabs.length < 2, run: () => {
-          layout = splitWithTab(layout, pane.id, "row", tab.id);
-          changed();
-        } },
-        { label: "\u4E0B\u306B\u5206\u5272", disabled: pane.tabs.length < 2, run: () => {
-          layout = splitWithTab(layout, pane.id, "col", tab.id);
-          changed();
-        } },
-        ...others.map((p, i) => ({ label: `\u30DA\u30A4\u30F3 ${panes(layout).findIndex((q2) => q2.id === p.id) + 1} \u3078\u79FB\u3059`, run: () => {
-          layout = moveTab(layout, tab.id, p.id);
-          changed();
-        } }))
-      ];
-    }
-    function dropZone(e, body) {
-      const r = body.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-      if (x < 0.25) return "left";
-      if (x > 0.75) return "right";
-      if (y < 0.25) return "top";
-      if (y > 0.75) return "bottom";
-      return "center";
-    }
-    function wireDrop(paneId, bar, body, zone) {
-      const isTab = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("text/gnosis-tab");
-      bar.addEventListener("dragover", (e) => {
-        if (isTab(e)) e.preventDefault();
-      });
-      bar.addEventListener("drop", (e) => {
-        if (!isTab(e)) return;
-        e.preventDefault();
-        const id2 = e.dataTransfer.getData("text/gnosis-tab");
-        const tabs = [...bar.querySelectorAll(".tab")];
-        let index = tabs.length;
-        for (let i = 0; i < tabs.length; i++) {
-          const r = tabs[i].getBoundingClientRect();
-          if (e.clientX < r.left + r.width / 2) {
-            index = i;
-            break;
-          }
-        }
-        layout = moveTab(layout, id2, paneId, index);
-        changed();
-      });
-      body.addEventListener("dragover", (e) => {
-        if (!isTab(e)) return;
-        e.preventDefault();
-        const z2 = dropZone(e, body);
-        zone.hidden = false;
-        zone.dataset.zone = z2;
-      });
-      body.addEventListener("dragleave", (e) => {
-        if (!body.contains(e.relatedTarget)) zone.hidden = true;
-      });
-      body.addEventListener("drop", (e) => {
-        if (!isTab(e)) return;
-        e.preventDefault();
-        zone.hidden = true;
-        const id2 = e.dataTransfer.getData("text/gnosis-tab");
-        const z2 = dropZone(e, body);
-        if (z2 === "center") layout = moveTab(layout, id2, paneId);
-        else layout = splitWithTab(layout, paneId, z2 === "left" || z2 === "right" ? "row" : "col", id2, z2 === "left" || z2 === "top" ? "before" : "after");
-        changed();
-      });
-    }
-    function wireSplitter(n, split, splitter) {
-      splitter.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        const r = split.getBoundingClientRect();
-        const move = (ev) => {
-          const ratio = n.dir === "row" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
-          layout = setRatio(layout, n.id, ratio);
-          const cur = splitEls.get(n.id);
-          const rr2 = setRatio(layout, n.id, ratio);
-          let val = ratio;
-          walk(rr2, (x) => {
-            if (x.id === n.id) val = x.ratio;
-          });
-          cur.a.style.flex = `0 0 calc(${val * 100}% - 3px)`;
-        };
-        const up = () => {
-          document.removeEventListener("mousemove", move, true);
-          document.removeEventListener("mouseup", up, true);
-          save();
-          onResize && onResize();
-        };
-        document.addEventListener("mousemove", move, true);
-        document.addEventListener("mouseup", up, true);
-      });
-    }
-    function openFeatures() {
-      openView("features", {}, "\u6A5F\u80FD\u4E00\u89A7");
-    }
-    function openExtra(key) {
-      openView("v2", { key }, extraTitle(key));
-    }
-    function extraMenu(x, y) {
-      menu(x, y, EXTRA_VIEWS.map(([k, t3]) => ({ label: t3, run: () => {
-        openExtra(k);
-      } })));
-    }
-    function openView(kind, params = {}, title = "") {
-      layout = openTab(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[0].id, newTab(kind, { title: title || KIND_LABEL[kind] || kind, params }));
-      changed();
-    }
-    function closeTab2(id2) {
-      const r = closeTab(layout, id2);
-      if (!r.closed) return false;
-      layout = r.layout;
-      closed.push(r.closed);
-      changed();
-      return true;
-    }
-    function reopenClosed() {
-      const c = closed.pop();
-      if (!c) return false;
-      layout = reopen(layout, c, paneEls.has(focusPane) ? focusPane : void 0);
-      changed();
-      return true;
-    }
-    function splitFocused(dir, kind = "cards") {
-      const pane = findPane(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[0].id);
-      layout = splitPane(layout, pane.id, dir, newTab(kind, { title: KIND_LABEL[kind] || kind }));
-      changed();
-    }
-    function unsplitFocused() {
-      if (panes(layout).length < 2) return false;
-      layout = unsplit(layout, paneEls.has(focusPane) ? focusPane : panes(layout)[1].id);
-      changed();
-      return true;
-    }
-    function cycle(dir) {
-      const pane = findPane(layout, focusPane) || panes(layout)[0];
-      const i = pane.tabs.findIndex((t3) => t3.id === pane.active);
-      const next = pane.tabs[(i + dir + pane.tabs.length) % pane.tabs.length];
-      layout = activateTab(layout, next.id);
-      changed();
-    }
-    function showVim() {
-      const v2 = vimTab(layout);
-      if (v2) {
-        focusPane = findTab(layout, v2.id).pane.id;
-        layout = activateTab(layout, v2.id);
-        changed();
-      }
-    }
-    function setNoteTab(rel) {
-      openView("note", { rel }, rel.replace(/\.md$/i, "").split("/").pop());
-    }
-    async function restore2() {
-      try {
-        const text = await gui2.loadWorkspace();
-        if (text) {
-          const o2 = JSON.parse(text);
-          layout = restore(o2.layout);
-          closed.load(o2.closed);
-        }
-      } catch {
-        layout = newLayout();
-      }
-      focusPane = panes(layout)[0].id;
-      render2();
-    }
-    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => {
-      onResize && onResize();
-    }).observe(root);
-    render2();
-    return {
-      getLayout: () => layout,
-      panesCount: () => paneEls.size,
-      closedCount: () => closed.size(),
-      openView,
-      openExtra,
-      openFeatures,
-      closeTab: closeTab2,
-      reopenClosed,
-      splitFocused,
-      unsplitFocused,
-      cycle,
-      showVim,
-      setNoteTab,
-      restore: restore2,
-      save,
-      activeKind: () => {
-        const p = findPane(layout, focusPane) || panes(layout)[0];
-        return (findTab(layout, p.active) || {}).tab?.kind || "";
-      },
-      focusPaneId: () => focusPane,
-      activateTab: (id2) => {
-        layout = activateTab(layout, id2);
-        changed();
-      },
-      reloadViews: async () => {
-        await ensureSite(true);
-        reloadAll();
-      }
-    };
+    return { render: render2, rerender: () => last3 && render2(last3), el: root };
   }
 
   // src/app.js
@@ -35179,25 +33999,18 @@ ${h3.join(`
   var term = null;
   var fit = null;
   var view2 = null;
-  var guiEdit = null;
-  var panes2 = null;
+  var mandala = null;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
   var expanded = false;
   var collapseTimer = null;
-  function fullRowsPx() {
-    return cell.h * term.rows;
-  }
   function layoutTerm() {
-    $3("term").style.height = fullRowsPx() + "px";
-    const stripH = cell.h * STRIP_ROWS;
-    document.documentElement.style.setProperty("--strip-h", stripH + "px");
+    $3("term").style.height = cell.h * term.rows + "px";
+    document.documentElement.style.setProperty("--strip-h", cell.h * STRIP_ROWS + "px");
   }
   function measureCell() {
     const screen = term.element?.querySelector(".xterm-screen");
-    if (screen && term.rows && term.cols) {
-      cell = { w: screen.clientWidth / term.cols, h: screen.clientHeight / term.rows };
-    }
+    if (screen && term.rows && term.cols) cell = { w: screen.clientWidth / term.cols, h: screen.clientHeight / term.rows };
   }
   function fitTerm() {
     const wrap = $3("termwrap");
@@ -35205,9 +34018,7 @@ ${h3.join(`
     wrap.classList.add("expanded");
     $3("term").style.height = "100%";
     const dim = fit.proposeDimensions();
-    if (dim && dim.cols > 10 && dim.rows > 3) {
-      if (dim.cols !== term.cols || dim.rows !== term.rows) term.resize(dim.cols, dim.rows);
-    }
+    if (dim && dim.cols > 10 && dim.rows > 3 && (dim.cols !== term.cols || dim.rows !== term.rows)) term.resize(dim.cols, dim.rows);
     measureCell();
     layoutTerm();
     if (!was) wrap.classList.remove("expanded");
@@ -35288,27 +34099,17 @@ ${h3.join(`
       }
     }
     view2?.refresh?.();
+    mandala?.rerender?.();
   }
   function applyState(s15) {
     applyLook(s15);
-    if (guiEdit && guiEdit.isOn()) {
-      last2 = { ...last2, file: s15.file !== void 0 ? s15.file : last2.file, bt: s15.bt !== void 0 ? s15.bt : last2.bt };
-      guiEdit.onVimState(s15);
-      return;
-    }
-    const prevCur = last2.cur;
     last2 = { ...last2, ...s15, lines: void 0 };
-    if (viewInCmd) {
-      if ((s15.mode || "n")[0] === "c") viewSawCmd = true;
-      else if (viewSawCmd) viewInCmd = false;
-    }
     const m = (s15.mode || "n")[0];
-    const el2 = $3("mode");
-    const showView = viewOnly && !needsTerminal(s15);
-    el2.textContent = showView ? "VIEW" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
-    if (last2.copyStack) el2.textContent += " \xB7 COPY STACK";
-    if (last2.linkSource) el2.textContent += " \xB7 LINK SOURCE";
-    el2.className = "mode " + (showView ? "viewonly" : MODE_CLASS[m] || "normal");
+    const md = s15.mandala && s15.mandala.cells ? s15.mandala : null;
+    const mEl = $3("mode");
+    mEl.textContent = md && s15.focus === "mandala" && m === "n" ? "MANDALA" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
+    if (last2.copyStack) mEl.textContent += " \xB7 COPY STACK";
+    mEl.className = "mode " + (MODE_CLASS[m] || "normal");
     $3("file").textContent = s15.file ? s15.file.split("/").pop() : "";
     $3("dirty").textContent = s15.mod ? "\u25CF" : "";
     if (needsTerminal(s15)) {
@@ -35322,232 +34123,32 @@ ${h3.join(`
       }, 120);
     }
     applyOverlay(last2);
-    if (s15.bt === "terminal") return;
-    const fileChanged = viewOnly && s15.file && s15.file !== lastViewFile;
-    if (s15.file) lastViewFile = s15.file;
+    const hasNote = !!s15.file && s15.bt === "";
+    $3("mandala").hidden = !md;
+    $3("main").classList.toggle("with-mandala", !!md);
+    $3("main").classList.toggle("mandala-only", !!md && !hasNote);
+    $3("view").hidden = !!md && !hasNote;
+    if (md) mandala.render(md);
+    if (s15.bt === "terminal" || !hasNote) return;
     view2.setLinkSource(!!last2.linkSource);
     if (s15.lines) {
       view2.setText(s15.lines.join("\n"));
+      view2.setHide(s15.hide || []);
       preloadImages(s15.lines);
     }
-    if (fileChanged) view2.view.scrollDOM.scrollTop = 0;
     if (s15.vtext) view2.setVtext(s15.vtext);
-    if (s15.cur) view2.setVim({ cur: s15.cur, mode: s15.mode || "n", vis: s15.vis });
-    if (viewOnly && s15.cur && prevCur && !viewInCmd && viewFollow > Date.now() && m === "n" && (prevCur[0] !== s15.cur[0] || prevCur[1] !== s15.cur[1])) {
-      viewFollow = 0;
-      view2.revealCursor();
-    }
+    if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis });
   }
   var fitTimer = null;
   function scheduleFit() {
     clearTimeout(fitTimer);
     fitTimer = setTimeout(() => {
       const st3 = $3("stage");
-      if (!term || !st3 || st3.offsetWidth < 50 || st3.offsetHeight < 50 || st3.closest(".hidden-tab")) return;
+      if (!term || !st3 || st3.offsetWidth < 50 || st3.offsetHeight < 50) return;
       const d = fitTerm();
       gui.resize(d.cols, d.rows);
       view2?.refresh?.();
     }, 60);
-  }
-  var vimCmds = null;
-  function paletteItems() {
-    const items = [];
-    const add = (group, label, keywords2, run) => items.push({ group, label, keywords: keywords2, run });
-    add("\u30E2\u30FC\u30C9", "Real Vim \u3067\u7DE8\u96C6", "vim mode \u672C\u7269", () => setMode("vim"));
-    add("\u30E2\u30FC\u30C9", "GUI \u7DE8\u96C6\u30E2\u30FC\u30C9\uFF08Vim \u3092\u4F7F\u308F\u306A\u3044\uFF09", "gui edit editor \u7DE8\u96C6", () => setMode("gui"));
-    add("\u30E2\u30FC\u30C9", "\u95B2\u89A7\u5C02\u7528\u30E2\u30FC\u30C9", "view readonly \u95B2\u89A7", () => setMode("view"));
-    for (const k of VIEW_KINDS) add("\u30D3\u30E5\u30FC", `${KIND_LABEL[k]}\u3092\u958B\u304F`, `${k} view`, () => panes2.openView(k));
-    for (const [k, t3] of EXTRA_VIEWS) add("\u30D3\u30E5\u30FC", `${t3}\u3092\u958B\u304F`, `${k} view \u8FFD\u52A0\u30D3\u30E5\u30FC`, () => panes2.openExtra(k));
-    add("\u30D3\u30E5\u30FC", "\u6A5F\u80FD\u4E00\u89A7\u3092\u958B\u304F", "features list \u4E00\u89A7 \u5168\u6A5F\u80FD", () => panes2.openFeatures());
-    add("\u30D3\u30E5\u30FC", "\u30D3\u30E5\u30FC\u3092\u6700\u65B0\u306E\u72B6\u614B\u306B\u66F4\u65B0", "refresh reload \u66F4\u65B0", () => panes2.reloadViews());
-    add("\u30BF\u30D6", "Vim \u306E\u30BF\u30D6\u3078\u79FB\u308B", "vim tab", () => panes2.showVim());
-    add("\u30BF\u30D6", "\u6B21\u306E\u30BF\u30D6", "next tab", () => panes2.cycle(1));
-    add("\u30BF\u30D6", "\u524D\u306E\u30BF\u30D6", "previous tab", () => panes2.cycle(-1));
-    add("\u30BF\u30D6", "\u9589\u3058\u305F\u30BF\u30D6\u3092\u958B\u304F", "reopen closed tab \u518D\u958B", () => panes2.reopenClosed());
-    add("\u5206\u5272", "\u53F3\u306B\u5206\u5272", "split right row \u5DE6\u53F3", () => panes2.splitFocused("row"));
-    add("\u5206\u5272", "\u4E0B\u306B\u5206\u5272", "split down col \u4E0A\u4E0B", () => panes2.splitFocused("col"));
-    add("\u5206\u5272", "\u5206\u5272\u3092\u89E3\u9664", "unsplit join", () => panes2.unsplitFocused());
-    if (guiEdit.isOn()) {
-      for (const [id2, label, kw] of [
-        ["bold", "\u592A\u5B57", "bold"],
-        ["italic", "\u659C\u4F53", "italic"],
-        ["strike", "\u53D6\u308A\u6D88\u3057\u7DDA", "strike"],
-        ["code", "\u30B3\u30FC\u30C9", "code"],
-        ["h1", "\u898B\u51FA\u3057 1", "heading"],
-        ["h2", "\u898B\u51FA\u3057 2", "heading"],
-        ["h3", "\u898B\u51FA\u3057 3", "heading"],
-        ["bullet", "\u7B87\u6761\u66F8\u304D", "list"],
-        ["number", "\u756A\u53F7\u3064\u304D\u30EA\u30B9\u30C8", "list"],
-        ["task", "\u30C1\u30A7\u30C3\u30AF\u30DC\u30C3\u30AF\u30B9\u306E\u884C", "task"],
-        ["checkbox", "\u30C1\u30A7\u30C3\u30AF\u306E\u5207\u308A\u66FF\u3048", "check"],
-        ["quote", "\u5F15\u7528", "quote"],
-        ["link", "\u30EA\u30F3\u30AF\u3092\u5165\u308C\u308B", "link"],
-        ["openLink", "\u30AB\u30FC\u30BD\u30EB\u306E\u30EA\u30F3\u30AF\u3092\u958B\u304F", "open link"],
-        ["undo", "\u5143\u306B\u623B\u3059", "undo"],
-        ["redo", "\u3084\u308A\u76F4\u3059", "redo"],
-        ["save", "\u4FDD\u5B58", "save"]
-      ]) add("\u7DE8\u96C6", label, kw, () => guiEdit.run(id2));
-    }
-    for (const c of vimCmds || []) {
-      items.push({ group: "Vim", label: ":" + c.name, keywords: "vim \u30B3\u30DE\u30F3\u30C9", run: async () => {
-        await setMode("vim");
-        panes2.showVim();
-        await sendVimCommand(c.name, c.nargs === "0");
-      } });
-    }
-    return items;
-  }
-  async function sendVimCommand(name2, run) {
-    gui.write("\x1B");
-    await new Promise((r) => setTimeout(r, 80));
-    gui.write(":" + name2 + (run ? "\r" : " "));
-  }
-  var palSel = 0;
-  var palItems = [];
-  async function openPalette() {
-    const box = $3("palette"), input = $3("palette-input");
-    if (!vimCmds) {
-      try {
-        vimCmds = await gui.vimCommands();
-      } catch {
-        vimCmds = [];
-      }
-    }
-    box.hidden = false;
-    input.value = "";
-    palSel = 0;
-    drawPalette();
-    input.focus();
-  }
-  function closePalette() {
-    $3("palette").hidden = true;
-    if (guiEdit.isOn()) view2.focus();
-    else term.focus();
-  }
-  function drawPalette() {
-    const all = paletteItems();
-    palItems = rank(all, $3("palette-input").value);
-    palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-    const ul2 = $3("palette-list");
-    ul2.textContent = "";
-    palItems.forEach((it, i) => {
-      const li2 = document.createElement("li");
-      li2.className = i === palSel ? "sel" : "";
-      li2.setAttribute("role", "option");
-      const l = document.createElement("span");
-      l.textContent = it.label;
-      const g = document.createElement("span");
-      g.className = "grp";
-      g.textContent = it.group;
-      li2.append(l, g);
-      li2.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        runPalette(i);
-      });
-      ul2.appendChild(li2);
-    });
-    const sel2 = ul2.querySelector(".sel");
-    if (sel2) sel2.scrollIntoView({ block: "nearest" });
-  }
-  async function runPalette(i) {
-    const it = palItems[i];
-    if (!it) return;
-    $3("palette").hidden = true;
-    try {
-      await it.run();
-    } catch (e) {
-      showError(e && e.message || e);
-    }
-  }
-  function initPalette() {
-    const input = $3("palette-input");
-    input.addEventListener("input", () => {
-      palSel = 0;
-      drawPalette();
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        palSel = Math.min(palSel + 1, palItems.length - 1);
-        drawPalette();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        palSel = Math.max(palSel - 1, 0);
-        drawPalette();
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        runPalette(palSel);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        closePalette();
-      }
-    });
-    input.addEventListener("blur", () => {
-      setTimeout(() => {
-        if (!$3("palette").hidden && document.activeElement !== input) $3("palette").hidden = true;
-      }, 150);
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") {
-        e.preventDefault();
-        openPalette();
-      }
-    }, true);
-  }
-  function currentMode() {
-    return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim";
-  }
-  async function setMode(m) {
-    if (m === currentMode()) return true;
-    if (guiEdit.isOn() && !await guiEdit.leave()) return false;
-    if (m === "view") setViewOnly(true);
-    else if (m === "vim") {
-      if (viewOnly) setViewOnly(false);
-      term.focus();
-    } else if (m === "gui") {
-      if (viewOnly) setViewOnly(false);
-      if (!await guiEdit.enter()) {
-        refreshModeUI();
-        return false;
-      }
-    }
-    refreshModeUI();
-    return true;
-  }
-  function refreshModeUI() {
-    const m = currentMode();
-    for (const b2 of document.querySelectorAll("#modes [data-mode]")) b2.setAttribute("aria-pressed", String(b2.dataset.mode === m));
-    const tools = $3("edit-tools");
-    if (tools) tools.hidden = m !== "gui";
-    if (m === "gui") {
-      const el2 = $3("mode");
-      el2.textContent = "EDIT";
-      el2.className = "mode edit";
-      $3("file").textContent = (guiEdit.state().file || "").split("/").pop();
-    }
-  }
-  function initToolbar() {
-    for (const b2 of document.querySelectorAll("#modes [data-mode]")) b2.addEventListener("click", () => setMode(b2.dataset.mode));
-    for (const b2 of document.querySelectorAll("#edit-tools [data-cmd]")) {
-      b2.addEventListener("mousedown", (e) => e.preventDefault());
-      b2.addEventListener("click", () => {
-        guiEdit.run(b2.dataset.cmd);
-      });
-    }
-    for (const b2 of document.querySelectorAll("#view-tools [data-open]")) b2.addEventListener("click", () => panes2.openView(b2.dataset.open));
-    for (const b2 of document.querySelectorAll("#view-tools [data-pane]")) {
-      b2.addEventListener("click", () => {
-        const a = b2.dataset.pane;
-        if (a === "split-row") panes2.splitFocused("row");
-        else if (a === "split-col") panes2.splitFocused("col");
-        else if (a === "unsplit") panes2.unsplitFocused();
-        else if (a === "reopen") panes2.reopenClosed();
-        else if (a === "palette") openPalette();
-        else if (a === "features") panes2.openFeatures();
-      });
-    }
-    initPalette();
-    refreshModeUI();
   }
   var imgCache = /* @__PURE__ */ new Map();
   var imgPending = /* @__PURE__ */ new Map();
@@ -35639,159 +34240,18 @@ ${h3.join(`
     pump();
     return queue.length;
   }
-  var viewOnly = false;
-  var lastViewFile = "";
-  function setViewOnly(on2) {
-    viewOnly = !!on2;
-    $3("view").classList.toggle("view-only", viewOnly);
-    view2.setViewOnly(viewOnly);
-    if (!viewOnly) view2.revealCursor(false);
-    if (!viewOnly) view2.setVim({ cur: last2.cur || [1, 1], mode: last2.mode || "n", vis: last2.vis });
-    applyState({ mode: last2.mode, file: last2.file, bt: last2.bt, popups: last2.popups });
-  }
-  function viewBlocks() {
-    return viewOnly && !viewInCmd && !needsTerminal(last2) && (last2.mode || "n")[0] !== "c";
-  }
-  var VIEW_PASS = /* @__PURE__ */ new Set([
-    "/",
-    "?",
-    "n",
-    "N",
-    "*",
-    "#",
-    "gs",
-    "gm",
-    " ",
-    "	",
-    "\x1B[Z",
-    "\r",
-    "\x7F",
-    "_",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "0",
-    "\\h",
-    "\\H",
-    "\\0",
-    "\\i",
-    "\\d",
-    "\\.",
-    "\\L",
-    "\\gi",
-    "\\r",
-    "\\bu",
-    "\\k",
-    "\\j",
-    "\\J",
-    "\\sc"
-  ]);
-  var VIEW_SCROLL_SEQ = /* @__PURE__ */ new Set(["gg"]);
-  var viewPend = "";
-  var viewInCmd = false;
-  var viewSawCmd = false;
-  var viewFollow = 0;
-  function viewStartSearch(key) {
-    viewFollow = Date.now() + 3e4;
-    if (key === "/" || key === "?") {
-      viewInCmd = true;
-      viewSawCmd = false;
-      setTimeout(() => {
-        if (!viewSawCmd) viewInCmd = false;
-      }, 1500);
-    }
-  }
-  function vimKeyString(e) {
-    if (e.ctrlKey || e.altKey || e.metaKey) return null;
-    switch (e.key) {
-      case "Tab":
-        return e.shiftKey ? "\x1B[Z" : "	";
-      case "Enter":
-        return "\r";
-      case "Backspace":
-        return "\x7F";
-      default:
-        return e.key.length === 1 ? e.key : null;
-    }
-  }
-  function viewOnlyKey(e) {
-    const sc2 = view2.view.scrollDOM;
-    const page = sc2.clientHeight - 60;
-    const by = (dy) => {
-      sc2.scrollTop += dy;
-      return true;
-    };
-    if (e.ctrlKey && !e.altKey) {
-      if (e.key === "d") return by(page / 2);
-      if (e.key === "u") return by(-page / 2);
-      return false;
-    }
-    if (e.altKey || e.metaKey) return false;
-    const ks2 = vimKeyString(e);
-    if (ks2 != null) {
-      const cand = viewPend + ks2;
-      if (VIEW_PASS.has(cand)) {
-        viewPend = "";
-        if ("/?nN*#".includes(cand) && cand.length === 1) viewStartSearch(cand);
-        gui.write(cand);
-        return true;
-      }
-      if (VIEW_SCROLL_SEQ.has(cand)) {
-        viewPend = "";
-        sc2.scrollTop = 0;
-        return true;
-      }
-      const isPrefix = [...VIEW_PASS, ...VIEW_SCROLL_SEQ].some((x) => x.startsWith(cand));
-      if (isPrefix) {
-        viewPend = cand;
-        return true;
-      }
-      const hadPend = viewPend !== "";
-      viewPend = "";
-      if (hadPend) return true;
-    }
-    switch (e.key) {
-      case "j":
-      case "ArrowDown":
-        return by(48);
-      case "k":
-      case "ArrowUp":
-        return by(-48);
-      case "PageDown":
-        return by(page);
-      case "PageUp":
-        return by(-page);
-      case "Home":
-        sc2.scrollTop = 0;
-        return true;
-      case "End":
-      case "G":
-        sc2.scrollTop = sc2.scrollHeight;
-        return true;
-      default:
-        return false;
-    }
-  }
-  function onClick({ pos, link, href, alt, mod }) {
+  function onClick({ pos, link, alt }) {
     if (pos == null) return;
-    if (guiEdit && guiEdit.isOn()) {
-      if (link && href) guiEdit.openAt(pos, href);
-      else if (mod) guiEdit.openAt(pos, "");
-      return;
-    }
     if (alt) link = false;
-    if (viewOnly && !link) return;
     const [l, c] = view2.lineColAt(pos);
     const m = (last2.mode || "n")[0];
-    const mv = `:call cursor(${l},${c})|redraw|echo ""\r`;
+    const toNote = last2.mandala && last2.mandala.cells && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? `call win_gotoid(${last2.mandala.noteWin})|` : "";
+    const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
     if (m === "n") gui.write(mv + (link ? "\r" : ""));
     else if (m === "i") gui.write("" + mv);
+  }
+  function onMandalaCell(r, c, enter) {
+    gui.write(`\x1B:call gnosis#mview#gui_click(${r},${c},${enter ? 1 : 0})|redraw|echo ""\r`);
   }
   function showError(msg) {
     const el2 = $3("err");
@@ -35806,39 +34266,8 @@ ${h3.join(`
   async function boot() {
     window.addEventListener("error", (e) => showError(e.message || e.error));
     window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
-    view2 = createView({
-      parent: $3("view"),
-      getImageURL: imageURL,
-      getImageSize: imageSize,
-      onImageSize,
-      onClick,
-      onCommand: (id2) => guiEdit ? guiEdit.run(id2) : false,
-      onUserChange: (u) => guiEdit && guiEdit.onUserChange(u)
-    });
-    guiEdit = createGuiEdit({ view: view2, gui, $: $3, getLast: () => last2, showError, onChange: () => refreshModeUI() });
-    panes2 = createPanes({
-      root: $3("workspace"),
-      stageEl: $3("stage"),
-      gui,
-      onNote: async (rel) => {
-        const r = await gui.openNote(rel);
-        if (!r.ok) showError(r.error || "\u958B\u3051\u307E\u305B\u3093\u3067\u3057\u305F");
-        else panes2.showVim();
-      },
-      onResize: () => scheduleFit(),
-      // 機能一覧タブの中身(コマンドパレットと同じ項目)。Vim のコマンドの一覧は初回だけ Vim に聞く
-      featureItems: async () => {
-        if (!vimCmds) {
-          try {
-            vimCmds = await gui.vimCommands();
-          } catch {
-            vimCmds = [];
-          }
-        }
-        return paletteItems();
-      }
-    });
-    initToolbar();
+    view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
+    mandala = createMandala($3("mandala"), { onCell: onMandalaCell });
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
       fontSize: 14,
@@ -35854,48 +34283,7 @@ ${h3.join(`
       await document.fonts.ready;
     } catch {
     }
-    let swallowed = false;
-    term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") {
-        const sw = swallowed;
-        if (e.type === "keyup") swallowed = false;
-        return sw ? false : !viewBlocks();
-      }
-      swallowed = false;
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") {
-        e.preventDefault();
-        swallowed = true;
-        setMode(viewOnly ? "vim" : "view");
-        return false;
-      }
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") {
-        e.preventDefault();
-        swallowed = true;
-        setMode("gui");
-        return false;
-      }
-      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "BracketRight" || e.code === "BracketLeft")) {
-        e.preventDefault();
-        swallowed = true;
-        panes2.cycle(e.code === "BracketRight" ? 1 : -1);
-        return false;
-      }
-      if (e.ctrlKey && e.shiftKey && e.code === "KeyP") {
-        e.preventDefault();
-        swallowed = true;
-        return false;
-      }
-      if (viewBlocks()) {
-        swallowed = true;
-        viewOnlyKey(e);
-        return false;
-      }
-      return true;
-    });
-    term.onData((d) => {
-      if (viewBlocks()) return;
-      gui.write(d);
-    });
+    term.onData((d) => gui.write(d));
     gui.onData((d) => term.write(d));
     gui.onState((s15) => {
       try {
@@ -35913,43 +34301,23 @@ ${h3.join(`
       const { cols, rows } = fitTerm();
       gui.start(cols, rows, vaultPath);
       term.focus();
-      panes2.restore().then(() => scheduleFit());
+      scheduleFit();
     });
     window.addEventListener("resize", () => {
       scheduleFit();
     });
     const backToInput = () => {
-      if (document.getElementById("launcher").hidden) {
-        if (guiEdit.isOn()) {
-          if (!document.activeElement || document.activeElement === document.body) view2.focus();
-        } else term.focus();
-      }
+      if (document.getElementById("launcher").hidden) term.focus();
     };
     document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
     window.addEventListener("focus", backToInput);
-    document.addEventListener("keydown", (e) => {
-      if (!guiEdit.isOn() || !e.altKey || e.ctrlKey || e.metaKey) return;
-      if (e.code === "KeyV") {
-        e.preventDefault();
-        setMode("view");
-      } else if (e.code === "KeyE") {
-        e.preventDefault();
-        setMode("vim");
-      }
-    });
     window.__gui = {
       term,
       view: view2,
+      mandala,
       state: () => last2,
       send: (d) => gui.write(d),
       isExpanded: () => expanded,
-      isViewOnly: () => viewOnly,
-      setViewOnly,
-      setMode,
-      currentMode,
-      guiEdit: () => guiEdit,
-      panes: () => panes2,
-      openPalette,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];

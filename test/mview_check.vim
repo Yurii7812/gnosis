@@ -541,11 +541,12 @@ call s:ok('もう一度 # で戻る', s:text() =~# '1 Index' && s:text() =~# '1/
 " 9×9: < > で横に伸ばす・= で正方形・p で右に本文・{ } で外側のページ
 call s:keys('f')
 let s:w0 = len(filter(getbufline(s:st.buf, 1, '$'), 'v:val =~# "┃"')[0])
-call s:keys('>')
-call s:keys('>')
-call s:ok('9×9: > で横に伸びる', s:st.stretch > 1.0, string(get(s:st, 'stretch', 'none')))
+call s:keys(')')
+call s:keys(')')
+call s:ok('9×9: ) で盤面が横に伸びる', s:st.stretch > 1.0, string(get(s:st, 'stretch', 'none')))
 call s:keys('=')
 call s:ok('9×9: = で正方形（伸ばしが 1 に戻る）', s:st.stretch == 1.0, string(s:st.stretch))
+call s:ok('( ) の伸ばしは mandala.json に保存される', join(readfile(gnosis#home#path('mandala.json')), '') =~# '"stretch"', join(readfile(gnosis#home#path('mandala.json')), ''))
 call s:keys('p')
 call s:ok('9×9: p で右にノートの窓が出る（本物の窓）', winnr('$') == 2 && get(s:st, 'pv', 0) == 1, string(winnr('$')))
 call s:keys(' ')
@@ -562,6 +563,27 @@ call s:ok('もう一度 p で右の窓が消える', winnr('$') == 1 && get(s:st
 call s:keys('}')
 call s:ok('} で外側のブロックのページ（ページが 1 つしか無ければ動かない）', s:st.opage >= 0)
 call s:keys('Q')
+
+" ( ) と < > は、閉じて開き直しても（別のセッションでも）前回のまま
+let g:gnosis_mview_restore = 1
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:keys(')')
+call s:keys(')')
+call s:keys('<')
+let s:str1 = s:st.stretch
+let s:ten1 = s:st.tenths
+call s:keys('Q')
+unlet s:st.stretch
+unlet s:st.tenths
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call s:ok('盤面の幅（( )）と画面の幅（< >）を、開き直しても覚えている', s:st.stretch == s:str1 && s:st.tenths == s:ten1 && s:str1 > 1.0, string([s:str1, s:ten1, get(s:st, 'stretch', 'none'), get(s:st, 'tenths', 'none')]))
+call s:keys('=')
+call s:ok('= で盤面は正方形・画面は半々に戻る', s:st.stretch == 1.0 && s:st.tenths == 5, string([s:st.stretch, s:st.tenths]))
+call s:keys('Q')
+let g:gnosis_mview_restore = 0
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

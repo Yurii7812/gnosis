@@ -1,22 +1,20 @@
 // 画面側。Vim（本体）の状態を、マークダウンの見た目で映し、端末の画面は必要なときだけ見せる。
+// 2026-10-24 に作り直して小さくした: ボタン・タブ・分割・コマンドパレット・GUI 編集・閲覧専用モードは無い（Vim にある操作だけ）。
+// あるのは 起動画面（vault の選択）・マークダウンの表示・曼荼羅（アプリ専用の描き方）・端末（Vim の画面）・下のバー。
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
-import { createGuiEdit } from "./guiedit.js";
-import { createPanes, KIND_LABEL, VIEW_KINDS } from "./panes.js";
-import { EXTRA_VIEWS } from "./extra-views.js";
-import { rank } from "./palette-core.js";
+import { createMandala } from "./mandala.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
 
-const STRIP_ROWS = 2; // 普段は端末の下の 2 行（ステータス行・コマンド行/メッセージ）だけ見せる。本文の最後の行は表示側にあるので出さない
+const STRIP_ROWS = 2; // 普段は端末の下の 2 行（ステータス行・コマンド行/メッセージ）だけ見せる
 let term = null;
 let fit = null;
 let view = null;
-let guiEdit = null; // GUI 編集モード（src/guiedit.js）
-let panes = null;   // タブ・分割ペイン（src/panes.js）
+let mandala = null;
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
@@ -24,20 +22,15 @@ let collapseTimer = null;
 
 // ---------------------------------------------------------------- 端末（xterm.js）
 
-function fullRowsPx() { return cell.h * term.rows; }
-
 function layoutTerm() {
   // 端末全体の高さは変えず（Vim の画面の大きさを保つ）、見える範囲だけを切り替える
-  $("term").style.height = fullRowsPx() + "px";
-  const stripH = cell.h * STRIP_ROWS;
-  document.documentElement.style.setProperty("--strip-h", stripH + "px");
+  $("term").style.height = cell.h * term.rows + "px";
+  document.documentElement.style.setProperty("--strip-h", cell.h * STRIP_ROWS + "px");
 }
 
 function measureCell() {
   const screen = term.element?.querySelector(".xterm-screen");
-  if (screen && term.rows && term.cols) {
-    cell = { w: screen.clientWidth / term.cols, h: screen.clientHeight / term.rows };
-  }
+  if (screen && term.rows && term.cols) cell = { w: screen.clientWidth / term.cols, h: screen.clientHeight / term.rows };
 }
 
 function fitTerm() {
@@ -47,9 +40,7 @@ function fitTerm() {
   wrap.classList.add("expanded");
   $("term").style.height = "100%";
   const dim = fit.proposeDimensions();
-  if (dim && dim.cols > 10 && dim.rows > 3) {
-    if (dim.cols !== term.cols || dim.rows !== term.rows) term.resize(dim.cols, dim.rows);
-  }
+  if (dim && dim.cols > 10 && dim.rows > 3 && (dim.cols !== term.cols || dim.rows !== term.rows)) term.resize(dim.cols, dim.rows);
   measureCell();
   layoutTerm();
   if (!was) wrap.classList.remove("expanded");
@@ -65,7 +56,7 @@ function setExpanded(on) {
   term.focus();
 }
 
-// 端末の全面表示のうち、ポップアップの長方形だけを見せる（背景は下のマークダウン表示のまま）
+// 端末の全面表示のうち、ポップアップの長方形だけを見せる（背景は下の表示のまま）
 function applyOverlay(s) {
   const wrap = $("termwrap");
   const scr = document.querySelector("#term .xterm-screen");
@@ -83,14 +74,13 @@ function applyOverlay(s) {
   wrap.style.clipPath = `path('${parts.join("")}')`;
 }
 
-// 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
-// ポップアップ（検索など）だけが理由のときは、背景の表示を変えず、ポップアップの場所にだけ端末を重ねる。
-// 確認・Enter 待ち・シェルなど、端末の画面全体が要る場面は、これまでどおり全面に広げる。
+// ポップアップ（検索など）だけが理由のときは、背景を変えず、ポップアップの場所にだけ端末を重ねる
 function overlayOnly(s) {
   const m = (s.mode || "n")[0];
   return (s.popuppos || []).length > 0 && m !== "r" && m !== "!" && s.mode !== "rm";
 }
 
+// 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
 function needsTerminal(s) {
   const m = (s.mode || "n")[0];
   return s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
@@ -138,29 +128,18 @@ function applyLook(s) {
     }
   }
   view?.refresh?.();
+  mandala?.rerender?.();
 }
 
 function applyState(s) {
   applyLook(s);
-  if (guiEdit && guiEdit.isOn()) {
-    // GUI 編集中は、画面が編集の主体。Vim の状態（別のノートを開いた・保存時の同期で内容が変わった）だけ取り込む
-    last = { ...last, file: s.file !== undefined ? s.file : last.file, bt: s.bt !== undefined ? s.bt : last.bt };
-    guiEdit.onVimState(s);
-    return;
-  }
-  const prevCur = last.cur;
   last = { ...last, ...s, lines: undefined };
-  if (viewInCmd) {
-    if ((s.mode || "n")[0] === "c") viewSawCmd = true;
-    else if (viewSawCmd) viewInCmd = false;
-  }
   const m = (s.mode || "n")[0];
-  const el = $("mode");
-  const showView = viewOnly && !needsTerminal(s);
-  el.textContent = showView ? "VIEW" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
-  if (last.copyStack) el.textContent += " · COPY STACK";
-  if (last.linkSource) el.textContent += " · LINK SOURCE";
-  el.className = "mode " + (showView ? "viewonly" : (MODE_CLASS[m] || "normal"));
+  const md = s.mandala && s.mandala.cells ? s.mandala : null;
+  const mEl = $("mode");
+  mEl.textContent = (md && s.focus === "mandala" && m === "n") ? "MANDALA" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
+  if (last.copyStack) mEl.textContent += " · COPY STACK";
+  mEl.className = "mode " + (MODE_CLASS[m] || "normal");
   $("file").textContent = s.file ? s.file.split("/").pop() : "";
   $("dirty").textContent = s.mod ? "●" : "";
 
@@ -174,161 +153,38 @@ function applyState(s) {
   }
   applyOverlay(last);
 
-  // バッファの内容とカーソルをマークダウンで映す（端末バッファは映さない）
-  if (s.bt === "terminal") return;
-  const fileChanged = viewOnly && s.file && s.file !== lastViewFile;
-  if (s.file) lastViewFile = s.file;
+  // 曼荼羅: 開いていれば左（全画面 9×9 で右の窓が無いときは全面）に描く
+  const hasNote = !!(s.file) && s.bt === "";
+  $("mandala").hidden = !md;
+  $("main").classList.toggle("with-mandala", !!md);
+  $("main").classList.toggle("mandala-only", !!md && !hasNote);
+  $("view").hidden = !!md && !hasNote;
+  if (md) mandala.render(md);
+
+  // ノート（曼荼羅が開いていれば、右の窓のノート）の内容とカーソルをマークダウンで映す
+  if (s.bt === "terminal" || !hasNote) return;
   view.setLinkSource(!!last.linkSource);
-  if (s.lines) { view.setText(s.lines.join("\n")); preloadImages(s.lines); }
-  if (fileChanged) view.view.scrollDOM.scrollTop = 0; // 見るだけのときは別のノートに移ったら先頭から
+  if (s.lines) { view.setText(s.lines.join("\n")); view.setHide(s.hide || []); preloadImages(s.lines); }
   if (s.vtext) view.setVtext(s.vtext);
-  if (s.cur) view.setVim({ cur: s.cur, mode: s.mode || "n", vis: s.vis });
-  // 見るだけで検索して、カーソルが動いたら、その行を出す
-  if (viewOnly && s.cur && prevCur && !viewInCmd && viewFollow > Date.now() && m === "n" && (prevCur[0] !== s.cur[0] || prevCur[1] !== s.cur[1])) {
-    viewFollow = 0;
-    view.revealCursor();
-  }
+  if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis });
 }
 
-// ペインの大きさが変わったら、Vim の端末の大きさを合わせ直す（Vim のタブが見えているときだけ）
+// ペインの大きさが変わったら、Vim の端末の大きさを合わせ直す
 let fitTimer = null;
 function scheduleFit() {
   clearTimeout(fitTimer);
   fitTimer = setTimeout(() => {
     const st = $("stage");
-    if (!term || !st || st.offsetWidth < 50 || st.offsetHeight < 50 || st.closest(".hidden-tab")) return;
+    if (!term || !st || st.offsetWidth < 50 || st.offsetHeight < 50) return;
     const d = fitTerm();
     gui.resize(d.cols, d.rows);
     view?.refresh?.();
   }, 60);
 }
 
-// ---------------------------------------------------------------- コマンドパレット（全部の機能の入口。ボタン・キーと同じ操作を呼ぶ）
-let vimCmds = null;
-function paletteItems() {
-  const items = [];
-  const add = (group, label, keywords, run) => items.push({ group, label, keywords, run });
-  add("モード", "Real Vim で編集", "vim mode 本物", () => setMode("vim"));
-  add("モード", "GUI 編集モード（Vim を使わない）", "gui edit editor 編集", () => setMode("gui"));
-  add("モード", "閲覧専用モード", "view readonly 閲覧", () => setMode("view"));
-  for (const k of VIEW_KINDS) add("ビュー", `${KIND_LABEL[k]}を開く`, `${k} view`, () => panes.openView(k));
-  for (const [k, t] of EXTRA_VIEWS) add("ビュー", `${t}を開く`, `${k} view 追加ビュー`, () => panes.openExtra(k));
-  add("ビュー", "機能一覧を開く", "features list 一覧 全機能", () => panes.openFeatures());
-  add("ビュー", "ビューを最新の状態に更新", "refresh reload 更新", () => panes.reloadViews());
-  add("タブ", "Vim のタブへ移る", "vim tab", () => panes.showVim());
-  add("タブ", "次のタブ", "next tab", () => panes.cycle(1));
-  add("タブ", "前のタブ", "previous tab", () => panes.cycle(-1));
-  add("タブ", "閉じたタブを開く", "reopen closed tab 再開", () => panes.reopenClosed());
-  add("分割", "右に分割", "split right row 左右", () => panes.splitFocused("row"));
-  add("分割", "下に分割", "split down col 上下", () => panes.splitFocused("col"));
-  add("分割", "分割を解除", "unsplit join", () => panes.unsplitFocused());
-  if (guiEdit.isOn()) {
-    for (const [id, label, kw] of [["bold", "太字", "bold"], ["italic", "斜体", "italic"], ["strike", "取り消し線", "strike"], ["code", "コード", "code"], ["h1", "見出し 1", "heading"], ["h2", "見出し 2", "heading"], ["h3", "見出し 3", "heading"],
-      ["bullet", "箇条書き", "list"], ["number", "番号つきリスト", "list"], ["task", "チェックボックスの行", "task"], ["checkbox", "チェックの切り替え", "check"], ["quote", "引用", "quote"], ["link", "リンクを入れる", "link"], ["openLink", "カーソルのリンクを開く", "open link"], ["undo", "元に戻す", "undo"], ["redo", "やり直す", "redo"], ["save", "保存", "save"]]) add("編集", label, kw, () => guiEdit.run(id));
-  }
-  for (const c of vimCmds || []) {
-    items.push({ group: "Vim", label: ":" + c.name, keywords: "vim コマンド", run: async () => { await setMode("vim"); panes.showVim(); await sendVimCommand(c.name, c.nargs === "0"); } });
-  }
-  return items;
-}
+// ---------------------------------------------------------------- 画像
 
-// Vim にコマンドを打つ。ESC と ":" を続けて送ると、Vim は Meta キー（Alt+:）と読むことがある（ttimeoutlen が短いため）。
-// 文字がノーマルモードのコマンドとして流れ込まないよう、ESC のあと少し置いてから送る。
-async function sendVimCommand(name, run) {
-  gui.write("\x1b");
-  await new Promise((r) => setTimeout(r, 80));
-  gui.write(":" + name + (run ? "\r" : " "));
-}
-
-let palSel = 0, palItems = [];
-async function openPalette() {
-  const box = $("palette"), input = $("palette-input");
-  if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } }
-  box.hidden = false; input.value = ""; palSel = 0;
-  drawPalette();
-  input.focus();
-}
-function closePalette() { $("palette").hidden = true; if (guiEdit.isOn()) view.focus(); else term.focus(); }
-function drawPalette() {
-  const all = paletteItems();
-  palItems = rank(all, $("palette-input").value);
-  palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-  const ul = $("palette-list"); ul.textContent = "";
-  palItems.forEach((it, i) => {
-    const li = document.createElement("li"); li.className = i === palSel ? "sel" : ""; li.setAttribute("role", "option");
-    const l = document.createElement("span"); l.textContent = it.label;
-    const g = document.createElement("span"); g.className = "grp"; g.textContent = it.group;
-    li.append(l, g);
-    li.addEventListener("mousedown", (e) => { e.preventDefault(); runPalette(i); });
-    ul.appendChild(li);
-  });
-  const sel = ul.querySelector(".sel"); if (sel) sel.scrollIntoView({ block: "nearest" });
-}
-async function runPalette(i) {
-  const it = palItems[i];
-  if (!it) return;
-  $("palette").hidden = true;
-  try { await it.run(); } catch (e) { showError(e && e.message || e); }
-}
-function initPalette() {
-  const input = $("palette-input");
-  input.addEventListener("input", () => { palSel = 0; drawPalette(); });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); palSel = Math.min(palSel + 1, palItems.length - 1); drawPalette(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); palSel = Math.max(palSel - 1, 0); drawPalette(); }
-    else if (e.key === "Enter") { e.preventDefault(); runPalette(palSel); }
-    else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
-  });
-  input.addEventListener("blur", () => { setTimeout(() => { if (!$("palette").hidden && document.activeElement !== input) $("palette").hidden = true; }, 150); });
-  // どこからでも Ctrl+Shift+P（Vim の画面にフォーカスがあるときは xterm の処理の前に捕まえる）
-  document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") { e.preventDefault(); openPalette(); } }, true);
-}
-
-// ---------------------------------------------------------------- モード（Real Vim / GUI 編集 / 閲覧専用）と、ツールバー
-// 排他。GUI 編集から出るときは、保存して Vim に読み直させる。保存できない（競合の確認待ちなど）ときは移らない。
-function currentMode() { return guiEdit && guiEdit.isOn() ? "gui" : viewOnly ? "view" : "vim"; }
-
-async function setMode(m) {
-  if (m === currentMode()) return true;
-  if (guiEdit.isOn() && !(await guiEdit.leave())) return false;
-  if (m === "view") setViewOnly(true);
-  else if (m === "vim") { if (viewOnly) setViewOnly(false); term.focus(); }
-  else if (m === "gui") { if (viewOnly) setViewOnly(false); if (!(await guiEdit.enter())) { refreshModeUI(); return false; } }
-  refreshModeUI();
-  return true;
-}
-
-function refreshModeUI() {
-  const m = currentMode();
-  for (const b of document.querySelectorAll("#modes [data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
-  const tools = $("edit-tools");
-  if (tools) tools.hidden = m !== "gui";
-  if (m === "gui") { const el = $("mode"); el.textContent = "EDIT"; el.className = "mode edit"; $("file").textContent = (guiEdit.state().file || "").split("/").pop(); }
-}
-
-function initToolbar() {
-  for (const b of document.querySelectorAll("#modes [data-mode]")) b.addEventListener("click", () => setMode(b.dataset.mode));
-  for (const b of document.querySelectorAll("#edit-tools [data-cmd]")) {
-    // ボタンを押しても編集欄のフォーカス（選択）を失わない
-    b.addEventListener("mousedown", (e) => e.preventDefault());
-    b.addEventListener("click", () => { guiEdit.run(b.dataset.cmd); });
-  }
-  for (const b of document.querySelectorAll("#view-tools [data-open]")) b.addEventListener("click", () => panes.openView(b.dataset.open));
-  for (const b of document.querySelectorAll("#view-tools [data-pane]")) {
-    b.addEventListener("click", () => {
-      const a = b.dataset.pane;
-      if (a === "split-row") panes.splitFocused("row"); else if (a === "split-col") panes.splitFocused("col");
-      else if (a === "unsplit") panes.unsplitFocused(); else if (a === "reopen") panes.reopenClosed(); else if (a === "palette") openPalette(); else if (a === "features") panes.openFeatures();
-    });
-  }
-  initPalette();
-  refreshModeUI();
-}
-
-// ---------------------------------------------------------------- 起動
-
-// 読み込んだ画像を覚える。key は「ノートのあるフォルダ + 書かれたパス」。
-// 画面から外れたウィジェットが作り直されても、読み直さず（Blob を作り直さず）すぐ表示できる。
+// 読み込んだ画像を覚える。key は「ノートのあるフォルダ + 書かれたパス」
 const imgCache = new Map(); // key -> { url, w, h }
 const imgPending = new Map(); // key -> Promise<url|null>
 const IMG_CACHE_MAX = 300;
@@ -343,7 +199,7 @@ function imageURL(src, fileOverride) {
   const file = fileOverride || last.file;
   const key = imgKey(file, src);
   const c = imgCache.get(key);
-  if (c && c.url) return c.url; // すぐ表示（同期）
+  if (c && c.url) return c.url;
   if (imgPending.has(key)) return imgPending.get(key);
   const p = (async () => {
     const bytes = await gui.readImage(file, src);
@@ -373,11 +229,10 @@ function onImageSize(src, w, h, fileOverride) {
   imgCache.set(key, { ...(imgCache.get(key) || {}), w, h });
 }
 
-// ノートを開いたとき、中の画像を先に読んで大きさを調べる。まだ画面に出ていない画像も高さが
-// 正確になり、スクロールしても全体の長さが跳ばない（初めて見る画像でも消えたり跳んだりしない）。
+// ノートを開いたとき、中の画像を先に読んで大きさを調べる（スクロールしても全体の長さが跳ばない）
 let preloadTimer = null;
-const PRELOAD_MAX = 24; // 1 ノートで先に調べる画像の上限
-const PRELOAD_PARALLEL = 4; // 同時に読む数
+const PRELOAD_MAX = 24;
+const PRELOAD_PARALLEL = 4;
 function preloadImages(lines) {
   const file = last.file;
   const re = /!\[(?:\\.|[^\]\\])*\]\(([^)\s]+)(?:\s+"[^"]*")?\)|<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
@@ -417,117 +272,26 @@ function preloadImages(lines) {
   return queue.length;
 }
 
-// ---------------------------------------------------------------- 見るだけモード
-// Alt+V（View）で「見るだけ」と「普通の Vim」を切り替える。見るだけのときは、カーソルを出さず、
-// キーを Vim に送らない（ノートは絶対に変わらない）。j/k・矢印・Space・PageUp/Down・gg/G・
-// Ctrl-d/u でスクロールし、リンクはクリックで開く。確認・fzf などの端末が要る場面では、
-// 普通どおりキーを Vim へ送る。
-let viewOnly = false;
-let lastViewFile = "";
+// ---------------------------------------------------------------- マウス
 
-function setViewOnly(on) {
-  viewOnly = !!on;
-  $("view").classList.toggle("view-only", viewOnly);
-  view.setViewOnly(viewOnly);
-  if (!viewOnly) view.revealCursor(false);
-  if (!viewOnly) view.setVim({ cur: last.cur || [1, 1], mode: last.mode || "n", vis: last.vis }); // カーソルへ戻す
-  applyState({ mode: last.mode, file: last.file, bt: last.bt, popups: last.popups });
-}
-
-// 見るだけで、キーを Vim へ流さない場面か（端末が要る場面・コマンドライン/質問の入力中は流す）
-function viewBlocks() {
-  return viewOnly && !viewInCmd && !needsTerminal(last) && (last.mode || "n")[0] !== "c";
-}
-
-// 見るだけでも Vim に届けるキー（編集しない SYN の操作）。完全に一致したらすぐ送る。
-// どれも他の候補の前半にはならない（待たずに送れる）。ここに無いキーは、スクロール以外は捨てる。
-const VIEW_PASS = new Set([
-  "/", "?", "n", "N", "*", "#", "gs", "gm", " ", "\t", "\x1b[Z", "\r", "\x7f", "_",
-  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
-  "\\h", "\\H", "\\0", "\\i", "\\d", "\\.", "\\L", "\\gi", "\\r", "\\bu", "\\k", "\\j", "\\J", "\\sc",
-]);
-const VIEW_SCROLL_SEQ = new Set(["gg"]);
-let viewPend = "";
-// 検索（/ ? n N * #）: コマンドラインに入ったのが画面に伝わる前に打たれたキーも Vim へ届けるため、
-// 検索を始めたら、コマンドラインが終わるまで（または 1.5 秒で入らなければ）キーを流す。
-// 終わって、カーソルが動いたら、その行を真ん中に出す。
-let viewInCmd = false;
-let viewSawCmd = false;
-let viewFollow = 0;
-function viewStartSearch(key) {
-  viewFollow = Date.now() + 30000;
-  if (key === "/" || key === "?") {
-    viewInCmd = true;
-    viewSawCmd = false;
-    setTimeout(() => { if (!viewSawCmd) viewInCmd = false; }, 1500);
-  }
-}
-
-function vimKeyString(e) {
-  if (e.ctrlKey || e.altKey || e.metaKey) return null;
-  switch (e.key) {
-    case "Tab": return e.shiftKey ? "\x1b[Z" : "\t";
-    case "Enter": return "\r";
-    case "Backspace": return "\x7f";
-    default: return e.key.length === 1 ? e.key : null;
-  }
-}
-
-function viewOnlyKey(e) {
-  const sc = view.view.scrollDOM;
-  const page = sc.clientHeight - 60;
-  const by = (dy) => { sc.scrollTop += dy; return true; };
-  if (e.ctrlKey && !e.altKey) {
-    if (e.key === "d") return by(page / 2);
-    if (e.key === "u") return by(-page / 2);
-    return false;
-  }
-  if (e.altKey || e.metaKey) return false;
-  const ks = vimKeyString(e);
-  if (ks != null) {
-    const cand = viewPend + ks;
-    if (VIEW_PASS.has(cand)) {
-      viewPend = "";
-      if ("/?nN*#".includes(cand) && cand.length === 1) viewStartSearch(cand);
-      gui.write(cand);
-      return true;
-    }
-    if (VIEW_SCROLL_SEQ.has(cand)) { viewPend = ""; sc.scrollTop = 0; return true; }
-    const isPrefix = [...VIEW_PASS, ...VIEW_SCROLL_SEQ].some((x) => x.startsWith(cand));
-    if (isPrefix) { viewPend = cand; return true; }
-    const hadPend = viewPend !== "";
-    viewPend = "";
-    if (hadPend) return true; // 候補から外れた続きは捨てる
-  }
-  switch (e.key) {
-    case "j": case "ArrowDown": return by(48);
-    case "k": case "ArrowUp": return by(-48);
-    case "PageDown": return by(page);
-    case "PageUp": return by(-page);
-    case "Home": sc.scrollTop = 0; return true;
-    case "End": case "G": sc.scrollTop = sc.scrollHeight; return true;
-    default: return false;
-  }
-}
-
-// 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。
-function onClick({ pos, link, href, alt, mod }) {
+// 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。Alt + クリックはカーソルだけ。
+function onClick({ pos, link, alt }) {
   if (pos == null) return;
-  // GUI 編集中: カーソルの移動はブラウザに任せる。描かれたリンクのクリック・Ctrl+クリックでそのノートを開く
-  if (guiEdit && guiEdit.isOn()) {
-    if (link && href) guiEdit.openAt(pos, href);
-    else if (mod) guiEdit.openAt(pos, "");
-    return;
-  }
-  // Alt + クリック: リンクでも開かず、カーソルだけをそこへ動かす（zk → g などに使う）
   if (alt) link = false;
-  if (viewOnly && !link) return; // 見るだけ: カーソルは動かさない（リンクだけ開く）
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
+  // 曼荼羅が開いているときは、まず右のノートの窓へ移る（Vim の窓の移動）
+  const toNote = last.mandala && last.mandala.cells && last.focus === "mandala" && last.mandala.noteWin > 0
+    ? `call win_gotoid(${last.mandala.noteWin})|` : "";
   // 打った :call … が下の行に残らないよう、直後に redraw して空のメッセージで消す
-  const mv = `:call cursor(${l},${c})|redraw|echo ""\r`;
+  const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
   if (m === "n") gui.write(mv + (link ? "\r" : ""));
   else if (m === "i") gui.write("\x0f" + mv);
+}
+
+// 曼荼羅のマスのクリック（enter が真なら中心にする）
+function onMandalaCell(r, c, enter) {
+  gui.write(`\x1b:call gnosis#mview#gui_click(${r},${c},${enter ? 1 : 0})|redraw|echo ""\r`);
 }
 
 // 画面側のエラーを、下のバーに赤く出す（何が起きたか分かるように）。ログにも残る（main 側）。
@@ -540,23 +304,13 @@ function showError(msg) {
   showError._t = setTimeout(() => { el.hidden = true; }, 12000);
 }
 
+// ---------------------------------------------------------------- 起動
+
 async function boot() {
   window.addEventListener("error", (e) => showError(e.message || e.error));
   window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
-  view = createView({
-    parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick,
-    onCommand: (id) => (guiEdit ? guiEdit.run(id) : false),
-    onUserChange: (u) => guiEdit && guiEdit.onUserChange(u),
-  });
-  guiEdit = createGuiEdit({ view, gui, $, getLast: () => last, showError, onChange: () => refreshModeUI() });
-  panes = createPanes({
-    root: $("workspace"), stageEl: $("stage"), gui,
-    onNote: async (rel) => { const r = await gui.openNote(rel); if (!r.ok) showError(r.error || "開けませんでした"); else panes.showVim(); },
-    onResize: () => scheduleFit(),
-    // 機能一覧タブの中身(コマンドパレットと同じ項目)。Vim のコマンドの一覧は初回だけ Vim に聞く
-    featureItems: async () => { if (!vimCmds) { try { vimCmds = await gui.vimCommands(); } catch { vimCmds = []; } } return paletteItems(); },
-  });
-  initToolbar();
+  view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
+  mandala = createMandala($("mandala"), { onCell: onMandalaCell });
 
   term = new Terminal({
     fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -571,24 +325,7 @@ async function boot() {
   term.open($("term"));
   try { await document.fonts.ready; } catch { /* ignore */ }
 
-  // 見るだけで自分で処理したキーは、同じキーの keypress / keyup も端末に渡さない
-  // （/ を打つと viewInCmd が真になり、続く keypress が通って // になっていた）
-  let swallowed = false;
-  term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== "keydown") {
-      const sw = swallowed;
-      if (e.type === "keyup") swallowed = false;
-      return sw ? false : !viewBlocks();
-    }
-    swallowed = false;
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyV") { e.preventDefault(); swallowed = true; setMode(viewOnly ? "vim" : "view"); return false; }
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyE") { e.preventDefault(); swallowed = true; setMode("gui"); return false; }
-    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "BracketRight" || e.code === "BracketLeft")) { e.preventDefault(); swallowed = true; panes.cycle(e.code === "BracketRight" ? 1 : -1); return false; }
-    if (e.ctrlKey && e.shiftKey && e.code === "KeyP") { e.preventDefault(); swallowed = true; return false; }   // パレットは document 側で開く
-    if (viewBlocks()) { swallowed = true; viewOnlyKey(e); return false; }
-    return true;
-  });
-  term.onData((d) => { if (viewBlocks()) return; gui.write(d); });
+  term.onData((d) => gui.write(d));
   gui.onData((d) => term.write(d));
   gui.onState((s) => { try { applyState(s); } catch (e) { console.error("applyState failed: " + (e && e.stack || e)); showError(e && e.message || e); } });
   gui.onExit(() => { $("mode").textContent = "EXIT"; });
@@ -599,30 +336,21 @@ async function boot() {
     const { cols, rows } = fitTerm();
     gui.start(cols, rows, vaultPath);
     term.focus();
-    panes.restore().then(() => scheduleFit());
+    scheduleFit();
   });
 
   window.addEventListener("resize", () => { scheduleFit(); });
-  // どこを押しても、キー入力は端末（Vim）へ戻す。GUI 編集中は編集欄に戻す
-  const backToInput = () => { if (document.getElementById("launcher").hidden) { if (guiEdit.isOn()) { if (!document.activeElement || document.activeElement === document.body) view.focus(); } else term.focus(); } };
+  // どこを押しても、キー入力は端末（Vim）へ戻す
+  const backToInput = () => { if (document.getElementById("launcher").hidden) term.focus(); };
   document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
   window.addEventListener("focus", backToInput);
-  // GUI 編集中（編集欄にフォーカスがあるとき）のモード切替キー
-  document.addEventListener("keydown", (e) => {
-    if (!guiEdit.isOn() || !e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.code === "KeyV") { e.preventDefault(); setMode("view"); }
-    else if (e.code === "KeyE") { e.preventDefault(); setMode("vim"); }
-  });
 
   // デバッグ・テスト用フック
   window.__gui = {
-    term, view,
+    term, view, mandala,
     state: () => last,
     send: (d) => gui.write(d),
     isExpanded: () => expanded,
-    isViewOnly: () => viewOnly,
-    setViewOnly,
-    setMode, currentMode, guiEdit: () => guiEdit, panes: () => panes, openPalette,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

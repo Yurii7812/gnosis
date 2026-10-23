@@ -10,78 +10,15 @@
 <body class="launching">
   <!-- 起動画面・vault の選択と管理・設定（src/launcher.js）。白背景・黒文字 -->
   <div id="launcher" class="launcher" hidden></div>
-  <!-- モードの切り替えと、GUI 編集の道具。キーでもできる操作は、全部ここのボタンからもできる -->
-  <div id="toolbar" role="toolbar" aria-label="Gnosis">
-    <span class="grp" id="modes">
-      <button type="button" data-mode="vim" title="本物の Vim で編集（Alt+V で閲覧専用に）">Vim</button>
-      <button type="button" data-mode="gui" title="GUI 編集: Vim を知らなくても書ける普通のエディタ（Alt+E）">GUI 編集</button>
-      <button type="button" data-mode="view" title="閲覧専用: 何を押してもノートは変わらない（Alt+V）">閲覧</button>
-    </span>
-    <span class="grp" id="edit-tools" hidden>
-      <button type="button" data-cmd="bold" title="太字（Ctrl+B）"><b>B</b></button>
-      <button type="button" data-cmd="italic" title="斜体（Ctrl+I）"><i>I</i></button>
-      <button type="button" data-cmd="strike" title="取り消し線"><s>S</s></button>
-      <button type="button" data-cmd="code" title="コード（Ctrl+E）">&lt;/&gt;</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="h1" title="見出し 1">H1</button>
-      <button type="button" data-cmd="h2" title="見出し 2">H2</button>
-      <button type="button" data-cmd="h3" title="見出し 3">H3</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="bullet" title="箇条書き">• 箇条</button>
-      <button type="button" data-cmd="number" title="番号つき">1. 番号</button>
-      <button type="button" data-cmd="task" title="チェックボックスの行">☐ 作業</button>
-      <button type="button" data-cmd="checkbox" title="チェックを入れる／外す">☑ 切替</button>
-      <button type="button" data-cmd="quote" title="引用">❝ 引用</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="link" title="リンク（Ctrl+K）">リンク</button>
-      <button type="button" data-cmd="openLink" title="カーソルのリンクを開く（Ctrl+クリック）">開く</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="undo" title="元に戻す（Ctrl+Z）">↶ 戻す</button>
-      <button type="button" data-cmd="redo" title="やり直す（Ctrl+Y）">↷ やり直す</button>
-      <button type="button" data-cmd="save" title="保存（Ctrl+S。自動でも保存します）">保存</button>
-    </span>
-    <span class="grp" id="view-tools" title="表示専用のビュー（書き込みません）。タブや分割ペインで並べて開けます">
-      <button type="button" data-open="cards" title="カード">カード</button>
-      <button type="button" data-open="table" title="テーブル">テーブル</button>
-      <button type="button" data-open="timeline" title="タイムライン">時系列</button>
-      <button type="button" data-open="graph" title="グラフ">グラフ</button>
-      <button type="button" data-open="fznav" title="Folgezettel 番号ナビ">番号</button>
-      <button type="button" data-open="analysis" title="グラフ分析">分析</button>
-      <button type="button" data-open="search" title="検索">検索</button>
-      <span class="sep"></span>
-      <button type="button" data-pane="split-row" title="右に分割">▥ 右に</button>
-      <button type="button" data-pane="split-col" title="下に分割">▤ 下に</button>
-      <button type="button" data-pane="unsplit" title="分割を解除">解除</button>
-      <button type="button" data-pane="reopen" title="閉じたタブを開く">↺ 再開</button>
-      <button type="button" data-pane="features" title="全機能の一覧（クリックで実行・検索できます）">☰ 機能一覧</button>
-      <button type="button" data-pane="palette" title="コマンドパレット（Ctrl+Shift+P）">⌘ コマンド</button>
-    </span>
-    <span id="save-state" class="save-state"></span>
-  </div>
-  <!-- 競合: 編集中に別のもの（別の Vim・スマホ取り込み）がファイルを書き換えた -->
-  <div id="conflict" role="alertdialog" hidden>
-    <span class="msg"></span>
-    <button type="button" data-act="mine">自分の版を残す</button>
-    <button type="button" data-act="theirs">ディスクの版を読み込む</button>
-    <button type="button" data-act="later">あとで</button>
-  </div>
-  <!-- 短い入力（リンク先など）。Electron には window.prompt が無いので自前 -->
-  <div id="ask" role="dialog" hidden>
-    <label></label> <input type="text" size="40"> <button type="button" data-act="ok">OK</button> <button type="button" data-act="cancel">やめる</button>
-  </div>
-  <!-- ワークスペース: タブと分割ペイン（src/panes.js）。最初は Vim の画面（#stage）だけが入っている -->
-  <div id="workspace" class="solo">
-    <div id="stage">
+  <!-- 本体: 曼荼羅（開いているときだけ左）とマークダウン表示。下に Vim の端末（普段は下の 2 行だけ） -->
+  <div id="stage">
+    <div id="main">
+      <div id="mandala" hidden></div>
       <div id="view" class="view"></div>
-      <div id="termwrap" class="strip">
-        <div id="term"></div>
-      </div>
     </div>
-  </div>
-  <!-- コマンドパレット（Ctrl+Shift+P）。全部の機能をここから検索して実行できる -->
-  <div id="palette" role="dialog" aria-label="コマンドパレット" hidden>
-    <input type="text" id="palette-input" placeholder="コマンドを検索（例: グラフ / 分割 / スマホ）" autocomplete="off" spellcheck="false">
-    <ul id="palette-list" role="listbox"></ul>
+    <div id="termwrap" class="strip">
+      <div id="term"></div>
+    </div>
   </div>
   <div id="statusbar">
     <span id="mode" class="mode normal">NORMAL</span>

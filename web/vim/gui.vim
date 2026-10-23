@@ -133,20 +133,35 @@ function! s:snapshot(force) abort
     return
   endif
   let l:m = mode(1)
+  " 曼荼羅が開いているとき: アプリは曼荼羅を自分で描き、ノートはノートの窓（右）のバッファを映す
+  " （曼荼羅の窓のバッファは罫線の文字なので、マークダウンとしては描けない）
+  let l:ms = {}
+  try
+    let l:ms = gnosis#mview#gui_state()
+  catch
+  endtry
+  let l:wid = win_getid()
+  if !empty(l:ms)
+    let l:wid = l:ms.noteWin > 0 ? l:ms.noteWin : -1
+  endif
+  let l:b = l:wid > 0 ? winbufnr(l:wid) : -1
+  let l:cur = l:wid > 0 ? getcurpos(l:wid)[1 : 2] : [1, 1]
   let l:d = {
-        \ 'file': expand('%:p'),
-        \ 'buf': bufnr('%'),
+        \ 'file': l:b > 0 ? fnamemodify(bufname(l:b), ':p') : '',
+        \ 'buf': l:b,
         \ 'mode': l:m,
+        \ 'focus': empty(l:ms) ? 'note' : (win_getid() == l:ms.win ? 'mandala' : 'note'),
         \ 'copyStack': get(g:, 'gnosis_stack_copy_mode', 0),
-        \ 'linkSource': get(b:, 'gnosis_link_source_on', 0),
-        \ 'cur': [line('.'), col('.')],
-        \ 'bt': &buftype,
-        \ 'ft': &filetype,
-        \ 'mod': &modified ? 1 : 0,
+        \ 'linkSource': l:b > 0 ? getbufvar(l:b, 'gnosis_link_source_on', 0) : 0,
+        \ 'cur': l:cur,
+        \ 'bt': l:b > 0 ? getbufvar(l:b, '&buftype') : '',
+        \ 'ft': l:b > 0 ? getbufvar(l:b, '&filetype') : '',
+        \ 'mod': l:b > 0 && getbufvar(l:b, '&modified') ? 1 : 0,
         \ 'popups': len(popup_list()),
         \ 'rows': &lines,
         \ 'cols': &columns,
         \ 'cmdtype': getcmdtype(),
+        \ 'mandala': l:ms,
         \ }
   " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
   let l:pp = []
@@ -157,14 +172,14 @@ function! s:snapshot(force) abort
     endif
   endfor
   let l:d.popuppos = l:pp
-  if l:m =~# '^[vV\x16sS\x13]'
+  if l:m =~# '^[vV\x16sS\x13]' && l:wid == win_getid()
     let l:p = getpos('v')
     let l:d.vis = [l:p[1], l:p[2]]
   endif
   " 仮想テキスト（テキストプロパティ）: リンクの数字のしるしなど。バッファの文字ではないので別に送る。
   let l:vt = []
-  if has('textprop') && &buftype ==# ''
-    for l:p in prop_list(1, {'end_lnum': line('$')})
+  if has('textprop') && l:b > 0 && getbufvar(l:b, '&buftype') ==# ''
+    for l:p in prop_list(1, {'bufnr': l:b, 'end_lnum': getbufinfo(l:b)[0].linecount})
       if has_key(l:p, 'text')
         call add(l:vt, [l:p.lnum, l:p.col, l:p.text, l:p.type])
       endif
@@ -182,10 +197,22 @@ function! s:snapshot(force) abort
     call extend(l:d, l:look)
     let s:sent_look = l:look
   endif
-  " 全行は、バッファか内容が変わったときだけ送る
-  let l:key = bufnr('%') . ':' . b:changedtick
+  " 全行は、バッファか内容が変わったときだけ送る。隠す行（YAML・上下の「名前:」系）も、行が変わったときに一緒に送る
+  let l:force = l:wid > 0 && getwinvar(l:wid, 'gnosis_hide_force', 0)
+  let l:h = l:force ? {'yaml': 1, 'top': 1, 'bottom': 1} : gnosis#hide#get()
+  let l:key = l:b . ':' . (l:b > 0 ? getbufvar(l:b, 'changedtick') : 0) . ':' . (empty(l:ms) ? 0 : 1) . ':' . string(l:h)
   if a:force || l:key !=# s:sent_key
-    let l:d.lines = getline(1, '$')
+    let l:lines = l:b > 0 ? getbufline(l:b, 1, '$') : []
+    let l:d.lines = l:lines
+    let l:hide = []
+    if l:b > 0 && getbufvar(l:b, '&buftype') ==# '' && fnamemodify(bufname(l:b), ':e') ==# 'md'
+      for l:r in gnosis#hide#regions(l:lines)
+        if l:h[l:r.kind]
+          call add(l:hide, [l:r.from, l:r.to])
+        endif
+      endfor
+    endif
+    let l:d.hide = l:hide
     let s:sent_key = l:key
   endif
   let l:json = json_encode(l:d)

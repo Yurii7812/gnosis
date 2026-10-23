@@ -21,7 +21,6 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const cfg = require("./config.cjs");
-const noteio = require("./noteio.cjs");
 
 const env = (name) => process.env["GNOSIS_" + name] || process.env["PKM_" + name] || "";
 const WEB = path.resolve(__dirname, "..");
@@ -356,102 +355,6 @@ ipcMain.on("vim:start", (_e, cols, rows, vault) => startVim(cols, rows, vault));
 ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* ignore */ } });
 ipcMain.on("pty:resize", (_e, cols, rows) => { try { bridge?.resize(cols, rows); } catch { /* ignore */ } });
 ipcMain.on("app:quit", () => app.quit());
-
-// ---- GUI 編集モード（アプリの編集モード。書き込みは Vim が普通の :write で行い、保存時の処理が全部走る） ----
-const noteErr = (e) => ({ ok: false, error: String((e && e.message) || e) });
-// モードに入る前: Vim の未保存の変更を保存させる。{ok, file}
-ipcMain.handle("gui:enter", async () => {
-  const r = await vimCall({ type: "save" });
-  return { ok: !!r.ok, file: r.file || "", error: r.error || "" };
-});
-// ディスクのノートを読む（内容と、保存のときに添える内容ハッシュ）
-ipcMain.handle("note:read", (_e, file) => { try { return { ok: true, ...noteio.readNote(noteRootDir, file) }; } catch (e) { return noteErr(e); } });
-// 確定。force=false で、ディスクが読んだときと違えば競合を返す。force=true は、ディスクの版を .state/conflicts に残して上書き。
-ipcMain.handle("note:commit", async (_e, file, text, expectedHash, force) => {
-  try {
-    const cur = noteio.readNote(noteRootDir, file);
-    const conflict = cur.hash !== expectedHash;
-    let savedAside = "";
-    if (conflict) {
-      if (!force) return { ok: false, conflict: true, disk: { text: cur.text, hash: cur.hash } };
-      savedAside = noteio.saveAside(noteRootDir, file, cur.text, "disk");
-    }
-    if (!conflict && cur.text === text) return { ok: true, hash: cur.hash, text: cur.text, unchanged: true };
-    if (vimSock) {
-      const r = await vimCall({ type: "commit", file, text, reload: conflict });
-      if (!r.ok) return { ok: false, error: r.error || "Vim が保存できませんでした" };
-    } else {
-      noteio.writeNote(noteRootDir, file, text, cur.hash, { force: true });
-    }
-    const now = noteio.readNote(noteRootDir, file); // 保存時の処理（記号の除去など）で内容が変わっているかもしれない
-    return { ok: true, hash: now.hash, text: now.text, savedAside };
-  } catch (e) { return noteErr(e); }
-});
-// 競合で捨てる側（自分の版）を .state/conflicts に残す
-ipcMain.handle("note:aside", (_e, file, text) => { try { noteio.inside(noteRootDir, file); return { ok: true, path: noteio.saveAside(noteRootDir, file, String(text), "mine") }; } catch (e) { return noteErr(e); } });
-ipcMain.handle("note:resolve", (_e, file, href) => { try { return { ok: true, ...noteio.resolveLink(noteRootDir, file, href) }; } catch (e) { return noteErr(e); } });
-// ノートを開く（Vim のバッファとして。GUI 編集モードの画面は、そのあとの Vim の状態で入れ替わる）
-ipcMain.handle("note:open", async (_e, file) => { const abs = path.isAbsolute(file) ? file : path.join(noteRootDir, file); try { noteio.inside(noteRootDir, abs); } catch (e) { return noteErr(e); } const r = await vimCall({ type: "open", file: abs }); return { ok: !!r.ok, file: r.file || "", error: r.error || "" }; });
-// ---- ワークスペース（タブ・分割のレイアウト）の保存。vault ごとの利用者設定で、ノートの原本ではない ----
-const workspaceFile = () => path.join(noteRootDir, ".gnosis", "workspace.json");
-ipcMain.handle("workspace:load", () => {
-  try { return noteRootDir ? fs.readFileSync(workspaceFile(), "utf8") : ""; } catch { return ""; }
-});
-ipcMain.handle("workspace:save", (_e, text) => {
-  try {
-    if (!noteRootDir || typeof text !== "string" || text.length > 200000) return { ok: false };
-    const f = workspaceFile();
-    fs.mkdirSync(path.dirname(f), { recursive: true });
-    const tmp = f + ".tmp-" + process.pid;
-    fs.writeFileSync(tmp, text, "utf8");
-    fs.renameSync(tmp, f);
-    return { ok: true };
-  } catch (e) { return noteErr(e); }
-});
-
-// ---- 表示専用ビューの元になる静的サイト（カード・テーブル・グラフ・番号ナビ・検索…）。派生物なので <vault>/.gnosis/cache/site に作る ----
-let siteJob = null;
-function siteDir() { return path.join(noteRootDir, ".gnosis", "cache", "site"); }
-function buildSite() {
-  if (siteJob) return siteJob;
-  siteJob = new Promise((resolve) => {
-    const out = siteDir();
-    const py = process.platform === "win32" ? "python" : "python3";
-    const child = spawn(py, [path.join(REPO, "python", "export_site.py"), noteRootDir, out], { stdio: ["ignore", "pipe", "pipe"] });
-    let so = "", se = "";
-    child.stdout.on("data", (d) => { so += d; });
-    child.stderr.on("data", (d) => { se += d; });
-    child.on("error", (e) => resolve({ ok: false, error: String(e) }));
-    child.on("exit", (code) => {
-      if (code === 0) resolve({ ok: true, dir: out, url: require("url").pathToFileURL(out).href + "/" });
-      else { let msg = se || so; try { msg = JSON.parse(so).error || msg; } catch { /* そのまま */ } resolve({ ok: false, error: String(msg).slice(0, 300) }); }
-    });
-  }).finally(() => { siteJob = null; });
-  return siteJob;
-}
-// force=false で、すでにあれば作り直さない（タブを開くたびに待たない）。更新ボタンは force=true
-ipcMain.handle("view:site", async (_e, force) => {
-  if (!noteRootDir) return { ok: false, error: "vault が開かれていません" };
-  if (!force && fs.existsSync(path.join(siteDir(), "index.html"))) return { ok: true, dir: siteDir(), url: require("url").pathToFileURL(siteDir()).href + "/" };
-  return buildSite();
-});
-
-// ---- コマンドパレット: Vim の Gnosis コマンドの一覧（plugin/gnosis.vim の command! から）----
-ipcMain.handle("cmds:vim", () => {
-  try {
-    const names = new Map();
-    for (const f of [path.join(REPO, "plugin", "gnosis.vim")]) {
-      for (const line of fs.readFileSync(f, "utf8").split("\n")) {
-        const m = /^command!\s+((?:-\S+\s+)*)(Gnosis\w+)\b/.exec(line);
-        if (m) { const n = /-nargs=(\S+)/.exec(m[1]); names.set(m[2], n ? n[1] : "0"); }
-      }
-    }
-    return [...names].map(([name, nargs]) => ({ name, nargs })).sort((a, b) => (a.name < b.name ? -1 : 1));
-  } catch { return []; }
-});
-
-// GUI 編集から Vim に戻る: 外で変わったファイルを Vim に読み直させる
-ipcMain.handle("gui:leave", async () => { const r = await vimCall({ type: "reload" }); return { ok: !!r.ok, error: r.error || "" }; });
 
 // 画像: ノートのあるフォルダからの相対パスで読む（vault の外は読まない）
 ipcMain.handle("img:read", async (_e, file, src) => {

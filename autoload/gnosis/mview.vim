@@ -626,9 +626,9 @@ function! s:geometry(n, W, H, chrome) abort
   " 9×9 は題が読めないほど狭くなるなら、正方形をあきらめて幅を確保する
   if a:n == 9
     let l:cw = max([l:cw, min([l:wlim, 8])])
-    " < > で横に伸ばす（= で正方形に戻す）
-    let l:cw = min([l:wlim, max([1, float2nr(round(l:cw * get(s:S, 'stretch', 1.0)))])])
   endif
+  " ( ) で曼荼羅の盤面を横に伸ばす・縮める（3×3 も 9×9 も。= で正方形に戻す）
+  let l:cw = min([l:wlim, max([1, float2nr(round(l:cw * get(s:S, 'stretch', 1.0)))])])
   return [max([1, l:cw]), l:ch]
 endfunction
 
@@ -787,7 +787,7 @@ function! s:help_lines() abort
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
         \ ' 並べる     w 近さ順(中心に近いものを先に)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
-        \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 幅・横の伸ばし   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
+        \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
         \ ' 色         ']
@@ -1125,11 +1125,11 @@ function! s:state_all() abort
 endfunction
 
 function! s:save_state() abort
-  if !has_key(s:S, 'tenths')
+  if !has_key(s:S, 'tenths') && !has_key(s:S, 'stretch')
     return
   endif
   try
-    call gnosis#home#write_json(gnosis#home#path('mandala.json'), {'tenths': s:S.tenths})
+    call gnosis#home#write_json(gnosis#home#path('mandala.json'), {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0)})
   catch
   endtry
 endfunction
@@ -1567,20 +1567,23 @@ endfunction
 
 " < で曼荼羅を狭く、> で広く（1 回で画面の幅の 1/10）。分割しているときだけ
 function! s:resize(d) abort
-  if s:S.size != 3
-    " 全画面（9×9）: < > で横に伸ばす・縮める（= で正方形に戻す）
-    " （min() / max() は小数を整数にしてしまうので、使わない）
-    let l:v = get(s:S, 'stretch', 1.0) + a:d * 0.15
-    let s:S.stretch = l:v > 3.0 ? 3.0 : (l:v < 0.5 ? 0.5 : l:v)
-    call s:render()
-    return
-  endif
+  " < > : 画面の幅（曼荼羅の窓と右のノートの窓の境目）。3×3 も、右の窓があるときの 9×9 も
   if s:note_win() < 0
+    echo 'Gnosis: 右の窓が無いので画面の幅は動かせません（9×9 では p で右の窓を出す）'
     return
   endif
   " 割合は 10 分率の整数で持つ（5 = 半々）。小数と整数を混ぜると Vim はエラーにする
   let s:S.tenths = min([8, max([2, get(s:S, 'tenths', 5) + a:d])])
   execute 'vertical resize ' . s:win_width()
+  call s:render()
+  call s:save_state()
+endfunction
+
+" ( ) : 曼荼羅の盤面そのものの幅（横に伸ばす・縮める）。3×3 も 9×9 も
+function! s:stretch(d) abort
+  " （min() / max() は小数を整数にしてしまうので、使わない）
+  let l:v = float2nr(round((get(s:S, 'stretch', 1.0) + a:d * 0.15) * 100)) / 100.0
+  let s:S.stretch = l:v > 3.0 ? 3.0 : (l:v < 0.5 ? 0.5 : l:v)
   call s:render()
   call s:save_state()
 endfunction
@@ -1599,18 +1602,14 @@ function! s:note_win() abort
   return -1
 endfunction
 
-" =: 3×3 は画面を分ける線を半々に戻す。9×9 は横の伸ばしを戻して正方形に
+" =: 盤面の伸ばしを正方形に戻し、画面の幅も半々に戻す（3×3 も 9×9 も）
 function! s:equalize() abort
-  if s:S.size != 3
-    let s:S.stretch = 1.0
-    call s:render()
-    return
-  endif
-  if s:note_win() < 0
-    return
-  endif
+  " = : 盤面の伸ばしを戻して正方形に、画面の幅は半々に
+  let s:S.stretch = 1.0
   let s:S.tenths = 5
-  execute 'vertical resize ' . s:win_width()
+  if s:note_win() > 0
+    execute 'vertical resize ' . s:win_width()
+  endif
   call s:render()
   call s:save_state()
 endfunction
@@ -1745,6 +1744,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> { <Cmd>call <SID>opage(-1)<CR>
   nnoremap <buffer><nowait><silent> } <Cmd>call <SID>opage(1)<CR>
   nnoremap <buffer><nowait><silent> = <Cmd>call <SID>equalize()<CR>
+  nnoremap <buffer><nowait><silent> ( <Cmd>call <SID>stretch(-1)<CR>
+  nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
   nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
   nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
@@ -2028,9 +2029,14 @@ function! s:open(center, ...) abort
   let l:c = a:center
   " 曼荼羅の幅は前回のまま（< > で変えた幅）。中心は今のノート
   if !has_key(s:S, 'tenths') && get(g:, 'gnosis_mview_restore', 1)
-    let l:t = get(s:state_all(), 'tenths', 0)
+    let l:all = s:state_all()
+    let l:t = get(l:all, 'tenths', 0)
     if type(l:t) == v:t_number && l:t >= 2 && l:t <= 8
       let s:S.tenths = l:t
+    endif
+    let l:sv = get(l:all, 'stretch', 0)
+    if (type(l:sv) == v:t_float || type(l:sv) == v:t_number) && l:sv >= 0.5 && l:sv <= 3.0 && !has_key(s:S, 'stretch')
+      let s:S.stretch = l:sv + 0.0
     endif
   endif
   if !s:has(l:c)
@@ -2199,6 +2205,51 @@ function! gnosis#mview#close() abort
     call win_gotoid(s:note_win())
   endif
   redraw!
+endfunction
+
+" ---- アプリ（\c）の曼荼羅: 盤面の状態を渡す・クリックを受ける ----------------------------------------------
+" アプリは曼荼羅を自分で描く（Vim の窓のバッファは罫線の文字なので、マークダウンとしては描けない）。
+" 操作は Vim の曼荼羅のキーがそのまま効く（アプリは見た目だけ）。マウスのクリックは gui_click で受ける。
+function! gnosis#mview#gui_state() abort
+  if !exists('s:S') || !has_key(s:S, 'cells') || get(s:S, 'win', -1) < 0 || empty(getwininfo(get(s:S, 'win', -1)))
+    return {}
+  endif
+  if winbufnr(s:S.win) != get(s:S, 'buf', -1)
+    return {}
+  endif
+  let l:cells = []
+  for l:row in s:S.cells
+    let l:r = []
+    for l:c in l:row
+      call add(l:r, {'t': s:label(l:c), 'k': get(l:c, 'kind', 'note'), 'n': get(l:c, 'n', 0), 'role': get(l:c, 'role', 'empty'),
+            \ 'bgi': get(l:c, 'bgi', -1), 'dup': get(l:c, 'dup', 0), 'pt': get(l:c, 'ptxt', '')})
+    endfor
+    call add(l:cells, l:r)
+  endfor
+  let l:cur = s:cur_cell()
+  return {'size': s:S.size, 'cur': s:S.cur, 'cells': l:cells, 'nums': get(s:S, 'nums', 1),
+        \ 'center': s:S.center, 'title': s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center,
+        \ 'page': s:S.page, 'pages': s:pages(s:S.center),
+        \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, 1, '', '')),
+        \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
+        \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
+        \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0),
+        \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
+        \ 'win': s:S.win, 'noteWin': s:note_win()}
+endfunction
+
+" アプリでマスをクリック: そのマスへカーソルを動かし、a:enter が 1 なら中心にする（Enter と同じ）
+function! gnosis#mview#gui_click(r, c, enter) abort
+  if !exists('s:S') || !has_key(s:S, 'cells') || a:r < 0 || a:r >= s:S.size || a:c < 0 || a:c >= s:S.size
+    return
+  endif
+  call win_gotoid(s:S.win)
+  let s:S.cur = [a:r, a:c]
+  call s:mark()
+  call s:preview()
+  if a:enter
+    call s:enter()
+  endif
 endfunction
 
 " 試験用: gs で選んだあとの処理を直接呼ぶ

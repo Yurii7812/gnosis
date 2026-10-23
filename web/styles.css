@@ -23,10 +23,10 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg-dim) 45%, transparent) transparent; }
 
 html { --strip-h: 54px; }
-#workspace { position: relative; height: calc(100vh - 24px - var(--toolbar-h, 36px)); overflow: hidden; }
-#workspace > .pane, #workspace > .split { position: absolute; inset: 0; }
-#stage { position: absolute; inset: 0; overflow: hidden; }
-.view { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); overflow: hidden; }
+#stage { position: relative; height: calc(100vh - 24px); overflow: hidden; }
+#main { position: absolute; left: 0; right: 0; top: 0; bottom: var(--strip-h); display: flex; overflow: hidden; }
+.view { position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; }
+.view[hidden] { display: none; }
 .view .cm-editor { height: 100%; }
 
 /* 端末（本物の Vim の画面）: 普段は下の数行だけ見せ、確認・fzf などのときは全体を見せる */
@@ -289,3 +289,24 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .featitem { text-align: left; font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .featitem:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
 .featnone { color: var(--fg-dim); padding: 16px 4px; }
+
+
+/* ---- 曼荼羅（src/mandala.js。Vim の曼荼羅の盤面を、色つきのマスで描く） ---- */
+#mandala { flex: 0 0 50%; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--bg); overflow: hidden; }
+#mandala[hidden] { display: none; }
+#main.mandala-only #mandala { flex: 1 1 auto; border-right: none; }
+.mandala .m-head { padding: 6px 12px; font-size: 13px; color: var(--fg-dim); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mandala .m-foot { padding: 6px 12px; font-size: 13px; color: var(--fg); border-top: 1px solid var(--line); min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mandala .m-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 12px 8px; font-size: 12px; }
+.mandala .m-board { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--n), 1fr); gap: 1px; padding: 8px; background: var(--line); margin: 8px; border-radius: 6px; overflow: hidden; }
+.mandala .m-cell { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px; background: var(--bg); overflow: hidden; cursor: pointer; font-size: var(--content-font-size, 16px); line-height: 1.35; }
+.mandala .n9 .m-cell { font-size: calc(var(--content-font-size, 16px) * .72); padding: 2px; }
+.mandala .m-cell.sel { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 1; }
+.mandala .m-cell.ctr .m-t { font-weight: 700; }
+.mandala .m-cell.bl { box-shadow: inset 2px 0 0 var(--fg-dim); }
+.mandala .m-cell.bt { box-shadow: inset 0 2px 0 var(--fg-dim); }
+.mandala .m-cell.bl.bt { box-shadow: inset 2px 0 0 var(--fg-dim), inset 0 2px 0 var(--fg-dim); }
+.mandala .m-t { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: break-word; }
+.mandala .m-pt { font-size: .75em; opacity: .8; }
+.mandala .m-cell.dup { font-weight: 700; }
+.cm-hide-line { display: none; }

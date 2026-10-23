@@ -563,6 +563,24 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.quote, color: "var(--fg-dim)" },
 ]);
 
+// 隠す行: 行ごとに class を付けて CSS で消す（文書は変えない）
+const setHide = StateEffect.define();
+const hideField = StateField.define({
+  create: () => [],
+  update(v, tr) {
+    for (const e of tr.effects) if (e.is(setHide)) return e.value;
+    return v;
+  },
+  provide: (f) => EditorView.decorations.compute([f, "doc"], (state) => {
+    const mark = Decoration.line({ class: "cm-hide-line" });
+    const lines = new Set();
+    for (const [from, to] of state.field(f)) for (let l = from; l <= Math.min(to, state.doc.lines); l++) lines.add(l);
+    const out = [];
+    for (const l of [...lines].sort((a, b) => a - b)) out.push(mark.range(state.doc.line(l).from));
+    return Decoration.set(out);
+  }),
+});
+
 export function createView(opts) {
   const cfg = { getImageURL: opts.getImageURL || (() => null), getImageSize: opts.getImageSize, onImageSize: opts.onImageSize, listNotes: () => [] };
   // 読み取り専用（Vim の内容を映す）と、GUI 編集の切り替え
@@ -596,6 +614,7 @@ export function createView(opts) {
       EditorView.lineWrapping,
       markdown({ base: markdownLanguage }),
       syntaxHighlighting(mdHighlight),
+      hideField,
       vimField,
       vimDecorations,
       vtextField,
@@ -705,6 +724,10 @@ export function createView(opts) {
     // 仮想テキスト（リンクの数字のしるしなど）を反映する
     setVtext(list) {
       view.dispatch({ effects: setVtext.of(list || []) });
+    },
+    // 隠す行（YAML・上下の「名前:」系）。[[開始行, 終了行], …]（1 始まり）。setText のあとに呼ぶ
+    setHide(ranges) {
+      view.dispatch({ effects: setHide.of(ranges || []) });
     },
     // Vim のカーソル（行・バイト列）、モード、ビジュアルの始点を反映する
     setVim({ cur, mode, vis }) {
