@@ -11973,8 +11973,13 @@ endfunction
 " よみの入力（表示名を決めたあと）。入力欄には登録済みのよみ（無ければ推測）が入っている。
 "   Enter → そのよみを登録 / 全部消して Enter・Esc → 登録しない（並べ替えは推測のよみで行う）
 " g:gnosis_test_yomi があれば入力の代わりに使う（試験用。"\x1b" は Esc）。戻り値はよみ（登録しないなら ''）
+" よみが要る名前か。漢字を含むときだけ（ひらがな・カタカナ・英数字・記号だけの名前は、そのまま並べ替えに使えるので聞かない）
+function! s:needs_yomi(name) abort
+  return a:name =~# '[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff々〇]'
+endfunction
+
 function! s:ask_yomi(group, note, name, ...) abort
-  if empty(a:name) || !filereadable(a:note)
+  if empty(a:name) || !filereadable(a:note) || !s:needs_yomi(a:name)
     return ''
   endif
   let l:rd = s:review_readings(a:group, [{'name': a:name, 'abs': fnamemodify(a:note, ':p')}])
@@ -14777,7 +14782,7 @@ function! s:ask_new_member_yomi(group, note, name) abort
   if get(g:, 'gnosis_test_review_skip', 0)
     return
   endif
-  if empty(a:name) || !filereadable(a:note)
+  if empty(a:name) || !filereadable(a:note) || !s:needs_yomi(a:name)
     return
   endif
   let l:rd = s:review_readings(a:group, [{'name': a:name, 'abs': fnamemodify(a:note, ':p')}])

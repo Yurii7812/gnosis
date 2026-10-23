@@ -444,6 +444,76 @@ def test_kana_row_threshold() -> None:
         check("い" not in out and "う" not in out, "30本に減ると行に戻す")
 
 
+def test_yomi_store_json_lines() -> None:
+    print("よみの保存: vault の .gnosis/yomi/ の JSON Lines（ハッシュで最大 256 個）")
+    import json
+    import os
+    import hashlib
+    base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+    os.makedirs(base, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=base) as tmp:
+        root = Path(tmp)
+        (root / ".gnosis").mkdir()
+        (root / "a.md").write_text("---\ntime: x\n---\n\n# A\n", encoding="utf-8")
+        (root / "sub").mkdir()
+        (root / "sub" / "b.md").write_text("# B\n", encoding="utf-8")
+        jy.clear_memos()
+        check(jy.set_yomi(root / "a.md", "筋トレ", "きんとれ"), "登録できる")
+        check(jy.get_yomi(root / "a.md", "筋トレ") == "きんとれ", "読める")
+        check("yomi" not in (root / "a.md").read_text(encoding="utf-8"), "ノートの YAML には書かない")
+        files = sorted((root / ".gnosis" / "yomi").glob("*.jsonl"))
+        check(len(files) == 1 and len(files[0].stem) == 2, f"殻のファイルは 1 つ（名前は 2 桁）: {[f.name for f in files]}")
+        want = hashlib.blake2b(b"a.md", digest_size=1).hexdigest()
+        check(files[0].stem == want, "殻はノートのファイル名のハッシュ")
+        rows = [json.loads(x) for x in files[0].read_text(encoding="utf-8").strip().split("\n")]
+        check(rows == [{"n": "a.md", "k": "筋トレ", "y": "きんとれ"}], f"1 行 1 件: {rows}")
+        jy.set_yomi(root / "sub" / "b.md", "辞書", "じしょ")
+        check(jy.get_yomi(root / "sub" / "b.md", "辞書") == "じしょ", "サブフォルダのノートも（vault からの相対パスが名前）")
+        check(jy.list_yomi_names(root / "a.md") == ["筋トレ"], "表示名の一覧")
+        jy.clear_memos()
+        check(jy.get_yomi(root / "a.md", "筋トレ") == "きんとれ", "読み直しても残る")
+        check(jy.set_yomi(root / "a.md", "筋トレ", ""), "消せる")
+        check(jy.get_yomi(root / "a.md", "筋トレ") == "" and not (root / ".gnosis" / "yomi" / f"{want}.jsonl").exists(), "消えたあと空（空の殻のファイルは残さない）")
+        # 古い front matter の yomi: も読める。登録し直すと JSON へ移り、YAML の分は外れる
+        (root / "c.md").write_text('---\ntime: x\nyomi:\n  "古い": "ふるい"\n---\n\n# C\n', encoding="utf-8")
+        jy.clear_memos()
+        check(jy.get_yomi(root / "c.md", "古い") == "ふるい", "古い形も読める")
+        jy.set_yomi(root / "c.md", "古い", "ふるい２")
+        txt = (root / "c.md").read_text(encoding="utf-8")
+        check("yomi" not in txt and jy.get_yomi(root / "c.md", "古い") == "ふるい２", f"JSON へ移り YAML から外れる: {txt!r}")
+
+
+def test_needs_reading() -> None:
+    print("よみが要る名前: 漢字を含むときだけ")
+    check(jy.needs_reading("筋トレ") and jy.needs_reading("第2話") and jy.needs_reading("々"), "漢字を含む")
+    check(not jy.needs_reading("ひらがな") and not jy.needs_reading("カタカナ") and not jy.needs_reading("ABC abc 123") and not jy.needs_reading("Index-1"), "かな・英数字だけは要らない")
+    check(not jy.needs_reading(""), "空")
+
+
+def test_sync_moves_yaml_yomi_to_store() -> None:
+    print("同期: 古い front matter の yomi: を JSON へ移す・使われていない表示名は掃除する")
+    import os
+    import note_format_v2 as v2
+    base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+    os.makedirs(base, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=base) as tmp:
+        root = Path(tmp)
+        (root / "index.md").write_text("---\ntime: x\n---\n\n# Index\n\n[筋トレ](a.md)\n", encoding="utf-8")
+        (root / "a.md").write_text('---\ntime: x\nyomi:\n  "筋トレ": "きんとれ"\n  "未使用": "みしよう"\n---\n\n# A\n', encoding="utf-8")
+        jy.clear_memos()
+        v2.simple_sync(root)
+        txt = (root / "a.md").read_text(encoding="utf-8")
+        check("yomi" not in txt, f"ノートの YAML から消える: {txt!r}")
+        jy.clear_memos()
+        check(jy.get_yomi(root / "a.md", "筋トレ") == "きんとれ", "JSON で読める")
+        # 使われていない表示名は、間をあけた掃除で消える
+        v2.PRUNE_EVERY = 0
+        v2.simple_sync(root)
+        jy.clear_memos()
+        check(jy.get_yomi(root / "a.md", "未使用") == "", "使われていない表示名のよみは掃除される")
+        check(jy.get_yomi(root / "a.md", "筋トレ") == "きんとれ", "使われているものは残る")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

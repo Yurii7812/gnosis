@@ -66,9 +66,11 @@ from pathlib import Path
 from urllib.parse import unquote
 
 try:
+    import japanese_yomi as _jy
     from japanese_yomi import parse_yomi_map, set_yomi_map
 except ImportError:  # 実行ディレクトリ以外から import されたとき
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import japanese_yomi as _jy
     from japanese_yomi import parse_yomi_map, set_yomi_map
 
 RELATIONS: tuple[str, ...] = (
@@ -1466,6 +1468,60 @@ def _used_display_names(notes: dict, incoming: dict | None = None) -> set[str]:
     return used
 
 
+PRUNE_EVERY = 600   # 秒。よみの JSON の掃除は、保存のたびではなく、これだけ間をあけて行う（全部の殻を読むので）
+
+
+def _yomi_to_store(root: Path, notes: dict) -> int:
+    """ノートの front matter に残っている古い yomi: を、vault の .gnosis/yomi/ の JSON に移す。移したノート数。"""
+    root = Path(root)
+    store = None
+    moved = 0
+    for p, n in notes.items():
+        if not n["fm"]:
+            continue
+        mapping = parse_yomi_map(n["fm"])
+        if not mapping:
+            continue
+        if store is None:
+            store = _jy.YomiStore(root)
+        try:
+            nid = p.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            continue
+        store.import_map(nid, mapping)
+        n["fm"] = set_yomi_map(n["fm"], {})
+        moved += 1
+    return moved
+
+
+def _prune_yomi_store(root: Path, notes: dict, used: set[str]) -> int:
+    """JSON のよみのうち、使われていない表示名・無くなったノートの分を消す（間をあけて行う）。"""
+    root = Path(root)
+    d = root / ".gnosis" / "yomi"
+    if not d.is_dir():
+        return 0
+    stamp = d / ".pruned"
+    try:
+        import time
+        if time.time() - stamp.stat().st_mtime < PRUNE_EVERY:
+            return 0
+    except OSError:
+        pass
+    rr = root.resolve()
+    existing = set()
+    for p in notes:
+        try:
+            existing.add(p.resolve().relative_to(rr).as_posix())
+        except ValueError:
+            pass
+    n = _jy.YomiStore(root).prune(used, existing)
+    try:
+        stamp.write_text("", encoding="utf-8")
+    except OSError:
+        pass
+    return n
+
+
 def _prune_yomi_maps(notes: dict, used: set[str]) -> int:
     """使われていない表示名の yomi を各ノートの front matter から取り除く。
 
@@ -2193,7 +2249,10 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
 
     # 使われていない表示名の yomi を掃除する（\zy で登録した表示名が Index から
     # 消えたら、同期時に一緒に消える）。ノート自身の title は incoming があるときだけ残す。
-    _prune_yomi_maps(notes, _used_display_names(notes, incoming))
+    _yomi_to_store(root, notes)
+    _used = _used_display_names(notes, incoming)
+    _prune_yomi_maps(notes, _used)
+    _prune_yomi_store(root, notes, _used)
 
     # `### Related` は対称。両側に同じ相手があるペアだけ成立する（zr は両側に
     # 書くので通常はそのまま）。片側で消されたら次回 sync で反対側からも消える。

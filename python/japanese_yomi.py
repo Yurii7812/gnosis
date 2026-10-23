@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """日本語のよみ（読み）ユーティリティ（Gnosis 用）。
 
-- front matter の ``yomi:`` マップ（表示名 → よみ）の parse / 保存
+- よみ（表示名 → よみ）の保存。2026-10-23〜 vault の ``.gnosis/yomi/<2桁16進>.jsonl``（ノートのファイル名のハッシュで
+  最大 256 個に分ける JSON Lines。1 行 1 件 ``{"n": ノート, "k": 表示名, "y": よみ}``）。ノート本体の YAML には書かない。
+  読むときは JSON を先に見て、古いノートの front matter の ``yomi:`` マップも読む（同期が JSON へ移す）
 - pykakasi による かな化（未導入時は入力をそのまま使うフォールバック）
 - 五十音順のソートキー（ローマ字は末尾）
 
-``yomi:`` の形::
+古い ``yomi:`` の形（今は読むだけ）::
 
     yomi:
       "筋トレ": "きんとれ"
@@ -189,7 +191,185 @@ def reading_key(text: str) -> tuple:
     return (2, "", text.casefold())
 
 
-# --- yomi マップ（front matter） -------------------------------------------
+# --- よみの保存（vault の .gnosis/yomi/ の JSON Lines） ------------------------------------
+# 100 万ノートでも、ファイルは最大 256 個。書くのは読みが要る表示名（漢字を含むもの）だけ。
+# 1 行 1 件で、ノートのファイル名の順に書くので、git で同期しても行単位でマージできる。
+
+import hashlib
+import tempfile
+
+SHARDS_NOTE = "256 個に分ける（ノートのファイル名の blake2b の先頭 1 バイト）"
+_KANJI = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff々〇]")
+
+
+def needs_reading(name: str) -> bool:
+    """よみが要る表示名か。漢字を含むときだけ（ひらがな・カタカナ・英数字・記号だけの名前は、そのまま並べ替えに使える）。"""
+    return bool(_KANJI.search(name or ""))
+
+
+_ROOT_MEMO: dict[str, "Path | None"] = {}
+_STORES: dict[str, "YomiStore"] = {}
+
+
+def find_root(path) -> "Path | None":
+    """ノート path の vault（.gnosis があるいちばん近い上のフォルダ。無ければ index.md があるいちばん近い上のフォルダ）。"""
+    p = Path(os.path.abspath(str(path)))
+    d = p if p.is_dir() else p.parent
+    key = str(d)
+    if key in _ROOT_MEMO:
+        return _ROOT_MEMO[key]
+    found = None
+    for q in [d, *d.parents]:
+        if (q / ".gnosis").is_dir():
+            found = q
+            break
+    if found is None:
+        for q in [d, *d.parents]:
+            if (q / "index.md").is_file():
+                found = q
+                break
+    _ROOT_MEMO[key] = found
+    return found
+
+
+def _shard_of(note_id: str) -> str:
+    return hashlib.blake2b(note_id.encode("utf-8"), digest_size=1).hexdigest()
+
+
+class YomiStore:
+    def __init__(self, root: Path):
+        self.root = Path(root)
+        self.dir = self.root / ".gnosis" / "yomi"
+        self._data: dict[str, dict[str, dict[str, str]]] = {}   # 殻 → {ノート: {表示名: よみ}}
+
+    def note_id(self, path) -> str:
+        try:
+            return Path(os.path.abspath(str(path))).relative_to(self.root).as_posix()
+        except ValueError:
+            return ""
+
+    def _file(self, sh: str) -> Path:
+        return self.dir / f"{sh}.jsonl"
+
+    def _load(self, sh: str) -> dict[str, dict[str, str]]:
+        if sh in self._data:
+            return self._data[sh]
+        out: dict[str, dict[str, str]] = {}
+        try:
+            for ln in self._file(sh).read_text(encoding="utf-8").split("\n"):
+                if not ln.strip():
+                    continue
+                try:
+                    d = json.loads(ln)
+                    out.setdefault(d["n"], {})[d["k"]] = d["y"]
+                except Exception:
+                    continue
+        except OSError:
+            pass
+        self._data[sh] = out
+        return out
+
+    def _save(self, sh: str) -> None:
+        data = self._data.get(sh, {})
+        f = self._file(sh)
+        rows = [json.dumps({"n": n, "k": k, "y": y}, ensure_ascii=False, separators=(",", ":"))
+                for n in sorted(data) for k, y in data[n].items()]
+        if not rows:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            return
+        self.dir.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(self.dir), prefix=".tmp-", suffix=".jsonl")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(rows) + "\n")
+            os.replace(tmp, f)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
+    def get(self, note_id: str, name: str) -> str:
+        return self._load(_shard_of(note_id)).get(note_id, {}).get(name, "")
+
+    def names(self, note_id: str) -> list[str]:
+        return list(self._load(_shard_of(note_id)).get(note_id, {}))
+
+    def set(self, note_id: str, name: str, reading: str) -> bool:
+        sh = _shard_of(note_id)
+        data = self._load(sh)
+        cur = data.get(note_id, {})
+        if reading:
+            if cur.get(name) == reading:
+                return False
+            data.setdefault(note_id, {})[name] = reading
+        else:
+            if name not in cur:
+                return False
+            del cur[name]
+            if not cur:
+                data.pop(note_id, None)
+        self._save(sh)
+        return True
+
+    def import_map(self, note_id: str, mapping: dict[str, str]) -> bool:
+        """YAML から移すとき: すでに JSON にある名前は上書きしない。"""
+        sh = _shard_of(note_id)
+        data = self._load(sh)
+        changed = False
+        for k, y in mapping.items():
+            if y and k not in data.get(note_id, {}):
+                data.setdefault(note_id, {})[k] = y
+                changed = True
+        if changed:
+            self._save(sh)
+        return changed
+
+    def prune(self, used: set[str], existing: "set[str] | None" = None) -> int:
+        """使われていない表示名のよみ（と、ノートが無くなったものの分）を消す。消した件数。"""
+        n = 0
+        try:
+            files = sorted(self.dir.glob("*.jsonl"))
+        except OSError:
+            return 0
+        for f in files:
+            sh = f.stem
+            data = self._load(sh)
+            changed = False
+            for note in list(data):
+                if existing is not None and note not in existing:
+                    n += len(data.pop(note))
+                    changed = True
+                    continue
+                for k in [k for k in data[note] if k not in used]:
+                    del data[note][k]
+                    n += 1
+                    changed = True
+                if not data[note]:
+                    del data[note]
+            if changed:
+                self._save(sh)
+        return n
+
+    def all_count(self) -> int:
+        return sum(len(v) for sh in (f.stem for f in self.dir.glob("*.jsonl")) for v in self._load(sh).values())
+
+
+def store_for(path, create: bool = False) -> "YomiStore | None":
+    root = find_root(path)
+    if root is None:
+        return None
+    key = str(root)
+    if key not in _STORES:
+        _STORES[key] = YomiStore(root)
+    return _STORES[key]
+
+
+# --- yomi マップ（古い形: front matter） -------------------------------------------
 
 
 def parse_yomi_map(fm: list[str]) -> dict[str, str]:
@@ -218,7 +398,7 @@ def parse_yomi_map(fm: list[str]) -> dict[str, str]:
 def set_yomi_map(fm: list[str], mapping: dict[str, str]) -> list[str]:
     """front matter 行の ``yomi:`` ブロックを mapping で置き換える。
 
-    mapping が空ならブロックを削除する。title 行の直後に置く。
+    mapping が空ならブロックを削除する。time 行（無ければ title 行）の直後に置く。
     """
     lines = list(fm)
     start = None
@@ -239,9 +419,10 @@ def set_yomi_map(fm: list[str], mapping: dict[str, str]) -> list[str]:
         ]
         at = None
         for i, ln in enumerate(lines):
-            if re.match(r"^\s*title\s*:", ln):
+            if re.match(r"^\s*(title|time)\s*:", ln):
                 at = i + 1
-                break
+                if ln.lstrip().startswith("title"):
+                    break
         if at is None:
             at = max(1, len(lines) - 1)
         at = min(at, len(lines))
@@ -267,6 +448,8 @@ _RESOLVE_MEMO: dict[tuple[str, str], "Path | None"] = {}
 def clear_memos() -> None:
     _NOTE_MEMO.clear()
     _RESOLVE_MEMO.clear()
+    _ROOT_MEMO.clear()
+    _STORES.clear()
 
 
 def _note_entry(path) -> "dict | None":
@@ -289,27 +472,57 @@ def _note_entry(path) -> "dict | None":
 
 
 def get_yomi(path, name: str) -> str:
-    """ノートの front matter の yomi マップから表示名 name のよみを返す。"""
+    """表示名 name のよみ。vault の JSON を先に見て、無ければノートの古い front matter の yomi: マップを見る。"""
+    st = store_for(path)
+    if st is not None:
+        nid = st.note_id(path)
+        if nid:
+            got = st.get(nid, name)
+            if got:
+                return got
     ent = _note_entry(path)
     return ent["map"].get(name, "") if ent else ""
 
 
 def list_yomi_names(path) -> list[str]:
-    """ノートの front matter の yomi マップの表示名を登録順に返す。"""
+    """ノートに登録されたよみの表示名を登録順に返す（JSON、続けて古い front matter の分）。"""
+    out: list[str] = []
+    st = store_for(path)
+    if st is not None:
+        nid = st.note_id(path)
+        if nid:
+            out = st.names(nid)
     ent = _note_entry(path)
-    return list(ent["map"]) if ent else []
+    if ent:
+        out += [k for k in ent["map"] if k not in out]
+    return out
 
 
 def set_yomi(path, name: str, reading: str) -> bool:
-    """ノートの yomi マップに name → reading を登録（reading 空で削除）。
+    """表示名 name のよみを登録（reading 空で削除）。変更したら True。
 
-    変更したら True。
+    vault があれば JSON に書き、ノートに古い front matter の yomi: が残っていればその名前の分を外す。
+    vault が見つからないときだけ、ノートの front matter に書く（古い形）。
     """
+    st = store_for(path)
+    nid = st.note_id(path) if st is not None else ""
+    if st is not None and nid:
+        changed = st.set(nid, name, reading)
+        ent = _note_entry(path)
+        if ent is not None and name in ent["map"]:
+            mapping = dict(ent["map"])
+            del mapping[name]
+            new_fm = set_yomi_map(ent["fm"], mapping)
+            ent["path"].write_text("\n".join(new_fm + ent["rest"]) + "\n", encoding="utf-8")
+            ent["fm"] = new_fm
+            ent["map"] = mapping
+            changed = True
+        return changed
     ent = _note_entry(path)
     if ent is None:
         return False
     p = ent["path"]
-    fm = ent["fm"] or ["---", "title: " + p.stem, "---"]
+    fm = ent["fm"] or ["---", "---"]
     mapping = dict(ent["map"])
     if reading:
         if mapping.get(name) == reading:
