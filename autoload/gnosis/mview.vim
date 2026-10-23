@@ -57,19 +57,131 @@ function! s:py(args) abort
   endtry
 endfunction
 
-function! s:load() abort
+" python/mandala_cache.py（SQLite のキャッシュ）を呼んで JSON を返す。失敗は v:null
+function! s:pyc(args) abort
+  let l:cmd = join(map([gnosis#python_cmd(), s:here . '/python/mandala_cache.py'] + a:args, 'shellescape(v:val)'), ' ') . ' 2>/dev/null'
+  let l:out = system(l:cmd)
+  if v:shell_error
+    return v:null
+  endif
+  try
+    return json_decode(l:out)
+  catch
+    return v:null
+  endtry
+endfunction
+
+" キャッシュを更新して、読み込み済みのノートを捨てる。force=1 は全体を走査（u）。ふだんは直近に走査していれば省く
+function! s:load(...) abort
   let l:root = s:root()
   if empty(l:root)
     return 0
   endif
-  let l:d = s:py(['dump', l:root])
-  if type(l:d) != v:t_dict || type(get(l:d, 'nodes', 0)) != v:t_dict
+  let l:first = !filereadable(l:root . '/.gnosis/cache/mandala.sqlite')
+  if l:first
+    echo 'Gnosis: 曼荼羅の索引を作っています（初回だけ時間がかかります）…'
+    redraw
+  endif
+  let l:force = a:0 && a:1
+  " 走査が重い vault（1 秒を超える）では、開くのを待たせず、走査は裏で行う。終わって変わっていれば描き直す
+  let l:st = l:first ? v:null : s:pyc(['status', l:root])
+  if !l:first && !l:force && type(l:st) == v:t_dict && get(l:st, 'scan_sec', 0) > 1.0 && has('job')
+    call s:refresh_async(l:root)
+    let l:r = {}
+  else
+    let l:r = s:pyc(['refresh', l:root] + (l:force ? ['--force'] : []))
+  endif
+  if type(l:r) != v:t_dict
     echohl WarningMsg | echo 'Gnosis: 曼荼羅のデータを読めませんでした' | echohl NONE
     return 0
   endif
-  let s:S.data = l:d
+  let s:S.data = {'nodes': {}}
+  let s:S.missing = {}
   let s:S.root = l:root
   return 1
+endfunction
+
+" 裏で更新する。終わって変わったノートがあれば、開いている曼荼羅を描き直す
+function! s:refresh_async(root) abort
+  if exists('s:S.job') && type(s:S.job) == v:t_job && job_status(s:S.job) ==# 'run'
+    return
+  endif
+  let s:S.async_out = ''
+  let s:S.job = job_start([gnosis#python_cmd(), s:here . '/python/mandala_cache.py', 'refresh', a:root],
+        \ {'out_mode': 'raw', 'err_io': 'null', 'in_io': 'null',
+        \  'out_cb': {_c, m -> execute('let s:S.async_out .= m', '')},
+        \  'exit_cb': {_j, _s -> timer_start(0, {-> s:after_async()})}})
+endfunction
+
+function! s:after_async() abort
+  try
+    let l:r = json_decode(get(s:S, 'async_out', ''))
+  catch
+    return
+  endtry
+  if type(l:r) != v:t_dict || (get(l:r, 'changed', 0) + get(l:r, 'removed', 0)) == 0 || s:mwin() < 0
+    return
+  endif
+  if !empty(getcmdtype()) || mode() =~# '^[iR]'
+    return
+  endif
+  let l:back = win_getid()
+  noautocmd call win_gotoid(s:mwin())
+  let s:S.data = {'nodes': {}}
+  let s:S.missing = {}
+  let s:S.nearc = {}
+  let s:S.relc = {}
+  if !s:has(s:S.center)
+    let s:S.center = 'index.md'
+  endif
+  call s:render()
+  noautocmd call win_gotoid(l:back)
+endfunction
+
+" ids のうち full（周りへの辺を持つ形）でないものを、まとめて 1 回で取る。周りのノートは light（題と索引か）で入る
+function! s:fetch(ids) abort
+  let l:need = []
+  for l:id in a:ids
+    if !empty(l:id) && !has_key(s:S.missing, l:id) && !(has_key(s:S.data.nodes, l:id) && has_key(s:S.data.nodes[l:id], 'o'))
+      call add(l:need, l:id)
+    endif
+  endfor
+  if empty(l:need)
+    return
+  endif
+  let l:need = uniq(sort(l:need))
+  let l:d = s:pyc(['nodes', s:S.root] + l:need)
+  if type(l:d) != v:t_dict
+    return
+  endif
+  let l:got = get(l:d, 'nodes', {})
+  for l:id in l:need
+    if !has_key(l:got, l:id)
+      let s:S.missing[l:id] = 1
+    endif
+  endfor
+  for [l:id, l:nd] in items(l:got)
+    if has_key(l:nd, 'o') || !has_key(s:S.data.nodes, l:id)
+      let s:S.data.nodes[l:id] = l:nd
+    endif
+  endfor
+endfunction
+
+" ノートがあるか（なければ 0）。light でよければ読み込み済みのものを使う
+function! s:has(id) abort
+  if empty(a:id)
+    return 0
+  endif
+  if !has_key(s:S.data.nodes, a:id)
+    call s:fetch([a:id])
+  endif
+  return has_key(s:S.data.nodes, a:id)
+endfunction
+
+" ノート a:id の full（無ければ {}）
+function! s:nd(id) abort
+  call s:fetch([a:id])
+  return get(s:S.data.nodes, a:id, {})
 endfunction
 
 " python/mandala_view.py の items() と同じ規則（ダブルインデックスの道に沿う）
@@ -161,6 +273,7 @@ function! s:near(c) abort
   endfor
   if empty(s:S.nearc[a:c])
     " 手がかりが無いときは Index の直下の索引も足す
+    call s:fetch(['index.md'])
     for l:id in gnosis#mview#items(s:S.data, 'index.md', 'groups')
       if l:id !=# a:c && index(l:out, l:id) < 0
         call add(l:out, l:id)
@@ -190,14 +303,19 @@ endfunction
 
 " 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
 function! s:base(c) abort
+  call s:fetch([a:c])
   if a:c ==# s:S.center
+    let l:ids = []
     if !empty(s:S.rquery)
-      return map(copy(s:S.results), '[v:val, ""]')
-    endif
-    if s:S.mode ==# 'near'
-      return map(s:near(a:c), '[v:val, ""]')
+      let l:ids = copy(s:S.results)
+    elseif s:S.mode ==# 'near'
+      let l:ids = s:near(a:c)
     elseif s:S.mode ==# 'rel'
-      return map(s:rel(a:c), '[v:val, ""]')
+      let l:ids = s:rel(a:c)
+    endif
+    if !empty(s:S.rquery) || index(['near', 'rel'], s:S.mode) >= 0
+      call s:fetch(l:ids)   " 題を出すのに要る。まとめて 1 回で取る
+      return map(l:ids, '[v:val, ""]')
     endif
   endif
   return gnosis#mview#entries(s:S.data, a:c, index(['near', 'rel'], s:S.mode) >= 0 ? 'all' : s:S.mode)
@@ -208,7 +326,7 @@ function! s:entry_text(e) abort
   if !empty(a:e[1])
     return tolower(a:e[1])
   endif
-  return has_key(s:S.data.nodes, a:e[0]) ? tolower(s:S.data.nodes[a:e[0]].t) : ''
+  return s:has(a:e[0]) ? tolower(s:S.data.nodes[a:e[0]].t) : ''
 endfunction
 
 " 絞り込み（/）: 索引を選ぶとき（\g）は題が合う索引を全部から、ふだんは今の周りの中から
@@ -219,13 +337,8 @@ function! s:items(c) abort
   endif
   let l:q = tolower(s:S.query)
   if get(s:S, 'pick', 0)
-    let l:out = []
-    for l:id in sort(keys(s:S.data.nodes))
-      if s:S.data.nodes[l:id].g && l:id !=# a:c && stridx(tolower(s:S.data.nodes[l:id].t), l:q) >= 0
-        call add(l:out, [l:id, ''])
-      endif
-    endfor
-    return l:out
+    let l:found = s:pyc(['find', s:S.root] + split(s:S.query, '\s\+'))
+    return map(filter(type(l:found) == v:t_list ? l:found : [], 'v:val !=# a:c'), '[v:val, ""]')
   endif
   return filter(l:b, 'stridx(s:entry_text(v:val), l:q) >= 0')
 endfunction
@@ -249,6 +362,15 @@ endfunction
 
 function! s:board() abort
   let l:b = s:board_cells()
+  " 種類を決めるのに、マスのノートと、そのマスの中心のノートの full が要る。まとめて 1 回で取る
+  let l:ids = []
+  for l:row in l:b
+    for l:cell in l:row
+      call add(l:ids, get(l:cell, 'id', ''))
+      call add(l:ids, get(l:cell, 'of', s:S.center))
+    endfor
+  endfor
+  call s:fetch(l:ids)
   call s:set_kinds(l:b)
   if !empty(s:S.rquery)
     let l:c = s:S.size == 3 ? 1 : 4
@@ -279,6 +401,9 @@ function! s:board_cells() abort
     call add(l:b, repeat([{'id': '', 'role': 'empty', 'n': 0}], l:n))
   endfor
   let l:ring = s:ring(s:S.center, s:S.page)
+  if l:n == 9
+    call s:fetch(map(copy(l:ring), 'v:val[0]'))
+  endif
   if l:n == 3
     let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 5}
     for l:i in range(8)
@@ -375,25 +500,26 @@ let s:kind_legend = ['index', 'group', 'parent', 'child', 'context', 'related', 
 
 " マス a:id が、a:of（そのマスの中心）から見てどういうものか
 function! s:kind(id, of) abort
-  if empty(a:id) || !has_key(s:S.data.nodes, a:id)
+  let l:nd = s:nd(a:id)
+  if empty(l:nd)
     return 'note'
   endif
-  let l:nd = s:S.data.nodes[a:id]
   if l:nd.g
     return 'group'
   endif
-  if empty(a:of) || !has_key(s:S.data.nodes, a:of)
+  let l:ofd = s:nd(a:of)
+  if empty(l:ofd)
     return 'note'
   endif
   " 索引 = グループに載っているノート（そのグループの項目）
-  if s:S.data.nodes[a:of].g && index(get(s:S.data.nodes[a:of].o, 'link', []), a:id) >= 0
+  if l:ofd.g && index(get(l:ofd.o, 'link', []), a:id) >= 0
     return 'index'
   endif
   " この索引（トピック索引）を BranchGroup: に持つノートは、戻る道（親）
-  if index(get(get(s:S.data.nodes[a:of], 'r', {}), 'branch_group', []), a:id) >= 0
+  if index(get(get(l:ofd, 'r', {}), 'branch_group', []), a:id) >= 0
     return 'parent'
   endif
-  let l:o = s:S.data.nodes[a:of].o
+  let l:o = l:ofd.o
   let l:r = l:nd.o
   if index(get(l:o, 'parent_branch', []), a:id) >= 0 || index(get(l:r, 'child_branch', []), a:of) >= 0
     return 'parent'
@@ -411,7 +537,7 @@ function! s:label(cell) abort
   if has_key(a:cell, 'text')
     return a:cell.text
   endif
-  if empty(a:cell.id) || !has_key(s:S.data.nodes, a:cell.id)
+  if !s:has(a:cell.id)
     return ''
   endif
   " 索引に載っている表示名（索引語）があればそれを名前にする
@@ -454,7 +580,7 @@ function! s:info() abort
   endif
   let l:cell = s:cur_cell()
   let l:txt = ''
-  if !empty(l:cell.id) && has_key(s:S.data.nodes, l:cell.id)
+  if s:has(l:cell.id)
     let l:why = (index(['near', 'rel'], s:S.mode) >= 0 && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)) ? '  ' . s:S.why[l:cell.id] : ''
     let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:why
   endif
@@ -564,7 +690,7 @@ function! s:render() abort
   let s:S.bars = []   " 色の線にする位置 [グループ, 行, 開始バイト, バイト長]
   let s:S.spans = {}   " 'r,c' => [行, 開始バイト(1 始まり), バイト長]
   " 上の見出し（今の中心・何枚目・モード）
-  let l:ctitle = has_key(s:S.data.nodes, s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
+  let l:ctitle = s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center
   let l:pages = s:pages(s:S.center)
   " ページ（1/2）は中央のマスの一番上に。マスが小さくて入らないときだけ見出しに出す
   let l:mid = l:n == 3 ? 1 : 4
@@ -842,7 +968,7 @@ function! s:enter() abort
     return
   endif
   if l:cell.id ==# s:S.center && get(s:S, 'pick', 0)
-    if s:S.data.nodes[l:cell.id].g && empty(s:S.query) && empty(s:S.rquery)
+    if s:nd(l:cell.id).g && empty(s:S.query) && empty(s:S.rquery)
       call s:decide(l:cell.id)
     endif
     return
@@ -860,7 +986,7 @@ endfunction
 " ---- / : ふつうの検索のように、語をハイライトしてヒットしたマスへ飛ぶ ----------------------
 
 function! s:title_of(id) abort
-  return has_key(s:S.data.nodes, a:id) ? tolower(s:S.data.nodes[a:id].t) : ''
+  return s:has(a:id) ? tolower(s:S.data.nodes[a:id].t) : ''
 endfunction
 
 function! s:cell_text(cell) abort
@@ -979,10 +1105,10 @@ function! s:back() abort
     return
   endif
   let [l:id, l:pg] = remove(s:S.hist, -1)
-  while !has_key(s:S.data.nodes, l:id) && !empty(s:S.hist)
+  while !s:has(l:id) && !empty(s:S.hist)
     let [l:id, l:pg] = remove(s:S.hist, -1)
   endwhile
-  if !has_key(s:S.data.nodes, l:id)
+  if !s:has(l:id)
     return
   endif
   call s:set_center(l:id, l:pg)
@@ -1162,7 +1288,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>resize(-1)<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call <SID>resize(1)<CR>
-  nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload()<CR>
+  nnoremap <buffer><nowait><silent> u <Cmd>call <SID>reload(1)<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   augroup gnosis_mview_buf
@@ -1174,10 +1300,31 @@ function! s:setup_buffer() abort
   augroup END
 endfunction
 
+" ノートを保存したら、曼荼羅が開いていなくても、キャッシュに「読み直すノート」として控える
+" （次に曼荼羅を開くとき、vault 全体を走査せずに追いつく）
+function! gnosis#mview#saved(path) abort
+  let l:root = s:root()
+  if empty(l:root) || stridx(a:path, l:root . '/') != 0 || !isdirectory(l:root . '/.gnosis/cache')
+    return
+  endif
+  try
+    call writefile([strpart(a:path, len(l:root) + 1)], l:root . '/.gnosis/cache/dirty', 'a')
+  catch
+  endtry
+endfunction
+
 " ノートを保存・読み込みしたら（題を zr で変えたときなど）、曼荼羅が開いていれば少し待って読み直す
-function! s:touched() abort
+function! s:touched(path) abort
   if empty(get(s:S, 'buf', 0)) || s:mwin() < 0 || &filetype ==# 'gnosis-mandala'
     return
+  endif
+  " 保存したノートだけをキャッシュで読み直す（vault 全体は走査しない）
+  let l:root = get(s:S, 'root', '')
+  if !empty(l:root) && stridx(a:path, l:root . '/') == 0
+    let l:rel = strpart(a:path, len(l:root) + 1)
+    if index(get(s:S, 'dirty', []), l:rel) < 0
+      let s:S.dirty = get(s:S, 'dirty', []) + [l:rel]
+    endif
   endif
   if exists('s:sync_timer')
     call timer_stop(s:sync_timer)
@@ -1238,15 +1385,35 @@ function! gnosis#mview#refresh() abort
   endif
   let l:back = win_getid()
   noautocmd call win_gotoid(l:mw)
-  call s:reload()
+  call s:reload_dirty()
   noautocmd call win_gotoid(l:back)
 endfunction
 
-function! s:reload() abort
+" 保存されたノートだけ読み直して描き直す
+function! s:reload_dirty() abort
+  let l:rels = get(s:S, 'dirty', [])
+  let s:S.dirty = []
+  if empty(l:rels)
+    " 控えが無いまま呼ばれたとき（外から書き換えたなど）は、vault を走査して変わったものを読み直す
+    call s:reload(1)
+    return
+  endif
+  call s:pyc(['refresh', s:S.root, '--only'] + l:rels)
+  let s:S.data = {'nodes': {}}
+  let s:S.missing = {}
   let s:S.nearc = {}
   let s:S.relc = {}
-  if s:load()
-    if !has_key(s:S.data.nodes, s:S.center)
+  if !s:has(s:S.center)
+    let s:S.center = 'index.md'
+  endif
+  call s:render()
+endfunction
+
+function! s:reload(...) abort
+  let s:S.nearc = {}
+  let s:S.relc = {}
+  if s:load(a:0 ? a:1 : 0)
+    if !s:has(s:S.center)
       let s:S.center = 'index.md'
     endif
     call s:render()
@@ -1274,7 +1441,7 @@ function! s:open(center, ...) abort
   call s:hl()
   augroup gnosis_mview_sync
     autocmd!
-    autocmd BufWritePost,FileChangedShellPost *.md call s:touched()
+    autocmd BufWritePost,FileChangedShellPost *.md call s:touched(expand('<afile>:p'))
     autocmd VimLeavePre * call s:save_state()
     " 配色が読み込み直されると（ノートを開き直したときなど）色の定義が全部消えるので、定義し直す
     autocmd ColorScheme * call s:hl()
@@ -1318,8 +1485,8 @@ function! s:open(center, ...) abort
       let s:S.tenths = l:t
     endif
   endif
-  if !has_key(s:S.data.nodes, l:c)
-    let l:c = has_key(s:S.data.nodes, 'index.md') ? 'index.md' : ''
+  if !s:has(l:c)
+    let l:c = s:has('index.md') ? 'index.md' : ''
   endif
   if empty(l:c)
     echohl WarningMsg | echo 'Gnosis: 曼荼羅にできるノートがありません' | echohl NONE

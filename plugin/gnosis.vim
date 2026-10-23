@@ -460,6 +460,12 @@ nnoremap <silent> <C-t> i<C-r>=gnosis#time_stamp()<CR>
 nnoremap <silent> \T   <Cmd>call gnosis#time_mode_toggle()<CR>
 command! GnosisTimeMode call gnosis#time_mode_toggle()
 " 時刻モードはそのノートだけ: 開いたときに決め（時系列記録のノートはオン）、閉じる・ほかのノートへ移ると取りやめる。書き始めた行の頭に時刻
+" 保存したノートを曼荼羅のキャッシュに控える（曼荼羅が閉じていても。次に開くとき、そのノートだけ読み直す）
+augroup gnosis_mview_saved
+  autocmd!
+  autocmd BufWritePost *.md call gnosis#mview#saved(expand('<afile>:p'))
+augroup END
+
 augroup gnosis_time_mode
   autocmd!
   autocmd BufWinEnter *.md call gnosis#time_mode_on_enter(str2nr(expand('<abuf>')))
