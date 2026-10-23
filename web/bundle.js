@@ -33935,11 +33935,20 @@ ${h3.join(`
         legend.appendChild(s15);
       }
     }
+    let sig = "";
     function render2(m) {
       last3 = m;
       const n = m.size;
       head.textContent = m.status || "";
       foot.textContent = m.info || "";
+      const key = JSON.stringify([n, m.nums, m.cells, light()]);
+      if (key === sig && board.children.length === n * n) {
+        board.querySelectorAll(".m-cell.sel").forEach((e) => e.classList.remove("sel"));
+        const el2 = m.cur && board.children[m.cur[0] * n + m.cur[1]];
+        if (el2) el2.classList.add("sel");
+        return;
+      }
+      sig = key;
       board.textContent = "";
       board.style.setProperty("--n", String(n));
       board.classList.toggle("n9", n === 9);

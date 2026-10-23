@@ -235,6 +235,19 @@ function! s:push() abort
   call s:snapshot(0)
 endfunction
 
+" カーソルの移動は、続けて起きる分を 1 回にまとめる（キーを押しっぱなしでも、アプリへ送るのは約 60 回/秒まで）。
+let s:soft = 0
+function! s:soft_flush(t) abort
+  let s:soft = 0
+  call s:snapshot(0)
+endfunction
+function! s:push_soft() abort
+  if !s:soft
+    let s:soft = 1
+    call timer_start(16, function('s:soft_flush'))
+  endif
+endfunction
+
 function! s:push_force() abort
   call s:snapshot(1)
 endfunction
@@ -245,7 +258,8 @@ endfunction
 
 augroup syn_gui
   autocmd!
-  autocmd TextChanged,TextChangedI,TextChangedP,CursorMoved,CursorMovedI,InsertEnter,InsertLeave,CmdlineEnter,CmdlineLeave,WinEnter,BufEnter,FocusGained * call s:push()
+  autocmd CursorMoved,CursorMovedI * call s:push_soft()
+  autocmd TextChanged,TextChangedI,TextChangedP,InsertEnter,InsertLeave,CmdlineEnter,CmdlineLeave,WinEnter,BufEnter,FocusGained * call s:push()
   autocmd BufEnter,BufWinEnter,VimResized,TerminalOpen,TerminalWinOpen * call s:push_force()
   if exists('##ModeChanged')
     autocmd ModeChanged * call s:push()

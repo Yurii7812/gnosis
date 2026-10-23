@@ -38,11 +38,21 @@ export function createMandala(root, { onCell }) {
     }
   }
 
+  let sig = "";
   function render(m) {
     last = m;
     const n = m.size;
     head.textContent = m.status || "";
     foot.textContent = m.info || "";
+    // 盤面の中身（マス・色・番号）が前と同じなら、作り直さず、選んでいるマスの枠だけ動かす（ちらつかない）
+    const key = JSON.stringify([n, m.nums, m.cells, light()]);
+    if (key === sig && board.children.length === n * n) {
+      board.querySelectorAll(".m-cell.sel").forEach((e) => e.classList.remove("sel"));
+      const el = m.cur && board.children[m.cur[0] * n + m.cur[1]];
+      if (el) el.classList.add("sel");
+      return;
+    }
+    sig = key;
     board.textContent = "";
     board.style.setProperty("--n", String(n));
     board.classList.toggle("n9", n === 9);

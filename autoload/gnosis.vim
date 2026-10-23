@@ -5520,15 +5520,15 @@ endfunction
 
 " ---------------------------------------------------------------------------
 " スマホ用の Gnosis メモ APK を作って入れる: :GnosisApkInstall
-"   android/ で assembleDebug（ビルド環境は ~/Android）→ USB でつないだスマホへ adb install -r。
+"   android/ で assembleFast（デバッグ可能のまま R8 で最適化した軽い版。ビルド環境は ~/Android）→ USB でつないだスマホへ adb install -r。
 "   取り込み（\M）は run-as を使うので、入れるのはデバッグ版の APK。
 " ---------------------------------------------------------------------------
 
 function! gnosis#apk_install() abort
   let l:android = s:note_root . '/android'
-  let l:apk = l:android . '/app/build/outputs/apk/debug/app-debug.apk'
+  let l:apk = l:android . '/app/build/outputs/apk/fast/app-fast.apk'
   let l:build = 'export JAVA_HOME=$HOME/Android/jdk ANDROID_HOME=$HOME/Android/Sdk; cd '
-        \ . shellescape(l:android) . ' && ./gradlew assembleDebug'
+        \ . shellescape(l:android) . ' && ./gradlew assembleFast'
   echo gnosis#i18n#tr('Gnosis: APK をビルドしています…（数分かかることがあります）')
   redraw
   let l:out = system('sh -c ' . shellescape(l:build) . ' 2>&1')

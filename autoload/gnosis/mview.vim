@@ -1014,13 +1014,25 @@ function! s:render() abort
   endwhile
   call add(l:lines, '')
   let s:S.info_line = len(l:lines)
+  " 全部消してから書き直すと画面がちらつくので、変わった行だけ書き換える。描いている間は画面を更新しない
+  let l:lz = &lazyredraw
+  set lazyredraw
   setlocal modifiable
-  silent! %delete _
-  call setline(1, l:lines)
+  let l:old = getline(1, '$')
+  if len(l:old) > len(l:lines)
+    silent! execute (len(l:lines) + 1) . ',$delete _'
+  endif
+  for l:i in range(len(l:lines))
+    if l:i >= len(l:old) || l:old[l:i] !=# l:lines[l:i]
+      call setline(l:i + 1, l:lines[l:i])
+    endif
+  endfor
   setlocal nomodifiable nomodified
   call winrestview({'topline': 1, 'leftcol': 0})
   call s:mark()
   call s:save_state()
+  call s:sync_leader()
+  let &lazyredraw = l:lz
 endfunction
 
 function! s:fit(s, w) abort
@@ -1532,7 +1544,10 @@ endfunction
 
 " I: 選んでいるノートを Index に追加する（そのトピックの入り口にする）
 function! s:decide_index() abort
-  if get(s:S, 'pick', '') !=# 'group'
+  " \l → I: 選んでいるノート（中心）を Index に載せる。\l → e → g → I は、入れるノートを Index に載せる
+  if get(s:S, 'pick', '') ==# 'link' && filereadable(s:S.root . '/' . s:S.center)
+    let s:S.src = s:S.root . '/' . s:S.center
+  elseif get(s:S, 'pick', '') !=# 'group'
     return
   endif
   if !s:has('index.md')
@@ -1815,9 +1830,31 @@ endfunction
 
 " ---- 入口 -------------------------------------------------------------------
 
+function! s:leader_to_note() abort
+  let l:nw = s:note_win()
+  if l:nw > 0
+    call win_gotoid(l:nw)
+  endif
+  call feedkeys('\', 'mi')
+endfunction
+
+" 右にノートの窓があるときだけ、\ で始まる操作をそのノートの窓へ渡す（窓が無い全画面では \ はそのまま）
+function! s:sync_leader() abort
+  if &filetype !=# 'gnosis-mandala'
+    return
+  endif
+  if s:note_win() > 0
+    nnoremap <buffer><nowait><silent> \ <Cmd>call <SID>leader_to_note()<CR>
+  elseif !empty(maparg('\', 'n', 0, 1)) && get(maparg('\', 'n', 0, 1), 'buffer', 0)
+    nunmap <buffer> \
+  endif
+endfunction
+
 function! s:setup_buffer() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=0 sidescrolloff=0
+  " ノートにカーソルがないとできない操作（\ で始まるもの）は、曼荼羅にカーソルがあっても、ノートにカーソルがあるのと同じに動く:
+  " 右のノートの窓へ移ってから、続きのキーを渡す
   nnoremap <buffer><nowait><silent> h <Cmd>call <SID>move(0, -1)<CR>
   nnoremap <buffer><nowait><silent> <Left> <Cmd>call <SID>move(0, -1)<CR>
   nnoremap <buffer><nowait><silent> l <Cmd>call <SID>move(0, 1)<CR>
@@ -2246,13 +2283,17 @@ endfunction
 " \l: 入れるノートを曼荼羅で選ぶ。曼荼羅が開いていればそこへ（開いていなければ開く）。e で決めると、置き場所のキーを聞く
 function! gnosis#mview#link_pick() abort
   let l:file = expand('%:p')
-  if empty(l:file) || &filetype ==# 'gnosis-mandala' || l:file !~? '\.md$'
+  " 曼荼羅にカーソルがあるときは、中心のノートを「今のノート」として扱う（ノートにカーソルがあるのと同じ）
+  if &filetype ==# 'gnosis-mandala' && has_key(s:S, 'center') && filereadable(s:S.root . '/' . s:S.center)
+    let l:file = s:S.root . '/' . s:S.center
+  endif
+  if empty(l:file) || (&filetype ==# 'gnosis-mandala' && l:file ==# expand('%:p')) || l:file !~? '\.md$'
     echohl WarningMsg | echo 'Gnosis: リンクを入れるノートを開いて実行して' | echohl NONE
     return
   endif
   let l:root = s:root()
   let l:rel = stridx(l:file, l:root . '/') == 0 ? strpart(l:file, len(l:root) + 1) : ''
-  let l:origin = {'path': l:file, 'pos': getpos('.')}
+  let l:origin = {'path': l:file, 'pos': &filetype ==# 'gnosis-mandala' ? [0, 1, 1, 0] : getpos('.')}
   if s:mwin() < 0
     call s:open(l:rel)
   else

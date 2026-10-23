@@ -9,6 +9,7 @@ import java.util.Date
 import java.util.Locale
 
 /** 書いた 1 件。Gnosis では 1 件 = 1 ノート（日記トピックは日記の本文に時刻つきで入る）。 */
+@androidx.compose.runtime.Immutable
 data class Entry(
     val id: String,              // Gnosis のファイル名（拡張子なし）。yyMMddHHmmss（重なれば -2, -3 …）
     val created: Long,

@@ -678,5 +678,23 @@ call gnosis#mview#preset_delete('別')
 call s:ok('プリセットを消す', gnosis#mview#preset_names() ==# [])
 call s:keys('Q')
 
+" 曼荼羅にカーソルがあっても \l ができる（ノートにカーソルがあるのと同じ）。\l → I で選んだノートを Index に載せる
+call s:mk('lk1.md', '載せる相手', 0, [], [])
+call s:mk('lk0.md', '元のノート', 0, [], ['[載せる相手](lk1.md)'])
+execute 'edit ' . s:v . '/lk0.md'
+call s:keys(' ')
+call s:ok('曼荼羅にカーソルがある', &filetype ==# 'gnosis-mandala')
+call s:keys('\l')
+let s:st = gnosis#mview#state()
+call s:ok('曼荼羅から \l ができる（入れるノートを選ぶモード）', s:st.pick ==# 'link' && &filetype ==# 'gnosis-mandala', string([s:st.pick, &filetype]))
+call s:keys('1')
+let s:st = gnosis#mview#state()
+let s:picked = s:st.center
+let g:gnosis_test_display_name = ['載せる相手']
+let g:gnosis_test_yomi = ['のせるあいて']
+call s:keys('I')
+call s:ok('\l → I で選んだノートが Index に載る', join(readfile(s:v . '/index.md'), "\n") =~# '(' . s:picked . ')', join(readfile(s:v . '/index.md'), "\n"))
+call s:keys('Q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
