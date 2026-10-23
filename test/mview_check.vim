@@ -725,5 +725,19 @@ call s:keys('u')
 call s:ok('もう一度 u でオフ（見出しが中心だったらノートに戻る）', s:st.ol_on == 0 && s:st.center ==# 'ol.md', string([s:st.ol_on, s:st.center]))
 call s:keys('Q')
 
+" u: A が B#見出し へリンクしているとき、B の題つきの見出しのマス（B そのものは出さない）
+call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# 呼ぶ側', '', '[章へ](ol.md#第一章)'], s:v . '/caller.md')
+execute 'edit ' . s:v . '/caller.md'
+call s:keys(' ')
+call s:keys('.')
+call s:keys('u')
+let s:st = gnosis#mview#state()
+let s:ids = []
+let s:names = []
+for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | call add(s:names, get(s:cell, 'name', '')) | endif | endfor | endfor
+call s:ok('A → B#見出し は、B の題つきの見出しのマスで出る（B 自体は出ない）', index(s:ids, 'ol.md#第一章') >= 0 && index(s:ids, 'ol.md') < 0 && join(s:names, '|') =~# '見出しの多いノート › 第一章', string([s:ids, s:names]))
+call s:keys('u')
+call s:keys('Q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

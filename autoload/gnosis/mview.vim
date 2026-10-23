@@ -190,6 +190,47 @@ function! s:h_find(id) abort
   return {}
 endfunction
 
+" リンク先 a:t（ノートからの相対）を vault からのパスにする
+function! s:h_resolve(base, t) abort
+  let l:dir = fnamemodify(a:base, ':h')
+  return l:dir ==# '.' ? a:t : simplify(l:dir . '/' . a:t)
+endfunction
+
+" 本文の a:lines にある [表示](x.md#見出し) のうち、見出しが実在するものを {ノート: [スラッグ…]} で、
+" 見出し無しのリンクがあるノートを plain に。「B#見出し」へのリンクは、B の題つきの見出しのマスで出す
+function! s:h_anchors(base, lines) abort
+  let l:anch = {}
+  let l:plain = {}
+  let l:pat = '\[[^\]]*\](\([^)#]\+\.md\)\(#[^)]*\)\=)'
+  for l:ln in a:lines
+    let l:pos = 0
+    while 1
+      let l:m = matchlist(l:ln, l:pat, l:pos)
+      if empty(l:m)
+        break
+      endif
+      let l:pos = matchend(l:ln, l:pat, l:pos)
+      let l:t = s:h_resolve(a:base, l:m[1])
+      let l:slug = strpart(l:m[2], 1)
+      if empty(l:slug)
+        let l:plain[l:t] = 1
+      elseif s:has(l:t) && !empty(s:h_find(l:t . '#' . l:slug))
+        let l:anch[l:t] = get(l:anch, l:t, [])
+        if index(l:anch[l:t], l:slug) < 0
+          call add(l:anch[l:t], l:slug)
+        endif
+      endif
+    endwhile
+  endfor
+  return [l:anch, l:plain]
+endfunction
+
+function! s:h_cell(t, slug) abort
+  let l:it = s:h_find(a:t . '#' . a:slug)
+  let l:nt = s:nd(a:t)
+  return [a:t . '#' . a:slug, get(l:nt, 't', a:t) . ' › ' . get(l:it, 'text', a:slug)]
+endfunction
+
 " 見出しのマスの中身: 親（1 つ上の見出し。無ければノート）・すぐ下の見出し・その節の本文のリンク先
 function! s:h_entries(id) abort
   let l:base = s:h_base(a:id)
@@ -219,11 +260,13 @@ function! s:h_entries(id) abort
       call add(l:out, [l:base . '#' . l:items[l:k].slug, l:items[l:k].text])
     endif
   endfor
-  " その節の本文（次の見出しの手前まで）のリンク先
+  " その節の本文（次の見出しの手前まで）のリンク先（B#見出し は、B の題つきの見出しのマス）
   let l:lines = readfile(s:S.root . '/' . l:base)
   let l:stop = l:end > 0 ? l:end - 1 : len(l:lines)
+  let l:sec = l:lines[l:me.lnum : l:stop - 1]
+  let [l:anch, l:plain] = s:h_anchors(l:base, l:sec)
   let l:dir = fnamemodify(l:base, ':h')
-  for l:ln in l:lines[l:me.lnum : l:stop - 1]
+  for l:ln in l:sec
     let l:pos = 0
     while 1
       let l:m = matchlist(l:ln, '\[[^\]]*\](\([^)#]\+\.md\)\(#[^)]*\)\=)', l:pos)
@@ -231,11 +274,19 @@ function! s:h_entries(id) abort
         break
       endif
       let l:pos = matchend(l:ln, '\[[^\]]*\](\([^)#]\+\.md\)\(#[^)]*\)\=)', l:pos)
-      let l:t = l:dir ==# '.' ? l:m[1] : simplify(l:dir . '/' . l:m[1])
-      if l:t !=# l:base && s:has(l:t) && index(map(copy(l:out), 'v:val[0]'), l:t) < 0
+      let l:t = s:h_resolve(l:base, l:m[1])
+      if l:t !=# l:base && s:has(l:t) && index(map(copy(l:out), 'v:val[0]'), l:t) < 0 && (empty(l:m[2]) || get(l:plain, l:t, 0) || !has_key(l:anch, l:t))
         call add(l:out, [l:t, ''])
       endif
     endwhile
+  endfor
+  for [l:t, l:slugs] in items(l:anch)
+    for l:sl in l:slugs
+      let l:c = s:h_cell(l:t, l:sl)
+      if index(map(copy(l:out), 'v:val[0]'), l:c[0]) < 0
+        call add(l:out, l:c)
+      endif
+    endfor
   endfor
   return l:out
 endfunction
@@ -442,7 +493,23 @@ function! s:base(c) abort
   let l:out = gnosis#mview#entries(s:S.data, a:c, s:S.mode)
   if get(s:S, 'ol_on', 0)
     " アウトライン: このノートの見出しを、リンクの前に 1 つずつのマスとして並べる
-    let l:out = map(copy(s:h_items(a:c)), '[a:c . "#" . v:val.slug, v:val.text]') + l:out
+    let l:heads = map(copy(s:h_items(a:c)), '[a:c . "#" . v:val.slug, v:val.text]')
+    " このノートが B#見出し へリンクしているものは、B の題つきの見出しのマスにする（B そのものへのリンクが無ければ B のマスは出さない）
+    let l:path = s:S.root . '/' . a:c
+    let [l:anch, l:plain] = s:h_anchors(a:c, filereadable(l:path) ? readfile(l:path) : [])
+    let l:cells = []
+    for l:e in l:out
+      if has_key(l:anch, l:e[0]) && !get(l:plain, l:e[0], 0)
+        continue
+      endif
+      call add(l:cells, l:e)
+    endfor
+    for [l:t, l:slugs] in items(l:anch)
+      for l:sl in l:slugs
+        call add(l:cells, s:h_cell(l:t, l:sl))
+      endfor
+    endfor
+    let l:out = l:heads + l:cells
   endif
   if a:c ==# s:S.center
     " c / r は、どのモードにも重ねる（中心でないブロックには重ねない）
@@ -1658,7 +1725,12 @@ function! s:link_decide() abort
   execute 'silent! hide edit ' . fnameescape(l:o.path)
   call setpos('.', l:o.pos)
   let l:link = gnosis#make_link(l:path, l:title)
-  call gnosis#insert_links_pick([l:link], l:o.pos)
+  try
+    call gnosis#insert_links_pick([l:link], l:o.pos)
+  catch
+    " 途中で Vim のエラーが出ても、曼荼羅に戻れるようにして、どこで出たかを見せる（原因を調べるため）
+    echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+  endtry
   " g が選ぶモードを始めていれば、そのまま続ける
   if empty(get(s:S, 'pick', ''))
     call s:back_to_mandala([s:rel_of(l:o.path)])
@@ -1677,7 +1749,11 @@ function! s:decide(id, ...) abort
   if s:goto_note_win() < 0
     return
   endif
-  call gnosis#index_add(l:src, l:group, l:slug)
+  try
+    call gnosis#index_add(l:src, l:group, l:slug)
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+  endtry
   if !empty(l:o) && filereadable(l:o.path) && fnamemodify(expand('%:p'), ':p') !=# fnamemodify(l:o.path, ':p')
     execute 'silent! hide edit ' . fnameescape(l:o.path)
     call setpos('.', l:o.pos)
