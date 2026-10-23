@@ -33905,10 +33905,11 @@ ${h3.join(`
     ["child", "\u5B50"],
     ["related", "\u95A2\u9023"],
     ["pred", "\u4E88\u6E2C\u95A2\u9023"],
-    ["note", "\u30CE\u30FC\u30C8"]
+    ["note", "\u30CE\u30FC\u30C8"],
+    ["outline", "\u898B\u51FA\u3057"]
   ];
-  var DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa" };
-  var LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d" };
+  var DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa", outline: "#7ee8fa" };
+  var LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d", outline: "#0b9fb8" };
   var BG_DARK = Array(8).fill("#262b36");
   var BG_LIGHT = Array(8).fill("#f1f3f6");
   function createMandala(root, { onCell }) {

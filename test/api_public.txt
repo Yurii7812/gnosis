@@ -139,6 +139,7 @@ gnosis#guard_vault_write
 gnosis#habit
 gnosis#habit_stats
 gnosis#has_python
+gnosis#heading_items
 gnosis#heading_links_after
 gnosis#heading_links_before
 gnosis#hide#apply
@@ -184,8 +185,8 @@ gnosis#index_add
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
-gnosis#insert_prompt_text
 gnosis#insert_prompt_lines
+gnosis#insert_prompt_text
 gnosis#ir_next
 gnosis#ir_rate
 gnosis#is_autosave_target

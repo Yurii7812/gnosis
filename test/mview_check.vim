@@ -74,7 +74,7 @@ call s:ok('a ですべてに戻る', s:text() =~# '植物' && s:text() =~# 'ミ�
 " 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
 let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
-call s:keys('u')
+call s:keys('.')
 call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
 call s:keys('i')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
@@ -388,7 +388,7 @@ for s:row in s:st.cells
 endfor
 call writefile(['---', 'time: x', '---', '', '# 逆', '', '本文で[ハブ](hub.md)を引用'], s:v . '/bl.md')
 call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# ハブ', '', 'ParentBranch:', '[親](kp.md)', '', 'Context:', '[文脈](kx.md)', '', '本文で[引用先](cit.md)に触れる', '', 'ChildBranch:', '[子](kc.md)', '', 'Related:', '[関連](kr.md)', '', 'BackLink:', '[逆](bl.md)'], s:v . '/hub.md')
-call s:keys('u')
+call s:keys('.')
 call s:ok('BackLink は引用とは別の種類・色', get(s:kinds, 'bl.md', 'x') ==# 'x' || get(s:kinds, 'bl.md') ==# 'back', string(s:kinds))
 call s:ok('種類の色: 親・文脈・引用・子・関連', get(s:kinds, 'kp.md') ==# 'parent' && get(s:kinds, 'kx.md') ==# 'context' && get(s:kinds, 'cit.md') ==# 'cite' && get(s:kinds, 'kc.md') ==# 'child' && get(s:kinds, 'kr.md') ==# 'related', string(s:kinds))
 call s:keys('c')
@@ -548,7 +548,7 @@ endfor
 call writefile(s:big, s:v . '/big.md')
 execute 'edit ' . s:v . '/big.md'
 call s:keys(' ')
-call s:keys('u')
+call s:keys('.')
 call s:keys('v')
 let s:st = gnosis#mview#state()
 call s:ok('v: 外向き（9×9 になり、状態の行に出る）', s:st.size == 9 && s:st.out_on == 1 && s:text() =~# 'v:外向き', string([s:st.size, get(s:st, 'out_on', -1)]))
@@ -701,6 +701,28 @@ let g:gnosis_test_display_name = ['載せる相手']
 let g:gnosis_test_yomi = ['のせるあいて']
 call s:keys('I')
 call s:ok('\l → I で選んだノートが Index に載る', join(readfile(s:v . '/index.md'), "\n") =~# '(' . s:picked . ')', join(readfile(s:v . '/index.md'), "\n"))
+call s:keys('Q')
+
+" u: アウトライン。見出しも 1 つのマス。見出しを中心にすると、親（ノート）・すぐ下の見出し・節の本文のリンクが周りに並ぶ
+call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# 見出しの多いノート', '', '## 第一章', '本文に [植物](plant.md) への言及', '### 第一節', '中身', '## 第二章', '中身'], s:v . '/ol.md')
+execute 'edit ' . s:v . '/ol.md'
+call s:keys(' ')
+call s:keys('.')
+call s:keys('u')
+let s:st = gnosis#mview#state()
+call s:ok('u: アウトラインがオンになり、状態の行に出る', s:st.ol_on == 1 && s:text() =~# 'u:見出し', s:text())
+let s:ids = []
+for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | endif | endfor | endfor
+call s:ok('u: ノートの見出しがマスとして並ぶ', index(s:ids, 'ol.md#第一章') >= 0 && index(s:ids, 'ol.md#第一節') >= 0 && index(s:ids, 'ol.md#第二章') >= 0, string(s:ids))
+let s:st.center = 'ol.md#第一章'
+call s:keys('z')
+let s:st = gnosis#mview#state()
+let s:ids = []
+let s:kinds2 = {}
+for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | let s:kinds2[s:cell.id] = s:cell.kind | endif | endfor | endfor
+call s:ok('見出しを中心に: 親はノート・すぐ下の見出し・節のリンク先', get(s:kinds2, 'ol.md') ==# 'parent' && get(s:kinds2, 'ol.md#第一節') ==# 'outline' && get(s:kinds2, 'plant.md') ==# 'cite' && index(s:ids, 'ol.md#第二章') < 0, string(s:kinds2))
+call s:keys('u')
+call s:ok('もう一度 u でオフ（見出しが中心だったらノートに戻る）', s:st.ol_on == 0 && s:st.center ==# 'ol.md', string([s:st.ol_on, s:st.center]))
 call s:keys('Q')
 
 call writefile(s:res, s:work . '/result.txt')

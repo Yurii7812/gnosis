@@ -2,11 +2,11 @@
 // 見た目だけ。キーは、Vim の曼荼羅の窓にそのまま届く（Space・hjkl・Enter・q など）。マウスのクリックは onCell で Vim に伝える。
 const KINDS = [
   ["index", "索引"], ["group", "グループ"], ["parent", "親"], ["context", "文脈"], ["cite", "引用"],
-  ["back", "BackLink"], ["child", "子"], ["related", "関連"], ["pred", "予測関連"], ["note", "ノート"],
+  ["back", "BackLink"], ["child", "子"], ["related", "関連"], ["pred", "予測関連"], ["note", "ノート"], ["outline", "見出し"],
 ];
 // 種類の色（Vim の曼荼羅と同じ。ライトは白い背景で読める濃さ）
-const DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa" };
-const LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d" };
+const DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa", outline: "#7ee8fa" };
+const LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d", outline: "#0b9fb8" };
 // 9×9 の、周りの 8 マスとそれぞれの曼荼羅の中心のマスの背景（全部同じごく薄い色）
 const BG_DARK = Array(8).fill("#262b36");
 const BG_LIGHT = Array(8).fill("#f1f3f6");

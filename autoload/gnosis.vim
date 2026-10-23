@@ -11622,6 +11622,11 @@ endfunction
 " 今のノートの見出しを選ぶ（t モード）。選ばれた見出しの行番号で a:Cb を呼ぶ。
 " 検索は見出しを優先しつつ、その下の本文にもヒットする（zo と同じ）。
 " ノート a:path の見出しを fzf で選び、スラッグで a:Cb を呼ぶ（曼荼羅の t 用。選ばずに閉じたら何もしない）
+" ノートの見出し [{text, slug, level, lnum}]（曼荼羅のアウトライン表示用）
+function! gnosis#heading_items(path) abort
+  return s:file_heading_items(a:path)
+endfunction
+
 function! gnosis#pick_heading(path, Cb) abort
   let l:items = s:file_heading_items(a:path)
   if empty(l:items)

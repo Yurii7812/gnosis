@@ -153,7 +153,7 @@ try {
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.start?.h1, "markdown should render at start: " + JSON.stringify(R.start));
-  check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 10, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
+  check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 11, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
   check(R.hide && R.hide.lines > 0, "YAML in the right note pane should be hidden: " + JSON.stringify(R.hide));
   check(R.noteText, "the note pane should show the note, not the mandala's box characters");
   check(R.click && R.click.before !== R.click.after && R.click.sel, "clicking a cell should move the cursor: " + JSON.stringify(R.click));
