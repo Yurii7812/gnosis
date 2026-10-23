@@ -1932,6 +1932,23 @@ function! gnosis#mview#toggle() abort
   call s:open(l:rel)
 endfunction
 
+" 起動したとき、曼荼羅ビューを左半分に出す（開いているのは Index）。設定 mandalaOnStart（既定オン）か
+" g:gnosis_mandala_on_start で止められる
+function! gnosis#mview#start() abort
+  let l:on = get(g:, 'gnosis_mandala_on_start', -1)
+  if l:on < 0
+    try
+      let l:on = get(gnosis#settings#current(), 'mandalaOnStart', v:true) ? 1 : 0
+    catch
+      let l:on = 1
+    endtry
+  endif
+  if !l:on || empty(s:root()) || &filetype ==# 'gnosis-mandala' || s:mwin() > 0 || empty(expand('%:p'))
+    return
+  endif
+  call gnosis#mview#toggle()
+endfunction
+
 " \l: 入れるノートを曼荼羅で選ぶ。曼荼羅が開いていればそこへ（開いていなければ開く）。e で決めると、置き場所のキーを聞く
 function! gnosis#mview#link_pick() abort
   let l:file = expand('%:p')

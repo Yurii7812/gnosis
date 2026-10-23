@@ -14,7 +14,8 @@
 "     "customThemes": {"名前": {"base": "light|dark", "bg": "#rrggbb", "fg": …,
 "                               "link": …, "heading": …, "selection": …, "cursorline": …}},
 "     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
-"     "appCustomThemes": {"名前": {… customThemes と同じ形 …}}
+"     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
+"     "mandalaOnStart": true   ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
 "   }
 "   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
 "   \c のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
@@ -50,6 +51,7 @@ function! gnosis#settings#defaults() abort
         \ 'customThemes': {},
         \ 'appTheme': {'kind': 'builtin'},
         \ 'appCustomThemes': {},
+        \ 'mandalaOnStart': v:true,
         \ }
 endfunction
 

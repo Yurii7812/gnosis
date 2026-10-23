@@ -1653,6 +1653,8 @@ function! gnosis#startup_sequence() abort
   " Index を開く（ファイルを指定して起動したときは、そのファイルのまま）
   if get(g:, 'gnosis_open_index_on_startup', 1) && argc() == 0 && has('timers')
     call timer_start(0, {-> execute('GnosisIndex')})
+    " 曼荼羅ビューを左半分に出して始める（設定 mandalaOnStart。既定オン。g:gnosis_mandala_on_start でも切り替えられる）
+    call timer_start(60, {-> gnosis#mview#start()})
   endif
   if has('timers')
     call timer_start(300, {-> execute('redraw!')})
