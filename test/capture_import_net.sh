@@ -42,7 +42,7 @@ EOF
 REPO="$REPO" D="$D" PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local} HOME="$D/home" GNOSIS_HOME="$D/gh" \
   timeout 120 vim -u NONE -N -es -S "$REPO/test/capture_import_check.vim" </dev/null 2>"$D/err" || true
 V="$D/v"
-diary=$(grep -l "^title: 2026-10-18-[A-Z][A-Z]$" "$V"/*.md | head -1)
+diary=$(grep -l "^# 2026-10-18-[A-Z][A-Z]$" "$V"/*.md | head -1)
 ng=0
 chk() { if eval "$2"; then :; else echo "NG $1" >&2; ng=1; fi; }
 chk "日記の本文に時刻つきで入る" 'grep -q "^12:00 お昼はスコーン$" "$diary" && grep -q "^二切れだけ$" "$diary"'
@@ -68,8 +68,8 @@ chk "まとめる: 使ったメモは同じノートの中で、その見出し�
 chk "ほかのノートから: 親が節なら見出しへのリンクの行と、トピックのノートを文脈に" 'grep -q "^↳ \[仕事#電話した\]($W#電話した) の続き$" "$V/261018170000.md" && grep -q "^前の\[仕事#電話した\]($W#電話した)を参照$" "$V/261018170000.md" && grep -A1 "^Context:" "$V/261018170000.md" | grep -q "$W"'
 chk "日時なし: 本文だけを足す" '[ -n "$book" ] && grep -q "^一冊目$" "$book" && grep -q "^二冊目$" "$book" && ! grep -q "^## 2026" "$book"'
 chk "日記はまとめる設定にしない（日記のまま）" '! grep -l "^capture_topic: \"日記\"" "$V"/*.md >/dev/null 2>&1'
-dream=$(grep -l '^title: 2026-10-18-SU-夢$' "$V"/*.md | head -1)
-recg=$(grep -l '^title: 時系列記録$' "$V"/*.md | head -1)
+dream=$(grep -l '^# 2026-10-18-SU-夢$' "$V"/*.md | head -1)
+recg=$(grep -l '^# 時系列記録$' "$V"/*.md | head -1)
 chk "時系列記録: その日の記録のノート（日付-曜日-夢）に時刻つき" '[ -n "$dream" ] && grep -q "^record: \"夢\"$" "$dream" && grep -q "^07:00 空を飛んだ$" "$dream" && grep -A1 "^07:00 空を飛んだ$" "$dream" | grep -q "^高かった$" && grep -q "^07:10 海の夢$" "$dream"'
 chk "時系列記録: 2 回目はその日のノートへ、PC で書いた分と時刻の順にまぜる" '[ "$(grep -o "^07:[0-9]* [^ ]*" "$dream" | cut -c1-5 | tr "\n" " ")" = "07:00 07:10 07:20 07:30 07:40 " ]'
 chk "時系列記録: その日の日記の上にリンク・時系列記録の中に夢" 'grep -q "^\[2026-10-18-SU-夢\]($(basename "$dream"))$" "$diary" && grep -q "^\[夢\](" "$recg"'
