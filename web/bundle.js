@@ -14591,12 +14591,12 @@ ${h3.join(`
     // be after/before a cursor position.
     resolveInline(pos, side, forCoords) {
       let before = null, beforeOff = -1, after = null, afterOff = -1;
-      function scan(tile, pos2) {
+      function scan2(tile, pos2) {
         for (let i = 0, off = 0; i < tile.children.length && off <= pos2; i++) {
           let child = tile.children[i], end = off + child.length;
           if (end >= pos2) {
             if (child.isComposite()) {
-              scan(child, pos2 - off);
+              scan2(child, pos2 - off);
             } else if ((!after || after.isHidden && (side > 0 && !(after.flags & 32) || forCoords && onSameLine(after, child))) && (end > pos2 || child.flags & 32 && side <= 1)) {
               after = child;
               afterOff = pos2 - off;
@@ -14608,7 +14608,7 @@ ${h3.join(`
           off = end;
         }
       }
-      scan(this, pos);
+      scan2(this, pos);
       let target = (side < 0 ? before : after) || before || after;
       return target ? { tile: target, offset: target == before ? beforeOff : afterOff } : null;
     }
@@ -15452,13 +15452,13 @@ ${h3.join(`
     }
   };
   function hasContent(tile, requireText) {
-    let scan = (tile2) => {
+    let scan2 = (tile2) => {
       for (let ch of tile2.children)
-        if ((requireText ? ch.isText() : ch.length) || scan(ch))
+        if ((requireText ? ch.isText() : ch.length) || scan2(ch))
           return true;
       return false;
     };
-    return scan(tile);
+    return scan2(tile);
   }
   function widgetFlags(deco) {
     let flags = deco.isReplace ? (deco.startSide < 0 ? 64 : 0) | (deco.endSide > 0 ? 128 : 0) : deco.startSide > 0 ? 32 : 16;
@@ -15842,11 +15842,11 @@ ${h3.join(`
       let { tile, offset } = this.tile.resolveBlock(pos, 1);
       if (!tile.isLine())
         return null;
-      function scan(tile2, offset2) {
+      function scan2(tile2, offset2) {
         if (tile2.isComposite()) {
           for (let ch of tile2.children) {
             if (ch.length >= offset2) {
-              let found = scan(ch, offset2);
+              let found = scan2(ch, offset2);
               if (found)
                 return found;
             }
@@ -15867,7 +15867,7 @@ ${h3.join(`
         }
         return null;
       }
-      return scan(tile, offset);
+      return scan2(tile, offset);
     }
     measureVisibleLineHeights(viewport) {
       let result = [], { from, to } = viewport;
@@ -15875,7 +15875,7 @@ ${h3.join(`
       let isWider = contentWidth > Math.max(this.view.scrollDOM.clientWidth, this.minWidth) + 1;
       let widest = -1, ltr = this.view.textDirection == Direction.LTR;
       let spaceAbove = 0;
-      let scan = (tile, pos, measureBounds) => {
+      let scan2 = (tile, pos, measureBounds) => {
         for (let i = 0; i < tile.children.length; i++) {
           if (pos > to)
             break;
@@ -15885,7 +15885,7 @@ ${h3.join(`
             spaceAbove += childRect.top - measureBounds.top;
           if (child instanceof BlockWrapperTile) {
             if (end > from)
-              scan(child, pos, childRect);
+              scan2(child, pos, childRect);
           } else if (pos >= from) {
             if (spaceAbove > 0)
               result.push(-spaceAbove);
@@ -15911,7 +15911,7 @@ ${h3.join(`
           pos = end + child.breakAfter;
         }
       };
-      scan(this.tile, 0, null);
+      scan2(this.tile, 0, null);
       return result;
     }
     textDirectionAt(pos) {
@@ -16047,8 +16047,8 @@ ${h3.join(`
       }
     }
     lineHasWidget(pos) {
-      let scan = (child) => child.isWidget() || child.children.some(scan);
-      return scan(this.tile.resolveBlock(pos, 1).tile);
+      let scan2 = (child) => child.isWidget() || child.children.some(scan2);
+      return scan2(this.tile.resolveBlock(pos, 1).tile);
     }
     destroy() {
       destroyDropped(this.tile);
@@ -16313,8 +16313,8 @@ ${h3.join(`
     }
     let resolvedGoal = rect.left + goal;
     let halfText = view3.viewState.heightOracle.textHeight >> 1, dist2 = distance !== null && distance !== void 0 ? distance : halfText;
-    for (let scan = 0; ; scan += halfText) {
-      let y = startY + (dist2 + scan) * dir;
+    for (let scan2 = 0; ; scan2 += halfText) {
+      let y = startY + (dist2 + scan2) * dir;
       let pos = posAtCoords(view3, { x: resolvedGoal, y }, false, dir);
       if (forward ? y > rect.bottom : y < rect.top)
         return EditorSelection.cursor(pos.pos, pos.assoc);
@@ -16457,11 +16457,11 @@ ${h3.join(`
         let dist2 = hi2 - lo2, mid = lo2 + hi2 >> 1;
         adjust: if (seen.has(mid)) {
           for (let i = 1; i < dist2; i++) {
-            let scan = mid + i;
-            if (scan >= hi2)
-              scan -= dist2;
-            if (!seen.has(scan)) {
-              mid = scan;
+            let scan2 = mid + i;
+            if (scan2 >= hi2)
+              scan2 -= dist2;
+            if (!seen.has(scan2)) {
+              mid = scan2;
               break adjust;
             }
           }
@@ -16529,11 +16529,11 @@ ${h3.join(`
       for (let i = 0; i < tile.length; i = findClusterBreak2(tile.text, i))
         positions.push(offset + i);
       positions.push(offset + tile.length);
-      let scan = this.scan(positions, (i) => {
+      let scan2 = this.scan(positions, (i) => {
         let off = positions[i] - offset, end = positions[i + 1] - offset;
         return textRange(tile.dom, off, end).getClientRects();
       });
-      return scan.after ? new PosAssoc(positions[scan.i + 1], -1) : new PosAssoc(positions[scan.i], 1);
+      return scan2.after ? new PosAssoc(positions[scan2.i + 1], -1) : new PosAssoc(positions[scan2.i], 1);
     }
     scanTile(tile, offset) {
       if (!tile.length)
@@ -16548,18 +16548,18 @@ ${h3.join(`
       let positions = [offset];
       for (let i = 0, pos2 = offset; i < tile.children.length; i++)
         positions.push(pos2 += tile.children[i].length);
-      let scan = this.scan(positions, (i) => {
+      let scan2 = this.scan(positions, (i) => {
         let child2 = tile.children[i];
         if (child2.flags & 48)
           return null;
         return (child2.dom.nodeType == 1 ? child2.dom : textRange(child2.dom, 0, child2.length)).getClientRects();
       });
-      let child = tile.children[scan.i], pos = positions[scan.i];
+      let child = tile.children[scan2.i], pos = positions[scan2.i];
       if (child.isText())
         return this.scanText(child, pos);
       if (child.isComposite())
         return this.scanTile(child, pos);
-      return scan.after ? new PosAssoc(positions[scan.i + 1], -1) : new PosAssoc(pos, 1);
+      return scan2.after ? new PosAssoc(positions[scan2.i + 1], -1) : new PosAssoc(pos, 1);
     }
   };
   var LineBreakPlaceholder = "\uFFFF";
@@ -21855,8 +21855,8 @@ ${h3.join(`
     }
     let mode = overlays ? 0 : IterMode.IgnoreOverlays;
     if (overlays)
-      for (let scan = node, parent = scan.parent; parent; scan = parent, parent = scan.parent) {
-        if (scan instanceof TreeNode && scan.index < 0 && ((_a3 = parent.enter(pos, side, mode)) === null || _a3 === void 0 ? void 0 : _a3.from) != scan.from)
+      for (let scan2 = node, parent = scan2.parent; parent; scan2 = parent, parent = scan2.parent) {
+        if (scan2 instanceof TreeNode && scan2.index < 0 && ((_a3 = parent.enter(pos, side, mode)) === null || _a3 === void 0 ? void 0 : _a3.from) != scan2.from)
           node = parent;
       }
     for (; ; ) {
@@ -21887,16 +21887,16 @@ ${h3.join(`
       return matchNodeContext(this.parent, context);
     }
     enterUnfinishedNodesBefore(pos) {
-      let scan = this.childBefore(pos), node = this;
-      while (scan) {
-        let last3 = scan.lastChild;
-        if (!last3 || last3.to != scan.to)
+      let scan2 = this.childBefore(pos), node = this;
+      while (scan2) {
+        let last3 = scan2.lastChild;
+        if (!last3 || last3.to != scan2.to)
           break;
         if (last3.type.isError && last3.from == last3.to) {
-          node = scan;
-          scan = last3.prevSibling;
+          node = scan2;
+          scan2 = last3.prevSibling;
         } else {
-          scan = last3;
+          scan2 = last3;
         }
       }
       return node;
@@ -22233,15 +22233,15 @@ ${h3.join(`
   };
   function stackIterator(tree, pos, side) {
     let inner = tree.resolveInner(pos, side), layers = null;
-    for (let scan = inner instanceof TreeNode ? inner : inner.context.parent; scan; scan = scan.parent) {
-      if (scan.index < 0) {
-        let parent = scan.parent;
+    for (let scan2 = inner instanceof TreeNode ? inner : inner.context.parent; scan2; scan2 = scan2.parent) {
+      if (scan2.index < 0) {
+        let parent = scan2.parent;
         (layers || (layers = [inner])).push(parent.resolve(pos, side));
-        scan = parent;
+        scan2 = parent;
       } else {
-        let mount = MountedTree.get(scan.tree);
+        let mount = MountedTree.get(scan2.tree);
         if (mount && mount.overlay && mount.overlay[0].from <= pos && mount.overlay[mount.overlay.length - 1].to >= pos) {
-          let root = new TreeNode(mount.tree, mount.overlay[0].from + scan.from, -1, scan);
+          let root = new TreeNode(mount.tree, mount.overlay[0].from + scan2.from, -1, scan2);
           (layers || (layers = [inner])).push(resolveNode(root, pos, side, false));
         }
       }
@@ -27694,8 +27694,8 @@ ${h3.join(`
         let index = this.buffer.length;
         if (index > 0 && (this.buffer[index - 4] != 0 || this.buffer[index - 1] < 0)) {
           let mustMove = false;
-          for (let scan = index; scan > 0 && this.buffer[scan - 2] > end; scan -= 4) {
-            if (this.buffer[scan - 1] >= 0) {
+          for (let scan2 = index; scan2 > 0 && this.buffer[scan2 - 2] > end; scan2 -= 4) {
+            if (this.buffer[scan2 - 1] >= 0) {
               mustMove = true;
               break;
             }
@@ -31782,12 +31782,12 @@ ${h3.join(`
   }
   function htmlCompletionFor(schema, context) {
     let { state, pos } = context, tree = syntaxTree(state).resolveInner(pos, -1), around = tree.resolve(pos);
-    for (let scan = pos, before; around == tree && (before = tree.childBefore(scan)); ) {
+    for (let scan2 = pos, before; around == tree && (before = tree.childBefore(scan2)); ) {
       let last3 = before.lastChild;
       if (!last3 || !last3.type.isError || last3.from < last3.to)
         break;
       around = tree = before;
-      scan = last3.from;
+      scan2 = last3.from;
     }
     if (tree.name == "TagName") {
       return tree.parent && /CloseTag$/.test(tree.parent.name) ? completeCloseTag(state, tree, tree.from, pos) : completeTag(state, schema, tree, tree.from, pos);
@@ -32250,17 +32250,17 @@ ${h3.join(`
     return normalizeIndent(insert2, state);
   }
   function contextNodeForDelete(tree, pos) {
-    let node = tree.resolveInner(pos, -1), scan = pos;
+    let node = tree.resolveInner(pos, -1), scan2 = pos;
     if (isMark(node)) {
-      scan = node.from;
+      scan2 = node.from;
       node = node.parent;
     }
-    for (let prev; prev = node.childBefore(scan); ) {
+    for (let prev; prev = node.childBefore(scan2); ) {
       if (isMark(prev)) {
-        scan = prev.from;
+        scan2 = prev.from;
       } else if (prev.name == "OrderedList" || prev.name == "BulletList") {
         node = prev.lastChild;
-        scan = node.to;
+        scan2 = node.to;
       } else {
         break;
       }
@@ -33992,6 +33992,173 @@ ${h3.join(`
     return { render: render2, rerender: () => last3 && render2(last3), el: root };
   }
 
+  // src/scan.js
+  function createScan(root, { api, onClose }) {
+    root.className = "scan";
+    root.innerHTML = `
+    <div class="scan-count"></div>
+    <div class="scan-img"><img alt=""><div class="scan-empty"></div></div>
+    <div class="scan-prev"></div>
+    <div class="scan-label"></div>
+    <input class="scan-input" type="text" autocomplete="off" spellcheck="false" aria-label="">
+    <div class="scan-msg"></div>
+    <div class="scan-keys"></div>`;
+    const $4 = (s15) => root.querySelector(s15);
+    const img = $4(".scan-img img"), empty = $4(".scan-empty"), input = $4(".scan-input");
+    const en2 = document.documentElement.lang === "en";
+    const T = en2 ? {
+      count: (i, n) => `${i} / ${n}`,
+      none: "No unnumbered scans.",
+      prev: (p) => `Previous: ${p}`,
+      id: "Number",
+      date: "Date written (YYYY-MM-DD)",
+      topicId: "Number the topic starts from",
+      topicName: "Topic name",
+      busy: "Working\u2026",
+      keys: "Enter: set and go next   \u2191 \u2193: back / forth   d: paper diary   t: topic   Tab: put the previous number   Esc: finish",
+      done: (id2) => `Saved as ${id2}`,
+      bad: (e) => e
+    } : {
+      count: (i, n) => `${i} / ${n}`,
+      none: "\u756A\u53F7\u306E\u306A\u3044\u30B9\u30AD\u30E3\u30F3\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
+      prev: (p) => `\u524D: ${p}`,
+      id: "\u756A\u53F7",
+      date: "\u65E5\u8A18\u304C\u66F8\u304B\u308C\u305F\u65E5\uFF08YYYY-MM-DD\uFF09",
+      topicId: "\u30C8\u30D4\u30C3\u30AF\u306E\u8D77\u70B9\u306E\u756A\u53F7",
+      topicName: "\u30C8\u30D4\u30C3\u30AF\u540D",
+      busy: "\u6574\u7406\u3057\u3066\u3044\u307E\u3059\u2026",
+      keys: "Enter \u6C7A\u3081\u3066\u6B21\u3078\u3000\u2191 \u2193 \u524D\u5F8C\u3000d \u65E5\u8A18\u3000t \u30C8\u30D4\u30C3\u30AF\u3000Tab \u524D\u306E\u756A\u53F7\u3092\u5165\u308C\u308B\u3000Esc \u7D42\u4E86",
+      done: (id2) => `${id2} \u306B\u3057\u307E\u3057\u305F`,
+      bad: (e) => e
+    };
+    let scans = [], idx = 0, last3 = "", mode = "id", pendingTopicId = "", changed = 0, busy = false, url = "";
+    const label = () => ({ id: T.id, date: T.date, topicId: T.topicId, topicName: T.topicName })[mode];
+    async function show() {
+      const n = scans.length;
+      $4(".scan-count").textContent = n ? T.count(idx + 1, n) : "";
+      $4(".scan-prev").textContent = last3 ? T.prev(last3) : "";
+      $4(".scan-label").textContent = n ? label() : "";
+      input.hidden = !n;
+      $4(".scan-img").classList.toggle("none", !n);
+      empty.textContent = n ? "" : T.none;
+      $4(".scan-keys").textContent = T.keys;
+      if (url) {
+        URL.revokeObjectURL(url);
+        url = "";
+      }
+      if (!n) {
+        img.removeAttribute("src");
+        img.hidden = true;
+        return;
+      }
+      img.hidden = false;
+      const bytes = await api.image(scans[idx]);
+      if (bytes) {
+        url = URL.createObjectURL(new Blob([bytes]));
+        img.src = url;
+      } else img.removeAttribute("src");
+      input.focus();
+    }
+    const msg = (t3, bad) => {
+      const m = $4(".scan-msg");
+      m.textContent = t3 || "";
+      m.classList.toggle("bad", !!bad);
+    };
+    const setMode = (m) => {
+      mode = m;
+      input.value = "";
+      msg("");
+      $4(".scan-label").textContent = label();
+    };
+    async function commit() {
+      const v2 = input.value.trim();
+      if (!v2 || busy || !scans.length) return;
+      const name2 = scans[idx];
+      if (mode === "topicId") {
+        pendingTopicId = v2;
+        setMode("topicName");
+        return;
+      }
+      busy = true;
+      msg(T.busy);
+      let r;
+      if (mode === "date") r = await api.run("diary", [name2, v2]);
+      else if (mode === "topicName") r = await api.run("assign", [name2, pendingTopicId, v2]);
+      else r = await api.run("assign", [name2, v2]);
+      busy = false;
+      if (!r.ok) {
+        msg(T.bad(r.error || "error"), true);
+        return;
+      }
+      changed++;
+      if (mode === "id") last3 = r.display;
+      msg(T.done(r.display || r.date || v2));
+      scans.splice(idx, 1);
+      if (idx >= scans.length) idx = Math.max(0, scans.length - 1);
+      setMode("id");
+      await show();
+    }
+    async function close() {
+      if (busy) return;
+      if (changed) {
+        busy = true;
+        msg(T.busy);
+        await api.run("finish", []);
+        busy = false;
+      }
+      root.hidden = true;
+      onClose(changed);
+    }
+    input.addEventListener("keydown", async (e) => {
+      if (e.isComposing) return;
+      const k = e.key;
+      if (k === "Enter") {
+        e.preventDefault();
+        await commit();
+      } else if (k === "Escape") {
+        e.preventDefault();
+        if (mode !== "id") setMode("id");
+        else await close();
+      } else if (k === "ArrowUp" || k === "ArrowDown") {
+        e.preventDefault();
+        if (!scans.length) return;
+        idx = (idx + (k === "ArrowDown" ? 1 : -1) + scans.length) % scans.length;
+        setMode("id");
+        await show();
+      } else if (k === "Tab") {
+        e.preventDefault();
+        if (last3 && mode === "id") input.value = last3;
+      } else if (!input.value && mode === "id" && !e.ctrlKey && !e.metaKey && !e.altKey && (k === "d" || k === "t")) {
+        e.preventDefault();
+        setMode(k === "d" ? "date" : "topicId");
+      }
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !scans.length) {
+        e.preventDefault();
+        close();
+      }
+    });
+    root.tabIndex = -1;
+    return {
+      async open() {
+        root.hidden = false;
+        changed = 0;
+        idx = 0;
+        mode = "id";
+        msg(T.busy);
+        const r = await api.run("list", []);
+        scans = r.ok ? r.scans : [];
+        last3 = r.ok ? r.last || "" : "";
+        input.value = "";
+        msg(r.ok ? "" : r.error, !r.ok);
+        await show();
+        (scans.length ? input : root).focus();
+      },
+      isOpen: () => !root.hidden
+    };
+  }
+
   // src/app.js
   var gui = window.gui;
   var $3 = (id2) => document.getElementById(id2);
@@ -34000,6 +34167,8 @@ ${h3.join(`
   var fit = null;
   var view2 = null;
   var mandala = null;
+  var scan = null;
+  var scanReq = 0;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
   var expanded = false;
@@ -34103,6 +34272,10 @@ ${h3.join(`
   }
   function applyState(s15) {
     applyLook(s15);
+    if (typeof s15.scanReq === "number") {
+      if (s15.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
+      scanReq = s15.scanReq;
+    }
     last2 = { ...last2, ...s15, lines: void 0 };
     const m = (s15.mode || "n")[0];
     const md = s15.mandala && s15.mandala.cells ? s15.mandala : null;
@@ -34271,6 +34444,14 @@ ${h3.join(`
     window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
     view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
     mandala = createMandala($3("mandala"), { onCell: onMandalaCell });
+    scan = createScan($3("scan"), {
+      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n) },
+      // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
+      onClose: (changed) => {
+        if (changed) gui.write("\x1B:checktime|redraw\r");
+        term.focus();
+      }
+    });
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
       fontSize: 14,
@@ -34310,7 +34491,7 @@ ${h3.join(`
       scheduleFit();
     });
     const backToInput = () => {
-      if (document.getElementById("launcher").hidden) term.focus();
+      if (document.getElementById("launcher").hidden && !(scan && scan.isOpen())) term.focus();
     };
     document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
     window.addEventListener("focus", backToInput);

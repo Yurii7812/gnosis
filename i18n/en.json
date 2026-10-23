@@ -672,7 +672,8 @@
     "グループに入れる": "put into a group",
     "マージ": "merge",
     "やめる": "cancel",
-    "どこに置く？": "Where to put it?"
+    "どこに置く？": "Where to put it?",
+    "Gnosis: 紙のスキャンを %d 枚受け取りました（\\F で番号を付けます）": "Gnosis: received %d paper scans (number them with \\F)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

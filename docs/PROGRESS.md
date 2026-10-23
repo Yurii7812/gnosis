@@ -7,7 +7,11 @@
 - **アプリ専用の GUI 曼荼羅**（`web/src/mandala.js`）: Vim が盤面の状態を送り（`gnosis#mview#gui_state()`）、色つきのマスで描く（CUI と同じ 10 色）。マスのクリック/ダブルクリックは `gnosis#mview#gui_click`。キーは従来どおり Vim へ。曼荼羅が開いている間は右のノート窓をマークダウンで映し、YAML・上下の「名前:」系は隠す（`hide` 行範囲）。幅は Vim の窓の割合に合わせる。
 - 曼荼羅のキー整理: `( )` = 盤面そのものの幅（3×3 も 9×9 も）、`< >` = 画面の幅（曼荼羅窓と右窓の境目）、`=` で両方戻す。どちらも `mandala.json` に保存して次回も前回のまま。
 - 試験: Vim 78 本全通過・`web/test/gui_e2e.mjs`（作り直し。Xvfb の Electron 実機で 曼荼羅 9 マス・クリック・幅・隠す行）・launcher/theme/multi/view_swap 通過（#1E1E1E の既定色に期待値を更新）。
-- **未実施**: `\l` ポップアップ化、`\F` のアプリ内画面・紙スキャンのワークフロー、APK（ML Kit スキャナー・長押しシート）。Konsole での `\=` 復帰の実機確認。
+- `\l` / `za` の置き場所の案内を、用途別（本文に置く／関係を結ぶ）の中央ポップアップに（`gnosis#insert_prompt_lines`）。
+- 曼荼羅 `v` = 外向きモード（親・BackLink を出さず、9×9 の外側の重複も出さない）。9×9 の外側の背景は 1 色の薄い色。
+- **`\F` をアプリ内の大きな画面に**（`web/src/scan.js`・`python/scan_inbox.py`）: 番号なしのスキャンは `<vault>/.gnosis/scans/`（`paper-scan-日時-連番.拡張子`）。番号 + `Enter` で次へ、`↑↓` 前後、空のとき `d` 日記・`t` トピック、`Tab` で前の番号、`Esc` で終了（終了時に regen）。同じ番号は上書きし、前の画像は `.trash/` に残す。アプリ外の Vim では従来の Tk 画面。`\M` はスマホの `files/scans/` を受け皿へ取り込む（`scans_state.json` に取り込み済みを記録し、`scans_done.json` をスマホへ返す）。folgezettel-Index-N は、トピックの Index を先、その後にノート（`## <ID>`）の順に。
+- 試験: Python 全通過（`test_scan_inbox.py` 6 本）・Vim 78 本・`gui_e2e.mjs`（番号付け画面の一連を含む）。
+- **未実施**: APK（ML Kit スキャナー・番号付け・長押しシート・`files/scans/` への保存と `scans_done.json` の反映）。実機（Konsole の `\=`、アプリでの `\F` の見た目）。
 
 ## 以前の現在地（2026-10-23）
 - ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main 2705598 から）。**main 未マージ・push 未**（最後にまとめて ff-only マージ → push）。DECISIONS D011・USER_GUIDE §6。

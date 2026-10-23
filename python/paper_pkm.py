@@ -1357,39 +1357,45 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
                     inner.append(f"![]({_rel(path.parent, img)})")
             inner.append("")
         id_index = id_index_paths.get(fid) or find_id_index(root, fid)
-        if id_index is not None:
-            fm_g, _bg = read_note(id_index)
-            gd = title_of(fm_g, _bg, id_index.stem)
-            inner.append(markdown_link(gd, id_index, path.parent))
         inner += [CONTEXT_HEAD,
                   markdown_link(FOLGE_INDEX[:-3], root / FOLGE_INDEX, path.parent)]
         body = merge_note_body(old_fi_body, inner)
-        body = _place_topic_lines(body, path.parent, members, folge, topics)
+        body = _place_topic_lines(body, path.parent, members, folge, topics, id_index)
         if body != old_fi_body:
             write_note(path, fm_fi, body)
 
 
 def _place_topic_lines(body: list[str], base: Path, members: list[str], folge: dict[str, Path],
-                       topics: dict) -> list[str]:
-    """folgezettel-Index-N の本文で、トピックへのリンク行を、起点IDごとに `## <ID>` の節の最後へ並べ直す。
-    トピック以外の行は変えない。消えたトピックの行は消す（自動で作る行なので）。"""
+                       topics: dict, id_index: Optional[Path] = None) -> list[str]:
+    """folgezettel-Index-N の本文で、トピックの Index（その番号のグループと、トピックのノート）へのリンク行を、
+    ノート（`## <ID>` の節）より先に、見出しの直後へ並べ直す（2026-10-24。トピックの Index を先、その後にノート）。
+    トピックのノートは、起点の ID の順に、親が子より先になる順で並べる。トピック以外の行は変えない。
+    消えたトピックの行は消す（自動で作る行なので）。"""
     all_topics = {os.path.normpath(str(pth)) for lst in topics.values() for _d, pth, _tp in lst}
-    if not all_topics and not any(_link_norm(base, ln) in all_topics for ln in body):
+    idx_norm = os.path.normpath(str(id_index)) if id_index is not None else None
+    mine = set(all_topics) | ({idx_norm} if idx_norm else set())
+    if not mine:
         return body
-    out = [ln for ln in body if not (_IS_LINK_LINE.match(ln) and _link_norm(base, ln) in all_topics)]
+    first = next((k for k, ln in enumerate(body) if _IS_LINK_LINE.match(ln) and _link_norm(base, ln) in mine), None)
+    out = [ln for ln in body if not (_IS_LINK_LINE.match(ln) and _link_norm(base, ln) in mine)]
+    lines: list[str] = []
+    if id_index is not None and id_index.is_file():
+        fm_g, body_g = read_note(id_index)
+        lines.append(markdown_link(title_of(fm_g, body_g, id_index.stem), id_index, base))
     for member in members:
-        tl = topics.get(member)
-        if not tl:
-            continue
-        head = next((k for k, ln in enumerate(out)
-                     if ln.startswith("## ") and _link_norm(base, ln) == os.path.normpath(str(folge[member]))), None)
-        if head is None:
-            continue
-        end = next((k for k in range(head + 1, len(out))
-                    if out[k].startswith("## ") or _is_section_head(out[k])), len(out))
-        while end > head + 1 and not out[end - 1].strip():
-            end -= 1
-        out[end:end] = [markdown_link(d, pth, base) for d, pth, _tp in topic_order(tl)]
+        for d, pth, _tp in topic_order(topics.get(member) or []):
+            lines.append(markdown_link(d, pth, base))
+    if not lines:
+        return out
+    if first is not None:
+        # すでにある場所（同期が上のブロックを動かしたあとの位置）に、同じ並びで置き直す。空行は増えない
+        out[first:first] = lines
+        return out
+    h1 = next((k for k, ln in enumerate(out) if ln.startswith("# ")), None)
+    at = (h1 + 1) if h1 is not None else 0
+    if at < len(out) and not out[at].strip():
+        at += 1  # 見出しの次の空行は 1 つだけ飛ばす（何度やっても同じ結果にするため）
+    out[at:at] = lines + ([""] if at >= len(out) or out[at].strip() else [])
     return out
 
 

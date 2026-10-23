@@ -356,6 +356,26 @@ ipcMain.on("pty:write", (_e, data) => { try { bridge?.write(data); } catch { /* 
 ipcMain.on("pty:resize", (_e, cols, rows) => { try { bridge?.resize(cols, rows); } catch { /* ignore */ } });
 ipcMain.on("app:quit", () => app.quit());
 
+// ---- 紙のスキャンの番号付け画面（python/scan_inbox.py。受け皿は <vault>/.gnosis/scans/）----
+const SCAN_PY = path.join(REPO, "python", "scan_inbox.py");
+const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0 }; // 名前 → 必要な引数の数（vault のあとに）
+ipcMain.handle("scan:run", (_e, cmd, args) => new Promise((resolve) => {
+  if (!noteRootDir || !(cmd in SCAN_CMDS) || !Array.isArray(args)) return resolve({ ok: false, error: "vault が開かれていません" });
+  const list = args.map(String);
+  if (list.length < SCAN_CMDS[cmd] || list.length > SCAN_CMDS[cmd] + 1) return resolve({ ok: false, error: "引数が違います" });
+  const child = spawn(process.platform === "win32" ? "python" : "python3", [SCAN_PY, cmd, noteRootDir, ...list], { stdio: ["ignore", "pipe", "pipe"] });
+  let out = "";
+  child.stdout.on("data", (d) => { out += d; });
+  child.on("error", (e) => resolve({ ok: false, error: String(e.message || e) }));
+  child.on("close", () => { try { resolve(JSON.parse(out.trim().split("\n").pop())); } catch { resolve({ ok: false, error: out.slice(0, 200) || "scan_inbox.py の出力を読めません" }); } });
+}));
+ipcMain.handle("scan:image", async (_e, name) => {
+  try {
+    if (!noteRootDir || /[\\/]/.test(name) || name.startsWith(".")) return null;
+    return await fs.promises.readFile(path.join(noteRootDir, ".gnosis", "scans", name));
+  } catch { return null; }
+});
+
 // 画像: ノートのあるフォルダからの相対パスで読む（vault の外は読まない）
 ipcMain.handle("img:read", async (_e, file, src) => {
   try {

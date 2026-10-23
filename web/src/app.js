@@ -6,6 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
 import { createMandala } from "./mandala.js";
+import { createScan } from "./scan.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -15,6 +16,8 @@ let term = null;
 let fit = null;
 let view = null;
 let mandala = null;
+let scan = null;
+let scanReq = 0;
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
@@ -133,6 +136,11 @@ function applyLook(s) {
 
 function applyState(s) {
   applyLook(s);
+  // \F: 紙のスキャンの番号付け画面を開く（Vim が合図の番号を増やす）
+  if (typeof s.scanReq === "number") {
+    if (s.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
+    scanReq = s.scanReq;
+  }
   last = { ...last, ...s, lines: undefined };
   const m = (s.mode || "n")[0];
   const md = s.mandala && s.mandala.cells ? s.mandala : null;
@@ -315,6 +323,11 @@ async function boot() {
   window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
   view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
   mandala = createMandala($("mandala"), { onCell: onMandalaCell });
+  scan = createScan($("scan"), {
+    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n) },
+    // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
+    onClose: (changed) => { if (changed) gui.write("\x1b:checktime|redraw\r"); term.focus(); },
+  });
 
   term = new Terminal({
     fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
@@ -345,7 +358,7 @@ async function boot() {
 
   window.addEventListener("resize", () => { scheduleFit(); });
   // どこを押しても、キー入力は端末（Vim）へ戻す
-  const backToInput = () => { if (document.getElementById("launcher").hidden) term.focus(); };
+  const backToInput = () => { if (document.getElementById("launcher").hidden && !(scan && scan.isOpen())) term.focus(); };
   document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
   window.addEventListener("focus", backToInput);
 

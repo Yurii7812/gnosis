@@ -162,6 +162,7 @@ function! s:snapshot(force) abort
         \ 'cols': &columns,
         \ 'cmdtype': getcmdtype(),
         \ 'mandala': l:ms,
+        \ 'scanReq': get(g:, 'gnosis_gui_scan_req', 0),
         \ }
   " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
   let l:pp = []
@@ -223,6 +224,12 @@ function! s:snapshot(force) abort
   endif
   let s:last = l:cmp
   call ch_sendraw(s:ch, l:json . "\n")
+endfunction
+
+" \F（紙のスキャンの番号付け）をアプリの画面で開く合図。gnosis#paper_scan が呼ぶ
+function! GnosisGuiScan() abort
+  let g:gnosis_gui_scan_req = get(g:, 'gnosis_gui_scan_req', 0) + 1
+  call s:snapshot(1)
 endfunction
 
 function! s:push() abort

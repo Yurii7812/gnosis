@@ -183,11 +183,11 @@
 ## 紙のPKM（フォルゲゼッテル）
 
 - `\f` … 紙PKM Index（`Paper-Zettelkasten-Index.md`）を開く／無ければ作る（`:GnosisPaperIndex`）。Index-write と Folgezettel-Index も作られる。更新は `\ua`
-- `\F` … スキャン画像に番号を付けて vault 直下へ移動（`:GnosisScan`。番号付け GUI が開く）。GUI で `d` = **紙の日記として登録**
+- `\F` … 紙のスキャンに番号を付ける。アプリ（`\c`）では専用の大きな画面が開く: 番号のないスキャンを 1 枚ずつ大きく出し、番号を打って `Enter` で次へ、`↑` `↓` で前後、何も打っていないときの `d` = **紙の日記として登録**（日付を入れる）、`t` = トピック（起点の番号 → トピック名）、`Tab` で前の番号を入れる、`Esc` で終了。すでにある番号の一覧は出さない。同じ番号は上書き（前の画像は `.trash/` に 1 つ残る）。スキャンは `\M` でスマホから受け取る（`.gnosis/scans/` に `paper-scan-日時-連番` の名前で入る）
 - `Index-write` … `キーワード(よみ): 1,1a10b,3` の形式で手書き。複数IDのキーワードはグループノート、単一IDは直接リンクとして紙PKM Index に並ぶ（保存で自動再生成）
 - `\S` … Index-write ではキーワード行もよみ順に並べる
 - Folgezettel-Index は存在する全IDの一覧（自然順）。生成物なので `\S` しない
-- 紙のノート `1` と `1a` … `1a` の `ParentBranch:` に `1`、`1` の `ChildBranch:` に `1a`（Context では代用しない）。トピック（`1-タイトル`）の `ParentBranch:` は `1`。トピックは `folgezettel-Index-1` の `## 1` の節にも並ぶ（親トピックが先・インデントなし。親子は front matter の `topic_parent:`。親が分からないものは推測しない）
+- 紙のノート `1` と `1a` … `1a` の `ParentBranch:` に `1`、`1` の `ChildBranch:` に `1a`（Context では代用しない）。トピック（`1-タイトル`）の `ParentBranch:` は `1`。トピックの Index は `folgezettel-Index-1` の先頭（ノートの `## 1` の節より前）に並ぶ（親トピックが先・インデントなし。親子は front matter の `topic_parent:`。親が分からないものは推測しない）
 - 紙の日記 … その日のデジタル日記の、タイトルの下（空行 1 行・本文より上）に `[紙の日記]` のリンクが入る（再生成しても重複しない。デジタル日記が無い日は作らず、日記ができたあとの `\ua` でリンクする）。スキャン由来のノートは front matter の `source: scan` で、「今日のノート」に載せない
 
 ## スマホのメモ（Gnosis メモ APK）

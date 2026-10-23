@@ -5497,6 +5497,22 @@ function! s:capture_py() abort
   return s:note_root . '/python/capture_import.py'
 endfunction
 
+" 紙のスキャン: スマホの写真（scans/）を受け皿（.gnosis/scans/）へ。番号が無いものは \F で付ける
+function! s:capture_scans(root, dir) abort
+  if !isdirectory(a:dir)
+    return
+  endif
+  let l:cmd = join(map([gnosis#python_cmd(), fnamemodify(s:capture_py(), ':h') . '/scan_inbox.py', 'import', a:root, a:dir], 'shellescape(v:val)'), ' ')
+  try
+    let l:r = json_decode(system(l:cmd))
+  catch
+    return
+  endtry
+  if type(l:r) == v:t_dict && !empty(get(l:r, 'added', []))
+    echo printf(gnosis#i18n#tr('Gnosis: 紙のスキャンを %d 枚受け取りました（\F で番号を付けます）'), len(l:r.added))
+  endif
+endfunction
+
 function! s:capture_run(args, ...) abort
   let l:cmd = join(map([gnosis#python_cmd(), s:capture_py()] + a:args, 'shellescape(v:val)'), ' ')
   return a:0 ? system(l:cmd, a:1) : system(l:cmd)
@@ -5554,6 +5570,10 @@ function! gnosis#capture_import(...) abort
     for l:img in glob(fnamemodify(l:src, ':h') . '/images/*', 1, 1)
       call writefile(readfile(l:img, 'b'), l:tmp . '/images/' . fnamemodify(l:img, ':t'), 'b')
     endfor
+    for l:sc in glob(fnamemodify(l:src, ':h') . '/scans/*', 1, 1)
+      call mkdir(l:tmp . '/scans', 'p')
+      call writefile(readfile(l:sc, 'b'), l:tmp . '/scans/' . fnamemodify(l:sc, ':t'), 'b')
+    endfor
   else
     echo gnosis#i18n#tr('Gnosis: スマホから読み込んでいます…')
     redraw
@@ -5568,6 +5588,7 @@ function! gnosis#capture_import(...) abort
     echohl WarningMsg | echo 'Gnosis: ' . trim(l:out) | echohl NONE
     return
   endif
+  call s:capture_scans(l:root, l:tmp . '/scans')
   let l:plan = json_decode(l:out)
   " 記録が無いのに行き先にもう入っているメモ（前回、書き込みの途中で止まった）は、二重に追記せず記録だけ直す
   let l:adopt = filter(copy(l:plan.items), 'get(v:val, "adopt", "") !=# ""')
@@ -16173,6 +16194,14 @@ function! gnosis#paper_scan() abort
   let l:root = s:get_pkm_root()
   if empty(l:root) || !filereadable(s:index_path(l:root))
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: PKM root が未設定です') | echohl NONE
+    return
+  endif
+  " アプリ（\c）の中なら、アプリの番号付け画面（キーボードだけ・大きく表示）を開く
+  if !empty($GNOSIS_GUI_PORT) && exists('*GnosisGuiScan')
+    if &modified
+      silent! update
+    endif
+    call GnosisGuiScan()
     return
   endif
   let l:dest = expand('%:p:h')

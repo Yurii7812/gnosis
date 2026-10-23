@@ -172,8 +172,8 @@ with tempfile.TemporaryDirectory() as d:
     names = [ln.split("]")[0].lstrip("[") for ln in lines_of(fi) if ln.startswith("[1-")]
     check(names == ["1-仏教", "1-四念処", "1-阿含"], f"folgezettel-Index-1 にトピックを、親を子より先に（インデントなし）: {names}")
     fl = lines_of(fi)
-    check(fl.index(next(l for l in fl if l.startswith("[1-仏教]"))) < fl.index(next(l for l in fl if l.startswith("## [1a]"))),
-          "トピックは ## 1 の節に並ぶ（## 1a より前）")
+    check(fl.index(next(l for l in fl if l.startswith("[1-仏教]"))) < fl.index(next(l for l in fl if l.startswith("## [1]"))),
+          "トピックの Index が先、その後にノート（## 1 の節より前）")
     # トピック本文の Context より下を切り捨てない
     tp = notes["1-仏教"]
     tp.write_text(tp.read_text(encoding="utf-8").rstrip("\n") + "\n\nRelated:\n[1a](" + n1a.name + ")\n\n手書きの続き\n", encoding="utf-8")

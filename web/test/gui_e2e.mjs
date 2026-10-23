@@ -44,6 +44,13 @@ mk("anchor.md", "アンカー", "[二](m2.md#sec)", "[Index](index.md)");
 mk("p1.md", "PKM の設計", "言語化は後回し。", "[Index](index.md)");
 
 
+// 紙のスキャンの番号付け（\F）用: 受け皿に 3 枚。Paper-Zettelkasten-Index も作っておく
+const TINY_PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082", "hex");
+fs.mkdirSync(path.join(vault, ".gnosis", "scans"), { recursive: true });
+for (const [i, n] of ["paper-scan-20261024-100000-01.png", "paper-scan-20261024-100000-02.png", "paper-scan-20261024-100000-03.png"].entries())
+  fs.writeFileSync(path.join(vault, ".gnosis", "scans", n), Buffer.concat([TINY_PNG, Buffer.from(String(i))]));
+execFileSync("python3", ["-c", "import sys; sys.path.insert(0, sys.argv[1]); import paper_pkm as pp; from pathlib import Path; pp.create_paper_index(Path(sys.argv[2]))", path.join(web, "..", "python"), vault]);
+
 const scenario = `(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let G = window.__gui;
@@ -80,6 +87,29 @@ const scenario = `(async () => {
   R.screenWidth = { w0, w1 };
   await press('Q', 1000);
   R.closed = { hidden: document.getElementById('mandala').hidden, mandala: !!(G.state().mandala && G.state().mandala.cells) };
+  // 紙のスキャンの番号付け: 開く → 番号 + Enter で次へ → d で日記 → Esc で終了
+  {
+    const scanEl = document.getElementById('scan');
+    const inp = scanEl.querySelector('.scan-input');
+    const key = async (k, wait = 700) => { inp.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); await sleep(wait); };
+    const typeIn = async (v) => { inp.value = v; await sleep(50); };
+    await press(':call GnosisGuiScan()\\r', 1500);
+    const sc = { opened: !scanEl.hidden, count1: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
+    await typeIn('1a2'); await key('Enter', 1500);
+    sc.afterFirst = { count: scanEl.querySelector('.scan-count').textContent, prev: scanEl.querySelector('.scan-prev').textContent };
+    await key('d', 400);
+    sc.dateLabel = scanEl.querySelector('.scan-label').textContent;
+    await typeIn('2026-10-24'); await key('Enter', 1500);
+    sc.afterDiary = scanEl.querySelector('.scan-count').textContent;
+    // 同じ番号をもう一度付けると上書き（前の画像は .trash に残る）
+    await key('Tab', 200);
+    sc.tab = inp.value;
+    await key('Enter', 1500);
+    sc.empty = scanEl.querySelector('.scan-empty').textContent;
+    await key('Escape', 6000);
+    sc.closed = scanEl.hidden;
+    R.scan = sc;
+  }
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
   R.__closeWindow = true;
   return R;
@@ -110,6 +140,17 @@ try {
   check(R.noteText, "the note pane should show the note, not the mandala's box characters");
   check(R.click && R.click.before !== R.click.after && R.click.sel, "clicking a cell should move the cursor: " + JSON.stringify(R.click));
   check(R.screenWidth && R.screenWidth.w1 !== R.screenWidth.w0, "< should change the screen width: " + JSON.stringify(R.screenWidth));
+  {
+    const sc = R.scan || {};
+    check(sc.opened && /1 \/ 3/.test(sc.count1) && sc.imgShown, "scan screen should open with 3 unnumbered scans and show the image: " + JSON.stringify(sc));
+    check(/2 ?\/ ?2|1 \/ 2/.test(sc.afterFirst?.count || "") && /1a2/.test(sc.afterFirst?.prev || ""), "after Enter the next scan is shown and the previous number is displayed: " + JSON.stringify(sc.afterFirst));
+    check(/YYYY/.test(sc.dateLabel || "") && /1 \/ 1/.test(sc.afterDiary || ""), "d should ask for a date and register the diary: " + JSON.stringify(sc));
+    check(sc.tab === "1a2" && sc.closed, "Tab puts the previous number; Esc closes: " + JSON.stringify(sc));
+    check(fs.existsSync(path.join(vault, "1a2.png")), "1a2.png should exist in the vault");
+    const trash = fs.existsSync(path.join(vault, ".trash")) ? fs.readdirSync(path.join(vault, ".trash")).filter((n) => n.endsWith("_1a2.png")) : [];
+    check(trash.length === 1, "overwriting the same number keeps the old image in .trash: " + JSON.stringify(trash));
+    check(fs.readdirSync(path.join(vault, ".gnosis", "scans")).length === 0, "the inbox should be empty after numbering all scans");
+  }
   check(R.closed?.hidden && !R.closed.mandala, "Q should close the mandala: " + JSON.stringify(R.closed));
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);

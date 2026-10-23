@@ -105,6 +105,20 @@ def adb_pull(outdir: str) -> int:
             print("画像を読めませんでした（取り込み済みにはしません）: " + n, file=sys.stderr)
             return 2
         (out / "images" / n).write_bytes(r.stdout)
+    # 紙のスキャン（files/scans/paper-scan-*.jpg）。PC の受け皿へ移すのは Vim の `\\M`（scan_inbox.py import）
+    r = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "ls", "files/scans"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode == 0:
+        (out / "scans").mkdir(exist_ok=True)
+        for n in r.stdout.decode("utf-8", "replace").split():
+            if "/" in n or n.startswith(".") or not n.startswith("paper-scan-"):
+                continue
+            g = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/scans/" + n],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if g.returncode != 0 or not g.stdout:
+                print("スキャンを読めませんでした: " + n, file=sys.stderr)
+                return 2
+            (out / "scans" / n).write_bytes(g.stdout)
     # トピックの取り込み方（1 つのノートにまとめる・日時）。アプリの設定ファイルにある
     r = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/settings.json"],
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -209,6 +223,14 @@ def adb_mark(root: str) -> int:
     entries = [e for key, e in state.get("entries", {}).items()
                if _destination_exists(rp, state["ids"].get(key, ""))]
     data = {"version": 2, "vault": str(rp), "entries": entries}
+    # 取り込み済みの紙のスキャン（スマホはこの名前の写真を一覧から外してよい）
+    try:
+        done = json.loads((rp / ".gnosis" / "scans_state.json").read_text("utf-8")).get("imported", [])
+    except (OSError, ValueError):
+        done = []
+    if done:
+        subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "tee", "files/scans_done.json"],
+                       input=json.dumps(done).encode("utf-8"), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     r = subprocess.run([_adb(), "exec-in", "run-as", PACKAGE, "tee", "files/imported.json.tmp"],
                        input=json.dumps(data, ensure_ascii=False).encode("utf-8"),
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)

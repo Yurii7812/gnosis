@@ -183,11 +183,11 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Paper PKM (Folgezettel)
 
 - `\f` … open the paper PKM Index (`Paper-Zettelkasten-Index.md`), creating it if missing (`:GnosisPaperIndex`). Index-write and Folgezettel-Index are created too. Update with `\ua`
-- `\F` … number scanned images and move them to the vault root (`:GnosisScan`; opens the numbering GUI). In the GUI, `d` = **register as a paper diary**
+- `\F` … number the paper scans. In the app (`\c`) a dedicated, large screen opens: it shows the unnumbered scans one at a time, big; type a number and `Enter` goes to the next, `↑` `↓` go back / forth, `d` (when nothing is typed) = **register as a paper diary** (enter the date), `t` = topic (the starting number → the topic name), `Tab` puts the previous number, `Esc` finishes. Numbers that already exist are not listed. The same number overwrites (the old image is kept once in `.trash/`). Scans arrive from the phone with `\M` (they land in `.gnosis/scans/` named `paper-scan-datetime-sequence`)
 - `Index-write` … write `keyword(reading): 1,1a10b,3` by hand. Keywords with several IDs become group notes, single IDs become direct links in the paper PKM Index (regenerated on save)
 - `\S` … in Index-write, keyword lines are sorted by reading too
 - Folgezettel-Index lists all existing IDs (natural order). It is generated, so no `\S`
-- Paper notes `1` and `1a` … `1` goes into `1a`'s `ParentBranch:` and `1a` into `1`'s `ChildBranch:` (Context is not used for this). A topic (`1-title`) has `1` as its `ParentBranch:`. Topics are also listed in the `## 1` section of `folgezettel-Index-1` (parent topic first, no indentation; the parent is the front matter `topic_parent:`; an unknown parent is never guessed)
+- Paper notes `1` and `1a` … `1` goes into `1a`'s `ParentBranch:` and `1a` into `1`'s `ChildBranch:` (Context is not used for this). A topic (`1-title`) has `1` as its `ParentBranch:`. The topic Index is listed at the top of `folgezettel-Index-1` (before the `## 1` section of the notes; parent topic first, no indentation; the parent is the front matter `topic_parent:`; an unknown parent is never guessed)
 - Paper diary … a `[紙の日記]` link is put under the title of that day's digital diary (one blank line, above the body; never duplicated on regeneration. If there is no digital diary that day, none is created; the link is added by `\ua` after the diary exists). Notes from scans carry `source: scan` in the front matter and are not listed in "today's notes"
 
 ## Phone memo (Gnosis memo APK)
