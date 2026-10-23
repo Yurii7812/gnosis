@@ -417,5 +417,32 @@ sleep 50m
 call s:ok('載っていない新しいノートも読み直して中心になる', s:st.center ==# 'brandnew.md', s:st.center)
 call s:keys('q')
 
+" 9×9 の背景: 周りの 8 マスと、それぞれの曼荼羅の中心のマスが同じ薄い色で塗られる
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+call s:keys('f')
+let s:st = gnosis#mview#state()
+let s:bw = bufwinid(s:st.buf)
+let s:groups = map(getmatches(s:bw), 'v:val.group')
+call s:ok('9×9: 周りの 8 色の背景が付く', len(filter(copy(s:groups), 'v:val =~# "B[0-7]$" || v:val =~# "Bg[0-7]$"')) >= 2, string(s:groups))
+let s:c1 = s:st.cells[3][3]
+let s:c2 = s:st.cells[1][1]
+call s:ok('周りのマスとその曼荼羅の中心のマスは同じ色の番号', s:c1.bgi == 0 && s:c2.bgi == 0 && s:c1.id ==# s:c2.id, string([s:c1, s:c2]))
+call s:ok('真ん中の中心には背景色の番号が無い', !has_key(s:st.cells[4][4], 'bgi'))
+call s:keys('f')
+call s:keys('q')
+
+" 右のノートは上から表示して、カーソルは画面のいちばん下の行に置く
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 長いノート', '---', '', '# 長いノート'] + map(range(1, 200), '"行 " . v:val'), s:v . '/long.md')
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+call gnosis#mview#gs_done(s:v . '/long.md', 1)
+sleep 100m
+let s:nw = filter(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype") !=# "gnosis-mandala"')[0]
+let s:info = getwininfo(win_getid(s:nw))[0]
+let s:cur = getcurpos(win_getid(s:nw))
+call s:ok('カーソルは先頭から数えて窓の高さの行（画面のいちばん下）', s:cur[1] == winheight(s:nw), string(s:cur) . ' h=' . winheight(s:nw))
+call s:keys('q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

@@ -435,10 +435,10 @@ function! s:board_cells() abort
     if empty(l:id)
       continue
     endif
-    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
+    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i], 'bgi': l:i}
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
-    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'center', 'n': s:nums[l:i]}
+    let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'center', 'n': s:nums[l:i], 'bgi': l:i}
     let l:sub = s:ring(l:id, 0)
     for l:j in range(8)
       if !empty(l:sub[l:j][0])
@@ -449,7 +449,7 @@ function! s:board_cells() abort
   " 真ん中のブロックの周り 8 マスは、周りのブロックの上書きで消えないように置き直す
   for l:i in range(8)
     if !empty(l:ring[l:i][0])
-      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
+      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i], 'bgi': l:i}
     endif
   endfor
   return l:b
@@ -951,7 +951,15 @@ function! s:mark() abort
         call s:addpos(empty(l:hg) ? 'GnosisMviewSel' : l:hg . 'S', l:sp, 20)
       elseif l:cell.role ==# 'center'
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
-        call s:addpos(empty(l:hg) ? 'GnosisMviewCenter' : l:hg . 'C', l:sp, 10)
+        let l:bi = get(l:cell, 'bgi', -1)
+        if l:bi >= 0
+          call s:addpos(empty(l:hg) ? 'GnosisMvCBg' . l:bi : l:hg . 'CB' . l:bi, l:sp, 10)
+        else
+          call s:addpos(empty(l:hg) ? 'GnosisMviewCenter' : l:hg . 'C', l:sp, 10)
+        endif
+      elseif get(l:cell, 'bgi', -1) >= 0
+        let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
+        call s:addpos(empty(l:hg) ? 'GnosisMvBg' . l:cell.bgi : l:hg . 'B' . l:cell.bgi, l:sp, 8)
       elseif !empty(get(s:kinds, get(l:cell, 'kind', 'note'), ['', '', ''])[2])
         call s:addpos(s:kinds[l:cell.kind][2], l:sp, 8)
       endif
@@ -1415,6 +1423,8 @@ function! s:show_note(id) abort
   endif
   call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
   call win_execute(l:nw, 'silent! hide edit ' . fnameescape(l:path))
+  " 上から表示して、カーソルは画面のいちばん下の行に置く
+  call win_execute(l:nw, 'keepjumps normal! ggL')
   let s:S.note = l:path
 endfunction
 
@@ -1600,6 +1610,17 @@ function! s:hl() abort
     " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）
     execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
     execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
+  endfor
+  " 9×9 の背景: 真ん中の周りの 8 マスと、それぞれの曼荼羅の中心のマスを、同じ薄い色で塗る（8 色）。種類の色（文字）はそのまま
+  let l:bgs = [['#2d3b52', 24], ['#43304f', 53], ['#2f4a3a', 22], ['#4f3f2b', 94], ['#4f2f36', 52], ['#2b4a4d', 23], ['#4a4a2b', 58], ['#3d3d4a', 60]]
+  for l:i in range(8)
+    let [l:gb, l:cb] = l:bgs[l:i]
+    execute printf('highlight default GnosisMvBg%d guibg=%s ctermbg=%d', l:i, l:gb, l:cb)
+    execute printf('highlight default GnosisMvCBg%d guibg=%s ctermbg=%d gui=bold cterm=bold', l:i, l:gb, l:cb)
+    for [l:k, l:c] in items(l:cols)
+      execute printf('highlight default GnosisMv%sB%d guifg=%s ctermfg=%d guibg=%s ctermbg=%d', l:k, l:i, l:c[0], l:c[1], l:gb, l:cb)
+      execute printf('highlight default GnosisMv%sCB%d guifg=%s ctermfg=%d guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:i, l:c[0], l:c[1], l:gb, l:cb)
+    endfor
   endfor
   " 罫線の色（空白の背景色で線にする）。太い線（3×3 の境目）と細い線
   highlight default GnosisMviewBarH guibg=#6b7280 ctermbg=243
