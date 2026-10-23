@@ -416,5 +416,77 @@ class TestCli(Base):
         self.assertEqual(json.loads(p.stdout)["code"], "cycle")
 
 
+
+class TestTimelineTree(unittest.TestCase):
+    """時系列の木（timeline: true）のノートは、本文に子の一覧があっても、子を ChildBranch: に必ず書く。"""
+
+    def setUp(self) -> None:
+        import tempfile
+        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        os.makedirs(base, exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=base)
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "index.md").write_text("---\ntime: x\n---\n\n# Index\n", encoding="utf-8")
+
+    def test_children_in_body_are_also_in_child_branch(self) -> None:
+        r = self.root
+        (r / "m.md").write_text("---\ntime: x\ntimeline: true\n---\n\n# 2026-10\n\n[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n", encoding="utf-8")
+        for n, t in (("d1", "2026-10-01-TH"), ("d2", "2026-10-02-FR")):
+            (r / f"{n}.md").write_text(f"---\ntime: x\n---\n\n# {t}\n\nParentBranch:\n[2026-10](m.md)\n\n本文\n", encoding="utf-8")
+        nf.simple_sync(r)
+        m = (r / "m.md").read_text(encoding="utf-8")
+        self.assertIn("ChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)", m)   # 日付（題）の順
+        self.assertIn("[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n\nChildBranch:", m)  # 本文の一覧はそのまま
+        self.assertEqual(nf.simple_sync(r), 0)   # 2 回目は変わらない
+
+    def test_ordinary_note_keeps_body_as_the_list(self) -> None:
+        r = self.root
+        (r / "m.md").write_text("---\ntime: x\n---\n\n# 親\n\n[子](d1.md)\n", encoding="utf-8")
+        (r / "d1.md").write_text("---\ntime: x\n---\n\n# 子\n\nParentBranch:\n[親](m.md)\n\n本文\n", encoding="utf-8")
+        nf.simple_sync(r)
+        self.assertNotIn("ChildBranch:", (r / "m.md").read_text(encoding="utf-8"))
+
+
+class TestParentBranchDeletion(unittest.TestCase):
+    """子の ParentBranch: を手で消せば、親の ChildBranch: からも外れる（片側だけ手で書いた ChildBranch: は残る）。"""
+
+    def setUp(self) -> None:
+        import tempfile
+        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        os.makedirs(base, exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=base)
+        self.addCleanup(self.tmp.cleanup)
+        self.root = r = Path(self.tmp.name)
+        (r / "index.md").write_text("---\ntime: x\n---\n\n# Index\n", encoding="utf-8")
+        (r / "p.md").write_text("---\ntime: x\n---\n\n# 親\n\n本文\n\nChildBranch:\n[子](c.md)\n", encoding="utf-8")
+        (r / "c.md").write_text("---\ntime: x\n---\n\n# 子\n\nParentBranch:\n[親](p.md)\n\n本文\n", encoding="utf-8")
+        nf.simple_sync(r)
+        nf.simple_sync(r)
+
+    def test_deleting_parent_branch_detaches(self) -> None:
+        r = self.root
+        (r / "c.md").write_text("---\ntime: x\n---\n\n# 子\n\n本文\n", encoding="utf-8")
+        nf.simple_sync(r)
+        self.assertNotIn("ChildBranch:", (r / "p.md").read_text(encoding="utf-8"))
+        self.assertNotIn("ParentBranch:", (r / "c.md").read_text(encoding="utf-8"))   # 子に戻ってこない
+        for _ in range(2):                                                          # 何度同期しても戻らない・変わらない
+            nf.simple_sync(r)
+        self.assertNotIn("ChildBranch:", (r / "p.md").read_text(encoding="utf-8"))
+
+    def test_one_sided_hand_written_child_branch_stays(self) -> None:
+        r = self.root
+        (r / "q.md").write_text("---\ntime: x\n---\n\n# 別\n\n本文\n\nChildBranch:\n[子](c.md)\n", encoding="utf-8")
+        for _ in range(3):
+            nf.simple_sync(r)
+        self.assertIn("ChildBranch:\n[子](c.md)", (r / "q.md").read_text(encoding="utf-8"))
+
+    def test_deleting_from_parent_side_does_not_detach(self) -> None:
+        r = self.root
+        (r / "p.md").write_text("---\ntime: x\n---\n\n# 親\n\n本文\n", encoding="utf-8")
+        nf.simple_sync(r)
+        self.assertIn("ParentBranch:\n[親](p.md)", (r / "c.md").read_text(encoding="utf-8"))
+        self.assertIn("[子](c.md)", (r / "p.md").read_text(encoding="utf-8"))   # 子の ParentBranch: があるので戻る
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

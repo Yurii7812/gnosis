@@ -1739,6 +1739,29 @@ def _save_group_state(root: Path, state: dict) -> None:
         pass
 
 
+_BRANCH_STATE_FILE = ".pkm_branch_state_v1.json"
+
+
+def _load_branch_pairs(root: Path) -> set[str]:
+    """前回の sync の終わりに、親の ChildBranch: と子の ParentBranch: の両方がそろっていた組（"親\t子"）。
+    子の ParentBranch: を手で消したことを見分けるのに使う（そろっていた組が片側だけになっていたら、消したと判断する）。"""
+    try:
+        data = json.loads((root / _BRANCH_STATE_FILE).read_text(encoding="utf-8"))
+        return set(data) if isinstance(data, list) else set()
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _save_branch_pairs(root: Path, pairs: set[str]) -> None:
+    fp = root / _BRANCH_STATE_FILE
+    try:
+        tmp = fp.with_name(fp.name + ".tmp")
+        tmp.write_text(json.dumps(sorted(pairs), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, fp)
+    except OSError:
+        pass
+
+
 def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
                             prev_titles: dict | None = None) -> list[str]:
     """本文リンクの表示名を、リンク先の現在のタイトルに追従させる。
@@ -1962,7 +1985,7 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 
 def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
                         ctx_kids: set | None = None, pb_kids: set | None = None,
-                        titles: dict | None = None) -> list[str]:
+                        titles: dict | None = None, timeline: bool = False, stale: set | None = None) -> list[str]:
     """ChildBranch: に書く子。本文（BranchGroup: の中も含む）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
     子の側の ParentBranch: にこのノートがあるのに ChildBranch: にも本文にも無い子は足す（本文から消したときに戻す）。
     並び: 上にこのノートを Context にしている子、空行、下にただの子（それぞれの中の並びは元のまま）。"""
@@ -1981,7 +2004,9 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
-    shown = {resolved(key(tg)) for _d, tg in _links_from(body)} - {None}
+    # 時系列の木のノート（timeline: true。日記・年・月・時系列記録）は、本文に子の一覧があっても、子を ChildBranch: に必ず書く
+    # （子の ParentBranch: に対する親の側。本文の一覧は日記の操作が使うので残す）
+    shown = set() if timeline else ({resolved(key(tg)) for _d, tg in _links_from(body)} - {None})
     kids = ctx_kids or set()
     entries: list[tuple[str, list]] = []
     for ln in cbranch:
@@ -1990,9 +2015,11 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
         tgs = [resolved(key(tg)) for _d, tg in _links_from([ln])]
         if tgs and all(t is not None and t in shown for t in tgs):
             continue
+        if tgs and all(t is not None and t in (stale or ()) for t in tgs):
+            continue   # 子の ParentBranch: を手で消した: 親の ChildBranch: からも外す
         entries.append((ln, tgs))
     listed = {t for _ln, tgs in entries for t in tgs}
-    for c in sorted(pb_kids or set(), key=lambda q: q.name):
+    for c in sorted(pb_kids or set(), key=(lambda q: ((titles or {}).get(q) or q.stem, q.name)) if timeline else (lambda q: q.name)):
         if c in shown or c in listed or base is None:
             continue
         title = (titles or {}).get(c) or c.stem
@@ -2047,7 +2074,8 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     elif use_block and _has(n.get("_leftover")):
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     cbranch = _split_child_branch(n.get("cbranch") or [], n.get("body") or [], path, n.get("_ctx_kids"),
-                                  n.get("_pb_kids"), titles)
+                                  n.get("_pb_kids"), titles, stale=n.get("_stale_kids"),
+                                  timeline=any(re.match(r"^\s*timeline\s*:\s*true\s*$", ln, re.I) for ln in n["fm"]))
     if _has(cbranch):
         sections.append((CHILD_BRANCH_MARK, cbranch))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
@@ -2170,7 +2198,39 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 q = (cp.parent / cand).resolve()
                 if q in notes:
                     notes[q].setdefault("_pb_kids", set()).add(cp)
+                    cn.setdefault("_pb_parents", set()).add(q)
                     break
+    # 子の ParentBranch: を手で消したとき、親の ChildBranch: からも外す。前回そろっていた組が片側だけになったら「消した」。
+    # （片側だけを手で書いた ChildBranch: は、そろっていた記録が無いので、そのまま残る）
+    branch_pairs_prev = _load_branch_pairs(root)
+    branch_pairs_now: set[str] = set()
+    for pp, pn in notes.items():
+        for _d, tg in _links_from(pn.get("cbranch") or []):
+            raw = tg.split("#", 1)[0]
+            for cand in (raw, unquote(raw)):
+                q = (pp.parent / cand).resolve()
+                if q in notes:
+                    if pp in notes[q].get("_pb_parents", ()):
+                        branch_pairs_now.add(_nid(pp, root) + "\t" + _nid(q, root))
+                    elif (_nid(pp, root) + "\t" + _nid(q, root)) in branch_pairs_prev:
+                        pn.setdefault("_stale_kids", set()).add(q)
+                    break
+    for cp, cn in notes.items():
+        for q in cn.get("_pb_parents", ()):
+            branch_pairs_now.add(_nid(q, root) + "\t" + _nid(cp, root))
+    # 外すと決めた行は、解析結果（キャッシュに残る）からも取り除く。残すと、次の sync でキャッシュから戻ってしまう
+    for pp, pn in notes.items():
+        if pn.get("_stale_kids"):
+            keep = []
+            for ln in pn.get("cbranch") or []:
+                tgs = []
+                for _d, tg in _links_from([ln]):
+                    raw = tg.split("#", 1)[0]
+                    tgs.append(next((q for q in ((pp.parent / c).resolve() for c in (raw, unquote(raw))) if q in notes), None))
+                if tgs and all(t is not None and t in pn["_stale_kids"] for t in tgs):
+                    continue
+                keep.append(ln)
+            pn["cbranch"] = keep
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
@@ -2522,6 +2582,8 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 数 MB の JSON を書き直さない（保存のたびに走るため無駄が大きい）。
     if group_state_new != group_state:
         _save_group_state(root, group_state_new)
+    if branch_pairs_now != branch_pairs_prev:
+        _save_branch_pairs(root, branch_pairs_now)
     if parsed_any or changed:
         out_cache: dict[str, list] = {}
         for p, n in notes.items():
