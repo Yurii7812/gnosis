@@ -34128,7 +34128,10 @@ ${h3.join(`
     $3("main").classList.toggle("with-mandala", !!md);
     $3("main").classList.toggle("mandala-only", !!md && !hasNote);
     $3("view").hidden = !!md && !hasNote;
-    if (md) mandala.render(md);
+    if (md) {
+      $3("mandala").style.flexBasis = md.wcols && s15.cols && hasNote ? (100 * md.wcols / s15.cols).toFixed(2) + "%" : "";
+      mandala.render(md);
+    }
     if (s15.bt === "terminal" || !hasNote) return;
     view2.setLinkSource(!!last2.linkSource);
     if (s15.lines) {

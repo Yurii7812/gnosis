@@ -2,7 +2,14 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
-## 現在地（2026-10-23）
+## 現在地（2026-10-24）
+- `\c` アプリ（`web/`）を小さく作り直した（旧版はタグ `archive/gui-2026-10-24`）。残したのは 起動画面・マークダウン表示・端末の下 2 行・配色/文字サイズ・画像・ステータスバー。タブ・分割・コマンドパレット・GUI 編集・見るだけモード・ツールバーは削除（Vim にある操作だけ）。
+- **アプリ専用の GUI 曼荼羅**（`web/src/mandala.js`）: Vim が盤面の状態を送り（`gnosis#mview#gui_state()`）、色つきのマスで描く（CUI と同じ 10 色）。マスのクリック/ダブルクリックは `gnosis#mview#gui_click`。キーは従来どおり Vim へ。曼荼羅が開いている間は右のノート窓をマークダウンで映し、YAML・上下の「名前:」系は隠す（`hide` 行範囲）。幅は Vim の窓の割合に合わせる。
+- 曼荼羅のキー整理: `( )` = 盤面そのものの幅（3×3 も 9×9 も）、`< >` = 画面の幅（曼荼羅窓と右窓の境目）、`=` で両方戻す。どちらも `mandala.json` に保存して次回も前回のまま。
+- 試験: Vim 78 本全通過・`web/test/gui_e2e.mjs`（作り直し。Xvfb の Electron 実機で 曼荼羅 9 マス・クリック・幅・隠す行）・launcher/theme/multi/view_swap 通過（#1E1E1E の既定色に期待値を更新）。
+- **未実施**: `\l` ポップアップ化、`\F` のアプリ内画面・紙スキャンのワークフロー、APK（ML Kit スキャナー・長押しシート）。Konsole での `\=` 復帰の実機確認。
+
+## 以前の現在地（2026-10-23）
 - ブランチ `feat/mandala-cui`（worktree `~/src/gnosis-mandala`、main 2705598 から）。**main 未マージ・push 未**（最後にまとめて ff-only マージ → push）。DECISIONS D011・USER_GUIDE §6。
   - 曼荼羅ビューの作り直し（モード a/i + 重ね c/r・色 7 種・`x` `m` `n` `N` `gs` `o` `Tab`・`q` `Q`・`?` ポップアップ・起動時に左半分・窓の保護）、`\l` → `e` → `g`（`\g` 廃止。`I` `t`）、SQLite キャッシュ（`python/mandala_cache.py`。10 万件 38 秒 → 0.3 秒未満、100 万件も実測）、題は H1（`note_title.py`・`title_migrate.py`）、よみは JSON（`YomiStore`・`yomi_migrate.py`）、`\zz` の隠す窓（`hide.vim`）、時系列の木の ChildBranch: と親の手削除（`note_format_v2.py`）。
   - 試験: `python/test_mandala_cache.py`・`test_title_migrate.py`・`test_sort_yomi.py`（JSON・移行）・`test_branch_ops.py`（時系列・手削除）・`test/mview_check.vim`（116 項目）・`test/hide_net.sh`。`test_nav.py` は日付で結果が変わるのを直した。

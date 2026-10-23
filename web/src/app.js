@@ -159,7 +159,11 @@ function applyState(s) {
   $("main").classList.toggle("with-mandala", !!md);
   $("main").classList.toggle("mandala-only", !!md && !hasNote);
   $("view").hidden = !!md && !hasNote;
-  if (md) mandala.render(md);
+  if (md) {
+    // 曼荼羅の窓の幅（Vim の桁数）の割合で、アプリの曼荼羅の幅を合わせる（< > で動く）
+    $("mandala").style.flexBasis = md.wcols && s.cols && hasNote ? (100 * md.wcols / s.cols).toFixed(2) + "%" : "";
+    mandala.render(md);
+  }
 
   // ノート（曼荼羅が開いていれば、右の窓のノート）の内容とカーソルをマークダウンで映す
   if (s.bt === "terminal" || !hasNote) return;

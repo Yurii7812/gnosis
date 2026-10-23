@@ -198,7 +198,7 @@ function! s:snapshot(force) abort
     let s:sent_look = l:look
   endif
   " 全行は、バッファか内容が変わったときだけ送る。隠す行（YAML・上下の「名前:」系）も、行が変わったときに一緒に送る
-  let l:force = l:wid > 0 && getwinvar(l:wid, 'gnosis_hide_force', 0)
+  let l:force = l:wid > 0 && getwinvar(win_id2win(l:wid), 'gnosis_hide_force', 0)
   let l:h = l:force ? {'yaml': 1, 'top': 1, 'bottom': 1} : gnosis#hide#get()
   let l:key = l:b . ':' . (l:b > 0 ? getbufvar(l:b, 'changedtick') : 0) . ':' . (empty(l:ms) ? 0 : 1) . ':' . string(l:h)
   if a:force || l:key !=# s:sent_key

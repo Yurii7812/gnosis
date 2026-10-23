@@ -1714,6 +1714,8 @@ function! s:show_note(id) abort
   if l:nw < 0
     return
   endif
+  " 右のノートでは、YAML と上下の「名前:」系を、\zz の設定に関わらず隠す（最初から開いていた窓も）
+  call setwinvar(win_id2win(l:nw), 'gnosis_hide_force', 1)
   if fnamemodify(bufname(winbufnr(l:nw)), ':p') ==# fnamemodify(l:path, ':p')
     return
   endif
@@ -2235,7 +2237,7 @@ function! gnosis#mview#gui_state() abort
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0),
         \           'mode': s:S.mode, 'pv': get(s:S, 'pv', 0), 'dbasis': get(s:S, 'dbasis', 'center')},
-        \ 'win': s:S.win, 'noteWin': s:note_win()}
+        \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
 
 " アプリでマスをクリック: そのマスへカーソルを動かし、a:enter が 1 なら中心にする（Enter と同じ）
