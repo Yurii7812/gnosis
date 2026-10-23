@@ -85,7 +85,7 @@ call s:keys('1')
 call s:ok('数字キー 1 でそのまま植物が中心になる', s:st.center ==# 'plant.md', s:st.center)
 call s:ok('カーソルは曼荼羅に残る', &filetype ==# 'gnosis-mandala')
 call s:ok('索引の周りに所属する Index が最初に出る', s:text() =~# '1 Index', s:text())
-call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '9 タイム', s:text())
+call s:ok('そのあとに載っているノートが 8 つまで', s:text() =~# '2 ハーブ' && s:text() =~# '8 タイム', s:text())
 call s:ok('1/2 枚目と出る', s:text() =~# '1/2', s:text())
 call s:ok('ページ 1/2 が中央のマスの上に出る', s:text() =~# '1/2' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *1/2 *┃"')) == 1, s:text())
 call s:ok('ページ 1/2 は盤面に残る', s:text() =~# '1/2', s:text())
@@ -103,8 +103,8 @@ call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダ
 call s:keys('q')
 call s:ok('q でハイライトをやめる（曼荼羅は閉じない）', s:st.find ==# '' && &filetype ==# 'gnosis-mandala')
 call s:keys('[')
-" 1 2 3 / 4 5 6 / 7 8 9 の並び（真ん中が 5。4 は中心の左・6 は右）
-call s:ok('4 は中心の左・5 は右の同じ行', len(filter(split(s:text(), "\n"), 'v:val =~# "4 栽培 *┃ *5 植物"')) == 1 && s:text() =~# '6 ローズ', s:text())
+" 1 2 3 / 8 _ 4 / 7 6 5 の並び（真ん中に番号は無い）
+call s:ok('3×3 は 1 2 3 / 8 _ 4 / 7 6 5 の並び（真ん中に番号は無い。8 は中心の左・4 は右の同じ行）', len(filter(split(s:text(), "\n"), 'v:val =~# "8 タイム.*┃.*植物.*┃.*4 栽培"')) == 1 && s:text() =~# '5 ' && s:text() =~# '6 ' && s:text() =~# '7 ', s:text())
 " 数字キーでそのままノートのマスへ進む: 右にそのノートが開く
 call s:keys('4')
 call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:st.center)
@@ -151,7 +151,7 @@ call s:ok('9×9 に周りの曼荼羅の中身も出る', s:text() =~# 'ハ' && 
 call s:ok('9×9 にも番号が出る', s:text() =~# '1 Index' && s:text() =~# '8 ', s:text())
 call s:keys('t')
 call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor', s:st.digit)
-call s:keys('6')
+call s:keys('4')
 call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [4, 7], string(s:st.cur) . ' ' . s:st.center)
 call s:keys('t')
 call s:ok('もう一度 t で数字は移動に戻る', s:st.digit ==# 'jump')
@@ -399,18 +399,14 @@ call s:keys('a')
 let s:st = gnosis#mview#state()
 call s:ok('Tab 前は中心のマス', s:st.cur == [1, 1] && s:st.page == 0, string(s:st.cur))
 call s:keys("\<S-Tab>")
-call s:keys("\<S-Tab>")
-call s:keys("\<S-Tab>")
-call s:keys("\<S-Tab>")
-call s:keys("\<S-Tab>")
-call s:ok('Shift-Tab は 3×3 の 1 番で止まる', s:st.cur == [0, 0], string(s:st.cur))
+call s:ok('Shift-Tab は中心（最初）で止まる', s:st.cur == [1, 1], string(s:st.cur))
 let s:path = []
 for s:i in range(9)
   call s:keys("\<Tab>")
   call add(s:path, s:st.cur)
 endfor
-call s:ok('Tab は 1 → 9 の順（中心の 5 も通る）', s:path ==# [[0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2], [2, 2]], string(s:path))
-call s:ok('9 番で止まる（次の曼荼羅へも最初へも行かない。ページも動かない）', s:st.cur == [2, 2] && s:st.page == 0, string([s:st.cur, s:st.page]))
+call s:ok('Tab は 中心 → 1 2 3 4 5 6 7 8 の順（時計回り）', s:path ==# [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0], [1, 0]], string(s:path))
+call s:ok('8 番で止まる（次の曼荼羅へも最初へも行かない。ページも動かない）', s:st.cur == [1, 0] && s:st.page == 0, string([s:st.cur, s:st.page]))
 call s:keys('f')
 call s:keys('4')
 let s:st = gnosis#mview#state()
@@ -560,13 +556,13 @@ for s:r in range(9)
 endfor
 call s:ok('v: 29 個のリンクが全部、周りの曼荼羅を作らずに並ぶ', len(s:filled) == len(gnosis#mview#items(s:st.data, 'big.md', 'all')) && len(filter(copy(s:filled), 'v:val[0] == 0')) == 0, string(len(s:filled)))
 call s:ok('v: 内側の輪（8 マス）→ 次の輪（16 マス）の順に埋まる', len(filter(copy(s:filled), 'v:val[0] == 1')) == 8 && len(filter(copy(s:filled), 'v:val[0] == 2')) == 16 && len(filter(copy(s:filled), 'v:val[0] == 3')) == len(s:filled) - 24, string(map(copy(s:filled), 'v:val[0]')))
-call s:ok('v: 1 2 3 / 4 _ 6 / 7 8 9 の順（中心の周りの輪）', s:st.cells[3][3].n == 1 && s:st.cells[3][4].n == 2 && s:st.cells[3][5].n == 3 && s:st.cells[4][3].n == 4 && s:st.cells[4][5].n == 6 && s:st.cells[5][3].n == 7 && s:st.cells[5][4].n == 8 && s:st.cells[5][5].n == 9, string([s:st.cells[3][3].n, s:st.cells[3][4].n, s:st.cells[3][5].n, s:st.cells[4][3].n, s:st.cells[4][5].n, s:st.cells[5][3].n]))
+call s:ok('v: 1 2 3 / 8 _ 4 / 7 6 5 の順（中心の周りの輪）', s:st.cells[3][3].n == 1 && s:st.cells[3][4].n == 2 && s:st.cells[3][5].n == 3 && s:st.cells[4][5].n == 4 && s:st.cells[5][5].n == 5 && s:st.cells[5][4].n == 6 && s:st.cells[5][3].n == 7 && s:st.cells[4][3].n == 8, string([s:st.cells[3][3].n, s:st.cells[3][4].n, s:st.cells[3][5].n, s:st.cells[4][3].n, s:st.cells[4][5].n, s:st.cells[5][3].n]))
 " Tab は内側から外側へ 1 つずつ。最後で止まる（ループしない）
 let s:st.digit = 'move'
-call s:keys('6')
+call s:keys('4')
 let s:st = gnosis#mview#state()
-call s:ok('v: 数字 6 は中心の右のマス', s:st.cur == [4, 5], string(s:st.cur))
-call s:keys('5')
+call s:ok('v: 数字 4 は中心の右のマス', s:st.cur == [4, 5], string(s:st.cur))
+call s:keys('9')
 call s:keys("\<Tab>")
 let s:st = gnosis#mview#state()
 let s:st.digit = 'jump'
@@ -609,11 +605,6 @@ call s:keys(' ')
 call s:ok('p がオンの間、Space は右の窓へ（3×3 に戻らない）', &filetype !=# 'gnosis-mandala' && s:st.size == 9, &filetype . ' size=' . s:st.size)
 call s:keys(' ')
 call s:ok('もう一度 Space で曼荼羅へ', &filetype ==# 'gnosis-mandala')
-let s:hide = 0
-for s:wi in range(1, winnr('$'))
-  if getwinvar(s:wi, 'gnosis_hide_force', 0) | let s:hide += 1 | endif
-endfor
-call s:ok('右のノートの窓は YAML・上下の : 系を常に隠す設定', s:hide == 1, string(s:hide))
 call s:keys('p')
 call s:ok('もう一度 p で右の窓が消える', winnr('$') == 1 && get(s:st, 'pv', 0) == 0)
 call s:keys('}')
@@ -666,6 +657,26 @@ call s:keys('f')
 call s:keys('w')
 call s:keys('Q')
 let g:gnosis_mview_restore = 0
+
+" プリセット（gp）: 設定に名前をつけて保存・呼び出し・名前変更・削除
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+let s:st.nums = 0
+let s:st.digit = 'move'
+call s:ok('プリセットを名前をつけて保存', gnosis#mview#preset_save('読書用') == 1 && gnosis#mview#preset_names() ==# ['読書用'], string(gnosis#mview#preset_names()))
+let s:st.nums = 1
+let s:st.digit = 'jump'
+call gnosis#mview#preset_apply('読書用')
+call s:ok('プリセットを呼び出すと設定が戻る', s:st.nums == 0 && s:st.digit ==# 'move', string([s:st.nums, s:st.digit]))
+call s:ok('プリセットの名前を変える', gnosis#mview#preset_rename('読書用', '調べもの') == 1 && gnosis#mview#preset_names() ==# ['調べもの'], string(gnosis#mview#preset_names()))
+call s:ok('空の名前・重複する名前には変えない', gnosis#mview#preset_save('別') == 1 && gnosis#mview#preset_rename('別', '調べもの') == 0 && gnosis#mview#preset_rename('別', '  ') == 0)
+call s:keys('#')
+call s:ok('mandala.json に presets が残り、モードの保存で消えない', join(readfile(gnosis#home#path('mandala.json')), '') =~# '調べもの')
+call gnosis#mview#preset_delete('調べもの')
+call gnosis#mview#preset_delete('別')
+call s:ok('プリセットを消す', gnosis#mview#preset_names() ==# [])
+call s:keys('Q')
 
 call writefile(s:res, s:work . '/result.txt')
 qa!

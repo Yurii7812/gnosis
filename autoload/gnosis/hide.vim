@@ -15,9 +15,6 @@ let s:top_heads = ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 
 let s:bottom_heads = ['ChildBranch:', 'Related:', 'BackLink:', '### Context', '### Related', '### BackLink', '### ParentBranch', '### ChildBranch']
 
 function! gnosis#hide#get() abort
-  if get(w:, 'gnosis_hide_force', 0)
-    return {'yaml': 1, 'top': 1, 'bottom': 1}   " 曼荼羅の右のノート: 設定に関わらず隠す
-  endif
   try
     let l:h = get(gnosis#settings#current(), 'hide', {})
   catch

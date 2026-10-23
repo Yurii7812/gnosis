@@ -8,7 +8,7 @@
 "
 " キー（曼荼羅のウィンドウ）
 "   h j k l / 矢印   マスを動く（右のノートがそのマスのノートに切り替わる。中心は変わらない）
-"   1-9              そのマスへ（1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で「移動して中心に」⇔「カーソルだけ」
+"   1-8              そのマスへ（1 2 3 / 8 _ 4 / 7 6 5。9 か 0 が中心）。t で「移動して中心に」⇔「カーソルだけ」
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
@@ -24,9 +24,9 @@
 let s:S = {}
 let s:here = expand('<sfile>:p:h:h:h')
 " 周りの 8 マス（読む順）
-let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
+let s:pos = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0]]   " 1 2 3 / 8 _ 4 / 7 6 5（時計回り）
 " 番号はテンキーと同じ並び（1 2 3 / 4 5 6 / 7 8 9）。真ん中が 5
-let s:nums = [1, 2, 3, 4, 6, 7, 8, 9]
+let s:nums = [1, 2, 3, 4, 5, 6, 7, 8]
 let s:mode_label = {'all': '全体', 'groups': '索引'}
 let s:mode_keys = [['a', 'all'], ['i', 'groups']]
 " 重ねるもの（オン/オフ）: [キー, 状態の名前, 表示名]
@@ -415,20 +415,28 @@ function! s:ring(c, page) abort
 endfunction
 
 " 外向きモード（v）: 中心のリンクを、9×9 の中心以外の 80 マスに、内側から外側へ 1 つずつ並べる（周りの曼荼羅は作らない）。
-" 並べる順はふつうの順（w の近さ順がオンなら近さ順）。マスの順は、中心に近い輪から、輪の中は読む順（1 2 3 / 4 _ 6 / 7 8 9 と同じ）
+" 並べる順はふつうの順（w の近さ順がオンなら近さ順）。マスの順は、中心に近い輪から、輪の中は左上から時計回り（1 2 3 / 8 _ 4 / 7 6 5）
 function! s:spiral() abort
   if !exists('s:spiral_cache')
-    let l:cells = []
-    for l:r in range(9)
-      for l:c in range(9)
-        if [l:r, l:c] != [4, 4]
-          call add(l:cells, [max([abs(l:r - 4), abs(l:c - 4)]), l:r, l:c])
-        endif
+    let l:out = []
+    " 内側の輪から。輪の中は、左上から時計回り（1 2 3 / 8 _ 4 / 7 6 5 と同じ）
+    for l:k in range(1, 4)
+      let l:t = 4 - l:k
+      let l:b = 4 + l:k
+      for l:c in range(l:t, l:b)
+        call add(l:out, [l:t, l:c])
+      endfor
+      for l:r in range(l:t + 1, l:b)
+        call add(l:out, [l:r, l:b])
+      endfor
+      for l:c in range(l:b - 1, l:t, -1)
+        call add(l:out, [l:b, l:c])
+      endfor
+      for l:r in range(l:b - 1, l:t + 1, -1)
+        call add(l:out, [l:r, l:t])
       endfor
     endfor
-    " 内側の輪から。輪の中は、読む順（上の行の左から右、次の行…）。1 2 3 / 4 _ 6 / 7 8 9 と同じ並び
-    call sort(l:cells, {a, b -> a[0] != b[0] ? a[0] - b[0] : (a[1] != b[1] ? a[1] - b[1] : a[2] - b[2])})
-    let s:spiral_cache = map(l:cells, '[v:val[1], v:val[2]]')
+    let s:spiral_cache = l:out
   endif
   return s:spiral_cache
 endfunction
@@ -493,7 +501,7 @@ function! s:board_cells() abort
     call add(l:b, repeat([{'id': '', 'role': 'empty', 'n': 0}], l:n))
   endfor
   if l:n == 9 && get(s:S, 'out_on', 0)
-    let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 5}
+    let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 0}
     let l:all = s:items(s:S.center)
     let l:slots = s:spiral()
     let l:from = s:S.page * 80
@@ -501,7 +509,7 @@ function! s:board_cells() abort
     for l:i in range(80)
       let l:e = get(l:all, l:from + l:i, ['', ''])
       if !empty(l:e[0])
-        let l:b[l:slots[l:i][0]][l:slots[l:i][1]] = {'id': l:e[0], 'name': l:e[1], 'role': 'item', 'n': (l:from == 0 && l:i < 8) ? s:nums[l:i] : l:from + l:i + 2}
+        let l:b[l:slots[l:i][0]][l:slots[l:i][1]] = {'id': l:e[0], 'name': l:e[1], 'role': 'item', 'n': l:from + l:i + 1}
       endif
     endfor
     return l:b
@@ -511,7 +519,7 @@ function! s:board_cells() abort
     call s:fetch(map(copy(l:ring), 'v:val[0]'))
   endif
   if l:n == 3
-    let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 5}
+    let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 0}
     for l:i in range(8)
       if !empty(l:ring[l:i][0])
         let l:b[s:pos[l:i][0]][s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
@@ -521,7 +529,7 @@ function! s:board_cells() abort
   endif
   " 9×9: 真ん中の 3×3 が今の曼荼羅。周りの 8 ブロックは、その周辺の各ノートを中心にした曼荼羅の 1 枚目。
   " ブロックの真ん中のマスにも、周りのマスと同じ番号を付ける
-  let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 5}
+  let l:b[4][4] = {'id': s:S.center, 'role': 'center', 'n': 0}
   for l:i in range(8)
     let l:id = l:ring[l:i][0]
     if empty(l:id)
@@ -806,27 +814,21 @@ endfunction
 
 " ---- Tab / Shift-Tab: 順次表示。1 2 3 4 6 7 8 9（5 の中心は飛ばす）、次の曼荼羅の 1 へ、最後まで行ったら最初に戻る ----------
 function! s:seq(dir) abort
-  " Tab / S-Tab: 今いるマスの 3×3（9×9 では外側のブロックの中も）の 1 〜 9 を順に。最後（9）・最初（1）で止まる（ループしない）。
-  " ページ（[ ]）は動かさない。外向きモード（v）では、内側から外側への順に 1 つずつ（中心 → 80 番目。止まる）
+  " Tab / S-Tab: 今いる 3×3（9×9 では外側のブロックの中も）の、中心 → 1 2 3 4 5 6 7 8 の順。最後・最初で止まる（ループしない）。
+  " ページ（[ ]）は動かさない。外向きモード（v）では、中心 → 内側から外側へ 1 つずつ（最後のリンクで止まる）
   if get(s:S, 'out_on', 0) && s:S.size == 9
     " 並んでいる（リンクのある）マスだけ
     let l:slots = [[4, 4]] + filter(copy(s:spiral()), 'get(s:S.cells[v:val[0]][v:val[1]], "id", "") !=# ""')
-    let l:i = index(l:slots, s:S.cur) + a:dir
-    if l:i < 0 || l:i >= len(l:slots)
-      return
-    endif
-    let s:S.cur = l:slots[l:i]
-    call s:mark()
-    call s:preview()
+  else
+    let l:r0 = s:S.cur[0] / 3 * 3
+    let l:c0 = s:S.cur[1] / 3 * 3
+    let l:slots = [[l:r0 + 1, l:c0 + 1]] + map(copy(s:pos), '[l:r0 + v:val[0], l:c0 + v:val[1]]')
+  endif
+  let l:i = index(l:slots, s:S.cur) + a:dir
+  if l:i < 0 || l:i >= len(l:slots)
     return
   endif
-  let l:r0 = s:S.cur[0] / 3 * 3
-  let l:c0 = s:S.cur[1] / 3 * 3
-  let l:i = (s:S.cur[0] - l:r0) * 3 + (s:S.cur[1] - l:c0) + a:dir
-  if l:i < 0 || l:i > 8
-    return
-  endif
-  let s:S.cur = [l:r0 + l:i / 3, l:c0 + l:i % 3]
+  let s:S.cur = l:slots[l:i]
   call s:mark()
   call s:preview()
 endfunction
@@ -836,14 +838,15 @@ function! s:help_lines() abort
   let l:t = [
         \ '曼荼羅ビュー',
         \ '',
-        \ ' 動く      h j k l / 矢印    1-9 そのマスへ(5 が中心)   t 数字の動き切替   z 中央に',
+        \ ' 動く      h j k l / 矢印    1-8 そのマスへ(9 か 0 が中心)   t 数字の動き切替   z 中央に',
         \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
-        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 1 → 9（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
+        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 中心 → 1 … 8（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
         \ ' モード     a 全体   i グループ・索引だけ',
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
         \ ' 並べる     v 外向き(リンクを内側から外側へ 1 つずつ最大 80 個)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' プリセット  gp 設定に名前をつけて保存・呼び出し・名前変更・消す',
         \ ' 画面       f 全画面(9×9)⇔分割   p 全画面の右に本文   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す   u 読み直し   Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
@@ -905,6 +908,9 @@ endfunction
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
+        \ . ' t:数字' . (get(s:S, 'digit', 'jump') ==# 'jump' ? '移動' : 'カーソルだけ')
+        \ . (get(s:S, 'nums', 1) ? '' : ' #:数字なし')
+        \ . (get(s:S, 'pv', 0) ? ' p:本文' : '')
         \ . (get(s:S, 'out_on', 0) ? ' v:外向き' : '')
         \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 && !get(s:S, 'out_on', 0) ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
   let l:cancel = s:cancel_hint()
@@ -1146,14 +1152,14 @@ function! s:preview() abort
   endif
 endfunction
 
-" 数字キー（テンキーと同じ 1 2 3 / 4 5 6 / 7 8 9。5 が中心）。t で切り替える:
+" 数字キー（1 2 3 / 8 _ 4 / 7 6 5。9 か 0 が中心）。t で切り替える:
 "   移動     … そのマスへ移って中心にする（0 は中心のノートを開く）
 "   カーソル … そのマスにカーソルを置くだけ（右のノートは切り替わる。中心は変わらない）
 " 9×9 ではそのブロックの真ん中のマスが対象
 function! s:digit(d) abort
   let l:i = index(s:nums, a:d)
   if s:S.size == 9 && get(s:S, 'out_on', 0)
-    " 外向き: 1〜9 は中心の周りの 8 マス（5 は中心）
+    " 外向き: 1〜8 は中心の周りの 8 マス（9 と 0 は中心）
     let s:S.cur = l:i < 0 ? [4, 4] : [3 + s:pos[l:i][0], 3 + s:pos[l:i][1]]
   elseif s:S.size == 9
     let s:S.cur = l:i < 0 ? [4, 4] : [s:pos[l:i][0] * 3 + 1, s:pos[l:i][1] * 3 + 1]
@@ -1197,7 +1203,11 @@ function! s:save_state() abort
   if !has_key(s:S, 'tenths') && !has_key(s:S, 'stretch') && !has_key(s:S, 'size')
     return
   endif
-  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0)}
+  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0), 'open': get(s:S, 'open_pref', 1)}
+  let l:old = s:state_all()
+  if type(get(l:old, 'presets', 0)) == v:t_dict
+    let l:d.presets = l:old.presets
+  endif
   for l:k in s:mode_keys
     if has_key(s:S, l:k) && !(l:k ==# 'mode' && get(s:S, 'pick', '') !=# '') && !(l:k ==# 'near_on' && !empty(get(s:S, 'saved_mode', [])) && get(s:S, 'src', '') !=# '')
       let l:d[l:k] = s:S[l:k]
@@ -1771,8 +1781,6 @@ function! s:ensure_note_win() abort
   call win_gotoid(l:mw)
   vertical rightbelow new
   let l:nw = win_getid()
-  " 右のノートでは、YAML と上下の「名前:」系を、\zz の設定に関わらず隠す
-  let w:gnosis_hide_force = 1
   " 窓を分けると曼荼羅の色づけ（matchaddpos）も新しい窓に写るので、ノートの窓には残さない
   call clearmatches(l:nw)
   unlet! w:mview_match
@@ -1795,8 +1803,6 @@ function! s:show_note(id) abort
   if l:nw < 0
     return
   endif
-  " 右のノートでは、YAML と上下の「名前:」系を、\zz の設定に関わらず隠す（最初から開いていた窓も）
-  call setwinvar(win_id2win(l:nw), 'gnosis_hide_force', 1)
   if fnamemodify(bufname(winbufnr(l:nw)), ':p') ==# fnamemodify(l:path, ':p')
     return
   endif
@@ -1844,6 +1850,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
+  nnoremap <buffer><nowait><silent> gp <Cmd>call <SID>preset_menu()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
@@ -2084,6 +2091,7 @@ function! s:open(center, ...) abort
   let s:S.pick = empty(l:pick) ? '' : 'group'
   call s:tick('pick')
   let s:S.src = l:pick
+  let s:S.open_pref = 1
   let s:S.origin_view = 0
   let s:S.query = ''
   let s:S.rquery = ''
@@ -2225,6 +2233,10 @@ function! gnosis#mview#start() abort
       let l:on = 1
     endtry
   endif
+  " 前回、曼荼羅を開いたまま閉じたなら開く。閉じてあったなら閉じたまま（g:gnosis_mandala_on_start が決まっていればそちら）
+  if l:on == 1 && !exists('g:gnosis_mandala_on_start') && get(s:state_all(), 'open', 1) == 0
+    return
+  endif
   if !l:on || empty(s:root()) || &filetype ==# 'gnosis-mandala' || s:mwin() > 0 || empty(expand('%:p'))
     return
   endif
@@ -2289,6 +2301,7 @@ function! gnosis#mview#group_pick(links) abort
 endfunction
 
 function! gnosis#mview#close() abort
+  let s:S.open_pref = 0
   call s:save_state()
   if has_key(s:S, 'saved_mode')
     let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
@@ -2379,4 +2392,152 @@ endfunction
 function! gnosis#mview#reset_for_test() abort
   let s:S = {}
   let s:saved_json = ''
+endfunction
+
+" ---- プリセット（曼荼羅の設定をまとめて名前をつけて覚える。gp） ----------------------------------------
+" 覚えるもの: モード（# f p v w d c r a/i t）と、幅（< > ( )）。Gnosis ホームの mandala.json の presets に入る
+function! s:preset_snapshot() abort
+  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0)}
+  for l:k in s:mode_keys
+    if has_key(s:S, l:k)
+      let l:d[l:k] = s:S[l:k]
+    endif
+  endfor
+  return l:d
+endfunction
+
+function! s:presets() abort
+  let l:p = get(s:state_all(), 'presets', {})
+  return type(l:p) == v:t_dict ? l:p : {}
+endfunction
+
+function! s:presets_write(p) abort
+  let l:all = s:state_all()
+  let l:all.presets = a:p
+  call gnosis#home#write_json(gnosis#home#path('mandala.json'), l:all)
+  let s:saved_json = ''
+endfunction
+
+function! gnosis#mview#preset_names() abort
+  return sort(keys(s:presets()))
+endfunction
+
+function! gnosis#mview#preset_save(name) abort
+  let l:n = trim(a:name)
+  if empty(l:n)
+    return 0
+  endif
+  let l:p = s:presets()
+  let l:p[l:n] = s:preset_snapshot()
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_delete(name) abort
+  let l:p = s:presets()
+  if !has_key(l:p, a:name)
+    return 0
+  endif
+  call remove(l:p, a:name)
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_rename(old, new) abort
+  let l:n = trim(a:new)
+  let l:p = s:presets()
+  if empty(l:n) || !has_key(l:p, a:old) || (l:n !=# a:old && has_key(l:p, l:n))
+    return 0
+  endif
+  let l:p[l:n] = remove(l:p, a:old)
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_apply(name) abort
+  let l:d = get(s:presets(), a:name, {})
+  if empty(l:d) || !exists('s:S') || !has_key(s:S, 'cells')
+    return 0
+  endif
+  for l:k in ['nums', 'pv', 'out_on', 'rank_on', 'near_on', 'rel_on']
+    if has_key(l:d, l:k)
+      let s:S[l:k] = l:d[l:k] ? 1 : 0
+    endif
+  endfor
+  for l:k in ['dbasis', 'digit', 'mode']
+    if type(get(l:d, l:k, 0)) == v:t_string
+      let s:S[l:k] = l:d[l:k]
+    endif
+  endfor
+  if type(get(l:d, 'tenths', '')) == v:t_number
+    let s:S.tenths = l:d.tenths
+  endif
+  if type(get(l:d, 'stretch', '')) == v:t_float || type(get(l:d, 'stretch', '')) == v:t_number
+    let s:S.stretch = l:d.stretch + 0.0
+  endif
+  let s:S.page = 0
+  let s:S.opage = 0
+  let l:want = get(l:d, 'size', s:S.size)
+  if l:want != s:S.size
+    call s:full()
+  endif
+  if !(s:S.size == 9)
+    let s:S.out_on = 0
+  endif
+  if s:note_win() > 0 && s:S.size == 3
+    execute 'vertical resize ' . s:win_width()
+  endif
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+  call s:preview()
+  return 1
+endfunction
+
+" gp: プリセットの画面（s=今の設定を保存  1-9=呼び出し  d + 番号=消す  q=閉じる）
+function! s:preset_menu() abort
+  let l:del = 0
+  while 1
+    let l:names = gnosis#mview#preset_names()
+    let l:lines = [' 曼荼羅のプリセット', '']
+    for l:i in range(min([len(l:names), 9]))
+      call add(l:lines, printf('  %d  %s', l:i + 1, l:names[l:i]))
+    endfor
+    if empty(l:names)
+      call add(l:lines, '  （まだありません）')
+    endif
+    call extend(l:lines, ['', l:del == 1 ? '  消すプリセットの番号を押す（Esc でやめる）' : (l:del == 2 ? '  名前を変えるプリセットの番号を押す（Esc でやめる）' : '  s 今の設定を名前をつけて保存   番号 呼び出し   n 名前を変える   d 消す   q 閉じる')])
+    let l:pid = popup_create(l:lines, {'pos': 'center', 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': ' gp '})
+    redraw
+    let l:k = getcharstr()
+    call popup_close(l:pid)
+    if l:del
+      let l:n = str2nr(l:k)
+      if l:n >= 1 && l:n <= len(l:names)
+        if l:del == 2
+          let l:new = input('新しい名前（' . l:names[l:n - 1] . '）: ', l:names[l:n - 1])
+          redraw
+          call gnosis#mview#preset_rename(l:names[l:n - 1], l:new)
+        else
+          call gnosis#mview#preset_delete(l:names[l:n - 1])
+        endif
+      endif
+      let l:del = 0
+    elseif l:k ==# 's'
+      let l:name = input('プリセットの名前: ')
+      redraw
+      if gnosis#mview#preset_save(l:name)
+        echo 'Gnosis: プリセット「' . trim(l:name) . '」を保存しました'
+      endif
+      return
+    elseif l:k ==# 'd' && !empty(l:names)
+      let l:del = 1
+    elseif l:k ==# 'n' && !empty(l:names)
+      let l:del = 2
+    elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(l:names)
+      call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
+      return
+    else
+      return
+    endif
+  endwhile
 endfunction

@@ -61,6 +61,8 @@ const scenario = `(async () => {
   const R = {};
   await sleep(2500);
   R.start = { file: base(G.state().file), h1: !!document.querySelector('.cm-md-h1'), hidden: [...document.querySelectorAll('.cm-hide-line')].length, mandalaHidden: document.getElementById('mandala').hidden };
+  // \\zz の設定（YAML・上下の名前: 系を隠す）
+  await press(':call gnosis#settings#set("hide.yaml", v:true)|call gnosis#settings#set("hide.top", v:true)|call gnosis#settings#set("hide.bottom", v:true)|call gnosis#hide#apply_all()\\r', 800);
   // 曼荼羅を開く
   if (document.getElementById('mandala').hidden) await press(' ', 1500);
   await waitFor(() => G.state().mandala && G.state().mandala.cells);
