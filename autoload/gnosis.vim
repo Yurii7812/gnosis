@@ -11664,6 +11664,41 @@ endfunction
 
 " 今のノートの見出しを選ぶ（t モード）。選ばれた見出しの行番号で a:Cb を呼ぶ。
 " 検索は見出しを優先しつつ、その下の本文にもヒットする（zo と同じ）。
+" ノート a:path の見出しを fzf で選び、スラッグで a:Cb を呼ぶ（曼荼羅の t 用。選ばずに閉じたら何もしない）
+function! gnosis#pick_heading(path, Cb) abort
+  let l:items = s:file_heading_items(a:path)
+  if empty(l:items)
+    echo gnosis#i18n#tr('Gnosis: 見出しがありません: ') . fnamemodify(a:path, ':t')
+    return
+  endif
+  if exists('g:gnosis_test_heading')
+    for l:it in l:items
+      if l:it.text ==# g:gnosis_test_heading
+        call call(a:Cb, [l:it.slug])
+        return
+      endif
+    endfor
+    return
+  endif
+  let s:pick_heading_cb = a:Cb
+  if !exists('*fzf#run')
+    let l:choices = map(copy(l:items), {i, it -> (i + 1) . ': ' . repeat('#', it.level) . ' ' . it.text})
+    let l:sel = gnosis#ui#inputlist(l:choices)
+    if l:sel > 0 && l:sel <= len(l:items)
+      call call(a:Cb, [l:items[l:sel - 1].slug])
+    endif
+    return
+  endif
+  call s:outline_fzf(l:items, a:path, function('s:pick_heading_sink'), 0)
+endfunction
+
+function! s:pick_heading_sink(line) abort
+  let l:f = split(a:line, "\t", 1)
+  if len(l:f) > 1 && exists('s:pick_heading_cb')
+    call timer_start(0, {-> call(s:pick_heading_cb, [l:f[1]])})
+  endif
+endfunction
+
 function! s:outline_pick_here(Cb) abort
   let l:path = expand('%:p')
   let l:items = s:file_heading_items(l:path, getline(1, '$'))
@@ -14169,7 +14204,7 @@ function! s:insert_links_core(links, ...) abort
   endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
   " 今のノートがグループかどうかでは決めない。
-  let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
+  let l:can_g = exists('*gnosis#mview#group_pick') && !empty(get(g:, 'gnosis_root', ''))
   " m（マージ）は \l で 1 つだけ選んだとき
   let l:can_m = !empty(s:inline_pos) && len(l:links) == 1
   echo gnosis#insert_prompt_text(a:0 > 0, l:can_g, l:can_m)
@@ -14219,9 +14254,8 @@ function! s:insert_links_core(links, ...) abort
     return -1
   endif
   if l:ch ==# 'g' && l:can_g
-    " g: 選んだノート（グループ）に、今のノートを入れる。選んだノートの本文に今のノートへのリンクが入り、
-    " 今のノートの Group: に選んだノートが出る（表示名は空欄から聞く。空 Enter = 今のノートのタイトル）。
-    return s:join_groups(l:links) > 0
+    " g: 選んだノートを入れるグループを、曼荼羅で選ぶ（e で決定・I で Index・t で見出しへのリンクにする）。選ぶ間は -1
+    return gnosis#mview#group_pick(l:links) ? -1 : 0
   endif
   if l:ch ==# 'm' && l:can_m
     " m: 選んだノートと開いているノートをマージする（どちらへまとめるかは続けて聞く。:GnosisMergeUndo で戻せる）
@@ -14463,11 +14497,11 @@ function! gnosis#insert_prompt_text(has_t, has_g, ...) abort
   " a:1 が真なら m（マージ。\l で 1 つ選んだとき）も出す
   let l:has_m = a:0 && a:1
   let l:full = (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
-        \ . (a:has_g ? gnosis#i18n#tr('g=このグループに入る / ') : '')
+        \ . (a:has_g ? gnosis#i18n#tr('g=グループに入れる / ') : '')
         \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / a=Context(今のノートにリンク先) / r=Related(相互)')
         \ . (l:has_m ? gnosis#i18n#tr(' / m=マージ') : '') . '  (Esc)'
   let l:compact = (a:has_t ? gnosis#i18n#tr('t=節 ') : '')
-        \ . (a:has_g ? gnosis#i18n#tr('g=所属 ') : '')
+        \ . (a:has_g ? gnosis#i18n#tr('g=グループ ') : '')
         \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=相手Ctx a=自分Ctx r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
@@ -21315,7 +21349,7 @@ endfunction
 
 " \g（曼荼羅で選んだ索引に、a:src のノートを載せる）。表示名とよみは zn / \l の g と同じ画面で聞く。
 " 載せたあとは元のノートに戻る。
-function! gnosis#index_add(src, group) abort
+function! gnosis#index_add(src, group, ...) abort
   if !filereadable(a:src) || !filereadable(a:group)
     echohl WarningMsg | echo 'Gnosis: ノートが見つかりません' | echohl NONE
     return
@@ -21331,6 +21365,10 @@ function! gnosis#index_add(src, group) abort
     return
   endif
   let l:link = s:make_link_from_dir(a:src, '', expand('%:p:h'))
+  " a:1: 見出しのスラッグ。あれば、その見出しへ飛ぶリンクにする（表示名はそのまま）
+  if a:0 && !empty(a:1)
+    let l:link = substitute(l:link, '\](\([^)#]*\)', '](\1#' . escape(a:1, '\&~') , '')
+  endif
   let l:n = 0
   if s:body_has_link(l:link)
     echohl WarningMsg | echo 'Gnosis: この索引にはもう載っています' | echohl NONE

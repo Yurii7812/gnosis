@@ -35,6 +35,6 @@ if !exists('g:gnosis_search_no_mappings')
   " アーカイブして、:GnosisLocalLinks だけ残した。
   " \l … タイトル優先の全文検索 → カーソル位置に [タイトル](相対.md) を挿入。
   " ビジュアルでは選択範囲をリンクで置き換える（表示テキストは選択文字列）。
-  nnoremap <silent> \l        <Cmd>LinkPick<CR>
+  nnoremap <silent> \l        <Cmd>call gnosis#mview#link_pick()<CR>
   xnoremap <silent> \l        :<C-u>call gnosis_search#pick_insert_link_visual()<CR>
 endif

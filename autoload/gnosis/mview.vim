@@ -350,7 +350,7 @@ function! s:items(c) abort
     return l:b
   endif
   let l:q = tolower(s:S.query)
-  if get(s:S, 'pick', 0)
+  if get(s:S, 'pick', '') ==# 'group'
     let l:found = s:pyc(['find', s:S.root] + split(s:S.query, '\s\+'))
     return map(filter(type(l:found) == v:t_list ? l:found : [], 'v:val !=# a:c'), '[v:val, ""]')
   endif
@@ -641,7 +641,7 @@ function! s:tick(name) abort
   let s:S.stamp[a:name] = s:S.tick
 endfunction
 
-let s:layer_label = {'find': 'ハイライト', 'query': '絞り込み', 'rquery': '検索結果', 'pick': '索引選び'}
+let s:layer_label = {'find': 'ハイライト', 'query': '絞り込み', 'rquery': '検索結果', 'pick': '選ぶモード'}
 
 function! s:newest() abort
   let l:act = []
@@ -667,7 +667,8 @@ function! s:cancel_hint() abort
 endfunction
 
 function! s:end_pick() abort
-  let s:S.pick = 0
+  let s:S.pick = ''
+  let s:S.origin_view = 0
   if has_key(s:S, 'saved_mode')
     let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
   endif
@@ -779,11 +780,22 @@ function! s:ensure_prop(kind) abort
   endif
 endfunction
 
+" 選ぶモードの案内（上の状態の行の頭）
+function! s:pick_label() abort
+  let l:p = get(s:S, 'pick', '')
+  if l:p ==# 'link'
+    return '入れるノートを選ぶ（e で決定・o 元のノート）: '
+  elseif l:p ==# 'group'
+    return 'グループを選ぶ（e 決定・I Index・t 見出し・o 元のノート）: '
+  endif
+  return ''
+endfunction
+
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
   let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
   let l:cancel = s:cancel_hint()
-  return printf(' %s%s  %s%s  [%s] %s%s%s', get(s:S, 'pick', 0) ? '追加先を選ぶ: ' : '', a:ctitle,
+  return printf(' %s%s  %s%s  [%s] %s%s%s', s:pick_label(), a:ctitle,
         \ (a:pages > 1 && empty(a:ptop)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
         \ s:S.mode ==# 'all' ? 'a' : 'i', l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
 endfunction
@@ -1232,7 +1244,7 @@ endfunction
 
 " x: 題で絞り込む（空にすると解除）。索引を選ぶとき（\l）は索引を全部から、ふだんは今の周りの中から
 function! s:filter() abort
-  let l:q = input(get(s:S, 'pick', 0) ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
+  let l:q = input(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
   let s:S.query = trim(l:q)
   call s:tick('query')
   let s:S.page = 0
@@ -1240,30 +1252,165 @@ function! s:filter() abort
   call s:render()
 endfunction
 
-" e: 索引を選んでいる最中に、中心の索引に決める（索引でなければ何もしない）
+" e: 選んでいる最中に、中心に決める。link は「入れるノート」（続けて置き場所を聞く）、group は「入れ先のグループ」
 function! s:decide_here() abort
-  if !get(s:S, 'pick', 0)
-    return
-  endif
-  let l:id = s:S.center
-  if !s:nd(l:id).g
-    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+  let l:p = get(s:S, 'pick', '')
+  if empty(l:p)
     return
   endif
   if !empty(s:S.query) || !empty(s:S.rquery)
     echohl WarningMsg | echo 'Gnosis: 絞り込み・検索をやめてから決めてください（q）' | echohl NONE
     return
   endif
-  call s:decide(l:id)
+  if l:p ==# 'link'
+    call s:link_decide()
+    return
+  endif
+  if !s:nd(s:S.center).g
+    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+    return
+  endif
+  call s:decide(s:S.center)
 endfunction
 
-" 中心の索引に決める: 曼荼羅を閉じ、元のノートを載せる
-function! s:decide(id) abort
+" 右の窓（ノートの窓）に移る。全画面（9×9）のときは分割に戻してから
+function! s:goto_note_win() abort
+  if s:S.size != 3
+    call s:full()
+  endif
+  call s:ensure_note_win()
+  let l:nw = s:note_win()
+  if l:nw > 0
+    call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
+    call win_gotoid(l:nw)
+  endif
+  return l:nw
+endfunction
+
+" 選ぶモードが終わったあと、曼荼羅の窓に戻って、変わったノートだけ読み直す
+function! s:back_to_mandala(rels) abort
+  let l:mw = s:mwin()
+  if l:mw > 0
+    call win_gotoid(l:mw)
+  endif
+  for l:r in a:rels
+    if !empty(l:r) && index(get(s:S, 'dirty', []), l:r) < 0
+      let s:S.dirty = get(s:S, 'dirty', []) + [l:r]
+    endif
+  endfor
+  call s:reload_dirty()
+  call s:show_note(s:S.center)
+endfunction
+
+function! s:rel_of_root(abs) abort
+  let l:r = s:root()
+  return stridx(a:abs, l:r . '/') == 0 ? strpart(a:abs, len(l:r) + 1) : ''
+endfunction
+
+function! s:rel_of(abs) abort
+  return stridx(a:abs, s:S.root . '/') == 0 ? strpart(a:abs, len(s:S.root) + 1) : ''
+endfunction
+
+" 元のノート（\l を押したノート）を右の窓に出す
+function! s:show_origin() abort
+  let l:o = get(s:S, 'origin', {})
+  if empty(l:o) || !filereadable(l:o.path)
+    return
+  endif
+  let l:nw = s:note_win()
+  if l:nw < 0
+    return
+  endif
+  call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
+  call win_execute(l:nw, 'silent! hide edit ' . fnameescape(l:o.path))
+  call win_execute(l:nw, 'keepjumps normal! ggL')
+endfunction
+
+" o: 入れるノート（\l を押したときのノート）を右に見る。もう一度で中心のノートに戻る
+function! s:toggle_origin() abort
+  if empty(get(s:S, 'pick', ''))
+    return
+  endif
+  if get(s:S, 'origin_view', 0)
+    call s:show_note(s:S.center)
+    return
+  endif
+  call s:show_origin()
+  let s:S.origin_view = 1
+endfunction
+
+" \l: e で、中心のノートを入れるノートに決める。続けて置き場所のキーを聞く（元のノートの窓で）
+function! s:link_decide() abort
+  let l:o = get(s:S, 'origin', {})
+  let l:path = s:S.root . '/' . s:S.center
+  if empty(l:o) || !filereadable(l:path)
+    return
+  endif
+  let l:title = s:nd(s:S.center).t
+  call s:end_pick()
+  if s:goto_note_win() < 0
+    return
+  endif
+  execute 'silent! hide edit ' . fnameescape(l:o.path)
+  call setpos('.', l:o.pos)
+  let l:link = gnosis#make_link(l:path, l:title)
+  call gnosis#insert_links_pick([l:link], l:o.pos)
+  " g が選ぶモードを始めていれば、そのまま続ける
+  if empty(get(s:S, 'pick', ''))
+    call s:back_to_mandala([s:rel_of(l:o.path)])
+  else
+    call win_gotoid(s:mwin())
+  endif
+endfunction
+
+" 中心のグループに決める: 曼荼羅は閉じず、選ぶモードだけ終わる。a:1 は見出しのスラッグ（アウトラインを索引にする）
+function! s:decide(id, ...) abort
+  let l:slug = a:0 ? a:1 : ''
   let l:src = s:S.src
   let l:group = s:S.root . '/' . a:id
-  call gnosis#mview#close()
-  let s:S.pick = 0
-  call gnosis#index_add(l:src, l:group)
+  let l:o = get(s:S, 'origin', {})
+  call s:end_pick()
+  if s:goto_note_win() < 0
+    return
+  endif
+  call gnosis#index_add(l:src, l:group, l:slug)
+  if !empty(l:o) && filereadable(l:o.path) && fnamemodify(expand('%:p'), ':p') !=# fnamemodify(l:o.path, ':p')
+    execute 'silent! hide edit ' . fnameescape(l:o.path)
+    call setpos('.', l:o.pos)
+  endif
+  call s:back_to_mandala([a:id, s:rel_of(l:src)])
+endfunction
+
+" I: 選んでいるノートを Index に追加する（そのトピックの入り口にする）
+function! s:decide_index() abort
+  if get(s:S, 'pick', '') !=# 'group'
+    return
+  endif
+  if !s:has('index.md')
+    echohl WarningMsg | echo 'Gnosis: index.md がありません' | echohl NONE
+    return
+  endif
+  call s:decide('index.md')
+endfunction
+
+" t（グループを選ぶ最中）: 入れるノートの見出しを選んで、その見出しへ飛ぶリンクで中心のグループに入れる（表示名はそのまま）
+function! s:t_key() abort
+  if get(s:S, 'pick', '') !=# 'group'
+    call s:toggle_digit()
+    return
+  endif
+  if !s:nd(s:S.center).g
+    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+    return
+  endif
+  call gnosis#pick_heading(s:S.src, function('s:heading_chosen', [s:S.center]))
+endfunction
+
+function! s:heading_chosen(group_id, slug) abort
+  if get(s:S, 'pick', '') !=# 'group' || s:S.center !=# a:group_id
+    return
+  endif
+  call s:decide(a:group_id, a:slug)
 endfunction
 
 function! s:back() abort
@@ -1403,9 +1550,7 @@ function! s:ensure_note_win() abort
 endfunction
 
 function! s:show_note(id) abort
-  if get(s:S, 'pick', 0)
-    return
-  endif
+  let s:S.origin_view = 0
   let l:path = s:S.root . '/' . a:id
   if !filereadable(l:path)
     return
@@ -1460,7 +1605,9 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> x <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>decide_here()<CR>
-  nnoremap <buffer><nowait><silent> t <Cmd>call <SID>toggle_digit()<CR>
+  nnoremap <buffer><nowait><silent> t <Cmd>call <SID>t_key()<CR>
+  nnoremap <buffer><nowait><silent> I <Cmd>call <SID>decide_index()<CR>
+  nnoremap <buffer><nowait><silent> o <Cmd>call <SID>toggle_origin()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>seq(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>seq(-1)<CR>
@@ -1644,9 +1791,10 @@ function! s:open(center, ...) abort
     let s:S.note = expand('%:p')
   endif
   let s:S.digit = get(s:S, 'digit', 'jump')
-  let s:S.pick = !empty(l:pick)
+  let s:S.pick = empty(l:pick) ? '' : 'group'
   call s:tick('pick')
   let s:S.src = l:pick
+  let s:S.origin_view = 0
   let s:S.query = ''
   let s:S.rquery = ''
   let s:S.results = []
@@ -1741,16 +1889,61 @@ function! gnosis#mview#toggle() abort
   call s:open(l:rel)
 endfunction
 
-" \g: 今のノートを載せる索引を、曼荼羅で選ぶ（/ で絞り込み → 移動 → 中心で Enter）
-function! gnosis#mview#pick() abort
+" \l: 入れるノートを曼荼羅で選ぶ。曼荼羅が開いていればそこへ（開いていなければ開く）。e で決めると、置き場所のキーを聞く
+function! gnosis#mview#link_pick() abort
   let l:file = expand('%:p')
   if empty(l:file) || &filetype ==# 'gnosis-mandala' || l:file !~? '\.md$'
-    echohl WarningMsg | echo 'Gnosis: 索引に載せるノートを開いて実行して' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: リンクを入れるノートを開いて実行して' | echohl NONE
     return
   endif
   let l:root = s:root()
   let l:rel = stridx(l:file, l:root . '/') == 0 ? strpart(l:file, len(l:root) + 1) : ''
-  call s:open(l:rel, l:file)
+  let l:origin = {'path': l:file, 'pos': getpos('.')}
+  if s:mwin() < 0
+    call s:open(l:rel)
+  else
+    call win_gotoid(s:mwin())
+  endif
+  if s:mwin() < 0
+    return
+  endif
+  let s:S.origin = l:origin
+  let s:S.pick = 'link'
+  call s:tick('pick')
+  call s:set_center(s:has(l:rel) ? l:rel : s:S.center, 0)
+endfunction
+
+" g（置き場所のキー）: 入れるノート（links の先頭）を入れるグループを、曼荼羅で選ぶ
+function! gnosis#mview#group_pick(links) abort
+  if empty(a:links) || empty(s:root())
+    return 0
+  endif
+  let l:t = substitute(matchstr(a:links[0], '](\zs[^)]*\ze)'), '#.*$', '', '')
+  let l:src = fnamemodify(gnosis#resolve_link(l:t), ':p')
+  if empty(l:t) || !filereadable(l:src)
+    return 0
+  endif
+  " 呼ばれたときのノート（置き場所を聞いている最中のノート）が、入れ終わったあとに戻る先
+  let l:origin = {'path': expand('%:p'), 'pos': getpos('.')}
+  if s:mwin() < 0
+    call s:open(s:rel_of_root(l:src))
+  endif
+  if s:mwin() < 0
+    return 0
+  endif
+  let s:S.origin = l:origin
+  call win_gotoid(s:mwin())
+  if !has_key(s:S, 'saved_mode')
+    let s:S.saved_mode = [s:S.mode, get(s:S, 'near_on', 0)]
+  endif
+  let s:S.near_on = 1
+  let s:S.mode = 'groups'
+  let s:S.pick = 'group'
+  let s:S.src = l:src
+  call s:tick('pick')
+  let l:rel = s:rel_of(l:src)
+  call s:set_center(s:has(l:rel) ? l:rel : s:S.center, 0)
+  return 1
 endfunction
 
 function! gnosis#mview#close() abort

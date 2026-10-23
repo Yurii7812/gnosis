@@ -842,7 +842,7 @@ nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>
 nnoremap <silent> \gi       <Cmd>call gnosis#open_gallery_smart()<CR>
 " \g … 今のノートを載せる索引を曼荼羅で選ぶ（/ で絞り込み → 移動 → 中心で Enter）
-nnoremap <silent> \g        <Cmd>call gnosis#mview#pick()<CR>
+" \g は廃止（\l → e → g で同じことができる）
 " アプリ (Electron / ブラウザ) を開く。vault はアプリ側 (既定 ~/files/yurii-note)。
 " ノートアプリ（\c を改め、\ と小文字の \c）。(\w は other.vim の :wa なので使わない)
 nnoremap <silent> \c        <Cmd>call gnosis#open_web()<CR>

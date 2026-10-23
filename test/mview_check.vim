@@ -248,28 +248,66 @@ call s:ok('中心は今のノート（位置は覚えない）', s:st.center ==#
 call s:keys('q')
 let g:gnosis_mview_restore = 0
 
-" \g: 曼荼羅で索引を選んで、今のノートを載せる
+" \l → e → g: 入れるノートを選び、置き場所のキー g で、入れるグループを曼荼羅で選ぶ（e で決定。曼荼羅は閉じない）
 call s:mk('misc.md', '雑記', 0, [], [])
 call s:mk('empty.md', '空の索引', 1, [['Index', 'index.md']], [])
 call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: Index', '---', '', '# Index', '', '[植物](plant.md)', '[料理](cook.md)', '[空の索引](empty.md)'], s:v . '/index.md')
 let g:gnosis_test_display_name = ['雑記']
 let g:gnosis_test_yomi = ['ざっき']
 execute 'edit ' . s:v . '/misc.md'
-call gnosis#mview#pick()
+call gnosis#mview#link_pick()
 let s:st = gnosis#mview#state()
-call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.near_on == 1 && s:st.mode ==# 'groups' && s:text() =~# '1 植物' && s:text() =~# '3 空の', s:text())
-call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
+call s:ok('\l は今のノートが中心で、入れるノートを選ぶモードになる', s:st.pick ==# 'link' && s:st.center ==# 'misc.md' && s:text() =~# '入れるノートを選ぶ', s:text())
+let g:gnosis_test_keys = ['g']
+call s:keys('e')
+call s:ok('e → g で、入れ先のグループを選ぶモードになる（近いグループが重なる）', s:st.pick ==# 'group' && s:st.center ==# 'misc.md' && s:st.near_on == 1 && s:st.mode ==# 'groups' && s:text() =~# '1 植物' && s:text() =~# '3 空の', s:text())
+call s:ok('曼荼羅は開いたまま', &filetype ==# 'gnosis-mandala')
+call s:keys('o')
+call s:ok('o で入れるノート（元のノート）を右に見る', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'misc.md') >= 0 && s:st.origin_view == 1)
+call s:keys('o')
+call s:ok('もう一度 o で中心のノートに戻る', s:st.origin_view == 0)
 let s:st.query = '空'
-call s:keys('u')
+call s:keys('z')
 call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 空の' && s:text() !~# '植物', s:text())
 call s:keys('1')
-call s:keys("\<CR>")
 call s:ok('絞り込んだ索引へ進むと絞り込みは解ける', s:st.center ==# 'empty.md' && s:st.query ==# '', s:st.center)
-call s:keys("\<CR>")
-call s:ok('Enter は辿るだけで、まだ載らない', join(readfile(s:v . '/empty.md'), "\n") !~# '\[雑記\]', 'x')
+call s:ok('Enter だけではまだ載らない', join(readfile(s:v . '/empty.md'), "\n") !~# '\[雑記\]', 'x')
 call s:keys('e')
 call s:ok('e で載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
-call s:ok('載せたあとは元のノートに戻り曼荼羅は閉じる', fnamemodify(expand('%:p'), ':t') ==# 'misc.md' && winnr('$') == 1, expand('%:p') . ' ' . winnr('$'))
+call s:ok('載せたあとも曼荼羅は閉じず、選ぶモードだけ終わる', &filetype ==# 'gnosis-mandala' && s:st.pick ==# '', &filetype . ' pick=' . string(s:st.pick))
+call s:ok('右の窓は入れ先のグループ（中心）を見せる', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') >= 0)
+call s:keys('Q')
+
+" I: グループを選ぶ最中に、Index に追加する（そのトピックの入り口にする）
+call s:mk('entry.md', '入り口のノート', 0, [], [])
+execute 'edit ' . s:v . '/entry.md'
+call gnosis#mview#link_pick()
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_display_name = ['入り口']
+let g:gnosis_test_yomi = ['いりぐち']
+call s:keys('e')
+call s:keys('I')
+call s:ok('I で Index に載る', join(readfile(s:v . '/index.md'), "\n") =~# '\[入り口\](entry.md)', join(readfile(s:v . '/index.md'), "\n"))
+call s:keys('Q')
+
+" t: 入れるノートの見出しを選んで、その見出しへ飛ぶリンクで入れる（表示名はそのまま）。q（取り消し）でも選ぶモードは続く
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 見出しのあるノート', '---', '', '# 見出しのあるノート', '', '## 第一の話', '本文', '## 第二の話', '本文'], s:v . '/outline.md')
+execute 'edit ' . s:v . '/outline.md'
+call gnosis#mview#link_pick()
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_display_name = ['見出しのあるノート']
+let g:gnosis_test_yomi = ['みだしのあるのーと']
+call s:keys('e')
+let s:st = gnosis#mview#state()
+call s:keys('2')
+call s:keys('1')
+let s:st.center = 'empty.md'
+call s:keys('z')
+let g:gnosis_test_heading = '第二の話'
+call s:keys('t')
+call s:ok('t で見出しへ飛ぶリンクが入る（表示名は題のまま）', join(readfile(s:v . '/empty.md'), "\n") =~# '\[見出しのあるノート\](outline.md#第二の話)', join(readfile(s:v . '/empty.md'), "\n"))
+unlet g:gnosis_test_heading
+call s:keys('Q')
 
 " 安定化: 全画面で q → 開いていたノートに戻り、曼荼羅の窓設定が残らない
 %bwipeout!

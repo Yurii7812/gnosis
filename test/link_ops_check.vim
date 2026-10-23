@@ -327,7 +327,7 @@ for s:cols in [80, 100, 120]
   call s:ok('案内は 1 行に収まり g も見える（幅 ' . s:cols . '）', strdisplaywidth(s:worst) <= s:cols - 2 && s:worst =~# 'g=' && s:worst =~# 'r=Related', s:worst . ' / ' . strdisplaywidth(s:worst))
 endfor
 let &columns = 240
-call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=このグループに入る' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
+call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=グループに入れる' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
 let &columns = s:cols_save
 
 " ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
@@ -439,18 +439,7 @@ call s:ok('\k: 一番上の「名前:」行（Group:）へ', getline('.') ==# 'G
 call gnosis#jump_last_section()
 call s:ok('\m: 本文の終わりから一番近い「名前:」行（ChildBranch:）へ', getline('.') ==# 'ChildBranch:' && getline(line('.') + 1) ==# '[a](a.md)', getline('.') . ' @' . line('.'))
 
-" ------------------------------------------------------------------ \l → g → Enter / za → g: 入れたグループを \S と同じ規則でよみ順に並べる
-call s:mk('gj1.md', 'あ', [])
-call s:mk('gj3.md', 'う', [])
-call s:mk('gj2.md', 'い', [])
-call s:mk('gjg.md', '所属グループ', ['文', '', '[あ](gj1.md)', '[う](gj3.md)'], 1)
-execute 'edit! ' . fnameescape(s:v . '/gj2.md')
-let g:gnosis_test_keys = ['g']
-let g:gnosis_test_display_name = ['い']
-call gnosis#insert_links_pick(['[所属グループ](gjg.md)'], getpos('.'))
-let s:gjg = s:file('gjg.md')
-call s:ok('g Enter: 入れたグループがよみ順に並ぶ', s:gjg[-3:] ==# ['[あ](gj1.md)', '[い](gj2.md)', '[う](gj3.md)'], string(s:gjg))
-call s:ok('g: 今のノートの Group: にグループが出る・保存済み', index(getline(1, '$'), '[所属グループ:い](gjg.md)') >= 0 && !&modified, string(getline(1, '$')))
+" （\l → e → g は曼荼羅でグループを選ぶ形に変わった。試験は test/mview_check.vim）
 
 " ------------------------------------------------------------------ za → c → Esc（何も変えない）
 call s:mk('k.md', 'ノートK', ['K の本文。'])

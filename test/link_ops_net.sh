@@ -24,8 +24,6 @@ V="$WORK/vault"
 chk() { if grep -qF -- "$2" "$V/$1"; then echo "OK 同期後: $3"; else echo "NG 同期後: $3"; fi; }
 {
   cat "$WORK/result.txt"
-  chk g.md '[ノートJG4](jg4.md)' "g でグループに入れたリンクが残る"
-  chk jg4.md '[グループG:ノートJG4](g.md)' "g で入れたノートの Group: が残る"
   chk gz.md '[いちご](' "グループの zn で入れた表示名が残る"
   chk e.md '[ノートA](a.md)' "\\l c Enter で E の Context に入れた A が残る"
   chk a.md '[ノートE](e.md)' "\\l c Enter で A に置いたリンクが残る"
