@@ -12,7 +12,8 @@
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
-"   a i n c r        モード: a 全体 / i 索引 / n ノート / c 近い索引（所属が先、近い未所属が後）/ r 関連（索引もノートも関連の強い順）
+"   a i              モード: a 全体（標準）/ i グループ・索引だけ
+"   c r              重ねる（オン/オフ。どのモードでも）: c 近いグループ / r 予測関連（関連の強い順。Related: の明示とは別の色）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -26,8 +27,10 @@ let s:here = expand('<sfile>:p:h:h:h')
 let s:pos = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1], [2, 2]]
 " 番号はテンキーと同じ並び（1 2 3 / 4 5 6 / 7 8 9）。真ん中が 5
 let s:nums = [1, 2, 3, 4, 6, 7, 8, 9]
-let s:mode_label = {'all': '全体', 'groups': '索引', 'notes': 'ノート', 'near': '近い索引', 'rel': '関連'}
-let s:mode_keys = [['a', 'all'], ['i', 'groups'], ['n', 'notes'], ['c', 'near'], ['r', 'rel']]
+let s:mode_label = {'all': '全体', 'groups': '索引'}
+let s:mode_keys = [['a', 'all'], ['i', 'groups']]
+" 重ねるもの（オン/オフ）: [キー, 状態の名前, 表示名]
+let s:over_keys = [['c', 'near_on', '近いグループ'], ['r', 'rel_on', '予測関連']]
 
 " 罫線の描き方。既定 'line' は罫線の文字。'color' は罫線の文字を使わず、空白に背景色を付けて線にする
 " （端末のフォントや大きさで罫線の文字がずれるのを避けたいとき用）
@@ -219,10 +222,14 @@ function! gnosis#mview#entries(data, center, mode) abort
       call add(l:plan, [get(l:o, 'branch_group', []), -1])
       call add(l:plan, [get(l:o, 'group', []), -1])
     endif
+    " 親 → 文脈 → 引用 → 子 → 関連。向かってくる辺（相手にだけ書かれた親子・文脈・関連）も同じ種類として出す
+    let l:in = get(l:c, 'i', {})
     if a:mode ==# 'notes' || a:mode ==# 'all'
-      for l:k in ['parent_branch', 'child_branch', 'context', 'related', 'backlink', 'link']
-        call add(l:plan, [get(l:o, l:k, []), -1])
-      endfor
+      call add(l:plan, [get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []), -1])
+      call add(l:plan, [get(l:o, 'context', []) + get(l:in, 'context', []), -1])
+      call add(l:plan, [get(l:o, 'link', []) + get(l:o, 'backlink', []), -1])
+      call add(l:plan, [get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', []), -1])
+      call add(l:plan, [get(l:o, 'related', []) + get(l:in, 'related', []), -1])
     endif
   endif
   for [l:ids, l:want] in l:plan
@@ -248,25 +255,20 @@ function! gnosis#mview#entries(data, center, mode) abort
   return l:out
 endfunction
 
-" 近い索引（python/mandala_view.py の near）。中心ごとに覚えておく（r で読み直し）
-function! s:near(c) abort
+" 近いグループ（python/mandala_view.py の near）。中心ごとに覚えておく（u で読み直し）。
+" 返すのは「近いのにまだ載っていない索引」（理由は s:S.why[id]）。すでに載っているものは返さない
+function! s:near_ids(c, have) abort
   if !has_key(s:S.nearc, a:c)
     let l:d = s:py(['near', s:S.root, a:c])
     if type(l:d) != v:t_list
       " 失敗は覚えない（次の描き直しでもう一度試す）
-      let s:S.why = {}
-      return gnosis#mview#items(s:S.data, a:c, 'groups')
+      return []
     endif
     let s:S.nearc[a:c] = l:d
   endif
-  " 先にすでに所属している索引（Index も）、そのあとに「近いのにまだ載っていない」索引
-  let s:S.why = {}
-  let l:out = gnosis#mview#items(s:S.data, a:c, 'groups')
-  for l:id in l:out
-    let s:S.why[l:id] = '所属'
-  endfor
+  let l:out = []
   for l:d in s:S.nearc[a:c]
-    if index(l:out, l:d.id) < 0
+    if index(a:have, l:d.id) < 0 && index(l:out, l:d.id) < 0
       call add(l:out, l:d.id)
       let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
     endif
@@ -275,7 +277,7 @@ function! s:near(c) abort
     " 手がかりが無いときは Index の直下の索引も足す
     call s:fetch(['index.md'])
     for l:id in gnosis#mview#items(s:S.data, 'index.md', 'groups')
-      if l:id !=# a:c && index(l:out, l:id) < 0
+      if l:id !=# a:c && index(a:have, l:id) < 0 && index(l:out, l:id) < 0
         call add(l:out, l:id)
         let s:S.why[l:id] = 'Index'
       endif
@@ -284,41 +286,53 @@ function! s:near(c) abort
   return l:out
 endfunction
 
-" 関連（python/mandala_view.py の related）。索引でもノートでも、関連の強い順。理由は強い 2 つまで
-function! s:rel(c) abort
+" 予測関連（python/mandala_view.py の related）。関連の強い順。理由は強い 2 つまで。Related: に書かれたものとは別の色
+function! s:rel_ids(c, have) abort
   if !has_key(s:S.relc, a:c)
     let l:d = s:py(['related', s:S.root, a:c])
     if type(l:d) != v:t_list
-      let s:S.why = {}
       return []
     endif
     let s:S.relc[a:c] = l:d
   endif
-  let s:S.why = {}
+  let l:out = []
   for l:d in s:S.relc[a:c]
-    let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
+    if index(a:have, l:d.id) < 0 && index(l:out, l:d.id) < 0
+      call add(l:out, l:d.id)
+      let s:S.pred[l:d.id] = 1
+      let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
+    endif
   endfor
-  return map(copy(s:S.relc[a:c]), 'v:val.id')
+  return l:out
 endfunction
 
 " 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
 function! s:base(c) abort
   call s:fetch([a:c])
   if a:c ==# s:S.center
-    let l:ids = []
+    let s:S.why = {}
+    let s:S.pred = {}
     if !empty(s:S.rquery)
       let l:ids = copy(s:S.results)
-    elseif s:S.mode ==# 'near'
-      let l:ids = s:near(a:c)
-    elseif s:S.mode ==# 'rel'
-      let l:ids = s:rel(a:c)
-    endif
-    if !empty(s:S.rquery) || index(['near', 'rel'], s:S.mode) >= 0
-      call s:fetch(l:ids)   " 題を出すのに要る。まとめて 1 回で取る
+      call s:fetch(l:ids)
       return map(l:ids, '[v:val, ""]')
     endif
   endif
-  return gnosis#mview#entries(s:S.data, a:c, index(['near', 'rel'], s:S.mode) >= 0 ? 'all' : s:S.mode)
+  let l:out = gnosis#mview#entries(s:S.data, a:c, s:S.mode)
+  if a:c ==# s:S.center
+    " c / r は、どのモードにも重ねる（中心でないブロックには重ねない）
+    let l:have = map(copy(l:out), 'v:val[0]')
+    let l:extra = []
+    if get(s:S, 'near_on', 0)
+      call extend(l:extra, s:near_ids(a:c, l:have))
+    endif
+    if get(s:S, 'rel_on', 0)
+      call extend(l:extra, s:rel_ids(a:c, l:have + l:extra))
+    endif
+    call s:fetch(l:extra)   " 題を出すのに要る。まとめて 1 回で取る
+    call extend(l:out, map(l:extra, '[v:val, ""]'))
+  endif
+  return l:out
 endfunction
 
 " 絞り込みや検索で照らす文字: 索引に書かれた名前があればそれ、無ければ題
@@ -386,9 +400,9 @@ function! s:set_kinds(b) abort
       let l:cell = a:b[l:r][l:c]
       let l:of = get(l:cell, 'of', s:S.center)
       let l:cell.kind = empty(l:cell.id) ? 'note' : s:kind(l:cell.id, l:of)
-      " 関連モードで出た、直接のつながりのないもの（Related: の欄ではなく、関連の強さで選ばれたもの）
-      if l:cell.kind ==# 'note' && s:S.mode ==# 'rel' && empty(s:S.rquery) && get(l:cell, 'role', '') ==# 'item' && has_key(s:S.why, l:cell.id)
-        let l:cell.kind = 'related'
+      " r で重ねた予測関連（Related: に書かれていない。関連の強さで選ばれたもの）
+      if l:cell.kind ==# 'note' && empty(s:S.rquery) && get(l:cell, 'role', '') ==# 'item' && has_key(s:S.pred, l:cell.id)
+        let l:cell.kind = 'pred'
       endif
     endfor
   endfor
@@ -494,9 +508,9 @@ endfunction
 
 " マスの種類（色と記号で一目で分かるように）: 索引・親・子・Context・関連・BackLink・ふつうのノート
 let s:kinds = {'index': ['', '索引', 'GnosisMvIndex'], 'group': ['', 'グループ', 'GnosisMvGroup'], 'parent': ['', '親', 'GnosisMvParent'],
-      \ 'child': ['', '子', 'GnosisMvChild'], 'context': ['', '文脈', 'GnosisMvContext'], 'related': ['', '関連', 'GnosisMvRelated'],
-      \ 'back': ['', 'BackLink', 'GnosisMvBack'], 'note': ['', 'ノート', '']}
-let s:kind_legend = ['index', 'group', 'parent', 'child', 'context', 'related', 'back', 'note']
+      \ 'context': ['', '文脈', 'GnosisMvContext'], 'cite': ['', '引用', 'GnosisMvCite'], 'child': ['', '子', 'GnosisMvChild'],
+      \ 'related': ['', '関連', 'GnosisMvRelated'], 'pred': ['', '予測関連', 'GnosisMvPred'], 'note': ['', 'ノート', '']}
+let s:kind_legend = ['index', 'group', 'parent', 'context', 'cite', 'child', 'related', 'pred', 'note']
 
 " マス a:id が、a:of（そのマスの中心）から見てどういうものか
 function! s:kind(id, of) abort
@@ -521,14 +535,18 @@ function! s:kind(id, of) abort
   endif
   let l:o = l:ofd.o
   let l:r = l:nd.o
-  if index(get(l:o, 'parent_branch', []), a:id) >= 0 || index(get(l:r, 'child_branch', []), a:of) >= 0
+  let l:oi = get(l:ofd, 'i', {})
+  if index(get(l:o, 'parent_branch', []), a:id) >= 0 || index(get(l:r, 'child_branch', []), a:of) >= 0 || index(get(l:oi, 'child_branch', []), a:id) >= 0
     return 'parent'
-  elseif index(get(l:o, 'child_branch', []), a:id) >= 0 || index(get(l:r, 'parent_branch', []), a:of) >= 0
+  elseif index(get(l:o, 'child_branch', []), a:id) >= 0 || index(get(l:r, 'parent_branch', []), a:of) >= 0 || index(get(l:oi, 'parent_branch', []), a:id) >= 0
     return 'child'
-  elseif index(get(l:o, 'context', []), a:id) >= 0 || index(get(l:r, 'context', []), a:of) >= 0
+  elseif index(get(l:o, 'context', []), a:id) >= 0 || index(get(l:r, 'context', []), a:of) >= 0 || index(get(l:oi, 'context', []), a:id) >= 0
     return 'context'
-  elseif index(get(l:o, 'backlink', []), a:id) >= 0
-    return 'back'
+  elseif index(get(l:o, 'related', []), a:id) >= 0 || index(get(l:r, 'related', []), a:of) >= 0 || index(get(l:oi, 'related', []), a:id) >= 0
+    return 'related'
+  elseif index(get(l:o, 'link', []), a:id) >= 0 || index(get(l:o, 'backlink', []), a:id) >= 0 || index(get(l:r, 'link', []), a:of) >= 0
+    " 文中で引用されている（リンクだけがあって、ブランチ・文脈・関連ではない）
+    return 'cite'
   endif
   return 'note'
 endfunction
@@ -581,7 +599,7 @@ function! s:info() abort
   let l:cell = s:cur_cell()
   let l:txt = ''
   if s:has(l:cell.id)
-    let l:why = (index(['near', 'rel'], s:S.mode) >= 0 && empty(s:S.rquery) && has_key(s:S.why, l:cell.id)) ? '  ' . s:S.why[l:cell.id] : ''
+    let l:why = (empty(s:S.rquery) && has_key(s:S.why, l:cell.id)) ? '  ' . s:S.why[l:cell.id] : ''
     let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:why
   endif
   setlocal modifiable
@@ -592,8 +610,8 @@ endfunction
 " 案内を幅に収まるように折り返す（見切れないように）
 function! s:footer_lines(W) abort
   let l:items = get(s:S, 'pick', 0)
-        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'q 取消']
-        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード切替（全体:a 索引:i ノート:n 近い索引:c 関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'Space ノート', 'q 閉じる']
+        \ ? ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に（索引が中心で Enter=ここに追加）', 'モード（全体:a 索引:i）  重ねる（近いグループ:c 予測関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'q 取消']
+        \ : ['hjkl 移動', '1-9 そのマスへ（5 が中心。t で移動⇔カーソルだけ）', 'Enter 中心に', 'モード（全体:a 索引:i）  重ねる（近いグループ:c 予測関連:r）', 's 検索', '/ ヒットへ（Tab 次）', 'e 絞り込み', '[ ] 前後', 'b 戻る', 'f 全画面', '< > 曼荼羅の幅', 'z 中央に', '? 隠す（曼荼羅だけに戻す）', 'u 読み直し', 'Space ノート', 'q 閉じる']
   let l:lines = []
   let l:cur = ''
   for l:it in l:items
@@ -609,9 +627,8 @@ function! s:footer_lines(W) abort
   return l:lines
 endfunction
 
-" モードの行: ' モード: [全体:a] 索引:i ノート:n 近い索引:c 関連:r'（今のモードを目立たせる位置も返す）
+" モードの行: ' モード: [全体:a] 索引:i   近いグループ:c[オン] 予測関連:r[オフ]'（今のモードを目立たせる位置も返す）
 function! s:mode_bar(W) abort
-  " ' モード: [a:全体] g:索引 …' を幅に収まるように折り返す。[行, 色を付ける位置] を返す
   let l:lines = []
   let l:cur = ' モード:'
   let l:span = []
@@ -621,15 +638,20 @@ function! s:mode_bar(W) abort
     if l:on
       let l:cell = '[' . l:cell . ']'
     endif
-    if strdisplaywidth(l:cur . ' ' . l:cell) > a:W && l:cur !~# '^ モード:$'
-      call add(l:lines, l:cur)
-      let l:cur = '        '
-    endif
     let l:cur .= ' '
     if l:on
       let l:span = [len(l:lines) + 2, strlen(l:cur) + 1, strlen(l:cell)]
     endif
     let l:cur .= l:cell
+  endfor
+  let l:cur .= '  '
+  for [l:k, l:st, l:name] in s:over_keys
+    let l:cell = l:name . ':' . l:k . '[' . (get(s:S, l:st, 0) ? 'オン' : 'オフ') . ']'
+    if strdisplaywidth(l:cur . ' ' . l:cell) > a:W && l:cur !~# '^ モード:$'
+      call add(l:lines, l:cur)
+      let l:cur = '        '
+    endif
+    let l:cur .= ' ' . l:cell
   endfor
   " 数字キーの動き（t で切り替え）
   let l:d = '数字:' . (s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(t)'
@@ -1125,7 +1147,16 @@ function! s:page(d) abort
   call s:render()
 endfunction
 
-" モード（英字）: a 全体 / i 索引 / n ノート / c 近い索引 / r 関連
+" 重ねる（c 近いグループ / r 予測関連）のオン/オフ。どのモードでも効く
+function! s:toggle_over(st) abort
+  let s:S[a:st] = !get(s:S, a:st, 0)
+  let s:S.find = ''
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
+
+" モード（英字）: a 全体 / i 索引だけ
 function! s:setmode(m) abort
   let s:S.mode = a:m
   let s:S.find = ''
@@ -1273,9 +1304,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
   nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
-  nnoremap <buffer><nowait><silent> n <Cmd>call <SID>setmode('notes')<CR>
-  nnoremap <buffer><nowait><silent> c <Cmd>call <SID>setmode('near')<CR>
-  nnoremap <buffer><nowait><silent> r <Cmd>call <SID>setmode('rel')<CR>
+  nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
+  nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> / <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>filter()<CR>
@@ -1423,7 +1453,7 @@ endfunction
 function! s:hl() abort
   " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字にした C つき
   let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#e5a64a', 178], 'Parent': ['#61afef', 75], 'Child': ['#56b6c2', 73],
-        \ 'Context': ['#c678dd', 176], 'Related': ['#98c379', 108], 'Back': ['#7f848e', 245]}
+        \ 'Context': ['#c678dd', 176], 'Cite': ['#d19a66', 173], 'Related': ['#98c379', 108], 'Pred': ['#7f848e', 245]}
   for [l:k, l:c] in items(l:cols)
     execute printf('highlight default GnosisMv%s guifg=%s ctermfg=%d', l:k, l:c[0], l:c[1])
     " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）
@@ -1461,6 +1491,7 @@ function! s:open(center, ...) abort
   let s:S.nearc = {}
   let s:S.relc = {}
   let s:S.why = {}
+  let s:S.pred = {}
   if !s:load()
     echohl WarningMsg | echo 'Gnosis: vault が選ばれていません' | echohl NONE
     return
@@ -1471,9 +1502,10 @@ function! s:open(center, ...) abort
   let l:hist = get(s:S, 'hist', [])
   let l:buf = get(s:S, 'buf', -1)
   if !empty(l:pick)
-    let s:S.saved_mode = l:mode
+    let s:S.saved_mode = [l:mode, get(s:S, 'near_on', 0)]
+    let s:S.near_on = 1
   endif
-  let s:S.mode = empty(l:pick) ? l:mode : 'near'
+  let s:S.mode = empty(l:pick) ? l:mode : 'groups'
   let s:S.size = 3
   let s:S.hist = l:hist
   let s:S.page = 0
@@ -1561,7 +1593,7 @@ endfunction
 function! gnosis#mview#close() abort
   call s:save_state()
   if has_key(s:S, 'saved_mode')
-    let s:S.mode = remove(s:S, 'saved_mode')
+    let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
   endif
   let l:mw = s:mwin()
   if l:mw > 0

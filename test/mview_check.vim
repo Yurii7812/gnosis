@@ -65,8 +65,8 @@ call s:ok('右にそのノートが開いている', fnamemodify(bufname(winbufn
 " モード: 索引だけ → ノートだけ
 call s:keys('i')
 call s:ok('索引だけ: ミントは出ない', s:text() !~# 'ミント' && s:text() =~# '植物', s:text())
-call s:keys('n')
-call s:ok('ノートだけ: 索引は出ない', s:grid() !~# '植物' && s:grid() !~# '料理' && s:text() =~# 'ミント', s:text())
+call s:keys('a')
+call s:ok('全体: 索引もノートも出る', s:grid() =~# '植物' && s:grid() =~# '料理' && s:text() =~# 'ミント', s:text())
 call s:keys('a')
 call s:ok('a ですべてに戻る', s:text() =~# '植物' && s:text() =~# 'ミント')
 " 検索の結果を周りに並べる（s の入力そのものは試験できないので、状態を入れて描き直す）
@@ -171,10 +171,10 @@ call s:ok('q で閉じる', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('c')
-call s:ok('c: すでに所属している索引が先に出る', s:text() =~# '1 植物' && s:text() =~# '2 料理', s:text())
+call s:ok('c: すでに所属している索引が先に出て、近いグループが後ろに重なる', s:text() =~# '1 植物' && s:text() =~# '2 料理', s:text())
 call s:keys('k')
 call s:keys('h')
-call s:ok('カーソルのマスの説明が下の 1 行に出る（索引・所属）', s:text() =~# '▶ 植物  \[グループ\]  所属', s:text())
+call s:ok('カーソルのマスの説明が下の 1 行に出る', s:text() =~# '▶ 植物  \[グループ\]', s:text())
 call s:keys('q')
 
 " ダブルインデックスの道: Index → 最初のノート → BranchGroup のトピック索引 → ノート
@@ -195,7 +195,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('r')
 call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '植物', s:text())
-call s:ok('モードの行に今のモードが出る', s:text() =~# '\[関連:r\]' && s:text() =~# '全体:a', s:text())
+call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[全体:a\]' && s:text() =~# '予測関連:r\[オン\]' && s:text() =~# '近いグループ:c\[', s:text())
 call s:ok('下の案内は見切れず全部出る（q 閉じる まで）', s:text() =~# 'q 閉じる', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
@@ -259,7 +259,7 @@ let g:gnosis_test_yomi = ['ざっき']
 execute 'edit ' . s:v . '/misc.md'
 call gnosis#mview#pick()
 let s:st = gnosis#mview#state()
-call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.mode ==# 'near' && s:text() =~# '1 植物' && s:text() =~# '3 空の', s:text())
+call s:ok('\g は今のノートが中心で近い索引から始まる（手がかりが無ければ Index の索引）', s:st.pick == 1 && s:st.center ==# 'misc.md' && s:st.near_on == 1 && s:st.mode ==# 'groups' && s:text() =~# '1 植物' && s:text() =~# '3 空の', s:text())
 call s:ok('選ぶ間は右のノートを入れ替えない', winnr('$') == 2)
 let s:st.query = '空'
 call s:keys('u')
@@ -317,8 +317,38 @@ let s:wn = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t"
 call s:ok('f → f で右のノートが残る', index(s:wn, 'herb.md') >= 0, string(s:wn))
 silent! colorscheme gnosis
 call s:keys('k')
-call s:ok('配色を読み込み直しても選択の色の定義が残る', len(filter(map(['Index', 'Group', 'Parent', 'Child', 'Context', 'Related', 'Back'], 'execute("highlight GnosisMv" . v:val . "S")'), 'v:val =~# "cleared"')) == 0, 'cleared')
+call s:ok('配色を読み込み直しても選択の色の定義が残る', len(filter(map(['Index', 'Group', 'Parent', 'Child', 'Context', 'Cite', 'Related', 'Pred'], 'execute("highlight GnosisMv" . v:val . "S")'), 'v:val =~# "cleared"')) == 0, 'cleared')
 call gnosis#mview#close()
+
+" 種類: 親 → 文脈 → 引用 → 子 → 関連 の順。相手にだけ書かれた親子・関連も出る。引用（文中のリンクだけ）に色が付く
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: ハブ', '---', '', '# ハブ', '', 'ParentBranch:', '[親](kp.md)', '', 'Context:', '[文脈](kx.md)', '', '本文で[引用先](cit.md)に触れる', '', 'ChildBranch:', '[子](kc.md)', '', 'Related:', '[関連](kr.md)'], s:v . '/hub.md')
+for [s:f, s:t] in [['kp.md', '親'], ['kx.md', '文脈'], ['cit.md', '引用先'], ['kc.md', '子'], ['kr.md', '関連']]
+  call s:mk(s:f, s:t, 0, [], [])
+endfor
+" 相手のファイルにだけ書かれた親子（こちらには書かれていない）と関連
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 隠れた子', '---', '', '# 隠れた子', '', 'ParentBranch:', '[ハブ](hub.md)'], s:v . '/hidden_kid.md')
+call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 隠れた関連', '---', '', '# 隠れた関連', '', 'Related:', '[ハブ](hub.md)'], s:v . '/hidden_rel.md')
+execute 'edit ' . s:v . '/hub.md'
+call gnosis#mview#refresh()
+call s:keys(' ')
+call s:keys('a')
+let s:st = gnosis#mview#state()
+let s:items = gnosis#mview#items(s:st.data, 'hub.md', 'all')
+call s:ok('並びは 親 → 文脈 → 引用 → 子 → 関連', s:items[0 : 4] ==# ['kp.md', 'kx.md', 'cit.md', 'kc.md', 'hidden_kid.md'] && index(s:items, 'kr.md') > 4, string(s:items))
+call s:ok('相手にだけ書かれた子・関連も出る', index(s:items, 'hidden_kid.md') >= 0 && index(s:items, 'hidden_rel.md') >= 0, string(s:items))
+let s:kinds = {}
+for s:row in s:st.cells
+  for s:cell in s:row
+    if !empty(s:cell.id) | let s:kinds[s:cell.id] = s:cell.kind | endif
+  endfor
+endfor
+call s:ok('種類の色: 親・文脈・引用・子・関連', get(s:kinds, 'kp.md') ==# 'parent' && get(s:kinds, 'kx.md') ==# 'context' && get(s:kinds, 'cit.md') ==# 'cite' && get(s:kinds, 'kc.md') ==# 'child' && get(s:kinds, 'kr.md') ==# 'related', string(s:kinds))
+call s:keys('c')
+call s:keys('r')
+call s:keys('i')
+call s:ok('i は索引だけ（ノートは出ない）', s:grid() !~# '引用先' && s:grid() !~# '文脈', s:grid())
+call s:keys('a')
+call s:keys('q')
 
 call writefile(s:res, s:work . '/result.txt')
 qa!
