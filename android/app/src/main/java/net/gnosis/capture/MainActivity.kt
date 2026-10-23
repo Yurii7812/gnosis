@@ -212,6 +212,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var topicDialogFor by remember { mutableStateOf<String?>(null) }
     var addTopicOpen by remember { mutableStateOf(false) }
     var moveToNewTopic by remember { mutableStateOf<List<String>>(emptyList()) }
+    var topicMenuFor by remember { mutableStateOf<String?>(null) }  // 長押ししたトピック（編集のシート）
     var topicListOpen by remember { mutableStateOf(false) }       // 「その他」のトピック一覧
     var modeFor by remember { mutableStateOf<String?>(null) }      // 取り込み方（1 つのノートにまとめる・日時）を変えるトピック
     var search by remember { mutableStateOf<String?>(null) }      // 全文検索（null で閉じている）
@@ -770,20 +771,12 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                         if (names.isNotEmpty()) item(key = "heading-$heading") { Text(heading, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
                         items(names, key = { it }) { t ->
                             val n = topicCounts[t] ?: 0
-                            Row(Modifier.fillMaxWidth().clickable { setTopic(t); topicListOpen = false }.padding(vertical = 10.dp),
+                            // 名前と件数だけ。編集（名前を変える・消す・取り込み方）は長押し
+                            Row(Modifier.fillMaxWidth().combinedClickable(onClick = { setTopic(t); topicListOpen = false }, onLongClick = { topicMenuFor = t })
+                                .heightIn(min = 56.dp).padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(t, fontSize = 16.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
-                                    settings.topicModes[t]?.let { m ->
-                                        val label = if (m.record) "時系列記録" else if (m.single) "1 つのノートにまとめる" + if (m.stamp) "・時刻あり" else "" else null
-                                        if (label != null) Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                                    }
-                                }
-                                Text("$n 件", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                                // PC から届いた時系列記録の名前は変えない（PC の記録と別物になってしまう）
-                                if (t !in pcRecords) IconButton(onClick = { renameFor = t }) { Icon(Icons.Filled.Edit, "名前を変える") }
-                                if (t !in pcRecords) IconButton(onClick = { deleteTopicFor = t }) { Icon(Icons.Filled.Delete, "トピックを消す") }
-                                IconButton(onClick = { modeFor = t }) { Icon(Icons.Filled.Settings, "取り込み方") }
+                                Text(t, Modifier.weight(1f), fontSize = 18.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
+                                Text("$n 件", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
                             }
                         }
                     }
@@ -795,6 +788,32 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     }
 
     // トピックの取り込み方（スイッチ）: 1 つのノートにまとめる（時刻を付ける）・時系列記録。どちらもオフなら 1 件 = 1 ノート
+    topicMenuFor?.let { t ->
+        ModalBottomSheet(onDismissRequest = { topicMenuFor = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Text(t, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 8.dp))
+                val acts = buildList {
+                    // PC から届いた時系列記録の名前は変えない・消さない（PC の記録と別物になってしまう）
+                    if (t !in pcRecords) add(SheetAct(Icons.Filled.Edit, "名前を変える", "このトピックの名前を直す") { renameFor = t })
+                    add(SheetAct(Icons.Filled.Settings, "取り込み方", "1 つのノートにまとめる・時刻など") { modeFor = t })
+                    if (t !in pcRecords) add(SheetAct(Icons.Filled.Delete, "消す", "トピックとメモを消す", danger = true) { deleteTopicFor = t })
+                }
+                acts.forEach { a ->
+                    val color = if (a.danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).clip(RoundedCornerShape(14.dp))
+                        .clickable { a.run(); topicMenuFor = null }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(a.icon, null, Modifier.size(28.dp), tint = color)
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(a.label, fontSize = 20.sp, fontWeight = FontWeight.Medium, color = color)
+                            Text(a.hint, fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     modeFor?.let { t ->
         val m = settings.topicModes[t] ?: TopicMode()
         fun save(n: TopicMode) { settings = settings.copy(topicModes = settings.topicModes + (t to n)); store.saveSettings(settings) }
