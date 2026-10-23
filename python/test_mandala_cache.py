@@ -101,5 +101,25 @@ class T(unittest.TestCase):
         self.assertEqual((self.r / ".gnosis" / "cache" / ".gitignore").read_text().strip(), "*")
 
 
+    def test_big_vault_near_related_search(self):
+        mc.refresh(self.r)
+        self.assertFalse(mc.is_big(self.r))
+        old = mc.BIG_VAULT
+        mc.BIG_VAULT = 2
+        try:
+            self.assertTrue(mc.is_big(self.r))
+            # herb は 植物 と 料理 に載っている。栽培 は 植物 だけ → 栽培 に近い索引: 料理（同じ植物に載っている herb が料理にも）
+            near = mc.near(self.r, "grow.md")
+            self.assertEqual([d["id"] for d in near][:1], ["cook.md"])
+            self.assertNotIn("plant.md", [d["id"] for d in near])   # すでに所属している索引は出さない
+            rel = mc.related(self.r, "herb.md")
+            ids = [d["id"] for d in rel]
+            self.assertIn("plant.md", ids)
+            self.assertIn("grow.md", ids)
+            self.assertEqual(mc.search(self.r, ["ハーブ"])[:1], ["herb.md"])   # 題に合うものが先
+        finally:
+            mc.BIG_VAULT = old
+
+
 if __name__ == "__main__":
     unittest.main()

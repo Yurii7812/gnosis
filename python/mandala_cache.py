@@ -11,6 +11,7 @@ Vim は全体を持たず、中心ごとに必要な分だけ受け取る（node
   mandala_cache.py nodes ROOT ID…      {"nodes": {ID: 上と同じ, …周りのノート: {"t","g"}}}（Vim が一度に取る）
   mandala_cache.py find ROOT 語…       題に語を全部含む索引（グループ）の相対パス
   mandala_cache.py status ROOT         {"notes", "edges", "stamp"}
+  mandala_cache.py near|related ROOT ID / search ROOT 語…   大きな vault 用の近い索引・関連・検索（BIG_VAULT 件を超えたら mandala_view.py が使う）
 
 辺の解決は保存時に行う。あとから足されたノートへ向く壊れたリンクは、そのノートを保存し直すか `--full` で直る。
 """
@@ -421,6 +422,190 @@ def find(root: str | Path, words: list[str], limit: int = 500) -> list[str]:
         db.close()
 
 
+# ---- 大きな vault 用の近い索引・関連・検索（全体を読まず、キャッシュと狭い候補だけで求める） ----------------------------
+# ノートが BIG_VAULT を超えたら mandala_view.py の near / related / search はこちらを使う（小さな vault は従来の全体計算のまま）。
+# 従来の計算との違い: Folgezettel の枝・本文の内容（TF-IDF）・歩いた近さは使わない。つながりと題の言葉だけ。
+BIG_VAULT = 20000
+_CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]+")
+_WORDS = re.compile(r"[a-z0-9]{2,}")
+
+
+def is_big(root: str | Path) -> bool:
+    db = connect(root)
+    if db is None:
+        return False
+    try:
+        return db.execute("SELECT COUNT(*) FROM files").fetchone()[0] > BIG_VAULT
+    finally:
+        db.close()
+
+
+def _tokens(title: str) -> set[str]:
+    t = title.lower()
+    out = set(_WORDS.findall(t))
+    for run in _CJK.findall(t):
+        if len(run) == 1:
+            out.add(run)
+        else:
+            out.update(run[i:i + 2] for i in range(len(run) - 1))
+    return out
+
+
+def _neighbors(db: sqlite3.Connection, fid: int) -> dict[int, set[str]]:
+    """fid と辺でつながるノート {id: {種類…}}（向きは問わない）。"""
+    out: dict[int, set[str]] = {}
+    for dst, k in db.execute("SELECT dst,kind FROM edges WHERE src=?", (fid,)):
+        out.setdefault(dst, set()).add(KINDS[k])
+    for src, k in db.execute("SELECT src,kind FROM edges WHERE dst=? LIMIT 5000", (fid,)):
+        out.setdefault(src, set()).add("in:" + KINDS[k])
+    out.pop(fid, None)
+    return out
+
+
+def near(root: str | Path, rel: str, limit: int = 60) -> list[dict]:
+    db = connect(root)
+    if db is None:
+        return []
+    try:
+        row = db.execute("SELECT id,title FROM files WHERE path=?", (rel,)).fetchone()
+        if row is None:
+            return []
+        fid, title = row
+        nb = _neighbors(db, fid)
+        mine = {d for d, ks in nb.items() if "group" in ks or "branch_group" in ks}   # すでに所属している索引
+        mine |= {s for s, in db.execute("SELECT src FROM edges WHERE dst=? AND kind=? AND src IN (SELECT id FROM files WHERE g=1)", (fid, _KID["link"]))}
+        score: dict[int, float] = {}
+        why: dict[int, dict[str, float]] = {}
+        nbl = list(nb)
+        for i in range(0, len(nbl), 500):
+            chunk = nbl[i:i + 500]
+            q = ",".join("?" * len(chunk))
+            # 近所のノートが載っている索引（索引 → ノート の link、ノート → 索引 の group / branch_group）
+            for g, c in db.execute(f"SELECT src, COUNT(*) FROM edges WHERE kind=? AND dst IN ({q}) AND src IN (SELECT id FROM files WHERE g=1) GROUP BY src", [_KID["link"], *chunk]):
+                score[g] = score.get(g, 0.0) + 2.0 * min(c, 5)
+                why.setdefault(g, {})[f"つながり {c}"] = 2.0 * min(c, 5)
+            for g, c in db.execute(f"SELECT dst, COUNT(*) FROM edges WHERE kind IN (?,?) AND src IN ({q}) GROUP BY dst", [_KID["group"], _KID["branch_group"], *chunk]):
+                score[g] = score.get(g, 0.0) + 2.0 * min(c, 5)
+                why.setdefault(g, {})[f"つながり {c}"] = 2.0 * min(c, 5)
+        mt = _tokens(title)
+        if mt:
+            for g, gt in db.execute("SELECT id,title FROM files WHERE g=1"):
+                common = _tokens(gt) & mt
+                if common:
+                    pts = 2.0 * min(len(common), 2)
+                    score[g] = score.get(g, 0.0) + pts
+                    why.setdefault(g, {})["題が近い"] = pts
+        for g in list(score):
+            if g == fid or g in mine:
+                del score[g]
+        top = sorted(score.items(), key=lambda kv: -kv[1])[:limit]
+        pm = _paths(db, [g for g, _v in top])
+        return [{"id": pm[g][0], "score": round(v, 2),
+                 "why": [k for k, _x in sorted(why[g].items(), key=lambda kv: -kv[1])]} for g, v in top if g in pm]
+    finally:
+        db.close()
+
+
+_REL_OUT = {"parent_branch": ("親", 5.0), "child_branch": ("子", 5.0), "context": ("Context", 4.0), "related": ("関連", 4.0),
+            "link": ("リンク", 3.0), "backlink": ("BackLink", 3.0), "group": ("所属の索引", 3.0), "branch_group": ("所属の索引", 3.0)}
+
+
+def related(root: str | Path, rel: str, limit: int = 80) -> list[dict]:
+    db = connect(root)
+    if db is None:
+        return []
+    try:
+        row = db.execute("SELECT id,title FROM files WHERE path=?", (rel,)).fetchone()
+        if row is None:
+            return []
+        fid, title = row
+        nb = _neighbors(db, fid)
+        score: dict[int, dict[str, float]] = {}
+
+        def add(x: int, why: str, pts: float) -> None:
+            if x != fid:
+                d = score.setdefault(x, {})
+                d[why] = max(d.get(why, 0.0), pts)
+        groups = set()
+        for d, ks in nb.items():
+            for k in ks:
+                kk = k[3:] if k.startswith("in:") else k
+                if kk in _REL_OUT:
+                    add(d, *_REL_OUT[kk])
+            if "group" in ks or "branch_group" in ks:
+                groups.add(d)
+            if "in:link" in ks:
+                row = db.execute("SELECT g FROM files WHERE id=?", (d,)).fetchone()
+                if row and row[0]:
+                    groups.add(d)
+        # 同じ索引に載っているノート
+        for g in list(groups)[:20]:
+            gname = db.execute("SELECT title FROM files WHERE id=?", (g,)).fetchone()
+            for m, in db.execute("SELECT dst FROM edges WHERE src=? AND kind=? LIMIT 300", (g, _KID["link"])):
+                add(m, "同じ索引: " + (gname[0] if gname else ""), 2.0)
+            for m, in db.execute("SELECT src FROM edges WHERE dst=? AND kind IN (?,?) LIMIT 300", (g, _KID["group"], _KID["branch_group"])):
+                add(m, "同じ索引: " + (gname[0] if gname else ""), 2.0)
+        # 近所の近所（2 歩先）
+        for d in list(nb)[:50]:
+            for x, in db.execute("SELECT dst FROM edges WHERE src=? LIMIT 50", (d,)):
+                add(x, "つながりが近い", 1.5)
+        # 題の言葉（候補の中だけ）
+        mt = _tokens(title)
+        if mt and score:
+            pm = _paths(db, list(score))
+            for x, (_p, t, _g) in pm.items():
+                common = _tokens(t) & mt
+                if common:
+                    add(x, "題が近い", min(1.5 * len(common), 4.0))
+        top = sorted(((x, sum(w.values()), w) for x, w in score.items()), key=lambda r: -r[1])[:limit]
+        pm = _paths(db, [x for x, _s, _w in top])
+        return [{"id": pm[x][0], "score": round(sc, 2), "why": [k for k, _v in sorted(w.items(), key=lambda kv: -kv[1])]}
+                for x, sc, w in top if x in pm]
+    finally:
+        db.close()
+
+
+def search(root: str | Path, words: list[str], limit: int = 200) -> list[str]:
+    """題か本文に words を全部含むノート。題に合うものが先。本文は ripgrep があればそれで探す。"""
+    db = connect(root)
+    if db is None:
+        return []
+    ws = [w.lower() for w in words if w]
+    if not ws:
+        return []
+    try:
+        title_hits = [p for p, t in db.execute("SELECT path,title FROM files ORDER BY path") if all(w in t.lower() for w in ws)][:limit]
+    finally:
+        db.close()
+    out = list(title_hits)
+    seen = set(out)
+    import shutil
+    import subprocess
+    root_p = Path(root)
+    if shutil.which("rg") and len(out) < limit:
+        try:
+            r = subprocess.run(["rg", "-l", "-i", "-F", "--glob", "*.md", "-e", ws[0], str(root_p)], capture_output=True, text=True, timeout=60)
+            for ln in r.stdout.split("\n"):
+                if not ln.strip() or len(out) >= limit:
+                    continue
+                try:
+                    rel = Path(ln).relative_to(root_p).as_posix()
+                except ValueError:
+                    continue
+                if rel in seen or rel.startswith("."):
+                    continue
+                try:
+                    body = (root_p / rel).read_text(encoding="utf-8").lower()
+                except (OSError, UnicodeDecodeError):
+                    continue
+                if all(w in body for w in ws):
+                    out.append(rel)
+                    seen.add(rel)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return out
+
+
 def status(root: str | Path) -> dict:
     db = connect(root)
     if db is None:
@@ -447,6 +632,14 @@ def main(argv: list[str]) -> int:
         out = ring(argv[2], argv[3])
     elif len(argv) >= 4 and argv[1] == "nodes":
         out = nodes(argv[2], argv[3:])
+    elif len(argv) >= 4 and argv[1] == "near":
+        out = near(argv[2], argv[3])
+    elif len(argv) >= 4 and argv[1] == "related":
+        out = related(argv[2], argv[3])
+    elif len(argv) >= 4 and argv[1] == "search":
+        out = search(argv[2], argv[3:])
+    elif len(argv) >= 3 and argv[1] == "isbig":
+        out = is_big(argv[2])
     elif len(argv) >= 4 and argv[1] == "find":
         out = find(argv[2], argv[3:])
     elif len(argv) >= 3 and argv[1] == "status":

@@ -442,14 +442,15 @@ def main(argv: list[str]) -> int:
     if len(argv) >= 3 and argv[1] == "dump":
         json.dump(dump(argv[2]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
         return 0
-    if len(argv) >= 4 and argv[1] == "near":
-        json.dump(near(argv[2], argv[3]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
-        return 0
-    if len(argv) >= 4 and argv[1] == "related":
-        json.dump(related(argv[2], argv[3]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
-        return 0
-    if len(argv) >= 4 and argv[1] == "search":
-        json.dump(search(argv[2], argv[3:]), sys.stdout, ensure_ascii=False, separators=(",", ":"))
+    if len(argv) >= 4 and argv[1] in ("near", "related", "search"):
+        # 大きな vault（キャッシュがあり、BIG_VAULT 件を超える）は、全体を読まないキャッシュ版で求める
+        import mandala_cache as mc
+        if mc.is_big(argv[2]):
+            fn = {"near": mc.near, "related": mc.related}.get(argv[1])
+            out = fn(argv[2], argv[3]) if fn else mc.search(argv[2], argv[3:])
+        else:
+            out = {"near": near, "related": related}[argv[1]](argv[2], argv[3]) if argv[1] != "search" else search(argv[2], argv[3:])
+        json.dump(out, sys.stdout, ensure_ascii=False, separators=(",", ":"))
         return 0
     print(__doc__, file=sys.stderr)
     return 2
