@@ -17,7 +17,7 @@
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
 "     "mandalaOnStart": true,  ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
 "     "hide": {"yaml": false, "top": false, "bottom": false, "image": false}   ← ノートで隠すもの（\zz の窓で切り替える。
-"                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系 / image=画像だけの行（![](…)）。オンにするまで保たれる。\c のアプリも同じ）
+"                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系 / image=ノートの中の画像（![](…) だけの行の画像。隠す＝表示しない）。オンにするまで保たれる。\c のアプリも同じ）
 "   }
 "   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
 "   \c のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。

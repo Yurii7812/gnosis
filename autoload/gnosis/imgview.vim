@@ -156,3 +156,279 @@ function! gnosis#imgview#open() abort
   endif
   call s:menu(l:items, l:sel)
 endfunction
+
+" =============================================================================
+" ノートの中に画像を出す（\zz の「画像を隠す」がオフのとき）
+"   ![](画像) だけの行の下に、画像の高さぶんの空きの行（テキストプロパティの仮想テキスト）を確保し、
+"   その位置に sixel を端末へ直接重ねる。画像は ~/.cache/gnosis/sixel に作って使い回す（python/sixel_view.py inline）。
+"   スクロール・編集・窓の変更のあとは、少し待って描き直す。ポップアップが開いている間は描かない（上に重なってしまうため）。
+"   ファイルの中身は変えない（空きの行は表示だけ）。
+" =============================================================================
+let s:ptype = 'gnosis_img'
+let s:meta = {}       " 画像のパス → {cols, rows, file}
+let s:six = {}        " sixel のファイル → 中身
+let s:job = 0
+let s:pending = {}    " 作成待ちの画像
+let s:sig = ''        " 今、端末に出している画像の位置の署名
+let s:timer = 0
+let s:popup_open = 0
+let s:own_tick = {}   " バッファ → こちらがプロパティを付け替えた直後の changedtick（編集と見なさない）
+
+function! s:hidden() abort
+  try
+    return get(get(gnosis#settings#current(), 'hide', {}), 'image', 0) ? 1 : 0
+  catch
+    return 0
+  endtry
+endfunction
+
+function! s:inline_on() abort
+  return has('textprop') && exists('*echoraw') && !has('gui_running') && !s:hidden() && s:sixel_ok()
+endfunction
+
+function! s:eligible(buf) abort
+  return getbufvar(a:buf, '&buftype') ==# '' && fnamemodify(bufname(a:buf), ':e') ==? 'md' && getbufvar(a:buf, '&filetype') !=# 'gnosis-mandala'
+endfunction
+
+function! s:cache_dir() abort
+  let l:base = !empty($XDG_CACHE_HOME) ? $XDG_CACHE_HOME : expand('~/.cache')
+  return l:base . '/gnosis/sixel'
+endfunction
+
+" バッファの「画像だけの行」→ [{lnum, path}]（相対パスはそのノートのフォルダから。遠隔 URL と存在しないものは除く）
+function! s:scan(buf) abort
+  let l:out = []
+  let l:dir = fnamemodify(bufname(a:buf), ':p:h')
+  let l:fence = 0
+  let l:n = 0
+  for l:ln in getbufline(a:buf, 1, '$')
+    let l:n += 1
+    if l:ln =~# '^\s*\(```\|\~\~\~\)'
+      let l:fence = !l:fence
+      continue
+    endif
+    if l:fence | continue | endif
+    let l:m = matchlist(l:ln, '^\s*!\[[^\]]*\](\s*<\?\([^)>]\+\)>\?\s*)\s*$')
+    if empty(l:m) | continue | endif
+    let l:u = substitute(l:m[1], '\s\+"[^"]*"$', '', '')
+    if l:u =~# '^\a\+://' | continue | endif
+    let l:u = substitute(l:u, '%\(\x\x\)', '\=nr2char(str2nr(submatch(1), 16))', 'g')
+    let l:p = l:u =~# '^/' ? l:u : l:dir . '/' . l:u
+    let l:p = simplify(l:p)
+    if filereadable(l:p)
+      call add(l:out, {'lnum': l:n, 'path': l:p})
+    endif
+  endfor
+  return l:out
+endfunction
+
+function! s:max_cols() abort
+  return max([16, min([70, &columns / 2 - 4])])
+endfunction
+
+function! s:max_rows() abort
+  return max([4, min([16, &lines / 3])])
+endfunction
+
+" 画像の下ごしらえ（非同期）。終わったら空きの行を付けて描き直す
+function! s:prepare(paths) abort
+  for l:p in a:paths
+    if !has_key(s:meta, l:p) | let s:pending[l:p] = 1 | endif
+  endfor
+  if s:job isnot 0 && job_status(s:job) ==# 'run'
+    return
+  endif
+  if empty(s:pending) | return | endif
+  let l:ps = keys(s:pending)
+  let s:pending = {}
+  let s:out = ''
+  let l:cmd = split(gnosis#python_cmd()) + [s:root . '/python/sixel_view.py', 'inline', s:cache_dir(), string(s:max_cols()), string(s:max_rows())] + l:ps
+  let s:job = job_start(l:cmd, {'out_mode': 'raw', 'out_cb': {ch, msg -> s:job_out(msg)},
+        \ 'exit_cb': {j, st -> s:job_done()}, 'err_io': 'null', 'in_io': 'null'})
+endfunction
+
+function! s:job_out(msg) abort
+  let s:out .= a:msg
+endfunction
+
+function! s:job_done() abort
+  try
+    for [l:p, l:m] in items(json_decode(s:out))
+      let s:meta[l:p] = l:m
+    endfor
+  catch
+  endtry
+  let s:job = 0
+  call gnosis#imgview#refresh()
+endfunction
+
+" バッファに空きの行を付け直す。変わったら 1
+function! s:apply_props(buf) abort
+  let l:want = []
+  for l:it in s:scan(a:buf)
+    if has_key(s:meta, l:it.path)
+      call add(l:want, [l:it.lnum, s:meta[l:it.path].rows])
+    endif
+  endfor
+  if l:want ==# getbufvar(a:buf, 'gnosis_img_rows', [])
+    return 0
+  endif
+  let l:mod = getbufvar(a:buf, '&modified')
+  if empty(prop_type_get(s:ptype))
+    call prop_type_add(s:ptype, {})
+  endif
+  call prop_remove({'type': s:ptype, 'bufnr': a:buf, 'all': 1})
+  for [l:lnum, l:rows] in l:want
+    for l:k in range(l:rows)
+      call prop_add(l:lnum, 0, {'type': s:ptype, 'bufnr': a:buf, 'text': ' ', 'text_align': 'below'})
+    endfor
+  endfor
+  call setbufvar(a:buf, 'gnosis_img_rows', l:want)
+  call setbufvar(a:buf, '&modified', l:mod)
+  let s:own_tick[a:buf] = getbufvar(a:buf, 'changedtick')
+  return 1
+endfunction
+
+" 付けた空きの行を全部外す
+function! s:remove_props(buf) abort
+  if empty(prop_type_get(s:ptype)) || empty(getbufvar(a:buf, 'gnosis_img_rows', []))
+    return
+  endif
+  let l:mod = getbufvar(a:buf, '&modified')
+  call prop_remove({'type': s:ptype, 'bufnr': a:buf, 'all': 1})
+  call setbufvar(a:buf, 'gnosis_img_rows', [])
+  call setbufvar(a:buf, '&modified', l:mod)
+  let s:own_tick[a:buf] = getbufvar(a:buf, 'changedtick')
+endfunction
+
+" 今の画面に出すべき画像 → [{row, col, six}] と署名
+function! s:visible() abort
+  let l:out = []
+  for l:w in getwininfo()
+    if l:w.tabnr != tabpagenr() || !s:eligible(l:w.bufnr) | continue | endif
+    for l:it in s:scan(l:w.bufnr)
+      let l:m = get(s:meta, l:it.path, {})
+      if empty(l:m) | continue | endif
+      let l:pos = screenpos(l:w.winid, l:it.lnum, 1)
+      if l:pos.row == 0 | continue | endif
+      if win_execute(l:w.winid, 'echo foldclosed(' . l:it.lnum . ')') =~# '\d' && str2nr(win_execute(l:w.winid, 'echo foldclosed(' . l:it.lnum . ')')) > 0
+        continue
+      endif
+      let l:top = l:pos.row + 1
+      if l:it.lnum < line('$', l:w.winid)
+        let l:nx = screenpos(l:w.winid, l:it.lnum + 1, 1)
+        if l:nx.row > 0 | let l:top = l:nx.row - l:m.rows | endif
+      endif
+      if l:top + l:m.rows - 1 > l:w.winrow + l:w.height - 1 || l:top <= l:pos.row
+        continue
+      endif
+      if l:pos.col + l:m.cols - 1 > l:w.wincol + l:w.width - 1
+        continue
+      endif
+      if !has_key(s:six, l:m.file)
+        let l:r = readfile(l:m.file)
+        let s:six[l:m.file] = empty(l:r) ? '' : l:r[0]
+      endif
+      if !empty(s:six[l:m.file])
+        call add(l:out, {'row': l:top, 'col': l:pos.col, 'file': l:m.file})
+      endif
+    endfor
+  endfor
+  return l:out
+endfunction
+
+function! s:sig_of(vis) abort
+  return join(map(copy(a:vis), 'v:val.row . "," . v:val.col . "," . v:val.file'), ';')
+endfunction
+
+function! s:popups() abort
+  for l:id in popup_list()
+    if get(popup_getpos(l:id), 'visible', 0) | return 1 | endif
+  endfor
+  return 0
+endfunction
+
+" 描き直す。force=1 は、同じ位置でも出し直す（ポップアップが閉じたあとなど）
+function! s:draw(force) abort
+  let s:timer = 0
+  if !s:inline_on() || mode() =~# '^[cr]' || s:popups()
+    return
+  endif
+  let l:vis = s:visible()
+  let l:sig = s:sig_of(l:vis)
+  if l:sig ==# s:sig && !a:force
+    return
+  endif
+  if !empty(s:sig) && l:sig !=# s:sig
+    " 古い位置の画像を消す（画面を描き直す）
+    redraw!
+  endif
+  let s:sig = l:sig
+  if empty(l:vis) | return | endif
+  let l:s = "\<Esc>7"
+  for l:v in l:vis
+    let l:s .= "\<Esc>[" . l:v.row . ';' . l:v.col . 'H' . s:six[l:v.file]
+  endfor
+  call echoraw(l:s . "\<Esc>8")
+endfunction
+
+function! gnosis#imgview#schedule(...) abort
+  let l:force = a:0 ? a:1 : 0
+  if s:timer != 0 | call timer_stop(s:timer) | endif
+  let s:timer = timer_start(60, {-> s:draw(l:force)})
+endfunction
+
+" ノート（今のタブの窓に出ているもの）の空きの行を付け直し、描き直す。編集・窓の変更・設定の変更のあとに呼ぶ
+function! gnosis#imgview#refresh(...) abort
+  if !s:inline_on()
+    return
+  endif
+  let l:need = []
+  let l:changed = 0
+  for l:b in uniq(sort(map(filter(getwininfo(), 'v:val.tabnr == tabpagenr() && s:eligible(v:val.bufnr)'), 'v:val.bufnr'), 'n'))
+    for l:it in s:scan(l:b)
+      if !has_key(s:meta, l:it.path) | call add(l:need, l:it.path) | endif
+    endfor
+    let l:changed += s:apply_props(l:b)
+  endfor
+  if !empty(l:need)
+    call s:prepare(l:need)
+  endif
+  call gnosis#imgview#schedule(l:changed)
+endfunction
+
+" 編集のあと（こちらが付け替えた直後の変更は除く）
+function! gnosis#imgview#on_text_changed() abort
+  if get(s:own_tick, bufnr('%'), -1) == b:changedtick
+    return
+  endif
+  call gnosis#imgview#refresh()
+endfunction
+
+" \zz で表示のオン・オフが変わったとき
+function! gnosis#imgview#apply_setting() abort
+  if s:hidden() || !s:sixel_ok()
+    for l:b in map(filter(getwininfo(), 's:eligible(v:val.bufnr)'), 'v:val.bufnr')
+      call s:remove_props(l:b)
+    endfor
+    let s:sig = ''
+    redraw!
+  else
+    call gnosis#imgview#refresh()
+  endif
+endfunction
+
+" ポップアップが閉じたら出し直す（開いている間は描かない）
+function! s:poll(t) abort
+  let l:now = s:popups()
+  if s:popup_open && !l:now
+    call gnosis#imgview#schedule(1)
+  endif
+  let s:popup_open = l:now
+endfunction
+
+function! gnosis#imgview#start() abort
+  if !has('timers') || !has('textprop') | return | endif
+  call timer_start(300, function('s:poll'), {'repeat': -1})
+  call gnosis#imgview#refresh()
+endfunction

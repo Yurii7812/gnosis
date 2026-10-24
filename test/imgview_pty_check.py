@@ -17,17 +17,19 @@ try:
     (work / "vault").mkdir()
     Image.new("RGB", (400, 300), (200, 30, 30)).save(work / "vault" / "a.jpg")
     Image.new("RGB", (80, 60), (30, 30, 200)).save(work / "vault" / "b.png")
+    (work / "vault" / "index.md").write_text("# Index\n", encoding="utf-8")
     note = work / "vault" / "n.md"
     note.write_text("# n\n\n![](a.jpg)\n\n![](b.png)\n\nlast\n", encoding="utf-8")
     res = []
 
-    def run(keys, extra_init=""):
+    def run(keys, extra_init="", pre_hidden=False):
+        shutil.rmtree(work / "vault" / ".gnosis", ignore_errors=True)  # 前の run の設定（\\zz で変えたもの）を持ち越さない
         env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
                    GNOSIS_CELL_PX="10x20", WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
         pid, fd = pty.fork()
         if pid == 0:
             os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "--cmd",
-                               "let g:gnosis_open_index_on_startup=0|let g:gnosis_skip_interactive_mount=1|let g:gnosis_autosync=0" + extra_init,
+                               "let g:gnosis_open_index_on_startup=0|let g:gnosis_skip_interactive_mount=1|let g:gnosis_autosync=0|let g:gnosis_root='" + str(work / "vault") + "/'" + extra_init,
                                str(note)], env)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 1200, 800))
         out = b""
@@ -67,12 +69,15 @@ try:
     ok("j で 2 枚目の sixel が出る", b"\x1bP0;1;0q" in out[m[2]: m[3]])
     ok("q で一覧に戻る", "画像（Enter".encode() in out[m[3]: m[4]])
     ok("もう一度 q で閉じたあと Vim で編集できる", b"edit" in out[m[5]:])
-    # 2) \\zz の窓に「画像の行」の項目がある（畳まれることの確認は imgview_hide_check.vim）
-    out, m = run([("\\zz", 0.8), ("q", 0.3)])
-    ok("\\zz の窓に画像の行の項目", "画像の行".encode() in out[: m[0]])
-    # 3) a（全部オン）を押しても、画像の行はオンにならない（YAML などの 3 つだけ）
+    # 2) ノートを開くだけで、画像の行の下に画像が出る（hide.image が既定でオフ＝表示する）
+    out, m = run([("3G", 3.0), ("j", 1.0), ("G", 1.0)])
+    ok("開くと画像が sixel で出る", out.count(b"\x1bP0;1;0q") >= 1 or out.count(b"\x1bP0;") >= 1)
+    # 3) \\zz の「画像」をオン（＝隠す）にすると、画像は出ない
+    out, m = run([("\\zz", 0.5), ("jjj", 0.3), (" ", 0.6), ("q", 0.8)], pre_hidden=True)
+    ok("\\zz の窓に画像の項目がある", "画像（ノートの中".encode() in out)
+    # 4) a（全部オン）を押しても、画像はオンにならない
     out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
-    ok("a で YAML などはオンになり、画像の行はオンにならない", "[x] YAML".encode() in out and "[x] 画像の行".encode() not in out)
+    ok("a で YAML などはオンになり、画像の項目はオンにならない", "[x] YAML".encode() in out and "[x] 画像".encode() not in out)
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

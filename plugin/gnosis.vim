@@ -473,6 +473,15 @@ augroup gnosis_mview_saved
   autocmd BufWritePost *.md call gnosis#mview#saved(expand('<afile>:p'))
 augroup END
 
+augroup gnosis_imgview
+  autocmd!
+  " ノートの中の画像（\zz の「画像」で隠せる）。sixel の端末だけ
+  autocmd VimEnter * call gnosis#imgview#start()
+  autocmd BufWinEnter,WinEnter,TabEnter *.md call gnosis#imgview#refresh()
+  autocmd VimResized * call gnosis#imgview#refresh()
+  autocmd TextChanged,InsertLeave *.md call gnosis#imgview#on_text_changed()
+  autocmd WinScrolled,WinResized * call gnosis#imgview#schedule()
+augroup END
 augroup gnosis_time_mode
   autocmd!
   autocmd BufWinEnter *.md call gnosis#time_mode_on_enter(str2nr(expand('<abuf>')))

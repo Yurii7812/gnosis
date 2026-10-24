@@ -47,6 +47,21 @@ class SixelViewTests(unittest.TestCase):
         head = sixel_view.render(str(self.dir / "b c.png"), 100, 40).split("\n", 1)[0]
         self.assertEqual(head, "4 2")
 
+    def test_inline_makes_cache_and_reuses_it(self):
+        os.environ["GNOSIS_CELL_PX"] = "10x20"
+        cache = self.dir / "cache"
+        a = str(self.dir / "a.jpg")
+        out = sixel_view.inline(str(cache), 30, 10, [a, str(self.dir / "none.png")])
+        self.assertEqual(list(out), [a])  # 無い画像は飛ばす
+        self.assertLessEqual(out[a]["cols"], 30)
+        self.assertLessEqual(out[a]["rows"], 10)
+        six = Path(out[a]["file"])
+        self.assertTrue(six.read_text(encoding="latin-1").startswith("\x1bP0;1;0q"))
+        mtime = six.stat().st_mtime_ns
+        again = sixel_view.inline(str(cache), 30, 10, [a])
+        self.assertEqual(again[a]["file"], out[a]["file"])
+        self.assertEqual(six.stat().st_mtime_ns, mtime)  # 作り直さない
+
     def test_cell_env_override(self):
         os.environ["GNOSIS_CELL_PX"] = "8x16"
         self.assertEqual(sixel_view.cell_px(), (8, 16))

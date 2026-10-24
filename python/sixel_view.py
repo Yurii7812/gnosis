@@ -5,6 +5,9 @@
                                    TEXTFILE があれば本文はそちらから読む（Vim の未保存の内容）
   render IMAGE COLS ROWS         … 1 行目に「幅セル 高さセル」、2 行目以降に sixel 本体
   cell                           … 端末の 1 セルのピクセル「幅x高さ」
+  inline CACHEDIR MAXCOLS MAXROWS IMAGE…
+                                 … ノートの中に画像を出すための下ごしらえ。画像ごとに sixel を CACHEDIR に作り
+                                   （同じ画像・大きさなら作り直さない）、JSON {画像: {cols, rows, file}} を出す
 
 セルの大きさは /dev/tty の ioctl（TIOCGWINSZ）から取る。取れなければ環境変数
 GNOSIS_CELL_PX（例 10x20）、それも無ければ 10x20。端末へは何も問い合わせない
@@ -103,7 +106,8 @@ def to_sixel(img, colors=128):
     return "".join(out)
 
 
-def render(path, cols, rows):
+def _fit(path, cols, rows, colors):
+    """画像を cols×rows セルに収まる大きさに縮めて (幅セル, 高さセル, sixel) を返す（拡大はしない）"""
     from PIL import Image, ImageOps
 
     cw, ch = cell_px()
@@ -111,8 +115,36 @@ def render(path, cols, rows):
     img.thumbnail((max(cw, cols * cw), max(ch, rows * ch)))
     w, h = img.size
     # sixel は 6 行単位。端末のセルに収まる大きさに切り上げた分を使う
-    cells_w, cells_h = -(-w // cw), -(-h // ch)
-    return f"{cells_w} {cells_h}\n" + to_sixel(img)
+    return -(-w // cw), -(-h // ch), to_sixel(img, colors)
+
+
+def render(path, cols, rows):
+    cells_w, cells_h, six = _fit(path, cols, rows, 128)
+    return f"{cells_w} {cells_h}\n" + six
+
+
+def inline(cache_dir, cols, rows, paths):
+    import hashlib
+
+    cache = Path(cache_dir)
+    cache.mkdir(parents=True, exist_ok=True)
+    cw, ch = cell_px()
+    out = {}
+    for p in paths:
+        try:
+            st = os.stat(p)
+            key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{st.st_size}|{cols}x{rows}|{cw}x{ch}".encode()).hexdigest()
+            meta = cache / (key + ".json")
+            six = cache / (key + ".six")
+            if not (meta.is_file() and six.is_file()):
+                c, r, data = _fit(p, cols, rows, 64)
+                six.write_text(data, encoding="latin-1")
+                meta.write_text(json.dumps({"cols": c, "rows": r}), encoding="utf-8")
+            m = json.loads(meta.read_text(encoding="utf-8"))
+            out[p] = {"cols": m["cols"], "rows": m["rows"], "file": str(six)}
+        except Exception:
+            continue
+    return out
 
 
 def main(argv):
@@ -120,6 +152,8 @@ def main(argv):
         print(json.dumps(list_images(argv[2], argv[3] if len(argv) > 3 else None), ensure_ascii=False))
     elif len(argv) >= 5 and argv[1] == "render":
         sys.stdout.write(render(argv[2], int(argv[3]), int(argv[4])))
+    elif len(argv) >= 6 and argv[1] == "inline":
+        print(json.dumps(inline(argv[2], int(argv[3]), int(argv[4]), argv[5:]), ensure_ascii=False))
     elif len(argv) >= 2 and argv[1] == "cell":
         print("%dx%d" % cell_px())
     else:
