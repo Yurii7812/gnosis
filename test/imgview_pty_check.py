@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""\\gp の画像ポップアップを、実 Vim を擬似端末で動かして確かめる（キーボードだけ）。
+"""gz の画像ポップアップを、実 Vim を擬似端末で動かして確かめる（キーボードだけ）。
 一時フォルダだけを使う。確かめること:
   一覧が出る → Enter で sixel が出る → j で次 → q で一覧 → q で閉じる → カーソルが Vim にあり、編集できる。
   オフにすると出ない。"""
@@ -60,16 +60,16 @@ try:
     def ok(name, cond):
         res.append(("OK " if cond else "NG ") + name)
 
-    # 1) \gp → 一覧。 3(行)に画像リンクがあるので a.jpg が最初に選ばれる。Enter で表示 → j → q → q → Gx で編集できる
-    out, m = run([("3G", 0.3), ("\\gp", 1.0), ("\r", 4.0), ("j", 4.0), ("q", 0.8), ("q", 0.8), ("Goedit\x1b", 0.6)])
+    # 1) gz → 一覧。 3(行)に画像リンクがあるので a.jpg が最初に選ばれる。Enter で表示 → j → q → q → Gx で編集できる
+    out, m = run([("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("j", 4.0), ("q", 0.8), ("q", 0.8), ("Goedit\x1b", 0.6)])
     ok("一覧の題が出る", "画像（Enter".encode() in out[: m[1]])
     ok("Enter で sixel が出る", b"\x1bP0;1;0q" in out[m[1]: m[2]])
     ok("j で 2 枚目の sixel が出る", b"\x1bP0;1;0q" in out[m[2]: m[3]])
     ok("q で一覧に戻る", "画像（Enter".encode() in out[m[3]: m[4]])
     ok("もう一度 q で閉じたあと Vim で編集できる", b"edit" in out[m[5]:])
-    # 2) オフ
-    out, m = run([("\\gP", 0.5), ("\\gp", 0.8)])
-    ok("オフのときは出ない", b"\x1bP0;1;0q" not in out and "画像（Enter".encode() not in out)
+    # 2) \\zz の窓に「画像の行」の項目がある（畳まれることの確認は imgview_hide_check.vim）
+    out, m = run([("\\zz", 0.8), ("q", 0.3)])
+    ok("\\zz の窓に画像の行の項目", "画像の行".encode() in out[: m[0]])
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

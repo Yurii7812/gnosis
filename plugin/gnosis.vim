@@ -848,10 +848,8 @@ nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " リンク先に #スラッグ（GitHub 互換）を付ける。先頭の「（見出しなし）」で解除。
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>
 nnoremap <silent> \gi       <Cmd>call gnosis#open_gallery_smart()<CR>
-" \gp … このノートの画像を一覧のポップアップから選んで、端末に sixel で重ねて見る（j/k・Enter・q。sixel 非対応の端末は外部ビューア）
-" \gP … 画像のポップアップのオン・オフ
-nnoremap <silent> \gp       <Cmd>call gnosis#imgview#open()<CR>
-nnoremap <silent> \gP       <Cmd>call gnosis#imgview#toggle()<CR>
+" gz … このノートの画像を一覧のポップアップから選んで、端末に sixel で重ねて見る（j/k・Enter・q。sixel 非対応の端末は外部ビューア）
+nnoremap <silent> gz         <Cmd>call gnosis#imgview#open()<CR>
 command! GnosisImages call gnosis#imgview#open()
 " \g … 今のノートを載せる索引を曼荼羅で選ぶ（/ で絞り込み → 移動 → 中心で Enter）
 " \g は廃止（\l → e → g で同じことができる）

@@ -39,7 +39,7 @@ call s:ok('ファイルの中身は変わらない', readfile(s:v . '/n.md') ==#
 let s:saved = join(readfile(s:v . '/.gnosis/settings.json'), '')
 call s:ok('設定ファイルに保存される', s:saved =~# '"hide"' && s:saved =~# '"yaml":\s*true' && s:saved =~# '"top":\s*true' && s:saved =~# '"bottom":\s*true', s:saved)
 call gnosis#settings#activate(g:gnosis_root)
-call s:ok('読み直しても続く', gnosis#hide#get() ==# {'yaml': 1, 'top': 1, 'bottom': 1}, string(gnosis#hide#get()))
+call s:ok('読み直しても続く', gnosis#hide#get() ==# {'yaml': 1, 'top': 1, 'bottom': 1, 'image': 0}, string(gnosis#hide#get()))
 enew
 execute 'edit ' . s:v . '/n.md'
 call s:ok('開き直しても畳まれたまま', foldclosed(1) == 1 && foldclosed(8) == 8 && foldclosed(17) == 17)

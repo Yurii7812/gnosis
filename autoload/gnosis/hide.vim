@@ -20,7 +20,7 @@ function! gnosis#hide#get() abort
   catch
     let l:h = {}
   endtry
-  return {'yaml': get(l:h, 'yaml', 0) ? 1 : 0, 'top': get(l:h, 'top', 0) ? 1 : 0, 'bottom': get(l:h, 'bottom', 0) ? 1 : 0}
+  return {'yaml': get(l:h, 'yaml', 0) ? 1 : 0, 'top': get(l:h, 'top', 0) ? 1 : 0, 'bottom': get(l:h, 'bottom', 0) ? 1 : 0, 'image': get(l:h, 'image', 0) ? 1 : 0}
 endfunction
 
 " ノートの隠す範囲を [{'kind': 'yaml'|'top'|'bottom', 'from': 行, 'to': 行}, …]（1 始まり）で返す
@@ -80,6 +80,27 @@ function! gnosis#hide#regions(lines) abort
       break
     endif
   endfor
+  " 画像だけの行（![](…)）。続く行は 1 つにまとめる。YAML・上下のブロックの中は除く（コードブロックの中も見ない）
+  let l:taken = {}
+  for l:r in l:out
+    for l:x in range(l:r.from, l:r.to)
+      let l:taken[l:x] = 1
+    endfor
+  endfor
+  let l:fence = 0
+  let l:start = 0
+  for l:k in range(0, l:n)
+    let l:ln = l:k < l:n ? a:lines[l:k] : ''
+    if l:k < l:n && l:ln =~# '^\s*\(```\|\~\~\~\)'
+      let l:fence = !l:fence
+    endif
+    if l:k < l:n && !l:fence && !has_key(l:taken, l:k + 1) && l:ln =~# '^\s*!\[\%(\\.\|[^\]\\]\)*\]([^)]\+)\s*$'
+      if l:start == 0 | let l:start = l:k + 1 | endif
+    elseif l:start > 0
+      call add(l:out, {'kind': 'image', 'from': l:start, 'to': l:k})
+      let l:start = 0
+    endif
+  endfor
   return l:out
 endfunction
 
@@ -108,7 +129,7 @@ endfunction
 
 function! gnosis#hide#text() abort
   let l:kind = get(get(get(s:cache, bufnr('%'), {}), 'lab', {}), v:foldstart, '')
-  let l:name = l:kind ==# 'yaml' ? 'YAML' : (l:kind ==# 'top' ? '上の関係' : (l:kind ==# 'bottom' ? '下の関係' : '隠した部分'))
+  let l:name = l:kind ==# 'yaml' ? 'YAML' : (l:kind ==# 'top' ? '上の関係' : (l:kind ==# 'bottom' ? '下の関係' : (l:kind ==# 'image' ? '画像' : '隠した部分')))
   return '▸ ' . gnosis#i18n#tr(l:name) . ' (' . (v:foldend - v:foldstart + 1) . ')'
 endfunction
 
@@ -118,7 +139,7 @@ function! gnosis#hide#apply() abort
     return
   endif
   let l:h = gnosis#hide#get()
-  let l:any = l:h.yaml || l:h.top || l:h.bottom
+  let l:any = l:h.yaml || l:h.top || l:h.bottom || l:h.image
   if l:any && !get(w:, 'gnosis_fold_on', 0)
     if !get(w:, 'gnosis_hide_on', 0)
       let w:gnosis_hide_saved = {'fdm': &l:foldmethod, 'fde': &l:foldexpr, 'fdt': &l:foldtext, 'fen': &l:foldenable, 'fdl': &l:foldlevel, 'fml': &l:foldminlines}
@@ -153,7 +174,7 @@ endfunction
 
 " ---- \zz の窓 ------------------------------------------------------------------------------------
 
-let s:items = [['yaml', 'YAML（先頭の --- で囲んだ部分）'], ['top', '上の「名前:」系（ParentBranch: など）'], ['bottom', '下の「名前:」系（BackLink: など）']]
+let s:items = [['yaml', 'YAML（先頭の --- で囲んだ部分）'], ['top', '上の「名前:」系（ParentBranch: など）'], ['bottom', '下の「名前:」系（BackLink: など）'], ['image', '画像の行（![](…) だけの行）']]
 
 function! s:lines() abort
   let l:h = gnosis#hide#get()
@@ -180,7 +201,7 @@ function! s:filter(id, key) abort
   elseif a:key ==# 'a'
     " 一括: ひとつでもオフならぜんぶオン、ぜんぶオンならぜんぶオフ
     let l:h = gnosis#hide#get()
-    let l:to = (l:h.yaml && l:h.top && l:h.bottom) ? v:false : v:true
+    let l:to = (l:h.yaml && l:h.top && l:h.bottom && l:h.image) ? v:false : v:true
     for l:it in s:items
       call gnosis#settings#set('hide.' . l:it[0], l:to)
     endfor

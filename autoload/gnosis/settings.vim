@@ -16,8 +16,8 @@
 "     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
 "     "mandalaOnStart": true,  ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
-"     "hide": {"yaml": false, "top": false, "bottom": false}   ← ノートで隠すもの（\zz の窓で切り替える。
-"                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系。オンにするまで保たれる。\c のアプリも同じ）
+"     "hide": {"yaml": false, "top": false, "bottom": false, "image": false}   ← ノートで隠すもの（\zz の窓で切り替える。
+"                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系 / image=画像だけの行（![](…)）。オンにするまで保たれる。\c のアプリも同じ）
 "   }
 "   theme / customThemes は通常の（ターミナルの）Vim の配色、appTheme / appCustomThemes は
 "   \c のアプリの配色。互いに独立していて、一方を変えてももう一方は変わらない。
@@ -54,7 +54,7 @@ function! gnosis#settings#defaults() abort
         \ 'appTheme': {'kind': 'builtin'},
         \ 'appCustomThemes': {},
         \ 'mandalaOnStart': v:true,
-        \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false},
+        \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
         \ }
 endfunction
 
@@ -102,7 +102,7 @@ function! gnosis#settings#validate(s) abort
   if type(get(l:s, 'hide', 0)) != v:t_dict
     let l:s.hide = {}
   endif
-  for l:k in ['yaml', 'top', 'bottom']
+  for l:k in ['yaml', 'top', 'bottom', 'image']
     let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
   endfor
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0

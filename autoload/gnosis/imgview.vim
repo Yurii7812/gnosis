@@ -1,8 +1,8 @@
-" ノートの画像をポップアップで見る（\gp）。
+" ノートの画像をポップアップで見る（gz）。
 "   ノートにある画像の一覧（popup_menu）→ Enter で端末に sixel で重ねて表示 → q で一覧に戻る → もう一度 q で閉じる。
 "   キーボードだけで動く。閉じたあとは redraw! で画像を消し、カーソルは元のまま Vim にある。
 "   sixel に対応しない端末では、外部のビューア（xdg-open など）で開く。
-"   g:gnosis_image_popup = 0 で全体をオフ、g:gnosis_image_viewer = 'auto' | 'sixel' | 'external'。
+"   g:gnosis_image_viewer = 'auto' | 'sixel' | 'external'。
 "   Python 側: python/sixel_view.py
 
 let s:root = expand('<sfile>:p:h:h:h')
@@ -12,16 +12,6 @@ function! s:py(args) abort
   let l:cmd = gnosis#python_cmd() . ' ' . shellescape(s:root . '/python/sixel_view.py')
         \ . ' ' . join(map(copy(a:args), 'shellescape(v:val)'), ' ') . ' 2>/dev/null'
   return system(l:cmd)
-endfunction
-
-function! gnosis#imgview#enabled() abort
-  return get(g:, 'gnosis_image_popup', 1) ? 1 : 0
-endfunction
-
-" 画像のポップアップのオン・オフ（\gP）
-function! gnosis#imgview#toggle() abort
-  let g:gnosis_image_popup = gnosis#imgview#enabled() ? 0 : 1
-  echo gnosis#imgview#enabled() ? '画像のポップアップ: オン（\gp）' : '画像のポップアップ: オフ'
 endfunction
 
 " 今の端末に sixel で出せるか
@@ -134,10 +124,6 @@ function! s:menu_done(id, result) abort
 endfunction
 
 function! gnosis#imgview#open() abort
-  if !gnosis#imgview#enabled()
-    echo '画像のポップアップはオフです（\gP でオン）'
-    return
-  endif
   if expand('%:e') !~? '^md$'
     echo 'Markdown のノートで使います'
     return
