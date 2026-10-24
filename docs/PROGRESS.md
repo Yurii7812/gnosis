@@ -3,6 +3,7 @@
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
 ## 現在地（2026-10-24）
+- **画像のポップアップ（ブランチ `feat/image-popup`、worktree `~/src/gnosis-image-popup`、main 399d5c9 から。main 未マージ・push 未）**: `\gp` = このノートの画像の一覧（popup_menu。`j` `k` 選ぶ・数字・`Enter` で見る・`q` `Esc` で閉じる）→ 端末に sixel で重ねて表示（`j` `k` `n` `p` で前後、`q` で一覧へ戻る）。閉じたら `redraw!` で画像を消し、カーソルは元のノートの位置。`\gP` でオン・オフ（`g:gnosis_image_popup`）。sixel に対応しない端末（tmux 内を含む）は外部ビューア（xdg-open）。`g:gnosis_image_viewer = auto|sixel|external`。画像は ![](相対パス) など既存のギャラリーと同じ拾い方（`python/gallery.py`）。セルの大きさは /dev/tty の ioctl（取れなければ `GNOSIS_CELL_PX=10x20`）。新規: `autoload/gnosis/imgview.vim`・`python/sixel_view.py`・`python/test_sixel_view.py`・`test/imgview_pty_check.py`（実 Vim を擬似端末で）。**未確認**: 本物の Konsole での見た目の通し（試作 `~/Desktop/test/sixel_demo.py` は利用者が Konsole で表示を確認済み）、`\c` アプリ内の端末（xterm.js）、`:GnosisImages`。
 - 曼荼羅: 右のノートの窓でページが変わったら左の曼荼羅の中心も動く（`s:follow`）。`y` で `c` `r` を両方オフ（オフにするだけ）。「起動時に曼荼羅を出す」は `\zz` から外し `:GnosisSettings` に移した。`\zz` に `a`（全部オン／全部オフ）。
 - 時系列の木（`timeline: true` = 時系列記録 → 日記 → 年・月 → 日ごとのノート）の子の一覧は、本文ではなく ChildBranch: に書く（本文にあった子へのリンクだけの行は同期で ChildBranch: に移る。二重にしない）。時系列記録の木だけで、ふつうのノートは従来どおり（文中のリンクは ChildBranch: に出ない）。日記の Vim 側の操作（`s:diary_edit_file`）は、操作のあいだだけ一覧を本文に出して終わったら戻す（`s:tl_fold_in/out`）。本物の vault は未確認（ロック中）。
 - APK 紙のスキャン: 全部／未取り込み／取り込み済みのタブ、それぞれの全削除、取り込み済みを消さず残して見返せる（`scans.json` の `imported`・PC は再取得しない）。ビルド・単体試験は通過。**実機未確認**。
