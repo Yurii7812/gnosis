@@ -96,6 +96,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 - `\e` … expand the notes around the current one into one md (`expand_v2.py`; choose **simple/detailed**; detailed takes 5 values and can save / load / delete named presets; output `.trash/T_*.md`)
 - `\se` … expand an S note into an A note (`expand_s.py`; output `.trash/T_*.md`)
 - `\gi` … image gallery (the note's images, or all images under the Index, in the browser)
+- `\gp` / `:GnosisImages` … pick one of this note's images in a popup list (`j` `k` `Enter` `q`) and view it over the terminal with sixel. `\gP` … toggle it on/off
 - `\oe` / `\O` … edit headings in a separate buffer (`:write` applies them to the note; `:OutlineEdit`)
 - `\sc` … CopyStack (`y` adds lines / selections, `d` cuts and adds them, across notes. Press `\sc` again to finish as one yank for `za` or pasting)
 - `mx` … toggle the checkbox `[ ]` / `[x]` of the line (visual: the selection)
