@@ -30,12 +30,49 @@ endfunction
 " ポップアップが使えない Vim では inputlist をそのまま使う。
 " g:gnosis_ui_keys（キーのリスト）があれば、そこから読む（試験用）。
 " ---------------------------------------------------------------------------
+" 1 キー読む。typeahead に積まれた <Cmd>…<CR>（gnosis#clear_search_highlight の nohlsearch など）は読み捨てる。
+" 読み捨てないと、ポップアップが選択肢を出す前に「何かのキーが押された」ことになって閉じ、
+" 残りの nohlsearch<CR> がノートへの通常キー（n で前回の検索 → E486、o で行が開くなど）として実行される。
+function! gnosis#ui#getcharstr() abort
+  while 1
+    let l:c = getcharstr()
+    if l:c !=# "\<Cmd>"
+      return l:c
+    endif
+    call s:drain_cmd()
+  endwhile
+endfunction
+
+" getchar() 版（数字のこともある）。<Cmd>…<CR> は読み捨てる
+function! gnosis#ui#getchar() abort
+  while 1
+    let l:c = getchar()
+    if type(l:c) != v:t_string || l:c !=# "\<Cmd>"
+      return l:c
+    endif
+    call s:drain_cmd()
+  endwhile
+endfunction
+
+" <Cmd> のあとの、<CR> までを読み捨てる（積まれているぶんだけ。待たない）
+function! s:drain_cmd() abort
+  while 1
+    let l:n = getchar(0)
+    if type(l:n) == v:t_number && l:n == 0
+      return
+    endif
+    if l:n == 13 || (type(l:n) == v:t_string && l:n ==# "\<CR>")
+      return
+    endif
+  endwhile
+endfunction
+
 function! gnosis#ui#getkey() abort
   if exists('g:gnosis_ui_keys') && !empty(g:gnosis_ui_keys)
     return remove(g:gnosis_ui_keys, 0)
   endif
   try
-    return getcharstr()
+    return gnosis#ui#getcharstr()
   catch /^Vim:Interrupt$/
     return "\<Esc>"
   endtry

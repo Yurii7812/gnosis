@@ -9838,7 +9838,7 @@ function! s:v2_pick(label, items) abort
   endfor
   call add(l:menu, l:i . gnosis#i18n#tr(' 入力'))
   echo a:label . '  ' . join(l:menu, '   ') . gnosis#i18n#tr('    (Esc / q: キャンセル)')
-  let l:c = getchar()
+  let l:c = gnosis#ui#getchar()
   redraw
   if type(l:c) == v:t_number && (l:c == 27 || l:c == 3)
     return ''
@@ -9900,7 +9900,7 @@ function! s:v2_pick_relation2(...) abort
   call add(l:menu, l:i . gnosis#i18n#tr(' 入力(') . l:side . gnosis#i18n#tr('には書かない)'))
 
   echo 'relation  ' . join(l:menu, '   ') . gnosis#i18n#tr('    (Esc / q: キャンセル)')
-  let l:c = getchar()
+  let l:c = gnosis#ui#getchar()
   redraw
   if type(l:c) == v:t_number && (l:c == 27 || l:c == 3)
     return {}
@@ -11193,7 +11193,7 @@ endfunction
 function! s:ask_yes_no(msg) abort
   " ポップアップは出さず、コマンドラインで y/n を 1 打だけ聞く
   echo a:msg . ' (y/n)'
-  let l:c = nr2char(getchar())
+  let l:c = nr2char(gnosis#ui#getchar())
   redraw
   return l:c ==? 'y'
 endfunction
@@ -12131,7 +12131,7 @@ function! s:getkey() abort
     if exists('g:gnosis_test_keys') && !empty(g:gnosis_test_keys)
       let l:key = remove(g:gnosis_test_keys, 0)
     else
-      let l:key = getcharstr()
+      let l:key = gnosis#ui#getcharstr()
     endif
     " 無操作で届く CursorHold は選択キーとして扱わず、入力を待ち続ける。
     if l:key !=# "\<CursorHold>" && l:key !=# "\<Ignore>"
@@ -13437,7 +13437,7 @@ function! s:new_note_no_title(prefix) abort
 
   echon 'mode: (O)rphan (B)ack (H)=cursor Enter=ChildLast: '
 
-  let l:char = getchar()
+  let l:char = gnosis#ui#getchar()
   redraw
 
   " Esc or Ctrl-C でキャンセル
@@ -13735,7 +13735,7 @@ endfunction
 " ビジュアル選択から nf / mm / nk を呼ぶエントリポイント
 function! gnosis#visual_new_quick_no_title() abort
   echo 'prefix (a-z): '
-  let l:char = getchar()
+  let l:char = gnosis#ui#getchar()
   redraw
   if l:char == 27 || l:char == 3
     echo 'Cancelled'
@@ -13766,7 +13766,7 @@ function! s:visual_select_mode(prefix) abort
 
   echon 'mode: (O)rphan (B)ack (H)=cursor Enter=ChildLast: '
 
-  let l:char = getchar()
+  let l:char = gnosis#ui#getchar()
   redraw
   if l:char == 27 || l:char == 3
     echo 'Cancelled'
@@ -13784,7 +13784,7 @@ endfunction
 
 function! gnosis#new_quick_no_title() abort
   echo 'prefix (a-z): '
-  let l:char = getchar()
+  let l:char = gnosis#ui#getchar()
   redraw
   if l:char == 27 || l:char == 3
     echo 'Cancelled'
@@ -13823,7 +13823,7 @@ function! gnosis#new_quick(args) abort
   let l:parent_title = gnosis#current_title()
 
   echo 'prefix (a-z): '
-  let l:raw = getchar()
+  let l:raw = gnosis#ui#getchar()
   redraw
   if l:raw == 27 || l:raw == 3
     echo 'Cancelled'
@@ -13840,7 +13840,7 @@ function! gnosis#new_quick(args) abort
 
   echon "\nmode: (O)rphan (B)ack (H)=cursor Enter=ChildLast: "
 
-  let l:raw2 = getchar()
+  let l:raw2 = gnosis#ui#getchar()
   redraw
   if l:raw2 == 27 || l:raw2 == 3
     echo 'Cancelled'
@@ -16729,7 +16729,7 @@ function! gnosis#rename_prefix() abort
 
   " 新プレフィクスを1文字即時入力
   echon 'filetype [' . l:cur_type . '] → '
-  let l:char = nr2char(getchar())
+  let l:char = nr2char(gnosis#ui#getchar())
   redraw
   if l:char !~# '^[a-zA-Z]$'
     echo 'Cancelled'

@@ -282,6 +282,14 @@ call s:ok('載せたあとも曼荼羅は閉じず、選ぶモードだけ終わ
 call s:ok('右の窓は入れ先のグループ（中心）を見せる', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') >= 0)
 call s:keys('Q')
 
+" キー待ち（ポップアップの選択肢）は、typeahead に積まれた <Cmd>…<CR>（nohlsearch）を読み捨てる。
+" 読み捨てないと、\l → e の置き場所の画面が出る前に閉じて、残りが通常キーになり E486 などが出た（2026-10-24）
+call feedkeys("\<Cmd>nohlsearch\<CR>y", 'nt')
+call s:ok('キー待ちは <Cmd>…<CR> を読み捨てて、本当のキーを返す', gnosis#ui#getcharstr() ==# 'y')
+call feedkeys("\<Cmd>nohlsearch\<CR>", 'nt')
+call feedkeys("\<Cmd>nohlsearch\<CR>q", 'nt')
+call s:ok('続けて積まれていても読み捨てる', gnosis#ui#getcharstr() ==# 'q')
+
 " ビジュアル \l: 選んだ文字を、曼荼羅で選んだノートへのリンクに置き換える（e で決定。位置キーは聞かない）
 call s:mk('vlk.md', 'ビジュアルの元', 0, [], ['ハーブガーデンを作ってみたい話。', '二行目。'])
 call s:mk('herb.md', 'ハーブガーデンを作ってみたい', 0, [], ['本文。'])

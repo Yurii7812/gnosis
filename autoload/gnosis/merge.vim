@@ -34,7 +34,7 @@ function! s:key() abort
   if exists('g:gnosis_test_keys') && !empty(g:gnosis_test_keys)
     return remove(g:gnosis_test_keys, 0)
   endif
-  return getcharstr()
+  return gnosis#ui#getcharstr()
 endfunction
 
 function! s:warn(msg) abort

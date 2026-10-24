@@ -241,6 +241,7 @@ gnosis#mview#gui_click
 gnosis#mview#gui_state
 gnosis#mview#items
 gnosis#mview#link_pick
+gnosis#mview#link_pick_visual
 gnosis#mview#preset_apply
 gnosis#mview#preset_delete
 gnosis#mview#preset_names
@@ -503,6 +504,8 @@ gnosis#trail
 gnosis#trash_current
 gnosis#trash_empty
 gnosis#trash_list
+gnosis#ui#getchar
+gnosis#ui#getcharstr
 gnosis#ui#getkey
 gnosis#ui#inputlist
 gnosis#ui#statusline
@@ -555,3 +558,4 @@ gnosis_search#run
 gnosis_search#run_legacy
 gnosis_search#search_global
 gnosis_search#search_local
+gnosis_search#visual_info

@@ -2869,7 +2869,7 @@ function! s:preset_menu() abort
     call extend(l:lines, ['', empty(l:msg) ? '' : ' ' . l:msg, ' j k 選ぶ   Enter 呼び出し   o 上書き保存   n 名前を変える   d 消す', ' s 今の設定を新しく保存   q 閉じる'])
     let l:pid = popup_create(l:lines, {'pos': 'center', 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': " ' "})
     redraw
-    let l:k = getcharstr()
+    let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
     let l:msg = ''
     let l:cur = empty(l:names) ? '' : l:names[l:sel]

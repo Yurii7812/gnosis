@@ -67,7 +67,7 @@ function! s:view(items, i) abort
         call s:caption(l:i, a:items, 'j/k・n/p: 前後  q/Esc: 戻る')
       endif
     endif
-    let l:k = getcharstr()
+    let l:k = gnosis#ui#getcharstr()
     if l:k ==# 'j' || l:k ==# 'n' || l:k ==# 'l' || l:k ==# ' ' || l:k ==# "\<Right>" || l:k ==# "\<Down>"
       if l:i < len(a:items) - 1 | let l:i += 1 | endif
     elseif l:k ==# 'k' || l:k ==# 'p' || l:k ==# 'h' || l:k ==# "\<Left>" || l:k ==# "\<Up>"

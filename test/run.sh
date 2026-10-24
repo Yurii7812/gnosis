@@ -243,6 +243,7 @@ python3 "$REPO/test/theme_pty_check.py"
 # 新規ノート（zn → Enter）の本文入力位置（Context の後ろの空行に、すぐ書ける）
 python3 "$REPO/test/context_pty_check.py"
 python3 "$REPO/test/link_source_pty_check.py"
+python3 "$REPO/test/link_pick_pty_check.py"
 python3 "$REPO/test/imgview_pty_check.py"
 sh "$REPO/test/imgview_hide_net.sh"
 python3 "$REPO/python/test_sixel_view.py"
