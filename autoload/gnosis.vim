@@ -17207,22 +17207,20 @@ endfunction
 
 " 時刻モード（\T / :GnosisTimeMode）: 空の行に書き始めると、行の頭に時刻（時:分 ）が入る。
 " Enter では空行を 1 つはさんで次の行へ。そのバッファだけで、ほかのノートへ移る・閉じると切れる。
-" 時系列記録のノート（front matter に record:）は、開いたときにオンになる。
+" 開いたときは常にオフ（時系列記録のノートでも自動ではオンにしない。使うときだけ \T）。
 function! gnosis#time_mode_toggle() abort
   let b:gnosis_time_mode = !get(b:, 'gnosis_time_mode', 0)
   redrawstatus
   echo 'Gnosis: ' . gnosis#i18n#tr(b:gnosis_time_mode ? '時刻モード: オン（書き始めた行の頭に時刻。\T で切る）' : '時刻モード: オフ')
 endfunction
 
-" ウィンドウに出したとき: まだ決めていなければ、時系列記録のノートだけ時刻モードをオンにする。
+" ウィンドウに出したとき: まだ決めていなければ、時刻モードはオフにする（自動ではオンにしない）。
 " 決めたあと（\T で切り替えたあとも）は、検索の画面を閉じた・読み直した・同期したなどで出し直しても変えない。
 function! gnosis#time_mode_on_enter(bnr) abort
   if type(getbufvar(a:bnr, 'gnosis_time_mode', v:none)) != v:t_none
     return
   endif
-  let l:head = getbufline(a:bnr, 1, 20)
-  let l:end = get(l:head, 0, '') ==# '---' ? index(l:head, '---', 1) : -1
-  call setbufvar(a:bnr, 'gnosis_time_mode', l:end > 0 && match(l:head[: l:end], '^record:') >= 0)
+  call setbufvar(a:bnr, 'gnosis_time_mode', 0)
 endfunction
 
 " ノートを閉じた・ほかのノートへ移ったら、そのノートの時刻モードは取りやめる（次に開いたときに決め直す）。

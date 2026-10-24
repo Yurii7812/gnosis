@@ -70,6 +70,9 @@ try:
     # 2) \\zz の窓に「画像の行」の項目がある（畳まれることの確認は imgview_hide_check.vim）
     out, m = run([("\\zz", 0.8), ("q", 0.3)])
     ok("\\zz の窓に画像の行の項目", "画像の行".encode() in out[: m[0]])
+    # 3) a（全部オン）を押しても、画像の行はオンにならない（YAML などの 3 つだけ）
+    out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
+    ok("a で YAML などはオンになり、画像の行はオンにならない", "[x] YAML".encode() in out and "[x] 画像の行".encode() not in out)
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

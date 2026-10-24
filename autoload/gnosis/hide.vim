@@ -182,7 +182,7 @@ function! s:lines() abort
   for l:i in range(len(s:items))
     call add(l:out, (l:i == s:sel ? ' ▶ ' : '   ') . (l:h[s:items[l:i][0]] ? '[x] ' : '[ ] ') . gnosis#i18n#tr(s:items[l:i][1]))
   endfor
-  call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ   q 閉じる'])
+  call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ（画像の行は含めない）   q 閉じる'])
   return l:out
 endfunction
 
@@ -201,8 +201,8 @@ function! s:filter(id, key) abort
   elseif a:key ==# 'a'
     " 一括: ひとつでもオフならぜんぶオン、ぜんぶオンならぜんぶオフ
     let l:h = gnosis#hide#get()
-    let l:to = (l:h.yaml && l:h.top && l:h.bottom && l:h.image) ? v:false : v:true
-    for l:it in s:items
+    let l:to = (l:h.yaml && l:h.top && l:h.bottom) ? v:false : v:true
+    for l:it in s:items[:2]
       call gnosis#settings#set('hide.' . l:it[0], l:to)
     endfor
     call gnosis#hide#apply_all()

@@ -43,9 +43,9 @@ try
   silent write
   execute 'edit ' . fnameescape($TIME_VAULT . '/rec.md')
   sleep 200m
-  call s:ok('時系列記録のノートは開くと時刻モード', get(b:, 'gnosis_time_mode', 0) == 1)
+  call s:ok('時系列記録のノートでも、開いても時刻モードは自動ではオンにならない', get(b:, 'gnosis_time_mode', 0) == 0)
   call feedkeys("Go見た夢\<Esc>", 'xt')
-  call s:ok('時系列記録: 書き始めると時刻', getline('$') =~# '^' . s:t . '見た夢$', getline('$'))
+  call s:ok('時系列記録: オフのままなら時刻は付かない', getline('$') ==# '見た夢', getline('$'))
   silent write
   execute 'edit ' . fnameescape($TIME_VAULT . '/t.md')
   call s:ok('オンのまま離れたノートへ戻ると、時刻モードは切れている', get(b:, 'gnosis_time_mode', 0) == 0)
