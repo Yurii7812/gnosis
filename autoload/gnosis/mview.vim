@@ -1107,6 +1107,9 @@ endfunction
 function! s:pick_label() abort
   let l:p = get(s:S, 'pick', '')
   if l:p ==# 'link'
+    if has_key(get(s:S, 'origin', {}), 'vis')
+      return '選んだ文字をリンクにするノートを選ぶ（e で決定・o 元のノート）: '
+    endif
     return '入れるノートを選ぶ（e で決定・o 元のノート）: '
   elseif l:p ==# 'group'
     return 'グループを選ぶ（e 決定・I Index・t 見出し・o 元のノート）: '
@@ -1724,6 +1727,22 @@ function! s:link_decide() abort
   endif
   execute 'silent! hide edit ' . fnameescape(l:o.path)
   call setpos('.', l:o.pos)
+  if has_key(l:o, 'vis')
+    " ビジュアル: 選んだ範囲をリンクに置き換える（表示名は選んだ文字。位置キーは聞かない）
+    let l:v = l:o.vis
+    if getline(l:v.sline, l:v.eline) !=# l:v.lines
+      echohl WarningMsg | echo 'Gnosis: 選んだあとにノートが変わったので、置き換えませんでした' | echohl NONE
+    else
+      let l:link = gnosis#make_link(l:path, !empty(l:v.text) ? l:v.text : l:title)
+      call gnosis#replace_visual_selection(l:link, l:v.is_linewise, l:v.sline, l:v.eline, l:v.scol, l:v.ecol, l:v.lines)
+      call cursor(l:v.sline, l:v.scol)
+      if &modified && &buftype ==# ''
+        call gnosis#conflict#safe_update()
+      endif
+    endif
+    call s:back_to_mandala([s:rel_of(l:o.path)])
+    return
+  endif
   let l:link = gnosis#make_link(l:path, l:title)
   try
     call gnosis#insert_links_pick([l:link], l:o.pos)
@@ -2551,6 +2570,20 @@ endfunction
 
 " \l: 入れるノートを曼荼羅で選ぶ。曼荼羅が開いていればそこへ（開いていなければ開く）。e で決めると、置き場所のキーを聞く
 function! gnosis#mview#link_pick() abort
+  call s:link_pick_start({})
+endfunction
+
+" ビジュアルの \l: 選んだ文字をリンクにするノートを曼荼羅で選ぶ（e で決定。置き場所は聞かず、選んだ範囲をリンクに置き換える）
+function! gnosis#mview#link_pick_visual() abort
+  let l:vis = gnosis_search#visual_info()
+  if empty(l:vis)
+    echohl WarningMsg | echo 'Gnosis: 選択範囲がありません' | echohl NONE
+    return
+  endif
+  call s:link_pick_start(l:vis)
+endfunction
+
+function! s:link_pick_start(vis) abort
   let l:file = expand('%:p')
   " 曼荼羅にカーソルがあるときは、中心のノートを「今のノート」として扱う（ノートにカーソルがあるのと同じ）
   if &filetype ==# 'gnosis-mandala' && has_key(s:S, 'center') && filereadable(s:S.root . '/' . s:S.center)
@@ -2563,6 +2596,10 @@ function! gnosis#mview#link_pick() abort
   let l:root = s:root()
   let l:rel = stridx(l:file, l:root . '/') == 0 ? strpart(l:file, len(l:root) + 1) : ''
   let l:origin = {'path': l:file, 'pos': &filetype ==# 'gnosis-mandala' ? [0, 1, 1, 0] : getpos('.')}
+  if !empty(a:vis)
+    let l:origin.vis = a:vis
+    let l:origin.pos = [0, a:vis.sline, a:vis.scol, 0]
+  endif
   if s:mwin() < 0
     call s:open(l:rel)
   else

@@ -282,6 +282,26 @@ call s:ok('載せたあとも曼荼羅は閉じず、選ぶモードだけ終わ
 call s:ok('右の窓は入れ先のグループ（中心）を見せる', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') >= 0)
 call s:keys('Q')
 
+" ビジュアル \l: 選んだ文字を、曼荼羅で選んだノートへのリンクに置き換える（e で決定。位置キーは聞かない）
+call s:mk('vlk.md', 'ビジュアルの元', 0, [], ['ハーブガーデンを作ってみたい話。', '二行目。'])
+call s:mk('herb.md', 'ハーブガーデンを作ってみたい', 0, [], ['本文。'])
+execute 'edit ' . s:v . '/vlk.md'
+call gnosis#clear_title_cache()
+let s:vl_ln = search('^ハーブガーデン', 'nw')
+execute "normal! " . s:vl_ln . "G0v" . (strchars('ハーブガーデン') - 1) . "l\<Esc>"
+'<,'>call gnosis#mview#link_pick_visual()
+let s:st = gnosis#mview#state()
+call s:ok('ビジュアル \l: 選ぶモードになる（文字をリンクにするノートを選ぶ）', s:st.pick ==# 'link' && s:text() =~# '選んだ文字をリンクにする', s:text())
+let s:st.center = 'herb.md'
+call s:keys('z')
+let g:gnosis_test_keys = ['x']
+call s:keys('e')
+call s:ok('ビジュアル \l: e で、選んだ文字が表示名のリンクに置き換わる', join(readfile(s:v . '/vlk.md'), "\n") =~# '\[ハーブガーデン\](herb.md)を作ってみたい話。', join(readfile(s:v . '/vlk.md'), "\n"))
+call s:ok('ビジュアル \l: 位置キーは聞かない（キーが残っている）', g:gnosis_test_keys ==# ['x'])
+call s:ok('ビジュアル \l: 曼荼羅は開いたまま・選ぶモードは終わる', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# '', &filetype)
+let g:gnosis_test_keys = []
+call s:keys('Q')
+
 " I: グループを選ぶ最中に、Index に追加する（そのトピックの入り口にする）
 call s:mk('entry.md', '入り口のノート', 0, [], [])
 execute 'edit ' . s:v . '/entry.md'
