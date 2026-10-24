@@ -683,6 +683,48 @@ call s:ok('mandala.json に presets が残り、モードの保存で消えな�
 call gnosis#mview#preset_delete('調べもの')
 call gnosis#mview#preset_delete('別')
 call s:ok('プリセットを消す', gnosis#mview#preset_names() ==# [])
+" プリセットは大きさ（全画面・幅・盤面の幅）も含めて全部覚える。上書き保存もできる
+let s:st.size = 3
+let s:st.nums = 1
+call s:keys('f')
+call s:keys('v')
+call s:keys('w')
+call s:keys('>')
+call s:keys('>')
+call s:keys(')')
+call s:keys(')')
+let s:st = gnosis#mview#state()
+let s:want = {}
+for s:k in ['size', 'nums', 'nv', 'ol_on', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit', 'tenths', 'stretch']
+  let s:want[s:k] = get(s:st, s:k, '')
+endfor
+let s:ww = winwidth(s:st.win)
+call gnosis#mview#preset_save('全部')
+call s:keys('=')
+call s:keys('v')
+call s:keys('w')
+call s:keys('f')
+call s:keys('c')
+call s:keys('p')
+call gnosis#mview#preset_apply('全部')
+let s:st = gnosis#mview#state()
+let s:got = {}
+for s:k in keys(s:want)
+  let s:got[s:k] = get(s:st, s:k, '')
+endfor
+call s:ok('プリセット: 大きさ・幅・盤面の幅・モードが全部戻る', s:got ==# s:want, string([s:want, s:got]))
+call s:ok('プリセット: 窓の幅も戻る', winwidth(s:st.win) == s:ww, string([s:ww, winwidth(s:st.win)]))
+" 上書き保存
+call s:keys('v')
+call s:keys('<')
+call s:ok('上書き保存: 同じ名前に今の設定を入れ直せる（名前は 1 つのまま）', gnosis#mview#preset_overwrite('全部') == 1 && gnosis#mview#preset_names() ==# ['全部'] && gnosis#mview#preset_overwrite('無い') == 0)
+let s:want2 = {'out_on': get(gnosis#mview#state(), 'out_on', 0), 'tenths': get(gnosis#mview#state(), 'tenths', 5)}
+call s:keys('v')
+call s:keys('>')
+call gnosis#mview#preset_apply('全部')
+let s:st = gnosis#mview#state()
+call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
+call gnosis#mview#preset_delete('全部')
 call s:keys('Q')
 
 " 曼荼羅にカーソルがあっても \l ができる（ノートにカーソルがあるのと同じ）。\l → I で選んだノートを Index に載せる

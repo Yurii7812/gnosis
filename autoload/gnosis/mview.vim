@@ -2743,6 +2743,17 @@ function! gnosis#mview#preset_save(name) abort
   return 1
 endfunction
 
+" 今の設定で、すでにある名前のプリセットを上書きする（無い名前なら何もしない）
+function! gnosis#mview#preset_overwrite(name) abort
+  let l:p = s:presets()
+  if !has_key(l:p, a:name)
+    return 0
+  endif
+  let l:p[a:name] = s:preset_snapshot()
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
 function! gnosis#mview#preset_delete(name) abort
   let l:p = s:presets()
   if !has_key(l:p, a:name)
@@ -2815,7 +2826,7 @@ function! s:preset_menu() abort
     if empty(l:names)
       call add(l:lines, '  （まだありません）')
     endif
-    call extend(l:lines, ['', l:del == 1 ? '  消すプリセットの番号を押す（Esc でやめる）' : (l:del == 2 ? '  名前を変えるプリセットの番号を押す（Esc でやめる）' : '  s 今の設定を名前をつけて保存   番号 呼び出し   n 名前を変える   d 消す   q 閉じる')])
+    call extend(l:lines, ['', l:del == 1 ? '  消すプリセットの番号を押す（Esc でやめる）' : (l:del == 2 ? '  名前を変えるプリセットの番号を押す（Esc でやめる）' : l:del == 3 ? '  今の設定で上書きするプリセットの番号を押す（Esc でやめる）' : '  s 今の設定を名前をつけて保存   o 上書き保存   番号 呼び出し   n 名前を変える   d 消す   q 閉じる')])
     let l:pid = popup_create(l:lines, {'pos': 'center', 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': " ' "})
     redraw
     let l:k = getcharstr()
@@ -2823,7 +2834,10 @@ function! s:preset_menu() abort
     if l:del
       let l:n = str2nr(l:k)
       if l:n >= 1 && l:n <= len(l:names)
-        if l:del == 2
+        if l:del == 3
+          call gnosis#mview#preset_overwrite(l:names[l:n - 1])
+          echo 'Gnosis: プリセット「' . l:names[l:n - 1] . '」を今の設定で上書きしました'
+        elseif l:del == 2
           let l:new = input('新しい名前（' . l:names[l:n - 1] . '）: ', l:names[l:n - 1])
           redraw
           call gnosis#mview#preset_rename(l:names[l:n - 1], l:new)
@@ -2843,6 +2857,8 @@ function! s:preset_menu() abort
       let l:del = 1
     elseif l:k ==# 'n' && !empty(l:names)
       let l:del = 2
+    elseif l:k ==# 'o' && !empty(l:names)
+      let l:del = 3
     elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(l:names)
       call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
       return
