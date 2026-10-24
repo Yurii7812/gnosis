@@ -243,6 +243,7 @@ gnosis#mview#link_pick
 gnosis#mview#preset_apply
 gnosis#mview#preset_delete
 gnosis#mview#preset_names
+gnosis#mview#preset_overwrite
 gnosis#mview#preset_rename
 gnosis#mview#preset_save
 gnosis#mview#refresh
