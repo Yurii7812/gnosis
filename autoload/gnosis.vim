@@ -20867,8 +20867,8 @@ function! gnosis#diary_today() abort
     execute 'edit ' . fnameescape(l:dir . '/' . l:diary)
   endif
   call s:diary_cursor()
-  " 書いている時刻が分かるように、空の行なら先頭に「HH:MM 」を入れる（何も書かずに離れたら消す）
-  if get(g:, 'gnosis_diary_time_stamp', 1) && getline('.') ==# ''
+  " g:gnosis_diary_time_stamp = 1 のときだけ、空の行の先頭に「HH:MM 」を入れる（何も書かずに離れたら消す）。既定はオフ
+  if get(g:, 'gnosis_diary_time_stamp', 0) && getline('.') ==# ''
     call setline('.', strftime('%H:%M') . ' ')
     let b:gnosis_diary_stamp = line('.')
     startinsert!
