@@ -98,13 +98,13 @@ call s:keys('[')
 " / : ふつうの検索のようにヒットへ飛ぶ（複数枚あるときは別の枚へも）。入力そのものは試験できないので状態を入れる
 let s:st.find = 'ラベンダー'
 call s:keys('n')
-call s:ok('n で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 1] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
+call s:ok('n で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 2] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
 call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダー 1/1', s:text())
 call s:keys('q')
 call s:ok('q でハイライトをやめる（曼荼羅は閉じない）', s:st.find ==# '' && &filetype ==# 'gnosis-mandala')
 call s:keys('[')
-" 1 2 3 / 8 _ 4 / 7 6 5 の並び（真ん中に番号は無い）
-call s:ok('3×3 は 1 2 3 / 8 _ 4 / 7 6 5 の並び（真ん中に番号は無い。8 は中心の左・4 は右の同じ行）', len(filter(split(s:text(), "\n"), 'v:val =~# "8 タイム.*┃.*植物.*┃.*4 栽培"')) == 1 && s:text() =~# '5 ' && s:text() =~# '6 ' && s:text() =~# '7 ', s:text())
+" 8 1 2 / 7 _ 3 / 6 5 4 の並び（真ん中に番号は無い。上の段の真ん中が 1 で時計回り）
+call s:ok('3×3 は 8 1 2 / 7 _ 3 / 6 5 4 の並び（真ん中に番号は無い。1 は中心の真上・7 は左・3 は右の同じ行）', len(filter(split(s:text(), "\n"), 'v:val =~# "7 バジル.*┃.*植物.*┃.*3 バラ"')) == 1 && len(filter(split(s:text(), "\n"), 'v:val =~# "8 タイム.*┃.*1 Index.*┃.*2 ハーブ"')) == 1 && s:text() =~# '5 ' && s:text() =~# '6 ' && s:text() =~# '7 ', s:text())
 " 数字キーでそのままノートのマスへ進む: 右にそのノートが開く
 call s:keys('4')
 call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:st.center)
@@ -115,12 +115,14 @@ call s:keys('b')
 call s:ok('b で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
 " カーソルを動かすだけで右のノートが切り替わる（曼荼羅の中心は変わらない）
 call s:keys('k')
-call s:ok('k で右のノートが切り替わる（ハーブ）', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0 && s:st.center ==# 'plant.md', s:st.center)
+call s:keys('l')
+call s:ok('k l で右のノートが切り替わる（ハーブ）', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'herb.md') >= 0 && s:st.center ==# 'plant.md', s:st.center)
+call s:keys('h')
 call s:keys('j')
 " 数字キー: 既定は移動して中心に。t でカーソルだけ（右のノートは切り替わる）
 call s:keys('t')
 call s:keys('3')
-call s:ok('カーソルだけ: 中心は変わらず、右のノートは切り替わる', s:st.center ==# 'plant.md' && s:st.cur == [0, 2] && index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'rose.md') >= 0, string(s:st.cur) . s:st.center)
+call s:ok('カーソルだけ: 中心は変わらず、右のノートは切り替わる', s:st.center ==# 'plant.md' && s:st.cur == [1, 2] && index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'rose.md') >= 0, string(s:st.cur) . s:st.center)
 call s:keys('t')
 " < > で曼荼羅の幅を変える（盤面は作り直されて正方形のまま）
 let s:w0 = winwidth(0)
@@ -154,7 +156,7 @@ call s:ok('9×9 にも番号が出る', s:text() =~# '1 Index' && s:text() =~# '
 call s:keys('t')
 call s:ok('t で数字キーはカーソルだけになる', s:st.digit ==# 'cursor', s:st.digit)
 call s:keys('4')
-call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [4, 7], string(s:st.cur) . ' ' . s:st.center)
+call s:ok('9×9 の数字（カーソルだけ）は中心を変えない', s:st.center ==# 'plant.md' && s:st.cur == [7, 7], string(s:st.cur) . ' ' . s:st.center)
 call s:keys('t')
 call s:ok('もう一度 t で数字は移動に戻る', s:st.digit ==# 'jump')
 call s:keys('p')
@@ -176,7 +178,6 @@ call s:keys(' ')
 call s:keys('c')
 call s:ok('c: すでに所属している索引が先に出て、近いグループが後ろに重なる', s:text() =~# '1 植物' && s:text() =~# '2 料理', s:text())
 call s:keys('k')
-call s:keys('h')
 call s:ok('カーソルのマスの説明が下の 1 行に出る', s:text() =~# '▶ 植物  \[グループ\]', s:text())
 call s:keys('q')
 
@@ -472,8 +473,8 @@ for s:i in range(9)
   call s:keys("\<Tab>")
   call add(s:path, s:st.cur)
 endfor
-call s:ok('Tab は 中心 → 1 2 3 4 5 6 7 8 の順（時計回り）', s:path ==# [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0], [1, 0]], string(s:path))
-call s:ok('8 番で止まる（次の曼荼羅へも最初へも行かない。ページも動かない）', s:st.cur == [1, 0] && s:st.page == 0, string([s:st.cur, s:st.page]))
+call s:ok('Tab は 中心 → 1 2 3 4 5 6 7 8 の順（時計回り）', s:path ==# [[0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0], [0, 0], [0, 0]], string(s:path))
+call s:ok('8 番で止まる（次の曼荼羅へも最初へも行かない。ページも動かない）', s:st.cur == [0, 0] && s:st.page == 0, string([s:st.cur, s:st.page]))
 call s:keys('f')
 call s:keys('4')
 let s:st = gnosis#mview#state()
@@ -539,8 +540,8 @@ let s:st = gnosis#mview#state()
 let s:bw = bufwinid(s:st.buf)
 let s:groups = map(getmatches(s:bw), 'v:val.group')
 call s:ok('9×9: 周りの 8 色の背景が付く', len(filter(copy(s:groups), 'v:val =~# "B[0-7]$" || v:val =~# "Bg[0-7]$"')) >= 2, string(s:groups))
-let s:c1 = s:st.cells[3][3]
-let s:c2 = s:st.cells[1][1]
+let s:c1 = s:st.cells[3][4]
+let s:c2 = s:st.cells[1][4]
 call s:ok('周りのマスとその曼荼羅の中心のマスは同じ色の番号', s:c1.bgi == 0 && s:c2.bgi == 0 && s:c1.id ==# s:c2.id, string([s:c1, s:c2]))
 call s:ok('真ん中の中心には背景色の番号が無い', !has_key(s:st.cells[4][4], 'bgi'))
 call s:keys('f')

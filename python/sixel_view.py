@@ -65,10 +65,50 @@ def _run(prev, run):
     return f"!{run}{ch}" if run > 3 else ch * run
 
 
-def to_sixel(img, colors=128):
+def to_sixel(img, colors=256):
     from PIL import Image
 
-    img = img.convert("RGB").quantize(colors=colors, method=Image.Quantize.MEDIANCUT)
+    img = img.convert("RGB").quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
+    try:
+        return _sixel_np(img)
+    except ImportError:
+        return _sixel_py(img)
+
+
+def _sixel_np(img):
+    import numpy as np
+
+    w, h = img.size
+    pal = img.getpalette()
+    arr = np.asarray(img, dtype=np.uint8)
+    used = np.unique(arr)
+    out = [f'{ESC}P0;1;0q"1;1;{w};{h}']
+    for i in used:
+        r, g, b = pal[int(i) * 3: int(i) * 3 + 3]
+        out.append(f"#{int(i)};2;{r * 100 // 255};{g * 100 // 255};{b * 100 // 255}")
+    weights = (1 << np.arange(6, dtype=np.uint8))[:, None]
+    for y0 in range(0, h, 6):
+        band = arr[y0:y0 + 6]
+        wt = weights[: band.shape[0]]
+        first = True
+        for c in np.unique(band):
+            bits = ((band == c) * wt).sum(axis=0).astype(np.uint8)
+            if not first:
+                out.append("$")
+            first = False
+            out.append(f"#{int(c)}")
+            # 同じ値の連なりをまとめる
+            idx = np.flatnonzero(np.diff(bits)) + 1
+            starts = np.concatenate(([0], idx))
+            lens = np.diff(np.concatenate((starts, [w])))
+            for v, n in zip(bits[starts].tolist(), lens.tolist()):
+                out.append(_run(v, n))
+        out.append("-")
+    out.append(ESC + "\\")
+    return "".join(out)
+
+
+def _sixel_py(img):
     w, h = img.size
     pal = img.getpalette()
     px = img.load()
@@ -87,7 +127,7 @@ def to_sixel(img, colors=128):
                     a = bits[c] = [0] * w
                 a[x] |= 1 << k
         first = True
-        for c, a in bits.items():
+        for c, a in sorted(bits.items()):
             if not first:
                 out.append("$")
             first = False
@@ -112,14 +152,14 @@ def _fit(path, cols, rows, colors):
 
     cw, ch = cell_px()
     img = ImageOps.exif_transpose(Image.open(path))
-    img.thumbnail((max(cw, cols * cw), max(ch, rows * ch)))
+    img.thumbnail((max(cw, cols * cw), max(ch, rows * ch)), Image.LANCZOS, reducing_gap=None)
     w, h = img.size
     # sixel は 6 行単位。端末のセルに収まる大きさに切り上げた分を使う
     return -(-w // cw), -(-h // ch), to_sixel(img, colors)
 
 
 def render(path, cols, rows):
-    cells_w, cells_h, six = _fit(path, cols, rows, 128)
+    cells_w, cells_h, six = _fit(path, cols, rows, 256)
     return f"{cells_w} {cells_h}\n" + six
 
 

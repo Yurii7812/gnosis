@@ -55,6 +55,7 @@ function! gnosis#settings#defaults() abort
         \ 'appCustomThemes': {},
         \ 'mandalaOnStart': v:true,
         \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
+        \ 'imageViewer': 'external',
         \ }
 endfunction
 
@@ -105,6 +106,9 @@ function! gnosis#settings#validate(s) abort
   for l:k in ['yaml', 'top', 'bottom', 'image']
     let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
   endfor
+  if index(['external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
+    let l:s.imageViewer = 'external'
+  endif
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0
     let l:s.theme = {'kind': 'builtin'}
   endif

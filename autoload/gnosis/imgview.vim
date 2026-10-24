@@ -1,8 +1,9 @@
 " ノートの画像をポップアップで見る（gz）。
 "   ノートにある画像の一覧（popup_menu）→ Enter で端末に sixel で重ねて表示 → q で一覧に戻る → もう一度 q で閉じる。
 "   キーボードだけで動く。閉じたあとは redraw! で画像を消し、カーソルは元のまま Vim にある。
-"   sixel に対応しない端末では、外部のビューア（xdg-open など）で開く。
-"   g:gnosis_image_viewer = 'auto' | 'sixel' | 'external'。
+"   既定は外部のビューア（xdg-open）で開く。ズームや画質はビューアに任せる。
+"   imageViewer（\zz の窓で選ぶ。既定は external）または g:gnosis_image_viewer（こちらが先）= 'external' | 'sixel'（この端末の中に sixel で出す。対応する端末だけ）| 'auto'（sixel に対応していれば sixel）。
+"   ノートの中に画像を出すもの（下のほう）は、この設定とは別に、端末が sixel に対応していれば出す。
 "   Python 側: python/sixel_view.py
 
 let s:root = expand('<sfile>:p:h:h:h')
@@ -14,11 +15,29 @@ function! s:py(args) abort
   return system(l:cmd)
 endfunction
 
-" 今の端末に sixel で出せるか
+" gz で開く方法: 'external'（xdg-open）か 'sixel'。g:gnosis_image_viewer があればそちらが先（'auto' は端末が対応していれば sixel）。
+" 無ければ \zz の窓で選んだ設定（imageViewer）
+function! gnosis#imgview#viewer() abort
+  if exists('g:gnosis_image_viewer')
+    return g:gnosis_image_viewer
+  endif
+  try
+    return get(gnosis#settings#current(), 'imageViewer', 'external')
+  catch
+    return 'external'
+  endtry
+endfunction
+
+" gz で、この端末の中に sixel で出すか
 function! s:sixel_ok() abort
-  let l:mode = get(g:, 'gnosis_image_viewer', 'auto')
+  let l:mode = gnosis#imgview#viewer()
   if l:mode ==# 'sixel' | return 1 | endif
   if l:mode ==# 'external' | return 0 | endif
+  return s:term_sixel()
+endfunction
+
+" 端末が sixel に対応しているか（ノートの中に画像を出すかどうかもこれで決める）
+function! s:term_sixel() abort
   if !empty($TMUX) || !empty($STY) | return 0 | endif
   if !empty($GNOSIS_SIXEL) | return 1 | endif
   if !empty($KONSOLE_VERSION) && str2nr($KONSOLE_VERSION) >= 220400 | return 1 | endif
@@ -81,6 +100,23 @@ function! s:view(items, i) abort
   return l:i
 endfunction
 
+" 画像を 1 枚見せる。外部のビューアで開く（既定）か、この端末の中に sixel で出す。戻り値: 添字
+function! s:show(items, i) abort
+  if s:sixel_ok()
+    return s:view(a:items, a:i)
+  endif
+  let l:it = a:items[a:i]
+  if !l:it.exists
+    echo ' 画像が見つかりません: ' . l:it.path
+  elseif executable('xdg-open')
+    call job_start(['xdg-open', l:it.path], {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+    echo ' 開きました: ' . l:it.label
+  else
+    echo ' xdg-open がありません。g:gnosis_image_viewer を設定してください'
+  endif
+  return a:i
+endfunction
+
 " 一覧（popup_menu）。Enter で表示、q / Esc で閉じる。表示のあとは同じ位置の一覧に戻る
 function! s:menu(items, sel) abort
   let l:lines = []
@@ -119,7 +155,7 @@ function! s:menu_done(id, result) abort
     return
   endif
   let l:items = s:menu_items
-  let l:i = s:view(l:items, a:result - 1)
+  let l:i = s:show(l:items, a:result - 1)
   call s:menu(l:items, l:i)
 endfunction
 
@@ -133,14 +169,6 @@ function! gnosis#imgview#open() abort
     echo 'このノートに画像はありません'
     return
   endif
-  if !s:sixel_ok()
-    for l:it in filter(copy(l:items), 'v:val.exists')
-      call job_start(['xdg-open', l:it.path], {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
-      break
-    endfor
-    echo 'この端末は sixel 非対応のため、外部のビューアで開きました'
-    return
-  endif
   " カーソルの行に画像があれば、その画像を最初に選んでおく
   let l:sel = 0
   let l:cur = getline('.')
@@ -151,7 +179,7 @@ function! gnosis#imgview#open() abort
     endif
   endfor
   if len(l:items) == 1
-    call s:view(l:items, 0)
+    call s:show(l:items, 0)
     return
   endif
   call s:menu(l:items, l:sel)
@@ -183,7 +211,7 @@ function! s:hidden() abort
 endfunction
 
 function! s:inline_on() abort
-  return has('textprop') && exists('*echoraw') && !has('gui_running') && !s:hidden() && s:sixel_ok()
+  return has('textprop') && exists('*echoraw') && !has('gui_running') && !s:hidden() && s:term_sixel()
 endfunction
 
 function! s:eligible(buf) abort
@@ -395,6 +423,11 @@ function! gnosis#imgview#refresh(...) abort
     call s:prepare(l:need)
   endif
   call gnosis#imgview#schedule(l:changed)
+  if l:changed && !get(s:, 'settling', 0)
+    let s:settling = 1
+    call timer_start(3500, {-> execute('let s:settling = 0')})
+    call s:settle()
+  endif
 endfunction
 
 " 編集のあと（こちらが付け替えた直後の変更は除く）
@@ -407,7 +440,7 @@ endfunction
 
 " \zz で表示のオン・オフが変わったとき
 function! gnosis#imgview#apply_setting() abort
-  if s:hidden() || !s:sixel_ok()
+  if s:hidden() || !s:term_sixel()
     for l:b in map(filter(getwininfo(), 's:eligible(v:val.bufnr)'), 'v:val.bufnr')
       call s:remove_props(l:b)
     endfor
@@ -431,4 +464,13 @@ function! gnosis#imgview#start() abort
   if !has('timers') || !has('textprop') | return | endif
   call timer_start(300, function('s:poll'), {'repeat': -1})
   call gnosis#imgview#refresh()
+  call s:settle()
+endfunction
+
+" 起動・ノートを開いた直後は、そのあとの画面の描き直し（曼荼羅や窓の組み立て）で画像が消えることがある。
+" 少しあとに何度か、同じ位置のまま出し直す（\zz でオフ→オンにしないと出ない、を防ぐ）
+function! s:settle() abort
+  for l:ms in [400, 1200, 3000]
+    call timer_start(l:ms, {-> gnosis#imgview#schedule(1)})
+  endfor
 endfunction

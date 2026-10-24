@@ -185,6 +185,7 @@ gnosis#imgview#open
 gnosis#imgview#refresh
 gnosis#imgview#schedule
 gnosis#imgview#start
+gnosis#imgview#viewer
 gnosis#import
 gnosis#include_check
 gnosis#include_view

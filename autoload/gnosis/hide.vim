@@ -161,6 +161,9 @@ function! s:lines() abort
   for l:i in range(len(s:items))
     call add(l:out, (l:i == s:sel ? ' ▶ ' : '   ') . (l:h[s:items[l:i][0]] ? '[x] ' : '[ ] ') . gnosis#i18n#tr(s:items[l:i][1]))
   endfor
+  call add(l:out, '')
+  call add(l:out, (s:sel == len(s:items) ? ' ▶ ' : '   ') . gnosis#i18n#tr('gz で画像を開く方法') . ': '
+        \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）')))
   call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ（画像の行は含めない）   q 閉じる'])
   return l:out
 endfunction
@@ -170,9 +173,11 @@ function! s:filter(id, key) abort
     call popup_close(a:id)
     return 1
   elseif a:key ==# 'j' || a:key ==# "\<Down>"
-    let s:sel = (s:sel + 1) % len(s:items)
+    let s:sel = (s:sel + 1) % (len(s:items) + 1)
   elseif a:key ==# 'k' || a:key ==# "\<Up>"
-    let s:sel = (s:sel + len(s:items) - 1) % len(s:items)
+    let s:sel = (s:sel + len(s:items)) % (len(s:items) + 1)
+  elseif (a:key ==# ' ' || a:key ==# "\<CR>") && s:sel == len(s:items)
+    call gnosis#settings#set('imageViewer', gnosis#imgview#viewer() ==# 'sixel' ? 'external' : 'sixel')
   elseif a:key ==# ' ' || a:key ==# "\<CR>"
     let l:k = s:items[s:sel][0]
     call gnosis#settings#set('hide.' . l:k, !gnosis#hide#get()[l:k] ? v:true : v:false)

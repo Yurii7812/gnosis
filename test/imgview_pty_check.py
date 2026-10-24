@@ -22,14 +22,19 @@ try:
     note.write_text("# n\n\n![](a.jpg)\n\n![](b.png)\n\nlast\n", encoding="utf-8")
     res = []
 
-    def run(keys, extra_init="", pre_hidden=False):
+    fake = work / "bin"
+    fake.mkdir()
+    (fake / "xdg-open").write_text('#!/bin/sh\necho "$1" >> "%s"\n' % (work / "opened.txt"))
+    (fake / "xdg-open").chmod(0o755)
+
+    def run(keys, extra_init="", pre_hidden=False, viewer="sixel"):
         shutil.rmtree(work / "vault" / ".gnosis", ignore_errors=True)  # 前の run の設定（\\zz で変えたもの）を持ち越さない
-        env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
+        env = dict(os.environ, PATH=str(fake) + ":" + os.environ["PATH"], TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
                    GNOSIS_CELL_PX="10x20", WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
         pid, fd = pty.fork()
         if pid == 0:
             os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "--cmd",
-                               "let g:gnosis_open_index_on_startup=0|let g:gnosis_skip_interactive_mount=1|let g:gnosis_autosync=0|let g:gnosis_root='" + str(work / "vault") + "/'" + extra_init,
+                               ("let g:gnosis_image_viewer='" + viewer + "'|" if viewer else "") + "let g:gnosis_open_index_on_startup=0|let g:gnosis_skip_interactive_mount=1|let g:gnosis_autosync=0|let g:gnosis_root='" + str(work / "vault") + "/'" + extra_init,
                                str(note)], env)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 1200, 800))
         out = b""
@@ -78,6 +83,16 @@ try:
     # 4) a（全部オン）を押しても、画像はオンにならない
     out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
     ok("a で YAML などはオンになり、画像の項目はオンにならない", "[x] YAML".encode() in out and "[x] 画像".encode() not in out)
+    # 5) 既定は xdg-open（外のビューア）。sixel は出ない
+    out, m = run([("3G", 0.3), ("gz", 1.0), ("\r", 1.5)], viewer=None)
+    opened = (work / "opened.txt").read_text() if (work / "opened.txt").exists() else ""
+    ok("既定は xdg-open で開く", opened.strip().endswith("a.jpg"))
+    ok("既定では gz で sixel を出さない", b"\x1bP0;1;0q" not in out[m[1]:])
+    # 6) \zz の窓の「gz で画像を開く方法」を切り替えると、gz が sixel になり、設定に残る
+    out, m = run([("\\zz", 0.8), ("jjjj", 0.3), ("\r", 0.5), ("q", 0.3), ("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("q", 0.8), ("q", 0.5)], viewer=None)
+    ok("\\zz の窓に開く方法の行がある", "gz で画像を開く方法".encode() in out[: m[0]])
+    ok("切り替えると sixel（この端末の中）と出る", "sixel（この端末の中）".encode() in out[m[1]: m[2]])
+    ok("切り替えたあとの gz は sixel で出る", b"\x1bP0;1;0q" in out[m[5]: m[6]])
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:
