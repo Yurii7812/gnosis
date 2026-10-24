@@ -91,7 +91,7 @@ function! gnosis#merge#pick(link) abort
     let [l:src, l:dst] = [l:cur, l:other]
   else
     echo 'Gnosis: ' . gnosis#i18n#tr('マージしませんでした')
-    return 0
+    return -2
   endif
   " ディスクの内容でまとめるので、開いているノートの未保存の変更を先に保存する
   if &modified && &buftype ==# ''

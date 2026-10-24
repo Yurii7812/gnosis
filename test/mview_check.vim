@@ -306,7 +306,9 @@ call s:keys('z')
 let g:gnosis_test_keys = ["\<Esc>"]
 call s:keys('e')
 call s:ok('ビジュアル \l: e のあと Esc なら、置き換えない', join(readfile(s:v . '/vlk.md'), "\n") !~# '\[ハーブガーデン\](herb.md)', join(readfile(s:v . '/vlk.md'), "\n"))
-call s:ok('ビジュアル \l: やめたあとも曼荼羅は開いたまま・選ぶモードは終わる', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# '', &filetype)
+call s:ok('ビジュアル \l: Esc で閉じるのは選択肢だけ。\l は続く（曼荼羅に戻って選び直せる）', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# 'link', &filetype . ' ' . gnosis#mview#state().pick)
+call s:keys('q')
+call s:ok('続けて q で、選ぶモードをやめる（曼荼羅は開いたまま）', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# '', &filetype . ' ' . gnosis#mview#state().pick)
 call s:keys('Q')
 " もう一度: e → Enter で、選んだ文字が表示名のリンクに置き換わる
 execute 'edit ' . s:v . '/vlk.md'
@@ -621,17 +623,17 @@ for s:r in range(9)
 endfor
 call s:ok('v: 29 個のリンクが全部、周りの曼荼羅を作らずに並ぶ', len(s:filled) == len(gnosis#mview#items(s:st.data, 'big.md', 'all')) && len(filter(copy(s:filled), 'v:val[0] == 0')) == 0, string(len(s:filled)))
 call s:ok('v: 内側の輪（8 マス）→ 次の輪（16 マス）の順に埋まる', len(filter(copy(s:filled), 'v:val[0] == 1')) == 8 && len(filter(copy(s:filled), 'v:val[0] == 2')) == 16 && len(filter(copy(s:filled), 'v:val[0] == 3')) == len(s:filled) - 24, string(map(copy(s:filled), 'v:val[0]')))
-call s:ok('v: 1 2 3 / 8 _ 4 / 7 6 5 の順（中心の周りの輪）', s:st.cells[3][3].n == 1 && s:st.cells[3][4].n == 2 && s:st.cells[3][5].n == 3 && s:st.cells[4][5].n == 4 && s:st.cells[5][5].n == 5 && s:st.cells[5][4].n == 6 && s:st.cells[5][3].n == 7 && s:st.cells[4][3].n == 8, string([s:st.cells[3][3].n, s:st.cells[3][4].n, s:st.cells[3][5].n, s:st.cells[4][3].n, s:st.cells[4][5].n, s:st.cells[5][3].n]))
+call s:ok('v: 内側の輪は 8 1 2 / 7 _ 3 / 6 5 4（上の段の真ん中が 1 で時計回り）、次の輪は上の段の左から 2 つ目の 9 から時計回りで 24 が左上の角', s:st.cells[3][4].n == 1 && s:st.cells[3][5].n == 2 && s:st.cells[4][5].n == 3 && s:st.cells[5][5].n == 4 && s:st.cells[5][4].n == 5 && s:st.cells[5][3].n == 6 && s:st.cells[4][3].n == 7 && s:st.cells[3][3].n == 8 && s:st.cells[2][3].n == 9 && s:st.cells[2][6].n == 12 && s:st.cells[6][6].n == 16 && s:st.cells[6][2].n == 20 && s:st.cells[2][2].n == 24, string([s:st.cells[3][4].n, s:st.cells[2][3].n, s:st.cells[2][2].n]))
 " Tab は内側から外側へ 1 つずつ。最後で止まる（ループしない）
 let s:st.digit = 'move'
 call s:keys('4')
 let s:st = gnosis#mview#state()
-call s:ok('v: 数字 4 は中心の右のマス', s:st.cur == [4, 5], string(s:st.cur))
+call s:ok('v: 数字 4 は中心の右下のマス', s:st.cur == [5, 5], string(s:st.cur))
 call s:keys('9')
 call s:keys("\<Tab>")
 let s:st = gnosis#mview#state()
 let s:st.digit = 'jump'
-call s:ok('v: Tab で中心から最初のリンク（左上）へ', s:st.cur == [3, 3], string(s:st.cur))
+call s:ok('v: Tab で中心から最初のリンク（上の段の真ん中）へ', s:st.cur == [3, 4], string(s:st.cur))
 for s:i in range(60)
   call s:keys("\<Tab>")
 endfor

@@ -11882,6 +11882,7 @@ endfunction
 "     w     … A には自動で置かない。B を yn と同じ方法でヤンクし、A を開いたままにする
 "   質問（置き場所・見出し）はすべて変更の前に行う。Esc（見出し選択の取り消しを含む）なら何も変えない。
 " ---------------------------------------------------------------------------
+" 戻り値: 1 決めた ／ -2 取り消した ／ -4 右のノートで場所を選ぶモードに入った ／ 0 見出し選び（別の画面で続く）
 function! s:c_ask_place(Cont) abort
   echo s:fit_prompt(gnosis#i18n#tr('今のノートにリンクを置く場所: Enter=本文の最後 / t=見出しの下 / h=カーソル直下 / i=行の中 / o=置かない / w=置かずにリンク先をヤンク  (Esc で取り消し)'),
         \ gnosis#i18n#tr('置き場所: Enter=末 t=見出し h=直下 i=行中 o=なし w=ヤンク (Esc)'))
@@ -11889,20 +11890,29 @@ function! s:c_ask_place(Cont) abort
   redraw
   if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
     call a:Cont({'mode': 'end'})
-  elseif l:ch ==# 't'
-    call s:outline_pick_here(function('s:c_place_head', [a:Cont]))
-  elseif l:ch ==# 'h'
-    call a:Cont({'mode': 'here'})
-  elseif l:ch ==# 'i'
-    " i: \l を押したときのカーソルの文字のすぐ後ろ（za なら今のカーソル）
-    call a:Cont({'mode': 'inline', 'pos': empty(s:inline_pos) ? getpos('.') : copy(s:inline_pos)})
+  elseif l:ch ==# 't' || l:ch ==# 'h' || l:ch ==# 'i'
+    if s:place_hook isnot 0
+      " 曼荼羅の \l: 右のノートで場所を選び、Enter で決める（q で置き場所の選択に戻る）
+      return call(s:place_hook, [l:ch ==# 't' ? 'head' : l:ch, function('s:c_place_cont', [a:Cont])])
+    endif
+    if l:ch ==# 't'
+      call s:outline_pick_here(function('s:c_place_head', [a:Cont]))
+      return 0
+    elseif l:ch ==# 'h'
+      call a:Cont({'mode': 'here'})
+    else
+      " i: \l を押したときのカーソルの文字のすぐ後ろ（za なら今のカーソル）
+      call a:Cont({'mode': 'inline', 'pos': empty(s:inline_pos) ? getpos('.') : copy(s:inline_pos)})
+    endif
   elseif l:ch ==# 'o'
     call a:Cont({'mode': 'none'})
   elseif l:ch ==# 'w'
     call a:Cont({'mode': 'w'})
   else
     echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+    return -2
   endif
+  return 1
 endfunction
 
 function! s:c_place_head(Cont, lnum) abort
@@ -14133,7 +14143,108 @@ endfunction
 " a:links を置き場所キーで今のノートに入れる。a:1 に Funcref（Done）を渡すと t（見出しの下）
 " が使える: 見出しの選択は非同期なので、入れ終わったあとの処理は Done を選択後に呼ぶ。
 " 戻り値は追加できたか（0/1）。t のときだけ -1（選択待ち。Done は選択後に呼ばれる）。
+let s:want_raw = 0
+let s:place_hook = 0
+let s:ask_started = 0
+let s:a_called = 0
+
+" a（今のノートの Context に選んだノートを入れる）が最後まで進んだことの印
+function! s:a_done_mark(Done, ...) abort
+  let s:a_called = 1
+  call a:Done()
+endfunction
+
+" 右のノートで選んだ場所（a:kind = h / i / head）にリンクを入れる。a:pos は getpos の形、a:lnum は見出しの行（head のとき）
+function! s:main_place(links, kind, pos, lnum) abort
+  if a:kind ==# 'i'
+    call s:insert_inline_at(a:pos, join(a:links, ' '))
+  elseif a:kind ==# 'h'
+    call cursor(a:pos[1], a:pos[2])
+    let [l:ins, l:blank] = s:h_insert_at()
+    if l:blank
+      call append(l:ins, '')
+      let l:ins += 1
+    endif
+    for l:lk in reverse(copy(a:links))
+      if s:buffer_has_link(l:lk)
+        continue
+      endif
+      call append(l:ins, l:lk)
+      let l:ins += 1
+    endfor
+  elseif a:kind ==# 'head'
+    for l:lk in a:links
+      if !s:buffer_has_link(l:lk)
+        call s:insert_link_under_heading(a:lnum, l:lk)
+      endif
+    endfor
+  endif
+endfunction
+
+" 右のノートで決めたとき（曼荼羅の place_decide から）。入れたあとに、通常の \l と同じ保存・同期をする
+function! s:main_place_cont(links, hint, kind, pos, lnum) abort
+  call s:main_place(a:links, a:kind, a:pos, a:lnum)
+  call s:links_added_done()
+  return 1
+endfunction
+
+" c の置き場所（h / i / t）を右のノートで選んだとき
+function! s:c_place_cont(Cont, kind, pos, lnum) abort
+  if a:kind ==# 'h'
+    call a:Cont({'mode': 'here'})
+  elseif a:kind ==# 'i'
+    call a:Cont({'mode': 'inline', 'pos': a:pos})
+  else
+    call a:Cont({'mode': 'head', 'lnum': a:lnum})
+  endif
+  return 1
+endfunction
+
+" カーソルがある節の見出しの行（カーソルより上で一番近い見出し）。無ければ 0
+function! gnosis#heading_lnum_at_cursor() abort
+  let l:best = 0
+  for l:it in s:file_heading_items(expand('%:p'), getline(1, '$'))
+    if l:it.lnum <= line('.')
+      let l:best = l:it.lnum
+    endif
+  endfor
+  return l:best
+endfunction
+
+" 曼荼羅の \l から: 置き場所を聞いて入れる。a:hook は h / i / 見出しのときに呼ぶ関数
+" （hook(kind, cont) → -4。右のノートで場所を選び、決めたら cont(kind, pos, lnum) を呼ぶ）。
+" 戻り値は s:insert_links_core の生の値（1 0 -1 -2 -3 -4）
+function! gnosis#insert_links_choose(links, pos, hook) abort
+  let s:inline_pos = a:pos
+  let s:place_hook = a:hook
+  let s:want_raw = 1
+  try
+    let l:r = s:insert_links_core(a:links, function('s:links_added_done'))
+  finally
+    let s:inline_pos = []
+    let s:place_hook = 0
+    let s:want_raw = 0
+  endtry
+  if l:r >= 0
+    call s:links_added_done()
+  endif
+  return l:r
+endfunction
+
+" 置き場所を聞いて、リンクを入れる。戻り値: 1 入れた ／ 0 何もしなかった ／ -1 続きが別の画面で進む（見出し・グループ選び）。
+" 曼荼羅の \l（gnosis#insert_links_choose）から呼ばれたときだけ、次の戻り値も返す（s:want_raw）:
+"   -2 サブの選択を取り消した（置き場所の選択に戻る） ／ -3 置き場所の選択そのものを閉じた（\l は続ける）
+"   -4 右のノートで場所を選ぶモードに入った（h / i / 見出し。決定は曼荼羅のほうで受ける）
+" ふつうの呼び出し（za / zn など）では、-2 -3 は 0（何もしない）、-4 は -1 になる。
 function! s:insert_links_core(links, ...) abort
+  let l:r = call('s:insert_links_core_raw', [a:links] + a:000)
+  if s:want_raw
+    return l:r
+  endif
+  return (l:r == -2 || l:r == -3) ? 0 : (l:r == -4 ? -1 : l:r)
+endfunction
+
+function! s:insert_links_core_raw(links, ...) abort
   let l:links = a:links
   if empty(l:links)
     return 0
@@ -14155,9 +14266,13 @@ function! s:insert_links_core(links, ...) abort
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
-    return 0
+    return s:want_raw ? -3 : 0
   endif
   if l:ch ==# 't' && a:0 > 0
+    if s:place_hook isnot 0
+      " 曼荼羅の \l: 右のノートで見出しを選んで（カーソルがある節）Enter で決める。q で置き場所の選択に戻る
+      return call(s:place_hook, ['head', function('s:main_place_cont', [l:links, a:1])])
+    endif
     call s:outline_pick_here(function('s:insert_links_under_heading', [l:links, a:1]))
     return -1
   endif
@@ -14181,9 +14296,13 @@ function! s:insert_links_core(links, ...) abort
       return 0
     endif
     let l:Done = a:0 > 0 ? a:1 : function('s:noop')
-    call s:c_ask_place(function('s:c_links_apply', [l:bs,
+    let s:ask_started = 0
+    let l:cr = s:c_ask_place(function('s:c_links_apply', [l:bs,
           \ {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, l:Done]))
-    return -1
+    if s:want_raw && l:cr == -2
+      return -2
+    endif
+    return l:cr == -4 ? -4 : -1
   endif
   if l:ch ==# 'a'
     " a: c の逆向き。今のノート（A）の Context: に選んだノート（B）を入れる。続けて、B のどこに A へのリンクを置くかを選ぶ。
@@ -14191,8 +14310,13 @@ function! s:insert_links_core(links, ...) abort
     if empty(l:bs)
       return 0
     endif
+    let s:a_called = 0
     call s:a_mode_chain(l:bs, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()},
-          \ a:0 > 0 ? a:1 : function('s:noop'))
+          \ function('s:a_done_mark', [a:0 > 0 ? a:1 : function('s:noop')]))
+    " 最初の問いを取り消した（何も進まず、別の画面も待っていない）ときは、置き場所の選択に戻る
+    if s:want_raw && !s:a_called && !exists('s:outline_pick_cb')
+      return -2
+    endif
     return -1
   endif
   if l:ch ==# 'g' && l:can_g
@@ -14201,34 +14325,32 @@ function! s:insert_links_core(links, ...) abort
   endif
   if l:ch ==# 'm' && l:can_m
     " m: 選んだノートと開いているノートをマージする（どちらへまとめるかは続けて聞く。:GnosisMergeUndo で戻せる）
-    call gnosis#merge#pick(l:links[0])
+    let l:mr = gnosis#merge#pick(l:links[0])
+    if s:want_raw && l:mr == -2
+      return -2
+    endif
     return -1
   endif
   if l:ch ==# 'i'
     " i: 行の中へそのまま入れる（\l を開いたときのカーソル位置。za ならいまのカーソル位置）。
     " カーソルの文字のすぐ後ろ（空の行なら行頭）に入れる。関係（Context・Branch など）は何も付けない
-    call s:insert_inline_at(empty(s:inline_pos) ? getpos('.') : s:inline_pos, join(l:links, ' '))
+    if s:place_hook isnot 0
+      return call(s:place_hook, ['i', function('s:main_place_cont', [l:links, 'i'])])
+    endif
+    call s:main_place(l:links, 'i', empty(s:inline_pos) ? getpos('.') : s:inline_pos, 0)
     return 1
   endif
   if l:ch ==# 'h'
     " カーソル直下（本文）。カーソルが関係のブロックの上なら、本文に置く
-    let [l:ins, l:blank] = s:h_insert_at()
-    if l:blank
-      call append(l:ins, '')
-      let l:ins += 1
+    if s:place_hook isnot 0
+      return call(s:place_hook, ['h', function('s:main_place_cont', [l:links, 'h'])])
     endif
-    for l:lk in reverse(copy(l:links))
-      if s:buffer_has_link(l:lk)
-        continue
-      endif
-      call append(l:ins, l:lk)
-      let l:ins += 1
-    endfor
+    call s:main_place(l:links, 'h', getpos('.'), 0)
     return 1
   endif
   if l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
     echo 'Gnosis: ' . gnosis#i18n#tr('何も追加しない')
-    return 0
+    return s:want_raw ? -3 : 0
   endif
   " Enter: 本文の最後。相手がグループでも、グループへの登録（g）にはしない
   let l:added = 0
@@ -14244,9 +14366,10 @@ function! s:insert_links_core(links, ...) abort
 endfunction
 
 " ビジュアルの \l（曼荼羅で選んだノート a:links を、選んだ範囲 a:vis のリンクにする）。置き場所は聞かない
-" （選んだ文字の場所が置き場所）。e のあとに選べる: Enter = リンクにするだけ ／ 関係も結ぶ p b c a r g m（先に
-" 選んだ文字をリンクに置き換えてから、通常の \l と同じ関係づけをする。c の「今のノートのどこに置くか」は聞かない）。戻り値: 何かしたら 1
-function! gnosis#insert_links_visual(links, vis) abort
+" （選んだ文字の場所が置き場所）。選択肢: Enter = リンクにするだけ ／ 関係も結ぶ p b c a r g m（リンクに置き換えてから、
+" 通常の \l と同じ関係づけ。c の「今のノートのどこに置くか」は聞かない）。取り消し（Esc）は何も変えない。
+" 戻り値は gnosis#insert_links_choose と同じ（1 0 -1 -2 -3）。-3 = 選択肢を閉じた（\l は続ける）
+function! gnosis#insert_links_visual(links, vis, ...) abort
   if empty(a:links) || empty(a:vis)
     return 0
   endif
@@ -14278,51 +14401,81 @@ function! gnosis#insert_links_visual(links, vis) abort
   let l:ok = (l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch =~# '^[pbcar]$' || (l:ch ==# 'g' && l:can_g) || (l:ch ==# 'm' && l:can_m))
   if !l:ok
     echo 'Gnosis: ' . gnosis#i18n#tr('何もしない')
-    return 0
+    return -3
   endif
   let l:v = a:vis
   if getline(l:v.sline, l:v.eline) !=# l:v.lines
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('選んだあとにノートが変わったので、置き換えませんでした') | echohl NONE
     return 0
   endif
+  " 先に選んだ文字をリンクにする（関係づけが本文の行を増やしても、位置がずれないように）。
+  " 関係づけの途中でやめたときは、この前の状態に戻す
+  let l:snap = getline(1, '$')
+  let l:was_mod = &modified
   let l:target = substitute(s:extract_target(a:links[0]), '#.*$', '', '')
   let l:label = !empty(l:v.text) ? l:v.text : matchstr(a:links[0], '^\[\zs[^\]]*\ze\]')
   let l:link = gnosis#make_link(fnamemodify(gnosis#resolve_link(l:target), ':p'), l:label)
   call gnosis#replace_visual_selection(l:link, l:v.is_linewise, l:v.sline, l:v.eline, l:v.scol, l:v.ecol, l:v.lines)
   call cursor(l:v.sline, l:v.scol)
-  " 関係づけに渡すリンク（選んだ文字の表示名ではなく、通常の \l と同じ、ノートの題の表示名）
   let l:links = a:links
-  if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
-    call s:links_added_done()
-    return 1
-  elseif l:ch ==# 'p'
-    return gnosis#branch#add_parent_links(l:links)
+  let l:r = 1
+  if l:ch ==# 'p'
+    let l:r = gnosis#branch#add_parent_links(l:links)
   elseif l:ch ==# 'b'
-    return gnosis#branch#add_links(l:links)
+    let l:r = gnosis#branch#add_links(l:links)
   elseif l:ch ==# 'r'
     call s:related_links(l:links)
-    return 1
   elseif l:ch ==# 'c'
     let l:bs = s:c_targets(l:links)
     if empty(l:bs)
-      return 0
+      let l:r = -2
+    else
+      call s:c_links_apply(l:bs, {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, function('s:noop'), {'mode': 'none'})
     endif
-    call s:c_links_apply(l:bs, {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, function('s:noop'), {'mode': 'none'})
-    return 1
   elseif l:ch ==# 'a'
     let l:bs = s:c_targets(l:links)
     if empty(l:bs)
-      return 0
+      let l:r = -2
+    else
+      let s:a_called = 0
+      call s:a_mode_chain(l:bs, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()},
+            \ function('s:a_done_mark', [function('s:noop')]))
+      if !s:a_called && !exists('s:outline_pick_cb')
+        let l:r = -2
+      endif
     endif
-    call s:a_mode_chain(l:bs, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, function('s:noop'))
-    return 1
   elseif l:ch ==# 'g'
-    return gnosis#mview#group_pick(l:links) ? 1 : 0
+    let s:vis_snap = {'lines': l:snap, 'mod': l:was_mod, 'buf': bufnr('%')}
+    let l:r = gnosis#mview#group_pick(l:links) ? -1 : -2
   elseif l:ch ==# 'm'
-    call gnosis#merge#pick(l:links[0])
-    return 1
+    let l:mr = gnosis#merge#pick(l:links[0])
+    if l:mr == -2 | let l:r = -2 | endif
   endif
-  return 0
+  if l:r == -2
+    " 途中でやめた: 選んだ文字のリンクを元に戻して、選択肢に戻る
+    if getline(1, '$') !=# l:snap
+      silent! %delete _
+      call setline(1, l:snap)
+    endif
+    let &modified = l:was_mod
+    return -2
+  endif
+  call s:links_added_done()
+  return l:r
+endfunction
+
+" ビジュアルの \l の g をやめたとき、先に置き換えていた選択範囲を元に戻す
+function! gnosis#insert_links_visual_restore() abort
+  if !exists('s:vis_snap') || empty(s:vis_snap)
+    return
+  endif
+  let l:v = s:vis_snap
+  unlet s:vis_snap
+  if bufnr('%') == l:v.buf
+    silent! %delete _
+    call setline(1, l:v.lines)
+    let &modified = l:v.mod
+  endif
 endfunction
 
 " c の B（選んだノート）を確かめる。存在しない・自分自身は外し、B が開いていて未保存なら全体を取り消す
@@ -14586,7 +14739,7 @@ function! s:insert_links_at_position(links, ...) abort
     return s:insert_links_core(a:links)
   endif
   let l:r = s:insert_links_core(a:links, a:1)
-  if l:r != -1
+  if l:r >= 0
     call a:1()
   endif
   return l:r > 0

@@ -26,8 +26,8 @@ try:
         (v / n).write_text(f"---\ntime: 2026-01-01 00:00:00\ntitle: {t}\n---\n\n# {t}\n\n{body}\n", encoding="utf-8")
 
     (v / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n\n[植物](plant.md)\n", encoding="utf-8")
-    mk("plant.md", "植物", "あいうえお。AI の話。")
-    mk("herb.md", "ハーブ", "ハーブの話。")
+    mk("plant.md", "植物", "あいうえお。AI の話。\n\n末尾の行。")
+    mk("herb.md", "ハーブ", "ハーブの話。[植物](plant.md)")
     before = (v / "plant.md").read_text(encoding="utf-8")
     env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
     pid, fd = pty.fork()
@@ -52,15 +52,53 @@ try:
         return re.sub(rb"\x1b\[[0-9;?<>]*[a-zA-Z]|\x1b[()78=>]", b"", b).decode("utf8", "replace")
 
     pump(1.5)
+
+    def center():
+        f = work / "center.txt"
+        if f.exists():
+            f.unlink()
+        os.write(fd, (":call writefile([gnosis#mview#state().center], '" + str(f) + "')\r").encode())
+        pump(0.6)
+        return f.read_text().strip() if f.exists() else ""
+
     for k, w in [("8G", 0.4), ("\\l", 2.0)]:
         os.write(fd, k.encode())
         pump(w)
+    # ハーブを中心にする（曼荼羅の状態を直接書き換えて、z で描き直す）
+    os.write(fd, b":let g:d = gnosis#mview#state() | let g:d.center = 'herb.md'\r")
+    pump(0.6)
+    os.write(fd, b"z")
+    pump(0.8)
+    ok("曼荼羅でハーブを選べた", center() == "herb.md")
+    before = (v / "plant.md").read_text(encoding="utf-8")
     mark = len(out)
     os.write(fd, b"e")
     pump(2.0)
     after_e = text(out[mark:])
     ok("e のあとに置き場所の選択肢が出る（どこに置く？）", "どこに置く" in after_e)
     ok("E486 が出ない", "E486" not in after_e)
+    ok("ここまでノートの中身は変わっていない", (v / "plant.md").read_text(encoding="utf-8") == before)
+    # h: 右の元のノートで場所を選ぶモードへ。q でやめると置き場所の選択に戻る（\l は続く）
+    mark = len(out)
+    os.write(fd, b"h")
+    pump(1.5)
+    after_h = text(out[mark:])
+    ok("h: 右のノートで場所を選ぶ案内が出る", "Enter で決定" in after_h)
+    mark = len(out)
+    os.write(fd, b"q")
+    pump(1.5)
+    after_q = text(out[mark:])
+    ok("h のあと q: 置き場所の選択に戻る（どこに置く？がもう一度出る）", "どこに置く" in after_q)
+    # もう一度 h → 1 行下へ動いて Enter で決める → リンクがその行の下に入る
+    os.write(fd, b"h")
+    pump(1.0)
+    os.write(fd, b"gg")
+    pump(0.4)
+    os.write(fd, b"\r")
+    pump(2.5)
+    body = (v / "plant.md").read_text(encoding="utf-8")
+    print(repr(body)) if os.environ.get("DBG") else None
+    ok("h → Enter: 先頭行(gg)の下に、選んだノートへのリンクが入る", "[ハーブ](herb.md)" in body and body.index("[ハーブ](herb.md)") < body.index("あいうえお"))
     os.write(fd, b"\x1b")
     pump(0.6)
     os.write(fd, b":qa!\r")
@@ -69,7 +107,6 @@ try:
         os.close(fd)
     except OSError:
         pass
-    ok("ノートの中身が変わっていない", (v / "plant.md").read_text(encoding="utf-8") == before)
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

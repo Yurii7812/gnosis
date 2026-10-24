@@ -607,22 +607,30 @@ endfunction
 function! s:spiral() abort
   if !exists('s:spiral_cache')
     let l:out = []
-    " 内側の輪から。輪の中は、左上から時計回り（1 2 3 / 8 _ 4 / 7 6 5 と同じ）
+    " 内側の輪から。輪の中は、上の段の左から 2 つ目を 1 番目にして時計回りに進み、左上の角を最後にする:
+    "   24  9 10 11 12
+    "   23  8  1  2 13
+    "   22  7 中心 3 14
+    "   21  6  5  4 15
+    "   20 19 18 17 16     （1〜8 が内側の輪、9〜24 が次の輪、…）
     for l:k in range(1, 4)
+      let l:ring = []
       let l:t = 4 - l:k
       let l:b = 4 + l:k
       for l:c in range(l:t, l:b)
-        call add(l:out, [l:t, l:c])
+        call add(l:ring, [l:t, l:c])
       endfor
       for l:r in range(l:t + 1, l:b)
-        call add(l:out, [l:r, l:b])
+        call add(l:ring, [l:r, l:b])
       endfor
       for l:c in range(l:b - 1, l:t, -1)
-        call add(l:out, [l:b, l:c])
+        call add(l:ring, [l:b, l:c])
       endfor
       for l:r in range(l:b - 1, l:t + 1, -1)
-        call add(l:out, [l:r, l:t])
+        call add(l:ring, [l:r, l:t])
       endfor
+      " 左上の角から始まる並びを、角が最後になるように回す
+      let l:out += l:ring[1 :] + [l:ring[0]]
     endfor
     let s:spiral_cache = l:out
   endif
@@ -969,7 +977,7 @@ function! s:newest() abort
   if !empty(get(s:S, 'find', '')) | call add(l:act, 'find') | endif
   if !empty(get(s:S, 'query', '')) | call add(l:act, 'query') | endif
   if !empty(get(s:S, 'rquery', '')) | call add(l:act, 'rquery') | endif
-  if get(s:S, 'pick', 0) | call add(l:act, 'pick') | endif
+  if !empty(get(s:S, 'pick', '')) | call add(l:act, 'pick') | endif
   let l:best = ''
   let l:bt = -1
   for l:n in l:act
@@ -990,6 +998,7 @@ endfunction
 function! s:end_pick() abort
   let s:S.pick = ''
   let s:S.origin_view = 0
+  if has_key(s:S, 'lk') | call remove(s:S, 'lk') | endif
   if has_key(s:S, 'saved_mode')
     let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
   endif
@@ -1013,12 +1022,35 @@ function! s:quit() abort
     let s:S.page = 0
     let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   elseif l:n ==# 'pick'
+    if s:S.pick ==# 'group' && !empty(get(s:S, 'lk', {}))
+      " \l の g（入れるグループ選び）だけをやめる: \l は続けて、置き場所の選択に戻る
+      let l:lk = s:S.lk
+      call s:end_pick()
+      let s:S.lk = l:lk
+      let s:S.pick = 'link'
+      call s:tick('pick')
+      call s:restore_visual_if_any()
+      call s:render()
+      call s:link_place()
+      return
+    endif
     call s:end_pick()
     call s:render()
     call s:show_note(s:S.center)
     return
   endif
   call s:render()
+endfunction
+
+" ビジュアルの \l で、g を選んだ時点で先に置き換えていた選択範囲を元に戻す（g をやめたとき）
+function! s:restore_visual_if_any() abort
+  let l:o = get(get(s:S, 'lk', {}), 'origin', {})
+  if has_key(l:o, 'vis')
+    let l:nw = s:note_win()
+    if l:nw > 0
+      call win_execute(l:nw, 'call gnosis#insert_links_visual_restore()')
+    endif
+  endif
 endfunction
 
 " ---- Tab / Shift-Tab: 順次表示。1 2 3 4 6 7 8 9（5 の中心は飛ばす）、次の曼荼羅の 1 へ、最後まで行ったら最初に戻る ----------
@@ -1053,8 +1085,8 @@ function! s:help_lines() abort
         \ ' モード     a 全体   i グループ・索引だけ',
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)   y c と r を両方オフ',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
-        \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
-        \ ' 並べる     v 外向き(リンクを内側から外側へ 1 つずつ最大 80 個)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
+        \ ' 索引に入れる  e これにする(選んでいる最中。\l では置き場所を聞かれる: h i t は右の元のノートで場所を選んで Enter、q で選び直し)   o 入れるノートを見る/戻る',
+        \ ' 並べる     v 外向き(リンクを中心の周りの輪に 1 つずつ最大 80 個。内側の輪は上の段の真ん中が 1 で時計回り、次の輪は上の段の左から 2 つ目が 9 で時計回り)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
         \ ' プリセット  '' 設定に名前をつけて保存・呼び出し・名前変更・消す   u 見出しも 1 つのマスに(アウトライン)   . 読み直し',
         \ ' 画面       f 全画面(9×9)⇔分割   p 右のノートを隠す・出す   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す      Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
@@ -1384,8 +1416,8 @@ endfunction
 function! s:digit(d) abort
   let l:i = index(s:nums, a:d)
   if s:S.size == 9 && get(s:S, 'out_on', 0)
-    " 外向き: 1〜8 は中心の周りの 8 マス（9 と 0 は中心）
-    let s:S.cur = l:i < 0 ? [4, 4] : [3 + s:pos[l:i][0], 3 + s:pos[l:i][1]]
+    " 外向き: 1〜8 は中心の周りの 8 マス（上の段の真ん中が 1 で時計回り。9 と 0 は中心）
+    let s:S.cur = l:i < 0 ? [4, 4] : copy(s:spiral()[l:i])
   elseif s:S.size == 9
     let s:S.cur = l:i < 0 ? [4, 4] : [s:pos[l:i][0] * 3 + 1, s:pos[l:i][1] * 3 + 1]
   else
@@ -1713,47 +1745,170 @@ function! s:toggle_origin() abort
   let s:S.origin_view = 1
 endfunction
 
-" \l: e で、中心のノートを入れるノートに決める。続けて置き場所のキーを聞く（元のノートの窓で）
+" \l: e で、中心のノートを入れるノートに決める。続けて置き場所を聞く（元のノートの窓で）。
+" 置き場所の選択を q / Esc で閉じても \l は続く（曼荼羅で選び直せる）。h / i / 見出しは、右の元のノートで場所を選んで Enter で決める
+" （q でやめると置き場所の選択に戻る）。c などのサブの選択を q でやめたときも、置き場所の選択に戻る
 function! s:link_decide() abort
   let l:o = get(s:S, 'origin', {})
   let l:path = s:S.root . '/' . s:S.center
   if empty(l:o) || !filereadable(l:path)
     return
   endif
-  let l:title = s:nd(s:S.center).t
-  call s:end_pick()
+  let s:S.lk = {'origin': copy(l:o), 'path': l:path, 'rel': s:S.center, 'title': s:nd(s:S.center).t, 'tries': 0}
+  call s:link_place()
+endfunction
+
+function! s:link_place() abort
+  let l:lk = get(s:S, 'lk', {})
+  if empty(l:lk)
+    return
+  endif
+  let l:o = l:lk.origin
   if s:goto_note_win() < 0
     return
   endif
   execute 'silent! hide edit ' . fnameescape(l:o.path)
   call setpos('.', l:o.pos)
-  if has_key(l:o, 'vis')
-    " ビジュアル: 選んだ範囲をリンクに置き換える（表示名は選んだ文字）。続けて関係（p b c a r g m）も選べる。置き場所は聞かない
-    try
-      call gnosis#insert_links_visual([gnosis#make_link(l:path, l:title)], l:o.vis)
-    catch
-      echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
-    endtry
-    if empty(get(s:S, 'pick', ''))
-      call s:back_to_mandala([s:rel_of(l:o.path)])
-    else
-      call win_gotoid(s:mwin())
-    endif
-    return
-  endif
-  let l:link = gnosis#make_link(l:path, l:title)
+  let l:link = gnosis#make_link(l:lk.path, l:lk.title)
   try
-    call gnosis#insert_links_pick([l:link], l:o.pos)
+    if has_key(l:o, 'vis')
+      let l:r = gnosis#insert_links_visual([l:link], l:o.vis)
+    else
+      let l:r = gnosis#insert_links_choose([l:link], l:o.pos, function('gnosis#mview#place_start'))
+    endif
   catch
     " 途中で Vim のエラーが出ても、曼荼羅に戻れるようにして、どこで出たかを見せる（原因を調べるため）
     echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+    let l:r = 0
   endtry
-  " g が選ぶモードを始めていれば、そのまま続ける
-  if empty(get(s:S, 'pick', ''))
-    call s:back_to_mandala([s:rel_of(l:o.path)])
-  else
-    call win_gotoid(s:mwin())
+  if l:r == -4
+    return
   endif
+  if l:r == -2
+    let l:lk.tries += 1
+    if l:lk.tries < 100
+      call s:link_place()
+      return
+    endif
+    let l:r = -3
+  endif
+  if l:r == -3
+    " 置き場所の選択を閉じた: \l は続ける。曼荼羅に戻って、選び直せる
+    call win_gotoid(s:mwin())
+    call s:render()
+    call s:show_note(s:S.center)
+    return
+  endif
+  if l:r == -1 && !empty(get(s:S, 'pick', '')) && s:S.pick !=# 'link'
+    " g が入れ先のグループ選びを始めた。そのまま続ける（q で置き場所の選択に戻る）
+    call win_gotoid(s:mwin())
+    return
+  endif
+  call s:link_finish()
+endfunction
+
+" \l を終える: 選ぶモードをやめ、曼荼羅に戻って、変わったノートを読み直す
+function! s:link_finish() abort
+  let l:lk = get(s:S, 'lk', {})
+  call s:end_pick()
+  call s:back_to_mandala(filter([empty(l:lk) ? '' : s:rel_of(l:lk.origin.path), get(l:lk, 'rel', '')], '!empty(v:val)'))
+endfunction
+
+" ---- 右のノートで置く場所を選ぶ（\l の h / i / 見出し） ------------------------------------------------
+" 右のノートが元のノート（\l を押したノート）になり、そこでカーソルを動かして Enter で決める。q / Esc でやめると置き場所の選択に戻る。
+function! gnosis#mview#place_start(kind, Cont) abort
+  let s:S.place = {'kind': a:kind, 'Cont': a:Cont, 'buf': bufnr('%'), 'saved': {}}
+  call s:place_maps(1)
+  augroup gnosis_mview_place
+    autocmd!
+    autocmd WinLeave,BufLeave <buffer> ++once call s:place_abort()
+  augroup END
+  call s:place_hint()
+  return -4
+endfunction
+
+function! s:place_hint() abort
+  let l:k = get(get(s:S, 'place', {}), 'kind', '')
+  if l:k ==# 'h'
+    echo 'Gnosis: ' . gnosis#i18n#tr('置く行(この行の下に入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
+  elseif l:k ==# 'i'
+    echo 'Gnosis: ' . gnosis#i18n#tr('置く文字(この文字のすぐ後ろに入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
+  else
+    echo 'Gnosis: ' . gnosis#i18n#tr('置く節(カーソルがある節の最後に入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
+  endif
+endfunction
+
+function! s:place_maps(on) abort
+  let l:p = get(s:S, 'place', {})
+  if empty(l:p)
+    return
+  endif
+  let l:b = l:p.buf
+  for l:k in ['<CR>', 'q', '<Esc>']
+    if a:on
+      let l:m = maparg(l:k, 'n', 0, 1)
+      let l:p.saved[l:k] = (!empty(l:m) && get(l:m, 'buffer', 0)) ? l:m : {}
+    endif
+  endfor
+  if a:on
+    nnoremap <buffer><nowait><silent> <CR> <Cmd>call gnosis#mview#place_decide()<CR>
+    nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#place_cancel()<CR>
+    nnoremap <buffer><nowait><silent> <Esc> <Cmd>call gnosis#mview#place_cancel()<CR>
+  else
+    for l:k in ['<CR>', 'q', '<Esc>']
+      if bufnr('%') == l:b
+        silent! execute 'nunmap <buffer> ' . l:k
+      else
+        call win_execute(bufwinid(l:b), 'silent! nunmap <buffer> ' . l:k)
+      endif
+      if !empty(get(l:p.saved, l:k, {}))
+        call mapset('n', 0, l:p.saved[l:k])
+      endif
+    endfor
+  endif
+endfunction
+
+function! s:place_abort() abort
+  if empty(get(s:S, 'place', {}))
+    return
+  endif
+  call s:place_maps(0)
+  if has_key(s:S, 'place') | call remove(s:S, 'place') | endif
+endfunction
+
+function! gnosis#mview#place_decide() abort
+  let l:p = get(s:S, 'place', {})
+  if empty(l:p)
+    return
+  endif
+  let l:lnum = 0
+  if l:p.kind ==# 'head'
+    let l:lnum = gnosis#heading_lnum_at_cursor()
+    if l:lnum == 0
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('見出しの下にカーソルを動かしてください（q でやめる）') | echohl NONE
+      return
+    endif
+  endif
+  let l:pos = getpos('.')
+  call s:place_maps(0)
+  if has_key(s:S, 'place') | call remove(s:S, 'place') | endif
+  silent! autocmd! gnosis_mview_place
+  try
+    call l:p.Cont(l:p.kind, l:pos, l:lnum)
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+  endtry
+  call s:link_finish()
+endfunction
+
+function! gnosis#mview#place_cancel() abort
+  if empty(get(s:S, 'place', {}))
+    return
+  endif
+  call s:place_maps(0)
+  if has_key(s:S, 'place') | call remove(s:S, 'place') | endif
+  silent! autocmd! gnosis_mview_place
+  call s:link_place()
 endfunction
 
 " 中心のグループに決める: 曼荼羅は閉じず、選ぶモードだけ終わる。a:1 は見出しのスラッグ（アウトラインを索引にする）

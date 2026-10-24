@@ -121,6 +121,7 @@ sh "$REPO/test/requests_8_net.sh"
 # i（行の中）・\L の b / c・\l → g（分岐したグループ・空のグループの空行）・\l → m（マージと取り消し）
 sh "$REPO/test/requests_1020_net.sh"
 sh "$REPO/test/requests_1020b_net.sh"
+sh "$REPO/test/mview_lmodes_net.sh"
 
 # - [ ] の行で Enter すると次の行にも - [ ] を作る
 sh "$REPO/test/checkbox_net.sh"

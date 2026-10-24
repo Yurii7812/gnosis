@@ -142,6 +142,7 @@ gnosis#has_python
 gnosis#heading_items
 gnosis#heading_links_after
 gnosis#heading_links_before
+gnosis#heading_lnum_at_cursor
 gnosis#hide#apply
 gnosis#hide#apply_all
 gnosis#hide#expr
@@ -185,8 +186,10 @@ gnosis#include_view
 gnosis#index_add
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
+gnosis#insert_links_choose
 gnosis#insert_links_pick
 gnosis#insert_links_visual
+gnosis#insert_links_visual_restore
 gnosis#insert_prompt_lines
 gnosis#insert_prompt_text
 gnosis#ir_next
@@ -243,6 +246,9 @@ gnosis#mview#gui_state
 gnosis#mview#items
 gnosis#mview#link_pick
 gnosis#mview#link_pick_visual
+gnosis#mview#place_cancel
+gnosis#mview#place_decide
+gnosis#mview#place_start
 gnosis#mview#preset_apply
 gnosis#mview#preset_delete
 gnosis#mview#preset_names
