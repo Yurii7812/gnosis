@@ -1728,19 +1728,17 @@ function! s:link_decide() abort
   execute 'silent! hide edit ' . fnameescape(l:o.path)
   call setpos('.', l:o.pos)
   if has_key(l:o, 'vis')
-    " ビジュアル: 選んだ範囲をリンクに置き換える（表示名は選んだ文字。位置キーは聞かない）
-    let l:v = l:o.vis
-    if getline(l:v.sline, l:v.eline) !=# l:v.lines
-      echohl WarningMsg | echo 'Gnosis: 選んだあとにノートが変わったので、置き換えませんでした' | echohl NONE
+    " ビジュアル: 選んだ範囲をリンクに置き換える（表示名は選んだ文字）。続けて関係（p b c a r g m）も選べる。置き場所は聞かない
+    try
+      call gnosis#insert_links_visual([gnosis#make_link(l:path, l:title)], l:o.vis)
+    catch
+      echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+    endtry
+    if empty(get(s:S, 'pick', ''))
+      call s:back_to_mandala([s:rel_of(l:o.path)])
     else
-      let l:link = gnosis#make_link(l:path, !empty(l:v.text) ? l:v.text : l:title)
-      call gnosis#replace_visual_selection(l:link, l:v.is_linewise, l:v.sline, l:v.eline, l:v.scol, l:v.ecol, l:v.lines)
-      call cursor(l:v.sline, l:v.scol)
-      if &modified && &buftype ==# ''
-        call gnosis#conflict#safe_update()
-      endif
+      call win_gotoid(s:mwin())
     endif
-    call s:back_to_mandala([s:rel_of(l:o.path)])
     return
   endif
   let l:link = gnosis#make_link(l:path, l:title)

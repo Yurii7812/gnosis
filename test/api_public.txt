@@ -186,6 +186,7 @@ gnosis#index_add
 gnosis#init_encrypted
 gnosis#init_persistent_undo_if_ready
 gnosis#insert_links_pick
+gnosis#insert_links_visual
 gnosis#insert_prompt_lines
 gnosis#insert_prompt_text
 gnosis#ir_next

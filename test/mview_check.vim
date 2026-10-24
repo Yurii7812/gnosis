@@ -302,11 +302,42 @@ let s:st = gnosis#mview#state()
 call s:ok('ビジュアル \l: 選ぶモードになる（文字をリンクにするノートを選ぶ）', s:st.pick ==# 'link' && s:text() =~# '選んだ文字をリンクにする', s:text())
 let s:st.center = 'herb.md'
 call s:keys('z')
-let g:gnosis_test_keys = ['x']
+" e → やめる（Esc）: 何も変えない
+let g:gnosis_test_keys = ["\<Esc>"]
 call s:keys('e')
-call s:ok('ビジュアル \l: e で、選んだ文字が表示名のリンクに置き換わる', join(readfile(s:v . '/vlk.md'), "\n") =~# '\[ハーブガーデン\](herb.md)を作ってみたい話。', join(readfile(s:v . '/vlk.md'), "\n"))
-call s:ok('ビジュアル \l: 位置キーは聞かない（キーが残っている）', g:gnosis_test_keys ==# ['x'])
+call s:ok('ビジュアル \l: e のあと Esc なら、置き換えない', join(readfile(s:v . '/vlk.md'), "\n") !~# '\[ハーブガーデン\](herb.md)', join(readfile(s:v . '/vlk.md'), "\n"))
+call s:ok('ビジュアル \l: やめたあとも曼荼羅は開いたまま・選ぶモードは終わる', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# '', &filetype)
+call s:keys('Q')
+" もう一度: e → Enter で、選んだ文字が表示名のリンクに置き換わる
+execute 'edit ' . s:v . '/vlk.md'
+let s:vl_ln = search('^ハーブガーデン', 'nw')
+execute "normal! " . s:vl_ln . "G0v" . (strchars('ハーブガーデン') - 1) . "l\<Esc>"
+'<,'>call gnosis#mview#link_pick_visual()
+let s:st = gnosis#mview#state()
+let s:st.center = 'herb.md'
+call s:keys('z')
+let g:gnosis_test_keys = ["\<CR>"]
+call s:keys('e')
+call s:ok('ビジュアル \l: e → Enter で、選んだ文字が表示名のリンクに置き換わる', join(readfile(s:v . '/vlk.md'), "\n") =~# '\[ハーブガーデン\](herb.md)を作ってみたい話。', join(readfile(s:v . '/vlk.md'), "\n"))
 call s:ok('ビジュアル \l: 曼荼羅は開いたまま・選ぶモードは終わる', &filetype ==# 'gnosis-mandala' && gnosis#mview#state().pick ==# '', &filetype)
+let g:gnosis_test_keys = []
+call s:keys('Q')
+
+" ビジュアル \l → e → b: 選んだ文字をリンクにして、そのノートを Branch（子）にもする
+call s:mk('vlb.md', 'Branch の元', 0, [], ['ハーブ二の話。'])
+call s:mk('herb2.md', 'ハーブ二', 0, [], ['本文。'])
+call gnosis#clear_title_cache()
+execute 'edit ' . s:v . '/vlb.md'
+let s:vb_ln = search('^ハーブ二', 'nw')
+execute "normal! " . s:vb_ln . "G0v" . (strchars('ハーブ二') - 1) . "l\<Esc>"
+'<,'>call gnosis#mview#link_pick_visual()
+let s:st = gnosis#mview#state()
+let s:st.center = 'herb2.md'
+call s:keys('z')
+let g:gnosis_test_keys = ['b']
+call s:keys('e')
+call s:ok('ビジュアル \l → b: 選んだ文字がリンクになる', join(readfile(s:v . '/vlb.md'), "\n") =~# '\[ハーブ二\](herb2.md)の話。', join(readfile(s:v . '/vlb.md'), "\n"))
+call s:ok('ビジュアル \l → b: 選んだノートが Branch（子）になる（相手の ParentBranch に元のノート）', join(readfile(s:v . '/herb2.md'), "\n") =~# 'vlb.md', join(readfile(s:v . '/herb2.md'), "\n"))
 let g:gnosis_test_keys = []
 call s:keys('Q')
 

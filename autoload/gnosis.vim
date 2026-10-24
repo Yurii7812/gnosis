@@ -14243,6 +14243,88 @@ function! s:insert_links_core(links, ...) abort
   return l:added > 0
 endfunction
 
+" ビジュアルの \l（曼荼羅で選んだノート a:links を、選んだ範囲 a:vis のリンクにする）。置き場所は聞かない
+" （選んだ文字の場所が置き場所）。e のあとに選べる: Enter = リンクにするだけ ／ 関係も結ぶ p b c a r g m（先に
+" 選んだ文字をリンクに置き換えてから、通常の \l と同じ関係づけをする。c の「今のノートのどこに置くか」は聞かない）。戻り値: 何かしたら 1
+function! gnosis#insert_links_visual(links, vis) abort
+  if empty(a:links) || empty(a:vis)
+    return 0
+  endif
+  let l:can_g = exists('*gnosis#mview#group_pick') && !empty(get(g:, 'gnosis_root', ''))
+  let l:can_m = len(a:links) == 1
+  let l:rel = [gnosis#i18n#tr('関係も結ぶ')]
+  call add(l:rel, '  p      ' . gnosis#i18n#tr('Parent(親)'))
+  call add(l:rel, '  b      ' . gnosis#i18n#tr('Branch(子)'))
+  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
+  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  r      ' . gnosis#i18n#tr('Related(相互)'))
+  if l:can_g
+    call add(l:rel, '  g      ' . gnosis#i18n#tr('グループに入れる'))
+  endif
+  if l:can_m
+    call add(l:rel, '  m      ' . gnosis#i18n#tr('マージ'))
+  endif
+  let l:lines = [gnosis#i18n#tr('選んだ文字をリンクにする'), '  Enter  ' . gnosis#i18n#tr('リンクにするだけ'), ''] + l:rel + ['', '  Esc    ' . gnosis#i18n#tr('やめる')]
+  let l:pw = 0
+  if exists('*popup_create')
+    let l:pw = popup_create(l:lines, {'title': ' ' . gnosis#i18n#tr('どうする？') . ' ', 'pos': 'center', 'border': [], 'padding': [0, 2, 0, 1], 'zindex': 200})
+    redraw
+  else
+    echo join(l:lines, ' / ')
+  endif
+  let l:ch = s:getkey()
+  call s:place_popup_close(l:pw)
+  redraw
+  let l:ok = (l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch =~# '^[pbcar]$' || (l:ch ==# 'g' && l:can_g) || (l:ch ==# 'm' && l:can_m))
+  if !l:ok
+    echo 'Gnosis: ' . gnosis#i18n#tr('何もしない')
+    return 0
+  endif
+  let l:v = a:vis
+  if getline(l:v.sline, l:v.eline) !=# l:v.lines
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('選んだあとにノートが変わったので、置き換えませんでした') | echohl NONE
+    return 0
+  endif
+  let l:target = substitute(s:extract_target(a:links[0]), '#.*$', '', '')
+  let l:label = !empty(l:v.text) ? l:v.text : matchstr(a:links[0], '^\[\zs[^\]]*\ze\]')
+  let l:link = gnosis#make_link(fnamemodify(gnosis#resolve_link(l:target), ':p'), l:label)
+  call gnosis#replace_visual_selection(l:link, l:v.is_linewise, l:v.sline, l:v.eline, l:v.scol, l:v.ecol, l:v.lines)
+  call cursor(l:v.sline, l:v.scol)
+  " 関係づけに渡すリンク（選んだ文字の表示名ではなく、通常の \l と同じ、ノートの題の表示名）
+  let l:links = a:links
+  if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    call s:links_added_done()
+    return 1
+  elseif l:ch ==# 'p'
+    return gnosis#branch#add_parent_links(l:links)
+  elseif l:ch ==# 'b'
+    return gnosis#branch#add_links(l:links)
+  elseif l:ch ==# 'r'
+    call s:related_links(l:links)
+    return 1
+  elseif l:ch ==# 'c'
+    let l:bs = s:c_targets(l:links)
+    if empty(l:bs)
+      return 0
+    endif
+    call s:c_links_apply(l:bs, {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, function('s:noop'), {'mode': 'none'})
+    return 1
+  elseif l:ch ==# 'a'
+    let l:bs = s:c_targets(l:links)
+    if empty(l:bs)
+      return 0
+    endif
+    call s:a_mode_chain(l:bs, 0, [], {'path': expand('%:p'), 'buf': bufnr('%'), 'title': gnosis#current_title()}, function('s:noop'))
+    return 1
+  elseif l:ch ==# 'g'
+    return gnosis#mview#group_pick(l:links) ? 1 : 0
+  elseif l:ch ==# 'm'
+    call gnosis#merge#pick(l:links[0])
+    return 1
+  endif
+  return 0
+endfunction
+
 " c の B（選んだノート）を確かめる。存在しない・自分自身は外し、B が開いていて未保存なら全体を取り消す
 " （何も変えない）。戻り値 [{'link': リンク行, 'path': B の絶対パス}, …]。
 function! s:c_targets(links) abort

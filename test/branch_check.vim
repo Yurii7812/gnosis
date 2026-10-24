@@ -136,7 +136,8 @@ call s:ok('D→A 循環 拒否: D も A も変わらない', s:file('d.md') ==# 
 execute 'edit ' . fnameescape(s:v . '/index.md')
 let s:before = s:files()
 let s:i_snap = s:file('index.md')
-let g:gnosis_test_keys = []
+" 置き場所の聞き方（Enter = 登録）に Enter で答え、表示名で Esc。以前は答えのキーが無く、typeahead に残った <Cmd>nohlsearch が「取り消し」に化けていた
+let g:gnosis_test_keys = ["\<CR>"]
 let g:gnosis_test_display_name = ["\x1b"]
 sleep 1100m
 call gnosis#v2_new_plain()
