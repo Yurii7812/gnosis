@@ -179,7 +179,12 @@ gnosis#i18n#system_lang
 gnosis#i18n#t
 gnosis#i18n#t_lang
 gnosis#i18n#tr
+gnosis#imgview#apply_setting
+gnosis#imgview#on_text_changed
 gnosis#imgview#open
+gnosis#imgview#refresh
+gnosis#imgview#schedule
+gnosis#imgview#start
 gnosis#import
 gnosis#include_check
 gnosis#include_view
