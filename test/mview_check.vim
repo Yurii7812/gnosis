@@ -739,5 +739,29 @@ call s:ok('A → B#見出し は、B の題つきの見出しのマスで出る�
 call s:keys('u')
 call s:keys('Q')
 
+" y: c と r を両方オフにする（オフにするだけ。もう一度押してもオンにはしない）
+execute 'edit ' . s:v . '/caller.md'
+call s:keys(' ')
+call s:keys('c')
+call s:keys('r')
+let s:st = gnosis#mview#state()
+call s:ok('c r をオンにした', get(s:st, "near_on", 0) == 1 && get(s:st, "rel_on", 0) == 1, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:keys('y')
+let s:st = gnosis#mview#state()
+call s:ok('y で c と r が両方オフ', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:keys('y')
+let s:st = gnosis#mview#state()
+call s:ok('もう一度 y を押してもオンにならない', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+
+" 右のノートの窓でページが変わったら、左の曼荼羅の中心も動く
+call s:keys('z')
+let s:before = gnosis#mview#state().center
+call s:keys(' ')
+execute 'edit ' . s:v . '/ol.md'
+sleep 100m
+let s:st = gnosis#mview#state()
+call s:ok('右でノートを開くと曼荼羅の中心も動く', s:before !=# 'ol.md' && s:st.center ==# 'ol.md', string([s:before, s:st.center]))
+call s:keys('Q')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

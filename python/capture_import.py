@@ -110,8 +110,17 @@ def adb_pull(outdir: str) -> int:
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if r.returncode == 0:
         (out / "scans").mkdir(exist_ok=True)
+        # スマホに残してある取り込み済みの写真（scans.json の imported）は、もう一度は取らない
+        skip: set = set()
+        ix = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/scans/scans.json"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if ix.returncode == 0:
+            try:
+                skip = {o["name"] for o in json.loads(ix.stdout.decode("utf-8")) if o.get("imported")}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                skip = set()
         for n in r.stdout.decode("utf-8", "replace").split():
-            if "/" in n or n.startswith(".") or not (n.startswith("paper-scan-") or n == "scans.json"):
+            if "/" in n or n.startswith(".") or n in skip or not (n.startswith("paper-scan-") or n == "scans.json"):
                 continue
             g = subprocess.run([exe, "exec-out", "run-as", PACKAGE, "cat", "files/scans/" + n],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)

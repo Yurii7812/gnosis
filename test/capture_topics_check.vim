@@ -10,7 +10,7 @@ call gnosis#create_vault_files($D . '/v')
 call gnosis#capture_import($D . '/pack')
 let s:n = $D . '/v/261019100000.md'
 let s:original = readfile(s:n)
-call assert_true(index(s:original, 'title: こんにちは今日はいい天気だと思ったけどそ...') >= 0)
+call assert_true(index(s:original, '# こんにちは今日はいい天気だと思ったけどそ...') >= 0)
 call assert_true(index(s:original, 'こんにちは今日はいい天気だと思ったけどそうでもないかもしれない') >= 0)
 call assert_true(index(s:original, 'ところで最近はいい感じ。') >= 0)
 call assert_true(index(s:original, 'topic: ""') >= 0)

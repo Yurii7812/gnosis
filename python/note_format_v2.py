@@ -2004,9 +2004,8 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
-    # 時系列の木のノート（timeline: true。日記・年・月・時系列記録）は、本文に子の一覧があっても、子を ChildBranch: に必ず書く
-    # （子の ParentBranch: に対する親の側。本文の一覧は日記の操作が使うので残す）
-    shown = set() if timeline else ({resolved(key(tg)) for _d, tg in _links_from(body)} - {None})
+    # 時系列の木のノートも同じ: 本文に子の一覧があれば、ChildBranch: には重ねて書かない（二重になる）
+    shown = {resolved(key(tg)) for _d, tg in _links_from(body)} - {None}
     kids = ctx_kids or set()
     entries: list[tuple[str, list]] = []
     for ln in cbranch:

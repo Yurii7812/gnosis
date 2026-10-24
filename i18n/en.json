@@ -696,6 +696,7 @@
     "settings.item.fontSize": "Font size",
     "settings.item.language": "Language",
     "settings.item.maximized": "Maximize on start",
+    "settings.item.mandalaOnStart": "Show the mandala view on the left at start",
     "settings.item.theme": "Theme (regular Vim)",
     "settings.item.theme_add": "Add a theme (Plug 'author/repo')",
     "settings.item.theme_reset": "Back to the standard theme (regular Vim)",

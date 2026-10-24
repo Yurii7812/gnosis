@@ -161,12 +161,7 @@ function! s:lines() abort
   for l:i in range(len(s:items))
     call add(l:out, (l:i == s:sel ? ' ▶ ' : '   ') . (l:h[s:items[l:i][0]] ? '[x] ' : '[ ] ') . gnosis#i18n#tr(s:items[l:i][1]))
   endfor
-  let l:on = get(g:, 'gnosis_mandala_on_start', -1)
-  if l:on < 0
-    let l:on = get(gnosis#settings#current(), 'mandalaOnStart', 1) ? 1 : 0
-  endif
-  call add(l:out, (len(s:items) == s:sel ? ' ▶ ' : '   ') . '' . (l:on ? '[x] ' : '[ ] ') . gnosis#i18n#tr('起動したとき曼荼羅ビューを左に出す'))
-  call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   q 閉じる'])
+  call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ   q 閉じる'])
   return l:out
 endfunction
 
@@ -175,22 +170,21 @@ function! s:filter(id, key) abort
     call popup_close(a:id)
     return 1
   elseif a:key ==# 'j' || a:key ==# "\<Down>"
-    let s:sel = (s:sel + 1) % (len(s:items) + 1)
+    let s:sel = (s:sel + 1) % len(s:items)
   elseif a:key ==# 'k' || a:key ==# "\<Up>"
-    let s:sel = (s:sel + len(s:items)) % (len(s:items) + 1)
+    let s:sel = (s:sel + len(s:items) - 1) % len(s:items)
   elseif a:key ==# ' ' || a:key ==# "\<CR>"
-    if s:sel < len(s:items)
-      let l:k = s:items[s:sel][0]
-      call gnosis#settings#set('hide.' . l:k, !gnosis#hide#get()[l:k] ? v:true : v:false)
-      call gnosis#hide#apply_all()
-    else
-      let l:on = get(g:, 'gnosis_mandala_on_start', -1)
-      if l:on >= 0
-        unlet g:gnosis_mandala_on_start
-      endif
-      let l:cur = get(gnosis#settings#current(), 'mandalaOnStart', 1) ? 1 : 0
-      call gnosis#settings#set('mandalaOnStart', l:cur ? v:false : v:true)
-    endif
+    let l:k = s:items[s:sel][0]
+    call gnosis#settings#set('hide.' . l:k, !gnosis#hide#get()[l:k] ? v:true : v:false)
+    call gnosis#hide#apply_all()
+  elseif a:key ==# 'a'
+    " 一括: ひとつでもオフならぜんぶオン、ぜんぶオンならぜんぶオフ
+    let l:h = gnosis#hide#get()
+    let l:to = (l:h.yaml && l:h.top && l:h.bottom) ? v:false : v:true
+    for l:it in s:items
+      call gnosis#settings#set('hide.' . l:it[0], l:to)
+    endfor
+    call gnosis#hide#apply_all()
   endif
   call popup_settext(a:id, s:lines())
   return 1

@@ -418,7 +418,7 @@ class TestCli(Base):
 
 
 class TestTimelineTree(unittest.TestCase):
-    """時系列の木（timeline: true）のノートは、本文に子の一覧があっても、子を ChildBranch: に必ず書く。"""
+    """時系列の木（timeline: true）のノートは、本文に子の一覧があれば、ChildBranch: には重ねて書かない（二重にしない）。"""
 
     def setUp(self) -> None:
         import tempfile
@@ -429,15 +429,19 @@ class TestTimelineTree(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "index.md").write_text("---\ntime: x\n---\n\n# Index\n", encoding="utf-8")
 
-    def test_children_in_body_are_also_in_child_branch(self) -> None:
+    def test_children_in_body_are_not_repeated_in_child_branch(self) -> None:
         r = self.root
         (r / "m.md").write_text("---\ntime: x\ntimeline: true\n---\n\n# 2026-10\n\n[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n", encoding="utf-8")
         for n, t in (("d1", "2026-10-01-TH"), ("d2", "2026-10-02-FR")):
             (r / f"{n}.md").write_text(f"---\ntime: x\n---\n\n# {t}\n\nParentBranch:\n[2026-10](m.md)\n\n本文\n", encoding="utf-8")
         nf.simple_sync(r)
         m = (r / "m.md").read_text(encoding="utf-8")
-        self.assertIn("ChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)", m)   # 日付（題）の順
-        self.assertIn("[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n\nChildBranch:", m)  # 本文の一覧はそのまま
+        self.assertNotIn("ChildBranch:", m)   # 本文の一覧があるので重ねて書かない
+        self.assertIn("[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n", m)   # 本文の一覧はそのまま
+        # すでに二重になっているノートは、本文の一覧だけを残す
+        (r / "m.md").write_text(m + "\nChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)\n", encoding="utf-8")
+        nf.simple_sync(r)
+        self.assertNotIn("ChildBranch:", (r / "m.md").read_text(encoding="utf-8"))
         self.assertEqual(nf.simple_sync(r), 0)   # 2 回目は変わらない
 
     def test_ordinary_note_keeps_body_as_the_list(self) -> None:

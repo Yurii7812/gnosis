@@ -10,7 +10,7 @@
 " Electron アプリは同じ設定を HTML の画面で変える（同じファイルを読み書きする）。
 " =============================================================================
 
-let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
+let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
 let s:font_items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal']
 
 function! s:t(key, ...) abort
@@ -93,6 +93,12 @@ function! s:value(item) abort
     return l:s.language ==# 'ja' ? '日本語' : 'English'
   elseif a:item ==# 'maximized'
     return l:s.window.maximized ? s:t('settings.on') : s:t('settings.off')
+  elseif a:item ==# 'mandalaOnStart'
+    let l:on = get(g:, 'gnosis_mandala_on_start', -1)
+    if l:on < 0
+      let l:on = get(l:s, 'mandalaOnStart', v:true) ? 1 : 0
+    endif
+    return l:on ? s:t('settings.on') : s:t('settings.off')
   elseif a:item ==# 'window'
     return l:s.window.width . ' × ' . l:s.window.height
   elseif a:item ==# 'appearance'
@@ -236,6 +242,13 @@ function! s:change(item) abort
     let l:s.language = l:s.language ==# 'ja' ? 'en' : 'ja'
   elseif a:item ==# 'maximized'
     let l:s.window.maximized = l:s.window.maximized ? v:false : v:true
+  elseif a:item ==# 'mandalaOnStart'
+    let l:on = get(g:, 'gnosis_mandala_on_start', -1)
+    if l:on < 0
+      let l:on = get(l:s, 'mandalaOnStart', v:true) ? 1 : 0
+    endif
+    silent! unlet g:gnosis_mandala_on_start
+    let l:s.mandalaOnStart = l:on ? v:false : v:true
   elseif a:item ==# 'window'
     let l:r = s:ask(s:t('settings.prompt_window'), l:s.window.width . 'x' . l:s.window.height)
     if l:r ==# "\x01" | return | endif

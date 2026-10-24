@@ -1051,7 +1051,7 @@ function! s:help_lines() abort
         \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
         \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 中心 → 1 … 8（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
         \ ' モード     a 全体   i グループ・索引だけ',
-        \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)',
+        \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)   y c と r を両方オフ',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中)   o 入れるノートを見る/戻る',
         \ ' 並べる     v 外向き(リンクを内側から外側へ 1 つずつ最大 80 個)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
@@ -1830,6 +1830,19 @@ function! s:toggle_over(st) abort
   call s:render()
 endfunction
 
+" c と r を両方オフにする（オフにするだけ。もう一度押してもオンにはしない）
+function! s:over_off() abort
+  if !get(s:S, 'near_on', 0) && !get(s:S, 'rel_on', 0)
+    return
+  endif
+  let s:S.near_on = 0
+  let s:S.rel_on = 0
+  let s:S.find = ''
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+endfunction
+
 " モード（英字）: a 全体 / i 索引だけ
 function! s:setmode(m) abort
   let s:S.mode = a:m
@@ -2111,6 +2124,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
+  nnoremap <buffer><nowait><silent> y <Cmd>call <SID>over_off()<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
   nnoremap <buffer><nowait><silent> ' <Cmd>call <SID>preset_menu()<CR>
@@ -2206,14 +2220,41 @@ function! s:guard_move(buf, timer) abort
   call win_gotoid(l:nw)
   execute 'silent! buffer ' . a:buf
   " 曼荼羅の中心も、開いたノートに合わせる（選ぶモードの最中は動かさない）
-  let l:rel = s:rel_of(l:path)
-  if !empty(l:rel) && empty(get(s:S, 'pick', '')) && l:rel !=# s:S.center && s:has(l:rel)
-    call add(s:S.hist, [s:S.center, s:S.page])
-    let s:S.center = l:rel
-    let s:S.page = 0
-    let s:S.cur = [1, 1]
-    call win_execute(l:mw, 'call gnosis#mview#render_here()')
+  call s:center_on(l:path)
+endfunction
+
+function! s:center_on(path) abort
+  let l:mw = get(s:S, 'win', -1)
+  let l:rel = s:rel_of(a:path)
+  if l:mw < 0 || empty(getwininfo(l:mw)) || empty(l:rel) || !empty(get(s:S, 'pick', '')) || l:rel ==# s:S.center || !s:has(l:rel)
+    return
   endif
+  call add(s:S.hist, [s:S.center, s:S.page])
+  let s:S.center = l:rel
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call win_execute(l:mw, 'call gnosis#mview#render_here()')
+endfunction
+
+" 右のノートの窓でページが変わったら（リンクを辿る・\i など）、左の曼荼羅の中心もそのノートに動かす。
+" 曼荼羅自身が右の窓に出したノート（s:S.note）には反応しない
+function! s:follow() abort
+  if empty(get(s:S, 'buf', 0)) || &buftype !=# '' || &filetype ==# 'gnosis-mandala' || win_getid() != s:note_win()
+    return
+  endif
+  call timer_start(0, function('s:follow_do', [win_getid(), bufnr('%')]))
+endfunction
+
+function! s:follow_do(wid, buf, timer) abort
+  if empty(get(s:S, 'buf', 0)) || winbufnr(a:wid) != a:buf
+    return
+  endif
+  let l:path = fnamemodify(bufname(a:buf), ':p')
+  if l:path ==# fnamemodify(get(s:S, 'note', ''), ':p')
+    return
+  endif
+  let s:S.note = l:path
+  call s:center_on(l:path)
 endfunction
 
 " 端末のカーソルの表示。曼荼羅では出さない（選んでいるマスは背景色で分かる）。show=0 で隠し、1 で戻す
@@ -2345,6 +2386,7 @@ function! s:open(center, ...) abort
     " 配色が読み込み直されると（ノートを開き直したときなど）色の定義が全部消えるので、定義し直す
     autocmd ColorScheme * call s:hl()
     autocmd BufWinEnter * call s:guard()
+    autocmd BufEnter *.md call s:follow()
   augroup END
   let l:pick = a:0 ? a:1 : ''
   " 閉じたときに戻るノート（全画面で閉じると窓が 1 つだけになるため）

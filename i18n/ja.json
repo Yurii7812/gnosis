@@ -19,6 +19,7 @@
     "settings.item.fontSize": "文字サイズ",
     "settings.item.language": "言語",
     "settings.item.maximized": "起動時に最大化",
+    "settings.item.mandalaOnStart": "起動時に曼荼羅ビューを左に出す",
     "settings.item.theme": "テーマ（通常の Vim）",
     "settings.item.theme_add": "テーマを追加（Plug '作者/リポジトリ'）",
     "settings.item.theme_reset": "標準テーマに戻す（通常の Vim）",
