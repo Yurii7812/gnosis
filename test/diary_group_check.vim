@@ -98,8 +98,8 @@ let s:d_month = matchstr(get(filter(readfile(s:v . '/' . s:d), 'v:val =~# "^# "'
 let s:mf = s:find_title(s:d_month)
 let s:ml2 = filereadable(s:mf) ? readfile(s:mf) : []
 let s:gi = index(s:ml2, 'ParentBranch:')
-call s:ok('月のノート: ParentBranch: の次に親、空行を 1 つ挟んで子（今日の日記）が本文に入る',
-      \ s:gi >= 0 && s:ml2[s:gi + 2] ==# '' && s:ml2[s:gi + 3] =~# '^\[\d\{4}-\d\d-\d\d-[A-Z][A-Z]\](', string(s:ml2))
+call s:ok('月のノート: ParentBranch: の次に親、空行を 1 つ挟んで ChildBranch: に子（今日の日記）が入る（本文には書かない）',
+      \ s:gi >= 0 && s:ml2[s:gi + 2] ==# '' && s:ml2[s:gi + 3] ==# 'ChildBranch:' && s:ml2[s:gi + 4] =~# '^\[\d\{4}-\d\d-\d\d-[A-Z][A-Z]\](', string(s:ml2))
 call s:ok('月のノート: Context: を作らない', index(s:ml2, 'Context:') < 0, string(s:ml2))
 call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))
 call system('python3 ' . shellescape(g:gnosis_python) . ' update ' . shellescape(s:v))

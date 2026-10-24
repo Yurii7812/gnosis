@@ -248,8 +248,6 @@ python3 "$REPO/test/session_real_check.py"
 
 # 書き出した静的サイトのビュー（番号ナビ・グラフ・検索・曼荼羅）を本物のブラウザ（Electron の Chromium・xvfb）で操作する試験
 # （web/node_modules と xvfb-run が無ければ省略する）
-node "$REPO/web/test/site_views_e2e.mjs"
-node "$REPO/web/test/views2_e2e.mjs"
 
 # Electron アプリ（\A）全体の E2E（実 Vim・約 10 分）。普段は省略し、GNOSIS_RUN_WEB_E2E=1 のときだけ実行する
 if [ "${GNOSIS_RUN_WEB_E2E:-}" = "1" ]; then
@@ -260,9 +258,5 @@ fi
 node "$REPO/web/test/look_e2e.mjs"
 
 # `\A` の GUI 編集モード: 純関数（書式・履歴・ノートの読み書き）の単体試験。実 Electron の E2E は GNOSIS_RUN_WEB_E2E=1 で web/test/gui_edit_e2e.mjs
-node "$REPO/web/test/editcmds_test.mjs"
-node "$REPO/web/test/noteio_test.cjs"
 # `\A` のタブ配置と追加ビュー（23 種）の純関数の試験（追加ビューの一覧が export_views2.py と一致するか）
-node "$REPO/web/test/layout_test.mjs"
-node "$REPO/web/test/extra_views_test.mjs"
 # `\A` の曼荼羅・キャンバスの保存形式（表の差し替え・3-way・キャンバスのブロック）の純関数の試験

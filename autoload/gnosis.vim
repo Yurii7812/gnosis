@@ -20041,7 +20041,96 @@ endfunction
 
 " ファイルに a:Fn（行リスト → 行リスト）を適用する。バッファが開いていればバッファを直接
 " 書き換える（未保存の変更を壊さない。保存は自動保存に任せる）。変わったら 1。
+" 時系列の木のノート（timeline: true）の子の一覧は ChildBranch: にある。日記の操作は「本文の子の一覧」を
+" 前提に書いてあるので、操作のあいだだけ一覧を本文に出し、終わったら ChildBranch: に戻す
+function! s:tl_is_tree(lines) abort
+  for l:ln in a:lines[1 : 40]
+    if l:ln ==# '---' | return 0 | endif
+    if l:ln =~# '^timeline:\s*true\s*$' | return 1 | endif
+  endfor
+  return 0
+endfunction
+
+let s:tl_link_pat = '^\s*\[[^]]*\]([^)]\+\.md)\s*$'
+
+function! s:tl_fold_in(lines) abort
+  let l:lines = copy(a:lines)
+  let l:flags = s:fence_flags(l:lines)
+  let l:c = -1
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'ChildBranch:' | let l:c = l:i | break | endif
+  endfor
+  if l:c < 0 | return l:lines | endif
+  let l:j = l:c + 1
+  while l:j < len(l:lines) && l:lines[l:j] =~# s:tl_link_pat | let l:j += 1 | endwhile
+  let l:kids = l:lines[l:c + 1 : l:j - 1]
+  call remove(l:lines, l:c, l:j - 1)
+  let l:p = s:first_section_index_in_lines(l:lines)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  while l:end > 0 && trim(l:lines[l:end - 1]) ==# '' | let l:end -= 1 | endwhile
+  let l:add = (l:end > 0 && (l:lines[l:end - 1] !~# ')\s*$' || s:top_block_last_index(l:lines) == l:end - 1) ? [''] : []) + l:kids
+  call extend(l:lines, l:add, l:end)
+  if l:p >= 0 && (l:end + len(l:add) >= len(l:lines) || trim(l:lines[l:end + len(l:add)]) !=# '')
+    call insert(l:lines, '', l:end + len(l:add))
+  endif
+  return l:lines
+endfunction
+
+function! s:tl_fold_out(lines) abort
+  let l:lines = copy(a:lines)
+  let l:flags = s:fence_flags(l:lines)
+  let l:p = s:first_section_index_in_lines(l:lines)
+  let l:end = l:p >= 0 ? l:p : len(l:lines)
+  let l:top = s:top_block_last_index(l:lines)
+  let l:h1 = match(l:lines, '^#\s')
+  let l:kids = []
+  let l:keep = []
+  for l:i in range(0, len(l:lines) - 1)
+    if l:i < l:end && l:i > max([l:top, l:h1]) && !l:flags[l:i] && l:lines[l:i] =~# s:tl_link_pat
+      call add(l:kids, trim(l:lines[l:i]))
+    else
+      call add(l:keep, l:lines[l:i])
+    endif
+  endfor
+  if empty(l:kids) | return l:lines | endif
+  let l:lines = l:keep
+  let l:p = s:first_section_index_in_lines(l:lines)
+  let l:c = -1
+  let l:flags = s:fence_flags(l:lines)
+  for l:i in range(0, len(l:lines) - 1)
+    if !l:flags[l:i] && trim(l:lines[l:i]) ==# 'ChildBranch:' | let l:c = l:i | break | endif
+  endfor
+  if l:c >= 0
+    let l:j = l:c + 1
+    while l:j < len(l:lines) && l:lines[l:j] =~# s:tl_link_pat | let l:j += 1 | endwhile
+    let l:kids = l:lines[l:c + 1 : l:j - 1] + filter(l:kids, 'index(l:lines[l:c + 1 : l:j - 1], v:val) < 0')
+    if l:j > l:c + 1
+      call remove(l:lines, l:c + 1, l:j - 1)
+    endif
+    call extend(l:lines, sort(l:kids, 'i'), l:c + 1)
+  else
+    let l:at = l:p >= 0 ? l:p : len(l:lines)
+    while l:at > 0 && trim(l:lines[l:at - 1]) ==# '' | call remove(l:lines, l:at - 1) | let l:at -= 1 | endwhile
+    let l:add = ['', 'ChildBranch:'] + sort(l:kids, 'i') + (l:p >= 0 ? [''] : [])
+    call extend(l:lines, l:add, l:at)
+  endif
+  return l:lines
+endfunction
+
+function! s:diary_tree_op(Fn, lines) abort
+  if !s:tl_is_tree(a:lines)
+    return call(a:Fn, [a:lines])
+  endif
+  let l:in = s:tl_fold_in(a:lines)
+  let l:out = call(a:Fn, [l:in])
+  return l:out ==# l:in ? a:lines : s:tl_fold_out(l:out)
+endfunction
+
 function! s:diary_edit_file(file, Fn) abort
+  return s:diary_edit_file_raw(a:file, function('s:diary_tree_op', [a:Fn]))
+endfunction
+
+function! s:diary_edit_file_raw(file, Fn) abort
   let l:nr = bufnr(a:file)
   if l:nr > 0 && bufloaded(l:nr)
     let l:old = getbufline(l:nr, 1, '$')
@@ -20732,7 +20821,7 @@ endfunction
 
 " グループ a:group の本文（Group: などの上のブロックを除く）にリンクがあるノート {ファイル名: 1}
 function! s:record_members(root, group) abort
-  let l:lines = readfile(fnamemodify(a:root, ':p') . a:group)
+  let l:lines = s:tl_fold_in(readfile(fnamemodify(a:root, ':p') . a:group))
   let l:h1 = match(l:lines, '^# ')
   let l:start = l:h1 < 0 ? 0 : max([l:h1 + 1, s:top_blocks_end(l:lines, l:h1, ['ParentBranch:', 'BranchGroup:', 'ThisNoteGroup:', 'Group:', 'Context:'])])
   let l:end = s:first_section_index_in_lines(l:lines)

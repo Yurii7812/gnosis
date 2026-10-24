@@ -418,7 +418,7 @@ class TestCli(Base):
 
 
 class TestTimelineTree(unittest.TestCase):
-    """時系列の木（timeline: true）のノートは、本文に子の一覧があれば、ChildBranch: には重ねて書かない（二重にしない）。"""
+    """時系列の木（timeline: true）のノートは、子の一覧は本文ではなく ChildBranch: に書く（本文に同じ一覧を残さない）。"""
 
     def setUp(self) -> None:
         import tempfile
@@ -429,19 +429,23 @@ class TestTimelineTree(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "index.md").write_text("---\ntime: x\n---\n\n# Index\n", encoding="utf-8")
 
-    def test_children_in_body_are_not_repeated_in_child_branch(self) -> None:
+    def test_children_in_body_move_to_child_branch(self) -> None:
         r = self.root
         (r / "m.md").write_text("---\ntime: x\ntimeline: true\n---\n\n# 2026-10\n\n[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n", encoding="utf-8")
         for n, t in (("d1", "2026-10-01-TH"), ("d2", "2026-10-02-FR")):
             (r / f"{n}.md").write_text(f"---\ntime: x\n---\n\n# {t}\n\nParentBranch:\n[2026-10](m.md)\n\n本文\n", encoding="utf-8")
         nf.simple_sync(r)
         m = (r / "m.md").read_text(encoding="utf-8")
-        self.assertNotIn("ChildBranch:", m)   # 本文の一覧があるので重ねて書かない
-        self.assertIn("[2026-10-02-FR](d2.md)\n[2026-10-01-TH](d1.md)\n", m)   # 本文の一覧はそのまま
-        # すでに二重になっているノートは、本文の一覧だけを残す
-        (r / "m.md").write_text(m + "\nChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)\n", encoding="utf-8")
+        # 子の一覧は本文ではなく ChildBranch: に書く（日付の順）。本文に同じ一覧を残さない
+        self.assertIn("ChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)", m)
+        self.assertEqual(m.count("(d1.md)"), 1)
+        self.assertEqual(m.count("(d2.md)"), 1)
+        # すでに二重のノートも、ChildBranch: の 1 つにそろう
+        (r / "m.md").write_text(m.replace("# 2026-10\n", "# 2026-10\n\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)\n", 1), encoding="utf-8")
         nf.simple_sync(r)
-        self.assertNotIn("ChildBranch:", (r / "m.md").read_text(encoding="utf-8"))
+        m2 = (r / "m.md").read_text(encoding="utf-8")
+        self.assertEqual(m2.count("(d1.md)"), 1)
+        self.assertIn("ChildBranch:\n[2026-10-01-TH](d1.md)\n[2026-10-02-FR](d2.md)", m2)
         self.assertEqual(nf.simple_sync(r), 0)   # 2 回目は変わらない
 
     def test_ordinary_note_keeps_body_as_the_list(self) -> None:

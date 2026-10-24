@@ -1985,7 +1985,8 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 
 def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
                         ctx_kids: set | None = None, pb_kids: set | None = None,
-                        titles: dict | None = None, timeline: bool = False, stale: set | None = None) -> list[str]:
+                        titles: dict | None = None, timeline: bool = False, stale: set | None = None,
+                        moved: list[str] | None = None) -> list[str]:
     """ChildBranch: に書く子。本文（BranchGroup: の中も含む）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
     子の側の ParentBranch: にこのノートがあるのに ChildBranch: にも本文にも無い子は足す（本文から消したときに戻す）。
     並び: 上にこのノートを Context にしている子、空行、下にただの子（それぞれの中の並びは元のまま）。"""
@@ -2004,8 +2005,9 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
-    # 時系列の木のノートも同じ: 本文に子の一覧があれば、ChildBranch: には重ねて書かない（二重になる）
-    shown = {resolved(key(tg)) for _d, tg in _links_from(body)} - {None}
+    # 時系列の木のノート（timeline: true。日記・年・月・時系列記録）は、子の一覧を本文ではなく ChildBranch: に書く
+    # （本文にあった子のリンクだけの行は moved で渡され、ここで ChildBranch: に移る）
+    shown = set() if timeline else ({resolved(key(tg)) for _d, tg in _links_from(body)} - {None})
     kids = ctx_kids or set()
     entries: list[tuple[str, list]] = []
     for ln in cbranch:
@@ -2018,11 +2020,19 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
             continue   # 子の ParentBranch: を手で消した: 親の ChildBranch: からも外す
         entries.append((ln, tgs))
     listed = {t for _ln, tgs in entries for t in tgs}
+    for ln in moved or []:
+        tgs = [resolved(key(tg)) for _d, tg in _links_from([ln])]
+        if tgs and all(t in listed for t in tgs):
+            continue
+        entries.append((ln, tgs))
+        listed |= set(tgs)
     for c in sorted(pb_kids or set(), key=(lambda q: ((titles or {}).get(q) or q.stem, q.name)) if timeline else (lambda q: q.name)):
         if c in shown or c in listed or base is None:
             continue
         title = (titles or {}).get(c) or c.stem
         entries.append(("[" + title + "](" + os.path.relpath(str(c), str(base.parent)) + ")", [c]))
+    if timeline:
+        entries.sort(key=lambda e: re.sub(r"^\[|\]\(.*$", "", e[0]).lower())
     top = [ln for ln, tgs in entries if tgs and all(t in kids for t in tgs)]
     rest = [ln for ln, tgs in entries if not (tgs and all(t in kids for t in tgs))]
     return top + ([""] if top and rest else []) + rest
@@ -2048,6 +2058,20 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
     中身が空の節は見出しごと出さない（新しいノートは本文だけ）。"""
     n = _drop_yaml_title(n)
+    is_timeline = any(re.match(r"^\s*timeline\s*:\s*true\s*$", ln, re.I) for ln in n["fm"])
+    moved_kids: list[str] = []
+    if is_timeline:
+        # 本文にある「子へのリンクだけの行」は ChildBranch: へ移す（本文と二重にしない）
+        n = dict(n)
+        body = list(n.get("body") or [])
+        keep = []
+        for ln, fz in zip(body, _fenced(body)):
+            if not fz and re.match(r"^\[[^\]]*\]\([^)\s]+\.md\)\s*$", ln):
+                moved_kids.append(ln.strip())
+            else:
+                keep.append(ln)
+        if moved_kids:
+            n["body"] = keep
     lines = list(n["fm"])
     if lines == ["---", "---"]:
         lines = []   # 中身の無い front matter は書かない（題は先頭の # 見出し）
@@ -2074,7 +2098,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     cbranch = _split_child_branch(n.get("cbranch") or [], n.get("body") or [], path, n.get("_ctx_kids"),
                                   n.get("_pb_kids"), titles, stale=n.get("_stale_kids"),
-                                  timeline=any(re.match(r"^\s*timeline\s*:\s*true\s*$", ln, re.I) for ln in n["fm"]))
+                                  timeline=is_timeline, moved=moved_kids)
     if _has(cbranch):
         sections.append((CHILD_BRANCH_MARK, cbranch))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。

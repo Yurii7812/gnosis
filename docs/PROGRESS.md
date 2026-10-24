@@ -4,9 +4,9 @@
 
 ## 現在地（2026-10-24）
 - 曼荼羅: 右のノートの窓でページが変わったら左の曼荼羅の中心も動く（`s:follow`）。`y` で `c` `r` を両方オフ（オフにするだけ）。「起動時に曼荼羅を出す」は `\zz` から外し `:GnosisSettings` に移した。`\zz` に `a`（全部オン／全部オフ）。
-- 時系列の木（`timeline: true`）の ChildBranch: が本文の子の一覧と二重になるのをやめた（本文にあれば ChildBranch: に書かない。すでに二重のノートは次の同期で直る）。`~/files/yurii-note/note` の vault には該当ノートが無く、本物の vault（ロック中）は未確認。
+- 時系列の木（`timeline: true` = 時系列記録 → 日記 → 年・月 → 日ごとのノート）の子の一覧は、本文ではなく ChildBranch: に書く（本文にあった子へのリンクだけの行は同期で ChildBranch: に移る。二重にしない）。時系列記録の木だけで、ふつうのノートは従来どおり（文中のリンクは ChildBranch: に出ない）。日記の Vim 側の操作（`s:diary_edit_file`）は、操作のあいだだけ一覧を本文に出して終わったら戻す（`s:tl_fold_in/out`）。本物の vault は未確認（ロック中）。
 - APK 紙のスキャン: 全部／未取り込み／取り込み済みのタブ、それぞれの全削除、取り込み済みを消さず残して見返せる（`scans.json` の `imported`・PC は再取得しない）。ビルド・単体試験は通過。**実機未確認**。
-- 試験メモ: `test/run.sh` は `keys_pty_check.py` で落ちる（変更前の main でも同じ）。`requests_1020b`・`tracker_check` は時間依存で時々落ちる。`capture_topics_check` の古い期待（YAML の title:）を直した。
+- 試験メモ: `test/run.sh` は `keys_pty_check.py` で落ちる（それ以外は全通過。run.sh の古い web 試験の行は削除）（変更前の main でも同じ）。`requests_1020b`・`tracker_check` は時間依存で時々落ちる。`capture_topics_check` の古い期待（YAML の title:）を直した。
 - `\c` アプリ（`web/`）を小さく作り直した（旧版はタグ `archive/gui-2026-10-24`）。残したのは 起動画面・マークダウン表示・端末の下 2 行・配色/文字サイズ・画像・ステータスバー。タブ・分割・コマンドパレット・GUI 編集・見るだけモード・ツールバーは削除（Vim にある操作だけ）。
 - **アプリ専用の GUI 曼荼羅**（`web/src/mandala.js`）: Vim が盤面の状態を送り（`gnosis#mview#gui_state()`）、色つきのマスで描く（CUI と同じ 10 色）。マスのクリック/ダブルクリックは `gnosis#mview#gui_click`。キーは従来どおり Vim へ。曼荼羅が開いている間は右のノート窓をマークダウンで映し、YAML・上下の「名前:」系は隠す（`hide` 行範囲）。幅は Vim の窓の割合に合わせる。
 - 曼荼羅のキー整理: `( )` = 盤面そのものの幅（3×3 も 9×9 も）、`< >` = 画面の幅（曼荼羅窓と右窓の境目）、`=` で両方戻す。どちらも `mandala.json` に保存して次回も前回のまま。
