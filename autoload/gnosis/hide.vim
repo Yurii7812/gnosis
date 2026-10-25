@@ -153,45 +153,67 @@ endfunction
 
 " ---- \zz の窓 ------------------------------------------------------------------------------------
 
-let s:items = [['yaml', 'YAML（先頭の --- で囲んだ部分）'], ['top', '上の「名前:」系（ParentBranch: など）'], ['bottom', '下の「名前:」系（BackLink: など）'], ['image', '画像（ノートの中の画像を表示しない）']]
+" 並び: ノートの表示（上の 3 つ。見出しをつける）→ そのほか（見出しなし、続けて並べる）。番号キー 1〜6 でその行を切り替える。
+" チェックが入っていると隠れる（画像も同じ向き）
+let s:items = [['yaml', 'YAML（先頭の --- で囲んだ部分）'], ['top', '上の「名前:」系（ParentBranch: など）'], ['bottom', '下の「名前:」系（BackLink: など）'],
+      \ ['image', 'ノートの中の画像'], ['insert', '挿入モードで、カーソルの行のリンクの中身を見せて編集する'], ['gz', 'gz で画像を開く方法']]
 
 function! s:lines() abort
   let l:h = gnosis#hide#get()
-  let l:out = [' 隠すもの', '']
+  let l:out = [' ' . gnosis#i18n#tr('ノートの表示')]
   for l:i in range(len(s:items))
-    call add(l:out, (l:i == s:sel ? ' ▶ ' : '   ') . (l:h[s:items[l:i][0]] ? '[x] ' : '[ ] ') . gnosis#i18n#tr(s:items[l:i][1]))
+    if l:i == 3
+      call add(l:out, '')
+    endif
+    let l:k = s:items[l:i][0]
+    let l:mark = l:i == s:sel ? ' ▶ ' : '   '
+    if l:k ==# 'gz'
+      let l:txt = gnosis#i18n#tr('gz で画像を開く方法') . ': '
+            \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）'))
+      call add(l:out, l:mark . (l:i + 1) . ' ' . l:txt)
+    else
+      let l:on = l:k ==# 'insert' ? gnosis#link_edit_insert() : l:h[l:k]
+      call add(l:out, l:mark . (l:i + 1) . ' ' . (l:on ? '[x] ' : '[ ] ') . gnosis#i18n#tr(s:items[l:i][1]))
+    endif
   endfor
-  call add(l:out, '')
-  call add(l:out, (s:sel == len(s:items) ? ' ▶ ' : '   ') . gnosis#i18n#tr('gz で画像を開く方法') . ': '
-        \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）')))
-  call add(l:out, (s:sel == len(s:items) + 1 ? ' ▶ ' : '   ') . (gnosis#link_edit_insert() ? '[x] ' : '[ ] ') . gnosis#i18n#tr('挿入モードで、カーソルの行のリンクの中身を見せて編集する'))
-  call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ（画像の行は含めない）   q 閉じる'])
+  call extend(l:out, ['', ' j k 動く   Space / Enter / 番号 切り替え   a 上の 3 つを全部オン／全部オフ   q 閉じる'])
   return l:out
 endfunction
 
-function! s:filter(id, key) abort
-  if a:key ==# 'q' || a:key ==# "\<Esc>"
-    call popup_close(a:id)
-    return 1
-  elseif a:key ==# 'j' || a:key ==# "\<Down>"
-    let s:sel = (s:sel + 1) % (len(s:items) + 2)
-  elseif a:key ==# 'k' || a:key ==# "\<Up>"
-    let s:sel = (s:sel + len(s:items) + 1) % (len(s:items) + 2)
-  elseif (a:key ==# ' ' || a:key ==# "\<CR>") && s:sel == len(s:items) + 1
+" i 番目を切り替える
+function! s:toggle(i) abort
+  let l:k = s:items[a:i][0]
+  if l:k ==# 'insert'
     call gnosis#settings#set('linkEditInsert', gnosis#link_edit_insert() ? v:false : v:true)
     call gnosis#conceal_apply_all()
-  elseif (a:key ==# ' ' || a:key ==# "\<CR>") && s:sel == len(s:items)
+  elseif l:k ==# 'gz'
     call gnosis#settings#set('imageViewer', gnosis#imgview#viewer() ==# 'sixel' ? 'external' : 'sixel')
-  elseif a:key ==# ' ' || a:key ==# "\<CR>"
-    let l:k = s:items[s:sel][0]
+  else
     call gnosis#settings#set('hide.' . l:k, !gnosis#hide#get()[l:k] ? v:true : v:false)
     if l:k ==# 'image'
       call gnosis#imgview#apply_setting()
     else
       call gnosis#hide#apply_all()
     endif
+  endif
+endfunction
+
+function! s:filter(id, key) abort
+  let l:n = len(s:items)
+  if a:key ==# 'q' || a:key ==# "\<Esc>"
+    call popup_close(a:id)
+    return 1
+  elseif a:key ==# 'j' || a:key ==# "\<Down>"
+    let s:sel = (s:sel + 1) % l:n
+  elseif a:key ==# 'k' || a:key ==# "\<Up>"
+    let s:sel = (s:sel + l:n - 1) % l:n
+  elseif a:key =~# '^[1-9]$' && str2nr(a:key) <= l:n
+    let s:sel = str2nr(a:key) - 1
+    call s:toggle(s:sel)
+  elseif a:key ==# ' ' || a:key ==# "\<CR>"
+    call s:toggle(s:sel)
   elseif a:key ==# 'a'
-    " 一括: ひとつでもオフならぜんぶオン、ぜんぶオンならぜんぶオフ
+    " 一括（上の 3 つ）: ひとつでもオフならぜんぶオン、ぜんぶオンならぜんぶオフ
     let l:h = gnosis#hide#get()
     let l:to = (l:h.yaml && l:h.top && l:h.bottom) ? v:false : v:true
     for l:it in s:items[:2]
@@ -205,6 +227,6 @@ endfunction
 
 function! gnosis#hide#window() abort
   let s:sel = 0
-  call popup_create(s:lines(), {'title': ' ノートの表示 ', 'pos': 'center', 'border': [], 'padding': [1, 2, 1, 2],
+  call popup_create(s:lines(), {'title': ' 表示 ', 'pos': 'center', 'border': [], 'padding': [1, 2, 1, 2],
         \ 'zindex': 300, 'mapping': 0, 'filter': function('s:filter'), 'wrap': 0})
 endfunction

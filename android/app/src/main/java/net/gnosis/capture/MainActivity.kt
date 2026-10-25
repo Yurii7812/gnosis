@@ -78,8 +78,8 @@ class MainActivity : ComponentActivity() {
             val vc = LocalViewConfiguration.current
             val quick = remember(vc) { object : ViewConfiguration by vc { override val longPressTimeoutMillis: Long get() = 280L } }
             CompositionLocalProvider(LocalViewConfiguration provides quick) {
-                MaterialTheme(colorScheme = EasyColors) {
-                    Surface(Modifier.fillMaxSize()) { EasyApp(Store(this), promptState) }
+                MaterialTheme(colorScheme = GnosisColors) {
+                    Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
                 }
             }
         }
@@ -116,7 +116,7 @@ private val timeFmt = SimpleDateFormat("HH:mm", Locale.JAPAN)
 private val dayFmt = SimpleDateFormat("M月d日（E）", Locale.JAPAN)
 private fun dayKey(t: Long) = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(t))
 
-fun short(s: String, n: Int = 24): String {
+private fun short(s: String, n: Int = 24): String {
     val one = MEMO_LINK.replace(s) { it.groupValues[1] }.replace('\n', ' ').trim()
     return if (one.length <= n) one.ifEmpty { "（画像）" } else one.take(n) + "…"
 }
@@ -166,7 +166,7 @@ private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>,
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, start: String = "", onHome: (() -> Unit)? = null) {
+fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val entries = remember { mutableStateListOf<Entry>().apply { addAll(store.load()) } }
@@ -226,16 +226,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, start: Strin
     var deleteTopicFor by remember { mutableStateOf<String?>(null) } // 消すトピック
     if (scanOpen) { ScanScreen(onClose = { scanOpen = false }); return }
     val prompt by promptState
-    // 「くわしい操作」から開いたとき、選んだ操作をすぐ始める
-    LaunchedEffect(start) {
-        when (start) {
-            "select" -> { selecting = true; selected.clear(); rangeAnchor = null; rangeMode = false }
-            "topics" -> topicListOpen = true
-            "folge" -> if (!settings.folgeView) { settings = settings.copy(folgeView = true); store.saveSettings(settings) }
-            "search" -> search = ""
-            "settings" -> settingsOpen = true
-        }
-    }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -454,7 +444,6 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, start: Strin
     Scaffold(
         topBar = { Column {
             TopAppBar(
-                navigationIcon = { if (onHome != null) TextButton(onClick = onHome) { Text("← ホーム", fontSize = 18.sp, fontWeight = FontWeight.Bold) } },
                 title = {
                     val n = entries.count { it.id !in imported }
                     val sq = search
@@ -772,30 +761,11 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, start: Strin
     if (topicListOpen) {
         var q by remember { mutableStateOf("") }
         val list = topics.filter { it != DIARY && matchesQuery(it, q) }
-        AlertDialog(onDismissRequest = { topicListOpen = false }, title = { Text("トピック・時系列記録") },
-            text = { Column {
-                OutlinedTextField(q, { q = it }, placeholder = { Text("探す") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Filled.Search, null) })
-                LazyColumn(Modifier.heightIn(max = 360.dp).padding(top = 6.dp)) {
-                    val sections = list.partition { settings.topicModes[it]?.record != true && it !in pcRecords }
-                    listOf("トピック" to sections.first, "時系列記録" to sections.second).forEach { (heading, names) ->
-                        if (names.isNotEmpty()) item(key = "heading-$heading") { Text(heading, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
-                        items(names, key = { it }) { t ->
-                            val n = topicCounts[t] ?: 0
-                            // 名前と件数だけ。編集（名前を変える・消す・取り込み方）は長押し
-                            Row(Modifier.fillMaxWidth().combinedClickable(onClick = { setTopic(t); topicListOpen = false }, onLongClick = { topicMenuFor = t })
-                                .heightIn(min = 56.dp).padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text(t, Modifier.weight(1f), fontSize = 18.sp, fontWeight = if (t == topic) FontWeight.Bold else null)
-                                Text("$n 件", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
-                            }
-                        }
-                    }
-                    if (list.isEmpty()) item { Text(if (q.isBlank()) "まだトピックがありません" else "見つかりません", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline) }
-                }
-                OutlinedButton(onClick = { topicListOpen = false; addTopicOpen = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("＋ 新しいトピック") }
-            } },
-            confirmButton = { TextButton(onClick = { topicListOpen = false }) { Text("閉じる") } })
+        val sec = list.partition { settings.topicModes[it]?.record != true && it !in pcRecords }
+        TopicPicker("トピック・時系列記録", emptyList(), listOf(TopicSection("トピック", sec.first), TopicSection("時系列記録", sec.second)), topic, topicCounts,
+            onPick = { setTopic(it); topicListOpen = false }, onEdit = { topicListOpen = false; topicMenuFor = it },
+            newLabel = "＋ 新しいトピック", onNew = { topicListOpen = false; addTopicOpen = true }, closeLabel = "閉じる",
+            onDismiss = { topicListOpen = false }, query = q, onQuery = { q = it })
     }
 
     // トピックの取り込み方（スイッチ）: 1 つのノートにまとめる（時刻を付ける）・時系列記録。どちらもオフなら 1 件 = 1 ノート
@@ -1175,21 +1145,11 @@ private fun TopicDestinationDialog(topics: List<String>, modes: Map<String, Topi
     onDismiss: () -> Unit, onSelect: (String) -> Unit, onNew: () -> Unit) {
     var query by remember { mutableStateOf("") }
     val matched = remember(topics, query) { topics.filter { matchesQuery(topicLabel(it), query) } }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("移動先を選ぶ") },
-        text = { Column {
-            OutlinedTextField(query, { query = it }, placeholder = { Text("探す") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, null) }, modifier = Modifier.fillMaxWidth())
-            LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                if (matchesQuery(topicLabel(UNASSIGNED), query)) item { TextButton(onClick = { onSelect(UNASSIGNED) }) { Text(topicLabel(UNASSIGNED)) } }
-                val sections = matched.partition { it != DIARY && modes[it]?.record != true && it !in records }
-                listOf("トピック" to sections.first, "日記・時系列記録" to sections.second).forEach { (heading, names) ->
-                    if (names.isNotEmpty()) item { Text(heading, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
-                    items(names, key = { it }) { t -> TextButton(onClick = { onSelect(t) }, modifier = Modifier.fillMaxWidth()) { Text(topicLabel(t)) } }
-                }
-                if (matched.isEmpty() && query.isNotBlank()) item { Text("見つかりません", Modifier.padding(8.dp)) }
-            }
-            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("＋ 新しいトピックを作って移動") }
-        } }, confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } })
+    val sec = matched.partition { it != DIARY && modes[it]?.record != true && it !in records }
+    TopicPicker("移動先を選ぶ", if (matchesQuery(topicLabel(UNASSIGNED), query)) listOf(UNASSIGNED) else emptyList(),
+        listOf(TopicSection("トピック", sec.first), TopicSection("日記・時系列記録", sec.second)), null, emptyMap(),
+        onPick = onSelect, onEdit = null, newLabel = "＋ 新しいトピックを作って移動", onNew = onNew, closeLabel = "やめる",
+        onDismiss = onDismiss, query = query, onQuery = { query = it })
 }
 
 /** 長押しのシートの 1 行分。 */

@@ -80,7 +80,7 @@ try:
     ok("開くと画像が sixel で出る", out.count(b"\x1bP0;1;0q") >= 1 or out.count(b"\x1bP0;") >= 1)
     # 3) \\zz の「画像」をオン（＝隠す）にすると、画像は出ない
     out, m = run([("\\zz", 0.5), ("jjj", 0.3), (" ", 0.6), ("q", 0.8)], pre_hidden=True)
-    ok("\\zz の窓に画像の項目がある", "画像（ノートの中".encode() in out)
+    ok("\\zz の窓に画像の項目がある", "ノートの中の画像".encode() in out)
     # 4) a（全部オン）を押しても、画像はオンにならない
     out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
     ok("a で YAML などはオンになり、画像の項目はオンにならない", "[x] YAML".encode() in out and "[x] 画像".encode() not in out)
@@ -99,10 +99,10 @@ try:
     run([("3G", 0.3), ("gz", 1.0), ("j", 0.2), ("j", 0.2), ("j", 0.2), ("k", 0.2), ("\r", 1.5)], viewer=None)
     ok("最後で j を重ねても先頭へ回らない（k で 1 つ戻れば先頭）", (work / "opened.txt").read_text().strip().endswith("01-a.jpg"))
     # 6) \zz の窓の「gz で画像を開く方法」を切り替えると、gz が sixel になり、設定に残る
-    out, m = run([("\\zz", 0.8), ("jjjj", 0.3), ("\r", 0.5), ("q", 0.3), ("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("q", 0.8), ("q", 0.5)], viewer=None)
+    out, m = run([("\\zz", 0.8), ("6", 0.5), ("q", 0.3), ("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("q", 0.8), ("q", 0.5)], viewer=None)
     ok("\\zz の窓に開く方法の行がある", "gz で画像を開く方法".encode() in out[: m[0]])
-    ok("切り替えると sixel（この端末の中）と出る", "sixel（この端末の中）".encode() in out[m[1]: m[2]])
-    ok("切り替えたあとの gz は sixel で出る", b"\x1bP0;1;0q" in out[m[5]: m[6]])
+    ok("切り替えると sixel（この端末の中）と出る", "sixel（この端末の中）".encode() in out[m[0]: m[1]])
+    ok("切り替えたあとの gz は sixel で出る", b"\x1bP0;1;0q" in out[m[4]: m[5]])
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

@@ -14,7 +14,7 @@
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
 "   a i d            モード: a 全体（標準）/ i グループ・索引だけ / d 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
 "   c r              重ねる（オン/オフ。どのモードでも）: c 近いグループ / r 予測関連（関連の強い順。Related: の明示とは別の色）
-"   z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q で閉じる）
+"   z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q か、もう一度 z で閉じる）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -2674,8 +2674,36 @@ function! s:follow_do(wid, buf, timer) abort
   if l:path ==# fnamemodify(get(s:S, 'note', ''), ':p')
     return
   endif
-  let s:S.note = l:path
+  let l:rel = s:rel_of(l:path)
+  " できたばかりのノート（\n など）は曼荼羅のデータにまだ無い。その 1 つだけ読み込んでから合わせる
+  if !empty(l:rel) && !s:has(l:rel) && filereadable(l:path)
+    call s:ingest(l:rel)
+  endif
   call s:center_on(l:path)
+  " 合わせられなかったとき（まだ読み込めない）は、次の保存・読み直しのあとにもう一度試す
+  if empty(l:rel) || s:S.center ==# l:rel || !empty(get(s:S, 'pick', ''))
+    let s:S.note = l:path
+  endif
+endfunction
+
+" できたばかりのノート 1 つをキャッシュに入れ、曼荼羅のデータを読み直す（描き直しはしない）
+function! s:ingest(rel) abort
+  call s:pyc(['refresh', s:S.root, '--only', a:rel])
+  let s:S.data = {'nodes': {}}
+  let s:S.missing = {}
+  let s:S.nearc = {}
+  let s:S.relc = {}
+endfunction
+
+" 右の窓が出しているノートに、左の曼荼羅の中心を合わせる（開き方によらず。保存・窓の移動のあとにも呼ぶ）
+function! s:resync() abort
+  if empty(get(s:S, 'buf', 0)) || !empty(get(s:S, 'pick', ''))
+    return
+  endif
+  let l:nw = s:note_win()
+  if l:nw > 0
+    call timer_start(0, function('s:follow_do', [l:nw, winbufnr(l:nw)]))
+  endif
 endfunction
 
 " 曼荼羅の窓にカーソルがあるか（WinEnter / WinLeave）。無いときは選択のハイライトを消し、戻ったら付け直す
@@ -2764,6 +2792,7 @@ function! s:reload_dirty() abort
     let s:S.center = 'index.md'
   endif
   call s:render()
+  call s:resync()
 endfunction
 
 function! s:reload(...) abort
@@ -3373,7 +3402,7 @@ function! s:panel_lines(sel, msg, w) abort
   if empty(l:names)
     call add(l:out, '   （まだありません。s で今の設定を保存）')
   endif
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' j k 選ぶ  Enter 切り替え・呼び出し', ' s 保存  o 上書き  n 名前  d 消す  q 閉じる'])
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' j k 選ぶ  Enter 切り替え・呼び出し', ' s 保存  o 上書き  n 名前  d 消す  q / z 閉じる'])
   return l:out
 endfunction
 
@@ -3431,7 +3460,8 @@ function! s:preset_menu() abort
         let l:msg = 'プリセット「' . trim(l:name) . '」を保存しました'
         let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:name))
       endif
-    elseif l:k ==# 'q' || l:k ==# "\<Esc>"
+    elseif l:k ==# 'q' || l:k ==# 'z' || l:k ==# "\<Esc>"
+      " z で開いて、もう一度 z で閉じる
       return
     endif
   endwhile

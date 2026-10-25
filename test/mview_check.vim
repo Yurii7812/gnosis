@@ -579,6 +579,24 @@ call s:ok('開いたノートは右の窓に出る', index(s:nm, 'guard.md') >= 
 call s:ok('曼荼羅の中心も開いたノートに合う', s:st.center ==# 'guard.md', s:st.center)
 call s:keys('Q')
 
+" 右の窓でできたばかりのノートを開いても（\n など）、曼荼羅の中心がそのノートに合う（データにまだ無いノートも）
+%bwipeout!
+execute 'edit ' . s:v . '/herb.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:keys("\<C-w>l")
+call s:mk('fresh.md', 'できたて', 0, [], [])
+execute 'edit ' . fnameescape(s:v . '/fresh.md')
+sleep 300m
+let s:st = gnosis#mview#state()
+call s:ok('右の窓で新しく作ったノートを開くと、曼荼羅の中心も合う', s:st.center ==# 'fresh.md', s:st.center)
+" 続けて別のノートを右で開いても追従する
+execute 'edit ' . fnameescape(s:v . '/rose.md')
+sleep 300m
+call s:ok('そのあと別のノートを右で開いても追従する', gnosis#mview#state().center ==# 'rose.md', gnosis#mview#state().center)
+call s:keys("\<C-w>h")
+call s:keys('Q')
+
 " 起動時に曼荼羅を左半分に出す（設定 mandalaOnStart・既定オン。g:gnosis_mandala_on_start で止められる）
 %bwipeout!
 execute 'edit ' . s:v . '/herb.md'
@@ -819,6 +837,11 @@ call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
+" z で設定の画面が開き、もう一度 z で閉じる（キーは 2 回目の z で消費され、そのあとの j は曼荼羅の操作になる）
+let s:st = gnosis#mview#state()
+let s:cur0 = copy(s:st.cur)
+call s:keys('zzj')
+call s:ok('z → z で設定の画面が閉じ、次の j は曼荼羅を動かす', &filetype ==# 'gnosis-mandala' && empty(popup_list()) && s:st.cur != s:cur0, string([s:cur0, s:st.cur]))
 call s:keys('z' . repeat('j', 16) . 'oq')
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
