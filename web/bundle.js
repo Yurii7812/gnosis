@@ -1,4 +1,30 @@
 (() => {
+  // src/look.js
+  var mix = (a, b2, pct) => `color-mix(in srgb, ${a} ${pct}%, ${b2})`;
+  function applyPalette(p, el2 = document.documentElement) {
+    const r = el2.style;
+    const dark = p.base === "dark";
+    r.setProperty("--bg", p.bg);
+    r.setProperty("--fg", p.fg);
+    r.setProperty("--link", p.link);
+    r.setProperty("--accent", p.link);
+    r.setProperty("--heading", p.heading);
+    r.setProperty("--subheading", p.subheading || p.heading);
+    r.setProperty("--selection", p.selection);
+    r.setProperty("--cursorline", p.cursorline);
+    r.setProperty("--bg-2", mix(p.fg, p.bg, dark ? 8 : 4));
+    r.setProperty("--bg-3", mix(p.fg, p.bg, dark ? 14 : 8));
+    r.setProperty("--fg-dim", p.muted && /^#[0-9a-f]{6}$/i.test(p.muted) ? p.muted : mix(p.fg, p.bg, 62));
+    r.setProperty("--line", mix(p.fg, p.bg, dark ? 22 : 18));
+    r.setProperty("--strong", dark ? `color-mix(in srgb, ${p.fg} 40%, #ffffff)` : p.fg);
+    const hex = (v2) => typeof v2 === "string" && /^#[0-9a-f]{6}$/i.test(v2) ? v2 : "";
+    r.setProperty("--hint-fg", dark ? hex(p.hintfg) || p.bg : hex(p.hintfg) || "#1e1e1e");
+    r.setProperty("--hint-bg", dark ? hex(p.hintbg) || hex(p.muted) || mix(p.fg, p.bg, 62) : hex(p.hintbg) || "#b3b3b3");
+    el2.style.colorScheme = dark ? "dark" : "light";
+    el2.classList.toggle("theme-light", !dark);
+    el2.classList.toggle("theme-dark", dark);
+  }
+
   // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
@@ -33386,15 +33412,6 @@ ${h3.join(`
           h2("option", { value: "light", selected: s15.appearance === "light" }, t2("settings.light")),
           h2("option", { value: "dark", selected: s15.appearance === "dark" }, t2("settings.dark"))
         )),
-        field(t2("settings.item.app_appearance"), h2(
-          "select",
-          { id: "s-app-appearance", onchange: (e) => {
-            s15.appAppearance = e.target.value;
-            render();
-          } },
-          h2("option", { value: "light", selected: s15.appAppearance !== "dark" }, t2("settings.light")),
-          h2("option", { value: "dark", selected: s15.appAppearance === "dark" }, t2("settings.dark"))
-        )),
         field(t2("settings.item.theme"), h2("select", { id: "s-theme", onchange: (e) => {
           setTheme(e.target.value);
           render();
@@ -34397,7 +34414,8 @@ ${h3.join(`
   }
   function needsTerminal(s15) {
     const m = (s15.mode || "n")[0];
-    return s15.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s15.popups || 0) > 0 || s15.mode === "rm";
+    const special = !!s15.curbt && s15.curbt !== "terminal" && s15.curft !== "gnosis-mandala";
+    return special || s15.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s15.popups || 0) > 0 || s15.mode === "rm";
   }
   var MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "": "V-BLOCK", R: "REPLACE", c: "COMMAND", t: "TERMINAL", r: "PROMPT", s: "SELECT", S: "S-LINE", "": "S-BLOCK", "!": "SHELL" };
   var MODE_CLASS = { n: "normal", i: "insert", v: "visual", V: "visual", "": "visual", R: "replace", c: "command", t: "command", r: "command", s: "visual", S: "visual", "": "visual", "!": "command" };
@@ -34410,22 +34428,7 @@ ${h3.join(`
     const p = s15.palette && s15.palette.bg ? s15.palette : null;
     const r = document.documentElement.style;
     if (p) {
-      const dark = p.base === "dark";
-      r.setProperty("--bg", p.bg);
-      r.setProperty("--fg", p.fg);
-      r.setProperty("--link", p.link);
-      r.setProperty("--accent", p.link);
-      r.setProperty("--heading", p.heading);
-      r.setProperty("--subheading", p.subheading || p.heading);
-      r.setProperty("--selection", p.selection);
-      r.setProperty("--cursorline", p.cursorline);
-      r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);
-      r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 14 : 8}%, ${p.bg})`);
-      r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
-      r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
-      document.documentElement.style.colorScheme = dark ? "dark" : "light";
-      document.documentElement.classList.toggle("theme-light", !dark);
-      document.documentElement.classList.toggle("theme-dark", dark);
+      applyPalette(p);
       if (term) term.options.theme = { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.selection };
     }
     if (s15.fontSize) {

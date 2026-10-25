@@ -123,7 +123,7 @@ html { --strip-h: 54px; }
 .dirty { color: #bf8700; font-size: 10px; }
 
 /* ---- Vim のカーソル・ビジュアル選択（表示用） ---- */
-.cm-vim-block { background: color-mix(in srgb, var(--fg) 55%, transparent); color: var(--bg); border-radius: 1px; }
+.cm-vim-block, .cm-vim-block * { background: var(--fg) !important; color: var(--bg) !important; text-decoration-color: var(--bg) !important; border-radius: 1px; }
 span.cm-vim-block { display: inline-block; width: .6em; }
 span.cm-vim-bar { display: inline-block; width: 0; border-left: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; margin-left: -1px; }
 span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid var(--fg); height: 1.2em; vertical-align: text-bottom; }
@@ -142,10 +142,10 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-h3 { font-size: 1.25em; font-weight: 700; padding-top: .4em; }
 .cm-md-h4, .cm-md-h5, .cm-md-h6 { font-weight: 700; }
 .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6 { color: var(--subheading, var(--heading)); }
-.cm-md-bold { font-weight: 700; }
-.cm-md-em { font-style: italic; }
+.cm-md-bold { font-weight: 700; color: var(--strong, inherit); }
+.cm-md-em { font-style: italic; color: var(--strong, inherit); }
 .cm-md-strike { text-decoration: line-through; color: var(--fg-dim); }
-.cm-md-code { font-family: var(--font-mono); font-size: .88em; background: color-mix(in srgb, var(--fg-dim) 18%, transparent); padding: .15em .4em; border-radius: 6px; }
+.cm-md-code { font-family: var(--font-mono); font-size: .88em; background: var(--bg-2); padding: .15em .4em; border-radius: 6px; }
 .cm-md-link { color: var(--link); }
 .cm-md-link-md { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); }
 .cm-md-link-md:hover { text-decoration-color: var(--link); }
@@ -163,7 +163,7 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-activeLine { background: transparent; }
 
 /* Vim の仮想テキスト（リンクの数字のしるし）: 目立つ小さなバッジ */
-.cm-vtext { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #bc4c00; background: color-mix(in srgb, #bc4c00 12%, transparent); border-radius: 4px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; user-select: none; }
+.cm-vtext { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--hint-fg, #1e1e1e); background: var(--hint-bg, #b3b3b3); border-radius: 4px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; user-select: none; }
 
 .err { color: #cf222e; font-weight: 700; margin-left: auto; padding-right: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

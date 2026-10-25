@@ -3117,6 +3117,11 @@ function! s:preset_menu() abort
   endwhile
 endfunction
 
+" 曼荼羅が開いているか（窓が残っているか）
+function! gnosis#mview#is_open() abort
+  return exists('s:S') && type(s:S) == v:t_dict && has_key(s:S, 'win') && !empty(getwininfo(get(s:S, 'win', -1)))
+endfunction
+
 " 試験用: 設定の画面の行と、行の操作
 function! gnosis#mview#panel_text() abort
   return join(s:panel_lines(0, '', 50), "\n")

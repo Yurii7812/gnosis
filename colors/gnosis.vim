@@ -42,8 +42,9 @@ let s:accent = get(s:p, 'accent', '') =~# '^#\x\{6}$' ? s:p.accent : s:link
 let s:subheading = get(s:p, 'subheading', '') =~# '^#\x\{6}$' ? s:p.subheading : s:heading
 let s:strong = s:mix(s:fg, &background ==# 'dark' ? '#ffffff' : '#000000', 0.6)
 let s:line = s:mix(s:fg, s:bg, 0.80)
-let s:panel = s:mix(s:fg, s:bg, 0.92)
 let s:dark = &background ==# 'dark'
+" コードの背景・パネル: ダークは本文色 8%、ライトは GitHub（Markdown Viewer）の灰色（薄すぎて白一色に見えないよう 7%）
+let s:panel = s:mix(s:fg, s:bg, s:dark ? 0.92 : 0.93)
 let s:red = s:dark ? '#FF8A8A' : '#B42318'
 let s:yellow = s:dark ? '#FFD479' : '#8A5A00'
 let s:green = s:dark ? '#8FE3A8' : '#1A7F37'

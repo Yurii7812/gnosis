@@ -1,6 +1,7 @@
 // 画面側。Vim（本体）の状態を、マークダウンの見た目で映し、端末の画面は必要なときだけ見せる。
 // 2026-10-24 に作り直して小さくした: ボタン・タブ・分割・コマンドパレット・GUI 編集・閲覧専用モードは無い（Vim にある操作だけ）。
 // あるのは 起動画面（vault の選択）・マークダウンの表示・曼荼羅（アプリ専用の描き方）・端末（Vim の画面）・下のバー。
+import { applyPalette } from "./look.js";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
@@ -86,7 +87,11 @@ function overlayOnly(s) {
 // 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
 function needsTerminal(s) {
   const m = (s.mode || "n")[0];
-  return s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
+  // ノートでも曼荼羅でもない特別なバッファ（:GnosisSettings の画面・ヘルプなど。buftype が nofile / help / quickfix など）は、
+  // マークダウンとしては描けないので、端末の画面をそのまま見せる
+  // （今いる窓のバッファで見る。曼荼羅が開いていても、設定の画面などを窓に出していればそちらが要る）
+  const special = !!s.curbt && s.curbt !== "terminal" && s.curft !== "gnosis-mandala";
+  return special || s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
 }
 
 // ---------------------------------------------------------------- 状態の反映
@@ -104,23 +109,7 @@ function applyLook(s) {
   const p = s.palette && s.palette.bg ? s.palette : null;
   const r = document.documentElement.style;
   if (p) {
-    const dark = p.base === "dark";
-    r.setProperty("--bg", p.bg);
-    r.setProperty("--fg", p.fg);
-    r.setProperty("--link", p.link);
-    r.setProperty("--accent", p.link);
-    r.setProperty("--heading", p.heading);
-    r.setProperty("--subheading", p.subheading || p.heading);
-    r.setProperty("--selection", p.selection);
-    r.setProperty("--cursorline", p.cursorline);
-    r.setProperty("--bg-2", `color-mix(in srgb, ${p.fg} ${dark ? 8 : 4}%, ${p.bg})`);
-    r.setProperty("--bg-3", `color-mix(in srgb, ${p.fg} ${dark ? 14 : 8}%, ${p.bg})`);
-    r.setProperty("--fg-dim", `color-mix(in srgb, ${p.fg} 62%, ${p.bg})`);
-    r.setProperty("--line", `color-mix(in srgb, ${p.fg} ${dark ? 22 : 18}%, ${p.bg})`);
-    document.documentElement.style.colorScheme = dark ? "dark" : "light";
-    // ライトのときだけ、Markdown Viewer 拡張（GitHub スタイル）の見え方にする（styles.css の html.theme-light）
-    document.documentElement.classList.toggle("theme-light", !dark);
-    document.documentElement.classList.toggle("theme-dark", dark);
+    applyPalette(p);
     if (term) term.options.theme = { background: p.bg, foreground: p.fg, cursor: p.fg, cursorAccent: p.bg, selectionBackground: p.selection };
   }
   if (s.fontSize) {

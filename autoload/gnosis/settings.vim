@@ -107,10 +107,6 @@ function! gnosis#settings#validate(s) abort
   for l:k in ['yaml', 'top', 'bottom', 'image']
     let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
   endfor
-  " \c のアプリの外観。無ければ通常の Vim の appearance と同じ
-  if has_key(l:s, 'appAppearance') && index(['light', 'dark'], l:s.appAppearance) < 0
-    call remove(l:s, 'appAppearance')
-  endif
   let l:s.linkEditInsert = get(l:s, 'linkEditInsert', v:false) ? v:true : v:false
   if index(['external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
     let l:s.imageViewer = 'external'
@@ -270,7 +266,7 @@ function! gnosis#settings#builtin_palettes() abort
     if empty(s:palettes)
       let s:palettes = {
             \ 'start': {'base': 'dark', 'bg': '#1E1E1E', 'fg': '#DADADA', 'link': '#6CB6FF', 'heading': '#DADADA', 'muted': '#B3B3B3', 'accent': '#6CB6FF', 'selection': '#474747', 'cursorline': '#262626'},
-            \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#222222', 'link': '#0969DA', 'heading': '#222222', 'subheading': '#222222', 'muted': '#5C5C5C', 'accent': '#222222', 'selection': '#D6D6D6', 'cursorline': '#F6F6F6'},
+            \ 'light': {'base': 'light', 'bg': '#FFFFFF', 'fg': '#1F2328', 'link': '#0969DA', 'heading': '#1F2328', 'subheading': '#1F2328', 'muted': '#59636E', 'accent': '#1F2328', 'selection': '#B6D4F1', 'cursorline': '#F6F8FA'},
             \ 'dark': {'base': 'dark', 'bg': '#1E1E1E', 'fg': '#DADADA', 'link': '#6CB6FF', 'heading': '#DADADA', 'subheading': '#DADADA', 'muted': '#B3B3B3', 'accent': '#B3B3B3', 'selection': '#474747', 'cursorline': '#262626'},
             \ 'app': {'base': 'light', 'bg': '#FAFAFA', 'fg': '#1F1F1F', 'link': '#21538C', 'heading': '#603510', 'muted': '#575757', 'accent': '#2D70BE', 'selection': '#B5CFEE', 'cursorline': '#EBEBEB'},
             \ }

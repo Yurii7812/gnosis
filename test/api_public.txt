@@ -252,6 +252,7 @@ gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click
 gnosis#mview#gui_state
+gnosis#mview#is_open
 gnosis#mview#items
 gnosis#mview#link_pick
 gnosis#mview#link_pick_visual

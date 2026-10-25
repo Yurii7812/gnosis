@@ -10,7 +10,7 @@
 " Electron アプリは同じ設定を HTML の画面で変える（同じファイルを読み書きする）。
 " =============================================================================
 
-let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'app_appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
+let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
 let s:font_items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal']
 
 function! s:t(key, ...) abort
@@ -41,7 +41,15 @@ function! gnosis#settings_ui#open(...) abort
   let s:sel = max([0, min([get(l:opts, 'sel', 0), len(s:items) - 1])])
   let s:message = ''
   let s:prev_buf = get(l:opts, 'prev_buf', bufnr('%'))
-  enew
+  " 曼荼羅が開いている窓（またはその横）で enew すると、曼荼羅が自分のバッファを戻して設定の画面がすぐ消える。
+  " そのときは新しいタブに出し、閉じるときにそのタブを閉じる（再描画で開き直すときは、すでに出ているタブをそのまま使う）
+  let s:in_tab = get(l:opts, 'in_tab', 0)
+  if !s:in_tab && (&filetype ==# 'gnosis-mandala' || gnosis#mview#is_open())
+    tabnew
+    let s:in_tab = 1
+  else
+    enew
+  endif
   setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nonumber norelativenumber nowrap nolist
   silent! file Gnosis\ Settings
   let b:gnosis_settings = 1
@@ -103,8 +111,6 @@ function! s:value(item) abort
     return l:s.window.width . ' × ' . l:s.window.height
   elseif a:item ==# 'appearance'
     return l:s.appearance ==# 'light' ? s:t('settings.light') : s:t('settings.dark')
-  elseif a:item ==# 'app_appearance'
-    return get(l:s, 'appAppearance', l:s.appearance) ==# 'dark' ? s:t('settings.dark') : s:t('settings.light')
   elseif a:item ==# 'theme'
     return s:theme_label(l:s)
   elseif a:item ==# 'app_theme'
@@ -319,8 +325,6 @@ function! s:change(item) abort
     return
   elseif a:item ==# 'appearance'
     let l:s.appearance = l:s.appearance ==# 'light' ? 'dark' : 'light'
-  elseif a:item ==# 'app_appearance'
-    let l:s.appAppearance = get(l:s, 'appAppearance', l:s.appearance) ==# 'dark' ? 'light' : 'dark'
   elseif a:item ==# 'theme'
     call s:choose_theme()
   elseif a:item ==# 'theme_add'
@@ -418,12 +422,17 @@ function! s:editor_closed(target, result) abort
     call s:save()
   endif
   " 設定画面に戻る（保存したテーマを読み直して表示）
-  call gnosis#settings_ui#open({'vault': s:vault, 'from_start': s:from_start, 'sel': s:editor_sel, 'prev_buf': s:prev_buf})
+  call gnosis#settings_ui#open({'vault': s:vault, 'from_start': s:from_start, 'sel': s:editor_sel, 'prev_buf': s:prev_buf, 'in_tab': get(s:, 'in_tab', 0)})
 endfunction
 
 function! gnosis#settings_ui#close() abort
   if gnosis#start#active() || get(s:, 'from_start', 0) && gnosis#start#active()
     call gnosis#start#open()
+    return
+  endif
+  if get(s:, 'in_tab', 0) && tabpagenr('$') > 1
+    let s:in_tab = 0
+    tabclose
     return
   endif
   if bufexists(get(s:, 'prev_buf', -1))

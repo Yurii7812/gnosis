@@ -163,6 +163,8 @@ function! s:snapshot(force) abort
         \ 'cmdtype': getcmdtype(),
         \ 'mandala': l:ms,
         \ 'scanReq': get(g:, 'gnosis_gui_scan_req', 0),
+        \ 'curbt': &buftype,
+        \ 'curft': &filetype,
         \ 'hideImage': gnosis#hide#get().image,
         \ 'linkEdit': gnosis#link_edit_insert(),
         \ }

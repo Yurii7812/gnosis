@@ -20,6 +20,8 @@ const DOC = `# 見出し 1
 
 本文の段落です。**太字**・*斜体*・\`inline code\`・[リンク](a.md) を含みます。
 
+リンクの行: [リンク先](b.md) と続きの文字
+
 ## 見出し 2
 
 > 引用文です。
@@ -42,22 +44,19 @@ code block
 
 fs.writeFileSync(path.join(tmp, "entry.js"), `
 import { createView } from ${JSON.stringify(path.join(web, "src/view.js"))};
+import { applyPalette } from ${JSON.stringify(path.join(web, "src/look.js"))};
 const PAL = ${JSON.stringify(pal)};
 const params = new URLSearchParams(location.search);
 const which = params.get("t") === "dark" ? "dark" : "light";
 const p = PAL[which];
-const r = document.documentElement.style;
-const dark = p.base === "dark";
-r.setProperty("--bg", p.bg); r.setProperty("--fg", p.fg); r.setProperty("--link", p.link); r.setProperty("--heading", p.heading);
-r.setProperty("--subheading", p.subheading || p.heading); r.setProperty("--selection", p.selection);
-r.setProperty("--bg-2", "color-mix(in srgb, " + p.fg + " " + (dark ? 8 : 4) + "%, " + p.bg + ")");
-r.setProperty("--fg-dim", "color-mix(in srgb, " + p.fg + " 62%, " + p.bg + ")");
-r.setProperty("--line", "color-mix(in srgb, " + p.fg + " " + (dark ? 22 : 18) + "%, " + p.bg + ")");
-document.documentElement.classList.toggle("theme-light", !dark);
-document.documentElement.classList.toggle("theme-dark", dark);
+applyPalette(p);
 const v = createView({ parent: document.body, getImageURL: () => null });
 v.setText(${JSON.stringify(DOC)});
-v.setVim({ cur: [28, 1], mode: "n" });   // カーソルは最後の行（ほかの行は全部「描いた見た目」になる）
+// カーソルは「リンクの行」のリンクの上（2 文字目）。リンクの番号のしるし（Vim の仮想テキスト）も付ける
+const LNK = ${JSON.stringify("リンクの行: [")};
+const curByte = new TextEncoder().encode(LNK).length + 1 + new TextEncoder().encode("リ").length;
+v.setVtext([[5, new TextEncoder().encode(LNK).length + 1, "1", "GnosisLinkHint"]]);
+v.setVim({ cur: [5, curByte], mode: "n" });
 const cs = (sel, prop) => { const e = document.querySelector(sel); return e ? getComputedStyle(e)[prop] : null; };
 setTimeout(() => {
   const out = {
@@ -76,6 +75,8 @@ setTimeout(() => {
     th: { border: cs("table.cm-md-table th", "borderTopWidth"), pad: cs("table.cm-md-table th", "paddingLeft"), weight: cs("table.cm-md-table th", "fontWeight") },
     tdEven: cs("table.cm-md-table tbody tr:nth-child(even) td", "backgroundColor"),
     hasLightClass: document.documentElement.classList.contains("theme-light"),
+    cursor: (() => { const e = document.querySelector(".cm-vim-block"); if (!e) return null; const c = getComputedStyle(e); return { text: e.textContent, color: c.color, bg: c.backgroundColor, inLink: !!e.closest(".cm-md-link") || !!e.querySelector(".cm-md-link") }; })(),
+    hint: (() => { const e = document.querySelector(".cm-vtext"); if (!e) return null; const c = getComputedStyle(e); return { color: c.color, bg: c.backgroundColor }; })(),
   };
   document.title = "RESULT=" + JSON.stringify(out);
 }, 500);
@@ -120,6 +121,12 @@ try {
   check(L.fence.bg === "rgb(246, 248, 250)" && L.fence.pad === "16px", "light: コードブロック " + JSON.stringify(L.fence));
   check(L.th.border === "1px" && L.th.pad === "13px" && L.th.weight === "600", "light: 表のセル " + JSON.stringify(L.th));
   check(L.tdEven === "rgb(246, 248, 250)", "light: 表の偶数行 " + L.tdEven);
+  // カーソルがリンクの上でも、文字が読める（背景 = 本文色・文字 = 背景色）。番号の札は CUI ダークと同じ灰色と黒（赤・橙にしない）
+  check(L.cursor && L.cursor.bg === "rgb(31, 35, 40)" && L.cursor.color === "rgb(255, 255, 255)", "light: カーソルは本文色の塊に背景色の文字 " + JSON.stringify(L.cursor));
+  check(L.hint && L.hint.bg === "rgb(179, 179, 179)" && L.hint.color === "rgb(30, 30, 30)", "light: 番号の札は灰色（#B3B3B3）と黒（#1E1E1E） " + JSON.stringify(L.hint));
+  check(D.hint && D.hint.bg === "rgb(179, 179, 179)" && D.hint.color === "rgb(30, 30, 30)", "dark: 番号の札は CUI ダークと同じ " + JSON.stringify(D.hint));
+  check(D.cursor && D.cursor.bg === "rgb(218, 218, 218)" && D.cursor.color === "rgb(30, 30, 30)", "dark: カーソルは本文色の塊 " + JSON.stringify(D.cursor));
+  check(L.bodyColor === "rgb(31, 35, 40)", "light: 本文は #1F2328（GitHub） " + L.bodyColor);
   // ダークは変えない（従来の見え方）
   check(!D.hasLightClass, "dark: html.theme-light は付かない");
   check(D.contentMaxWidth === "860px", "dark: 本文の幅は従来どおり 860px " + D.contentMaxWidth);

@@ -75,6 +75,11 @@ const scenario = `(async () => {
   await press('q', 700);
   R.zz = { before: hid0, open: hid1, after: shown(), st: JSON.stringify(G.state().hide) };
   await press(':call gnosis#settings#set("hide.yaml", v:false)|call gnosis#hide#apply_all()\\r', 700);
+  // :GnosisSettings（特別なバッファ）は、端末の画面が全面に出て読める
+  await press(':GnosisSettings\\r', 1300);
+  R.settings = { expanded: G.isExpanded(), text: G.screen().join('\\n').includes('Gnosis — 設定') };
+  await press('q', 900);
+  R.settings.back = !G.isExpanded();
   // \\zz の設定（YAML・上下の名前: 系を隠す）
   await press(':call gnosis#settings#set("hide.yaml", v:true)|call gnosis#settings#set("hide.top", v:true)|call gnosis#settings#set("hide.bottom", v:true)|call gnosis#hide#apply_all()\\r', 800);
   // 曼荼羅を開く
@@ -165,6 +170,7 @@ try {
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.start?.h1, "markdown should render at start: " + JSON.stringify(R.start));
   check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 11, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
+  check(R.settings && R.settings.expanded && R.settings.text && R.settings.back, ":GnosisSettings should show the terminal screen and q should return: " + JSON.stringify(R.settings));
   check(R.fm && R.fm.fm === R.fm.body, "YAML should not be gray (same color as the body text): " + JSON.stringify(R.fm));
   check(R.zz && R.zz.after < R.zz.before, "\\\\zz in the app should really hide YAML: " + JSON.stringify(R.zz));
   check(R.hide && R.hide.lines > 0, "YAML in the right note pane should be hidden: " + JSON.stringify(R.hide));

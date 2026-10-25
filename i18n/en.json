@@ -706,7 +706,6 @@
     "settings.dark": "Dark",
     "settings.installing": "Downloading the theme…",
     "settings.item.appearance": "Theme (dark / light)",
-    "settings.item.app_appearance": "App (\\c) dark / light",
     "settings.item.custom": "Create / edit custom colors (regular Vim)",
     "settings.item.fontSize": "Font size",
     "settings.item.language": "Language",
