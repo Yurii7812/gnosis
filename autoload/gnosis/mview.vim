@@ -12,8 +12,9 @@
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
-"   a i              モード: a 全体（標準）/ i グループ・索引だけ
+"   a i ,            モード: a 全体（標準）/ i グループ・索引だけ / , 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
 "   c r              重ねる（オン/オフ。どのモードでも）: c 近いグループ / r 予測関連（関連の強い順。Related: の明示とは別の色）
+"   '                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q で閉じる）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -27,8 +28,8 @@ let s:here = expand('<sfile>:p:h:h:h')
 let s:pos = [[0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0], [1, 0], [0, 0]]   " 8 1 2 / 7 _ 3 / 6 5 4（上の段の真ん中が 1 で時計回り）
 " 番号はテンキーと同じ並び（1 2 3 / 4 5 6 / 7 8 9）。真ん中が 5
 let s:nums = [1, 2, 3, 4, 5, 6, 7, 8]
-let s:mode_label = {'all': '全体', 'groups': '索引'}
-let s:mode_keys = [['a', 'all'], ['i', 'groups']]
+let s:mode_label = {'all': '全体', 'groups': '索引', 'family': '親子'}
+let s:mode_keys = [['a', 'all'], ['i', 'groups'], [',', 'family']]
 " 重ねるもの（オン/オフ）: [キー, 状態の名前, 表示名]
 let s:over_keys = [['c', 'near_on', '近いグループ'], ['r', 'rel_on', '予測関連']]
 
@@ -392,6 +393,12 @@ function! gnosis#mview#entries(data, center, mode) abort
     endif
     " 親 → 文脈 → 引用 → 子 → 関連。向かってくる辺（相手にだけ書かれた親子・文脈・関連）も同じ種類として出す
     let l:in = get(l:c, 'i', {})
+    if a:mode ==# 'family'
+      " 親子だけ: 親（ParentBranch: に書いたもの＋相手の ChildBranch: に自分が書かれているもの）→
+      " 子（ChildBranch: に書いたもの＋相手の ParentBranch: に自分が書かれているもの。自分の ChildBranch: に無くても出す）
+      call add(l:plan, [get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []), -1])
+      call add(l:plan, [get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', []), -1])
+    endif
     if a:mode ==# 'notes' || a:mode ==# 'all'
       call add(l:plan, [get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []), -1])
       call add(l:plan, [get(l:o, 'context', []) + get(l:in, 'context', []), -1])
@@ -1082,12 +1089,12 @@ function! s:help_lines() abort
         \ ' 動く      h j k l / 矢印    1-8 そのマスへ(9 か 0 が中心)   t 数字の動き切替   z 中央に',
         \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
         \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 中心 → 1 … 8（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
-        \ ' モード     a 全体   i グループ・索引だけ',
+        \ ' モード     a 全体   i グループ・索引だけ   , 親子だけ(親と子。相手の ParentBranch: に自分が書かれているものも子に出す)',
         \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)   y c と r を両方オフ',
         \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
         \ ' 索引に入れる  e これにする(選んでいる最中。\l では置き場所を聞かれる: h i t は右の元のノートで場所を選んで Enter、q で選び直し)   o 入れるノートを見る/戻る',
         \ ' 並べる     v 外向き(リンクを中心の周りの輪に 1 つずつ最大 80 個。内側の輪は上の段の真ん中が 1 で時計回り、次の輪は上の段の左から 2 つ目が 9 で時計回り)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
-        \ ' プリセット  '' 設定に名前をつけて保存・呼び出し・名前変更・消す   u 見出しも 1 つのマスに(アウトライン)   . 読み直し',
+        \ ' 設定の画面  '' モード・重ねるものをその場で切り替え。プリセットの保存・呼び出し・名前変更・消す(右に出る。q で閉じる)   u 見出しも 1 つのマスに(アウトライン)   . 読み直し',
         \ ' 画面       f 全画面(9×9)⇔分割   p 右のノートを隠す・出す   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す      Space ノートへ',
         \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
         \ '',
@@ -1162,7 +1169,7 @@ function! s:status(ctitle, pages, ptop, extra) abort
   " 中心のノートの題は上に出さない（盤面の真ん中のマスに出ている）
   return printf(' %s%s%s  [%s] %s%s%s', s:pick_label(),
         \ (a:pages > 1 && empty(a:ptop) && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . a:pages . '  ' : '', s:S.size == 3 ? '3×3' : '9×9',
-        \ s:S.mode ==# 'all' ? 'a' : 'i', l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
+        \ get({'all': 'a', 'groups': 'i', 'family': '親子'}, s:S.mode, 'a'), l:ov, empty(l:cancel) ? '' : '   ' . l:cancel, a:extra)
 endfunction
 
 function! s:render() abort
@@ -2294,6 +2301,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
   nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
+  nnoremap <buffer><nowait><silent> , <Cmd>call <SID>setmode('family')<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> y <Cmd>call <SID>over_off()<CR>
@@ -2627,7 +2635,7 @@ function! s:open(center, ...) abort
       if get(l:all, 'digit', '') =~# '^\(jump\|move\)$'
         let s:S.digit = l:all.digit
       endif
-      if get(l:all, 'mode', '') =~# '^\(all\|groups\)$' && !has_key(s:S, 'mode_set')
+      if get(l:all, 'mode', '') =~# '^\(all\|groups\|family\)$' && !has_key(s:S, 'mode_set')
         let s:S.mode = l:all.mode
       endif
     endif
@@ -3004,58 +3012,115 @@ function! gnosis#mview#preset_apply(name) abort
   return 1
 endfunction
 
-" ': プリセットの画面。j k / 矢印で選んで、Enter=呼び出し  o=上書き保存  n=名前変更  d=消す  s=新しく保存  q=閉じる
-" （番号 1-9 でそのまま呼び出すこともできる）
+" ': 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
+"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i , c r t # p u f v w はふだんのキーのまま使える
+"   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
+function! s:panel_rows() abort
+  let l:Onoff = {v -> v ? 'オン' : 'オフ'}
+  let l:mode = get(s:S, 'mode', 'all')
+  return [
+        \ {'key': 'a', 'name': 'モード', 'val': '[' . get(s:mode_label, l:mode, l:mode) . ']  全体:a 索引:i 親子:,', 'act': function('s:panel_mode')},
+        \ {'key': 'c', 'name': '近いグループを重ねる', 'val': l:Onoff(get(s:S, 'near_on', 0)), 'act': function('s:toggle_over', ['near_on'])},
+        \ {'key': 'r', 'name': '予測関連を重ねる', 'val': l:Onoff(get(s:S, 'rel_on', 0)), 'act': function('s:toggle_over', ['rel_on'])},
+        \ {'key': 't', 'name': '数字キーの動き', 'val': get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ', 'act': function('s:toggle_digit')},
+        \ {'key': '#', 'name': '番号を出す', 'val': l:Onoff(get(s:S, 'nums', 1)), 'act': function('s:toggle_nums')},
+        \ {'key': 'p', 'name': '右にノートの本文を出す', 'val': l:Onoff(get(s:S, 'nv', 1)), 'act': function('s:toggle_preview')},
+        \ {'key': 'u', 'name': '見出しも並べる', 'val': l:Onoff(get(s:S, 'ol_on', 0)), 'act': function('s:toggle_outline')},
+        \ {'key': 'f', 'name': '全画面（9×9）', 'val': l:Onoff(s:S.size == 9), 'act': function('s:full')},
+        \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
+        \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
+        \ ]
+endfunction
+
+" モードを 全体 → 索引 → 親子 → 全体 と順に切り替える
+function! s:panel_mode() abort
+  let l:order = ['all', 'groups', 'family']
+  call s:setmode(l:order[(index(l:order, get(s:S, 'mode', 'all')) + 1) % len(l:order)])
+endfunction
+
+" 画面の行（試験用に外へも出す）。sel は選んでいる行の番号（設定の行 → プリセットの行の通し）
+function! s:panel_lines(sel, msg, w) abort
+  let l:rows = s:panel_rows()
+  let l:names = gnosis#mview#preset_names()
+  let l:out = [' 曼荼羅の設定', '']
+  for l:i in range(len(l:rows))
+    let l:lab = gnosis#i18n#tr(l:rows[l:i].name) . ' ' . l:rows[l:i].key
+    call add(l:out, ' ' . (l:i == a:sel ? '▶' : ' ') . ' ' . l:lab . repeat(' ', max([1, 28 - strdisplaywidth(l:lab)])) . l:rows[l:i].val)
+  endfor
+  call extend(l:out, ['', ' プリセット'])
+  for l:j in range(len(l:names))
+    call add(l:out, printf(' %s %s %s', len(l:rows) + l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
+  endfor
+  if empty(l:names)
+    call add(l:out, '   （まだありません。s で今の設定を保存）')
+  endif
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' j k 選ぶ  Enter 切り替え・呼び出し', ' s 保存  o 上書き  n 名前  d 消す  q 閉じる'])
+  return l:out
+endfunction
+
 function! s:preset_menu() abort
   let l:sel = 0
   let l:msg = ''
   while 1
+    let l:rows = s:panel_rows()
     let l:names = gnosis#mview#preset_names()
-    let l:sel = empty(l:names) ? 0 : min([l:sel, len(l:names) - 1])
-    let l:lines = [' 曼荼羅のプリセット', '']
-    for l:i in range(len(l:names))
-      call add(l:lines, printf(' %s %s %s', l:i == l:sel ? '▶' : ' ', l:i < 9 ? (l:i + 1) . '' : ' ', l:names[l:i]))
-    endfor
-    if empty(l:names)
-      call add(l:lines, '  （まだありません）')
-    endif
-    call extend(l:lines, ['', empty(l:msg) ? '' : ' ' . l:msg, ' j k 選ぶ   Enter 呼び出し   o 上書き保存   n 名前を変える   d 消す', ' s 今の設定を新しく保存   q 閉じる'])
-    let l:pid = popup_create(l:lines, {'pos': 'center', 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': " ' "})
+    let l:n = len(l:rows) + len(l:names)
+    let l:sel = min([l:sel, l:n - 1])
+    let l:w = max([44, min([60, &columns / 2 - 2])])
+    let l:pid = popup_create(s:panel_lines(l:sel, l:msg, l:w), {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - l:w - 1]),
+          \ 'minwidth': l:w, 'maxwidth': l:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': " ' "})
     redraw
     let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
     let l:msg = ''
-    let l:cur = empty(l:names) ? '' : l:names[l:sel]
+    let l:pre = l:sel >= len(l:rows) ? l:names[l:sel - len(l:rows)] : ''
+    let l:hot = filter(range(len(l:rows)), 'l:rows[v:val].key ==# l:k')
     if l:k ==# 'j' || l:k ==# "\<Down>"
-      let l:sel = empty(l:names) ? 0 : (l:sel + 1) % len(l:names)
+      let l:sel = (l:sel + 1) % l:n
     elseif l:k ==# 'k' || l:k ==# "\<Up>"
-      let l:sel = empty(l:names) ? 0 : (l:sel + len(l:names) - 1) % len(l:names)
-    elseif (l:k ==# "\<CR>" || l:k ==# "\r") && !empty(l:cur)
-      call gnosis#mview#preset_apply(l:cur)
-      return
+      let l:sel = (l:sel + l:n - 1) % l:n
+    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# ','
+      call s:setmode(get({'a': 'all', 'i': 'groups', ',': 'family'}, l:k))
+    elseif !empty(l:hot)
+      call l:rows[l:hot[0]].act()
+    elseif l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' '
+      if l:sel < len(l:rows)
+        call l:rows[l:sel].act()
+      elseif !empty(l:pre)
+        call gnosis#mview#preset_apply(l:pre)
+        let l:msg = '「' . l:pre . '」を呼び出しました'
+      endif
     elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(l:names)
       call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
-      return
-    elseif l:k ==# 'o' && !empty(l:cur)
-      call gnosis#mview#preset_overwrite(l:cur)
-      let l:msg = '「' . l:cur . '」を今の設定で上書きしました'
-    elseif l:k ==# 'n' && !empty(l:cur)
-      let l:new = input('新しい名前（' . l:cur . '）: ', l:cur)
+      let l:msg = '「' . l:names[str2nr(l:k) - 1] . '」を呼び出しました'
+    elseif l:k ==# 'o' && !empty(l:pre)
+      call gnosis#mview#preset_overwrite(l:pre)
+      let l:msg = '「' . l:pre . '」を今の設定で上書きしました'
+    elseif l:k ==# 'n' && !empty(l:pre)
+      let l:new = input('新しい名前（' . l:pre . '）: ', l:pre)
       redraw
-      if gnosis#mview#preset_rename(l:cur, l:new)
-        let l:sel = index(gnosis#mview#preset_names(), trim(l:new))
+      if gnosis#mview#preset_rename(l:pre, l:new)
+        let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:new))
       endif
-    elseif l:k ==# 'd' && !empty(l:cur)
-      call gnosis#mview#preset_delete(l:cur)
+    elseif l:k ==# 'd' && !empty(l:pre)
+      call gnosis#mview#preset_delete(l:pre)
     elseif l:k ==# 's'
       let l:name = input('プリセットの名前: ')
       redraw
       if gnosis#mview#preset_save(l:name)
-        echo 'Gnosis: プリセット「' . trim(l:name) . '」を保存しました'
+        let l:msg = 'プリセット「' . trim(l:name) . '」を保存しました'
+        let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:name))
       endif
-      return
     elseif l:k ==# 'q' || l:k ==# "\<Esc>"
       return
     endif
   endwhile
+endfunction
+
+" 試験用: 設定の画面の行と、行の操作
+function! gnosis#mview#panel_text() abort
+  return join(s:panel_lines(0, '', 50), "\n")
+endfunction
+function! gnosis#mview#panel_act(i) abort
+  call s:panel_rows()[a:i].act()
 endfunction

@@ -252,6 +252,8 @@ gnosis#mview#gui_state
 gnosis#mview#items
 gnosis#mview#link_pick
 gnosis#mview#link_pick_visual
+gnosis#mview#panel_act
+gnosis#mview#panel_text
 gnosis#mview#place_cancel
 gnosis#mview#place_decide
 gnosis#mview#place_start
