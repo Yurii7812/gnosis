@@ -28,6 +28,7 @@ from urllib.parse import unquote
 
 import note_format_v2 as nf
 import re
+import search_query as sq
 import sys
 
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", "__pycache__",
@@ -38,7 +39,8 @@ RESET = "\033[0m"
 
 
 def split_tokens(query: str) -> list[str]:
-    return [t for t in re.split(r"[\s\u3000]+", query) if t]
+    """色をつける語（検索の書き方は search_query.py。肯定の語だけ）。"""
+    return sq.terms(query)
 
 
 def title_of(text: str, path: str) -> tuple[str, int]:
@@ -103,8 +105,8 @@ def load_notes(root: str):
 
 def first_hit_line(lines: list[str], tokens: list[str]) -> int:
     for i, ln in enumerate(lines, 1):
-        low = ln.lower()
-        if any(t.lower() in low for t in tokens):
+        low = sq.normalize(ln)
+        if any(sq.normalize(t) in low for t in tokens):
             return i
     return 1
 
@@ -165,6 +167,7 @@ def search_rows(root: str, query: str, mode: str = "all", only: dict[str, str] |
     hit in the destination (a name supplied by an index is not a body hit).
     """
     tokens = split_tokens(query)
+    groups = sq.parse(query)
     notes = dict(load_notes(root))
     candidates = []
     for path, text in notes.items():
@@ -187,13 +190,24 @@ def search_rows(root: str, query: str, mode: str = "all", only: dict[str, str] |
         text = notes[path]
         title, _tline = title_of(text, path)
         shown = name or title
-        hay = (name + "\n" + text).lower()
-        if tokens and not all(t.lower() in hay for t in tokens):
+        hay = sq.normalize(name + "\n" + text)
+        nname, ntitle = sq.normalize(name), sq.normalize(title)
+        # OR で分けた組のうち、合うものの中で、名前・題に当たる語がいちばん多いものを使う（除外の語がどこかにあれば、その組は外れる）
+        best = None
+        for g in groups:
+            if any(sq.normalize(w) in hay for w in g.neg):
+                continue
+            if not all(sq.normalize(w) in hay for w in g.pos):
+                continue
+            nh = sum(sq.normalize(w) in nname for w in g.pos)
+            th = sum(sq.normalize(w) in ntitle for w in g.pos)
+            if best is None or (nh, th) > (best[0], best[1]):
+                best = (nh, th, g.pos)
+        if groups and best is None:
             continue
-        name_hits = sum(t.lower() in name.lower() for t in tokens)
-        title_hits = sum(t.lower() in title.lower() for t in tokens)
-        body_hit = any(t.lower() in text.lower() for t in tokens)
-        line = first_hit_line(text.split("\n"), tokens) if body_hit else (0 if tokens else 1)
+        name_hits, title_hits, gpos = best if best else (0, 0, [])
+        body_hit = any(sq.normalize(t) in sq.normalize(text) for t in gpos)
+        line = first_hit_line(text.split("\n"), gpos) if body_hit else (0 if groups else 1)
         rows.append((-name_hits, -title_hits, shown.casefold(), path, shown, line, source))
     rows.sort()
     return rows

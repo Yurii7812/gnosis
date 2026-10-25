@@ -79,6 +79,8 @@ python3 "$REPO/python/test_import_notes.py"
 python3 "$REPO/python/test_collector.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
+python3 "$REPO/python/test_search_ops.py"
+sh "$REPO/test/search_query_net.sh"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \
@@ -128,6 +130,7 @@ sh "$REPO/test/mview_depth_net.sh"
 python3 "$REPO/test/mview_ui_pty_check.py"
 python3 "$REPO/test/mview_frame_pty_check.py"
 python3 "$REPO/test/start_size_check.py"
+python3 "$REPO/test/close_keys_pty_check.py"
 
 # - [ ] の行で Enter すると次の行にも - [ ] を作る
 sh "$REPO/test/checkbox_net.sh"

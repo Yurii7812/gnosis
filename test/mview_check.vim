@@ -903,6 +903,16 @@ call s:ok('x の -語: その語を含むノートが出ない（ほかは残る
 let s:st.query = 'ミ -ミント'
 call s:keys("\<C-l>")
 call s:ok('絞り込みと除外を一緒に（ミ を含み ミント は含まない）', index(s:cell_ids(), 'mint.md') < 0, string(s:cell_ids()))
+" x の OR（前後に空白のある |）と、演算子と同じ文字を探すとき（\- ・" "）
+let s:st.query = 'ミント | バジル'
+call s:keys("\<C-l>")
+call s:ok('x の OR: どちらかを含むノートが出る（ミント | バジル）', index(s:cell_ids(), 'mint.md') >= 0 && index(s:cell_ids(), 'basil.md') >= 0 && index(s:cell_ids(), 'rose.md') < 0, string(s:cell_ids()))
+let s:st.query = '\-ミント'
+call s:keys("\<C-l>")
+call s:ok('x: \- で、- を含む題を文字として探す（そんな題は無いので空）', empty(s:cell_ids()), string(s:cell_ids()))
+let s:st.query = '"ミント" -バジル'
+call s:keys("\<C-l>")
+call s:ok('x: 句と除外の組み合わせ', index(s:cell_ids(), 'mint.md') >= 0 && index(s:cell_ids(), 'basil.md') < 0, string(s:cell_ids()))
 let s:st.query = ''
 call s:keys("\<C-l>")
 call s:keys('Q')

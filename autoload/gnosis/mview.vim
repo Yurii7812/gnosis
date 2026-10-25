@@ -648,38 +648,30 @@ function! s:deepen(first) abort
   return s:S.deep_memo.list
 endfunction
 
-" x の入力: 空白で区切った語。`-語` はその語を含むものを除く（除外）。それ以外は全部含むもの（AND）。例: `ハーブ -メモ`
-function! s:q_parse(q) abort
-  let l:pos = []
-  let l:neg = []
-  for l:w in split(tolower(a:q), '\s\+')
-    if l:w =~# '^-.' | call add(l:neg, l:w[1 :]) | elseif l:w !=# '-' | call add(l:pos, l:w) | endif
-  endfor
-  return [l:pos, l:neg]
-endfunction
-
-function! s:q_match(text, pos, neg) abort
-  for l:w in a:pos
-    if stridx(a:text, l:w) < 0 | return 0 | endif
-  endfor
-  for l:w in a:neg
-    if stridx(a:text, l:w) >= 0 | return 0 | endif
-  endfor
-  return 1
-endfunction
-
+" x の入力（検索の書き方は autoload/gnosis/query.vim。AND=空白・NOT=-語・OR=` | `・句="…"・文字=\ か "…"）
 function! s:items_raw(c) abort
   let l:b = s:base(a:c)
   if a:c !=# s:S.center || empty(s:S.query)
     return l:b
   endif
-  let [l:pos, l:neg] = s:q_parse(s:S.query)
-  if get(s:S, 'pick', '') ==# 'group'
-    let l:found = empty(l:pos) ? map(copy(l:b), 'v:val[0]') : s:pyc(['find', s:S.root] + l:pos)
-    let l:out = map(filter(type(l:found) == v:t_list ? l:found : [], 'v:val !=# a:c'), '[v:val, ""]')
-    return empty(l:neg) ? l:out : filter(l:out, 's:q_match(s:entry_text(v:val), [], l:neg)')
+  let l:gs = gnosis#query#parse(s:S.query)
+  if empty(l:gs)
+    return l:b
   endif
-  return filter(l:b, 's:q_match(s:entry_text(v:val), l:pos, l:neg)')
+  if get(s:S, 'pick', '') ==# 'group'
+    " 索引を探す: 組ごとに python の find（題・よみ）で探し、その組の除外の語を含むものを外して、全部の組を合わせる
+    let l:ids = []
+    for l:g in l:gs
+      let l:found = empty(l:g.pos) ? map(copy(l:b), 'v:val[0]') : s:pyc(['find', s:S.root] + l:g.pos)
+      for l:id in (type(l:found) == v:t_list ? l:found : [])
+        if l:id !=# a:c && index(l:ids, l:id) < 0 && gnosis#query#match([{'pos': [], 'neg': l:g.neg}], s:entry_text([l:id, '']))
+          call add(l:ids, l:id)
+        endif
+      endfor
+    endfor
+    return map(l:ids, '[v:val, ""]')
+  endif
+  return filter(l:b, 'gnosis#query#match(l:gs, s:entry_text(v:val))')
 endfunction
 
 function! s:pages(center) abort
@@ -1541,41 +1533,6 @@ function! s:addpos(group, pos, prio) abort
   endfor
 endfunction
 
-" マス（spans: [行, 開始バイト, バイト長] が上から下まで）の周りの枠のセルの位置: 左右の縦線の列と、上下の横線の行。
-" バッファの文字から、線の文字（罫線は 3 バイト・色の線のときは空白 1 バイト）の長さを読んで求める
-function! s:frame_pos(sp) abort
-  if empty(a:sp)
-    return []
-  endif
-  let l:first = a:sp[0]
-  let l:last = a:sp[-1]
-  let l:l1 = getline(l:first[0])
-  let l:lb = l:first[1] - strlen(matchstr(strpart(l:l1, 0, l:first[1] - 1), '.$'))
-  let l:re = l:first[1] + l:first[2]
-  let l:rl = strlen(matchstr(strpart(l:l1, l:re - 1), '^.'))
-  let l:out = []
-  for l:s in a:sp
-    call add(l:out, [l:s[0], l:lb, l:first[1] - l:lb])
-    call add(l:out, [l:s[0], l:re, l:rl])
-  endfor
-  " 上下の横線の行は、文字の幅（バイト数）が内側の行と違う（罫線は 3 バイト・空白は 1 バイト）ので、表示の桁から求める
-  let l:dc = strdisplaywidth(strpart(l:l1, 0, l:lb - 1))
-  let l:dw = strdisplaywidth(strpart(l:l1, l:lb - 1, l:re + l:rl - l:lb))
-  for l:ln in [l:first[0] - 1, l:last[0] + 1]
-    if l:ln < 1 || l:ln > line('$')
-      continue
-    endif
-    let l:t = getline(l:ln)
-    let l:bs = byteidx(l:t, l:dc)
-    let l:be = byteidx(l:t, l:dc + l:dw)
-    if l:bs < 0
-      continue
-    endif
-    call add(l:out, [l:ln, l:bs + 1, (l:be < 0 ? strlen(l:t) : l:be) - l:bs])
-  endfor
-  return l:out
-endfunction
-
 function! s:mark() abort
   if exists('w:mview_match')
     for l:m in w:mview_match
@@ -1600,14 +1557,6 @@ function! s:mark() abort
         " 選んでいるマス: 種類の色を残して背景だけ変える
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         call s:addpos(empty(l:hg) ? 'GnosisMviewSel' : l:hg . 'S', l:sp, 20)
-        " 枠の線は端の行・桁のちょうど真ん中に引かれる。線のセルに背景を塗ると、線の外側に半マスはみ出すので塗らない。
-        " 代わりに、選んでいるマスをぐるっと囲む枠の線を、そのマスの種類の色・太字で光らせる（内側の塗りと合わせて、マス全体が選ばれて見える）。
-        " 色の線にする方式（g:gnosis_mview_border = 'color'）では、線のセルの背景を塗る（塗りが線ぴったりに届く）
-        if s:bar_color()
-          call s:addpos('GnosisMviewSelEdge', s:frame_pos(l:sp), 19)
-        else
-          call s:addpos(empty(l:hg) ? 'GnosisMviewSelLine' : l:hg . 'C', s:frame_pos(l:sp), 19)
-        endif
       elseif l:cell.role ==# 'center'
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         let l:bi = get(l:cell, 'bgi', -1)
@@ -1642,7 +1591,11 @@ function! s:mark() abort
   endfor
   " / の語は、ふつうの検索のようにハイライト
   if !empty(get(s:S, 'find', ''))
-    call add(w:mview_match, matchadd('Search', '\c\V' . escape(s:S.find, '\'), 5))
+    " m の語: 検索の書き方（autoload/gnosis/query.vim）の肯定の語に色をつける（- の語は色をつけない）
+    let l:terms = gnosis#query#terms(s:S.find)
+    if !empty(l:terms)
+      call add(w:mview_match, matchadd('Search', '\c' . join(map(copy(l:terms), '"\\%(\\V" . escape(v:val, "\\") . "\\)"'), '\|'), 5))
+    endif
   endif
   let l:sp = get(s:S.spans, s:S.cur[0] . ',' . s:S.cur[1], [])
   if !empty(l:sp)
@@ -1836,11 +1789,11 @@ endfunction
 
 " ヒットの一覧 [[枚, 行, 列], …]（読む順）。ほかの枚は周りの 8 マスだけ、今の枚は見えているマス全部
 function! s:hit_list() abort
-  let l:q = tolower(s:S.find)
+  let l:q = gnosis#query#parse(s:S.find)
   let l:out = []
   let l:ring = s:items(s:S.center)
   for l:i in range(len(l:ring))
-    if stridx(s:entry_text(l:ring[l:i]), l:q) >= 0
+    if gnosis#query#match(l:q, s:entry_text(l:ring[l:i]))
       let l:p = s:pos[l:i % 8]
       let l:o = s:S.size == 3 ? 0 : 3
       call add(l:out, [l:i / 8, l:o + l:p[0], l:o + l:p[1]])
@@ -1850,7 +1803,7 @@ function! s:hit_list() abort
   for l:r in range(s:S.size)
     for l:c in range(s:S.size)
       let l:cell = s:S.cells[l:r][l:c]
-      if (l:cell.role ==# 'sub' || (l:r == l:mid && l:c == l:mid)) && !empty(l:cell.id) && stridx(s:cell_text(l:cell), l:q) >= 0
+      if (l:cell.role ==# 'sub' || (l:r == l:mid && l:c == l:mid)) && !empty(l:cell.id) && gnosis#query#match(l:q, s:cell_text(l:cell))
         call add(l:out, [s:S.page, l:r, l:c])
       endif
     endfor
@@ -1935,7 +1888,7 @@ endfunction
 
 " x: 題で絞り込む（空にすると解除）。索引を選ぶとき（\l）は索引を全部から、ふだんは今の周りの中から
 function! s:filter() abort
-  let l:q = s:ask(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除。-語 でその語を除く）: ', s:S.query)
+  let l:q = s:ask(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除。-語 で除く・a | b でどちらか）: ', s:S.query)
   let s:S.query = trim(l:q)
   call s:tick('query')
   let s:S.page = 0
@@ -2327,7 +2280,7 @@ function! s:search() abort
   if empty(l:q)
     let s:S.rquery = ''
   else
-    let l:d = s:py(['search', s:S.root] + split(l:q, '\s\+'))
+    let l:d = s:py(['search', s:S.root, l:q])
     let s:S.results = type(l:d) == v:t_list ? l:d : []
     let s:S.rquery = l:q
     call s:tick('rquery')
@@ -2854,8 +2807,6 @@ function! s:hl() abort
   highlight default GnosisMviewBarL guibg=#3f4551 ctermbg=239
   highlight default link GnosisMviewSel Visual
   " 選んでいるマスの周りの枠（線のセル）の背景。線の文字の色は残して背景だけ塗る（塗りが線まで届くように）
-  highlight default GnosisMviewSelEdge guibg=#3a3f4b ctermbg=238
-  highlight default GnosisMviewSelLine guifg=#ffffff ctermfg=231 gui=bold cterm=bold
   highlight default link GnosisMviewCenter Title
 endfunction
 
@@ -3030,6 +2981,11 @@ function! gnosis#mview#start() abort
     return
   endif
   call gnosis#mview#toggle()
+  " 起動したときは、曼荼羅の窓にカーソルがある（選ばれている）状態にする（右のノートではなく）
+  let l:mw = s:mwin()
+  if l:mw > 0 && win_getid() != l:mw
+    call win_gotoid(l:mw)
+  endif
 endfunction
 
 " \l: 入れるノートを曼荼羅で選ぶ。曼荼羅が開いていればそこへ（開いていなければ開く）。e で決めると、置き場所のキーを聞く

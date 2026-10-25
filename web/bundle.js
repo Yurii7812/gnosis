@@ -34761,6 +34761,7 @@ ${h3.join(`
   var mandala = null;
   var scan = null;
   var scanReq = 0;
+  var quitReq = 0;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
   var expanded = false;
@@ -34862,6 +34863,14 @@ ${h3.join(`
     if (typeof s15.scanReq === "number") {
       if (s15.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
       scanReq = s15.scanReq;
+    }
+    if (typeof s15.quitReq === "number") {
+      if (s15.quitReq > quitReq) {
+        quitReq = s15.quitReq;
+        gui.quit();
+        return;
+      }
+      quitReq = s15.quitReq;
     }
     last2 = { ...last2, ...s15, lines: void 0 };
     const m = (s15.mode || "n")[0];

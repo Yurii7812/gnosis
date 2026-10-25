@@ -19,6 +19,7 @@ let view = null;
 let mandala = null;
 let scan = null;
 let scanReq = 0;
+let quitReq = 0;
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
 let expanded = false;
@@ -140,6 +141,11 @@ function applyState(s) {
   if (typeof s.scanReq === "number") {
     if (s.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
     scanReq = s.scanReq;
+  }
+  // \x / \X: Vim から「アプリを閉じて」（キーボードだけで閉じる。CUI から開いたなら、閉じて CUI に戻る）
+  if (typeof s.quitReq === "number") {
+    if (s.quitReq > quitReq) { quitReq = s.quitReq; gui.quit(); return; }
+    quitReq = s.quitReq;
   }
   last = { ...last, ...s, lines: undefined };
   const m = (s.mode || "n")[0];

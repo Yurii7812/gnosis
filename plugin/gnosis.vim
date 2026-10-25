@@ -483,6 +483,17 @@ augroup gnosis_codeline
   autocmd ColorScheme * silent! highlight default link GnosisCodeLine ColorColumn
 augroup END
 
+" 動いている Gnosis（CUI・GUI）の登録と、キーボードだけで閉じる（autoload/gnosis/run.vim）。\x 今の画面を閉じる / \X 全部閉じる
+augroup gnosis_run
+  autocmd!
+  autocmd VimEnter * call gnosis#run#register()
+  autocmd VimLeavePre * call gnosis#run#unregister()
+augroup END
+nnoremap <silent> \x <Cmd>call gnosis#run#close_here()<CR>
+nnoremap <silent> \X <Cmd>call gnosis#run#close_all()<CR>
+command! GnosisClose call gnosis#run#close_here()
+command! GnosisCloseAll call gnosis#run#close_all()
+
 augroup gnosis_modeline
   autocmd!
   autocmd InsertEnter,InsertLeave * redrawstatus!

@@ -64,6 +64,7 @@ const scenario = `(async () => {
   const base = (f) => (f || '').split('/').pop();
   const R = {};
   await sleep(2500);
+  R.startFocus = { focus: G.state().focus, mandalaHidden: document.getElementById('mandala').hidden, selected: !!document.querySelector('.m-cell.sel'), unfocused: document.getElementById('mandala').classList.contains('unfocused') };
   R.start = { file: base(G.state().file), h1: !!document.querySelector('.cm-md-h1'), hidden: [...document.querySelectorAll('.cm-hide-line')].length, mandalaHidden: document.getElementById('mandala').hidden };
   // 本物の \\zz の窓で YAML を隠す（Space で切り替え、q で閉じる）。アプリの画面で実際に隠れる
   const shown = () => [...document.querySelectorAll('.cm-line')].filter((e) => getComputedStyle(e).display !== 'none').length;
@@ -198,6 +199,7 @@ try {
   check(Array.isArray(R.__uncaught) && R.__uncaught.length === 0, "uncaught exception after the window was destroyed: " + JSON.stringify(R.__uncaught));
   const jsErrors = (R.__console || []).filter((l) => !/Electron Security Warning/.test(l));
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
+  check(R.startFocus && R.startFocus.focus === 'mandala' && R.startFocus.selected && !R.startFocus.unfocused, "at startup the mandala is open and selected (the cursor is in the mandala): " + JSON.stringify(R.startFocus));
   check(R.start?.h1, "markdown should render at start: " + JSON.stringify(R.start));
   check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 11, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
   check(R.settings && R.settings.expanded && /buffer:nofile/.test(R.settings.why) && R.settings.text && R.settings.back, ":GnosisSettings should show the terminal screen (the reason is shown in the status bar) and q should return: " + JSON.stringify(R.settings));

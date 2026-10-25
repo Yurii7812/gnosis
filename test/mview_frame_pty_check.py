@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""曼荼羅（CUI）で、選んでいるマスの周りの枠（縦線・横線のセル）にも背景が塗られ、塗りが枠の線まで届く（実 Vim・擬似端末）。
+"""曼荼羅（CUI）で、選んでいるマスは内側だけを塗り、枠の線は光らせない。右のノートにカーソルがあるときはハイライトを消す（実 Vim・擬似端末）。
 枠の線は端の行・桁の真ん中に引かれるので、内側だけ塗ると線との間に半マスの隙間ができ、「一部だけ」に見えた。"""
 import fcntl, os, pty, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
@@ -57,7 +57,7 @@ try:
     pump(1.0)
     lines = f.read_text().split("\n") if f.exists() else []
     a = lines[0].split() if lines else []
-    ok("3×3: 左右の縦線と上下の横線の線が光る（属性が付く）: " + " ".join(a), len(a) == 5 and "0" not in a[:4] and a[0] == a[1] and a[0] != a[4])
+    ok("3×3: 枠の線（縦線・横線）は光らせない（属性なし）、内側だけ塗る: " + " ".join(a), len(a) == 5 and a[:4] == ["0", "0", "0", "0"] and a[4] != "0")
     # 9×9（全画面）でも同じ
     if f.exists():
         f.unlink()
@@ -67,7 +67,7 @@ try:
     pump(1.0)
     lines = f.read_text().split("\n") if f.exists() else []
     a = lines[0].split() if lines else []
-    ok("9×9: 左右の縦線と上下の横線のセルにも背景が塗られる: " + " ".join(a), len(a) == 5 and "0" not in a[:4])
+    ok("9×9: 枠の線は光らせない、内側だけ塗る: " + " ".join(a), len(a) == 5 and a[:4] == ["0", "0", "0", "0"] and a[4] != "0")
     # 右のノートにカーソルがあるとき（曼荼羅の窓にカーソルが無いとき）は、選んでいるマスのハイライトを消す
     cmdw = (":let g:st=gnosis#mview#state()|let g:sp=g:st.spans[g:st.cur[0].','.g:st.cur[1]]|let g:wi=getwininfo(win_getid(1))[0]|"
             "let g:r=g:wi.winrow+g:sp[0][0]-1|let g:ln=getbufline(g:st.buf,g:sp[0][0])[0]|let g:c=g:wi.wincol+strdisplaywidth(strpart(g:ln,0,g:sp[0][1]-1))+2|"

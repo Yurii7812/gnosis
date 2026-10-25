@@ -22,7 +22,9 @@ LEAD_LINES = 2
 
 
 def split_tokens(query: str) -> list[str]:
-    return [t for t in re.split(r"[\s\u3000]+", query) if t]
+    """色をつける語（検索の書き方は search_query.py。肯定の語だけ）。"""
+    import search_query as sq
+    return sq.terms(query)
 
 
 def highlight_line(line: str, tokens: list[str]) -> str:

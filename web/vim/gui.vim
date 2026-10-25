@@ -163,6 +163,7 @@ function! s:snapshot(force) abort
         \ 'cmdtype': getcmdtype(),
         \ 'mandala': l:ms,
         \ 'scanReq': get(g:, 'gnosis_gui_scan_req', 0),
+        \ 'quitReq': get(g:, 'gnosis_gui_quit_req', 0),
         \ 'curbt': &buftype,
         \ 'curft': &filetype,
         \ 'hideImage': gnosis#hide#get().image,
@@ -232,6 +233,11 @@ endfunction
 " \F（紙のスキャンの番号付け）をアプリの画面で開く合図。gnosis#paper_scan が呼ぶ
 function! GnosisGuiScan() abort
   let g:gnosis_gui_scan_req = get(g:, 'gnosis_gui_scan_req', 0) + 1
+  call s:snapshot(1)
+endfunction
+
+" \x / \X（autoload/gnosis/run.vim）が、状態を今すぐアプリへ送るのに使う
+function! GnosisGuiPush() abort
   call s:snapshot(1)
 endfunction
 

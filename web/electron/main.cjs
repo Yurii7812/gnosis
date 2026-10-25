@@ -465,11 +465,32 @@ ipcMain.handle("link:html", (_e, file, href) => {
   } catch { return null; }
 });
 
+// 動いている Gnosis としての登録（Gnosis ホームの run/gui-<pid>.json）。Vim の \x \X が、これを見て閉じる依頼
+// （run/close-gui-<pid> というファイル）を置く。0.5 秒ごとに見て、あれば消してアプリを終了する（通常の終了の流れ）。
+// 起動したのが CUI の Vim なら GNOSIS_PARENT_PID にその pid が入っている
+function runDir() { const d = path.join(cfg.gnosisHome(), "run"); fs.mkdirSync(d, { recursive: true }); return d; }
+function registerRun() {
+  try {
+    const dir = runDir();
+    const file = path.join(dir, `gui-${process.pid}.json`);
+    fs.writeFileSync(file, JSON.stringify({ kind: "gui", pid: process.pid, parent: Number(process.env.GNOSIS_PARENT_PID || 0) || 0, started: Date.now() }));
+    const req = path.join(dir, `close-gui-${process.pid}`);
+    const timer = setInterval(() => {
+      try { if (fs.existsSync(req)) { fs.unlinkSync(req); app.quit(); } } catch { /* ignore */ }
+    }, 500);
+    timer.unref();
+    const clean = () => { try { fs.unlinkSync(file); } catch { /* ignore */ } try { fs.unlinkSync(req); } catch { /* ignore */ } };
+    app.on("will-quit", clean);
+    process.on("exit", clean);
+  } catch { /* ignore */ }
+}
+
 app.setName("Gnosis");
 if (process.platform === "win32") app.setAppUserModelId("Gnosis");
 app.whenReady().then(() => {
   if (process.platform === "darwin" && iconPath()) { try { app.dock.setIcon(nativeImage.createFromPath(iconPath())); } catch { /* ignore */ } }
   createWindow();
+  if (!SCAN_ONLY) registerRun();
 });
 app.on("window-all-closed", () => { if (!TEST) app.quit(); });
 // 終了: Vim に「未保存を書いて終了」を送り、VimLeave を走らせる（暗号化 vault のロック判定は VimLeave で行う。

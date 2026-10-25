@@ -322,6 +322,10 @@ gnosis#profile
 gnosis#push_history
 gnosis#python_cmd
 gnosis#query
+gnosis#query#match
+gnosis#query#normalize
+gnosis#query#parse
+gnosis#query#terms
 gnosis#query_list
 gnosis#query_promote
 gnosis#query_run
@@ -365,6 +369,12 @@ gnosis#review_reopen
 gnosis#review_setup
 gnosis#review_skip
 gnosis#review_write
+gnosis#run#close_all
+gnosis#run#close_here
+gnosis#run#dir
+gnosis#run#list
+gnosis#run#register
+gnosis#run#unregister
 gnosis#save_before_normal_jump
 gnosis#save_current_note
 gnosis#seal

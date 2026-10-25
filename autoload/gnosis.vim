@@ -18595,7 +18595,7 @@ function! gnosis#open_web(...) abort
   " デスクトップアプリ (Electron)。今の vault と、今開いているノートを渡して起動する。
   " Linux / macOS はランチャー（bin/gnosis --app。KDE Wayland 向けの起動オプション付き）、
   " Windows は実体の electron.exe を直接起動する。
-  let l:env = {'GNOSIS_HOME': gnosis#home#dir()}
+  let l:env = {'GNOSIS_HOME': gnosis#home#dir(), 'GNOSIS_PARENT_PID': string(getpid())}
   if !empty($MYVIMRC) && get(g:, 'gnosis_managed', 0)
     let l:env.GNOSIS_VIMRC = $MYVIMRC
   endif
