@@ -13,7 +13,7 @@
 //   GNOSIS_VIMRC … 使う vimrc（既定: Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）
 //   GNOSIS_VIM   … Vim の実行ファイル（既定: PATH の vim）
 //   GNOSIS_HOME  … Gnosis ホーム（vault の登録簿など）
-const { app, BrowserWindow, ipcMain, Menu, dialog, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, dialog, nativeImage, shell } = require("electron");
 const { spawn } = require("child_process");
 const { StringDecoder } = require("string_decoder");
 const net = require("net");
@@ -401,6 +401,31 @@ ipcMain.handle("img:read", async (_e, file, src) => {
     const allowed = roots.filter(Boolean).map((x) => path.resolve(x));
     if (!allowed.some((a) => p === a || p.startsWith(a + path.sep))) return null;
     return await fs.promises.readFile(p);
+  } catch { return null; }
+});
+
+// リンクのクリック: Web サイト（http / https）は普段のブラウザで開く
+ipcMain.handle("link:external", (_e, url) => {
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return false;
+  shell.openExternal(url);
+  return true;
+});
+
+// リンクのクリック: HTML ファイルは、アプリの画面の中で開く。ノートと同じ vault（かノートのあるフォルダ）の中のファイルだけ。
+// 戻り値は { url: "file://…", name } か null（読めない・範囲外）。画面側は、スクリプトを分離した枠（sandbox）の中で表示する
+ipcMain.handle("link:html", (_e, file, href) => {
+  try {
+    if (!file || typeof href !== "string") return null;
+    const base = path.dirname(file);
+    const clean = decodeURIComponent(href.split("#")[0].split("?")[0]);
+    const p = path.resolve(base, clean);
+    if (!/\.html?$/i.test(p) || !fs.existsSync(p)) return null;
+    const roots = [base, path.dirname(base)];
+    if (activeVault) roots.push(activeVault, cfg.noteRoot(activeVault));
+    if (EXPLICIT_ROOT) roots.push(EXPLICIT_ROOT);
+    const allowed = roots.filter(Boolean).map((x) => path.resolve(x));
+    if (!allowed.some((a) => p === a || p.startsWith(a + path.sep))) return null;
+    return { url: require("url").pathToFileURL(p).href + (href.includes("#") ? "#" + href.split("#")[1] : ""), name: path.basename(p) };
   } catch { return null; }
 });
 

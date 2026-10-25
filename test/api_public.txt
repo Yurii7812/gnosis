@@ -250,6 +250,7 @@ gnosis#multi_clear
 gnosis#mview#close
 gnosis#mview#cursor
 gnosis#mview#entries
+gnosis#mview#focus
 gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click

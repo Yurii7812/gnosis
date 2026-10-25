@@ -68,6 +68,26 @@ try:
     lines = f.read_text().split("\n") if f.exists() else []
     a = lines[0].split() if lines else []
     ok("9×9: 左右の縦線と上下の横線のセルにも背景が塗られる: " + " ".join(a), len(a) == 5 and "0" not in a[:4])
+    # 右のノートにカーソルがあるとき（曼荼羅の窓にカーソルが無いとき）は、選んでいるマスのハイライトを消す
+    cmdw = (":let g:st=gnosis#mview#state()|let g:sp=g:st.spans[g:st.cur[0].','.g:st.cur[1]]|let g:wi=getwininfo(win_getid(1))[0]|"
+            "let g:r=g:wi.winrow+g:sp[0][0]-1|let g:ln=getbufline(g:st.buf,g:sp[0][0])[0]|let g:c=g:wi.wincol+strdisplaywidth(strpart(g:ln,0,g:sp[0][1]-1))+2|"
+            "call writefile([string(screenattr(g:r,g:c))],'" + str(f) + "')\r")
+    os.write(fd, b"\x17l")      # 右のノートの窓へ
+    pump(1.0)
+    if f.exists():
+        f.unlink()
+    os.write(fd, cmdw.encode())
+    pump(1.0)
+    off = f.read_text().strip() if f.exists() else "?"
+    os.write(fd, b"\x17h")      # 曼荼羅の窓へ戻る
+    pump(1.0)
+    if f.exists():
+        f.unlink()
+    os.write(fd, cmdw.encode())
+    pump(1.0)
+    on = f.read_text().strip() if f.exists() else "?"
+    ok("右のノートにカーソルがあると、選んでいるマスのハイライトが消える（属性 " + off + "）", off == "0")
+    ok("曼荼羅に戻るとハイライトが戻る（属性 " + on + "）", on not in ("0", "?"))
     os.write(fd, b":qa!\r")
     pump(0.6)
     try:

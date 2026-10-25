@@ -48,6 +48,7 @@ import { applyPalette } from ${JSON.stringify(path.join(web, "src/look.js"))};
 const PAL = ${JSON.stringify(pal)};
 const params = new URLSearchParams(location.search);
 const which = params.get("t") === "dark" ? "dark" : "light";
+const scn = params.get("s") || "";
 const p = PAL[which];
 applyPalette(p);
 const v = createView({ parent: document.body, getImageURL: () => null });
@@ -56,7 +57,12 @@ v.setText(${JSON.stringify(DOC)});
 const LNK = ${JSON.stringify("リンクの行: [")};
 const curByte = new TextEncoder().encode(LNK).length + 1 + new TextEncoder().encode("リ").length;
 v.setVtext([[5, new TextEncoder().encode(LNK).length + 1, "1", "GnosisLinkHint"]]);
-v.setVim({ cur: [5, curByte], mode: "n" });
+const TBL = ${JSON.stringify(DOC.split("\n").findIndex((l) => l.startsWith("| 3 |")) + 1)};
+if (scn === "tbl-i" || scn === "tbl-n") v.setVim({ cur: [TBL, scn === "tbl-i" ? 4 : 3], mode: scn === "tbl-i" ? "i" : "n" });   // 表の「3」のセルの中（| 3 | 4 |）
+else if (scn === "lk-open") v.setVim({ cur: [5, new TextEncoder().encode(LNK).length], mode: "n" });                    
+else if (scn === "lk-url") v.setVim({ cur: [5, new TextEncoder().encode(LNK).length + 1 + new TextEncoder().encode("リンク先").length + 2], mode: "n" });
+else if (scn === "lk-url-i") v.setVim({ cur: [5, new TextEncoder().encode(LNK).length + 1 + new TextEncoder().encode("リンク先").length + 2], mode: "i" });
+else v.setVim({ cur: [5, curByte], mode: "n" });
 const cs = (sel, prop) => { const e = document.querySelector(sel); return e ? getComputedStyle(e)[prop] : null; };
 setTimeout(() => {
   const out = {
@@ -75,7 +81,11 @@ setTimeout(() => {
     th: { border: cs("table.cm-md-table th", "borderTopWidth"), pad: cs("table.cm-md-table th", "paddingLeft"), weight: cs("table.cm-md-table th", "fontWeight") },
     tdEven: cs("table.cm-md-table tbody tr:nth-child(even) td", "backgroundColor"),
     hasLightClass: document.documentElement.classList.contains("theme-light"),
+    tbl: { table: !!document.querySelector("table.cm-md-table"), editCell: document.querySelector("td.cm-md-cell-edit")?.textContent ?? null,
+      bar: !!document.querySelector("td .cm-vim-bar"), block: document.querySelector("td .cm-vim-block")?.textContent ?? null, rawLine: document.querySelector(".cm-content").textContent.includes("| 3 | 4 |") },
     cursor: (() => { const e = document.querySelector(".cm-vim-block"); if (!e) return null; const c = getComputedStyle(e); return { text: e.textContent, color: c.color, bg: c.backgroundColor, inLink: !!e.closest(".cm-md-link") || !!e.querySelector(".cm-md-link") }; })(),
+    cursorLink: (() => { const e = document.querySelector(".cm-vim-block"); return e ? { text: e.textContent, inLink: !!e.closest(".cm-md-link") } : null; })(),
+    barLink: (() => { const e = document.querySelector(".cm-vim-bar"); return e ? { visible: e.getBoundingClientRect().width >= 0 && e.getBoundingClientRect().height > 0, prev: e.previousSibling ? e.previousSibling.textContent.slice(-1) : "" } : null; })(),
     hint: (() => { const e = document.querySelector(".cm-vtext"); if (!e) return null; const c = getComputedStyle(e); return { color: c.color, bg: c.backgroundColor }; })(),
   };
   document.title = "RESULT=" + JSON.stringify(out);
@@ -93,9 +103,9 @@ function findChrome() {
 }
 const chrome = findChrome();
 if (!chrome) { console.error("SKIP: chromium が無いので省略"); fs.rmSync(tmp, { recursive: true, force: true }); process.exit(0); }
-const url = (t) => "file://" + path.join(tmp, "index.html") + "?t=" + t;
-const dump = (t) => {
-  const dom = execFileSync(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files", "--window-size=1200,1000", "--virtual-time-budget=5000", "--dump-dom", url(t)],
+const url = (t, sc = "") => "file://" + path.join(tmp, "index.html") + "?t=" + t + (sc ? "&s=" + sc : "");
+const dump = (t, sc = "") => {
+  const dom = execFileSync(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files", "--window-size=1200,1000", "--virtual-time-budget=5000", "--dump-dom", url(t, sc)],
     { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
   const m = /<title>RESULT=(.*?)<\/title>/s.exec(dom);
   if (!m) throw new Error("no RESULT (" + t + ")");
@@ -104,7 +114,7 @@ const dump = (t) => {
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { console.error("FAIL: " + msg); failed = 1; } };
 try {
-  const L = dump("light"), D = dump("dark");
+  const L = dump("light"), D = dump("dark"), TI = dump("light", "tbl-i"), TN = dump("dark", "tbl-n"), LO = dump("light", "lk-open"), LU = dump("light", "lk-url"), LUI = dump("dark", "lk-url-i");
   // ライト = GitHub スタイル（Markdown Viewer 拡張の既定）
   check(L.hasLightClass, "light: html.theme-light が付く");
   check(L.bodyBg === "rgb(255, 255, 255)", "light: 背景は白 " + L.bodyBg);
@@ -127,6 +137,14 @@ try {
   check(D.hint && D.hint.bg === "rgb(179, 179, 179)" && D.hint.color === "rgb(30, 30, 30)", "dark: 番号の札は CUI ダークと同じ " + JSON.stringify(D.hint));
   check(D.cursor && D.cursor.bg === "rgb(218, 218, 218)" && D.cursor.color === "rgb(30, 30, 30)", "dark: カーソルは本文色の塊 " + JSON.stringify(D.cursor));
   check(L.bodyColor === "rgb(31, 35, 40)", "light: 本文は #1F2328（GitHub） " + L.bodyColor);
+  // 表: 挿入モードでも、カーソルが表の中にあっても、表の見た目のまま（元の | の行にならない）。カーソルはセルの中の文字の位置に出る
+  check(TI.tbl.table && !TI.tbl.rawLine && TI.tbl.bar && TI.tbl.editCell === "3", "table: insert mode keeps the table look and shows the bar cursor in the cell " + JSON.stringify(TI.tbl));
+  check(TN.tbl.table && !TN.tbl.rawLine && TN.tbl.block === "3", "table: normal mode with the cursor inside keeps the table look and shows the block cursor on the char " + JSON.stringify(TN.tbl));
+  check(L.tbl.table && !L.tbl.bar && L.tbl.editCell === null, "table: cursor outside the table = formatted table " + JSON.stringify(L.tbl));
+  // リンクの隠れた文字（`[` と `](ファイル)`）の上にカーソルがあっても、見えている名前の上にカーソルが出る（Tab でリンクに移ったとき）
+  check(LO.cursorLink && LO.cursorLink.text === "リ", "link: cursor on the hidden `[` is shown on the first visible char " + JSON.stringify(LO.cursorLink));
+  check(LU.cursorLink && LU.cursorLink.text === "先", "link: cursor inside the hidden `](url)` is shown on the last visible char " + JSON.stringify(LU.cursorLink));
+  check(LUI.barLink && LUI.barLink.visible && LUI.barLink.prev === "先", "link: insert cursor inside the hidden part is shown right after the name " + JSON.stringify(LUI.barLink));
   // ダークは変えない（従来の見え方）
   check(!D.hasLightClass, "dark: html.theme-light は付かない");
   check(D.contentMaxWidth === "860px", "dark: 本文の幅は従来どおり 860px " + D.contentMaxWidth);

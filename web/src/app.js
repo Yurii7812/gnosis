@@ -159,6 +159,7 @@ function applyState(s) {
   if (md) {
     // 曼荼羅の窓の幅（Vim の桁数）の割合で、アプリの曼荼羅の幅を合わせる（< > で動く）
     $("mandala").style.flexBasis = md.wcols && s.cols && hasNote ? (100 * md.wcols / s.cols).toFixed(2) + "%" : "";
+    mandala.setFocus(s.focus === "mandala");
     mandala.render(md);
   }
 
@@ -278,9 +279,14 @@ function preloadImages(lines) {
 // ---------------------------------------------------------------- マウス
 
 // 表示をクリックしたとき、Vim のカーソルをそこへ動かす。リンクならそのまま開く（Enter）。Alt + クリックはカーソルだけ。
-function onClick({ pos, link, alt }) {
+function onClick({ pos, link, anyHref, alt, mod }) {
   if (pos == null) return;
   if (alt) link = false;
+  // Web サイト（http / https）は普段のブラウザで、HTML ファイルはこの画面の中で開く。Ctrl + クリックの HTML は Vim に任せる（外のビューア）
+  if (anyHref && !alt && !link) {
+    if (/^https?:\/\//i.test(anyHref)) { gui.linkExternal(anyHref); return; }
+    if (/\.html?([#?]|$)/i.test(anyHref) && !mod) { openHtml(anyHref); return; }
+  }
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
   // 曼荼羅が開いているときは、まず右のノートの窓へ移る（Vim の窓の移動）
@@ -290,6 +296,25 @@ function onClick({ pos, link, alt }) {
   const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
   if (m === "n") gui.write(mv + (link ? "\r" : ""));
   else if (m === "i") gui.write("\x0f" + mv);
+}
+
+// ---- HTML をこの画面の中で開く（ノートの上に重ねる。q / Esc で閉じる）
+let htmlOpen = false;
+async function openHtml(href) {
+  const res = await gui.linkHtml(last.file, href);
+  if (!res) { showError(document.documentElement.lang === "en" ? "Cannot open this HTML file" : "この HTML ファイルは開けません（vault の外・存在しない）"); return; }
+  $("hv-name").textContent = res.name;
+  $("hv-frame").src = res.url;
+  $("htmlview").hidden = false;
+  htmlOpen = true;
+  $("htmlview").focus();
+}
+function closeHtml() {
+  if (!htmlOpen) return;
+  htmlOpen = false;
+  $("htmlview").hidden = true;
+  $("hv-frame").src = "about:blank";
+  term.focus();
 }
 
 // 曼荼羅のマスのクリック（enter が真なら中心にする）
@@ -364,7 +389,12 @@ async function boot() {
 
   window.addEventListener("resize", () => { scheduleFit(); });
   // どこを押しても、キー入力は端末（Vim）へ戻す
-  const backToInput = () => { if (document.getElementById("launcher").hidden && !(scan && scan.isOpen())) term.focus(); };
+  const backToInput = () => { if (document.getElementById("launcher").hidden && !(scan && scan.isOpen()) && !htmlOpen) term.focus(); };
+  // HTML の重ね表示が出ているあいだ: q / Esc で閉じる（キーは Vim へ送らない）
+  document.addEventListener("keydown", (e) => {
+    if (htmlOpen && (e.key === "q" || e.key === "Escape")) { e.preventDefault(); e.stopPropagation(); closeHtml(); }
+  }, true);
+  $("hv-close").addEventListener("click", closeHtml);
   document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
   window.addEventListener("focus", backToInput);
 
@@ -374,6 +404,7 @@ async function boot() {
     state: () => last,
     send: (d) => gui.write(d),
     isExpanded: () => expanded,
+    openHtml, closeHtml, htmlIsOpen: () => htmlOpen,
     screen: () => {
       const b = term.buffer.active;
       const out = [];

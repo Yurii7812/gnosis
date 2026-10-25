@@ -56,6 +56,7 @@ function! gnosis#settings#defaults() abort
         \ 'mandalaOnStart': v:true,
         \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
         \ 'imageViewer': 'external',
+        \ 'mandalaLegend': v:true,
         \ 'linkEditInsert': v:false,
         \ }
 endfunction
@@ -107,6 +108,7 @@ function! gnosis#settings#validate(s) abort
   for l:k in ['yaml', 'top', 'bottom', 'image']
     let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
   endfor
+  let l:s.mandalaLegend = get(l:s, 'mandalaLegend', v:true) ? v:true : v:false
   let l:s.linkEditInsert = get(l:s, 'linkEditInsert', v:false) ? v:true : v:false
   if index(['external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
     let l:s.imageViewer = 'external'

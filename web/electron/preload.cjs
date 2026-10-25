@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("gui", {
   scan: (cmd, args) => ipcRenderer.invoke("scan:run", cmd, args || []),
   scanLs: (dir) => ipcRenderer.invoke("scan:ls", dir || ""),
   scanImage: (name) => ipcRenderer.invoke("scan:image", name),
+  linkExternal: (url) => ipcRenderer.invoke("link:external", url),
+  linkHtml: (file, href) => ipcRenderer.invoke("link:html", file, href),
   quit: () => ipcRenderer.send("app:quit"),
 });
 

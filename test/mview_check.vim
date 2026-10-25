@@ -54,7 +54,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
-call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] 1/1 c:オフ r:オフ' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
+call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] 1/1 c:オフ r:オフ' && s:text() !~# 'q 閉じる' && getbufline(s:st.buf, 1, 1)[0] !~# 'グループ' && s:text() =~# 'グループ  親', s:text())
 call s:keys('?')
 call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab / S-Tab', string(popup_list()))
 call s:keys('q')
@@ -587,6 +587,19 @@ call gnosis#mview#start()
 call s:ok('すでに出ていれば二重に出さない', winnr('$') == 2)
 call s:keys('Q')
 unlet g:gnosis_mandala_on_start
+" 前回、曼荼羅を閉じて終わっていても、CUI は閉じたまま、\c のアプリ（$GNOSIS_GUI_PORT がある）は設定がオンなら開く
+let s:mjson = gnosis#home#path('mandala.json')
+let s:mold = filereadable(s:mjson) ? readfile(s:mjson) : []
+call writefile([json_encode({'open': 0})], s:mjson)
+execute 'edit ' . s:v . '/herb.md'
+call gnosis#mview#start()
+call s:ok('CUI: 前回閉じていれば閉じたまま', &filetype !=# 'gnosis-mandala' && winnr('$') == 1)
+let $GNOSIS_GUI_PORT = '1'
+call gnosis#mview#start()
+call s:ok('\c のアプリ: 前回閉じていても、設定がオンなら開く', &filetype ==# 'gnosis-mandala' && winnr('$') == 2)
+let $GNOSIS_GUI_PORT = ''
+call s:keys('Q')
+if empty(s:mold) | call delete(s:mjson) | else | call writefile(s:mold, s:mjson) | endif
 
 " w: 近さ順（点の高いものを先に）。点は「予測関連」と同じ計算（ここでは点を直接入れて確かめる）
 execute 'edit ' . s:v . '/plant.md'
@@ -786,13 +799,13 @@ call s:keys('>')
 call gnosis#mview#preset_apply('全部')
 let s:st = gnosis#mview#state()
 call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
-" 画面で選んで上書き（設定の行が 11 あるので j を 12 回で 2 つ目のプリセット。o で上書き、q で閉じる）
+" 画面で選んで上書き（設定の行が 12 あるので j を 13 回で 2 つ目のプリセット。o で上書き、q で閉じる）
 call gnosis#mview#preset_save('あ')
 call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
-call s:keys("'" . repeat('j', 12) . "oq")
+call s:keys("'" . repeat('j', 13) . "oq")
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1

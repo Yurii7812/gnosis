@@ -205,7 +205,7 @@ function decorateLine(line, active, inFence, decos, cfg) {
     const isMd = tg.split("#")[0].toLowerCase().endsWith(".md");
     decos.push(Decoration.mark({
       class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
-      attributes: isMd ? { "data-md-href": tg } : {},
+      attributes: isMd ? { "data-md-href": tg, "data-href": tg } : { "data-href": tg },
     }).range(dispStart, dispEnd));
     // \zz の「挿入モードでリンクの中身を見せる」がオンなら、挿入モードでカーソルのある行は [名前](ファイル) のまま見せる
     if (!cfg.linkSource && !(cfg.linkEdit && cfg.insertMode && active)) {
@@ -367,6 +367,36 @@ function findTables(doc) {
   return out;
 }
 
+// 1 行の各セルの文字の範囲 [{s, e}]（行の中の添字。区切りの | と枠の | は含まない。splitRow と同じ規則）
+function cellSpans(text) {
+  const f = text.length - text.trimStart().length;
+  const l = text.trimEnd().length;
+  let from = f, to = l;
+  if (text[f] === "|") from = f + 1;
+  if (l > from && text[l - 1] === "|" && text[l - 2] !== "\\") to = l - 1;
+  const out = [];
+  let st = from;
+  for (let i = from; i < to; i++) if (text[i] === "|" && text[i - 1] !== "\\") { out.push({ s: st, e: i }); st = i + 1; }
+  out.push({ s: st, e: Math.max(st, to) });
+  return out;
+}
+
+// カーソル（文書の位置）が表のどのセルのどこにあるか。区切り線の行にあるときは null（そのときは元の文字を見せる）
+function tableCursor(doc, t, pos) {
+  const ln = doc.lineAt(pos);
+  if (ln.number < t.startLine || ln.number > t.endLine || ln.number === t.startLine + 1) return null;
+  const row = ln.number === t.startLine ? 0 : ln.number - t.startLine - 1;   // 0 = 見出し、1〜 = 本文の行
+  const col = pos - ln.from;
+  const spans = cellSpans(ln.text);
+  let ci = spans.findIndex((sp) => col <= sp.e);
+  if (ci < 0) ci = spans.length - 1;
+  const sp = spans[ci];
+  const raw = ln.text.slice(sp.s, sp.e);
+  const lead = raw.length - raw.trimStart().length;
+  const shown = raw.trim();
+  return { row, cell: ci, off: Math.max(0, Math.min(shown.length, col - sp.s - lead)) };
+}
+
 function inlineInto(el, text) {
   const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)\)/g;
   let last = 0, m;
@@ -383,7 +413,7 @@ function inlineInto(el, text) {
 }
 
 class TableWidget extends WidgetType {
-  constructor(t) { super(); this.t = t; this.key = JSON.stringify([t.head, t.aligns, t.rows]); }
+  constructor(t, cur, insert) { super(); this.t = t; this.cur = cur; this.insert = insert; this.key = JSON.stringify([t.head, t.aligns, t.rows, cur, insert]); }
   eq(o) { return o.key === this.key; }
   toDOM() {
     const { head, aligns, rows } = this.t;
@@ -391,21 +421,35 @@ class TableWidget extends WidgetType {
     wrap.className = "cm-md-tablewrap";
     const table = document.createElement("table");
     table.className = "cm-md-table";
-    const mk = (tag, cells, tr) => {
+    // カーソルがこの表の中にあるとき（挿入モードを含む）は、表の見た目のまま、セルの中を元の文字で見せ、Vim のカーソルをその位置に出す
+    const cur = this.cur;
+    const mk = (tag, cells, tr, rowNo) => {
       for (let c = 0; c < head.length; c++) {
         const cell = document.createElement(tag);
         if (aligns[c]) cell.style.textAlign = aligns[c];
-        inlineInto(cell, cells[c] ?? "");
+        const txt = cells[c] ?? "";
+        if (cur && cur.row === rowNo && cur.cell === c) {
+          cell.classList.add("cm-md-cell-edit");
+          const off = Math.min(cur.off, txt.length);
+          cell.appendChild(document.createTextNode(txt.slice(0, off)));
+          const k = document.createElement("span");
+          if (this.insert) { k.className = "cm-vim-bar"; cell.appendChild(k); cell.appendChild(document.createTextNode(txt.slice(off))); }
+          else { k.className = "cm-vim-block"; k.textContent = off < txt.length ? txt[off] : "\u00a0"; cell.appendChild(k); cell.appendChild(document.createTextNode(txt.slice(off + 1))); }
+        } else if (cur) {
+          cell.textContent = txt;
+        } else {
+          inlineInto(cell, txt);
+        }
         tr.appendChild(cell);
       }
     };
     const thead = document.createElement("thead");
     const htr = document.createElement("tr");
-    mk("th", head, htr);
+    mk("th", head, htr, 0);
     thead.appendChild(htr);
     table.appendChild(thead);
     const tbody = document.createElement("tbody");
-    for (const r of rows) { const tr = document.createElement("tr"); mk("td", r, tr); tbody.appendChild(tr); }
+    rows.forEach((r, i) => { const tr = document.createElement("tr"); mk("td", r, tr, i + 1); tbody.appendChild(tr); });
     table.appendChild(tbody);
     wrap.appendChild(table);
     return wrap;
@@ -422,8 +466,14 @@ function tableField(cfg) {
     const a = doc.lineAt(sel.from).number, b = doc.lineAt(sel.to).number;
     const decos = [];
     for (const t of findTables(doc)) {
-      if (!cfg.viewOnly && (editing || (a <= t.endLine && b >= t.startLine))) continue;
-      decos.push(Decoration.replace({ widget: new TableWidget(t), block: true }).range(t.from, t.to));
+      const inside = !cfg.viewOnly && a <= t.endLine && b >= t.startLine;
+      let cur = null;
+      if (inside) {
+        cur = tableCursor(doc, t, sel.head);
+        // 区切り線の行（| --- | --- |）にカーソルがあるときだけ、元の文字のまま見せる
+        if (!cur) continue;
+      }
+      decos.push(Decoration.replace({ widget: new TableWidget(t, cur, editing), block: true }).range(t.from, t.to));
     }
     return Decoration.set(decos, true);
   };
@@ -521,25 +571,53 @@ class CursorWidget extends WidgetType {
   }
 }
 
-const vimDecorations = EditorView.decorations.compute(["doc", vimField], (state) => {
-  const v = state.field(vimField);
-  const decos = [];
-  const doc = state.doc;
-  const pos = Math.min(v.pos, doc.length);
-  if (v.visFrom != null) {
-    const from = Math.max(0, Math.min(v.visFrom, v.visTo)), to = Math.min(doc.length, Math.max(v.visFrom, v.visTo));
-    if (to > from) decos.push(Decoration.mark({ class: "cm-vim-visual" }).range(from, to));
-  }
-  const insertLike = v.mode[0] === "i" || v.mode[0] === "R";
-  if (insertLike) {
-    decos.push(Decoration.widget({ widget: new CursorWidget(v.mode[0] === "R" ? "under" : "bar"), side: -1 }).range(pos));
-  } else if (pos < doc.length && doc.sliceString(pos, pos + 1) !== "\n") {
-    decos.push(Decoration.mark({ class: "cm-vim-block" }).range(pos, Math.min(doc.length, pos + 1)));
-  } else {
-    decos.push(Decoration.widget({ widget: new CursorWidget("block"), side: 1 }).range(pos));
-  }
-  return Decoration.set(decos, true);
+// 描き直しの合図を数える（リンクの表示の切り替え・画像・設定の変化で、カーソルの位置を作り直す）
+const refreshTick = StateField.define({
+  create: () => 0,
+  update: (v, tr) => (tr.effects.some((e) => e.is(refreshDecorations)) ? v + 1 : v),
 });
+
+// リンク [名前](ファイル) は、名前だけを見せて前後（`[` と `](ファイル)`）を隠している。Vim のカーソルがその隠れた文字の上にあると
+// （Tab でリンクに移ったときなど）カーソルの装飾も隠れて見えなくなるので、見えている文字（リンクの名前）に寄せて出す。
+// 元の書き方が見えているとき（LinkSource・挿入モードでリンクの中身を見せる設定）は、そのまま。
+function visibleCursorPos(doc, pos, cfg, insertLike) {
+  if (cfg.linkSource || (cfg.linkEdit && insertLike)) return pos;
+  const line = doc.lineAt(pos);
+  const re = new RegExp(RE.link.source, "g");
+  let m;
+  while ((m = re.exec(line.text)) !== null) {
+    if (m.index > 0 && line.text[m.index - 1] === "!") continue;
+    const a = line.from + m.index, b = a + m[0].length;
+    if (pos < a || pos >= b) continue;
+    const ds = a + 1, de = ds + m[1].length;
+    if (pos >= ds && pos < de) return pos;               // 名前の上: そのまま
+    if (pos < ds) return m[1].length ? ds : a;           // `[` の上: 名前の先頭へ
+    return insertLike ? de : Math.max(ds, de - 1);       // `](ファイル)` の上: 名前の最後（挿入は名前のすぐ後ろ）
+  }
+  return pos;
+}
+
+function vimDecorationsFor(cfg) {
+  return EditorView.decorations.compute(["doc", vimField, refreshTick], (state) => {
+    const v = state.field(vimField);
+    const decos = [];
+    const doc = state.doc;
+    const insertLike = v.mode[0] === "i" || v.mode[0] === "R";
+    const pos = visibleCursorPos(doc, Math.min(v.pos, doc.length), cfg, insertLike);
+    if (v.visFrom != null) {
+      const from = Math.max(0, Math.min(v.visFrom, v.visTo)), to = Math.min(doc.length, Math.max(v.visFrom, v.visTo));
+      if (to > from) decos.push(Decoration.mark({ class: "cm-vim-visual" }).range(from, to));
+    }
+    if (insertLike) {
+      decos.push(Decoration.widget({ widget: new CursorWidget(v.mode[0] === "R" ? "under" : "bar"), side: -1 }).range(pos));
+    } else if (pos < doc.length && doc.sliceString(pos, pos + 1) !== "\n") {
+      decos.push(Decoration.mark({ class: "cm-vim-block" }).range(pos, Math.min(doc.length, pos + 1)));
+    } else {
+      decos.push(Decoration.widget({ widget: new CursorWidget("block"), side: 1 }).range(pos));
+    }
+    return Decoration.set(decos, true);
+  });
+}
 
 // Vim の col（1 始まりのバイト位置）を、文字列の添字（UTF-16）に直す
 function byteColToIndex(text, col) {
@@ -617,7 +695,8 @@ export function createView(opts) {
       syntaxHighlighting(mdHighlight),
       hideField,
       vimField,
-      vimDecorations,
+      refreshTick,
+      vimDecorationsFor(cfg),
       vtextField,
       vtextDecorations,
       livePreview(cfg),
@@ -626,8 +705,9 @@ export function createView(opts) {
       EditorView.domEventHandlers({
         mousedown: (e, view) => {
           const el = e.target?.closest?.("[data-md-href]");
+          const any = e.target?.closest?.("[data-href]");
           const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
-          opts.onClick?.({ pos, link: !!el, href: el ? el.getAttribute("data-md-href") : "", doc: view.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
+          opts.onClick?.({ pos, link: !!el, href: el ? el.getAttribute("data-md-href") : "", anyHref: any ? any.getAttribute("data-href") : "", doc: view.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
           return false;
         },
       }),

@@ -32616,7 +32616,7 @@ ${h3.join(`
       const isMd = tg.split("#")[0].toLowerCase().endsWith(".md");
       decos.push(Decoration.mark({
         class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
-        attributes: isMd ? { "data-md-href": tg } : {}
+        attributes: isMd ? { "data-md-href": tg, "data-href": tg } : { "data-href": tg }
       }).range(dispStart, dispEnd));
       if (!cfg.linkSource && !(cfg.linkEdit && cfg.insertMode && active)) {
         decos.push(Decoration.replace({}).range(base2 + a, dispStart));
@@ -32788,6 +32788,35 @@ ${h3.join(`
     }
     return out;
   }
+  function cellSpans(text) {
+    const f = text.length - text.trimStart().length;
+    const l = text.trimEnd().length;
+    let from = f, to = l;
+    if (text[f] === "|") from = f + 1;
+    if (l > from && text[l - 1] === "|" && text[l - 2] !== "\\") to = l - 1;
+    const out = [];
+    let st3 = from;
+    for (let i = from; i < to; i++) if (text[i] === "|" && text[i - 1] !== "\\") {
+      out.push({ s: st3, e: i });
+      st3 = i + 1;
+    }
+    out.push({ s: st3, e: Math.max(st3, to) });
+    return out;
+  }
+  function tableCursor(doc2, t3, pos) {
+    const ln2 = doc2.lineAt(pos);
+    if (ln2.number < t3.startLine || ln2.number > t3.endLine || ln2.number === t3.startLine + 1) return null;
+    const row = ln2.number === t3.startLine ? 0 : ln2.number - t3.startLine - 1;
+    const col = pos - ln2.from;
+    const spans = cellSpans(ln2.text);
+    let ci2 = spans.findIndex((sp2) => col <= sp2.e);
+    if (ci2 < 0) ci2 = spans.length - 1;
+    const sp = spans[ci2];
+    const raw = ln2.text.slice(sp.s, sp.e);
+    const lead = raw.length - raw.trimStart().length;
+    const shown = raw.trim();
+    return { row, cell: ci2, off: Math.max(0, Math.min(shown.length, col - sp.s - lead)) };
+  }
   function inlineInto(el2, text) {
     const re2 = /\*\*([^*]+)\*\*|`([^`]+)`|\[((?:\\.|[^\]\\])*)\]\(([^)\s]+)\)/g;
     let last3 = 0, m;
@@ -32812,10 +32841,12 @@ ${h3.join(`
     if (last3 < text.length) el2.appendChild(document.createTextNode(text.slice(last3)));
   }
   var TableWidget = class extends WidgetType {
-    constructor(t3) {
+    constructor(t3, cur, insert2) {
       super();
       this.t = t3;
-      this.key = JSON.stringify([t3.head, t3.aligns, t3.rows]);
+      this.cur = cur;
+      this.insert = insert2;
+      this.key = JSON.stringify([t3.head, t3.aligns, t3.rows, cur, insert2]);
     }
     eq(o2) {
       return o2.key === this.key;
@@ -32826,25 +32857,46 @@ ${h3.join(`
       wrap.className = "cm-md-tablewrap";
       const table = document.createElement("table");
       table.className = "cm-md-table";
-      const mk = (tag, cells, tr2) => {
+      const cur = this.cur;
+      const mk = (tag, cells, tr2, rowNo) => {
         for (let c = 0; c < head.length; c++) {
           const cell2 = document.createElement(tag);
           if (aligns[c]) cell2.style.textAlign = aligns[c];
-          inlineInto(cell2, cells[c] ?? "");
+          const txt = cells[c] ?? "";
+          if (cur && cur.row === rowNo && cur.cell === c) {
+            cell2.classList.add("cm-md-cell-edit");
+            const off = Math.min(cur.off, txt.length);
+            cell2.appendChild(document.createTextNode(txt.slice(0, off)));
+            const k = document.createElement("span");
+            if (this.insert) {
+              k.className = "cm-vim-bar";
+              cell2.appendChild(k);
+              cell2.appendChild(document.createTextNode(txt.slice(off)));
+            } else {
+              k.className = "cm-vim-block";
+              k.textContent = off < txt.length ? txt[off] : "\xA0";
+              cell2.appendChild(k);
+              cell2.appendChild(document.createTextNode(txt.slice(off + 1)));
+            }
+          } else if (cur) {
+            cell2.textContent = txt;
+          } else {
+            inlineInto(cell2, txt);
+          }
           tr2.appendChild(cell2);
         }
       };
       const thead = document.createElement("thead");
       const htr = document.createElement("tr");
-      mk("th", head, htr);
+      mk("th", head, htr, 0);
       thead.appendChild(htr);
       table.appendChild(thead);
       const tbody = document.createElement("tbody");
-      for (const r of rows) {
+      rows.forEach((r, i) => {
         const tr2 = document.createElement("tr");
-        mk("td", r, tr2);
+        mk("td", r, tr2, i + 1);
         tbody.appendChild(tr2);
-      }
+      });
       table.appendChild(tbody);
       wrap.appendChild(table);
       return wrap;
@@ -32862,8 +32914,13 @@ ${h3.join(`
       const a = doc2.lineAt(sel2.from).number, b2 = doc2.lineAt(sel2.to).number;
       const decos = [];
       for (const t3 of findTables(doc2)) {
-        if (!cfg.viewOnly && (editing2 || a <= t3.endLine && b2 >= t3.startLine)) continue;
-        decos.push(Decoration.replace({ widget: new TableWidget(t3), block: true }).range(t3.from, t3.to));
+        const inside = !cfg.viewOnly && a <= t3.endLine && b2 >= t3.startLine;
+        let cur = null;
+        if (inside) {
+          cur = tableCursor(doc2, t3, sel2.head);
+          if (!cur) continue;
+        }
+        decos.push(Decoration.replace({ widget: new TableWidget(t3, cur, editing2), block: true }).range(t3.from, t3.to));
       }
       return Decoration.set(decos, true);
     };
@@ -32957,25 +33014,47 @@ ${h3.join(`
       return s15;
     }
   };
-  var vimDecorations = EditorView.decorations.compute(["doc", vimField], (state) => {
-    const v2 = state.field(vimField);
-    const decos = [];
-    const doc2 = state.doc;
-    const pos = Math.min(v2.pos, doc2.length);
-    if (v2.visFrom != null) {
-      const from = Math.max(0, Math.min(v2.visFrom, v2.visTo)), to = Math.min(doc2.length, Math.max(v2.visFrom, v2.visTo));
-      if (to > from) decos.push(Decoration.mark({ class: "cm-vim-visual" }).range(from, to));
-    }
-    const insertLike = v2.mode[0] === "i" || v2.mode[0] === "R";
-    if (insertLike) {
-      decos.push(Decoration.widget({ widget: new CursorWidget(v2.mode[0] === "R" ? "under" : "bar"), side: -1 }).range(pos));
-    } else if (pos < doc2.length && doc2.sliceString(pos, pos + 1) !== "\n") {
-      decos.push(Decoration.mark({ class: "cm-vim-block" }).range(pos, Math.min(doc2.length, pos + 1)));
-    } else {
-      decos.push(Decoration.widget({ widget: new CursorWidget("block"), side: 1 }).range(pos));
-    }
-    return Decoration.set(decos, true);
+  var refreshTick = StateField.define({
+    create: () => 0,
+    update: (v2, tr2) => tr2.effects.some((e) => e.is(refreshDecorations)) ? v2 + 1 : v2
   });
+  function visibleCursorPos(doc2, pos, cfg, insertLike) {
+    if (cfg.linkSource || cfg.linkEdit && insertLike) return pos;
+    const line = doc2.lineAt(pos);
+    const re2 = new RegExp(RE.link.source, "g");
+    let m;
+    while ((m = re2.exec(line.text)) !== null) {
+      if (m.index > 0 && line.text[m.index - 1] === "!") continue;
+      const a = line.from + m.index, b2 = a + m[0].length;
+      if (pos < a || pos >= b2) continue;
+      const ds2 = a + 1, de2 = ds2 + m[1].length;
+      if (pos >= ds2 && pos < de2) return pos;
+      if (pos < ds2) return m[1].length ? ds2 : a;
+      return insertLike ? de2 : Math.max(ds2, de2 - 1);
+    }
+    return pos;
+  }
+  function vimDecorationsFor(cfg) {
+    return EditorView.decorations.compute(["doc", vimField, refreshTick], (state) => {
+      const v2 = state.field(vimField);
+      const decos = [];
+      const doc2 = state.doc;
+      const insertLike = v2.mode[0] === "i" || v2.mode[0] === "R";
+      const pos = visibleCursorPos(doc2, Math.min(v2.pos, doc2.length), cfg, insertLike);
+      if (v2.visFrom != null) {
+        const from = Math.max(0, Math.min(v2.visFrom, v2.visTo)), to = Math.min(doc2.length, Math.max(v2.visFrom, v2.visTo));
+        if (to > from) decos.push(Decoration.mark({ class: "cm-vim-visual" }).range(from, to));
+      }
+      if (insertLike) {
+        decos.push(Decoration.widget({ widget: new CursorWidget(v2.mode[0] === "R" ? "under" : "bar"), side: -1 }).range(pos));
+      } else if (pos < doc2.length && doc2.sliceString(pos, pos + 1) !== "\n") {
+        decos.push(Decoration.mark({ class: "cm-vim-block" }).range(pos, Math.min(doc2.length, pos + 1)));
+      } else {
+        decos.push(Decoration.widget({ widget: new CursorWidget("block"), side: 1 }).range(pos));
+      }
+      return Decoration.set(decos, true);
+    });
+  }
   function byteColToIndex(text, col) {
     const target = Math.max(0, col - 1);
     let bytes = 0, idx = 0;
@@ -33049,7 +33128,8 @@ ${h3.join(`
         syntaxHighlighting(mdHighlight),
         hideField,
         vimField,
-        vimDecorations,
+        refreshTick,
+        vimDecorationsFor(cfg),
         vtextField,
         vtextDecorations,
         livePreview(cfg),
@@ -33058,8 +33138,9 @@ ${h3.join(`
         EditorView.domEventHandlers({
           mousedown: (e, view4) => {
             const el2 = e.target?.closest?.("[data-md-href]");
+            const any = e.target?.closest?.("[data-href]");
             const pos = view4.posAtCoords({ x: e.clientX, y: e.clientY });
-            opts.onClick?.({ pos, link: !!el2, href: el2 ? el2.getAttribute("data-md-href") : "", doc: view4.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
+            opts.onClick?.({ pos, link: !!el2, href: el2 ? el2.getAttribute("data-md-href") : "", anyHref: any ? any.getAttribute("data-href") : "", doc: view4.state.doc, alt: e.altKey, mod: e.ctrlKey || e.metaKey, event: e });
             return false;
           }
         }),
@@ -33957,11 +34038,9 @@ ${h3.join(`
     head.className = "m-head";
     const board = document.createElement("div");
     board.className = "m-board";
-    const foot = document.createElement("div");
-    foot.className = "m-foot";
     const legend = document.createElement("div");
     legend.className = "m-legend";
-    root.append(head, board, foot, legend);
+    root.append(head, board, legend);
     const light = () => document.documentElement.classList.contains("theme-light");
     const colors = () => light() ? LIGHT : DARK;
     function drawLegend() {
@@ -33979,7 +34058,7 @@ ${h3.join(`
       last3 = m;
       const n = m.size;
       head.textContent = m.status || "";
-      foot.textContent = m.info || "";
+      legend.hidden = m.legend === false;
       const key = JSON.stringify([n, m.nums, m.cells, light()]);
       if (key === sig && board.children.length === n * n) {
         board.querySelectorAll(".m-cell.sel").forEach((e) => e.classList.remove("sel"));
@@ -34037,7 +34116,10 @@ ${h3.join(`
       }));
       drawLegend();
     }
-    return { render: render2, rerender: () => last3 && render2(last3), el: root };
+    function setFocus(on2) {
+      root.classList.toggle("unfocused", !on2);
+    }
+    return { render: render2, rerender: () => last3 && render2(last3), setFocus, el: root };
   }
 
   // src/scan.js
@@ -34477,6 +34559,7 @@ ${h3.join(`
     $3("view").hidden = !!md && !hasNote;
     if (md) {
       $3("mandala").style.flexBasis = md.wcols && s15.cols && hasNote ? (100 * md.wcols / s15.cols).toFixed(2) + "%" : "";
+      mandala.setFocus(s15.focus === "mandala");
       mandala.render(md);
     }
     if (s15.bt === "terminal" || !hasNote) return;
@@ -34592,15 +34675,45 @@ ${h3.join(`
     pump();
     return queue.length;
   }
-  function onClick({ pos, link, alt }) {
+  function onClick({ pos, link, anyHref, alt, mod }) {
     if (pos == null) return;
     if (alt) link = false;
+    if (anyHref && !alt && !link) {
+      if (/^https?:\/\//i.test(anyHref)) {
+        gui.linkExternal(anyHref);
+        return;
+      }
+      if (/\.html?([#?]|$)/i.test(anyHref) && !mod) {
+        openHtml(anyHref);
+        return;
+      }
+    }
     const [l, c] = view2.lineColAt(pos);
     const m = (last2.mode || "n")[0];
     const toNote = last2.mandala && last2.mandala.cells && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? `call win_gotoid(${last2.mandala.noteWin})|` : "";
     const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
     if (m === "n") gui.write(mv + (link ? "\r" : ""));
     else if (m === "i") gui.write("" + mv);
+  }
+  var htmlOpen = false;
+  async function openHtml(href) {
+    const res = await gui.linkHtml(last2.file, href);
+    if (!res) {
+      showError(document.documentElement.lang === "en" ? "Cannot open this HTML file" : "\u3053\u306E HTML \u30D5\u30A1\u30A4\u30EB\u306F\u958B\u3051\u307E\u305B\u3093\uFF08vault \u306E\u5916\u30FB\u5B58\u5728\u3057\u306A\u3044\uFF09");
+      return;
+    }
+    $3("hv-name").textContent = res.name;
+    $3("hv-frame").src = res.url;
+    $3("htmlview").hidden = false;
+    htmlOpen = true;
+    $3("htmlview").focus();
+  }
+  function closeHtml() {
+    if (!htmlOpen) return;
+    htmlOpen = false;
+    $3("htmlview").hidden = true;
+    $3("hv-frame").src = "about:blank";
+    term.focus();
   }
   function onMandalaCell(r, c, enter) {
     gui.write(`\x1B:call gnosis#mview#gui_click(${r},${c},${enter ? 1 : 0})|redraw|echo ""\r`);
@@ -34680,8 +34793,16 @@ ${h3.join(`
       scheduleFit();
     });
     const backToInput = () => {
-      if (document.getElementById("launcher").hidden && !(scan && scan.isOpen())) term.focus();
+      if (document.getElementById("launcher").hidden && !(scan && scan.isOpen()) && !htmlOpen) term.focus();
     };
+    document.addEventListener("keydown", (e) => {
+      if (htmlOpen && (e.key === "q" || e.key === "Escape")) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeHtml();
+      }
+    }, true);
+    $3("hv-close").addEventListener("click", closeHtml);
     document.addEventListener("mousedown", () => setTimeout(backToInput, 0));
     window.addEventListener("focus", backToInput);
     window.__gui = {
@@ -34691,6 +34812,9 @@ ${h3.join(`
       state: () => last2,
       send: (d) => gui.write(d),
       isExpanded: () => expanded,
+      openHtml,
+      closeHtml,
+      htmlIsOpen: () => htmlOpen,
       screen: () => {
         const b2 = term.buffer.active;
         const out = [];

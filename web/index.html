@@ -26,6 +26,11 @@
     <span id="dirty" class="dirty"></span>
     <span id="err" class="err" hidden></span>
   </div>
+  <!-- リンクを開いた HTML をアプリの中で表示する重ね表示（q か Esc で閉じる） -->
+  <div id="htmlview" class="htmlview" hidden tabindex="-1">
+    <div class="hv-head"><span id="hv-name"></span><span class="hv-hint">q / Esc で閉じる</span><button id="hv-close" type="button" aria-label="閉じる">×</button></div>
+    <iframe id="hv-frame" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+  </div>
   <!-- 紙のスキャンの番号付け（\F。src/scan.js） -->
   <div id="scan" hidden></div>
   <script src="bundle.js"></script>

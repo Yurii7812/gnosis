@@ -18,11 +18,9 @@ export function createMandala(root, { onCell }) {
   head.className = "m-head";
   const board = document.createElement("div");
   board.className = "m-board";
-  const foot = document.createElement("div");
-  foot.className = "m-foot";
   const legend = document.createElement("div");
   legend.className = "m-legend";
-  root.append(head, board, foot, legend);
+  root.append(head, board, legend);
 
   const light = () => document.documentElement.classList.contains("theme-light");
   const colors = () => (light() ? LIGHT : DARK);
@@ -43,7 +41,8 @@ export function createMandala(root, { onCell }) {
     last = m;
     const n = m.size;
     head.textContent = m.status || "";
-    foot.textContent = m.info || "";
+    // 種類の凡例（Vim の設定 mandalaLegend）。選んでいるノートの題は出さない（右のノートに出ている）
+    legend.hidden = m.legend === false;
     // 盤面の中身（マス・色・番号）が前と同じなら、作り直さず、選んでいるマスの枠だけ動かす（ちらつかない）
     const key = JSON.stringify([n, m.nums, m.cells, light()]);
     if (key === sig && board.children.length === n * n) {
@@ -88,5 +87,8 @@ export function createMandala(root, { onCell }) {
     drawLegend();
   }
 
-  return { render, rerender: () => last && render(last), el: root };
+  // 曼荼羅の窓にカーソルがあるときだけ、選んでいるマスをハイライトする（右のノートにカーソルがあるときは消す。CUI も同じ）
+  function setFocus(on) { root.classList.toggle("unfocused", !on); }
+
+  return { render, rerender: () => last && render(last), setFocus, el: root };
 }

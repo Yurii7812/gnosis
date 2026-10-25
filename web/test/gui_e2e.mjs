@@ -41,6 +41,7 @@ fs.writeFileSync(path.join(vault, "index.md"), "---\ntime: 2026-10-11 10:00:00\n
 mk("m1.md", "数学とは何か", "数学は**形式**と行動の間。\n\n- 箇条書き\n- [ ] 未完了\n\n[PKM の設計](p1.md) と [一貫性](m2.md)", "[Index](index.md)");
 mk("m2.md", "一貫性", "同じ条件に同じ規則。\n\n## sec\n\n見出しの本文", "[数学とは何か](m1.md)");
 mk("anchor.md", "アンカー", "[二](m2.md#sec)", "[Index](index.md)");
+fs.writeFileSync(path.join(vault, "page.html"), "<!doctype html><html><head><meta charset=utf-8><title>t</title></head><body><h1 id=hh>HTML ページ</h1></body></html>");
 mk("p1.md", "PKM の設計", "言語化は後回し。", "[Index](index.md)");
 
 
@@ -89,6 +90,29 @@ const scenario = `(async () => {
   R.mandala = { size: m.size, cells: document.querySelectorAll('.m-cell').length, shown: !document.getElementById('mandala').hidden,
     withNote: document.getElementById('main').classList.contains('with-mandala'),
     kinds: [...new Set((m.cells || []).flat().map((c) => c.k))], legend: document.querySelectorAll('.m-legend span').length, center: m.title };
+  // リンクの HTML は、この画面の中（重ね表示）で開き、q で閉じる。vault の外の HTML は開かない
+  {
+    R.html = {};
+    await G.openHtml('page.html');
+    await sleep(400);
+    R.html.open = G.htmlIsOpen() && !document.getElementById('htmlview').hidden && /page\.html$/.test(document.getElementById('hv-frame').src);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', bubbles: true, cancelable: true }));
+    await sleep(200);
+    R.html.closed = !G.htmlIsOpen() && document.getElementById('htmlview').hidden;
+    R.html.outside = await window.gui.linkHtml(G.state().file, '../../../../../etc/passwd.html');
+    R.html.web = await window.gui.linkExternal('javascript:alert(1)');
+  }
+  // 曼荼羅の下: 選んでいるノートの題は出さず、種類の凡例を出す。選んでいるマスは内側が塗られ（::after）、右のノートにカーソルがあるときは消える
+  {
+    const selEl = document.querySelector('.m-cell.sel');
+    R.mand2 = { foot: !!document.querySelector('.m-foot'), legend: !document.querySelector('.m-legend').hidden, legendN: document.querySelectorAll('.m-legend span').length,
+      selAfter: selEl ? getComputedStyle(selEl, '::after').content : null, focusedClass: !document.getElementById('mandala').classList.contains('unfocused') };
+    await press('\\x17l', 900);
+    R.mand2.unfocusedAfterNote = document.getElementById('mandala').classList.contains('unfocused');
+    R.mand2.selAfterGone = selEl ? getComputedStyle(document.querySelector('.m-cell.sel'), '::after').display : null;
+    await press('\\x17h', 900);
+    R.mand2.refocused = !document.getElementById('mandala').classList.contains('unfocused');
+  }
   // 曼荼羅が開いている間も、右にノートが映る（罫線の文字が出ない）
   R.hide = { st: JSON.stringify(G.state().hide), lines: document.querySelectorAll('.cm-hide-line').length, nw: G.state().mandala.noteWin };
   R.noteText = G.view.getText().includes('数学とは何か') && !/[─│┌┐└┘]/.test(G.view.getText());
@@ -171,8 +195,10 @@ try {
   check(R.start?.h1, "markdown should render at start: " + JSON.stringify(R.start));
   check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 11, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
   check(R.settings && R.settings.expanded && R.settings.text && R.settings.back, ":GnosisSettings should show the terminal screen and q should return: " + JSON.stringify(R.settings));
+  check(R.html && R.html.open && R.html.closed && R.html.outside === null && R.html.web === false, "HTML link opens inside the app and q closes it; outside-vault and non-http are refused: " + JSON.stringify(R.html));
   check(R.fm && R.fm.fm === R.fm.body, "YAML should not be gray (same color as the body text): " + JSON.stringify(R.fm));
   check(R.zz && R.zz.after < R.zz.before, "\\\\zz in the app should really hide YAML: " + JSON.stringify(R.zz));
+  check(R.mand2 && !R.mand2.foot && R.mand2.legend && R.mand2.legendN === 11 && R.mand2.selAfter === '""' && R.mand2.focusedClass && R.mand2.unfocusedAfterNote && R.mand2.selAfterGone === 'none' && R.mand2.refocused, "mandala: no title footer, legend shown, selected cell filled, unfocused hides it: " + JSON.stringify(R.mand2));
   check(R.hide && R.hide.lines > 0, "YAML in the right note pane should be hidden: " + JSON.stringify(R.hide));
   check(R.noteText, "the note pane should show the note, not the mandala's box characters");
   check(R.click && R.click.before !== R.click.after && R.click.sel, "clicking a cell should move the cursor: " + JSON.stringify(R.click));

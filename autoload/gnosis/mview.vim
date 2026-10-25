@@ -1244,6 +1244,31 @@ function! s:status(ctitle, pages, ptop, extra) abort
         \ get({'all': 'a', 'groups': 'i', 'family': '親子'}, s:S.mode, 'a'), s:S.page + 1, max([1, a:pages]), l:ov, empty(l:cancel) ? '' : '  ' . l:cancel, a:extra)
 endfunction
 
+" 種類の凡例（索引 グループ 親 文脈 引用 BackLink 子 関連 予測関連 ノート 見出し）。曼荼羅の下に色つきで出す。
+" 設定 mandalaLegend（既定オン。設定の画面 z で切り替え）。窓の幅に収まるように、足りなければ 2 行に分ける
+function! s:legend_on() abort
+  try
+    return get(gnosis#settings#current(), 'mandalaLegend', 1) ? 1 : 0
+  catch
+    return 1
+  endtry
+endfunction
+
+" 戻り値: [行の文字列のリスト, [[何行目(0 始まり), 開始バイト, バイト長, 種類], …]]
+function! s:legend_build(W) abort
+  let l:rows = [' ']
+  let l:spans = []
+  for l:k in s:kind_legend
+    let l:cell = s:kinds[l:k][1]
+    if strdisplaywidth(l:rows[-1] . l:cell) > a:W - 1 && len(l:rows) < 3 && l:rows[-1] !=# ' '
+      call add(l:rows, ' ')
+    endif
+    call add(l:spans, [len(l:rows) - 1, strlen(l:rows[-1]) + 1, strlen(l:cell), l:k])
+    let l:rows[-1] .= l:cell . '  '
+  endfor
+  return [l:rows, l:spans]
+endfunction
+
 function! s:render() abort
   " 色の定義が消えていたら戻す（default なので、利用者の指定は上書きしない）
   call s:hl()
@@ -1262,7 +1287,9 @@ function! s:render() abort
   let l:foot = []
   let l:show_ref = 1
   let s:S.modespan = []
-  let l:fixed = 2
+  " 窓が低いときは凡例を出さない（盤面を潰さないため）
+  let l:leg = (s:legend_on() && l:H >= 22) ? s:legend_build(l:W) : [[], []]
+  let l:fixed = 2 + len(l:leg[0])
   let s:S.legend_line = 0
   let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, l:fixed)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
@@ -1334,9 +1361,18 @@ function! s:render() abort
   endfor
   call add(l:lines, l:left . s:hline(l:n, l:cw, l:n, l:heavy))
   call add(s:S.bars, ['GnosisMviewBarH', len(l:lines), strlen(l:left) + 1, l:gridw])
-  while len(l:lines) < l:H - 1
+  while len(l:lines) < l:H - 1 - len(l:leg[0])
     call add(l:lines, '')
   endwhile
+  " 種類の凡例（盤面の下、カーソルのマスの説明の上）
+  let s:S.legend_spans = []
+  let l:lg0 = len(l:lines)
+  for l:row in l:leg[0]
+    call add(l:lines, s:fit(l:row, l:W))
+  endfor
+  for [l:li, l:col, l:len, l:kind] in l:leg[1]
+    call add(s:S.legend_spans, [l:kind, l:lg0 + l:li + 1, l:col, l:len])
+  endfor
   call add(l:lines, '')
   let s:S.info_line = len(l:lines)
   " 全部消してから書き直すと画面がちらつくので、変わった行だけ書き換える。描いている間は画面を更新しない
@@ -1442,6 +1478,10 @@ function! s:mark() abort
     endfor
   endif
   let w:mview_match = []
+  " 曼荼羅の窓にカーソルが無い（右のノートにカーソルがある）ときは、選んでいるマスなどのハイライトを付けない
+  if !get(s:S, 'focus', 1)
+    return
+  endif
   let l:n = s:S.size
   for l:r in range(l:n)
     for l:c in range(l:n)
@@ -1490,9 +1530,9 @@ function! s:mark() abort
   if !empty(get(s:S, 'modespan', []))
     call s:addpos('GnosisMviewSel', [s:S.modespan], 15)
   endif
-  for [l:k, l:col, l:len] in get(s:S, 'legend_spans', [])
+  for [l:k, l:ln, l:col, l:len] in get(s:S, 'legend_spans', [])
     if !empty(s:kinds[l:k][2])
-      call s:addpos(s:kinds[l:k][2], [[s:S.legend_line, l:col, l:len]], 15)
+      call s:addpos(s:kinds[l:k][2], [[l:ln, l:col, l:len]], 15)
     endif
   endfor
   " / の語は、ふつうの検索のようにハイライト
@@ -2480,8 +2520,8 @@ function! s:setup_buffer() abort
   augroup gnosis_mview_buf
     autocmd! * <buffer>
     autocmd VimResized,WinResized * call gnosis#mview#rerender()
-    autocmd BufEnter,WinEnter <buffer> call gnosis#mview#cursor(0)
-    autocmd BufLeave,WinLeave <buffer> call gnosis#mview#cursor(1)
+    autocmd BufEnter,WinEnter <buffer> call gnosis#mview#cursor(0) | call gnosis#mview#focus(1)
+    autocmd BufLeave,WinLeave <buffer> call gnosis#mview#cursor(1) | call gnosis#mview#focus(0)
     autocmd VimLeavePre <buffer> call gnosis#mview#cursor(1)
   augroup END
 endfunction
@@ -2584,6 +2624,17 @@ function! s:follow_do(wid, buf, timer) abort
   endif
   let s:S.note = l:path
   call s:center_on(l:path)
+endfunction
+
+" 曼荼羅の窓にカーソルがあるか（WinEnter / WinLeave）。無いときは選択のハイライトを消し、戻ったら付け直す
+function! gnosis#mview#focus(on) abort
+  if !exists('s:S') || type(s:S) != v:t_dict
+    return
+  endif
+  let s:S.focus = a:on ? 1 : 0
+  if &filetype ==# 'gnosis-mandala' && has_key(s:S, 'cells')
+    call s:mark()
+  endif
 endfunction
 
 " 端末のカーソルの表示。曼荼羅では出さない（選んでいるマスは背景色で分かる）。show=0 で隠し、1 で戻す
@@ -2871,8 +2922,9 @@ function! gnosis#mview#start() abort
       let l:on = 1
     endtry
   endif
-  " 前回、曼荼羅を開いたまま閉じたなら開く。閉じてあったなら閉じたまま（g:gnosis_mandala_on_start が決まっていればそちら）
-  if l:on == 1 && !exists('g:gnosis_mandala_on_start') && get(s:state_all(), 'open', 1) == 0
+  " 前回、曼荼羅を開いたまま閉じたなら開く。閉じてあったなら閉じたまま（g:gnosis_mandala_on_start が決まっていればそちら）。
+  " \c のアプリの中では、前回の状態は見ず、設定（mandalaOnStart）がオンなら必ず開く
+  if l:on == 1 && !exists('g:gnosis_mandala_on_start') && empty($GNOSIS_GUI_PORT) && get(s:state_all(), 'open', 1) == 0
     return
   endif
   if !l:on || empty(s:root()) || s:locked() || &filetype ==# 'gnosis-mandala' || s:mwin() > 0 || empty(expand('%:p'))
@@ -3021,6 +3073,7 @@ function! gnosis#mview#gui_state() abort
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
         \           'mode': s:S.mode, 'nv': get(s:S, 'nv', 1), 'dbasis': get(s:S, 'dbasis', 'center')},
+        \ 'legend': s:legend_on(),
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
 
@@ -3183,9 +3236,16 @@ function! s:panel_rows() abort
         \ {'key': 'u', 'name': '見出しも並べる', 'val': l:Onoff(get(s:S, 'ol_on', 0)), 'act': function('s:toggle_outline')},
         \ {'key': 'f', 'name': '全画面（9×9）', 'val': l:Onoff(s:S.size == 9), 'act': function('s:full')},
         \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
+        \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
         \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . '（1 = 直接のつながりだけ）', 'act': function('s:depth_ask')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
+endfunction
+
+" 種類の凡例の表示/非表示（vault の設定 mandalaLegend）
+function! s:toggle_legend() abort
+  call gnosis#settings#set('mandalaLegend', s:legend_on() ? v:false : v:true)
+  call s:render()
 endfunction
 
 " モードを 全体 → 索引 → 親子 → 全体 と順に切り替える
