@@ -5,11 +5,11 @@ const KINDS = [
   ["back", "BackLink"], ["child", "子"], ["related", "関連"], ["pred", "予測関連"], ["note", "ノート"], ["outline", "見出し"],
 ];
 // 種類の色（Vim の曼荼羅と同じ。ライトは白い背景で読める濃さ）
-const DARK = { index: "#ff6b81", group: "#f2d13d", parent: "#61afef", context: "#c678dd", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#9aa0aa", outline: "#7ee8fa" };
-const LIGHT = { index: "#d6336c", group: "#b8860b", parent: "#1c7ed6", context: "#9c36b6", cite: "#e8590c", back: "#495057", child: "#0b7285", related: "#2f9e44", pred: "#8a6d3b", note: "#6c757d", outline: "#0b9fb8" };
+const DARK = { index: "#ff8798", group: "#f2d13d", parent: "#65b1ef", context: "#d194e4", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#a6abb4", outline: "#7ee8fa" };
+const LIGHT = { index: "#b81e52", group: "#8a5a00", parent: "#1864ab", context: "#862e9c", cite: "#a8400a", back: "#495057", child: "#08606f", related: "#1f6f30", pred: "#7a5530", note: "#5c6670", outline: "#0a6f8a" };
 // 9×9 の、周りの 8 マスとそれぞれの曼荼羅の中心のマスの背景（全部同じごく薄い色）
 const BG_DARK = Array(8).fill("#262b36");
-const BG_LIGHT = Array(8).fill("#f1f3f6");
+const BG_LIGHT = Array(8).fill("#e9edf3");
 
 export function createMandala(root, { onCell }) {
   let last = null;

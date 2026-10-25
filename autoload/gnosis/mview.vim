@@ -2780,19 +2780,34 @@ endfunction
 function! s:hl() abort
   " 種類の色（gui の色, 256 色の番号）。中心のマスは同じ色を太字にした C つき
   " 種類ごとに、はっきり違う色（索引=ピンク・グループ=黄・親=青・文脈=紫・引用=橙・バックリンク=灰白・子=青緑・関連=緑・予測関連=ベージュ・ノート=灰）
-  let l:cols = {'Index': ['#ff6b81', 204], 'Group': ['#f2d13d', 220], 'Parent': ['#61afef', 75], 'Child': ['#2ec4b6', 43],
-        \ 'Context': ['#c678dd', 176], 'Cite': ['#ff9e4a', 215], 'Back': ['#d8dee9', 253], 'Related': ['#8fd14f', 113],
-        \ 'Pred': ['#d2b48c', 180], 'Note': ['#9aa0aa', 247], 'Outline': ['#7ee8fa', 123]}
+  let l:dark = &background ==# 'dark'
+  if l:dark
+    " （選んだマスの背景 #3a3f4b の上でもコントラスト比 4.5 以上になるように、4 色は少し明るくしてある）
+    let l:cols = {'Index': ['#ff8798', 204], 'Group': ['#f2d13d', 220], 'Parent': ['#65b1ef', 75], 'Child': ['#2ec4b6', 43],
+          \ 'Context': ['#d194e4', 176], 'Cite': ['#ff9e4a', 215], 'Back': ['#d8dee9', 253], 'Related': ['#8fd14f', 113],
+          \ 'Pred': ['#d2b48c', 180], 'Note': ['#a6abb4', 247], 'Outline': ['#7ee8fa', 123]}
+  else
+    " ライト: 白に近い背景で読める濃い色（背景・選んだマスの薄い青の背景のどちらでもコントラスト比 4.5 以上。試験で確かめる）
+    let l:lc = {'Index': '#b81e52', 'Group': '#8a5a00', 'Parent': '#1864ab', 'Child': '#08606f', 'Context': '#862e9c', 'Cite': '#a8400a',
+          \ 'Back': '#495057', 'Related': '#1f6f30', 'Pred': '#7a5530', 'Note': '#5c6670', 'Outline': '#0a6f8a'}
+    let l:cols = {}
+    for [l:k, l:h] in items(l:lc)
+      let l:cols[l:k] = [l:h, gnosis#theme#to_cterm(l:h)]
+    endfor
+  endif
+  let l:selbg = l:dark ? ['#3a3f4b', 238] : ['#dfe8f3', 253]
+  let l:dupfg = l:dark ? ['#1a1a1a', 234] : ['#ffffff', 231]
+  let l:bg9 = l:dark ? ['#262b36', 236] : ['#e9edf3', 255]
   for [l:k, l:c] in items(l:cols)
     execute printf('highlight default GnosisMv%s guifg=%s ctermfg=%d', l:k, l:c[0], l:c[1])
     " 中心のマスは太字だけ（下線はマスの全部の行に引かれて、しましまになる）
     execute printf('highlight default GnosisMv%sC guifg=%s ctermfg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
-    execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=#3a3f4b ctermbg=238 gui=bold cterm=bold', l:k, l:c[0], l:c[1])
+    execute printf('highlight default GnosisMv%sS guifg=%s ctermfg=%d guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1], l:selbg[0], l:selbg[1])
     " 中心と同じノート（外側）: 種類の色を背景に、文字は暗く
-    execute printf('highlight default GnosisMv%sD guifg=#1a1a1a ctermfg=234 guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:c[0], l:c[1])
+    execute printf('highlight default GnosisMv%sD guifg=%s ctermfg=%d guibg=%s ctermbg=%d gui=bold cterm=bold', l:k, l:dupfg[0], l:dupfg[1], l:c[0], l:c[1])
   endfor
   " 9×9 の背景: 真ん中の周りの 8 マスと、それぞれの曼荼羅の中心のマスを、全部同じごく薄い色で塗る（読みづらくならないように）。種類の色（文字）はそのまま
-  let l:bgs = repeat([['#262b36', 236]], 8)
+  let l:bgs = repeat([l:bg9], 8)
   for l:i in range(8)
     let [l:gb, l:cb] = l:bgs[l:i]
     execute printf('highlight default GnosisMvBg%d guibg=%s ctermbg=%d', l:i, l:gb, l:cb)
@@ -2803,8 +2818,13 @@ function! s:hl() abort
     endfor
   endfor
   " 罫線の色（空白の背景色で線にする）。太い線（3×3 の境目）と細い線
-  highlight default GnosisMviewBarH guibg=#6b7280 ctermbg=243
-  highlight default GnosisMviewBarL guibg=#3f4551 ctermbg=239
+  if l:dark
+    highlight default GnosisMviewBarH guibg=#6b7280 ctermbg=243
+    highlight default GnosisMviewBarL guibg=#3f4551 ctermbg=239
+  else
+    highlight default GnosisMviewBarH guibg=#8b949e ctermbg=246
+    highlight default GnosisMviewBarL guibg=#c4ccd4 ctermbg=251
+  endif
   highlight default link GnosisMviewSel Visual
   " 選んでいるマスの周りの枠（線のセル）の背景。線の文字の色は残して背景だけ塗る（塗りが線まで届くように）
   highlight default link GnosisMviewCenter Title

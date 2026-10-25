@@ -47,7 +47,7 @@ let s:dark = &background ==# 'dark'
 let s:panel = s:mix(s:fg, s:bg, s:dark ? 0.92 : 0.93)
 let s:red = s:dark ? '#FF8A8A' : '#B42318'
 let s:yellow = s:dark ? '#FFD479' : '#8A5A00'
-let s:green = s:dark ? '#8FE3A8' : '#1A7F37'
+let s:green = s:dark ? '#8FE3A8' : '#116329'
 
 function! s:hl(group, fg, bg, attr) abort
   let l:cmd = 'highlight ' . a:group
@@ -129,6 +129,10 @@ call s:hl('DiffAdd', s:green, s:panel, '')
 call s:hl('DiffDelete', s:red, s:panel, '')
 call s:hl('DiffChange', s:fg, s:panel, '')
 call s:hl('DiffText', s:yellow, s:panel, 'bold')
+" diff のあたらしい名前（Vim 9 の Added / Changed / Removed）も、どの配色でも読める色に
+call s:hl('Added', s:green, '', '')
+call s:hl('Changed', s:yellow, '', '')
+call s:hl('Removed', s:red, '', '')
 call s:hl('SpellBad', '', '', 'undercurl')
 call s:hl('SpellCap', '', '', 'undercurl')
 
