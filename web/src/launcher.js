@@ -147,7 +147,7 @@ function renderSettings() {
       field(t("settings.item.appearance"), h("select", { id: "s-appearance", onchange: (e) => { s.appearance = e.target.value; render(); } },
         h("option", { value: "light", selected: s.appearance === "light" }, t("settings.light")), h("option", { value: "dark", selected: s.appearance === "dark" }, t("settings.dark")))),
       field(t("settings.item.app_appearance"), h("select", { id: "s-app-appearance", onchange: (e) => { s.appAppearance = e.target.value; render(); } },
-        h("option", { value: "light", selected: (s.appAppearance || s.appearance) !== "dark" }, t("settings.light")), h("option", { value: "dark", selected: (s.appAppearance || s.appearance) === "dark" }, t("settings.dark")))),
+        h("option", { value: "light", selected: s.appAppearance !== "dark" }, t("settings.light")), h("option", { value: "dark", selected: s.appAppearance === "dark" }, t("settings.dark")))),
       field(t("settings.item.theme"), h("select", { id: "s-theme", onchange: (e) => { setTheme(e.target.value); render(); } }, themeOptions)),
       field(t("settings.item.theme_add"), h("span", { class: "l-row" },
         h("input", { type: "text", id: "s-plug", placeholder: "Plug 'cocopon/iceberg.vim'" }),

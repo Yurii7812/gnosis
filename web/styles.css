@@ -159,7 +159,7 @@ span.cm-vim-under { display: inline-block; width: .6em; border-bottom: 2px solid
 .cm-md-fence { background: var(--bg-2); font-family: var(--font-mono); font-size: .88em; }
 .cm-md-fence-edge { font-size: 11px; color: var(--fg-dim); line-height: 1.4; }
 .cm-md-fm-hide { display: none !important; }
-.cm-md-fm { color: var(--fg-dim); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--bg-2); }
+.cm-md-fm { color: var(--fg); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
 .cm-activeLine { background: transparent; }
 
 /* Vim の仮想テキスト（リンクの数字のしるし）: 目立つ小さなバッジ */
@@ -309,7 +309,7 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .mandala .m-t { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: break-word; }
 .mandala .m-pt { font-size: .75em; opacity: .8; }
 .mandala .m-cell.dup { font-weight: 700; }
-.cm-hide-line { display: none; }
+.cm-hide-line { display: none !important; }
 
 /* ---- 紙のスキャンの番号付け（src/scan.js）: 大きく・シンプルに ---- */
 #scan[hidden] { display: none; }

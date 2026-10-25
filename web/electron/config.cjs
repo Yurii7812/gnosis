@@ -254,7 +254,7 @@ function paletteFor(s) {
 // 通常の Vim の配色（paletteFor）とは別。Vim 側の変更はここに影響しない（逆も同じ）。
 function appPaletteFor(s) {
   const pals = builtinPalettes();
-  const base = (s.appAppearance || s.appearance) === "dark" ? { ...pals.dark } : { ...(pals.app || pals.light) };
+  const base = s.appAppearance === "dark" ? { ...pals.dark } : { ...(pals.app || pals.light) };
   const th = s.appTheme || { kind: "builtin" };
   const c = th.kind === "custom" && s.appCustomThemes ? s.appCustomThemes[th.name] : null;
   if (!c) return base;

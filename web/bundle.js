@@ -33392,8 +33392,8 @@ ${h3.join(`
             s15.appAppearance = e.target.value;
             render();
           } },
-          h2("option", { value: "light", selected: (s15.appAppearance || s15.appearance) !== "dark" }, t2("settings.light")),
-          h2("option", { value: "dark", selected: (s15.appAppearance || s15.appearance) === "dark" }, t2("settings.dark"))
+          h2("option", { value: "light", selected: s15.appAppearance !== "dark" }, t2("settings.light")),
+          h2("option", { value: "dark", selected: s15.appAppearance === "dark" }, t2("settings.dark"))
         )),
         field(t2("settings.item.theme"), h2("select", { id: "s-theme", onchange: (e) => {
           setTheme(e.target.value);
