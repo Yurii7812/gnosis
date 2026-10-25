@@ -126,6 +126,7 @@ sh "$REPO/test/mview_family_net.sh"
 python3 "$REPO/test/mview_panel_pty_check.py"
 sh "$REPO/test/mview_depth_net.sh"
 python3 "$REPO/test/mview_ui_pty_check.py"
+python3 "$REPO/test/mview_frame_pty_check.py"
 
 # - [ ] の行で Enter すると次の行にも - [ ] を作る
 sh "$REPO/test/checkbox_net.sh"

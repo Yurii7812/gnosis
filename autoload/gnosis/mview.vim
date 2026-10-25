@@ -1400,6 +1400,41 @@ function! s:addpos(group, pos, prio) abort
   endfor
 endfunction
 
+" マス（spans: [行, 開始バイト, バイト長] が上から下まで）の周りの枠のセルの位置: 左右の縦線の列と、上下の横線の行。
+" バッファの文字から、線の文字（罫線は 3 バイト・色の線のときは空白 1 バイト）の長さを読んで求める
+function! s:frame_pos(sp) abort
+  if empty(a:sp)
+    return []
+  endif
+  let l:first = a:sp[0]
+  let l:last = a:sp[-1]
+  let l:l1 = getline(l:first[0])
+  let l:lb = l:first[1] - strlen(matchstr(strpart(l:l1, 0, l:first[1] - 1), '.$'))
+  let l:re = l:first[1] + l:first[2]
+  let l:rl = strlen(matchstr(strpart(l:l1, l:re - 1), '^.'))
+  let l:out = []
+  for l:s in a:sp
+    call add(l:out, [l:s[0], l:lb, l:first[1] - l:lb])
+    call add(l:out, [l:s[0], l:re, l:rl])
+  endfor
+  " 上下の横線の行は、文字の幅（バイト数）が内側の行と違う（罫線は 3 バイト・空白は 1 バイト）ので、表示の桁から求める
+  let l:dc = strdisplaywidth(strpart(l:l1, 0, l:lb - 1))
+  let l:dw = strdisplaywidth(strpart(l:l1, l:lb - 1, l:re + l:rl - l:lb))
+  for l:ln in [l:first[0] - 1, l:last[0] + 1]
+    if l:ln < 1 || l:ln > line('$')
+      continue
+    endif
+    let l:t = getline(l:ln)
+    let l:bs = byteidx(l:t, l:dc)
+    let l:be = byteidx(l:t, l:dc + l:dw)
+    if l:bs < 0
+      continue
+    endif
+    call add(l:out, [l:ln, l:bs + 1, (l:be < 0 ? strlen(l:t) : l:be) - l:bs])
+  endfor
+  return l:out
+endfunction
+
 function! s:mark() abort
   if exists('w:mview_match')
     for l:m in w:mview_match
@@ -1420,6 +1455,9 @@ function! s:mark() abort
         " 選んでいるマス: 種類の色を残して背景だけ変える
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         call s:addpos(empty(l:hg) ? 'GnosisMviewSel' : l:hg . 'S', l:sp, 20)
+        " 枠の線は端の行・桁のちょうど真ん中に引かれるので、内側だけを塗ると線との間に半マスの隙間ができて「一部だけ」に見える。
+        " 周りの枠のセル（左右の縦線・上下の横線）にも背景だけを塗って、塗りが線まで届くようにする（線の文字の色は残る）
+        call s:addpos('GnosisMviewSelEdge', s:frame_pos(l:sp), 19)
       elseif l:cell.role ==# 'center'
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         let l:bi = get(l:cell, 'bgi', -1)
@@ -2660,6 +2698,8 @@ function! s:hl() abort
   highlight default GnosisMviewBarH guibg=#6b7280 ctermbg=243
   highlight default GnosisMviewBarL guibg=#3f4551 ctermbg=239
   highlight default link GnosisMviewSel Visual
+  " 選んでいるマスの周りの枠（線のセル）の背景。線の文字の色は残して背景だけ塗る（塗りが線まで届くように）
+  highlight default GnosisMviewSelEdge guibg=#3a3f4b ctermbg=238
   highlight default link GnosisMviewCenter Title
 endfunction
 
