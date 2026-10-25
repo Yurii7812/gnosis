@@ -1455,9 +1455,14 @@ function! s:mark() abort
         " 選んでいるマス: 種類の色を残して背景だけ変える
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         call s:addpos(empty(l:hg) ? 'GnosisMviewSel' : l:hg . 'S', l:sp, 20)
-        " 枠の線は端の行・桁のちょうど真ん中に引かれるので、内側だけを塗ると線との間に半マスの隙間ができて「一部だけ」に見える。
-        " 周りの枠のセル（左右の縦線・上下の横線）にも背景だけを塗って、塗りが線まで届くようにする（線の文字の色は残る）
-        call s:addpos('GnosisMviewSelEdge', s:frame_pos(l:sp), 19)
+        " 枠の線は端の行・桁のちょうど真ん中に引かれる。線のセルに背景を塗ると、線の外側に半マスはみ出すので塗らない。
+        " 代わりに、選んでいるマスをぐるっと囲む枠の線を、そのマスの種類の色・太字で光らせる（内側の塗りと合わせて、マス全体が選ばれて見える）。
+        " 色の線にする方式（g:gnosis_mview_border = 'color'）では、線のセルの背景を塗る（塗りが線ぴったりに届く）
+        if s:bar_color()
+          call s:addpos('GnosisMviewSelEdge', s:frame_pos(l:sp), 19)
+        else
+          call s:addpos(empty(l:hg) ? 'GnosisMviewSelLine' : l:hg . 'C', s:frame_pos(l:sp), 19)
+        endif
       elseif l:cell.role ==# 'center'
         let l:hg = s:kinds[get(l:cell, 'kind', 'note')][2]
         let l:bi = get(l:cell, 'bgi', -1)
@@ -2700,6 +2705,7 @@ function! s:hl() abort
   highlight default link GnosisMviewSel Visual
   " 選んでいるマスの周りの枠（線のセル）の背景。線の文字の色は残して背景だけ塗る（塗りが線まで届くように）
   highlight default GnosisMviewSelEdge guibg=#3a3f4b ctermbg=238
+  highlight default GnosisMviewSelLine guifg=#ffffff ctermfg=231 gui=bold cterm=bold
   highlight default link GnosisMviewCenter Title
 endfunction
 

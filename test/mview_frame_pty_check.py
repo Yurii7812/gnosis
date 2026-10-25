@@ -57,7 +57,7 @@ try:
     pump(1.0)
     lines = f.read_text().split("\n") if f.exists() else []
     a = lines[0].split() if lines else []
-    ok("3×3: 左右の縦線と上下の横線のセルにも背景が塗られ、内側と同じ背景: " + " ".join(a), len(a) == 5 and "0" not in a[:4] and a[0] == a[1])
+    ok("3×3: 左右の縦線と上下の横線の線が光る（属性が付く）: " + " ".join(a), len(a) == 5 and "0" not in a[:4] and a[0] == a[1] and a[0] != a[4])
     # 9×9（全画面）でも同じ
     if f.exists():
         f.unlink()
