@@ -46,12 +46,12 @@ call s:mk('index.md', 'Index', [])
 execute 'edit ' . s:v . '/top.md'
 call s:keys(' ')
 call s:ok('全体では普通のリンクも出る', index(s:names(), 'linkonly.md') >= 0 && index(s:names(), 'kid1.md') >= 0, string(s:names()))
-call s:keys(',')
+call s:keys('d')
 call s:ok(', で親子モードになる', s:st().mode ==# 'family', s:st().mode)
 call s:ok('親子: 親・子が出る', index(s:names(), 'par.md') >= 0 && index(s:names(), 'kid1.md') >= 0, string(s:names()))
 call s:ok('親子: 相手の ParentBranch: に書かれているだけの子も出る', index(s:names(), 'kid2.md') >= 0, string(s:names()))
 call s:ok('親子: 普通のリンクは出ない', index(s:names(), 'linkonly.md') < 0, string(s:names()))
-call s:ok('親子: ヘッダーに 親子 と出る', getbufline(s:st().buf, 1, 3)->join("\n") =~# '親子', join(getbufline(s:st().buf, 1, 3), "\n"))
+call s:ok('親子: ヘッダーのモードの印が d になる', getbufline(s:st().buf, 1, 3)->join("\n") =~# '\[d\]', join(getbufline(s:st().buf, 1, 3), "\n"))
 call s:keys('a')
 call s:ok('a で全体に戻る', s:st().mode ==# 'all' && index(s:names(), 'linkonly.md') >= 0)
 call s:keys('i')
@@ -78,7 +78,7 @@ call s:ok('数字キーの動きの行の操作で切り替わる', s:st().digit
 call gnosis#mview#panel_act(3)
 
 " プリセットに親子モードも入る
-call s:keys(',')
+call s:keys('d')
 call gnosis#mview#preset_save('親子用')
 call s:keys('a')
 call gnosis#mview#preset_apply('親子用')

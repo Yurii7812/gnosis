@@ -53,17 +53,17 @@ endfor
 execute 'edit ' . s:v . '/index.md'
 call s:keys(' ')
 " 何枚目か: # に関わらず、左上の [モード] のすぐ後ろに出る
-call s:ok('1/1 でなく、何枚目かが [a] のすぐ後ろに出る（13 件 = 2 枚）', s:head() =~# '\[a\] 1/2 ', s:head())
+call s:ok('1/1 でなく、何枚目かが [a] のすぐ後ろに出る（13 件 = 2 枚）', s:head() =~# '\[a\] 1/2', s:head())
 call s:keys('#')
-call s:ok('# で数字を消しても、何枚目かは出たまま', s:head() =~# '\[a\] 1/2 ', s:head())
+call s:ok('# で数字を消しても、何枚目かは出たまま', s:head() =~# '\[a\] 1/2', s:head())
 call s:keys('#')
 call s:keys(']')
-call s:ok('] で 2/2', s:head() =~# '\[a\] 2/2 ', s:head())
+call s:ok('] で 2/2', s:head() =~# '\[a\] 2/2', s:head())
 call s:keys('[')
 " 1 枚だけのときも 1/1
 execute 'edit ' . s:v . '/b1.md'
 call s:keys(' ')
-call s:ok('1 枚だけなら 1/1', s:head() =~# '\[a\] 1/1 ', s:head())
+call s:ok('1 枚だけなら 1/1', s:head() =~# '\[a\] 1/1', s:head())
 call s:keys('Q')
 
 " 外向きの深さ
@@ -74,7 +74,7 @@ call s:keys('v')
 call s:ok('外向き 深さ 1: 直接のつながりだけ', s:names() ==# ['b0.md', 'b1.md'] || index(s:names(), 'c0.md') < 0, string(s:names()))
 call gnosis#mview#set_depth(2)
 call s:ok('深さ 2: その先（c0）も出る', index(s:names(), 'c0.md') >= 0 && index(s:names(), 'd0.md') < 0, string(s:names()))
-call s:ok('ヘッダーに深さが出る', s:head() =~# 'v:外向き 深さ2', s:head())
+call s:ok('ヘッダーに深さが出る', s:head() =~# 'out dep2', s:head())
 call gnosis#mview#set_depth(3)
 call s:ok('深さ 3 で d0 も', index(s:names(), 'd0.md') >= 0, string(s:names()))
 call gnosis#mview#set_depth(99)

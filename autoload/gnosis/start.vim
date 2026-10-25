@@ -241,7 +241,7 @@ function! gnosis#start#open() abort
 endfunction
 
 function! s:map_keys() abort
-  for l:k in ['<CR>', 'v', 's', 'q', 'j', 'k', '<Down>', '<Up>', 'a', 'n', 'd', '<Esc>', 'r', 'l', '?']
+  for l:k in ['<CR>', 'v', 's', 'g', 'q', 'j', 'k', '<Down>', '<Up>', 'a', 'n', 'd', '<Esc>', 'r', 'l', '?']
     execute printf('nnoremap <buffer><silent><nowait> %s <Cmd>call gnosis#start#key(%s)<CR>', l:k, substitute(string(l:k), '<', '<lt>', 'g'))
   endfor
   " 文字の上で i や o などを押しても編集しない
@@ -260,9 +260,22 @@ function! s:current_vault() abort
   return l:list[max([0, min([s:sel, len(l:list) - 1])])]
 endfunction
 
+" 窓の幅より長い行は、折り返して表示が崩れないように、幅に収まるところで切る（最後に … を付ける）
+function! s:clip(text, width) abort
+  if strdisplaywidth(a:text) <= a:width
+    return a:text
+  endif
+  let l:t = a:text
+  while strdisplaywidth(l:t) > max([1, a:width - 1]) && !empty(l:t)
+    let l:t = substitute(l:t, '.$', '', '')
+  endwhile
+  return l:t . '…'
+endfunction
+
 function! s:center(text, width) abort
-  let l:pad = max([0, (a:width - strdisplaywidth(a:text)) / 2])
-  return repeat(' ', l:pad) . a:text
+  let l:text = s:clip(a:text, a:width)
+  let l:pad = max([0, (a:width - strdisplaywidth(l:text)) / 2])
+  return repeat(' ', l:pad) . l:text
 endfunction
 
 " 画面を描く
@@ -315,6 +328,9 @@ function! gnosis#start#render() abort
     " 配置: Chnoubis の図案を最優先に残す。入らなければ、余白 → 補足の行 → ロゴの大きさの順に詰める
     let l:logo = gnosis#start#logo(l:cols, l:rows)
     let l:small_logo = gnosis#start#logo(0, 0)
+    " 幅に収まらないロゴは出さない（折り返して崩れる）。代わりに文字の題を出す
+    if !empty(l:logo) && max(map(copy(l:logo), 'strdisplaywidth(v:val)')) > l:cols | let l:logo = [] | endif
+    if !empty(l:small_logo) && max(map(copy(l:small_logo), 'strdisplaywidth(v:val)')) > l:cols | let l:small_logo = [] | endif
     let l:layouts = [[l:logo, l:info, 1], [l:logo, l:info, 0], [l:logo, l:info[: 0], 0],
           \ [l:small_logo, l:info[: 0], 0], [[], l:info[: 0], 0]]
     let l:art = []
@@ -326,6 +342,10 @@ function! gnosis#start#render() abort
     endfor
     if empty(l:art)
       let [l:lg, l:inf, l:gap] = l:layouts[0]
+    endif
+    " 図案が幅に収まらないときも出さない
+    if !empty(l:art) && max(map(copy(l:art), 'strdisplaywidth(v:val)')) > l:cols
+      let l:art = []
     endif
     let [l:logo, l:info] = [l:lg, l:inf]
     let l:top = max([0, (l:rows - len(l:art) - len(l:logo) - len(l:info) - 2 * l:gap) / 2])
@@ -382,6 +402,10 @@ function! gnosis#start#render() abort
       call add(l:hl, 'gnosisStartWarn')
     endif
   endif
+  " どの画面でも、窓の幅より長い行は切る（折り返して崩れないように）
+  for l:i in range(len(l:lines))
+    let l:lines[l:i] = s:clip(l:lines[l:i], l:cols)
+  endfor
   setlocal modifiable
   silent %delete _
   call setline(1, l:lines)
@@ -448,6 +472,14 @@ function! gnosis#start#key(k) abort
     elseif a:k ==# 's'
       call gnosis#settings_ui#open({'from_start': 1})
       return
+    elseif a:k ==# 'g'
+      " 選んでいる vault を GUI（\c のアプリ）で開く
+      let l:v = s:current_vault()
+      if empty(l:v) || !l:v.exists
+        let s:message = s:t('start.missing_choose', empty(l:v) ? '' : l:v.path)
+      else
+        call gnosis#open_web(l:v.path)
+      endif
     elseif a:k ==# 'q'
       qall
       return

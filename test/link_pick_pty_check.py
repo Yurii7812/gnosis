@@ -67,7 +67,7 @@ try:
     # ハーブを中心にする（曼荼羅の状態を直接書き換えて、z で描き直す）
     os.write(fd, b":let g:d = gnosis#mview#state() | let g:d.center = 'herb.md'\r")
     pump(0.6)
-    os.write(fd, b"z")
+    os.write(fd, b"\x0c")      # Ctrl-L: 盤面を中央に戻す
     pump(0.8)
     ok("曼荼羅でハーブを選べた", center() == "herb.md")
     before = (v / "plant.md").read_text(encoding="utf-8")

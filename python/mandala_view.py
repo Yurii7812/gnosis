@@ -32,7 +32,7 @@ import gnosis_graph as gg  # noqa: E402
 import note_format_v2 as nf  # noqa: E402
 
 GROUP_KINDS = ("group", "branch_group")
-NOTE_KINDS = ("parent_branch", "child_branch", "context", "related", "backlink", "link")
+NOTE_KINDS = ("parent_branch", "link", "context", "child_branch", "backlink", "related")
 KEPT = GROUP_KINDS + NOTE_KINDS
 MODES = ("all", "groups", "notes")
 

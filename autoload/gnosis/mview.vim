@@ -12,9 +12,9 @@
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
 "   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
-"   a i ,            モード: a 全体（標準）/ i グループ・索引だけ / , 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
+"   a i d            モード: a 全体（標準）/ i グループ・索引だけ / d 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
 "   c r              重ねる（オン/オフ。どのモードでも）: c 近いグループ / r 予測関連（関連の強い順。Related: の明示とは別の色）
-"   '                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q で閉じる）
+"   z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q で閉じる）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -391,7 +391,7 @@ function! gnosis#mview#entries(data, center, mode) abort
       call add(l:plan, [get(l:o, 'branch_group', []), -1])
       call add(l:plan, [get(l:o, 'group', []), -1])
     endif
-    " 親 → 文脈 → 引用 → 子 → 関連。向かってくる辺（相手にだけ書かれた親子・文脈・関連）も同じ種類として出す
+    " 親 → 引用（本文のリンク）→ 文脈 → 子 → BackLink → 関連。向かってくる辺（相手にだけ書かれた親子・文脈・関連）も同じ種類として出す
     let l:in = get(l:c, 'i', {})
     if a:mode ==# 'family'
       " 親子だけ: 親（ParentBranch: に書いたもの＋相手の ChildBranch: に自分が書かれているもの）→
@@ -400,11 +400,13 @@ function! gnosis#mview#entries(data, center, mode) abort
       call add(l:plan, [get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', []), -1])
     endif
     if a:mode ==# 'notes' || a:mode ==# 'all'
+      " 並び: 所属する索引（BranchGroup・Group。上の if）→ 親（ParentBranch）→ [アウトラインの見出し（U）]→ 本文のリンク（引用）→ Context → 子（ChildBranch）→ BackLink → Related
+      " （そのあとに、c の近いグループ・r の予測関連が後ろに足される）
       call add(l:plan, [get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []), -1])
-      call add(l:plan, [get(l:o, 'context', []) + get(l:in, 'context', []), -1])
       call add(l:plan, [get(l:o, 'link', []), -1])
-      call add(l:plan, [get(l:o, 'backlink', []), -1])
+      call add(l:plan, [get(l:o, 'context', []) + get(l:in, 'context', []), -1])
       call add(l:plan, [get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', []), -1])
+      call add(l:plan, [get(l:o, 'backlink', []), -1])
       call add(l:plan, [get(l:o, 'related', []) + get(l:in, 'related', []), -1])
     endif
   endif
@@ -498,8 +500,9 @@ function! s:base(c) abort
     endif
   endif
   let l:out = gnosis#mview#entries(s:S.data, a:c, s:S.mode)
-  if get(s:S, 'ol_on', 0)
-    " アウトライン: このノートの見出しを、リンクの前に 1 つずつのマスとして並べる
+  if get(s:S, 'ol_on', 0) || get(s:S, 'ol_only', 0)
+    " アウトライン: このノートの見出しを 1 つずつのマスとして並べる。U（ol_on）は他のものと一緒に（所属索引・親のあと、本文のリンクの前）、
+    " u（ol_only）は見出しだけ
     let l:heads = map(copy(s:h_items(a:c)), '[a:c . "#" . v:val.slug, v:val.text]')
     " このノートが B#見出し へリンクしているものは、B の題つきの見出しのマスにする（B そのものへのリンクが無ければ B のマスは出さない）
     let l:path = s:S.root . '/' . a:c
@@ -516,7 +519,29 @@ function! s:base(c) abort
         call add(l:cells, s:h_cell(l:t, l:sl))
       endfor
     endfor
-    let l:out = l:heads + l:cells
+    if get(s:S, 'ol_only', 0)
+      let l:out = l:heads
+    else
+      " 所属する索引・親（先頭に並んでいる分）のあとに見出しを入れる
+      let l:nd = get(s:S.data.nodes, a:c, {})
+      let l:front = {}
+      for l:k in ['branch_group', 'group', 'parent_branch']
+        for l:t in get(get(l:nd, 'o', {}), l:k, [])
+          let l:front[type(l:t) == v:t_list ? l:t[0] : l:t] = 1
+        endfor
+      endfor
+      for l:t in get(get(l:nd, 'i', {}), 'child_branch', [])
+        let l:front[type(l:t) == v:t_list ? l:t[0] : l:t] = 1
+      endfor
+      let l:np = 0
+      while l:np < len(l:cells) && has_key(l:front, l:cells[l:np][0])
+        let l:np += 1
+      endwhile
+      let l:out = l:cells[: l:np - 1] + l:heads + l:cells[l:np :]
+      if l:np == 0
+        let l:out = l:heads + l:cells
+      endif
+    endif
   endif
   if a:c ==# s:S.center
     " c / r は、どのモードにも重ねる（中心でないブロックには重ねない）
@@ -623,17 +648,38 @@ function! s:deepen(first) abort
   return s:S.deep_memo.list
 endfunction
 
+" x の入力: 空白で区切った語。`-語` はその語を含むものを除く（除外）。それ以外は全部含むもの（AND）。例: `ハーブ -メモ`
+function! s:q_parse(q) abort
+  let l:pos = []
+  let l:neg = []
+  for l:w in split(tolower(a:q), '\s\+')
+    if l:w =~# '^-.' | call add(l:neg, l:w[1 :]) | elseif l:w !=# '-' | call add(l:pos, l:w) | endif
+  endfor
+  return [l:pos, l:neg]
+endfunction
+
+function! s:q_match(text, pos, neg) abort
+  for l:w in a:pos
+    if stridx(a:text, l:w) < 0 | return 0 | endif
+  endfor
+  for l:w in a:neg
+    if stridx(a:text, l:w) >= 0 | return 0 | endif
+  endfor
+  return 1
+endfunction
+
 function! s:items_raw(c) abort
   let l:b = s:base(a:c)
   if a:c !=# s:S.center || empty(s:S.query)
     return l:b
   endif
-  let l:q = tolower(s:S.query)
+  let [l:pos, l:neg] = s:q_parse(s:S.query)
   if get(s:S, 'pick', '') ==# 'group'
-    let l:found = s:pyc(['find', s:S.root] + split(s:S.query, '\s\+'))
-    return map(filter(type(l:found) == v:t_list ? l:found : [], 'v:val !=# a:c'), '[v:val, ""]')
+    let l:found = empty(l:pos) ? map(copy(l:b), 'v:val[0]') : s:pyc(['find', s:S.root] + l:pos)
+    let l:out = map(filter(type(l:found) == v:t_list ? l:found : [], 'v:val !=# a:c'), '[v:val, ""]')
+    return empty(l:neg) ? l:out : filter(l:out, 's:q_match(s:entry_text(v:val), [], l:neg)')
   endif
-  return filter(l:b, 'stridx(s:entry_text(v:val), l:q) >= 0')
+  return filter(l:b, 's:q_match(s:entry_text(v:val), l:pos, l:neg)')
 endfunction
 
 function! s:pages(center) abort
@@ -691,9 +737,19 @@ endfunction
 " 親（1 つ上の見出し・無ければノート）・すぐ下の見出し・その節の本文のリンク先が周りに並ぶ
 function! s:toggle_outline() abort
   let s:S.ol_on = !get(s:S, 'ol_on', 0)
+  call s:outline_changed()
+endfunction
+
+" u: アウトライン（見出し）だけを表示する / やめる（U は見出しを他のものと一緒に出す・出さない）
+function! s:toggle_outline_only() abort
+  let s:S.ol_only = !get(s:S, 'ol_only', 0)
+  call s:outline_changed()
+endfunction
+
+function! s:outline_changed() abort
   let s:S.page = 0
   let s:S.opage = 0
-  if !s:S.ol_on && s:is_h(s:S.center)
+  if !get(s:S, 'ol_on', 0) && !get(s:S, 'ol_only', 0) && s:is_h(s:S.center)
     let s:S.center = s:h_base(s:S.center)
   endif
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -996,6 +1052,7 @@ function! s:info() abort
     let l:dp = (get(s:S, 'out_on', 0) && get(s:S, 'depth', 1) > 1 && has_key(get(s:S, 'dmap', {}), l:cell.id)) ? '  深さ ' . s:S.dmap[l:cell.id] : ''
     let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:dp . l:why
   endif
+  let l:txt .= s:query_tags()
   setlocal modifiable
   call setline(s:S.info_line, s:fit(l:txt, winwidth(0)))
   setlocal nomodifiable nomodified
@@ -1155,23 +1212,55 @@ endfunction
 
 " ---- ? : 案内のポップアップ（画面の中央。q で閉じる） ----------------------------------------------
 function! s:help_lines() abort
-  let l:t = [
-        \ '曼荼羅ビュー',
-        \ '',
-        \ ' 動く      h j k l / 矢印    1-8 そのマスへ(9 か 0 が中心)   t 数字の動き切替   z 中央に',
-        \ ' 中心にする Enter    gs 全文検索で選んだノートを中心に    b / BS 一つ前   [ ] 前後の曼荼羅',
-        \ ' 順に見る   Tab / S-Tab  今いる 3×3 の 中心 → 1 … 8（9×9 では外側のブロックの中。外向き v では内側から外側へ。最後で止まる）',
-        \ ' モード     a 全体   i グループ・索引だけ   , 親子だけ(親と子。相手の ParentBranch: に自分が書かれているものも子に出す)',
-        \ ' 重ねる     c 近いグループ   r 予測関連   (オン/オフ。どのモードでも)   y c と r をまとめてオン/オフ(オフにした状態を覚えて戻す)',
-        \ ' 探す       s 検索(結果が周りに並ぶ)   x 文字で絞り込む   m ハイライト → n / N で次・前',
-        \ ' 索引に入れる  e これにする(選んでいる最中。\l では置き場所を聞かれる: h i t は右の元のノートで場所を選んで Enter、q で選び直し)   o 入れるノートを見る/戻る',
-        \ ' 並べる     v 外向き(リンクを中心の周りの輪に 1 つずつ最大 80 個。内側の輪は上の段の真ん中が 1 で時計回り、次の輪は上の段の左から 2 つ目が 9 で時計回り)   w 近さ順(中心に近いものを先に。外向きでもそのまま効く)   d 9×9の外側の基準(中心 / 自分)   { } 外側のページ   # 数字の表示/非表示',
-        \ ' 設定の画面  '' モード・重ねるものをその場で切り替え。プリセットの保存・呼び出し・名前変更・消す(右に出る。q で閉じる)   u 見出しも 1 つのマスに(アウトライン)   . 読み直し',
-        \ ' 画面       f 全画面(9×9)⇔分割   p 右のノートを隠す・出す   < > 画面の幅   ( ) 盤面の幅   = 半々・正方形に戻す      Space ノートへ',
-        \ ' やめる     q かかっているものを 1 つやめる(何もなければ閉じる)   Q 全部閉じる',
-        \ '',
-        \ ' 色         ']
-  return l:t
+  " 用途ごとの見出しと、「キー → 何が起きるか」を 1 行ずつ。幅が足りるときは 2 列に並べる（最後の行は色の凡例。toggle_help が色をつける）
+  let l:sec = [
+        \ ['動く', [['h j k l  矢印', 'マスを動く（右のノートも切り替わる）'], ['1-8', 'そのマスへ（9 か 0 は中心）'], ['Enter', 'カーソルのマスを中心にする'],
+        \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['b  BS', '一つ前に戻る'], ['Space', 'ノートへ移る']]],
+        \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループを足す'], ['r', '予測関連を足す'],
+        \   ['y', 'c と r を両方同じオン/オフ'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['w', '近さ順に並べる'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
+        \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
+        \ ['リンクを入れる（\\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
+        \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
+        \   ['Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
+        \ ['設定とやめる', [['z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
+        \ ]
+  " 'p' が 2 回出ないように、画面の重複を除く
+  let l:sec[4][1] = filter(copy(l:sec[4][1]), 'v:val[1] !=# "（上と同じ）"')
+  let l:cells = []
+  for [l:name, l:items] in l:sec
+    let l:blk = [' ■ ' . l:name]
+    for [l:k, l:t] in l:items
+      call add(l:blk, '   ' . l:k . repeat(' ', max([1, 13 - strdisplaywidth(l:k)])) . l:t)
+    endfor
+    call add(l:cells, l:blk)
+  endfor
+  let l:two = &columns >= 112
+  let l:out = [' 曼荼羅ビュー', '']
+  if !l:two
+    for l:b in l:cells
+      call extend(l:out, l:b + [''])
+    endfor
+  else
+    " 2 列: 行数がなるべく同じになるように、見出しごとに左右へ振り分ける
+    let l:left = []
+    let l:right = []
+    let l:total = 0
+    for l:b in l:cells | let l:total += len(l:b) + 1 | endfor
+    for l:b in l:cells
+      if len(l:left) < l:total / 2
+        call extend(l:left, l:b + [''])
+      else
+        call extend(l:right, l:b + [''])
+      endif
+    endfor
+    let l:w = 54
+    for l:i in range(max([len(l:left), len(l:right)]))
+      let l:a = get(l:left, l:i, '')
+      call add(l:out, l:a . repeat(' ', max([1, l:w - strdisplaywidth(l:a)])) . get(l:right, l:i, ''))
+    endfor
+  endif
+  call add(l:out, ' 色')
+  return l:out
 endfunction
 
 function! s:help_filter(id, key) abort
@@ -1230,18 +1319,34 @@ endfunction
 
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
 function! s:status(ctitle, pages, ptop, extra) abort
-  let l:ov = join(map(copy(s:over_keys), 'v:val[0] . ":" . (get(s:S, v:val[1], 0) ? "オン" : "オフ")'), ' ')
-        \ . ' t:数字' . (get(s:S, 'digit', 'jump') ==# 'jump' ? '移動' : 'カーソルだけ')
-        \ . (get(s:S, 'nums', 1) ? '' : ' #:数字なし')
-        \ . (get(s:S, 'nv', 1) ? '' : ' p:本文なし')
-        \ . (get(s:S, 'ol_on', 0) ? ' u:見出し' : '')
-        \ . (get(s:S, 'out_on', 0) ? ' v:外向き' . (get(s:S, 'depth', 1) > 1 ? ' 深さ' . s:S.depth : '') : '')
-        \ . (get(s:S, 'rank_on', 0) ? ' w:' . (s:S.size == 9 && !get(s:S, 'out_on', 0) ? (get(s:S, 'dbasis', 'center') ==# 'self' ? '近さ(外側は自分)' : '近さ(中心)') : '近さ') : '')
+  " オンのものだけ、英字の短い単語で（# と t の表示は出さない）。near=c / rel=r / out=v（dep=深さ）/ rank=w / outl=U / heads=u / nopv=右のノートを隠している
+  let l:on = []
+  if get(s:S, 'near_on', 0) | call add(l:on, 'near') | endif
+  if get(s:S, 'rel_on', 0) | call add(l:on, 'rel') | endif
+  if get(s:S, 'out_on', 0)
+    call add(l:on, 'out')
+    if get(s:S, 'depth', 1) > 1 | call add(l:on, 'dep' . s:S.depth) | endif
+  endif
+  if get(s:S, 'rank_on', 0) | call add(l:on, 'rank') | endif
+  if get(s:S, 'ol_only', 0) | call add(l:on, 'heads') | elseif get(s:S, 'ol_on', 0) | call add(l:on, 'outl') | endif
+  if !get(s:S, 'nv', 1) | call add(l:on, 'nopv') | endif
   let l:cancel = s:cancel_hint()
-  " 中心のノートの題は上に出さない（盤面の真ん中のマスに出ている）
   " 何枚目の曼荼羅か（1/1・3/10 など）は、# の数字の表示に関わらず、左上の [モード] のすぐ後ろに常に出す
-  return printf(' %s%s [%s] %d/%d %s%s%s', s:pick_label(), s:S.size == 3 ? '3×3' : '9×9',
-        \ get({'all': 'a', 'groups': 'i', 'family': '親子'}, s:S.mode, 'a'), s:S.page + 1, max([1, a:pages]), l:ov, empty(l:cancel) ? '' : '  ' . l:cancel, a:extra)
+  " 検索（s:）・絞り込み（x:）・ハイライト（m:）の語は、下の行（カーソルのマスの説明）に出す
+  return printf(' %s%s [%s] %d/%d%s%s', s:pick_label(), s:S.size == 3 ? '3×3' : '9×9',
+        \ get({'all': 'a', 'groups': 'i', 'family': 'd'}, s:S.mode, 'a'), s:S.page + 1, max([1, a:pages]),
+        \ empty(l:on) ? '' : ' ' . join(l:on, ' '), empty(l:cancel) ? '' : '  ' . l:cancel)
+endfunction
+
+" 下の行に出す、検索の語: s:検索語(N件)  x:絞り込み  m:ハイライト n/m
+function! s:query_tags() abort
+  let l:t = ''
+  if !empty(s:S.rquery) | let l:t .= '  s:' . s:S.rquery . '(' . len(s:S.results) . ')' | endif
+  if !empty(s:S.query) | let l:t .= '  x:' . s:S.query | endif
+  if !empty(get(s:S, 'find', ''))
+    let l:t .= '  m:' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : '(0)')
+  endif
+  return l:t
 endfunction
 
 " 種類の凡例（索引 グループ 親 文脈 引用 BackLink 子 関連 予測関連 ノート 見出し）。曼荼羅の下に色つきで出す。
@@ -1616,7 +1721,7 @@ endfunction
 
 " 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
 " 閉じても、Vim を再起動しても、前回のまま
-let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit', 'depth']
+let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'mode', 'digit', 'depth']
 let s:saved_json = ''
 
 function! s:save_state() abort
@@ -1830,7 +1935,7 @@ endfunction
 
 " x: 題で絞り込む（空にすると解除）。索引を選ぶとき（\l）は索引を全部から、ふだんは今の周りの中から
 function! s:filter() abort
-  let l:q = s:ask(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除）: ', s:S.query)
+  let l:q = s:ask(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除。-語 でその語を除く）: ', s:S.query)
   let s:S.query = trim(l:q)
   call s:tick('query')
   let s:S.page = 0
@@ -2193,17 +2298,11 @@ function! s:toggle_over(st) abort
   call s:render()
 endfunction
 
-" y: c と r をまとめてオン/オフ。どちらかがオンならまとめてオフ（そのときの状態を覚える）、両方オフなら
-" 直前にオフにしたときの状態に戻す（覚えていなければ両方オン）
+" y: c と r をまとめてオン/オフ。どちらかがオン（片方だけでも）なら、強制的に両方オフ。両方オフなら、両方オン
 function! s:over_off() abort
-  if get(s:S, 'near_on', 0) || get(s:S, 'rel_on', 0)
-    let s:S.over_saved = [get(s:S, 'near_on', 0), get(s:S, 'rel_on', 0)]
-    let s:S.near_on = 0
-    let s:S.rel_on = 0
-  else
-    let l:sv = get(s:S, 'over_saved', [0, 0])
-    let [s:S.near_on, s:S.rel_on] = (l:sv[0] || l:sv[1]) ? l:sv : [1, 1]
-  endif
+  let l:to = (get(s:S, 'near_on', 0) || get(s:S, 'rel_on', 0)) ? 0 : 1
+  let s:S.near_on = l:to
+  let s:S.rel_on = l:to
   let s:S.find = ''
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -2482,7 +2581,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
   nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> + <Cmd>call <SID>depth_ask()<CR>
-  nnoremap <buffer><nowait><silent> d <Cmd>call <SID>toggle_dbasis()<CR>
+  nnoremap <buffer><nowait><silent> d <Cmd>call <SID>setmode('family')<CR>
+  nnoremap <buffer><nowait><silent> <C-l> <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page_key(1)<CR>
   nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>page_key(-1)<CR>
@@ -2490,13 +2590,12 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
   nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
-  nnoremap <buffer><nowait><silent> , <Cmd>call <SID>setmode('family')<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>toggle_over('near_on')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call <SID>toggle_over('rel_on')<CR>
   nnoremap <buffer><nowait><silent> y <Cmd>call <SID>over_off()<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
-  nnoremap <buffer><nowait><silent> ' <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> z <Cmd>call <SID>preset_menu()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
@@ -2509,11 +2608,11 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>seq(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>seq(-1)<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call <SID>full()<CR>
-  nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>resize(-1)<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call <SID>resize(1)<CR>
   nnoremap <buffer><nowait><silent> . <Cmd>call <SID>reload(1)<CR>
-  nnoremap <buffer><nowait><silent> u <Cmd>call <SID>toggle_outline()<CR>
+  nnoremap <buffer><nowait><silent> u <Cmd>call <SID>toggle_outline_only()<CR>
+  nnoremap <buffer><nowait><silent> U <Cmd>call <SID>toggle_outline()<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call <SID>quit()<CR>
   nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
@@ -2827,7 +2926,7 @@ function! s:open(center, ...) abort
     let l:all = s:state_all()
     if !get(s:S, 'modes_restored', 0)
       let s:S.modes_restored = 1
-      for l:k in ['nums', 'nv', 'ol_on', 'out_on', 'rank_on', 'near_on', 'rel_on']
+      for l:k in ['nums', 'nv', 'ol_on', 'ol_only', 'out_on', 'rank_on', 'near_on', 'rel_on']
         if has_key(l:all, l:k) && (type(l:all[l:k]) == v:t_number) && !has_key(s:S, l:k)
           let s:S[l:k] = l:all[l:k] ? 1 : 0
         endif
@@ -3131,6 +3230,17 @@ function! s:presets_write(p) abort
   let s:saved_json = ''
 endfunction
 
+" 新しいプリセットの既定の名前: すでにある、名前が数字だけのプリセットの最大 + 1（無ければ 1）
+function! gnosis#mview#preset_next_number() abort
+  let l:max = 0
+  for l:n in gnosis#mview#preset_names()
+    if l:n =~# '^\d\+$'
+      let l:max = max([l:max, str2nr(l:n)])
+    endif
+  endfor
+  return l:max + 1
+endfunction
+
 function! gnosis#mview#preset_names() abort
   return sort(keys(s:presets()))
 endfunction
@@ -3183,7 +3293,7 @@ function! gnosis#mview#preset_apply(name) abort
   if empty(l:d) || !exists('s:S') || !has_key(s:S, 'cells')
     return 0
   endif
-  for l:k in ['nums', 'nv', 'ol_on', 'out_on', 'rank_on', 'near_on', 'rel_on']
+  for l:k in ['nums', 'nv', 'ol_on', 'ol_only', 'out_on', 'rank_on', 'near_on', 'rel_on']
     if has_key(l:d, l:k)
       let s:S[l:k] = l:d[l:k] ? 1 : 0
     endif
@@ -3220,24 +3330,27 @@ function! gnosis#mview#preset_apply(name) abort
   return 1
 endfunction
 
-" ': 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
-"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i , c r t # p u f v w はふだんのキーのまま使える
+" z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
+"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i d c r t # p u U f v w はふだんのキーのまま使える（D 近さの基準・Z 中央に戻す は、この画面の中だけのキー）
 "   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
 function! s:panel_rows() abort
   let l:Onoff = {v -> v ? 'オン' : 'オフ'}
   let l:mode = get(s:S, 'mode', 'all')
   return [
-        \ {'key': 'a', 'name': 'モード', 'val': '[' . get(s:mode_label, l:mode, l:mode) . ']  全体:a 索引:i 親子:,', 'act': function('s:panel_mode')},
+        \ {'key': 'a', 'name': 'モード', 'val': '[' . get(s:mode_label, l:mode, l:mode) . ']  全体:a 索引:i 親子:d', 'act': function('s:panel_mode')},
         \ {'key': 'c', 'name': '近いグループを重ねる', 'val': l:Onoff(get(s:S, 'near_on', 0)), 'act': function('s:toggle_over', ['near_on'])},
         \ {'key': 'r', 'name': '予測関連を重ねる', 'val': l:Onoff(get(s:S, 'rel_on', 0)), 'act': function('s:toggle_over', ['rel_on'])},
         \ {'key': 't', 'name': '数字キーの動き', 'val': get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ', 'act': function('s:toggle_digit')},
         \ {'key': '#', 'name': '番号を出す', 'val': l:Onoff(get(s:S, 'nums', 1)), 'act': function('s:toggle_nums')},
         \ {'key': 'p', 'name': '右にノートの本文を出す', 'val': l:Onoff(get(s:S, 'nv', 1)), 'act': function('s:toggle_preview')},
-        \ {'key': 'u', 'name': '見出しも並べる', 'val': l:Onoff(get(s:S, 'ol_on', 0)), 'act': function('s:toggle_outline')},
+        \ {'key': 'u', 'name': '見出しだけを出す', 'val': l:Onoff(get(s:S, 'ol_only', 0)), 'act': function('s:toggle_outline_only')},
+        \ {'key': 'U', 'name': '見出しも他と一緒に出す', 'val': l:Onoff(get(s:S, 'ol_on', 0)), 'act': function('s:toggle_outline')},
         \ {'key': 'f', 'name': '全画面（9×9）', 'val': l:Onoff(s:S.size == 9), 'act': function('s:full')},
         \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
         \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
         \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . '（1 = 直接のつながりだけ）', 'act': function('s:depth_ask')},
+        \ {'key': 'D', 'name': '9×9 の近さ順の基準（中心 ⇔ そのブロックの中心）', 'val': get(s:S, 'dbasis', 'center') ==# 'self' ? '外側は自分' : '中心', 'act': function('s:toggle_dbasis')},
+        \ {'key': 'Z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
 endfunction
@@ -3284,7 +3397,7 @@ function! s:preset_menu() abort
     let l:sel = min([l:sel, l:n - 1])
     let l:w = max([44, min([60, &columns / 2 - 2])])
     let l:pid = popup_create(s:panel_lines(l:sel, l:msg, l:w), {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - l:w - 1]),
-          \ 'minwidth': l:w, 'maxwidth': l:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': " ' "})
+          \ 'minwidth': l:w, 'maxwidth': l:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': ' z '})
     redraw
     let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
@@ -3295,8 +3408,8 @@ function! s:preset_menu() abort
       let l:sel = (l:sel + 1) % l:n
     elseif l:k ==# 'k' || l:k ==# "\<Up>"
       let l:sel = (l:sel + l:n - 1) % l:n
-    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# ','
-      call s:setmode(get({'a': 'all', 'i': 'groups', ',': 'family'}, l:k))
+    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# 'd'
+      call s:setmode(get({'a': 'all', 'i': 'groups', 'd': 'family'}, l:k))
     elseif !empty(l:hot)
       call l:rows[l:hot[0]].act()
     elseif l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' '
@@ -3321,7 +3434,8 @@ function! s:preset_menu() abort
     elseif l:k ==# 'd' && !empty(l:pre)
       call gnosis#mview#preset_delete(l:pre)
     elseif l:k ==# 's'
-      let l:name = s:ask('プリセットの名前: ', '')
+      " 名前の既定は、すでにある番号（名前が数字のもの）の次の番号。そのまま Enter で決まる
+      let l:name = s:ask('プリセットの名前: ', string(gnosis#mview#preset_next_number()))
       redraw
       if gnosis#mview#preset_save(l:name)
         let l:msg = 'プリセット「' . trim(l:name) . '」を保存しました'

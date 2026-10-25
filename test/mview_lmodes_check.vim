@@ -47,7 +47,7 @@ function! s:start(line_pat) abort
   call gnosis#mview#link_pick()
   let l:d = gnosis#mview#state()
   let l:d.center = 'tgt.md'
-  call s:keys('z')
+  call s:keys("\<C-l>")
 endfunction
 
 " ---- e → Esc: 選択だけ閉じる。\l は続く

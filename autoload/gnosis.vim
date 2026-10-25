@@ -18577,7 +18577,8 @@ endfunction
 "   サーバーは立てない。同期ロジックは JS 移植 (web/src/sync.js)。
 "   起動: :GnosisWeb / \c
 " ---------------------------------------------------------------------------
-function! gnosis#open_web() abort
+" a:1 … 開く vault（起動画面の g から。無ければ今の vault）
+function! gnosis#open_web(...) abort
   " 関数内の <sfile> は信用できない（現在のバッファ名になることがある）。
   " Python スクリプトのパス (…/Gnosis/python/… or legacy/…) から
   " プラグインルートを導出する。
@@ -18586,7 +18587,7 @@ function! gnosis#open_web() abort
     return
   endif
   let l:webdir = fnamemodify(g:gnosis_python, ':h:h') . '/web'
-  let l:root = s:get_pkm_root()
+  let l:root = (a:0 && !empty(a:1)) ? a:1 : s:get_pkm_root()
   " アプリは disk を読むので、編集中のノートは先に書き出す（古い内容で開かない）
   if gnosis#is_vault_note(expand('%:p'))
     call gnosis#save_current_note()

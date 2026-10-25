@@ -16,6 +16,7 @@ let g:gnosis_mview_border = 'line'
 
 function! s:ok(name, cond, ...) abort
   call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
+  call writefile(s:res, s:work . '/result.txt')
 endfunction
 function! s:keys(k) abort
   call feedkeys(a:k, 'xt')
@@ -54,9 +55,13 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
-call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] 1/1 c:オフ r:オフ' && s:text() !~# 'q 閉じる' && getbufline(s:st.buf, 1, 1)[0] !~# 'グループ' && s:text() =~# 'グループ  親', s:text())
+call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] 1/1' && s:text() !~# 'c:オフ' && s:text() !~# 't:数字' && s:text() !~# 'q 閉じる' && getbufline(s:st.buf, 1, 1)[0] !~# 'グループ' && s:text() =~# 'グループ  親', s:text())
 call s:keys('?')
-call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab / S-Tab', string(popup_list()))
+call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab  S-Tab', string(popup_list()))
+let s:hp = popup_getpos(popup_list()[0])
+let s:ht = join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n")
+call s:ok('案内は用途ごとの見出し（動く・見る・探す・画面…）と、1 行 1 キー', s:ht =~# '■ 動く' && s:ht =~# '■ 見る' && s:ht =~# '■ 探す' && s:ht =~# '■ 画面' && s:ht =~# 'z  *設定の画面', s:ht)
+call s:ok('案内は見切れない（全部の行が窓の高さ・幅に収まる）', s:hp.height >= len(getbufline(winbufnr(popup_list()[0]), 1, '$')) && s:hp.width >= max(map(getbufline(winbufnr(popup_list()[0]), 1, '$'), 'strdisplaywidth(v:val)')), string(s:hp))
 call s:keys('q')
 call s:ok('q でポップアップが閉じる（曼荼羅は閉じない）', len(popup_list()) == 0 && &filetype ==# 'gnosis-mandala', string(popup_list()))
 call s:ok('中心は今のノート', s:st.center ==# 'herb.md', s:st.center)
@@ -75,7 +80,7 @@ call s:ok('a ですべてに戻る', s:text() =~# '植物' && s:text() =~# 'ミ�
 let s:st.results = ['mint.md', 'herb.md']
 let s:st.rquery = 'ハーブ'
 call s:keys('.')
-call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# '検索: ハーブ（2件）' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
+call s:ok('検索の結果が周りに出て、真ん中に検索の語が出る', s:text() =~# '1 ミント' && s:text() =~# 's:ハーブ(2)' && len(filter(split(s:text(), "\n"), 'v:val =~# "┃ *検索: ハ"')) == 1, s:text())
 call s:keys('i')
 call s:ok('モードを変えると検索は解ける', s:st.rquery ==# '' && s:text() !~# '検索:', s:text())
 call s:keys('a')
@@ -99,7 +104,7 @@ call s:keys('[')
 let s:st.find = 'ラベンダー'
 call s:keys('n')
 call s:ok('n で別の枚のヒットへ飛ぶ（植物の 2 枚目）', s:st.page == 1 && s:st.cur == [0, 2] && s:st.hit_n == 1, string(s:st.cur) . ' page=' . s:st.page . ' n=' . get(s:st, 'hit_n', -1))
-call s:ok('ヒットの語がヘッダーに出る', s:text() =~# '/ラベンダー 1/1', s:text())
+call s:ok('ヒットの語が下の行に出る（m:語 n/m）', s:text() =~# 'm:ラベンダー 1/1', s:text())
 call s:keys('q')
 call s:ok('q でハイライトをやめる（曼荼羅は閉じない）', s:st.find ==# '' && &filetype ==# 'gnosis-mandala')
 call s:keys('[')
@@ -137,14 +142,14 @@ for [s:ww, s:hh] in [[24, 14], [40, 12], [100, 30]]
   execute 'vertical resize ' . s:ww
   execute 'resize ' . s:hh
   call s:keys('l')
-  call s:keys('z')
+  call s:keys("\<C-l>")
   let s:bl = getbufline(s:st.buf, 1, '$')
   call s:ok('窓 ' . s:ww . 'x' . s:hh . ': どの行も幅に収まり、行数も高さに収まる', len(filter(copy(s:bl), 'strdisplaywidth(v:val) > winwidth(0)')) == 0 && len(s:bl) <= winheight(0), winwidth(0) . 'x' . winheight(0) . ' lines=' . len(s:bl))
   call s:ok('z でカーソルは中心のマスへ戻る', s:st.cur == [1, 1], string(s:st.cur))
 endfor
 execute 'vertical resize ' . (&columns / 2)
 execute 'resize ' . (&lines - 2)
-call s:keys('z')
+call s:keys("\<C-l>")
 " 全画面 9×9
 call s:keys('f')
 call s:ok('f で 9×9（右のノートの窓はそのまま出ている）', s:st.size == 9 && winnr('$') == 2, s:st.size . ' wins=' . winnr('$'))
@@ -199,7 +204,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('r')
 call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '植物', s:text())
-call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[a\] [0-9]*/[0-9]* c:オン r:オン', s:text())
+call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[a\] [0-9]*/[0-9]* near rel', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
 
@@ -272,7 +277,7 @@ call s:ok('o で入れるノート（元のノート）を右に見る', index(m
 call s:keys('o')
 call s:ok('もう一度 o で中心のノートに戻る', s:st.origin_view == 0)
 let s:st.query = '空'
-call s:keys('z')
+call s:keys("\<C-l>")
 call s:ok('絞り込むと題が合う索引だけ', s:text() =~# '1 空の' && s:text() !~# '植物', s:text())
 call s:keys('1')
 call s:ok('絞り込んだ索引へ進むと絞り込みは解ける', s:st.center ==# 'empty.md' && s:st.query ==# '', s:st.center)
@@ -302,7 +307,7 @@ execute "normal! " . s:vl_ln . "G0v" . (strchars('ハーブガーデン') - 1) .
 let s:st = gnosis#mview#state()
 call s:ok('ビジュアル \l: 選ぶモードになる（文字をリンクにするノートを選ぶ）', s:st.pick ==# 'link' && s:text() =~# '選んだ文字をリンクにする', s:text())
 let s:st.center = 'herb.md'
-call s:keys('z')
+call s:keys("\<C-l>")
 " e → やめる（Esc）: 何も変えない
 let g:gnosis_test_keys = ["\<Esc>"]
 call s:keys('e')
@@ -318,7 +323,7 @@ execute "normal! " . s:vl_ln . "G0v" . (strchars('ハーブガーデン') - 1) .
 '<,'>call gnosis#mview#link_pick_visual()
 let s:st = gnosis#mview#state()
 let s:st.center = 'herb.md'
-call s:keys('z')
+call s:keys("\<C-l>")
 let g:gnosis_test_keys = ["\<CR>"]
 call s:keys('e')
 call s:ok('ビジュアル \l: e → Enter で、選んだ文字が表示名のリンクに置き換わる', join(readfile(s:v . '/vlk.md'), "\n") =~# '\[ハーブガーデン\](herb.md)を作ってみたい話。', join(readfile(s:v . '/vlk.md'), "\n"))
@@ -336,7 +341,7 @@ execute "normal! " . s:vb_ln . "G0v" . (strchars('ハーブ二') - 1) . "l\<Esc>
 '<,'>call gnosis#mview#link_pick_visual()
 let s:st = gnosis#mview#state()
 let s:st.center = 'herb2.md'
-call s:keys('z')
+call s:keys("\<C-l>")
 let g:gnosis_test_keys = ['b']
 call s:keys('e')
 call s:ok('ビジュアル \l → b: 選んだ文字がリンクになる', join(readfile(s:v . '/vlb.md'), "\n") =~# '\[ハーブ二\](herb2.md)の話。', join(readfile(s:v . '/vlb.md'), "\n"))
@@ -368,7 +373,7 @@ let s:st = gnosis#mview#state()
 call s:keys('2')
 call s:keys('1')
 let s:st.center = 'empty.md'
-call s:keys('z')
+call s:keys("\<C-l>")
 let g:gnosis_test_heading = '第二の話'
 call s:keys('t')
 call s:ok('t で見出しへ飛ぶリンクが入る（表示名は題のまま）', join(readfile(s:v . '/empty.md'), "\n") =~# '\[見出しのあるノート\](outline.md#第二の話)', join(readfile(s:v . '/empty.md'), "\n"))
@@ -440,7 +445,7 @@ call s:keys(' ')
 call s:keys('a')
 let s:st = gnosis#mview#state()
 let s:items = gnosis#mview#items(s:st.data, 'hub.md', 'all')
-call s:ok('並びは 親 → 文脈 → 引用 → 子 → 関連', s:items[0 : 4] ==# ['kp.md', 'kx.md', 'cit.md', 'kc.md', 'hidden_kid.md'] && index(s:items, 'kr.md') > 4, string(s:items))
+call s:ok('並びは 親 → 引用（本文のリンク）→ 文脈 → 子 → BackLink → 関連', s:items[0 : 4] ==# ['kp.md', 'cit.md', 'kx.md', 'kc.md', 'hidden_kid.md'] && index(s:items, 'kr.md') > 4, string(s:items))
 call s:ok('相手にだけ書かれた子・関連も出る', index(s:items, 'hidden_kid.md') >= 0 && index(s:items, 'hidden_rel.md') >= 0, string(s:items))
 let s:kinds = {}
 for s:row in s:st.cells
@@ -494,7 +499,7 @@ let s:st.query = '植'
 let s:st.find = 'ミ'
 let s:st.stamp = {'query': 1, 'find': 2}
 execute 'vertical resize 110'
-call s:keys('z')
+call s:keys("\<C-l>")
 call s:ok('かかっているものと q の案内が上の行に出る', s:text() =~# 'q でハイライトをやめる', s:text())
 call s:keys('q')
 call s:ok('q は新しいほう（ハイライト）から', s:st.find ==# '' && s:st.query ==# '植' && &filetype ==# 'gnosis-mandala', string([s:st.find, s:st.query]))
@@ -510,7 +515,7 @@ execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 let s:st.query = 'ラベ'
-call s:keys('z')
+call s:keys("\<C-l>")
 call s:ok('x の絞り込み: 題が合うものだけ', s:grid() =~# 'ラベンダー' && s:grid() !~# 'タイム', s:grid())
 call s:keys('q')
 call s:ok('q で絞り込みを解く', s:st.query ==# '' && s:grid() =~# 'タイム', s:grid())
@@ -608,7 +613,7 @@ let s:st = gnosis#mview#state()
 let s:st.rankc = {'plant.md': {'sage.md': 9.0, 'lav.md': 5.0, 'water.md': 5.0}}
 call s:keys('w')
 let s:ring1 = map(copy(gnosis#mview#items(s:st.data, 'plant.md', 'all')), 'v:val')
-call s:ok('w: 近さ順がオンになる（状態の行にも出る）', s:st.rank_on == 1 && s:text() =~# 'w:近さ', s:text())
+call s:ok('w: 近さ順がオンになる（状態の行にも出る）', s:st.rank_on == 1 && s:text() =~# 'rank', s:text())
 call s:ok('w: 点の高いものが先に来る（sage → lav / water の順。同じ点は元の並び）', s:text() =~# '1 サルビア' && s:text() =~# '2 ラベンダー' && s:text() =~# '3 水やり', s:text())
 call s:keys('w')
 call s:ok('もう一度 w でオフ（元の並び）', s:st.rank_on == 0 && s:text() =~# '1 Index', s:text())
@@ -626,7 +631,7 @@ call s:keys(' ')
 call s:keys('.')
 call s:keys('v')
 let s:st = gnosis#mview#state()
-call s:ok('v: 外向き（9×9 になり、状態の行に出る）', s:st.size == 9 && s:st.out_on == 1 && s:text() =~# 'v:外向き', string([s:st.size, get(s:st, 'out_on', -1)]))
+call s:ok('v: 外向き（9×9 になり、状態の行に出る）', s:st.size == 9 && s:st.out_on == 1 && s:text() =~# ' out', string([s:st.size, get(s:st, 'out_on', -1)]))
 let s:filled = []
 for s:r in range(9)
   for s:c in range(9)
@@ -747,6 +752,15 @@ let s:st = gnosis#mview#state()
 let s:st.nums = 0
 let s:st.digit = 'move'
 call s:ok('プリセットを名前をつけて保存', gnosis#mview#preset_save('読書用') == 1 && gnosis#mview#preset_names() ==# ['読書用'], string(gnosis#mview#preset_names()))
+" 新しいプリセットの既定の名前は、すでにある番号の次（名前が数字のプリセットの最大 + 1）
+call s:ok('番号のプリセットが無ければ 1 から', gnosis#mview#preset_next_number() == 1, string(gnosis#mview#preset_next_number()))
+call gnosis#mview#preset_save('1')
+call gnosis#mview#preset_save('3')
+call gnosis#mview#preset_save('メモ用')
+call s:ok('すでにある番号の最大の次（1 と 3 があれば 4。数字でない名前は数えない）', gnosis#mview#preset_next_number() == 4, string(gnosis#mview#preset_next_number()))
+call gnosis#mview#preset_delete('1')
+call gnosis#mview#preset_delete('3')
+call gnosis#mview#preset_delete('メモ用')
 let s:st.nums = 1
 let s:st.digit = 'jump'
 call gnosis#mview#preset_apply('読書用')
@@ -799,13 +813,13 @@ call s:keys('>')
 call gnosis#mview#preset_apply('全部')
 let s:st = gnosis#mview#state()
 call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
-" 画面で選んで上書き（設定の行が 12 あるので j を 13 回で 2 つ目のプリセット。o で上書き、q で閉じる）
+" 画面で選んで上書き（設定の行が 15 あるので j を 16 回で 2 つ目のプリセット。o で上書き、q で閉じる）
 call gnosis#mview#preset_save('あ')
 call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
-call s:keys("'" . repeat('j', 13) . "oq")
+call s:keys('z' . repeat('j', 16) . 'oq')
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1
@@ -838,20 +852,20 @@ call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# 見出しの�
 execute 'edit ' . s:v . '/ol.md'
 call s:keys(' ')
 call s:keys('.')
-call s:keys('u')
+call s:keys('U')
 let s:st = gnosis#mview#state()
-call s:ok('u: アウトラインがオンになり、状態の行に出る', s:st.ol_on == 1 && s:text() =~# 'u:見出し', s:text())
+call s:ok('U: 見出しを他と一緒に出す（状態の行に outl）', s:st.ol_on == 1 && s:text() =~# 'outl', s:text())
 let s:ids = []
 for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | endif | endfor | endfor
 call s:ok('u: ノートの見出しがマスとして並ぶ', index(s:ids, 'ol.md#第一章') >= 0 && index(s:ids, 'ol.md#第一節') >= 0 && index(s:ids, 'ol.md#第二章') >= 0, string(s:ids))
 let s:st.center = 'ol.md#第一章'
-call s:keys('z')
+call s:keys("\<C-l>")
 let s:st = gnosis#mview#state()
 let s:ids = []
 let s:kinds2 = {}
 for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | let s:kinds2[s:cell.id] = s:cell.kind | endif | endfor | endfor
 call s:ok('見出しを中心に: 親はノート・すぐ下の見出し・節のリンク先', get(s:kinds2, 'ol.md') ==# 'parent' && get(s:kinds2, 'ol.md#第一節') ==# 'outline' && get(s:kinds2, 'plant.md') ==# 'cite' && index(s:ids, 'ol.md#第二章') < 0, string(s:kinds2))
-call s:keys('u')
+call s:keys('U')
 call s:ok('もう一度 u でオフ（見出しが中心だったらノートに戻る）', s:st.ol_on == 0 && s:st.center ==# 'ol.md', string([s:st.ol_on, s:st.center]))
 call s:keys('Q')
 
@@ -860,13 +874,37 @@ call writefile(['---', 'time: 2026-01-01 00:00:00', '---', '', '# 呼ぶ側', ''
 execute 'edit ' . s:v . '/caller.md'
 call s:keys(' ')
 call s:keys('.')
-call s:keys('u')
+call s:keys('U')
 let s:st = gnosis#mview#state()
 let s:ids = []
 let s:names = []
 for s:row in s:st.cells | for s:cell in s:row | if !empty(s:cell.id) && s:cell.role ==# 'item' | call add(s:ids, s:cell.id) | call add(s:names, get(s:cell, 'name', '')) | endif | endfor | endfor
 call s:ok('A → B#見出し は、B の題つきの見出しのマスで出る（B 自体は出ない）', index(s:ids, 'ol.md#第一章') >= 0 && index(s:ids, 'ol.md') < 0 && join(s:names, '|') =~# '見出しの多いノート › 第一章', string([s:ids, s:names]))
-call s:keys('u')
+call s:keys('U')
+call s:keys('Q')
+
+" x の入力: `-語` はその語を含むものを除く（絞り込みの逆）。語を空白で並べると全部含む（AND）
+execute 'edit ' . s:v . '/plant.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+function! s:cell_ids() abort
+  let l:o = []
+  for l:r in gnosis#mview#state().cells
+    for l:c in l:r
+      if get(l:c, 'role', '') ==# 'item' | call add(l:o, l:c.id) | endif
+    endfor
+  endfor
+  return sort(l:o)
+endfunction
+let s:all_ids = s:cell_ids()
+let s:st.query = '-ハーブ'
+call s:keys("\<C-l>")
+call s:ok('x の -語: その語を含むノートが出ない（ほかは残る）', index(s:cell_ids(), 'herb.md') < 0 && index(s:cell_ids(), 'sage.md') >= 0, string([s:all_ids, s:cell_ids()]))
+let s:st.query = 'ミ -ミント'
+call s:keys("\<C-l>")
+call s:ok('絞り込みと除外を一緒に（ミ を含み ミント は含まない）', index(s:cell_ids(), 'mint.md') < 0, string(s:cell_ids()))
+let s:st.query = ''
+call s:keys("\<C-l>")
 call s:keys('Q')
 
 " y: c と r をまとめてオン/オフ（オフにしたときの状態を覚えていて、もう一度押すと戻る）
@@ -881,15 +919,19 @@ let s:st = gnosis#mview#state()
 call s:ok('y で c と r が両方オフ', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
 call s:keys('y')
 let s:st = gnosis#mview#state()
-call s:ok('もう一度 y を押すと、オフにする前の c r に戻る', get(s:st, "near_on", 0) == 1 && get(s:st, "rel_on", 0) == 1, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:ok('もう一度 y を押すと、両方オンになる', get(s:st, "near_on", 0) == 1 && get(s:st, "rel_on", 0) == 1, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+" c だけオンにした（片方だけオン）あとの y は、強制的に両方オフ。その次の y は両方オン
 call s:keys('y')
-call s:keys('y')
+call s:keys('c')
 call s:keys('y')
 let s:st = gnosis#mview#state()
-call s:ok('y を重ねてもオン/オフが入れ替わるだけ（今はオフ）', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0)
+call s:ok('片方だけオンのときの y は、両方オフ', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:keys('y')
+let s:st = gnosis#mview#state()
+call s:ok('両方オフのときの y は、両方オン（前の状態は覚えない）', get(s:st, "near_on", 0) == 1 && get(s:st, "rel_on", 0) == 1)
 
 " 右のノートの窓でページが変わったら、左の曼荼羅の中心も動く
-call s:keys('z')
+call s:keys("\<C-l>")
 let s:before = gnosis#mview#state().center
 call s:keys(' ')
 execute 'edit ' . s:v . '/ol.md'

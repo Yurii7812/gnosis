@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """曼荼羅で ' を押すと、右側に設定の画面が出る（実 Vim・擬似端末）。
-  ' で出る（画面の右半分）→ , で親子モード → j Enter で次の行を切り替え → q で閉じる（曼荼羅は残る）。
+  z で出る（画面の右半分）→ , で親子モード → j Enter で次の行を切り替え → q で閉じる（曼荼羅は残る）。
 一時 vault だけを使う。"""
 import fcntl, os, pty, re, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
@@ -63,15 +63,15 @@ try:
     st = state()
     ok("曼荼羅が開いている（全体モード）", st[:1] == ["all"] and st[2:3] == ["gnosis-mandala"])
     mark = len(out)
-    os.write(fd, b"'")
+    os.write(fd, b"z")
     pump(1.2)
     seg = out[mark:]
-    ok("' で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセット".encode() in seg)
+    ok("z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセット".encode() in seg)
     i = seg.rfind("曼荼羅の設定".encode())
     m = list(re.finditer(rb"\x1b\[(\d+);(\d+)H", seg[:i]))
     col = int(m[-1].group(2)) if m else 0
     ok("画面の右半分に出る（列 %d）" % col, col > 70)
-    os.write(fd, b",")
+    os.write(fd, b"d")
     pump(0.8)
     os.write(fd, b"j")
     pump(0.4)
