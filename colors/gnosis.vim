@@ -149,6 +149,8 @@ call s:hl('markdownItalicDelimiter', s:dim, '', '')
 call s:hl('markdownBoldItalicDelimiter', s:dim, '', '')
 call s:hl('markdownCode', s:fg, s:panel, '')
 call s:hl('markdownCodeBlock', s:fg, s:panel, '')
+" ``` で囲んだコードの行全体（右端まで）の背景。signs の linehl で付ける（autoload/gnosis/codeline.vim）
+call s:hl('GnosisCodeLine', '', s:panel, '')
 call s:hl('markdownCodeDelimiter', s:dim, s:panel, '')
 call s:hl('markdownListMarker', s:dim, '', '')
 call s:hl('markdownOrderedListMarker', s:dim, '', '')

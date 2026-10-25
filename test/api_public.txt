@@ -66,6 +66,8 @@ gnosis#clip
 gnosis#clip_yank
 gnosis#clipboard_copy
 gnosis#clipboard_paste
+gnosis#codeline#lines
+gnosis#codeline#update
 gnosis#collect
 gnosis#color#base_of
 gnosis#color#contrast
@@ -272,6 +274,7 @@ gnosis#mview#render_here
 gnosis#mview#rerender
 gnosis#mview#reset_for_test
 gnosis#mview#saved
+gnosis#mview#set_depth
 gnosis#mview#start
 gnosis#mview#state
 gnosis#mview#toggle

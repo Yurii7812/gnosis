@@ -54,7 +54,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('Space で曼荼羅が開く', &filetype ==# 'gnosis-mandala', &filetype)
-call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] c:オフ r:オフ' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
+call s:ok('上に状態の 1 行（モード・重ね）。案内や凡例は出ない', s:text() =~# '\[a\] 1/1 c:オフ r:オフ' && s:text() !~# 'q 閉じる' && s:text() !~# 'グループ  親', s:text())
 call s:keys('?')
 call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab / S-Tab', string(popup_list()))
 call s:keys('q')
@@ -199,7 +199,7 @@ execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call s:keys('r')
 call s:ok('r: 関連モード。ノートも索引も出る', s:text() =~# 'ミント' && s:text() =~# '植物', s:text())
-call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[a\] c:オン r:オン', s:text())
+call s:ok('モードの行に今のモードと重ねるもののオン/オフが出る', s:text() =~# '\[a\] [0-9]*/[0-9]* c:オン r:オン', s:text())
 call s:ok('どの行も窓の幅に収まる', len(filter(getbufline(s:st.buf, 1, '$'), 'strdisplaywidth(v:val) > winwidth(0)')) == 0)
 call s:keys('q')
 
@@ -654,7 +654,7 @@ call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('# の前は番号とページが出ている', s:text() =~# '1 Index' && s:text() =~# '1/2', s:text())
 call s:keys('#')
-call s:ok('# で番号とページが消える', s:text() !~# '1 Index' && s:text() !~# '1/2' && s:text() =~# 'Index', s:text())
+call s:ok('# で番号とページが消える', s:text() !~# '1 Index' && s:text() !~# '1/2 *┃' && s:text() =~# 'Index', s:text())
 call s:keys('#')
 call s:ok('もう一度 # で戻る', s:text() =~# '1 Index' && s:text() =~# '1/2', s:text())
 
@@ -786,13 +786,13 @@ call s:keys('>')
 call gnosis#mview#preset_apply('全部')
 let s:st = gnosis#mview#state()
 call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
-" 画面で選んで上書き（設定の行が 10 あるので j を 11 回で 2 つ目のプリセット。o で上書き、q で閉じる）
+" 画面で選んで上書き（設定の行が 11 あるので j を 12 回で 2 つ目のプリセット。o で上書き、q で閉じる）
 call gnosis#mview#preset_save('あ')
 call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
-call s:keys("'" . repeat('j', 11) . "oq")
+call s:keys("'" . repeat('j', 12) . "oq")
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1
@@ -856,7 +856,7 @@ call s:ok('A → B#見出し は、B の題つきの見出しのマスで出る�
 call s:keys('u')
 call s:keys('Q')
 
-" y: c と r を両方オフにする（オフにするだけ。もう一度押してもオンにはしない）
+" y: c と r をまとめてオン/オフ（オフにしたときの状態を覚えていて、もう一度押すと戻る）
 execute 'edit ' . s:v . '/caller.md'
 call s:keys(' ')
 call s:keys('c')
@@ -868,7 +868,12 @@ let s:st = gnosis#mview#state()
 call s:ok('y で c と r が両方オフ', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
 call s:keys('y')
 let s:st = gnosis#mview#state()
-call s:ok('もう一度 y を押してもオンにならない', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:ok('もう一度 y を押すと、オフにする前の c r に戻る', get(s:st, "near_on", 0) == 1 && get(s:st, "rel_on", 0) == 1, string([get(s:st, "near_on", 0), get(s:st, "rel_on", 0)]))
+call s:keys('y')
+call s:keys('y')
+call s:keys('y')
+let s:st = gnosis#mview#state()
+call s:ok('y を重ねてもオン/オフが入れ替わるだけ（今はオフ）', get(s:st, "near_on", 0) == 0 && get(s:st, "rel_on", 0) == 0)
 
 " 右のノートの窓でページが変わったら、左の曼荼羅の中心も動く
 call s:keys('z')

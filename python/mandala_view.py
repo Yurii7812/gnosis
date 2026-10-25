@@ -418,24 +418,15 @@ def _related(g, note: str, limit: int = 80) -> list[dict]:
 
 
 def search(root: str | Path, words: list[str], limit: int = 200) -> list[str]:
-    """題か本文に words を全部含むノート（相対パス）。題に合うものが先。"""
+    """題・ファイル名・本文に words を全部含むノート（相対パス）。題やファイル名に合うものが先（python/mandala_search.py）。"""
+    import mandala_search as ms
+
     g = gg.build(root)
-    ws = [w.lower() for w in words if w]
-    if not ws:
-        return []
-    title_hits, body_hits = [], []
-    for nid, n in g.nodes.items():
-        t = n.title.lower()
-        if all(w in t for w in ws):
-            title_hits.append((n.title, nid))
-            continue
-        try:
-            body = (g.root / nid).read_text(encoding="utf-8").lower()
-        except (OSError, UnicodeDecodeError):
-            continue
-        if all(w in t or w in body for w in ws):
-            body_hits.append((n.title, nid))
-    return [nid for _t, nid in sorted(title_hits)] + [nid for _t, nid in sorted(body_hits)][:max(0, limit - len(title_hits))]
+
+    def body_of(nid: str):
+        return lambda: (g.root / nid).read_text(encoding="utf-8")
+
+    return ms.rank(((nid, n.title, body_of(nid)) for nid, n in g.nodes.items()), words, limit)
 
 
 def main(argv: list[str]) -> int:

@@ -473,6 +473,24 @@ augroup gnosis_mview_saved
   autocmd BufWritePost *.md call gnosis#mview#saved(expand('<afile>:p'))
 augroup END
 
+" モード表示（左下の NORMAL / INSERT …）。曼荼羅を開いたまま右のノートで挿入モードにしても、
+" 動いていない窓（曼荼羅の窓）のステータス行は自動では描き直されず NORMAL のままになるので、モードが変わるたびに全窓を描き直す
+" ``` で囲んだコードの行は、文字だけでなく行全体をうす灰色にする（サイン。autoload/gnosis/codeline.vim）
+augroup gnosis_codeline
+  autocmd!
+  autocmd FileType markdown,vimwiki call gnosis#codeline#update()
+  autocmd BufWinEnter,BufEnter,TextChanged,InsertLeave *.md call gnosis#codeline#update()
+  autocmd ColorScheme * silent! highlight default link GnosisCodeLine ColorColumn
+augroup END
+
+augroup gnosis_modeline
+  autocmd!
+  autocmd InsertEnter,InsertLeave * redrawstatus!
+  if exists('##ModeChanged')
+    autocmd ModeChanged * redrawstatus!
+  endif
+augroup END
+
 augroup gnosis_imgview
   autocmd!
   " ノートの中の画像（\zz の「画像」で隠せる）。sixel の端末だけ

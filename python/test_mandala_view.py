@@ -78,6 +78,23 @@ class T(unittest.TestCase):
         self.assertIn("body.md", hits)
         self.assertEqual(mv.search(r, ["ハーブ", "存在しない語"]), [])
 
+    def test_search_matches_filename_case_kana_and_fuzzy(self):
+        r = Path(self.tmp.name)
+        # 題が日本語でも、ファイル名（index.md）で見つかる。大文字小文字・全角半角・カタカナ/ひらがなの違いは無視
+        (r / "toc.md").write_text(note("目次", True, [], ["[ハーブ](herb.md)"]))
+        (r / "memo-index.md").write_text(note("メモ", False, [], []))
+        (r / "kana.md").write_text(note("カタカナのノート", False, [], []))
+        hits = mv.search(r, ["index"])
+        self.assertIn("index.md", hits)
+        self.assertIn("memo-index.md", hits)          # ファイル名の一部
+        self.assertEqual(hits[0], "index.md")         # 題（Index）が完全に合うものが先
+        self.assertEqual(mv.search(r, ["INDEX"])[0], "index.md")
+        self.assertEqual(mv.search(r, ["ｉｎｄｅｘ"])[0], "index.md")   # 全角
+        self.assertIn("kana.md", mv.search(r, ["かたかな"]))          # ひらがなでカタカナの題
+        # 厳密に合うものが無いときだけ、曖昧（文字が順に並ぶ）も使う
+        self.assertIn("kana.md", mv.search(r, ["かなの"]) + mv.search(r, ["かのと"]))
+        self.assertEqual(mv.search(r, ["zzzqqq"]), [])
+
     def test_related_any_kind(self):
         r = Path(self.tmp.name)
         (r / "herb.md").write_text(note("ハーブ", False, [("植物", "plant.md")], ["[栽培](grow.md)"], "1a"))

@@ -786,44 +786,18 @@ def related(root: str | Path, rel: str, limit: int = 80, body: bool = True) -> l
 
 
 def search(root: str | Path, words: list[str], limit: int = 200) -> list[str]:
-    """題か本文に words を全部含むノート。題に合うものが先。本文は ripgrep があればそれで探す。"""
+    """題・ファイル名・本文に words を全部含むノート。題やファイル名に合うものが先（python/mandala_search.py）。"""
+    import mandala_search as ms
+
     db = connect(root)
     if db is None:
         return []
-    ws = [w.lower() for w in words if w]
-    if not ws:
-        return []
     try:
-        title_hits = [p for p, t in db.execute("SELECT path,title FROM files ORDER BY path") if all(w in t.lower() for w in ws)][:limit]
+        rows = db.execute("SELECT path,title FROM files ORDER BY path").fetchall()
     finally:
         db.close()
-    out = list(title_hits)
-    seen = set(out)
-    import shutil
-    import subprocess
     root_p = Path(root)
-    if shutil.which("rg") and len(out) < limit:
-        try:
-            r = subprocess.run(["rg", "-l", "-i", "-F", "--glob", "*.md", "-e", ws[0], str(root_p)], capture_output=True, text=True, timeout=60)
-            for ln in r.stdout.split("\n"):
-                if not ln.strip() or len(out) >= limit:
-                    continue
-                try:
-                    rel = Path(ln).relative_to(root_p).as_posix()
-                except ValueError:
-                    continue
-                if rel in seen or rel.startswith("."):
-                    continue
-                try:
-                    body = (root_p / rel).read_text(encoding="utf-8").lower()
-                except (OSError, UnicodeDecodeError):
-                    continue
-                if all(w in body for w in ws):
-                    out.append(rel)
-                    seen.add(rel)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    return out
+    return ms.rank(((p, t, (lambda p=p: (root_p / p).read_text(encoding="utf-8"))) for p, t in rows), words, limit)
 
 
 def status(root: str | Path) -> dict:
