@@ -143,9 +143,13 @@ const scenario = `(async () => {
     const choose = { shown: !scanEl.querySelector('.scan-source').hidden, inText: scanEl.querySelector('.c-in').textContent, outText: scanEl.querySelector('.c-out').textContent };
     await rootKey('v', 1200);
     const sc = { choose, opened: !scanEl.hidden, count1: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
+    sc.inputHiddenBeforeSpace = inp.hidden;
+    await rootKey(' ', 400);                                    // Space で番号の入力を開く
     await typeIn('1a2'); await key('Enter', 1500);
     sc.afterFirst = { count: scanEl.querySelector('.scan-count').textContent, prev: scanEl.querySelector('.scan-prev').textContent };
-    await key('d', 400);
+    await key('Escape', 400);                                   // Esc は入力だけ閉じる
+    sc.afterEscOpen = !scanEl.hidden && inp.hidden;
+    await rootKey('d', 400);                                    // 入力が閉じていれば d は日記
     sc.dateLabel = scanEl.querySelector('.scan-label').textContent;
     await typeIn('2026-10-24'); await key('Enter', 1500);
     sc.afterDiary = scanEl.querySelector('.scan-count').textContent;
@@ -154,7 +158,7 @@ const scenario = `(async () => {
     sc.tab = inp.value;
     await key('Enter', 1500);
     sc.empty = scanEl.querySelector('.scan-empty').textContent;
-    await key('Escape', 6000);
+    await rootKey('q', 6000);                                   // q で \\F の画面を閉じる
     sc.closed = scanEl.hidden;
     // vault の外のフォルダ: Enter → フォルダを選ぶ → Enter で使う → 番号付け
     localStorage.setItem('scanDir', ${JSON.stringify(outside)});
@@ -162,10 +166,12 @@ const scenario = `(async () => {
     await rootKey('Enter', 1000);
     sc.folder = { shown: !scanEl.querySelector('.scan-folder').hidden, path: scanEl.querySelector('.scan-path').textContent, rows: scanEl.querySelector('.scan-row.use')?.textContent };
     await rootKey('Enter', 2500);
+    await rootKey(' ', 400);
     sc.outside = { count: scanEl.querySelector('.scan-count').textContent, imgShown: !!scanEl.querySelector('img').getAttribute('src') };
     await typeIn('9'); await key('Enter', 1200);
     await typeIn('9a'); await key('Enter', 1200);
-    await key('Escape', 6000);
+    await key('Escape', 500);
+    await rootKey('q', 6000);
     R.scan = sc;
   }
   R.__png = ${JSON.stringify(path.join(tmp, "final.png"))};
@@ -211,7 +217,7 @@ try {
     check(sc.opened && /1 \/ 3/.test(sc.count1) && sc.imgShown, "scan screen should open with 3 unnumbered scans and show the image: " + JSON.stringify(sc));
     check(/2 ?\/ ?2|1 \/ 2/.test(sc.afterFirst?.count || "") && /1a2/.test(sc.afterFirst?.prev || ""), "after Enter the next scan is shown and the previous number is displayed: " + JSON.stringify(sc.afterFirst));
     check(/YYYY/.test(sc.dateLabel || "") && /1 \/ 1/.test(sc.afterDiary || ""), "d should ask for a date and register the diary: " + JSON.stringify(sc));
-    check(sc.tab === "1a2" && sc.closed, "Tab puts the previous number; Esc closes: " + JSON.stringify(sc));
+    check(sc.inputHiddenBeforeSpace && sc.afterEscOpen && sc.tab === "1a2" && sc.closed, "Space opens the input, Esc closes only the input, d works when it is closed, Tab puts the previous number, q closes: " + JSON.stringify(sc));
     check(fs.existsSync(path.join(vault, "1a2.png")), "1a2.png should exist in the vault");
     const trash = fs.existsSync(path.join(vault, ".trash")) ? fs.readdirSync(path.join(vault, ".trash")).filter((n) => n.endsWith("_1a2.png")) : [];
     check(trash.length === 1, "overwriting the same number keeps the old image in .trash: " + JSON.stringify(trash));
