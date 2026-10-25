@@ -174,6 +174,14 @@ call s:ok('再起動: アプリ側だけ変えても Vim 側は変わらない',
 
 " リンクの番号の札（GnosisLinkHint）: 配色に hintfg / hintbg があればその色、無ければ 文字=背景色・札=補助の色
 let g:gnosis_palette = copy(gnosis#settings#builtin_palettes().dark)
+" GUI と CUI のダーク/ライトは別々（appAppearance。無ければ appearance と同じ）。CUI のライトは目に優しいよう少し灰色（GitHub の #F6F8FA）、GUI のライトは GitHub の白
+let s:l_dark = extend(copy(s:def), {'appearance': 'light', 'appAppearance': 'dark'})
+call s:ok('GUI だけダーク: CUI がライトでも GUI は暗い', toupper(gnosis#theme#app_palette(s:l_dark).bg) ==# '#1E1E1E' && gnosis#theme#app_palette(s:l_dark).base ==# 'dark' && toupper(gnosis#theme#palette(s:l_dark).bg) ==# '#F6F8FA')
+let s:d_light = extend(copy(s:def), {'appearance': 'dark', 'appAppearance': 'light'})
+call s:ok('GUI だけライト: CUI がダークでも GUI は白（CUI はダークのまま）', toupper(gnosis#theme#app_palette(s:d_light).bg) ==# '#FFFFFF' && toupper(gnosis#theme#palette(s:d_light).bg) ==# '#1E1E1E')
+call s:ok('GUI のライトの本文は GitHub の #1F2328、CUI のライトも同じ文字色', toupper(gnosis#theme#app_palette(s:d_light).fg) ==# '#1F2328' && toupper(gnosis#theme#palette(extend(copy(s:def), {'appearance': 'light'})).fg) ==# '#1F2328')
+call s:ok('未設定なら GUI は CUI（appearance）と同じ', toupper(gnosis#theme#app_palette(extend(copy(s:def), {'appearance': 'light'})).bg) ==# '#FFFFFF' && toupper(gnosis#theme#app_palette(extend(copy(s:def), {'appearance': 'dark'})).bg) ==# '#1E1E1E')
+call s:ok('壊れた appAppearance は無かったことにする', !has_key(gnosis#settings#validate(extend(copy(s:def), {'appAppearance': 'blue'})), 'appAppearance'))
 silent! colorscheme gnosis
 call s:ok('リンク番号の札: 設定が無ければ 文字=背景色・札=補助の色', s:gui('GnosisLinkHint', 'fg') ==# tolower(g:gnosis_palette.bg) && s:gui('GnosisLinkHint', 'bg') ==# tolower(g:gnosis_palette.muted), s:gui('GnosisLinkHint', 'fg') . ' ' . s:gui('GnosisLinkHint', 'bg'))
 let g:gnosis_palette = extend(copy(gnosis#settings#builtin_palettes().dark), {'hintfg': '#ffffff', 'hintbg': '#2d70be'})

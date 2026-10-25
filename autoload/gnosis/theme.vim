@@ -125,8 +125,10 @@ endfunction
 function! gnosis#theme#app_palette(s) abort
   let l:pals = gnosis#settings#builtin_palettes()
   " 組み込みは通常の Vim と同じ見た目（ダーク・ライト）。\c 用のカスタム配色を選んだときだけ別の色
-  " 外観（ダーク／ライト）は通常の Vim と同じ appearance（CUI と同じ見た目にそろえる）
-  let l:p = copy(get(l:pals, get(a:s, 'appearance', 'dark'), l:pals.dark))
+  " 外観（ダーク／ライト）は GUI 用の appAppearance（無ければ CUI の appearance と同じ）。ダークは CUI と同じ色、
+  " ライトは GitHub（Brave の Markdown Viewer）の白（CUI のライトは目に優しいよう少し灰色に下げている）
+  let l:ap = get(a:s, 'appAppearance', get(a:s, 'appearance', 'dark'))
+  let l:p = copy(l:ap ==# 'light' ? get(l:pals, 'gui_light', l:pals.light) : l:pals.dark)
   let l:th = get(a:s, 'appTheme', {})
   if get(l:th, 'kind', 'builtin') ==# 'custom'
     let l:c = get(get(a:s, 'appCustomThemes', {}), get(l:th, 'name', ''), {})
@@ -140,7 +142,7 @@ function! gnosis#theme#app_palette(s) abort
       return l:p
     endif
   endif
-  let l:p.base = gnosis#settings#background(a:s)
+  let l:p.base = l:ap ==# 'light' ? 'light' : 'dark'
   return l:p
 endfunction
 

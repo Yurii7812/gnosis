@@ -47,7 +47,7 @@ import { createView } from ${JSON.stringify(path.join(web, "src/view.js"))};
 import { applyPalette } from ${JSON.stringify(path.join(web, "src/look.js"))};
 const PAL = ${JSON.stringify(pal)};
 const params = new URLSearchParams(location.search);
-const which = params.get("t") === "dark" ? "dark" : "light";
+const which = params.get("t") === "dark" ? "dark" : "gui_light";
 const scn = params.get("s") || "";
 const p = PAL[which];
 applyPalette(p);

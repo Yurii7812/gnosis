@@ -28,7 +28,7 @@ from keys_pty import ESC, Session  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
-ITEMS = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'theme',
+ITEMS = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'app_appearance', 'theme',
          'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
 
 

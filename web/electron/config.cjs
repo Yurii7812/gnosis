@@ -185,6 +185,8 @@ function validateSettings(s) {
   const out = { ...d, ...(s && typeof s === "object" ? s : {}) };
   out.language = out.language === "en" || out.language === "ja" ? out.language : d.language;
   out.appearance = out.appearance === "dark" ? "dark" : "light";
+  // GUI のダーク／ライト。無ければ appearance と同じ（Vim 側の規則）
+  if (out.appAppearance !== "dark" && out.appAppearance !== "light") delete out.appAppearance;
   out.fontSize = clamp(out.fontSize, 8, 48, 16);
   const w = { ...d.window, ...(out.window && typeof out.window === "object" ? out.window : {}) };
   out.window = { maximized: !!w.maximized, width: clamp(w.width, 480, 10000, 1200), height: clamp(w.height, 360, 10000, 860) };
