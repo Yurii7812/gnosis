@@ -78,8 +78,8 @@ class MainActivity : ComponentActivity() {
             val vc = LocalViewConfiguration.current
             val quick = remember(vc) { object : ViewConfiguration by vc { override val longPressTimeoutMillis: Long get() = 280L } }
             CompositionLocalProvider(LocalViewConfiguration provides quick) {
-                MaterialTheme(colorScheme = GnosisColors) {
-                    Surface(Modifier.fillMaxSize()) { CaptureScreen(Store(this), promptState) }
+                MaterialTheme(colorScheme = EasyColors) {
+                    Surface(Modifier.fillMaxSize()) { EasyApp(Store(this), promptState) }
                 }
             }
         }
@@ -116,7 +116,7 @@ private val timeFmt = SimpleDateFormat("HH:mm", Locale.JAPAN)
 private val dayFmt = SimpleDateFormat("M月d日（E）", Locale.JAPAN)
 private fun dayKey(t: Long) = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(t))
 
-private fun short(s: String, n: Int = 24): String {
+fun short(s: String, n: Int = 24): String {
     val one = MEMO_LINK.replace(s) { it.groupValues[1] }.replace('\n', ' ').trim()
     return if (one.length <= n) one.ifEmpty { "（画像）" } else one.take(n) + "…"
 }
@@ -166,7 +166,7 @@ private fun PickDialog(entries: List<Entry>, kind: String, exclude: Set<String>,
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
+fun CaptureScreen(store: Store, promptState: MutableState<Boolean>, start: String = "", onHome: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val entries = remember { mutableStateListOf<Entry>().apply { addAll(store.load()) } }
@@ -226,6 +226,16 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     var deleteTopicFor by remember { mutableStateOf<String?>(null) } // 消すトピック
     if (scanOpen) { ScanScreen(onClose = { scanOpen = false }); return }
     val prompt by promptState
+    // 「くわしい操作」から開いたとき、選んだ操作をすぐ始める
+    LaunchedEffect(start) {
+        when (start) {
+            "select" -> { selecting = true; selected.clear(); rangeAnchor = null; rangeMode = false }
+            "topics" -> topicListOpen = true
+            "folge" -> if (!settings.folgeView) { settings = settings.copy(folgeView = true); store.saveSettings(settings) }
+            "search" -> search = ""
+            "settings" -> settingsOpen = true
+        }
+    }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -444,6 +454,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     Scaffold(
         topBar = { Column {
             TopAppBar(
+                navigationIcon = { if (onHome != null) TextButton(onClick = onHome) { Text("← ホーム", fontSize = 18.sp, fontWeight = FontWeight.Bold) } },
                 title = {
                     val n = entries.count { it.id !in imported }
                     val sq = search
