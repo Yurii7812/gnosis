@@ -84,6 +84,17 @@ function overlayOnly(s) {
   return (s.popuppos || []).length > 0 && m !== "r" && m !== "!" && s.mode !== "rm";
 }
 
+// 端末の画面が出ている理由（下のバーに小さく出す。「カーソルが一番下に無いのに端末の画面になる」ときに、何が原因かを見分けるため）
+function terminalReason(s) {
+  const m = (s.mode || "n")[0];
+  if (s.bt === "terminal" || m === "t") return "terminal";
+  if (m === "r" || s.mode === "rm") return "hit-enter/prompt";
+  if (m === "!") return "shell";
+  if ((s.popups || 0) > 0) return "popup×" + s.popups;
+  if (s.curbt && s.curft !== "gnosis-mandala") return "buffer:" + s.curbt + (s.curft ? "/" + s.curft : "");
+  return "";
+}
+
 // 端末の画面そのものが要る場面（確認・fzf・ポップアップ・Enter 待ちなど）か
 function needsTerminal(s) {
   const m = (s.mode || "n")[0];
@@ -149,6 +160,7 @@ function applyState(s) {
     collapseTimer = setTimeout(() => { collapseTimer = null; if (!needsTerminal(last)) setExpanded(false); }, 120);
   }
   applyOverlay(last);
+  { const why = $("termwhy"); if (why) { const r = expanded ? terminalReason(last) : ""; why.textContent = r ? "端末: " + r : ""; } }
 
   // 曼荼羅: 開いていれば左（全画面 9×9 で右の窓が無いときは全面）に描く
   const hasNote = !!(s.file) && s.bt === "";

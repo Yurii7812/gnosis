@@ -78,7 +78,7 @@ const scenario = `(async () => {
   await press(':call gnosis#settings#set("hide.yaml", v:false)|call gnosis#hide#apply_all()\\r', 700);
   // :GnosisSettings（特別なバッファ）は、端末の画面が全面に出て読める
   await press(':GnosisSettings\\r', 1300);
-  R.settings = { expanded: G.isExpanded(), text: G.screen().join('\\n').includes('Gnosis — 設定') };
+  R.settings = { why: document.getElementById('termwhy').textContent, expanded: G.isExpanded(), text: G.screen().join('\\n').includes('Gnosis — 設定') };
   await press('q', 900);
   R.settings.back = !G.isExpanded();
   // \\zz の設定（YAML・上下の名前: 系を隠す）
@@ -200,7 +200,7 @@ try {
   check(jsErrors.length === 0, "console errors in the app: " + JSON.stringify(jsErrors));
   check(R.start?.h1, "markdown should render at start: " + JSON.stringify(R.start));
   check(R.mandala?.size === 3 && R.mandala.cells === 9 && R.mandala.shown && R.mandala.withNote && R.mandala.legend === 11, "mandala should draw 3x3 colored cells: " + JSON.stringify(R.mandala));
-  check(R.settings && R.settings.expanded && R.settings.text && R.settings.back, ":GnosisSettings should show the terminal screen and q should return: " + JSON.stringify(R.settings));
+  check(R.settings && R.settings.expanded && /buffer:nofile/.test(R.settings.why) && R.settings.text && R.settings.back, ":GnosisSettings should show the terminal screen (the reason is shown in the status bar) and q should return: " + JSON.stringify(R.settings));
   check(R.html && R.html.open && R.html.closed && R.html.outside === null && R.html.web === false, "HTML link opens inside the app and q closes it; outside-vault and non-http are refused: " + JSON.stringify(R.html));
   check(R.fm && R.fm.fm === R.fm.body, "YAML should not be gray (same color as the body text): " + JSON.stringify(R.fm));
   check(R.zz && R.zz.after < R.zz.before, "\\\\zz in the app should really hide YAML: " + JSON.stringify(R.zz));

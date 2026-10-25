@@ -120,6 +120,7 @@ html { --strip-h: 54px; }
 .mode.viewonly { background: #575757; }
 .mode.command { background: #bf8700; }
 .file { color: var(--fg); }
+.termwhy { margin-left: auto; font-size: 11px; color: var(--fg-dim); font-family: var(--font-mono); }
 .dirty { color: #bf8700; font-size: 10px; }
 
 /* ---- Vim のカーソル・ビジュアル選択（表示用） ---- */

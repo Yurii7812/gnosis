@@ -34816,6 +34816,15 @@ ${h3.join(`
     const m = (s15.mode || "n")[0];
     return (s15.popuppos || []).length > 0 && m !== "r" && m !== "!" && s15.mode !== "rm";
   }
+  function terminalReason(s15) {
+    const m = (s15.mode || "n")[0];
+    if (s15.bt === "terminal" || m === "t") return "terminal";
+    if (m === "r" || s15.mode === "rm") return "hit-enter/prompt";
+    if (m === "!") return "shell";
+    if ((s15.popups || 0) > 0) return "popup\xD7" + s15.popups;
+    if (s15.curbt && s15.curft !== "gnosis-mandala") return "buffer:" + s15.curbt + (s15.curft ? "/" + s15.curft : "");
+    return "";
+  }
   function needsTerminal(s15) {
     const m = (s15.mode || "n")[0];
     const special = !!s15.curbt && s15.curbt !== "terminal" && s15.curft !== "gnosis-mandala";
@@ -34874,6 +34883,13 @@ ${h3.join(`
       }, 120);
     }
     applyOverlay(last2);
+    {
+      const why = $3("termwhy");
+      if (why) {
+        const r = expanded ? terminalReason(last2) : "";
+        why.textContent = r ? "\u7AEF\u672B: " + r : "";
+      }
+    }
     const hasNote = !!s15.file && s15.bt === "";
     $3("mandala").hidden = !md;
     $3("main").classList.toggle("with-mandala", !!md);
