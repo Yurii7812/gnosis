@@ -54,8 +54,11 @@ def save_state(root: Path, state: dict) -> None:
 
 def list_scans(root: Path) -> dict:
     d = inbox(root)
-    names = sorted(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in EXTS)
-    return {"ok": True, "scans": names, "last": load_state(root).get("last", "")}
+    files = sorted((p for p in d.iterdir() if p.is_file() and p.suffix.lower() in EXTS), key=lambda p: p.name)
+    names = [p.name for p in files]
+    # 並べ替え（画面の s）に使う、更新日時（秒）と大きさ
+    info = {p.name: {"mtime": int(p.stat().st_mtime), "size": p.stat().st_size} for p in files}
+    return {"ok": True, "scans": names, "info": info, "last": load_state(root).get("last", "")}
 
 
 def _next_name(d: Path, when: datetime, suffix: str) -> str:

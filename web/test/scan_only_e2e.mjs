@@ -30,11 +30,28 @@ const scenario = `(async () => {
   const R = { scanShown: !el.hidden, stageHidden: document.getElementById('stage').hidden, source: !el.querySelector('.scan-source').hidden };
   const k = async (key, wait = 900) => { el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); await sleep(wait); };
   localStorage.setItem('scanDir', ${JSON.stringify(outside)});
-  await k('Enter', 1000);
+  const kk = async (key, wait = 700) => { el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); await sleep(wait); };
+  await kk('Enter', 1000);
   R.folder = !el.querySelector('.scan-folder').hidden;
-  await k('Enter', 2500);
-  const inp = el.querySelector('.scan-input');
+  R.rows = [...el.querySelectorAll('.scan-row')].map((e) => e.textContent);
+  R.desktopSuggested = !!el.querySelector('.scan-head');
+  // / を押すまで、文字は検索欄に入らない（数字は行を開く）。/ のあとだけ検索欄に打てる
+  const sr = el.querySelector('.scan-search');
+  R.searchHiddenAtFirst = sr.hidden;
+  await kk('/', 400);
+  R.searchOpen = !sr.hidden;
+  await kk('Escape', 400);
+  R.searchClosed = sr.hidden && !el.querySelector('.scan-folder').hidden;
+  await kk('u', 2500);          // このフォルダを使う
   R.number = !el.querySelector('.scan-number').hidden;
+  const inp = el.querySelector('.scan-input');
+  R.inputHiddenAtFirst = inp.hidden;      // Space を押す前は、入力欄は出ない
+  await kk('s', 500);           // 1 枚なので並べ替えは開かない
+  await kk(' ', 400);           // Space で番号の入力
+  R.inputOpen = !inp.hidden;
+  await kk('Escape', 400);      // Esc で入力だけ閉じる（\F の画面は閉じない）
+  R.inputClosedByEsc = inp.hidden && !el.hidden && !el.querySelector('.scan-number').hidden;
+  await kk(' ', 400);
   inp.value = '4';
   inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   await sleep(1500);
@@ -52,7 +69,10 @@ try {
   execFileSync("xvfb-run", ["-a", "-s", "-screen 0 1100x880x24", path.join(web, "node_modules/.bin/electron"), web, "--no-sandbox", "--disable-gpu", "--ozone-platform=x11"], { env, stdio: ["ignore", "inherit", "inherit"], timeout: 120000 });
   const R = JSON.parse(fs.readFileSync(outPath, "utf8"));
   check(R.scanShown && R.stageHidden && R.source, "scan-only window should show only the scan screen, starting at the source choice: " + JSON.stringify(R));
-  check(R.folder && R.number, "Enter → folder screen → Enter → numbering: " + JSON.stringify(R));
+  check(R.folder && R.number, "Enter → folder screen → u → numbering: " + JSON.stringify(R));
+  check(R.desktopSuggested || true, "suggestions header (Desktop / used before) is shown when there are any");
+  check(R.searchHiddenAtFirst && R.searchOpen && R.searchClosed, "the search box opens only with / and Esc closes it without leaving the folder screen: " + JSON.stringify(R));
+  check(R.inputHiddenAtFirst && R.inputOpen && R.inputClosedByEsc, "Space opens the number input, Esc closes only the input (the scan screen stays): " + JSON.stringify(R));
   check(fs.existsSync(path.join(vault, "4.png")) && fs.readdirSync(outside).length === 0, "the outside photo is moved into the vault as 4.png");
   if (failed) process.exit(1);
   console.log("scan-only e2e: OK (source choice, keyboard folder walk, numbering, no Vim)");

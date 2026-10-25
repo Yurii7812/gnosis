@@ -382,6 +382,42 @@ ipcMain.handle("scan:ls", async (_e, dir) => {
     return { ok: true, dir: d, parent: path.dirname(d) === d ? "" : path.dirname(d), dirs, images };
   } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
 });
+// 前回使ったフォルダ（Gnosis ホームの scan_recent.json。新しい順・最大 8 つ）と、Desktop。存在するものだけ
+const recentFile = () => path.join(cfg.gnosisHome(), "scan_recent.json");
+const readRecent = () => { try { const a = JSON.parse(fs.readFileSync(recentFile(), "utf8")); return Array.isArray(a) ? a.filter((x) => typeof x === "string") : []; } catch { return []; } };
+ipcMain.handle("scan:recent", () => {
+  const desk = path.join(os.homedir(), "Desktop");
+  return { recent: readRecent().filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }), desktop: fs.existsSync(desk) ? desk : "" };
+});
+ipcMain.handle("scan:remember", (_e, dir) => {
+  try {
+    if (typeof dir !== "string" || !dir) return false;
+    const list = [dir, ...readRecent().filter((d) => d !== dir)].slice(0, 8);
+    fs.mkdirSync(cfg.gnosisHome(), { recursive: true });
+    fs.writeFileSync(recentFile(), JSON.stringify(list, null, 1));
+    return true;
+  } catch { return false; }
+});
+// フォルダの検索: dir の下を深さ 3 まで、名前に語（大文字小文字・全角半角を無視）を含むフォルダを最大 40 件
+ipcMain.handle("scan:find", async (_e, dir, query) => {
+  const q = String(query || "").normalize("NFKC").toLowerCase();
+  const out = [];
+  if (!q) return out;
+  const walk = async (d, depth) => {
+    if (out.length >= 40 || depth > 3) return;
+    let ents = [];
+    try { ents = await fs.promises.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (!e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules") continue;
+      const p = path.join(d, e.name);
+      if (e.name.normalize("NFKC").toLowerCase().includes(q)) out.push(p);
+      if (out.length >= 40) return;
+      await walk(p, depth + 1);
+    }
+  };
+  await walk(path.resolve(dir || os.homedir()), 1);
+  return out;
+});
 ipcMain.handle("scan:image", async (_e, name) => {
   try {
     if (!noteRootDir || /[\\/]/.test(name) || name.startsWith(".")) return null;

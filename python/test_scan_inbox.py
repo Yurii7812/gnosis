@@ -26,6 +26,10 @@ class ScanInboxTest(unittest.TestCase):
         self.assertEqual(len(r["added"]), 3)
         self.assertTrue(all(n.startswith("paper-scan-") and n.endswith(".png") for n in r["added"]))
         self.assertEqual(si.list_scans(self.root)["scans"], sorted(r["added"]))
+        # 並べ替え（画面の s）に使う、更新日時と大きさ
+        info = si.list_scans(self.root)["info"]
+        self.assertEqual(sorted(info), sorted(r["added"]))
+        self.assertTrue(all(v["size"] > 0 and v["mtime"] > 0 for v in info.values()))
         # 同じ名前（paper-scan-…）は二重に取り込まない
         again = si.import_files(self.root, [str(si.inbox(self.root))])
         self.assertEqual(again["added"], [])

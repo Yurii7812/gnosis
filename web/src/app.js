@@ -341,7 +341,7 @@ async function bootScanOnly() {
   $("statusbar").hidden = true;
   $("launcher").hidden = true;
   scan = createScan($("scan"), {
-    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
+    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q) => gui.scanFind(d, q) },
     onClose: () => gui.quit(),
   });
   window.__gui = { scan, state: () => ({}) };
@@ -355,7 +355,7 @@ async function boot() {
   view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
   mandala = createMandala($("mandala"), { onCell: onMandalaCell });
   scan = createScan($("scan"), {
-    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d) },
+    api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q) => gui.scanFind(d, q) },
     // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
     onClose: (changed) => { if (changed) gui.write("\x1b:checktime|redraw\r"); term.focus(); },
   });

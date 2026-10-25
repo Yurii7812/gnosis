@@ -350,3 +350,18 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .scan-row { font-size: 34px; padding: 12px 20px; border-radius: 12px; border: 3px solid transparent; }
 .scan-row.use { font-weight: 700; }
 .scan-row.sel { border-color: var(--accent); background: var(--bg-2); }
+.scan-head { font-size: 20px; color: var(--fg-dim); padding: 10px 20px 2px; }
+.scan-search { width: min(900px, 92vw); font: inherit; font-size: 30px; padding: 6px 14px; color: var(--fg); background: var(--bg); border: 3px solid var(--accent); border-radius: 10px; outline: none; }
+.scan-search[hidden] { display: none; }
+/* 並べ替えのポップアップ（s）: 左に基準、右に実際のファイルの一覧（選ぶと並びがその場で変わる） */
+.scan-sort { position: absolute; inset: 4vh 5vw; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 18px 22px; background: var(--bg); color: var(--fg); border: 3px solid var(--accent); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+.scan-sort[hidden] { display: none; }
+.ss-title { font-size: 30px; font-weight: 700; }
+.ss-body { flex: 1 1 0; min-height: 0; display: flex; gap: 18px; }
+.ss-opts { flex: 0 0 34%; display: flex; flex-direction: column; gap: 6px; }
+.ss-opt { font-size: 24px; padding: 10px 16px; border: 3px solid transparent; border-radius: 10px; }
+.ss-opt.sel { border-color: var(--accent); background: var(--bg-2); font-weight: 700; }
+.ss-files { flex: 1 1 0; overflow-y: auto; font-family: var(--font-mono); font-size: 18px; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.ss-file { padding: 3px 10px; white-space: pre; }
+.ss-file.cur { background: var(--bg-3); font-weight: 700; }
+.ss-keys { font-size: 18px; color: var(--fg-dim); }
