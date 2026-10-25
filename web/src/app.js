@@ -176,6 +176,8 @@ function applyState(s) {
   // ノート（曼荼羅が開いていれば、右の窓のノート）の内容とカーソルをマークダウンで映す
   if (s.bt === "terminal" || !hasNote) return;
   view.setLinkSource(!!last.linkSource);
+  view.setHideImage(!!last.hideImage);
+  view.setLinkEdit(!!last.linkEdit);
   if (s.lines) { view.setText(s.lines.join("\n")); view.setHide(s.hide || []); preloadImages(s.lines); }
   if (s.vtext) view.setVtext(s.vtext);
   if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis });

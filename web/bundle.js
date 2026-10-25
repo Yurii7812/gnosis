@@ -32573,11 +32573,11 @@ ${h3.join(`
       decos.push(Decoration.replace({}).range(base2 + b3 - 1, base2 + b3));
     });
     addSpan(RE.image, (m, a, b3) => {
-      if (active || cfg.insertMode) return;
+      if (active || cfg.insertMode || cfg.hideImage) return;
       decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base2 + a, base2 + b3));
     });
     addSpan(RE.htmlimg, (m, a, b3) => {
-      if (active || cfg.insertMode) return;
+      if (active || cfg.insertMode || cfg.hideImage) return;
       const w = /\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)(%|px)?/i.exec(m[0]);
       const width = w ? w[1] + (w[2] || "px") : "";
       decos.push(Decoration.replace({ widget: new ImageWidget("", m[1], cfg, width) }).range(base2 + a, base2 + b3));
@@ -32592,7 +32592,7 @@ ${h3.join(`
         class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
         attributes: isMd ? { "data-md-href": tg } : {}
       }).range(dispStart, dispEnd));
-      if (!cfg.linkSource) {
+      if (!cfg.linkSource && !(cfg.linkEdit && cfg.insertMode && active)) {
         decos.push(Decoration.replace({}).range(base2 + a, dispStart));
         decos.push(Decoration.replace({}).range(dispEnd, base2 + b3));
       }
@@ -33103,6 +33103,18 @@ ${h3.join(`
         while (b2 < max - a && cur.charCodeAt(cur.length - 1 - b2) === text.charCodeAt(text.length - 1 - b2)) b2++;
         view3.dispatch({ changes: { from: a, to: cur.length - b2, insert: text.slice(a, text.length - b2) }, annotations: external.of(true) });
       },
+      // \zz の「画像」: オンなら画像を描かず文字のまま見せる
+      setHideImage(on2) {
+        if (cfg.hideImage === !!on2) return;
+        cfg.hideImage = !!on2;
+        view3.dispatch({ effects: refreshDecorations.of(null) });
+      },
+      // \zz の「挿入モードでリンクの中身を見せる」
+      setLinkEdit(on2) {
+        if (cfg.linkEdit === !!on2) return;
+        cfg.linkEdit = !!on2;
+        view3.dispatch({ effects: refreshDecorations.of(null) });
+      },
       setLinkSource(on2) {
         if (cfg.linkSource === !!on2) return;
         cfg.linkSource = !!on2;
@@ -33373,6 +33385,15 @@ ${h3.join(`
           } },
           h2("option", { value: "light", selected: s15.appearance === "light" }, t2("settings.light")),
           h2("option", { value: "dark", selected: s15.appearance === "dark" }, t2("settings.dark"))
+        )),
+        field(t2("settings.item.app_appearance"), h2(
+          "select",
+          { id: "s-app-appearance", onchange: (e) => {
+            s15.appAppearance = e.target.value;
+            render();
+          } },
+          h2("option", { value: "light", selected: (s15.appAppearance || s15.appearance) !== "dark" }, t2("settings.light")),
+          h2("option", { value: "dark", selected: (s15.appAppearance || s15.appearance) === "dark" }, t2("settings.dark"))
         )),
         field(t2("settings.item.theme"), h2("select", { id: "s-theme", onchange: (e) => {
           setTheme(e.target.value);
@@ -34457,6 +34478,8 @@ ${h3.join(`
     }
     if (s15.bt === "terminal" || !hasNote) return;
     view2.setLinkSource(!!last2.linkSource);
+    view2.setHideImage(!!last2.hideImage);
+    view2.setLinkEdit(!!last2.linkEdit);
     if (s15.lines) {
       view2.setText(s15.lines.join("\n"));
       view2.setHide(s15.hide || []);

@@ -17,6 +17,7 @@ try:
     (work / "vault").mkdir()
     Image.new("RGB", (400, 300), (200, 30, 30)).save(work / "vault" / "a.jpg")
     Image.new("RGB", (80, 60), (30, 30, 200)).save(work / "vault" / "b.png")
+    Image.new("RGB", (80, 60), (30, 200, 30)).save(work / "vault" / "other.png")  # ノートに書かれていない画像
     (work / "vault" / "index.md").write_text("# Index\n", encoding="utf-8")
     note = work / "vault" / "n.md"
     note.write_text("# n\n\n![](a.jpg)\n\n![](b.png)\n\nlast\n", encoding="utf-8")
@@ -29,7 +30,7 @@ try:
 
     def run(keys, extra_init="", pre_hidden=False, viewer="sixel"):
         shutil.rmtree(work / "vault" / ".gnosis", ignore_errors=True)  # 前の run の設定（\\zz で変えたもの）を持ち越さない
-        env = dict(os.environ, PATH=str(fake) + ":" + os.environ["PATH"], TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
+        env = dict(os.environ, XDG_CACHE_HOME=str(work / "cache"), PATH=str(fake) + ":" + os.environ["PATH"], TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
                    GNOSIS_CELL_PX="10x20", WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
         pid, fd = pty.fork()
         if pid == 0:
@@ -88,6 +89,15 @@ try:
     opened = (work / "opened.txt").read_text() if (work / "opened.txt").exists() else ""
     ok("既定は xdg-open で開く", opened.strip().endswith("a.jpg"))
     ok("既定では gz で sixel を出さない", b"\x1bP0;1;0q" not in out[m[1]:])
+    staged = Path(opened.strip().splitlines()[-1]) if opened.strip() else Path("/nonexistent")
+    ok("ビューアには、このノートの画像だけを入れた一時フォルダのファイルを渡す", sorted(x.name for x in staged.parent.iterdir()) == ["01-a.jpg", "02-b.png"] if staged.exists() else False)
+    # 一覧は端でループしない: 先頭で k → まだ先頭（a.jpg）、下へ何回 j しても最後（b.png）で止まる
+    (work / "opened.txt").unlink()
+    run([("3G", 0.3), ("gz", 1.0), ("k", 0.3), ("\r", 1.5)], viewer=None)
+    ok("一覧の先頭で k を押しても最後へ回らない", (work / "opened.txt").read_text().strip().endswith("01-a.jpg"))
+    (work / "opened.txt").unlink()
+    run([("3G", 0.3), ("gz", 1.0), ("j", 0.2), ("j", 0.2), ("j", 0.2), ("k", 0.2), ("\r", 1.5)], viewer=None)
+    ok("最後で j を重ねても先頭へ回らない（k で 1 つ戻れば先頭）", (work / "opened.txt").read_text().strip().endswith("01-a.jpg"))
     # 6) \zz の窓の「gz で画像を開く方法」を切り替えると、gz が sixel になり、設定に残る
     out, m = run([("\\zz", 0.8), ("jjjj", 0.3), ("\r", 0.5), ("q", 0.3), ("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("q", 0.8), ("q", 0.5)], viewer=None)
     ok("\\zz の窓に開く方法の行がある", "gz で画像を開く方法".encode() in out[: m[0]])

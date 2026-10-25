@@ -786,13 +786,13 @@ call s:keys('>')
 call gnosis#mview#preset_apply('全部')
 let s:st = gnosis#mview#state()
 call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
-" 画面で選んで上書き（j で 2 つ目を選び、o で上書き、q で閉じる）
+" 画面で選んで上書き（設定の行が 10 あるので j を 11 回で 2 つ目のプリセット。o で上書き、q で閉じる）
 call gnosis#mview#preset_save('あ')
 call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
-call s:keys("'joq")
+call s:keys("'" . repeat('j', 11) . "oq")
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1

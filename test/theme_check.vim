@@ -174,6 +174,12 @@ call s:ok('再起動: アプリ側だけ変えても Vim 側は変わらない',
 
 " リンクの番号の札（GnosisLinkHint）: 配色に hintfg / hintbg があればその色、無ければ 文字=背景色・札=補助の色
 let g:gnosis_palette = copy(gnosis#settings#builtin_palettes().dark)
+" \c だけの外観（:GnosisSettings の「アプリ（\c）のダーク／ライト」。無ければ appearance と同じ）
+let s:l_dark = extend(copy(s:def), {'appearance': 'light', 'appAppearance': 'dark'})
+call s:ok('\c だけダーク: appearance がライトでも \c は暗い', toupper(gnosis#theme#app_palette(s:l_dark).bg) ==# '#1E1E1E' && gnosis#theme#app_palette(s:l_dark).base ==# 'dark' && toupper(gnosis#theme#palette(s:l_dark).bg) ==# '#FFFFFF')
+let s:d_light = extend(copy(s:def), {'appearance': 'dark', 'appAppearance': 'light'})
+call s:ok('\c だけライト: appearance がダークでも \c は白い（Vim はダークのまま）', toupper(gnosis#theme#app_palette(s:d_light).bg) ==# '#FFFFFF' && toupper(gnosis#theme#palette(s:d_light).bg) ==# '#1E1E1E')
+call s:ok('壊れた appAppearance は無かったことにする', !has_key(gnosis#settings#validate(extend(copy(s:def), {'appAppearance': 'blue'})), 'appAppearance'))
 silent! colorscheme gnosis
 call s:ok('リンク番号の札: 設定が無ければ 文字=背景色・札=補助の色', s:gui('GnosisLinkHint', 'fg') ==# tolower(g:gnosis_palette.bg) && s:gui('GnosisLinkHint', 'bg') ==# tolower(g:gnosis_palette.muted), s:gui('GnosisLinkHint', 'fg') . ' ' . s:gui('GnosisLinkHint', 'bg'))
 let g:gnosis_palette = extend(copy(gnosis#settings#builtin_palettes().dark), {'hintfg': '#ffffff', 'hintbg': '#2d70be'})

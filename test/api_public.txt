@@ -77,7 +77,9 @@ gnosis#color#on_note_enter
 gnosis#color#refresh
 gnosis#compat
 gnosis#complete
+gnosis#conceal_apply_all
 gnosis#conceal_eol_fix
+gnosis#conceal_modes
 gnosis#conflict#disk_changed
 gnosis#conflict#handle
 gnosis#conflict#mark_own_sync
@@ -215,6 +217,7 @@ gnosis#jump_up_cursor
 gnosis#knowledge
 gnosis#learn_path
 gnosis#life_log
+gnosis#link_edit_insert
 gnosis#link_highlight
 gnosis#link_syntax
 gnosis#link_to_outline

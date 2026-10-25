@@ -164,6 +164,7 @@ function! s:lines() abort
   call add(l:out, '')
   call add(l:out, (s:sel == len(s:items) ? ' ▶ ' : '   ') . gnosis#i18n#tr('gz で画像を開く方法') . ': '
         \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）')))
+  call add(l:out, (s:sel == len(s:items) + 1 ? ' ▶ ' : '   ') . (gnosis#link_edit_insert() ? '[x] ' : '[ ] ') . gnosis#i18n#tr('挿入モードで、カーソルの行のリンクの中身を見せて編集する'))
   call extend(l:out, ['', ' j k 動く   Space / Enter 切り替え   a 全部オン／全部オフ（画像の行は含めない）   q 閉じる'])
   return l:out
 endfunction
@@ -173,9 +174,12 @@ function! s:filter(id, key) abort
     call popup_close(a:id)
     return 1
   elseif a:key ==# 'j' || a:key ==# "\<Down>"
-    let s:sel = (s:sel + 1) % (len(s:items) + 1)
+    let s:sel = (s:sel + 1) % (len(s:items) + 2)
   elseif a:key ==# 'k' || a:key ==# "\<Up>"
-    let s:sel = (s:sel + len(s:items)) % (len(s:items) + 1)
+    let s:sel = (s:sel + len(s:items) + 1) % (len(s:items) + 2)
+  elseif (a:key ==# ' ' || a:key ==# "\<CR>") && s:sel == len(s:items) + 1
+    call gnosis#settings#set('linkEditInsert', gnosis#link_edit_insert() ? v:false : v:true)
+    call gnosis#conceal_apply_all()
   elseif (a:key ==# ' ' || a:key ==# "\<CR>") && s:sel == len(s:items)
     call gnosis#settings#set('imageViewer', gnosis#imgview#viewer() ==# 'sixel' ? 'external' : 'sixel')
   elseif a:key ==# ' ' || a:key ==# "\<CR>"

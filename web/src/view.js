@@ -185,12 +185,12 @@ function decorateLine(line, active, inFence, decos, cfg) {
   addSpan(RE.image, (m, a, b) => {
     // 編集中（インサートモード）は、画像も文字（`![](…)`）のまま見せる。範囲は占有されるので
     // リンクとしても描かれない。
-    if (active || cfg.insertMode) return;
+    if (active || cfg.insertMode || cfg.hideImage) return;
     decos.push(Decoration.replace({ widget: new ImageWidget(m[1], m[2], cfg) }).range(base + a, base + b));
   });
 
   addSpan(RE.htmlimg, (m, a, b) => {
-    if (active || cfg.insertMode) return;
+    if (active || cfg.insertMode || cfg.hideImage) return;
     const w = /\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)(%|px)?/i.exec(m[0]);
     const width = w ? w[1] + (w[2] || "px") : "";
     decos.push(Decoration.replace({ widget: new ImageWidget("", m[1], cfg, width) }).range(base + a, base + b));
@@ -207,7 +207,8 @@ function decorateLine(line, active, inFence, decos, cfg) {
       class: isMd ? "cm-md-link cm-md-link-md" : "cm-md-link",
       attributes: isMd ? { "data-md-href": tg } : {},
     }).range(dispStart, dispEnd));
-    if (!cfg.linkSource) {
+    // \zz の「挿入モードでリンクの中身を見せる」がオンなら、挿入モードでカーソルのある行は [名前](ファイル) のまま見せる
+    if (!cfg.linkSource && !(cfg.linkEdit && cfg.insertMode && active)) {
       decos.push(Decoration.replace({}).range(base + a, dispStart));
       decos.push(Decoration.replace({}).range(dispEnd, base + b));
     }
@@ -693,6 +694,18 @@ export function createView(opts) {
       let b = 0;
       while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
       view.dispatch({ changes: { from: a, to: cur.length - b, insert: text.slice(a, text.length - b) }, annotations: external.of(true) });
+    },
+    // \zz の「画像」: オンなら画像を描かず文字のまま見せる
+    setHideImage(on) {
+      if (cfg.hideImage === !!on) return;
+      cfg.hideImage = !!on;
+      view.dispatch({ effects: refreshDecorations.of(null) });
+    },
+    // \zz の「挿入モードでリンクの中身を見せる」
+    setLinkEdit(on) {
+      if (cfg.linkEdit === !!on) return;
+      cfg.linkEdit = !!on;
+      view.dispatch({ effects: refreshDecorations.of(null) });
     },
     setLinkSource(on) {
       if (cfg.linkSource === !!on) return;

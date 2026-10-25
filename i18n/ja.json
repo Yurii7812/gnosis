@@ -15,6 +15,7 @@
     "settings.dark": "ダーク",
     "settings.installing": "テーマを取得しています…",
     "settings.item.appearance": "テーマ（ダーク／ライト）",
+    "settings.item.app_appearance": "アプリ（\\c）のダーク／ライト",
     "settings.item.custom": "カスタム配色を作る・直す（通常の Vim）",
     "settings.item.fontSize": "文字サイズ",
     "settings.item.language": "言語",

@@ -2988,9 +2988,33 @@ function! gnosis#toggle_link_source(...) abort
 endfunction
 
 " A などで行末に入ってもリンクを展開しない。元の Markdown は明示的なモードで編集する。
+" 挿入モードでカーソルのある行の隠れたリンクの中身（](…)）を見せて編集できるか（\zz の窓で切り替え。設定 linkEditInsert）
+function! gnosis#link_edit_insert() abort
+  try
+    return get(gnosis#settings#current(), 'linkEditInsert', 0) ? 1 : 0
+  catch
+    return 0
+  endtry
+endfunction
+
+" 隠すモード（concealcursor）。ふだんは n v i。リンクの中身を挿入モードで編集できるようにしているときは i を外す
+" （カーソルのある行だけ、挿入モードの間は元の [名前](ファイル) が見える）
+function! gnosis#conceal_modes() abort
+  return gnosis#link_edit_insert() ? 'nv' : 'nvi'
+endfunction
+
+" 設定を変えたとき、開いている窓に反映する
+function! gnosis#conceal_apply_all() abort
+  let l:back = win_getid()
+  for l:w in range(1, winnr('$'))
+    call win_execute(win_getid(l:w), 'if &l:conceallevel > 0 && !get(b:, "gnosis_link_source_on", 0) | let &l:concealcursor = gnosis#conceal_modes() | endif')
+  endfor
+  call win_gotoid(l:back)
+endfunction
+
 function! gnosis#conceal_eol_fix() abort
   if &l:conceallevel > 0 && !get(b:, 'gnosis_link_source_on', 0)
-    setlocal concealcursor=nvi
+    let &l:concealcursor = gnosis#conceal_modes()
   endif
 endfunction
 

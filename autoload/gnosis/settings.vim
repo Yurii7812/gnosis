@@ -56,6 +56,7 @@ function! gnosis#settings#defaults() abort
         \ 'mandalaOnStart': v:true,
         \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
         \ 'imageViewer': 'external',
+        \ 'linkEditInsert': v:false,
         \ }
 endfunction
 
@@ -106,6 +107,11 @@ function! gnosis#settings#validate(s) abort
   for l:k in ['yaml', 'top', 'bottom', 'image']
     let l:s.hide[l:k] = get(l:s.hide, l:k, v:false) ? v:true : v:false
   endfor
+  " \c のアプリの外観。無ければ通常の Vim の appearance と同じ
+  if has_key(l:s, 'appAppearance') && index(['light', 'dark'], l:s.appAppearance) < 0
+    call remove(l:s, 'appAppearance')
+  endif
+  let l:s.linkEditInsert = get(l:s, 'linkEditInsert', v:false) ? v:true : v:false
   if index(['external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
     let l:s.imageViewer = 'external'
   endif

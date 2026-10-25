@@ -986,11 +986,11 @@ function! s:setup_conceal() abort
     setlocal conceallevel=2
     " A で行末に追記するときも表示名だけを見せる。
     " :GnosisLinkSource on / off で元の Markdown を編集するモードを切り替える。
-    setlocal concealcursor=nvi
+    let &l:concealcursor = gnosis#conceal_modes()
     augroup gnosis_conceal_eol
       autocmd! * <buffer>
       autocmd InsertEnter,CursorMovedI,TextChangedI <buffer> call gnosis#conceal_eol_fix()
-      autocmd InsertLeave <buffer> if &l:conceallevel > 0 | setlocal concealcursor=nvi | endif
+      autocmd InsertLeave <buffer> if &l:conceallevel > 0 | let &l:concealcursor = gnosis#conceal_modes() | endif
     augroup END
     nnoremap <buffer><silent> <Right> :<C-u>call gnosis#move_visible(1, v:count1)<CR>
     nnoremap <buffer><silent> <Left>  :<C-u>call gnosis#move_visible(0, v:count1)<CR>

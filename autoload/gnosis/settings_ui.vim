@@ -10,7 +10,7 @@
 " Electron アプリは同じ設定を HTML の画面で変える（同じファイルを読み書きする）。
 " =============================================================================
 
-let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
+let s:items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal', 'language', 'maximized', 'mandalaOnStart', 'window', 'appearance', 'app_appearance', 'theme', 'theme_add', 'custom', 'theme_reset', 'app_theme', 'app_custom', 'app_theme_reset']
 let s:font_items = ['fontSize', 'fontFamily', 'lineSpacing', 'terminal']
 
 function! s:t(key, ...) abort
@@ -103,6 +103,8 @@ function! s:value(item) abort
     return l:s.window.width . ' × ' . l:s.window.height
   elseif a:item ==# 'appearance'
     return l:s.appearance ==# 'light' ? s:t('settings.light') : s:t('settings.dark')
+  elseif a:item ==# 'app_appearance'
+    return get(l:s, 'appAppearance', l:s.appearance) ==# 'dark' ? s:t('settings.dark') : s:t('settings.light')
   elseif a:item ==# 'theme'
     return s:theme_label(l:s)
   elseif a:item ==# 'app_theme'
@@ -317,6 +319,8 @@ function! s:change(item) abort
     return
   elseif a:item ==# 'appearance'
     let l:s.appearance = l:s.appearance ==# 'light' ? 'dark' : 'light'
+  elseif a:item ==# 'app_appearance'
+    let l:s.appAppearance = get(l:s, 'appAppearance', l:s.appearance) ==# 'dark' ? 'light' : 'dark'
   elseif a:item ==# 'theme'
     call s:choose_theme()
   elseif a:item ==# 'theme_add'

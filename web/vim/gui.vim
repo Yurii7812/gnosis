@@ -163,6 +163,8 @@ function! s:snapshot(force) abort
         \ 'cmdtype': getcmdtype(),
         \ 'mandala': l:ms,
         \ 'scanReq': get(g:, 'gnosis_gui_scan_req', 0),
+        \ 'hideImage': gnosis#hide#get().image,
+        \ 'linkEdit': gnosis#link_edit_insert(),
         \ }
   " ポップアップの位置（端末の桁・行、1 始まり）。アプリは背景の表示を変えず、ここだけ端末を重ねる。
   let l:pp = []

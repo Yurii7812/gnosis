@@ -61,5 +61,18 @@ call s:ok('Space で YAML が切り替わる', gnosis#hide#get().yaml == 1, stri
 call feedkeys('q', 'xt')
 call s:ok('q で閉じる', len(popup_list()) == 0)
 
+" 挿入モードでリンクの中身を見せて編集する（\zz の一番下の行）
+call s:ok('はじめは挿入モードでもリンクの中身を隠す（concealcursor に i）', gnosis#link_edit_insert() == 0 && gnosis#conceal_modes() ==# 'nvi')
+call gnosis#hide#window()
+call feedkeys('jjjjj', 'xt')
+call feedkeys(' ', 'xt')
+call s:ok('\zz の一番下で切り替わる', gnosis#link_edit_insert() == 1, string(gnosis#settings#current().linkEditInsert))
+call s:ok('オンのとき concealcursor から i が外れる', gnosis#conceal_modes() ==# 'nv')
+call s:ok('開いている窓にも反映される', &l:conceallevel == 0 || &l:concealcursor ==# 'nv', &l:concealcursor)
+call s:ok('窓にその行が出る', join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# '挿入モードで、カーソルの行のリンクの中身を見せて編集する', '')
+call feedkeys(' ', 'xt')
+call s:ok('もう一度で元に戻る', gnosis#link_edit_insert() == 0 && gnosis#conceal_modes() ==# 'nvi')
+call feedkeys('q', 'xt')
+
 call writefile(s:res, s:work . '/result.txt')
 qa!

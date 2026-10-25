@@ -100,6 +100,31 @@ function! s:view(items, i) abort
   return l:i
 endfunction
 
+" 外のビューアに渡すため、このノートの画像だけを ~/.cache/gnosis/view/<ノートごと>/ に 01-名前 02-名前 … と並べる。
+" ビューア（Gwenview など）は開いた画像と同じフォルダの画像を前後に出すので、元のフォルダのままだと
+" このノートにない画像まで出てしまう。ここでは、このノートの画像（見つかるものだけ）しか入らない
+function! s:stage(items, i) abort
+  let l:base = (!empty($XDG_CACHE_HOME) ? $XDG_CACHE_HOME : expand('~/.cache')) . '/gnosis/view/' . sha256(expand('%:p'))[: 15]
+  if isdirectory(l:base)
+    call delete(l:base, 'rf')
+  endif
+  call mkdir(l:base, 'p')
+  let l:want = ''
+  let l:n = 0
+  for l:k in range(len(a:items))
+    if !a:items[l:k].exists | continue | endif
+    let l:n += 1
+    let l:dst = l:base . '/' . printf('%02d-%s', l:n, fnamemodify(a:items[l:k].path, ':t'))
+    try
+      call writefile(readfile(a:items[l:k].path, 'B'), l:dst, 'b')
+    catch
+      continue
+    endtry
+    if l:k == a:i | let l:want = l:dst | endif
+  endfor
+  return l:want
+endfunction
+
 " 画像を 1 枚見せる。外部のビューアで開く（既定）か、この端末の中に sixel で出す。戻り値: 添字
 function! s:show(items, i) abort
   if s:sixel_ok()
@@ -109,7 +134,8 @@ function! s:show(items, i) abort
   if !l:it.exists
     echo ' 画像が見つかりません: ' . l:it.path
   elseif executable('xdg-open')
-    call job_start(['xdg-open', l:it.path], {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+    let l:path = s:stage(a:items, a:i)
+    call job_start(['xdg-open', empty(l:path) ? l:it.path : l:path], {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
     echo ' 開きました: ' . l:it.label
   else
     echo ' xdg-open がありません。g:gnosis_image_viewer を設定してください'
@@ -145,6 +171,15 @@ function! s:menu_key(id, key) abort
   if a:key =~# '^[1-9]$' && str2nr(a:key) <= len(s:menu_items)
     call win_execute(a:id, 'call cursor(' . a:key . ', 1)')
     call popup_filter_menu(a:id, "\<CR>")
+    return 1
+  endif
+  " j / k は端で止める（ループしない）
+  let l:n = len(s:menu_items)
+  let l:cur = line('.', a:id)
+  if (a:key ==# 'j' || a:key ==# "\<Down>" || a:key ==# "\<C-n>") && l:cur >= l:n
+    return 1
+  endif
+  if (a:key ==# 'k' || a:key ==# "\<Up>" || a:key ==# "\<C-p>") && l:cur <= 1
     return 1
   endif
   return popup_filter_menu(a:id, a:key)
