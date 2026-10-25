@@ -15,7 +15,8 @@
 "   a i d            モード: a 全体（標準）/ i グループ・索引だけ / d 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
 "   c r u            それだけを出すモード（オン/オフ）: c 近いグループだけ / r 予測関連だけ（関連の強い順。Related: の明示とは別の色）/ u 見出しだけ
 "   C R U            今出ているものに重ねる（オン/オフ。c r u のモードにも重なる）: C 近いグループ / R 予測関連 / U 見出し
-"   z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q か、もう一度 z で閉じる）
+"   Z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q か、もう一度 Z で閉じる）
+"   z                盤面を中央に戻す（カーソルを中心のマスへ。Ctrl-L も同じ）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
@@ -1244,8 +1245,8 @@ function! s:help_lines() abort
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
-        \   ['Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
-        \ ['設定とやめる', [['z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
+        \   ['z  Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
+        \ ['設定とやめる', [['Z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
         \ ]
   " 'p' が 2 回出ないように、画面の重複を除く
   let l:sec[4][1] = filter(copy(l:sec[4][1]), 'v:val[1] !=# "（上と同じ）"')
@@ -1375,7 +1376,7 @@ function! s:query_tags() abort
 endfunction
 
 " 種類の凡例（索引 グループ 親 文脈 引用 BackLink 子 関連 予測関連 ノート 見出し）。曼荼羅の下に色つきで出す。
-" 設定 mandalaLegend（既定オン。設定の画面 z で切り替え）。窓の幅に収まるように、足りなければ 2 行に分ける
+" 設定 mandalaLegend（既定オン。設定の画面 Z で切り替え）。窓の幅に収まるように、足りなければ 2 行に分ける
 function! s:legend_on() abort
   try
     return get(gnosis#settings#current(), 'mandalaLegend', 1) ? 1 : 0
@@ -1685,7 +1686,7 @@ function! s:digit(d) abort
   endif
 endfunction
 
-" z: 中央にする（盤面を今の窓の大きさに合わせて中央に描き直し、スクロールのずれを戻し、カーソルを中心のマスへ）
+" z / Ctrl-L: 中央にする（盤面を今の窓の大きさに合わせて中央に描き直し、スクロールのずれを戻し、カーソルを中心のマスへ）
 function! s:recenter() abort
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
   call s:render()
@@ -2585,7 +2586,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> y <Cmd>call <SID>over_off()<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
-  nnoremap <buffer><nowait><silent> z <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> Z <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
@@ -3386,8 +3388,8 @@ function! gnosis#mview#preset_apply(name) abort
   return 1
 endfunction
 
-" z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
-"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i d c r t # p u U f v w はふだんのキーのまま使える（D 近さの基準・Z 中央に戻す は、この画面の中だけのキー）
+" Z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
+"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i d c r t # p u U f v w はふだんのキーのまま使える（D 近さの基準・z 中央に戻す は、この画面の中だけのキー）
 "   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
 function! s:panel_rows() abort
   let l:Onoff = {v -> v ? 'オン' : 'オフ'}
@@ -3408,7 +3410,7 @@ function! s:panel_rows() abort
         \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
         \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . '（1 = 直接のつながりだけ）', 'act': function('s:depth_ask')},
         \ {'key': 'D', 'name': '9×9 の近さ順の基準（中心 ⇔ そのブロックの中心）', 'val': get(s:S, 'dbasis', 'center') ==# 'self' ? '外側は自分' : '中心', 'act': function('s:toggle_dbasis')},
-        \ {'key': 'Z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
+        \ {'key': 'z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
 endfunction
@@ -3499,8 +3501,8 @@ function! s:preset_menu() abort
         let l:msg = 'プリセット「' . trim(l:name) . '」を保存しました'
         let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:name))
       endif
-    elseif l:k ==# 'q' || l:k ==# 'z' || l:k ==# "\<Esc>"
-      " z で開いて、もう一度 z で閉じる
+    elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
+      " Z で開いて、もう一度 Z で閉じる
       return
     endif
   endwhile

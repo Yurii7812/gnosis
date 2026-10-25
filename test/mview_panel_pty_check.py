@@ -63,10 +63,10 @@ try:
     st = state()
     ok("曼荼羅が開いている（全体モード）", st[:1] == ["all"] and st[2:3] == ["gnosis-mandala"])
     mark = len(out)
-    os.write(fd, b"z")
+    os.write(fd, b"Z")
     pump(1.2)
     seg = out[mark:]
-    ok("z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセット".encode() in seg)
+    ok("Z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセット".encode() in seg)
     i = seg.rfind("曼荼羅の設定".encode())
     m = list(re.finditer(rb"\x1b\[(\d+);(\d+)H", seg[:i]))
     col = int(m[-1].group(2)) if m else 0

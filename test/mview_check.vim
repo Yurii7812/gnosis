@@ -60,7 +60,7 @@ call s:keys('?')
 call s:ok('? で案内が画面中央のポップアップに出る', len(popup_list()) == 1 && join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n") =~# 'Tab  S-Tab', string(popup_list()))
 let s:hp = popup_getpos(popup_list()[0])
 let s:ht = join(getbufline(winbufnr(popup_list()[0]), 1, '$'), "\n")
-call s:ok('案内は用途ごとの見出し（動く・見る・探す・画面…）と、1 行 1 キー', s:ht =~# '■ 動く' && s:ht =~# '■ 見る' && s:ht =~# '■ 探す' && s:ht =~# '■ 画面' && s:ht =~# 'z  *設定の画面', s:ht)
+call s:ok('案内は用途ごとの見出し（動く・見る・探す・画面…）と、1 行 1 キー', s:ht =~# '■ 動く' && s:ht =~# '■ 見る' && s:ht =~# '■ 探す' && s:ht =~# '■ 画面' && s:ht =~# 'Z  *設定の画面', s:ht)
 call s:ok('案内は見切れない（全部の行が窓の高さ・幅に収まる）', s:hp.height >= len(getbufline(winbufnr(popup_list()[0]), 1, '$')) && s:hp.width >= max(map(getbufline(winbufnr(popup_list()[0]), 1, '$'), 'strdisplaywidth(v:val)')), string(s:hp))
 call s:keys('q')
 call s:ok('q でポップアップが閉じる（曼荼羅は閉じない）', len(popup_list()) == 0 && &filetype ==# 'gnosis-mandala', string(popup_list()))
@@ -147,6 +147,9 @@ for [s:ww, s:hh] in [[24, 14], [40, 12], [100, 30]]
   call s:ok('窓 ' . s:ww . 'x' . s:hh . ': どの行も幅に収まり、行数も高さに収まる', len(filter(copy(s:bl), 'strdisplaywidth(v:val) > winwidth(0)')) == 0 && len(s:bl) <= winheight(0), winwidth(0) . 'x' . winheight(0) . ' lines=' . len(s:bl))
   call s:ok('z でカーソルは中心のマスへ戻る', s:st.cur == [1, 1], string(s:st.cur))
 endfor
+call s:keys('l')
+call s:keys('z')
+call s:ok('z でも盤面が中央に戻り、設定の画面は開かない', s:st.cur == [1, 1] && empty(popup_list()), string(s:st.cur))
 execute 'vertical resize ' . (&columns / 2)
 execute 'resize ' . (&lines - 2)
 call s:keys("\<C-l>")
@@ -882,12 +885,12 @@ call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
 let s:st.out_on = 1
 let s:st.rank_on = 0
-" z で設定の画面が開き、もう一度 z で閉じる（キーは 2 回目の z で消費され、そのあとの j は曼荼羅の操作になる）
+" Z で設定の画面が開き、もう一度 Z で閉じる（キーは 2 回目の Z で消費され、そのあとの j は曼荼羅の操作になる）
 let s:st = gnosis#mview#state()
 let s:cur0 = copy(s:st.cur)
-call s:keys('zzj')
-call s:ok('z → z で設定の画面が閉じ、次の j は曼荼羅を動かす', &filetype ==# 'gnosis-mandala' && empty(popup_list()) && s:st.cur != s:cur0, string([s:cur0, s:st.cur]))
-call s:keys('z' . repeat('j', 18) . 'oq')
+call s:keys('ZZj')
+call s:ok('Z → Z で設定の画面が閉じ、次の j は曼荼羅を動かす', &filetype ==# 'gnosis-mandala' && empty(popup_list()) && s:st.cur != s:cur0, string([s:cur0, s:st.cur]))
+call s:keys('Z' . repeat('j', 18) . 'oq')
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1
