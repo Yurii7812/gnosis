@@ -152,5 +152,24 @@ class T(unittest.TestCase):
         self.assertEqual(mv.items(self.d, "x.md"), [])
 
 
+class ManyTests(unittest.TestCase):
+    def test_near_related_many_match_single(self):
+        import io, json, contextlib, tempfile, os
+        d = tempfile.mkdtemp(dir=os.environ.get("TMPDIR"))
+        open(d + "/index.md", "w", encoding="utf-8").write("---\ntitle: Index\nattribute: group\n---\n\n# Index\n\n[a](a.md)\n[b](b.md)\n")
+        open(d + "/a.md", "w", encoding="utf-8").write("# a\n\n[b](b.md)\n")
+        open(d + "/b.md", "w", encoding="utf-8").write("# b\n\nhello\n")
+        for many, single in (("near_many", "near"), ("related_many", "related")):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                mv.main(["x", many, d, "a.md", "b.md"])
+            got = json.loads(buf.getvalue())
+            for n in ("a.md", "b.md"):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    mv.main(["x", single, d, n])
+                self.assertEqual(got[n], json.loads(buf.getvalue()), (many, n))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -436,6 +436,29 @@ endfunction
 
 " 近いグループ（python/mandala_view.py の near）。中心ごとに覚えておく（u で読み直し）。
 " 返すのは「近いのにまだ載っていない索引」（理由は s:S.why[id]）。すでに載っているものは返さない
+" 9×9 のまわりのブロックの分の、近いグループ・予測関連を、まとめて 1 回で求めてキャッシュに入れる（ブロックごとに python を起こさない）
+function! s:prefetch_over(ids) abort
+  let l:want = filter(map(copy(a:ids), 's:h_base(v:val)'), '!empty(v:val)')
+  call uniq(sort(l:want))
+  for [l:flag, l:only, l:cache, l:cmd] in [['near_on', 'near_only', 'nearc', 'near_many'], ['rel_on', 'rel_only', 'relc', 'related_many']]
+    if !get(s:S, l:flag, 0) && !get(s:S, l:only, 0)
+      continue
+    endif
+    let l:need = filter(copy(l:want), '!has_key(s:S[l:cache], v:val)')
+    if len(l:need) < 2
+      continue
+    endif
+    let l:d = s:py([l:cmd, s:S.root] + l:need)
+    if type(l:d) == v:t_dict
+      for [l:k, l:v] in items(l:d)
+        if type(l:v) == v:t_list
+          let s:S[l:cache][l:k] = l:v
+        endif
+      endfor
+    endif
+  endfor
+endfunction
+
 function! s:near_ids(c, have) abort
   if !has_key(s:S.nearc, a:c)
     let l:d = s:py(['near', s:S.root, a:c])
@@ -454,8 +477,12 @@ function! s:near_ids(c, have) abort
   endfor
   if empty(s:S.nearc[a:c])
     " 手がかりが無いときは Index の直下の索引も足す
-    call s:fetch(['index.md'])
-    for l:id in gnosis#mview#items(s:S.data, 'index.md', 'groups')
+    " Index 直下の索引の一覧は、データが変わるまで 1 回だけ作る（ブロックごと・描き直しごとに数えない）
+    if !has_key(s:S.nearc, '__index_groups__')
+      call s:fetch(['index.md'])
+      let s:S.nearc['__index_groups__'] = gnosis#mview#items(s:S.data, 'index.md', 'groups')
+    endif
+    for l:id in s:S.nearc['__index_groups__']
       if l:id !=# a:c && index(a:have, l:id) < 0 && index(l:out, l:id) < 0
         call add(l:out, l:id)
         let s:S.why[l:id] = 'Index'
@@ -501,8 +528,8 @@ function! s:base(c) abort
     endif
   endif
   " c / r / u は「それだけ」を出すモード（ほかのものは出さない）。C / R / U は今出ているものに重ねる。
-  " c・r は中心のブロックだけ（外側のブロックはふだんどおり）
-  let l:only = get(s:S, 'ol_only', 0) || (a:c ==# s:S.center && (get(s:S, 'near_only', 0) || get(s:S, 'rel_only', 0)))
+  " （9×9 の外側のブロックにも、それぞれのブロックの中心について同じように効く）
+  let l:only = get(s:S, 'ol_only', 0) || get(s:S, 'near_only', 0) || get(s:S, 'rel_only', 0)
   let l:out = l:only ? [] : gnosis#mview#entries(s:S.data, a:c, s:S.mode)
   if get(s:S, 'ol_on', 0) || get(s:S, 'ol_only', 0)
     " アウトライン: このノートの見出しを 1 つずつのマスとして並べる。U（ol_on）は他のものと一緒に（所属索引・親のあと、本文のリンクの前）、
@@ -547,19 +574,18 @@ function! s:base(c) abort
       endif
     endif
   endif
-  if a:c ==# s:S.center
-    " C / R（と、c / r のモード）は、中心のブロックに足す（中心でないブロックには足さない）
-    let l:have = map(copy(l:out), 'v:val[0]')
-    let l:extra = []
-    if get(s:S, 'near_on', 0) || get(s:S, 'near_only', 0)
-      call extend(l:extra, s:near_ids(a:c, l:have))
-    endif
-    if get(s:S, 'rel_on', 0) || get(s:S, 'rel_only', 0)
-      call extend(l:extra, s:rel_ids(a:c, l:have + l:extra))
-    endif
-    call s:fetch(l:extra)   " 題を出すのに要る。まとめて 1 回で取る
-    call extend(l:out, map(l:extra, '[v:val, ""]'))
+  " C / R（と、c / r のモード）は、どのブロックにも足す（外側のブロックには、そのブロックの中心について）
+  let l:base = s:h_base(a:c)
+  let l:have = map(copy(l:out), 'v:val[0]')
+  let l:extra = []
+  if get(s:S, 'near_on', 0) || get(s:S, 'near_only', 0)
+    call extend(l:extra, s:near_ids(l:base, l:have))
   endif
+  if get(s:S, 'rel_on', 0) || get(s:S, 'rel_only', 0)
+    call extend(l:extra, s:rel_ids(l:base, l:have + l:extra))
+  endif
+  call s:fetch(l:extra)   " 題を出すのに要る。まとめて 1 回で取る
+  call extend(l:out, map(l:extra, '[v:val, ""]'))
   return l:out
 endfunction
 
@@ -855,6 +881,7 @@ function! s:board_cells() abort
   let l:ring = s:ring(s:S.center, s:S.page)
   if l:n == 9
     call s:fetch(map(copy(l:ring), 'v:val[0]'))
+    call s:prefetch_over([s:S.center] + map(copy(l:ring), 'v:val[0]'))
   endif
   if l:n == 3
     let l:b[1][1] = {'id': s:S.center, 'role': 'center', 'n': 0}

@@ -225,6 +225,15 @@ call s:ok('r のモードに C を押すと近いグループが重なる（near
 call s:keys('C')
 call s:keys('r')
 call s:ok('r をもう一度でふだんの表示に戻る', get(s:st, 'rel_only', 0) == 0 && s:text() !~# '-only', s:text())
+call s:keys('f')
+let s:n9 = s:text()
+let s:st.near_only = 1
+let s:st.rel_only = 1
+call s:keys("\<C-l>")
+call s:ok('9×9 でも c r は全部のブロックに効く（外側のブロックも変わる）', s:text() !=# s:n9 && s:st.size == 9, 'size=' . s:st.size)
+let s:st.near_only = 0
+let s:st.rel_only = 0
+call s:keys('f')
 call s:keys('c')
 call s:ok('c で 近いグループだけのモード（near-only）', get(s:st, 'near_only', 0) == 1 && s:text() =~# 'near-only', s:text())
 call s:keys('c')

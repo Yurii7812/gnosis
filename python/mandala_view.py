@@ -443,6 +443,19 @@ def main(argv: list[str]) -> int:
             out = {"near": near, "related": related}[argv[1]](argv[2], argv[3]) if argv[1] != "search" else search(argv[2], argv[3:])
         json.dump(out, sys.stdout, ensure_ascii=False, separators=(",", ":"))
         return 0
+    if len(argv) >= 4 and argv[1] in ("near_many", "related_many"):
+        # 9×9 の周りのブロック用: 何枚かの中心について、1 回で求める（グラフを 1 回だけ作る）。{ノート: [結果…]}
+        import mandala_cache as mc
+        names = argv[3:]
+        if mc.is_big(argv[2]):
+            fn = mc.near if argv[1] == "near_many" else mc.related
+            out = {n: fn(argv[2], n) for n in names}
+        else:
+            g = gg.build(argv[2])
+            fn = _near if argv[1] == "near_many" else _related
+            out = {n: fn(g, n) for n in names}
+        json.dump(out, sys.stdout, ensure_ascii=False, separators=(",", ":"))
+        return 0
     print(__doc__, file=sys.stderr)
     return 2
 
