@@ -3123,6 +3123,19 @@ endfunction
 " ---- アプリ（\c）の曼荼羅: 盤面の状態を渡す・クリックを受ける ----------------------------------------------
 " アプリは曼荼羅を自分で描く（Vim の窓のバッファは罫線の文字なので、マークダウンとしては描けない）。
 " 操作は Vim の曼荼羅のキーがそのまま効く（アプリは見た目だけ）。マウスのクリックは gui_click で受ける。
+" アプリへ状態を送るたび（カーソルを動かすたびに約 60 回/秒まで）に周りの件数を数え直すと、つながりの多いノートでは重い。
+" 描き直しのたびに s:S.cells は作り直されるので、その同一性・中心・ページが同じ間は前の数を使う。
+let s:pages_memo_v = {}
+function! s:pages_memo() abort
+  let l:m = s:pages_memo_v
+  if !empty(l:m) && l:m.cells is# s:S.cells && l:m.center ==# s:S.center && l:m.page == s:S.page
+    return l:m.n
+  endif
+  let l:n = s:pages(s:S.center)
+  let s:pages_memo_v = {'cells': s:S.cells, 'center': s:S.center, 'page': s:S.page, 'n': l:n}
+  return l:n
+endfunction
+
 function! gnosis#mview#gui_state() abort
   if !exists('s:S') || !has_key(s:S, 'cells') || get(s:S, 'win', -1) < 0 || empty(getwininfo(get(s:S, 'win', -1)))
     return {}
@@ -3140,10 +3153,11 @@ function! gnosis#mview#gui_state() abort
     call add(l:cells, l:r)
   endfor
   let l:cur = s:cur_cell()
+  let l:pg = s:pages_memo()
   return {'size': s:S.size, 'cur': s:S.cur, 'cells': l:cells, 'nums': get(s:S, 'nums', 1),
         \ 'center': s:S.center, 'title': s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center,
-        \ 'page': s:S.page, 'pages': s:pages(s:S.center),
-        \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, s:pages(s:S.center), '', '')),
+        \ 'page': s:S.page, 'pages': l:pg,
+        \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, l:pg, '', '')),
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),

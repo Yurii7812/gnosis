@@ -83,6 +83,10 @@ if !has('gui_running')
     autocmd VimEnter * for s:ms in [200, 700, 1500, 3000] | call timer_start(s:ms, {-> execute('silent! mode | silent! call gnosis#mview#rerender()')}) | endfor
   augroup END
 endif
+" syntax on を先に済ませてから配色を読む（配色を読んだあとの syntax on は配色を読み直して、起動が約 130ms 遅くなる）
+if !exists('g:syntax_on')
+  syntax on
+endif
 silent! colorscheme gnosis
 " 画面に入りきらない長い行（チャットの取り込みなど）も、入るところまで本文を見せる
 " （空のままだと、行が丸ごと「@」の行になる）。smoothscroll で長い行の中も画面の 1 行ずつ動ける

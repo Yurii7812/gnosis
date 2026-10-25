@@ -81,9 +81,10 @@ step("table is rendered as a real table", () => {
   v.setText(doc);
   v.setVim({ cur: [8, 1], mode: "n" });
   v.setVim({ cur: [5, 1], mode: "n" });
-  if (document.querySelector("table.cm-md-table")) throw new Error("table should be raw text when the cursor is inside");
+  // 表はカーソルが中にあっても、挿入モードでも、表の見た目のまま（カーソルのあるセルだけ文字のまま出る）
+  if (!document.querySelector("table.cm-md-table")) throw new Error("table should stay a table when the cursor is inside");
   v.setVim({ cur: [8, 1], mode: "i" });
-  if (document.querySelector("table.cm-md-table")) throw new Error("table should be raw text in insert mode");
+  if (!document.querySelector("table.cm-md-table")) throw new Error("table should stay a table in insert mode");
 });
 // 中身が空の Context / BackLink の見出しは出さない。中身がある節と、カーソルがある見出しは出す
 step("empty relation sections are hidden", () => {

@@ -135,6 +135,7 @@ function applyLook(s) {
   mandala?.rerender?.();
 }
 
+let vtextKey = "";
 function applyState(s) {
   applyLook(s);
   // \F: 紙のスキャンの番号付け画面を開く（Vim が合図の番号を増やす）
@@ -187,7 +188,11 @@ function applyState(s) {
   view.setHideImage(!!last.hideImage);
   view.setLinkEdit(!!last.linkEdit);
   if (s.lines) { view.setText(s.lines.join("\n")); view.setHide(s.hide || []); preloadImages(s.lines); }
-  if (s.vtext) view.setVtext(s.vtext);
+  if (s.vtext) {
+    // カーソルを動かすだけの状態では、仮想テキストは変わらない。同じなら編集画面へ渡さない（装飾の作り直しを避ける）
+    const vk = JSON.stringify(s.vtext);
+    if (vk !== vtextKey || s.lines) { vtextKey = vk; view.setVtext(s.vtext); }
+  }
   if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis });
 }
 

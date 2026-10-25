@@ -82,6 +82,7 @@ python3 "$REPO/python/test_diary_tree.py"
 python3 "$REPO/python/test_search_ops.py"
 sh "$REPO/test/search_query_net.sh"
 sh "$REPO/test/light_contrast_net.sh"
+sh "$REPO/test/startup_net.sh"
 
 timeout 60 vim -u "$REPO/vimrc_gnosis" -es \
   -c "let g:gnosis_api_out='$OUT'" \

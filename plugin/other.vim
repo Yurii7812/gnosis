@@ -8,7 +8,9 @@ set fileencodings=utf-8,euc-jp,sjis,cp932
 set fileformats=unix,dos,mac
 
 filetype plugin indent on
-syntax on
+if !exists('g:syntax_on')
+  syntax on
+endif
 
 " =========================================================
 " 表示

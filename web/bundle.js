@@ -34858,6 +34858,7 @@ ${h3.join(`
     view2?.refresh?.();
     mandala?.rerender?.();
   }
+  var vtextKey = "";
   function applyState(s15) {
     applyLook(s15);
     if (typeof s15.scanReq === "number") {
@@ -34918,7 +34919,13 @@ ${h3.join(`
       view2.setHide(s15.hide || []);
       preloadImages(s15.lines);
     }
-    if (s15.vtext) view2.setVtext(s15.vtext);
+    if (s15.vtext) {
+      const vk = JSON.stringify(s15.vtext);
+      if (vk !== vtextKey || s15.lines) {
+        vtextKey = vk;
+        view2.setVtext(s15.vtext);
+      }
+    }
     if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis });
   }
   var fitTimer = null;

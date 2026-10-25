@@ -183,13 +183,21 @@ function! s:snapshot(force) abort
     let l:d.vis = [l:p[1], l:p[2]]
   endif
   " 仮想テキスト（テキストプロパティ）: リンクの数字のしるしなど。バッファの文字ではないので別に送る。
+  " 全行を調べ直すのは、バッファの内容が変わったとき（changedtick。prop_add でも増える）だけ。カーソルの移動のたびには調べない
   let l:vt = []
   if has('textprop') && l:b > 0 && getbufvar(l:b, '&buftype') ==# ''
-    for l:p in prop_list(1, {'bufnr': l:b, 'end_lnum': getbufinfo(l:b)[0].linecount})
-      if has_key(l:p, 'text')
-        call add(l:vt, [l:p.lnum, l:p.col, l:p.text, l:p.type])
-      endif
-    endfor
+    let l:vk = l:b . ':' . getbufvar(l:b, 'changedtick')
+    if !a:force && l:vk ==# get(s:, 'vt_key', '')
+      let l:vt = s:vt_val
+    else
+      for l:p in prop_list(1, {'bufnr': l:b, 'end_lnum': getbufinfo(l:b)[0].linecount})
+        if has_key(l:p, 'text')
+          call add(l:vt, [l:p.lnum, l:p.col, l:p.text, l:p.type])
+        endif
+      endfor
+      let s:vt_key = l:vk
+      let s:vt_val = l:vt
+    endif
   endif
   let l:d.vtext = l:vt
   " 配色（テーマ）・文字サイズ・vault: 変わったときだけ送る
