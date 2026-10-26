@@ -61,6 +61,14 @@ jobs:
           python3 test/fcitx_isolation_check.py
           "$RUNNER_TEMP/gnosis-test-venv/bin/python" test/keys_pty_check.py TestConcurrentEdit
           sh test/session_net.sh
+      - name: Test timeline record kind rename
+        env:
+          TMPDIR: ${{ runner.temp }}
+          GNOSIS_LANG: ja
+        run: |
+          . test/noclip.sh
+          python3 python/test_diary_tree.py
+          sh test/record_rename_net.sh
       - name: Test full Vim feature detection beyond line 40
         run: sh test/vim_version_detection_net.sh
       - name: Test GNOME Terminal's isolated font profile

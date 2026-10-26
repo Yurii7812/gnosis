@@ -14,6 +14,7 @@ Folgezettel ID が付き、ParentBranch をたどって番号が決まる（年�
 使い方::
 
     diary_tree.py migrate ROOT [--dry-run]   # グループで作っていた古い木を、この形に直す
+    diary_tree.py rename-kind ROOT OLD NEW [--dry-run] [--kind-only] [--kind-file FILE] [--sync]
 """
 from __future__ import annotations
 
@@ -200,15 +201,152 @@ def migrate(root, dry_run: bool = False) -> dict:
     return {"ok": True, "changed": [str(p) for p in changed]}
 
 
+def _is_timeline(text: str) -> bool:
+    fm, _ = nf._split_front_matter(text.split("\n"))
+    return any(TIMELINE_RE.match(line.strip()) for line in fm)
+
+
+def _rename_h1(text: str, title: str) -> str:
+    lines, nl = _split(text)
+    fm, _ = nf._split_front_matter(lines)
+    fenced = nf._fenced(lines)
+    for i in range(len(fm), len(lines)):
+        if not fenced[i] and re.match(r"^#\s+", lines[i]):
+            lines[i] = "# " + title
+            return _join(lines, nl)
+    raise ValueError("H1 not found")
+
+
+def _rename_kind_locked(root, old, new, dry_run, kind_file, include_descendants):
+    v = bo.Vault(root)
+    # symlink の先を含む vault 外のファイルは対象にしない。
+    texts = {p: t for p, t in v.texts.items() if p.is_relative_to(v.root)}
+    titles = {p: _title(t, p) for p, t in texts.items()}
+    tops = [p for p, t in texts.items() if titles[p] == "時系列記録" and _is_timeline(t)]
+    result = {"ok": True, "applicable": False, "changed": [], "counts": {"year": 0, "month": 0, "day": 0}}
+    if not tops:
+        return result
+    if len(tops) != 1:
+        return dict(result, ok=False, code="ambiguous")
+    top = tops[0]
+    children = {p: set() for p in texts}
+    for p in texts:
+        for parent in v.declared_parents.get(p, []):
+            if parent in children:
+                children[parent].add(p)
+        children[p].update(c for c in v.declared_children.get(p, []) if c in texts)
+    kinds = {p for p in children[top] | v.body_links.get(top, set())
+             if p in texts and _is_timeline(texts[p])}
+    matches = [p for p in sorted(kinds) if titles[p] == old]
+    if not kind_file and len(matches) > 1:
+        return dict(result, ok=False, code="ambiguous")
+    target = Path(kind_file).resolve() if kind_file else (top if old == "時系列記録" else next(iter(matches), None))
+    if target == top or target in kinds and titles[target] == "日記":
+        return dict(result, ok=False, applicable=True, code="protected")
+    if target not in kinds:
+        return result
+    result["applicable"] = True
+    if (old == new and titles[target] == old) or (titles[target] == new and old != new):
+        return result
+    if titles[target] != old:
+        return dict(result, ok=False, code="conflict")
+    if not new.strip() or new != new.strip() or any(c in new for c in "\r\n\0"):
+        return dict(result, ok=False, code="invalid")
+    if new in {"日記", "時系列記録"} or any(p != target and titles[p] == new for p in kinds):
+        return dict(result, ok=False, code="collision")
+    suffix = re.escape(old)
+    patterns = [(k, re.compile(r"^(" + prefix + r")-" + suffix + r"$")) for k, prefix in [
+        ("year", r"\d{4}"), ("month", r"\d{4}-\d{2}"), ("day", r"\d{4}-\d{2}-\d{2}-[A-Z]{2}")]]
+    entries = [{"path": str(target), "old": old, "new": new, "type": "kind"}]
+    seen = {target, top}
+    pending = sorted(children[target], reverse=True) if include_descendants else []
+    while pending:
+        p = pending.pop()
+        if p in seen or p in kinds:
+            continue
+        seen.add(p)
+        pending.extend(sorted(children[p] - seen, reverse=True))
+        for kind, pattern in patterns:
+            match = pattern.fullmatch(titles[p])
+            if match:
+                entries.append({"path": str(p), "old": titles[p], "new": match[1] + "-" + new, "type": kind})
+                result["counts"][kind] += 1
+                break
+    plan = []
+    for entry in entries:
+        p = Path(entry["path"])
+        if not dry_run and nf._editor_has_unsaved_changes(p):
+            return dict(result, ok=False, code="dirty", path=str(p))
+        updated = _rename_h1(texts[p], entry["new"])
+        if entry["type"] == "day":
+            lines, nl = _split(updated)
+            fm, _ = nf._split_front_matter(lines)
+            for i in range(1, max(1, len(fm) - 1)):
+                m = re.match(r"^record\s*:\s*(.*?)\s*$", lines[i])
+                if m:
+                    try:
+                        value = json.loads(m[1])
+                    except ValueError:
+                        value = m[1].strip("'")
+                    if value == old:
+                        lines[i] = "record: " + json.dumps(new, ensure_ascii=False)
+            updated = _join(lines, nl)
+        plan.append((p, texts[p], updated))
+    result.update(changed=[str(p) for p, _, _ in plan], entries=entries)
+    if not dry_run:
+        try:
+            bo._atomic_pair_write(plan)
+        except Exception as exc:
+            remaining = []
+            for p, before, _ in plan:
+                try:
+                    if p.read_text(encoding="utf-8") != before:
+                        remaining.append(str(p))
+                except OSError:
+                    remaining.append(str(p))
+            return dict(result, ok=False, code="write_failed", changed=remaining, message=str(exc))
+    return result
+
+
+def rename_kind(root, old, new, dry_run=False, *, kind_file=None, include_descendants=True):
+    """直下の記録種類と日付の題を原子的に改題。リンク表示名は既存の同期に任せる。"""
+    try:
+        if dry_run:
+            return _rename_kind_locked(root, old, new, True, kind_file, include_descendants)
+        with nf.vault_lock(root, 20.0) as got:
+            if not got:
+                return {"ok": False, "code": "conflict", "changed": []}
+            return _rename_kind_locked(root, old, new, False, kind_file, include_descendants)
+    except (OSError, ValueError, RuntimeError) as exc:
+        return {"ok": False, "code": "error", "message": str(exc), "changed": []}
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="diary_tree.py")
     sub = ap.add_subparsers(dest="mode", required=True)
     p_m = sub.add_parser("migrate")
     p_m.add_argument("root")
     p_m.add_argument("--dry-run", action="store_true")
+    p_r = sub.add_parser("rename-kind")
+    for name in ("root", "old", "new"):
+        p_r.add_argument(name)
+    p_r.add_argument("--dry-run", action="store_true")
+    p_r.add_argument("--kind-only", action="store_true")
+    p_r.add_argument("--kind-file")
+    p_r.add_argument("--sync", action="store_true")
     args = ap.parse_args(argv)
     if args.mode == "migrate":
         r = migrate(args.root, args.dry_run)
+        print(json.dumps(r, ensure_ascii=False))
+        return 0 if r["ok"] else 1
+    if args.mode == "rename-kind":
+        r = rename_kind(args.root, args.old, args.new, args.dry_run,
+                        kind_file=args.kind_file, include_descendants=not args.kind_only)
+        if r["ok"] and not args.dry_run and args.sync and r["changed"]:
+            try:
+                nf.simple_sync(args.root, {e["path"]: e["old"] for e in r["entries"]})
+            except Exception as exc:
+                r.update(ok=False, code="sync_failed", message=str(exc))
         print(json.dumps(r, ensure_ascii=False))
         return 0 if r["ok"] else 1
     return 1

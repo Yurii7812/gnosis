@@ -13311,12 +13311,88 @@ endfunction
 " rename_title (:NT)
 " ---------------------------------------------------------------------------
 
+function! s:record_rename_run(old, new, flags) abort
+  let l:cmd = s:python_cmd() . ' ' . shellescape(fnamemodify(g:gnosis_python, ':h') . '/diary_tree.py')
+        \ . ' rename-kind ' . shellescape(s:get_pkm_root()) . ' ' . shellescape(a:old) . ' ' . shellescape(a:new)
+        \ . ' --kind-file ' . shellescape(expand('%:p')) . a:flags
+  try
+    return json_decode(gnosis#sh#system(l:cmd))
+  catch
+    return {'ok': 0, 'code': 'error', 'message': v:exception}
+  endtry
+endfunction
+
+function! s:record_rename_error(result) abort
+  let l:code = get(a:result, 'code', 'error')
+  echohl WarningMsg
+  if l:code ==# 'protected'
+    echom gnosis#i18n#tr('時系列記録と日記の名前は変更できません')
+  elseif l:code ==# 'collision'
+    echom gnosis#i18n#tr('同じ名前の記録の種類があるか、予約された名前です（何も変更していません）')
+  elseif l:code ==# 'dirty'
+    echom gnosis#i18n#tr('未保存の変更があるノートがあります。先に保存してください（何も変更していません）')
+  else
+    echom printf(gnosis#i18n#tr('記録の改題に失敗しました: %s'), l:code . ' ' . get(a:result, 'message', '')
+          \ . ' ' . join(get(a:result, 'changed', []), ', '))
+  endif
+  echohl NONE
+endfunction
+
+" 記録の種類なら Python で一括改題。普通のノートは従来の処理へ戻す。
+function! s:try_record_rename(old, new) abort
+  let l:lines = getline(1, '$')
+  let l:end = get(l:lines, 0, '') ==# '---' ? index(l:lines, '---', 1) : -1
+  if l:end < 0 || match(l:lines[: l:end], '^timeline:\s*true\s*$') < 0
+    return 0
+  endif
+  if a:old ==# a:new | return 1 | endif
+  let l:plan = s:record_rename_run(a:old, a:new, ' --dry-run')
+  if !get(l:plan, 'ok', 0)
+    call s:record_rename_error(l:plan)
+    return 1
+  endif
+  if !get(l:plan, 'applicable', 0) | return 0 | endif
+  let l:c = l:plan.counts
+  let l:answer = tolower(trim(input(printf(gnosis#i18n#tr('下の年・月・日のノートの題も「%s」→「%s」に直しますか？（年 %d・月 %d・日 %d）(y/n): '),
+        \ a:old, a:new, l:c.year, l:c.month, l:c.day))))
+  if index(['y', 'n'], l:answer) < 0
+    echo gnosis#i18n#tr('やめました（何も変更していません）')
+    return 1
+  endif
+  let l:targets = l:answer ==# 'y' ? get(l:plan, 'changed', []) : [expand('%:p')]
+  for l:path in l:targets
+    let l:nr = bufnr(l:path)
+    if l:nr > 0 && getbufvar(l:nr, '&modified')
+      call s:record_rename_error({'code': 'dirty'})
+      return 1
+    endif
+  endfor
+  call gnosis#dirty_guard_release(l:targets)
+  let l:result = s:record_rename_run(a:old, a:new, ' --sync' . (l:answer ==# 'n' ? ' --kind-only' : ''))
+  if !get(l:result, 'ok', 0)
+    call s:record_rename_error(l:result)
+    return 1
+  endif
+  call gnosis#clear_title_cache()
+  let l:view = winsaveview()
+  silent edit
+  call winrestview(l:view)
+  call s:checktime_others()
+  echom printf(gnosis#i18n#tr('記録の題を変更しました（年 %d・月 %d・日 %d）'),
+        \ l:result.counts.year, l:result.counts.month, l:result.counts.day)
+  return 1
+endfunction
+
 function! gnosis#rename_title_with_default(default) abort
   let l:old_title = gnosis#current_title()
   let l:title = input('new title: ', a:default)
 
   if empty(l:title)
     echo 'Cancelled'
+    return
+  endif
+
+  if s:try_record_rename(l:old_title, l:title)
     return
   endif
 
