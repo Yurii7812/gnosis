@@ -58,10 +58,11 @@ jobs:
         run: sh test/gnome_font_profile_net.sh
       - name: Test saved tab boards
         run: sh test/tabs_board_net.sh
-      - name: Test GUI and CUI mandala state handoff and close keys
+      - name: Test mandala direction, GUI and CUI state handoff and close keys
         env:
           TMPDIR: ${{ runner.temp }}
         run: |
+          sh test/mview_depth_net.sh
           sh test/mview_handoff_net.sh
           python3 test/close_keys_pty_check.py
       - name: Test saved font settings and terminal launch arguments

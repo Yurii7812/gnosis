@@ -879,7 +879,7 @@ call s:keys('>')
 call gnosis#mview#preset_apply('全部')
 let s:st = gnosis#mview#state()
 call s:ok('上書き保存した内容が呼び出される', s:st.out_on == s:want2.out_on && s:st.tenths == s:want2.tenths, string([s:want2, s:st.out_on, s:st.tenths]))
-" 画面で選んで上書き（設定の行が 15 あるので j を 16 回で 2 つ目のプリセット。o で上書き、q で閉じる）
+" 画面で選んで上書き（設定の行数から選択位置を求める。o で上書き、q で閉じる）
 call gnosis#mview#preset_save('あ')
 call gnosis#mview#preset_save('い')
 let s:st = gnosis#mview#state()
@@ -890,7 +890,9 @@ let s:st = gnosis#mview#state()
 let s:cur0 = copy(s:st.cur)
 call s:keys('ZZj')
 call s:ok('Z → Z で設定の画面が閉じ、次の j は曼荼羅を動かす', &filetype ==# 'gnosis-mandala' && empty(popup_list()) && s:st.cur != s:cur0, string([s:cur0, s:st.cur]))
-call s:keys('Z' . repeat('j', 18) . 'oq')
+let s:panel_count = index(split(gnosis#mview#panel_text(), "\n"), ' プリセット') - 3
+let s:preset_row = s:panel_count + index(gnosis#mview#preset_names(), 'い')
+call s:keys('Z' . repeat('j', s:preset_row) . 'oq')
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1

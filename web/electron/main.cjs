@@ -149,7 +149,8 @@ async function startVim(cols, rows, vaultPath) {
   }
   const port = await startServer();
   const vimCmd = env("VIM") || "vim";
-  const args = ["-u", vimrcPath(), "--cmd", "let g:gnosis_start_screen = 0"];
+  // 埋め込み端末の色・幅・カーソルはアプリが管理する。自動照会の応答をキー入力へ混ぜない。
+  const args = ["-u", vimrcPath(), "--cmd", "set t_RV= t_u7= t_RF= t_RB= t_RC= t_RS=", "--cmd", "let g:gnosis_start_screen = 0"];
   const vault = vaultPath || EXPLICIT_ROOT;
   if (vault) {
     activeVault = cfg.normalize(vault);

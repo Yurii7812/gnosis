@@ -53,7 +53,7 @@ call s:mk('curry.md', 'カレー', 0, [['料理', 'cook.md']], [])
 
 execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
-call s:keys('f#>')
+call s:keys('f#>D')
 call gnosis#mview#gui_click(3, 5, 0)
 let s:before = gnosis#mview#handoff()
 call gnosis#settings#set('mandalaLegend', v:false)

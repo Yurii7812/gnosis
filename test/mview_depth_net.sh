@@ -14,6 +14,11 @@ LINES=60 COLUMNS=160 MD_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= D
 if [ ! -s "$WORK/result.txt" ]; then
   echo "NG: mview_depth の結果が無い（Vim のエラー）" >&2; cat "$WORK/out.txt" "$WORK/err.txt" >&2; exit 1
 fi
+if ! grep -aq '^DONE$' "$WORK/result.txt"; then
+  echo 'NG: mview_depth の検証が途中で終了' >&2
+  cat "$WORK/result.txt" "$WORK/out.txt" "$WORK/err.txt" >&2
+  exit 1
+fi
 if grep -aq '^NG' "$WORK/result.txt"; then
   grep -av '^OK' "$WORK/result.txt" >&2
   echo "NG: mview_depth" >&2; exit 1

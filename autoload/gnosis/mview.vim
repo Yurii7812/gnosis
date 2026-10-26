@@ -18,6 +18,7 @@
 "   Z                設定の画面（右に出る。モードや重ねるものをその場で切り替え、プリセットを呼び出す・保存する。q か、もう一度 Z で閉じる）
 "   z                盤面を中央に戻す（カーソルを中心のマスへ。Ctrl-L も同じ）
 "   s                検索（題・本文を vault 全体から。結果が周りに並び、真ん中に「検索: 語」）
+"   + / D            外向きの深さを入力 / 配下だけ ⇔ 通常（深さは維持）
 "   /                ふつうの検索のように語をハイライトしてヒットのマスへ飛ぶ（複数枚あれば別の枚へも）。Tab / S-Tab で次・前、Esc で解除
 "   e                今の周りを題で絞り込む（\g では索引を全部から）    f 全画面（9×9）⇔ 分割（3×3）
 "   Space            ノートのウィンドウへ    u 読み直す    q 閉じる
@@ -294,6 +295,53 @@ function! s:h_entries(id) abort
   return l:out
 endfunction
 
+" 直下の見出しだけ。見出しレベルが飛んでいても、途中に親がなければ直下とする。
+function! s:h_children(id) abort
+  let l:base = s:h_base(a:id)
+  let l:items = s:h_items(l:base)
+  let l:me = s:is_h(a:id) ? s:h_find(a:id) : {}
+  if s:is_h(a:id) && empty(l:me) | return [] | endif
+  let l:start = empty(l:me) ? 0 : index(map(copy(l:items), 'v:val.slug'), l:me.slug) + 1
+  let l:level = empty(l:me) ? 0 : l:me.level
+  let l:child_level = 1000
+  let l:out = []
+  for l:it in l:items[l:start :]
+    if l:it.level <= l:level | break | endif
+    if l:it.level <= l:child_level
+      call add(l:out, [l:base . '#' . l:it.slug, l:it.text])
+      let l:child_level = l:it.level
+    endif
+  endfor
+  return l:out
+endfunction
+
+function! s:down_only() abort
+  return s:S.size == 9 && get(s:S, 'out_on', 0) && get(s:S, 'out_dir', 'all') ==# 'down'
+endfunction
+
+" 配下への辺だけ。所属先・親・引用・BackLink・予測関連へは戻らない。
+function! s:down_entries(id) abort
+  if s:is_h(a:id) | return s:h_children(a:id) | endif
+  let l:nd = s:nd(a:id)
+  if empty(l:nd) | return [] | endif
+  let l:heads = get(s:S, 'ol_on', 0) || get(s:S, 'ol_only', 0) ? s:h_children(a:id) : []
+  if get(s:S, 'ol_only', 0) | return l:heads | endif
+  let l:o = get(l:nd, 'o', {})
+  let l:in = get(l:nd, 'i', {})
+  let l:parents = get(l:o, 'group', []) + get(l:o, 'parent_branch', []) + get(l:in, 'child_branch', []) + get(get(l:nd, 'r', {}), 'branch_group', [])
+  let l:entries = get(l:nd, 'g', 0) ? copy(get(l:nd, 'en', [])) : []
+  call extend(l:entries, map(copy(get(l:o, 'child_branch', []) + get(l:in, 'parent_branch', [])), '[v:val, ""]'))
+  let l:out = []
+  let l:seen = {a:id: 1}
+  for l:e in l:entries + l:heads
+    if !has_key(l:seen, l:e[0]) && index(l:parents, l:e[0]) < 0 && s:has(l:e[0])
+      let l:seen[l:e[0]] = 1
+      call add(l:out, l:e)
+    endif
+  endfor
+  return l:out
+endfunction
+
 function! s:fetch(ids) abort
   let l:need = []
   for l:id in a:ids
@@ -516,7 +564,7 @@ endfunction
 " 周辺に出すもの（絞り込み前）。検索の結果があればそれ。中心でなければ（9×9 の周りのブロック）近い索引は使わず「すべて」
 function! s:base(c) abort
   if s:is_h(a:c)
-    return s:h_entries(a:c)
+    return s:down_only() ? s:down_entries(a:c) : s:h_entries(a:c)
   endif
   call s:fetch([a:c])
   if a:c ==# s:S.center
@@ -527,6 +575,9 @@ function! s:base(c) abort
       call s:fetch(l:ids)
       return map(l:ids, '[v:val, ""]')
     endif
+  endif
+  if s:down_only()
+    return s:down_entries(a:c)
   endif
   " c / r / u は「それだけ」を出すモード（ほかのものは出さない）。C / R / U は今出ているものに重ねる。
   " （9×9 の外側のブロックにも、それぞれのブロックの中心について同じように効く）
@@ -645,7 +696,7 @@ endfunction
 " （s:base。中心でないノートの規則）のうち、まだ出ていないもの。同じノートは 1 回だけ。全部で 300 件まで。
 " s:S.dmap[ノート] に深さを覚える（マスの説明に出す）。描き直しのたびに作り直す（s:S.deep_memo）
 function! s:deepen(first) abort
-  let l:key = s:S.center . '|' . get(s:S, 'depth', 1) . '|' . len(a:first)
+  let l:key = s:S.center . '|' . get(s:S, 'depth', 1) . '|' . get(s:S, 'out_dir', 'all') . '|' . len(a:first)
   if get(s:S, 'deep_memo', {}) ==# {} || get(s:S.deep_memo, 'key', '') !=# l:key
     let l:seen = {s:S.center: 1}
     let l:out = []
@@ -787,7 +838,8 @@ function! gnosis#mview#set_depth(n) abort
     return 0
   endif
   let l:n = max([1, min([10, a:n])])
-  if !get(s:S, 'out_on', 0)
+  if !get(s:S, 'out_on', 0) || s:S.size != 9
+    let s:S.out_on = 0
     call s:toggle_out()
   endif
   let s:S.depth = l:n
@@ -804,6 +856,21 @@ function! s:depth_ask() abort
   if l:r =~# '^\d\+$'
     call gnosis#mview#set_depth(str2nr(l:r))
   endif
+endfunction
+
+" D: 配下だけ ⇔ 通常。深さと通常側のモード・重ねる設定は維持する。
+function! s:toggle_down() abort
+  let s:S.out_dir = s:down_only() ? 'all' : 'down'
+  if !get(s:S, 'out_on', 0) || s:S.size != 9
+    let s:S.out_on = 0
+    call s:toggle_out()
+    return
+  endif
+  let s:S.page = 0
+  let s:S.opage = 0
+  let s:S.cur = [4, 4]
+  call s:render()
+  call s:preview()
 endfunction
 
 function! s:toggle_out() abort
@@ -1243,7 +1310,7 @@ function! s:help_lines() abort
         \ ['動く', [['h j k l  矢印', 'マスを動く（右のノートも切り替わる）'], ['1-8', 'そのマスへ（9 か 0 は中心）'], ['Enter', 'カーソルのマスを中心にする'],
         \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['b  BS', '一つ前に戻る'], ['Space', 'ノートへ移る']]],
         \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループだけ'], ['C', '近いグループを重ねる'], ['r', '予測関連だけ'], ['R', '予測関連を重ねる'],
-        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['w', '近さ順に並べる'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
+        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['B', '通常9×9の外側の基準（中心 ⇔ 各ブロック）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
@@ -1347,15 +1414,26 @@ endfunction
 function! s:status(ctitle, pages, ptop, extra) abort
   " オンのものだけ、英字の短い単語で（# と t の表示は出さない）。near=c / rel=r / out=v（dep=深さ）/ rank=w / outl=U / heads=u / nopv=右のノートを隠している
   let l:on = []
-  if get(s:S, 'near_only', 0) | call add(l:on, 'near-only') | endif
-  if get(s:S, 'near_on', 0) | call add(l:on, 'near') | endif
-  if get(s:S, 'rel_only', 0) | call add(l:on, 'rel-only') | endif
-  if get(s:S, 'rel_on', 0) | call add(l:on, 'rel') | endif
+  if !s:down_only()
+    if get(s:S, 'near_only', 0) | call add(l:on, 'near-only') | endif
+    if get(s:S, 'near_on', 0) | call add(l:on, 'near') | endif
+    if get(s:S, 'rel_only', 0) | call add(l:on, 'rel-only') | endif
+    if get(s:S, 'rel_on', 0) | call add(l:on, 'rel') | endif
+  endif
   if get(s:S, 'out_on', 0)
     call add(l:on, 'out')
-    if get(s:S, 'depth', 1) > 1 | call add(l:on, 'dep' . s:S.depth) | endif
+    if s:down_only()
+      call add(l:on, '配下・深さ' . get(s:S, 'depth', 1))
+    elseif get(s:S, 'depth', 1) > 1
+      call add(l:on, 'dep' . s:S.depth)
+    endif
   endif
-  if get(s:S, 'rank_on', 0) | call add(l:on, 'rank') | endif
+  if get(s:S, 'rank_on', 0)
+    call add(l:on, 'rank')
+    if s:S.size == 9 && !get(s:S, 'out_on', 0)
+      call add(l:on, get(s:S, 'dbasis', 'center') ==# 'self' ? '基準:各ブロック' : '基準:中心')
+    endif
+  endif
   if get(s:S, 'ol_only', 0) | call add(l:on, 'heads') | elseif get(s:S, 'ol_on', 0) | call add(l:on, 'outl') | endif
   if !get(s:S, 'nv', 1) | call add(l:on, 'nopv') | endif
   let l:cancel = s:cancel_hint()
@@ -1716,7 +1794,7 @@ endfunction
 
 " 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
 " 閉じても、Vim を再起動しても、前回のまま
-let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth']
+let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'out_dir', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth']
 let s:saved_json = ''
 
 function! s:save_state() abort
@@ -2442,7 +2520,7 @@ function! s:toggle_preview() abort
   endif
 endfunction
 
-" w: 近さ順（中心に近いものを先に）のオン/オフ。d: 9×9 の外側の並びの基準（中心に近い / そのブロックのノート自身に近い）
+" w: 近さ順のオン/オフ。基準（中心 / そのブロック自身）は B（Z 内でも同じ）で切り替える
 function! s:toggle_rank() abort
   let s:S.rank_on = !get(s:S, 'rank_on', 0)
   let s:S.page = 0
@@ -2452,13 +2530,12 @@ function! s:toggle_rank() abort
 endfunction
 
 function! s:toggle_dbasis() abort
-  if s:S.size != 9 || !get(s:S, 'rank_on', 0)
-    echo 'Gnosis: d は 9×9 で近さ順（w）がオンのときの、外側の並びの切り替えです'
-    return
-  endif
   let s:S.dbasis = get(s:S, 'dbasis', 'center') ==# 'center' ? 'self' : 'center'
   let s:S.opage = 0
   call s:render()
+  let l:basis = s:S.dbasis ==# 'self' ? '各ブロックの中心' : '中心'
+  let l:active = s:S.size == 9 && !get(s:S, 'out_on', 0) && get(s:S, 'rank_on', 0)
+  echo 'Gnosis: 近さ順の基準 → ' . l:basis . (l:active ? '' : '（通常の9×9・近さ順 w オンで外側に反映）')
 endfunction
 
 " { }: 外側のブロックのページを前後に（[ ] は中心の周り）
@@ -2601,8 +2678,10 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
   nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
+  nnoremap <buffer><nowait><silent> B <Cmd>call <SID>toggle_dbasis()<CR>
   nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> + <Cmd>call <SID>depth_ask()<CR>
+  nnoremap <buffer><nowait><silent> D <Cmd>call <SID>toggle_down()<CR>
   nnoremap <buffer><nowait><silent> d <Cmd>call <SID>setmode('family')<CR>
   nnoremap <buffer><nowait><silent> <C-l> <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
@@ -2811,7 +2890,8 @@ endfunction
 
 " 窓の大きさが変わったとき、曼荼羅の窓を今の大きさで描き直す（今いる窓は変えない）
 function! gnosis#mview#rerender() abort
-  if !empty(state('moxS')) | return | endif
+  " マッピングの途中には割り込まない。通常の明示的な再描画は許可する。
+  if !empty(state('m')) | return | endif
   let l:mw = s:mwin()
   if l:mw < 0 || !has_key(s:S, 'data') || !has_key(s:S, 'cells')
     return
@@ -3006,6 +3086,12 @@ function! s:open(center, ...) abort
       endfor
       if get(l:all, 'dbasis', '') =~# '^\(center\|self\)$' && !has_key(s:S, 'dbasis')
         let s:S.dbasis = l:all.dbasis
+      endif
+      if get(l:all, 'out_dir', '') =~# '^\(all\|down\)$' && !has_key(s:S, 'out_dir')
+        let s:S.out_dir = l:all.out_dir
+      endif
+      if type(get(l:all, 'depth', '')) == v:t_number && !has_key(s:S, 'depth')
+        let s:S.depth = max([1, min([10, l:all.depth])])
       endif
       if get(l:all, 'digit', '') =~# '^\(jump\|move\)$'
         let s:S.digit = l:all.digit
@@ -3266,7 +3352,7 @@ function! gnosis#mview#gui_state() abort
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
         \ 'info': substitute(trim(s:info_text()), '^▶\s*', '', ''),
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
-        \           'mode': s:S.mode, 'nv': get(s:S, 'nv', 1), 'dbasis': get(s:S, 'dbasis', 'center')},
+        \           'mode': s:S.mode, 'nv': get(s:S, 'nv', 1), 'dbasis': get(s:S, 'dbasis', 'center'), 'outDir': get(s:S, 'out_dir', 'all')},
         \ 'legend': s:legend_on(),
         \ 'win': s:S.win, 'noteWin': s:note_win(), 'wcols': winwidth(s:S.win)}
 endfunction
@@ -3398,6 +3484,7 @@ function! gnosis#mview#preset_apply(name) abort
       let s:S[l:k] = l:d[l:k]
     endif
   endfor
+  let s:S.out_dir = get(l:d, 'out_dir', 'all') ==# 'down' ? 'down' : 'all'
   if type(get(l:d, 'tenths', '')) == v:t_number
     let s:S.tenths = l:d.tenths
   endif
@@ -3426,7 +3513,7 @@ function! gnosis#mview#preset_apply(name) abort
 endfunction
 
 " Z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
-"   j k 選ぶ   Enter / Space 切り替え・呼び出し   a i d c r t # p u U f v w はふだんのキーのまま使える（D 近さの基準・z 中央に戻す は、この画面の中だけのキー）
+"   j k 選ぶ   Enter / Space 切り替え・呼び出し   D は配下だけの切り替え。B は曼荼羅上でもこの画面内でも近さ順の基準を変える
 "   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
 function! s:panel_rows() abort
   let l:Onoff = {v -> v ? 'オン' : 'オフ'}
@@ -3446,7 +3533,8 @@ function! s:panel_rows() abort
         \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
         \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
         \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . '（1 = 直接のつながりだけ）', 'act': function('s:depth_ask')},
-        \ {'key': 'D', 'name': '9×9 の近さ順の基準（中心 ⇔ そのブロックの中心）', 'val': get(s:S, 'dbasis', 'center') ==# 'self' ? '外側は自分' : '中心', 'act': function('s:toggle_dbasis')},
+        \ {'key': 'D', 'name': '外向きに辿る方向', 'val': get(s:S, 'out_dir', 'all') ==# 'down' ? '配下だけ' : '通常', 'act': function('s:toggle_down')},
+        \ {'key': 'B', 'name': '通常9×9・外側の近さ順の基準（中心 ⇔ そのブロックの中心）', 'val': get(s:S, 'dbasis', 'center') ==# 'self' ? '外側は自分' : '中心', 'act': function('s:toggle_dbasis')},
         \ {'key': 'z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
@@ -3560,7 +3648,7 @@ endfunction
 
 " CUI / GUI 間で表示状態だけを渡す。ジョブやキャッシュは渡さない。
 function! gnosis#mview#handoff() abort
-  let l:d = {}
+  let l:d = {'out_dir': get(s:S, 'out_dir', 'all')}
   for l:k in s:mode_keys + ['tenths', 'stretch', 'center', 'cur', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
     if has_key(s:S, l:k)
       let l:d[l:k] = deepcopy(s:S[l:k])
@@ -3595,6 +3683,7 @@ function! gnosis#mview#restore_handoff(d) abort
       let s:S[l:k] = deepcopy(a:d[l:k])
     endif
   endfor
+  let s:S.out_dir = get(a:d, 'out_dir', 'all') ==# 'down' ? 'down' : 'all'
   let s:S.cur = copy(get(a:d, 'cur', l:size == 9 ? [4, 4] : [1, 1]))
   if len(s:S.cur) != 2 || min(s:S.cur) < 0 || max(s:S.cur) >= s:S.size
     let s:S.cur = s:S.size == 9 ? [4, 4] : [1, 1]
