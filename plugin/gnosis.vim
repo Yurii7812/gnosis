@@ -487,6 +487,7 @@ augroup END
 augroup gnosis_run
   autocmd!
   autocmd VimEnter * call gnosis#run#register()
+  autocmd VimEnter * call timer_start(450, {-> gnosis#run#startup()})
   autocmd VimLeavePre * call gnosis#run#unregister()
 augroup END
 nnoremap <silent> \x <Cmd>call gnosis#run#close_here()<CR>
@@ -894,6 +895,7 @@ command! GnosisImages call gnosis#imgview#open()
 " アプリ (Electron / ブラウザ) を開く。vault はアプリ側 (既定 ~/files/yurii-note)。
 " ノートアプリ（\c を改め、\ と小文字の \c）。(\w は other.vim の :wa なので使わない)
 nnoremap <silent> \c        <Cmd>call gnosis#open_web()<CR>
+nnoremap <silent> \C        <Cmd>call gnosis#run#switch("cui")<CR>
 
 " ---------------------------------------------------------------------------
 " Shift-Tab / BackTab の端末互換

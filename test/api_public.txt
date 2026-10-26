@@ -255,6 +255,7 @@ gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click
 gnosis#mview#gui_state
+gnosis#mview#handoff
 gnosis#mview#is_open
 gnosis#mview#items
 gnosis#mview#link_pick
@@ -275,6 +276,7 @@ gnosis#mview#refresh
 gnosis#mview#render_here
 gnosis#mview#rerender
 gnosis#mview#reset_for_test
+gnosis#mview#restore_handoff
 gnosis#mview#saved
 gnosis#mview#set_depth
 gnosis#mview#start
@@ -372,8 +374,13 @@ gnosis#review_write
 gnosis#run#close_all
 gnosis#run#close_here
 gnosis#run#dir
+gnosis#run#export
+gnosis#run#focus
 gnosis#run#list
+gnosis#run#receive
 gnosis#run#register
+gnosis#run#startup
+gnosis#run#switch
 gnosis#run#unregister
 gnosis#save_before_normal_jump
 gnosis#save_current_note

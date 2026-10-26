@@ -51,7 +51,11 @@ function! s:gui_command(m) abort
   let l:t = get(a:m, 'type', '')
   let l:r = {'ok': 0, 'file': expand('%:p')}
   try
-    if l:t ==# 'save'
+    if l:t ==# 'handoff'
+      if mode() ==# 'n' && empty(state('moxS'))
+        let l:r.ok = gnosis#run#receive(a:m.path)
+      endif
+    elseif l:t ==# 'save'
       if &modified && &buftype ==# '' && !empty(expand('%:p'))
         silent! call gnosis#save_current_note()
       endif
@@ -116,9 +120,13 @@ set ttimeoutlen=20
 
 " 最初に開くノート（$GNOSIS_FILE）。Gnosis は起動時に Index を開き直すので、起動が済んだあとで開く。
 function! s:open_start_file(t) abort
+  if !empty($GNOSIS_HANDOFF) | return | endif
   let l:f = fnamemodify($GNOSIS_FILE, ':p')
   if filereadable(l:f) && fnamemodify(expand('%:p'), ':p') !=# l:f
+    let l:ms = gnosis#mview#gui_state()
+    if get(l:ms, 'noteWin', 0) > 0 | call win_gotoid(l:ms.noteWin) | endif
     execute 'silent! edit ' . fnameescape(l:f)
+    if get(l:ms, 'win', 0) > 0 | call win_gotoid(l:ms.win) | endif
   endif
 endfunction
 if $GNOSIS_FILE !=# ''
@@ -129,7 +137,7 @@ let s:sent_key = ''
 let s:last = ''
 
 function! s:snapshot(force) abort
-  if ch_status(s:ch) !=# 'open'
+  if ch_status(s:ch) !=# 'open' || get(g:, 'gnosis_handoff_loading', 0)
     return
   endif
   let l:m = mode(1)
@@ -140,6 +148,9 @@ function! s:snapshot(force) abort
     let l:ms = gnosis#mview#gui_state()
   catch
   endtry
+  if gnosis#mview#is_open() && empty(l:ms)
+    return
+  endif
   let l:wid = win_getid()
   if !empty(l:ms)
     let l:wid = l:ms.noteWin > 0 ? l:ms.noteWin : -1
@@ -264,6 +275,11 @@ function! s:push_soft() abort
     let s:soft = 1
     call timer_start(16, function('s:soft_flush'))
   endif
+endfunction
+
+" GUI の盤面は端末カーソルを動かさず更新するため、移動を明示的に通知する。
+function! GnosisGuiChanged() abort
+  call s:push_soft()
 endfunction
 
 function! s:push_force() abort

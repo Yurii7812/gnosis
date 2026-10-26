@@ -31,7 +31,7 @@ npm run build          # src/*.js -> bundle.js
 npm run app            # = electron .
 ```
 
-Vim からは `\c` / `:GnosisWeb`。Electron を使う場合のみ `gnosis --app`（通常の `gnosis` はターミナル Vim）。
+Vim からは `\c` / `:GnosisWeb`。GUIから `\C` でCUIを開けます。同じvaultの起動済み画面を再利用し、曼荼羅の中心・選択位置・表示設定を引き継ぎます。`\x` で今の画面を閉じると、もう片方が開いていれば状態を渡してフォーカスを戻します。Electron を使う場合のみ `gnosis --app`（通常の `gnosis` はターミナル Vim）。
 
 環境変数: `GNOSIS_ROOT`（vault。指定すると起動画面を出さずにその vault で始める）、`GNOSIS_FILE`（最初に開くノート）、
 `GNOSIS_VIMRC`（使う vimrc。既定は Gnosis ホームの vimrc、無ければ本体の vimrc_gnosis）、`GNOSIS_HOME`、`GNOSIS_VIM`。旧 `PKM_*` も読む。

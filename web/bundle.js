@@ -25,7 +25,7 @@
     el2.classList.toggle("theme-dark", dark);
   }
 
-  // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
+  // node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
   var Ll = (s15, t3) => {
@@ -9140,7 +9140,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+  // node_modules/@xterm/addon-fit/lib/addon-fit.mjs
   var h = 2;
   var _ = 1;
   var o = class {
@@ -9164,7 +9164,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/@marijn/find-cluster-break/src/index.js
+  // node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
   var rangeTo = [];
   (() => {
@@ -9238,7 +9238,7 @@ ${h3.join(`
     return code < 65536 ? 1 : 2;
   }
 
-  // ../../../gnosis/web/node_modules/@codemirror/state/dist/index.js
+  // node_modules/@codemirror/state/dist/index.js
   var Text2 = class _Text {
     /**
     Get the line description around the given position.
@@ -12626,7 +12626,7 @@ ${h3.join(`
     return strict === true ? -1 : string2.length;
   }
 
-  // ../../../gnosis/web/node_modules/style-mod/src/style-mod.js
+  // node_modules/style-mod/src/style-mod.js
   var C2 = "\u037C";
   var COUNT = typeof Symbol == "undefined" ? "__" + C2 : Symbol.for(C2);
   var SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : Symbol("styleSet");
@@ -12762,7 +12762,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/w3c-keyname/index.js
+  // node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -12868,7 +12868,7 @@ ${h3.join(`
     return name2;
   }
 
-  // ../../../gnosis/web/node_modules/@codemirror/view/dist/index.js
+  // node_modules/@codemirror/view/dist/index.js
   var nav = typeof navigator != "undefined" ? navigator : { userAgent: "", vendor: "", platform: "" };
   var doc = typeof document != "undefined" ? document : { documentElement: { style: {} } };
   var ie_edge = /* @__PURE__ */ /Edge\/(\d+)/.exec(nav.userAgent);
@@ -21375,7 +21375,7 @@ ${h3.join(`
   GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
   GutterMarker.prototype.point = true;
 
-  // ../../../gnosis/web/node_modules/@lezer/common/dist/index.js
+  // node_modules/@lezer/common/dist/index.js
   var DefaultBufferLength = 1024;
   var nextPropID = 0;
   var Range2 = class {
@@ -23426,7 +23426,7 @@ ${h3.join(`
     return result;
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/highlight/dist/index.js
+  // node_modules/@lezer/highlight/dist/index.js
   var nextTagID = 0;
   var Tag = class _Tag {
     /**
@@ -24150,7 +24150,7 @@ ${h3.join(`
     { tag: tags.punctuation, class: "tok-punctuation" }
   ]);
 
-  // ../../../gnosis/web/node_modules/@codemirror/language/dist/index.js
+  // node_modules/@codemirror/language/dist/index.js
   var _a2;
   var languageDataProp = /* @__PURE__ */ new NodeProp();
   function defineLanguageFacet(baseData) {
@@ -25064,7 +25064,7 @@ ${h3.join(`
     auto: /* @__PURE__ */ Decoration.mark({ class: "cm-iso", inclusive: true, attributes: { dir: "auto" }, bidiIsolate: null })
   };
 
-  // ../../../gnosis/web/node_modules/@codemirror/autocomplete/dist/index.js
+  // node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
     /**
     Create a new completion context. (Mostly useful for testing
@@ -25529,7 +25529,7 @@ ${h3.join(`
   closedBracket.endSide = -1;
   var android = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
 
-  // ../../../gnosis/web/node_modules/@lezer/markdown/dist/index.js
+  // node_modules/@lezer/markdown/dist/index.js
   var CompositeBlock = class _CompositeBlock {
     static create(type, value, from, parentHash, end) {
       let hash2 = parentHash + (parentHash << 8) + type + (value << 4) | 0;
@@ -27593,7 +27593,7 @@ ${h3.join(`
     }]
   };
 
-  // ../../../gnosis/web/node_modules/@lezer/lr/dist/index.js
+  // node_modules/@lezer/lr/dist/index.js
   var Stack = class _Stack {
     /**
     @internal
@@ -29355,7 +29355,7 @@ ${h3.join(`
     return spec.get;
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/html/dist/index.js
+  // node_modules/@lezer/html/dist/index.js
   var scriptText = 55;
   var StartCloseScriptTag = 1;
   var styleText = 56;
@@ -29699,7 +29699,7 @@ ${h3.join(`
     });
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/css/dist/index.js
+  // node_modules/@lezer/css/dist/index.js
   var descendantOp = 148;
   var Unit = 1;
   var identifier = 149;
@@ -29878,7 +29878,7 @@ ${h3.join(`
     tokenPrec: 2433
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-css/dist/index.js
+  // node_modules/@codemirror/lang-css/dist/index.js
   var _properties = null;
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
@@ -30739,7 +30739,7 @@ ${h3.join(`
     return new LanguageSupport(cssLanguage, cssLanguage.data.of({ autocomplete: cssCompletionSource }));
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/javascript/dist/index.js
+  // node_modules/@lezer/javascript/dist/index.js
   var noSemi = 317;
   var noSemiType = 318;
   var incdec = 1;
@@ -30951,7 +30951,7 @@ ${h3.join(`
     tokenPrec: 15178
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-javascript/dist/index.js
+  // node_modules/@codemirror/lang-javascript/dist/index.js
   var snippets = [
     /* @__PURE__ */ snippetCompletion("function ${name}(${params}) {\n	${}\n}", {
       label: "function",
@@ -31263,7 +31263,7 @@ ${h3.join(`
     return true;
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-html/dist/index.js
+  // node_modules/@codemirror/lang-html/dist/index.js
   var Targets = ["_blank", "_self", "_top", "_parent"];
   var Charsets = ["ascii", "utf-8", "utf-16", "latin1", "latin1"];
   var Methods = ["get", "post", "put", "delete"];
@@ -32003,7 +32003,7 @@ ${h3.join(`
     return true;
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-markdown/dist/index.js
+  // node_modules/@codemirror/lang-markdown/dist/index.js
   var data = /* @__PURE__ */ defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
   var headingProp = /* @__PURE__ */ new NodeProp();
   var commonmark = /* @__PURE__ */ parser.configure({
@@ -34049,7 +34049,9 @@ ${h3.join(`
     board.className = "m-board";
     const legend = document.createElement("div");
     legend.className = "m-legend";
-    root.append(head, board, legend);
+    const info = document.createElement("div");
+    info.className = "m-info";
+    root.append(head, board, legend, info);
     const light = () => document.documentElement.classList.contains("theme-light");
     const colors = () => light() ? LIGHT : DARK;
     function drawLegend() {
@@ -34063,37 +34065,43 @@ ${h3.join(`
       }
     }
     let sig = "";
+    let selected2 = null;
+    let legendTheme = null;
     function render2(m) {
       last3 = m;
       const n = m.size;
-      head.textContent = m.status || "";
-      legend.hidden = m.legend === false;
+      if (head.textContent !== (m.status || "")) head.textContent = m.status || "";
+      const description = m.info ? "\u25B6 " + m.info : "";
+      if (info.textContent !== description) info.textContent = description;
+      legend.hidden = m.legend === false || m.legend === 0;
+      if (legendTheme !== light()) {
+        drawLegend();
+        legendTheme = light();
+      }
       const key = JSON.stringify([n, m.nums, m.cells, light()]);
       if (key === sig && board.children.length === n * n) {
-        board.querySelectorAll(".m-cell.sel").forEach((e) => e.classList.remove("sel"));
-        const el2 = m.cur && board.children[m.cur[0] * n + m.cur[1]];
-        if (el2) el2.classList.add("sel");
+        select(m.cur, n);
         return;
       }
       sig = key;
-      board.textContent = "";
+      if (board.children.length !== n * n) {
+        board.replaceChildren(...Array.from({ length: n * n }, () => document.createElement("div")));
+        selected2 = null;
+      }
       board.style.setProperty("--n", String(n));
       board.classList.toggle("n9", n === 9);
       const c = colors();
       const bgs = light() ? BG_LIGHT : BG_DARK;
       m.cells.forEach((row, r) => row.forEach((cell2, col) => {
-        const el2 = document.createElement("div");
+        const el2 = board.children[r * n + col];
+        const cellKey = JSON.stringify([cell2, m.nums, light()]);
+        if (el2.dataset.content === cellKey) return;
+        el2.dataset.content = cellKey;
+        el2.replaceChildren();
+        el2.removeAttribute("style");
         el2.className = "m-cell role-" + cell2.role;
         el2.dataset.r = String(r);
         el2.dataset.c = String(col);
-        if (n === 9) {
-          if (col % 3 === 0) el2.classList.add("bl");
-          if (r % 3 === 0) el2.classList.add("bt");
-          if (col === 8) el2.classList.add("br");
-          if (r === 8) el2.classList.add("bb");
-        }
-        const sel2 = m.cur && m.cur[0] === r && m.cur[1] === col;
-        if (sel2) el2.classList.add("sel");
         if (cell2.role === "center") el2.classList.add("ctr");
         if (cell2.t) {
           const color = c[cell2.k] || c.note;
@@ -34116,14 +34124,19 @@ ${h3.join(`
           t3.textContent = (cell2.n > 0 && m.nums ? cell2.n + " " : "") + cell2.t;
           el2.appendChild(t3);
         }
-        el2.addEventListener("click", () => onCell(r, col, false));
-        el2.addEventListener("dblclick", (e) => {
+        el2.onclick = () => onCell(r, col, false);
+        el2.ondblclick = (e) => {
           e.preventDefault();
           onCell(r, col, true);
-        });
-        board.appendChild(el2);
+        };
       }));
-      drawLegend();
+      select(m.cur, n);
+    }
+    function select(cur, n) {
+      const next = cur && board.children[cur[0] * n + cur[1]];
+      if (selected2 !== next) selected2?.classList.remove("sel");
+      next?.classList.add("sel");
+      selected2 = next;
     }
     function setFocus(on2) {
       root.classList.toggle("unfocused", !on2);

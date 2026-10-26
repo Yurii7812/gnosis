@@ -79,7 +79,7 @@ const scenario = `(async () => {
   await press(':call gnosis#settings#set("hide.yaml", v:false)|call gnosis#hide#apply_all()\\r', 700);
   // :GnosisSettings（特別なバッファ）は、端末の画面が全面に出て読める
   await press(':GnosisSettings\\r', 1300);
-  R.settings = { why: document.getElementById('termwhy').textContent, expanded: G.isExpanded(), text: G.screen().join('\\n').includes('Gnosis — 設定') };
+  R.settings = { why: document.getElementById('termwhy').textContent, expanded: G.isExpanded(), text: /Gnosis — (設定|Settings)/.test(G.screen().join('\\n')) };
   await press('q', 900);
   R.settings.back = !G.isExpanded();
   // \\zz の設定（YAML・上下の名前: 系を隠す）
@@ -90,7 +90,7 @@ const scenario = `(async () => {
   const m = G.state().mandala || {};
   R.mandala = { size: m.size, cells: document.querySelectorAll('.m-cell').length, shown: !document.getElementById('mandala').hidden,
     withNote: document.getElementById('main').classList.contains('with-mandala'),
-    kinds: [...new Set((m.cells || []).flat().map((c) => c.k))], legend: document.querySelectorAll('.m-legend span').length, center: m.title };
+    kinds: [...new Set((m.cells || []).flat().map((c) => c.k))], legend: document.querySelectorAll('.m-legend span').length, center: m.title, info: m.info };
   // リンクの HTML は、この画面の中（重ね表示）で開き、q で閉じる。vault の外の HTML は開かない
   {
     R.html = {};
@@ -103,10 +103,10 @@ const scenario = `(async () => {
     R.html.outside = await window.gui.linkHtml(G.state().file, '../../../../../etc/passwd.html');
     R.html.web = await window.gui.linkExternal('javascript:alert(1)');
   }
-  // 曼荼羅の下: 選んでいるノートの題は出さず、種類の凡例を出す。選んでいるマスは内側が塗られ（::after）、右のノートにカーソルがあるときは消える
+  // 曼荼羅の下: 選んでいるノートの題と関係、種類の凡例を出す。選んでいるマスは内側が塗られ（::after）、右のノートにカーソルがあるときは消える
   {
     const selEl = document.querySelector('.m-cell.sel');
-    R.mand2 = { foot: !!document.querySelector('.m-foot'), legend: !document.querySelector('.m-legend').hidden, legendN: document.querySelectorAll('.m-legend span').length,
+    R.mand2 = { info: document.querySelector('.m-info')?.textContent, legend: !document.querySelector('.m-legend').hidden, legendN: document.querySelectorAll('.m-legend span').length,
       selAfter: selEl ? getComputedStyle(selEl, '::after').content : null, focusedClass: !document.getElementById('mandala').classList.contains('unfocused') };
     await press('\\x17l', 900);
     R.mand2.unfocusedAfterNote = document.getElementById('mandala').classList.contains('unfocused');
@@ -131,6 +131,24 @@ const scenario = `(async () => {
   await press('<', 700);
   const w1 = document.getElementById('mandala').getBoundingClientRect().width;
   R.screenWidth = { w0, w1 };
+  // 9×9 の線は均一。移動と番号切替で既存のマスを破棄しない。
+  await press('f', 700);
+  {
+    const cells = [...document.querySelectorAll('.m-cell')];
+    const board = document.querySelector('.m-board');
+    const before = JSON.stringify(G.state().mandala.cur);
+    const start = performance.now();
+    G.send('l');
+    await waitFor(() => JSON.stringify(G.state().mandala.cur) !== before);
+    R.fastBoard = { count: cells.length, gap: getComputedStyle(board).gap,
+      moveMs: Math.round(performance.now() - start),
+      stable: cells.every((e, i) => board.children[i] === e),
+      uniform: cells.every((e) => getComputedStyle(e).boxShadow === 'none') };
+    await press('#', 500);
+    R.fastBoard.stableAfterNumbers = cells.every((e, i) => board.children[i] === e);
+    await press('f', 500);
+    R.fastBoard.backToNineCells = board.children.length === 9;
+  }
   await press('Q', 1000);
   R.closed = { hidden: document.getElementById('mandala').hidden, mandala: !!(G.state().mandala && G.state().mandala.cells) };
   // 紙のスキャンの番号付け: 開く → 番号 + Enter で次へ → d で日記 → Esc で終了
@@ -206,7 +224,7 @@ try {
   check(R.html && R.html.open && R.html.closed && R.html.outside === null && R.html.web === false, "HTML link opens inside the app and q closes it; outside-vault and non-http are refused: " + JSON.stringify(R.html));
   check(R.fm && R.fm.fm === R.fm.body, "YAML should not be gray (same color as the body text): " + JSON.stringify(R.fm));
   check(R.zz && R.zz.after < R.zz.before, "\\\\zz in the app should really hide YAML: " + JSON.stringify(R.zz));
-  check(R.mand2 && !R.mand2.foot && R.mand2.legend && R.mand2.legendN === 11 && R.mand2.selAfter === '""' && R.mand2.focusedClass && R.mand2.unfocusedAfterNote && R.mand2.selAfterGone === 'none' && R.mand2.refocused, "mandala: no title footer, legend shown, selected cell filled, unfocused hides it: " + JSON.stringify(R.mand2));
+  check(R.mand2 && R.mand2.info === "▶ " + R.mandala.info && R.mand2.legend && R.mand2.legendN === 11 && R.mand2.selAfter === '""' && R.mand2.focusedClass && R.mand2.unfocusedAfterNote && R.mand2.selAfterGone === 'none' && R.mand2.refocused, "mandala: selected note and relation shown, legend shown, selected cell filled, unfocused hides it: " + JSON.stringify(R.mand2));
   check(R.hide && R.hide.lines > 0, "YAML in the right note pane should be hidden: " + JSON.stringify(R.hide));
   check(R.noteText, "the note pane should show the note, not the mandala's box characters");
   check(R.click && R.click.before !== R.click.after && R.click.sel, "clicking a cell should move the cursor: " + JSON.stringify(R.click));
@@ -226,6 +244,8 @@ try {
     check(fs.readdirSync(path.join(vault, ".gnosis", "scans")).length === 0, "the inbox should be empty after numbering all scans");
   }
   check(R.closed?.hidden && !R.closed.mandala, "Q should close the mandala: " + JSON.stringify(R.closed));
+  check(R.fastBoard?.count === 81 && R.fastBoard.gap === '3px' && R.fastBoard.uniform && R.fastBoard.stable && R.fastBoard.stableAfterNumbers && R.fastBoard.backToNineCells && R.fastBoard.moveMs < 1000,
+    "uniform thick grid and incremental movement: " + JSON.stringify(R.fastBoard));
   const png = path.join(tmp, "final.png");
   if (fs.existsSync(png) && process.env.KEEP_PNG) fs.copyFileSync(png, process.env.KEEP_PNG);
   if (failed) process.exit(1);

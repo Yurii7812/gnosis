@@ -18579,6 +18579,9 @@ endfunction
 " ---------------------------------------------------------------------------
 " a:1 … 開く vault（起動画面の g から。無ければ今の vault）
 function! gnosis#open_web(...) abort
+  if gnosis#run#switch("gui", a:0 ? a:1 : "")
+    return
+  endif
   " 関数内の <sfile> は信用できない（現在のバッファ名になることがある）。
   " Python スクリプトのパス (…/Gnosis/python/… or legacy/…) から
   " プラグインルートを導出する。
@@ -18595,9 +18598,9 @@ function! gnosis#open_web(...) abort
   " デスクトップアプリ (Electron)。今の vault と、今開いているノートを渡して起動する。
   " Linux / macOS はランチャー（bin/gnosis --app。KDE Wayland 向けの起動オプション付き）、
   " Windows は実体の electron.exe を直接起動する。
-  let l:env = {'GNOSIS_HOME': gnosis#home#dir(), 'GNOSIS_PARENT_PID': string(getpid())}
+  let l:env = {'GNOSIS_HOME': gnosis#home#dir(), 'GNOSIS_PARENT_PID': string(getpid()), 'GNOSIS_HANDOFF': empty(a:0 ? a:1 : '') ? gnosis#run#export() : ''}
   if !empty($MYVIMRC) && get(g:, 'gnosis_managed', 0)
-    let l:env.GNOSIS_VIMRC = $MYVIMRC
+    let l:env.GNOSIS_VIMRC = empty($GNOSIS_VIMRC) ? $MYVIMRC : $GNOSIS_VIMRC
   endif
   if !empty(l:root)
     let l:env.GNOSIS_ROOT = fnamemodify(l:root, ':p')
