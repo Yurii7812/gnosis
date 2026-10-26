@@ -277,6 +277,17 @@ let s:ret = gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
 call s:ok('\l g: 選んだグループ G に今のノートが表示名で入り、もう一度グループを選ぶ画面にならない', index(s:file('g.md'), '[ジー四](jg4.md)') >= 0 && get(gnosis#mview#state(), 'pick', '') !=# 'group', string(s:file('g.md')))
 silent! call gnosis#mview#close()
 
+" ------------------------------------------------------------------ zn → o は \n と同じ作り方（同じ体裁・カーソル）
+call s:mk('zo.md', 'ノートZO', ['ZO の本文。'])
+execute 'edit ' . fnameescape(s:v . '/zo.md')
+let g:gnosis_test_keys = ['o']
+call gnosis#v2_new_plain()
+let s:zo_ts = expand('%:t:r')
+call s:ok('zn → o: \n と同じ体裁のノートが開く（見出しの下に空行 3 行）', getline(1, '$')[1:] ==# gnosis#note_template(s:zo_ts)[1:] && getline(1, '$')[0] ==# '---', string(getline(1, '$')))
+call s:ok('zn → o: カーソルは見出しの下の真ん中の空行（\n と同じ）', line('.') == search('^#\s', 'nw') + 2 && col('.') == 1, string(getpos('.')[1:2]))
+call s:ok('zn → o: 元のノートは変わらない', s:file('zo.md')[-1] ==# 'ZO の本文。')
+silent! stopinsert
+
 " ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
 let s:cols_save = &columns
 for s:cols in [80, 100, 120]

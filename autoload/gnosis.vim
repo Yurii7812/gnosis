@@ -9241,8 +9241,20 @@ function! gnosis#quick_note() abort
   if empty(l:root)
     return
   endif
+  call s:quick_note_in(l:root)
+endfunction
+
+" とりあえず書く: a:dir にタイムスタンプ名の孤立ノートを作り、見出しの下の真ん中の空行に挿入モードで入る。
+" \n と zn → o（リンク無し）が共通で使う（作られるものを同じにするため。同期は待たず、体裁を崩さない）
+function! s:quick_note_in(dir) abort
   let l:ts = gnosis#timestamp_filename()
-  let l:file = fnamemodify(l:root, ':p') . l:ts . '.md'
+  " 同じ秒の名前がもうあれば、空いている次の秒にする
+  let l:k = 1
+  while filereadable(fnamemodify(a:dir, ':p') . l:ts . '.md') && l:k < 600
+    let l:ts = strftime('%y%m%d%H%M%S', localtime() + l:k)
+    let l:k += 1
+  endwhile
+  let l:file = fnamemodify(a:dir, ':p') . l:ts . '.md'
   try
     call s:write_new_note(gnosis#note_template(l:ts), l:file)
   catch
@@ -11574,7 +11586,8 @@ function! s:v2_new_interactive(attr) abort
     let l:gch = s:getkey()
     redraw
     if l:gch ==? 'o'
-      call s:v2_new_run('', 'o', 0)
+      " o（孤立）は \n と同じ作り方（同じ体裁・カーソル）。置き場所は今のノートと同じフォルダ
+      call s:quick_note_in(expand('%:p:h'))
       return
     endif
     if l:gch !=# "\<CR>" && l:gch !=# "\<NL>" && l:gch !=# 'g'
@@ -11628,6 +11641,11 @@ function! s:v2_new_interactive(attr) abort
   endif
   if l:ch !=# 'r' && l:ch !=# 'h' && l:ch !=# 'i' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / i / c / b / p / o / r のどれか）') | return
+  endif
+  if l:ch ==# 'o' && empty(a:attr)
+    " o（孤立）は \n と同じ作り方（同じ体裁・カーソル）。置き場所は今のノートと同じフォルダ
+    call s:quick_note_in(expand('%:p:h'))
+    return
   endif
   call s:v2_new_run(a:attr, l:ch, 0)
 endfunction
