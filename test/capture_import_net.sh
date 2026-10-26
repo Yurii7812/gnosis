@@ -72,6 +72,6 @@ dream=$(grep -l '^# 2026-10-18-SU-夢$' "$V"/*.md | head -1)
 recg=$(grep -l '^# 時系列記録$' "$V"/*.md | head -1)
 chk "時系列記録: その日の記録のノート（日付-曜日-夢）に時刻つき" '[ -n "$dream" ] && grep -q "^record: \"夢\"$" "$dream" && grep -q "^07:00 空を飛んだ$" "$dream" && grep -A1 "^07:00 空を飛んだ$" "$dream" | grep -q "^高かった$" && grep -q "^07:10 海の夢$" "$dream"'
 chk "時系列記録: 2 回目はその日のノートへ、PC で書いた分と時刻の順にまぜる" '[ "$(grep -o "^07:[0-9]* [^ ]*" "$dream" | cut -c1-5 | tr "\n" " ")" = "07:00 07:10 07:20 07:30 07:40 " ]'
-chk "時系列記録: その日の日記の上にリンク・時系列記録の中に夢" 'grep -q "^\[2026-10-18-SU-夢\]($(basename "$dream"))$" "$diary" && grep -q "^\[夢\](" "$recg"'
+chk "時系列記録: その日の日記の上に DailyNotes: でリンク（表示名は系列名）・時系列記録の中に夢" 'grep -q "^DailyNotes:$" "$diary" && grep -q "^\[夢\]($(basename "$dream"))$" "$diary" && grep -q "^\[夢\](" "$recg"'
 chk "二度目は取り込まない" '[ "$(grep -c "スコーン" "$diary")" = 1 ] && [ "$(grep -c "^15:10 電話した" "$work")" = 1 ] && [ "$(grep -c "^二冊目" "$book")" = 1 ] && [ "$(grep -c "海の夢" "$dream")" = 1 ]'
 if [ $ng = 0 ]; then echo "capture_import OK"; else cat "$D/err" >&2; [ -n "${KEEP:-}" ] && cp -r "$D" "$KEEP"; exit 1; fi
