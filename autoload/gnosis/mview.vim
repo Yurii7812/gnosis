@@ -1313,7 +1313,7 @@ function! s:help_lines() abort
         \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['B', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
-        \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
+        \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['L', '種類の凡例を出す・隠す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
         \   ['z  Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
         \ ['設定とやめる', [['Z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
         \ ]
@@ -2713,6 +2713,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
   nnoremap <buffer><nowait><silent> Z <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> L <Cmd>call <SID>toggle_legend()<CR>
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>

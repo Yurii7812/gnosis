@@ -176,8 +176,10 @@ gnosis#hub_open
 gnosis#hub_set
 gnosis#hypotheses
 gnosis#hypothesis
+gnosis#i18n#choose
 gnosis#i18n#lang
 gnosis#i18n#reload
+gnosis#i18n#saved
 gnosis#i18n#set_lang
 gnosis#i18n#system_lang
 gnosis#i18n#t
