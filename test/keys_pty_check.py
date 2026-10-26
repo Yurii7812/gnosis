@@ -170,6 +170,71 @@ class TestTerminals(Env):
 class TestConcurrentEdit(Env):
     """別のプロセスが同じノートを書き換えたとき（FileChangedShell は本物の端末で動く）"""
 
+    def test_sync_id_change_preserves_unsaved_text_without_warning(self) -> None:
+        import time
+        original = note("N", "Original body")
+        v = self.make_vault("sync-id", {"n.md": original})
+        f = v / "n.md"
+        with Session(self.rc("let g:gnosis_autosave = 0", root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            s.send("GA unsaved text", 0.3)
+            s.send(ESC, 0.3)
+            # 自分の同期の30秒の印が切れた後も、番号の付与は編集の競合ではない。
+            s.send(":let b:gnosis_own_sync = localtime() - 31\r", 0.2)
+            time.sleep(1.1)
+            f.write_text(original.replace("title: N\n", "title: N\nfolgezettel: 10a\n"), encoding="utf-8")
+            s.send(":checktime\r", 0.4)
+            self.assertFalse(list((v / ".state/conflicts").glob("*-n.md")), s.text())
+            s.send(":call gnosis#conflict#safe_update()\r", 0.5)
+            saved = f.read_text(encoding="utf-8")
+            self.assertIn("folgezettel: 10a", saved)
+            self.assertIn("unsaved text", saved)
+            self.assertNotIn("別のウィンドウ", s.raw.decode("utf-8", "replace"))
+
+    def test_unchanged_file_rewrite_does_not_warn(self) -> None:
+        import time
+        original = note("N", "Original body")
+        v = self.make_vault("same-content", {"n.md": original})
+        f = v / "n.md"
+        with Session(self.rc("let g:gnosis_autosave = 0", root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            s.send("GA unsaved text", 0.3)
+            s.send(ESC, 0.3)
+            time.sleep(1.1)
+            f.write_text(original, encoding="utf-8")
+            s.send(":checktime\r", 0.4)
+            self.assertFalse(list((v / ".state/conflicts").glob("*-n.md")), s.text())
+            s.send(":call gnosis#conflict#safe_update()\r", 0.5)
+            self.assertIn("unsaved text", f.read_text(encoding="utf-8"))
+
+    def test_checktime_does_not_accept_unsaved_external_conflict(self) -> None:
+        import time
+        v = self.make_vault("preserve-conflict", {"n.md": note("N", "Original body")})
+        f = v / "n.md"
+        external = note("N", "External edit must survive")
+        with Session(self.rc("let g:gnosis_autosave = 0", root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            s.send("GA unsaved text", 0.3)
+            s.send(ESC, 0.3)
+            time.sleep(1.1)
+            f.write_text(external, encoding="utf-8")
+            s.send(":checktime\r", 0.4)
+            s.send("\r", 0.1)  # 本物の競合の警告（hit-enter）を閉じてから保存を試す。
+            s.send(":call gnosis#conflict#safe_update()\r", 0.5)
+            self.assertEqual(f.read_text(encoding="utf-8"), external)
+            self.assertTrue(list((v / ".state/conflicts").glob("*-n.md")))
+
+    def test_folgezettel_in_body_is_a_real_external_edit(self) -> None:
+        import time
+        v = self.make_vault("body-id", {"n.md": note("N", "folgezettel: original")})
+        f = v / "n.md"
+        external = note("N", "folgezettel: external")
+        with Session(self.rc("let g:gnosis_autosave = 0", root=v), str(self.home), str(self.gh), args=[str(f)]) as s:
+            s.send("GA unsaved text", 0.3)
+            s.send(ESC, 0.3)
+            time.sleep(1.1)
+            f.write_text(external, encoding="utf-8")
+            s.send(":call gnosis#conflict#safe_update()\r", 0.5)
+            self.assertEqual(f.read_text(encoding="utf-8"), external)
+            self.assertTrue(list((v / ".state/conflicts").glob("*-n.md")))
+
     def test_unsaved_edit_survives_external_change(self) -> None:
         import time
         v = self.make_vault("vc", {"n.md": note("N", "最初の本文")})

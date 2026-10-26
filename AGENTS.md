@@ -12,6 +12,7 @@ Claude Code 向けの入口は `CLAUDE.md`。ここは Codex など `AGENTS.md` 
 
 ## 試験
 - 場所は必ず `~/gnosis-work/test`（`TMPDIR`）と一時の `GNOSIS_HOME`。**本物の vault・Gnosis ホームに触らない。プロセスは名前で kill しない。**
+- 試験は `test/noclip.sh` で入力・デスクトップも隔離する。単独の Vim/GUI 試験でも本物の IME（`fcitx*-remote` など）・クリップボード・ウィンドウのフォーカスを操作しない。表示接続を外すだけでは D-Bus 経由の IME 操作は防げない。
 - 小さな直し: `test/related.sh`（変えたファイルに関係する試験だけを同時に流す。共通部分が変わっていれば自動で全部）。
 - 大きな直し・マージ前: `test/run_parallel.sh`（約 3〜6 分。同時に 12 本。落ちたものは 1 本ずつ流し直し、それでも落ちるものだけ失敗にする。`test/known_ng.txt` の既知の失敗は数えない）。API 一覧などを含む全体は `sh test/run.sh`（直列で遅い）。
 - 言語の既定は英語。日本語の画面を確かめる試験は `GNOSIS_LANG=ja` で流す（`run.sh` は自動で ja）。

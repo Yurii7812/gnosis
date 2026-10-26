@@ -1280,7 +1280,9 @@ augroup gnosis_autosync
   autocmd!
   autocmd BufReadPost *.md call gnosis#remember_title()
   " record は on_write_post より先に置く（同期が付ける「自分の同期」の印を、record が消さないように）
-  autocmd BufReadPost,BufWritePost,FileChangedShellPost *.md call gnosis#conflict#record(expand('<abuf>'))
+  autocmd BufReadPost,BufWritePost *.md call gnosis#conflict#record(expand('<abuf>'))
+  " 外部変更を読み込まず編集中の本文を残した場合は、比較元も保存まで残す。
+  autocmd FileChangedShellPost *.md if !getbufvar(str2nr(expand('<abuf>')), '&modified') | call gnosis#conflict#record(expand('<abuf>')) | endif
   " グループに増えたメンバーに気づくのは、同期が書き直して読み直す（控えが取り直される）より前
   autocmd BufWritePost *.md call gnosis#group_review_check()
   autocmd BufWritePost *.md call s:on_write_post()

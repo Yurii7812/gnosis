@@ -34,11 +34,21 @@ let s:id_pat = '^folgezettel\s*:'
 
 " front matter の folgezettel: の行を除いた行（なければそのまま）
 function! s:without_id(lines) abort
-  return filter(copy(a:lines), {i, v -> v !~# s:id_pat})
+  let l:lines = copy(a:lines)
+  if get(l:lines, 0, '') ==# '---'
+    let l:end = index(l:lines, '---', 1)
+    if l:end > 0
+      let l:at = match(l:lines[: l:end], s:id_pat)
+      if l:at > 0
+        call remove(l:lines, l:at)
+      endif
+    endif
+  endif
+  return l:lines
 endfunction
 
 " 外での変更が、同期が振った Folgezettel の番号（front matter の folgezettel: の行）だけなら、その行（無ければ ''）を返す。
-" ほかも変わっていれば v:null
+" 中身が同じで更新時刻だけ変わった場合は v:false、ほかも変わっていれば v:null
 function! s:id_only_change(buf) abort
   let l:base = getbufvar(a:buf, 'gnosis_disk_lines', [])
   let l:p = s:path_of(a:buf)
@@ -46,10 +56,14 @@ function! s:id_only_change(buf) abort
     return v:null
   endif
   let l:disk = readfile(l:p)
+  if l:disk ==# l:base
+    return v:false
+  endif
   if s:without_id(l:disk) !=# s:without_id(l:base)
     return v:null
   endif
-  return get(filter(copy(l:disk), {i, v -> v =~# s:id_pat}), 0, '')
+  let l:end = index(l:disk, '---', 1)
+  return get(filter(l:disk[: l:end], {i, v -> v =~# s:id_pat}), 0, '')
 endfunction
 
 " 今のバッファの front matter の folgezettel: の行を a:line にする（'' なら外す）
@@ -149,6 +163,15 @@ function! gnosis#conflict#safe_update() abort
     return 0
   endif
   if gnosis#conflict#disk_changed()
+    " 自分の同期の時刻印が切れた後でも、内容不変・番号だけの更新は競合ではない。
+    " FileChangedShell と同じ判定を使い、番号と未保存の本文を両方残す。
+    let l:id = s:id_only_change(bufnr('%'))
+    if l:id isnot v:null
+      if mode() =~# '^[iR]'
+        return 0
+      endif
+      return s:rewrite_with(l:id is v:false ? getline(1, '$') : s:apply_id_line(getline(1, '$'), l:id))
+    endif
     if s:own_sync_recent(bufnr('%'))
       " 自分の同期が整えた内容。次の保存でまた同期が走って整え直すので、バッファ側を優先して書く。
       " 挿入中は :edit できない。Esc で抜けたときの保存で改めて試す（黙って待つ）。
@@ -165,14 +188,6 @@ function! gnosis#conflict#safe_update() abort
       call winrestview(l:view)
       silent! update
       return !&modified
-    endif
-    " 同期が番号（folgezettel:）を振っただけなら、その行を取り込んで、こちらの変更と一緒に保存する
-    let l:id = s:id_only_change(bufnr('%'))
-    if l:id isnot v:null
-      if mode() =~# '^[iR]'
-        return 0
-      endif
-      return s:rewrite_with(s:apply_id_line(getline(1, '$'), l:id))
     endif
     call gnosis#conflict#handle()
     return 0
@@ -191,6 +206,11 @@ function! gnosis#conflict#on_changed_shell() abort
   endif
   if v:fcs_reason ==# 'conflict' || (v:fcs_reason ==# 'changed' && getbufvar(l:buf, '&modified'))
     let v:fcs_choice = ''
+    " 保存時は番号だけの同期を取り込めるので、外部変更の通知でも同じ扱いにする。
+    " ここでは読み直さず、未保存の本文と比較元を次の保存まで残す。
+    if s:id_only_change(l:buf) isnot v:null
+      return
+    endif
     call gnosis#conflict#handle(l:buf)
     return
   endif

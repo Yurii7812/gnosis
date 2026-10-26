@@ -108,6 +108,11 @@ endif
 let g:gnosis_fcitx_restore_on_insert = 0
 
 function! s:GnosisFcitxRemoteCmd() abort
+  " バックグラウンド試験の Vim から、利用者が別アプリで使っている IME を切り替えない。
+  " DISPLAY を外しても fcitx-remote はセッションの D-Bus 経由で本物の IME に届く。
+  if $GNOSIS_TEST_NO_DESKTOP ==# '1' || (empty($DISPLAY) && empty($WAYLAND_DISPLAY))
+    return ''
+  endif
   if !empty(get(g:, 'gnosis_fcitx_remote_cmd', get(g:, 'yurii_fcitx_remote_cmd', '')))
     return get(g:, 'gnosis_fcitx_remote_cmd', get(g:, 'yurii_fcitx_remote_cmd', ''))
   endif

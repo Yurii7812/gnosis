@@ -20,6 +20,7 @@ ERR=$(mktemp)
 trap 'rm -f "$OUT" "$ERR"' EXIT
 
 python3 "$REPO/test/vim_static_check.py"
+python3 "$REPO/test/fcitx_isolation_check.py"
 python3 "$REPO/test/check_guide.py"
 python3 "$REPO/test/i18n_check.py"
 python3 "$REPO/test/check_commands.py"

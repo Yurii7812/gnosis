@@ -48,10 +48,19 @@ jobs:
       - name: Test zk n/g and guide relationships
         run: |
           python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
-          "$RUNNER_TEMP/gnosis-test-venv/bin/python" -m pip install --quiet pykakasi
+          "$RUNNER_TEMP/gnosis-test-venv/bin/python" -m pip install --quiet pykakasi pyte
           export PATH="$RUNNER_TEMP/gnosis-test-venv/bin:$PATH"
           sh test/link_ops_net.sh
           sh test/guide_relations_net.sh
+      - name: Test IME isolation and external-edit conflict handling
+        env:
+          TMPDIR: ${{ runner.temp }}
+          GNOSIS_LANG: ja
+        run: |
+          . test/noclip.sh
+          python3 test/fcitx_isolation_check.py
+          "$RUNNER_TEMP/gnosis-test-venv/bin/python" test/keys_pty_check.py TestConcurrentEdit
+          sh test/session_net.sh
       - name: Test full Vim feature detection beyond line 40
         run: sh test/vim_version_detection_net.sh
       - name: Test GNOME Terminal's isolated font profile
