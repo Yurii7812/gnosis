@@ -288,6 +288,16 @@ call s:ok('zn → o: カーソルは見出しの下の真ん中の空行（\n �
 call s:ok('zn → o: 元のノートは変わらない', s:file('zo.md')[-1] ==# 'ZO の本文。')
 silent! stopinsert
 
+" ------------------------------------------------------------------ Related を足したあとも、リンクの [ と ](…) は隠れる（noautocmd の再読み込みで構文が消えていた）
+call s:mk('rcA.md', 'ノートRCA', ['RCA の本文。'])
+call s:mk('rcB.md', 'ノートRCB', ['RCB の本文。'])
+execute 'edit ' . fnameescape(s:v . '/rcA.md')
+let g:gnosis_test_keys = ['r']
+call gnosis#insert_links_pick(['[ノートRCB](rcB.md)'], getpos('.'))
+let s:rc_ln = search('^\[ノートRCB\]', 'nw')
+call s:ok('r で Related を足したあと: 足した行がある', s:rc_ln > 0, string(getline(1, '$')))
+call s:ok('r で Related を足したあとも、リンクの [ は隠れ、名前に色が付く', s:rc_ln > 0 && synconcealed(s:rc_ln, 1)[0] == 1 && synIDattr(synID(s:rc_ln, 3, 1), 'name') ==# 'gnosisLinkText', string([synconcealed(s:rc_ln, 1), synIDattr(synID(s:rc_ln, 3, 1), 'name')]))
+
 " ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
 let s:cols_save = &columns
 for s:cols in [80, 100, 120]
