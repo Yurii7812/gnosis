@@ -174,6 +174,7 @@ function! s:snapshot(force) abort
         \ 'cmdtype': getcmdtype(),
         \ 'mandala': l:ms,
         \ 'scanReq': get(g:, 'gnosis_gui_scan_req', 0),
+        \ 'recordReq': get(g:, 'gnosis_gui_record_req', {}),
         \ 'quitReq': get(g:, 'gnosis_gui_quit_req', 0),
         \ 'curbt': &buftype,
         \ 'curft': &filetype,
@@ -252,6 +253,12 @@ endfunction
 " \F（紙のスキャンの番号付け）をアプリの画面で開く合図。gnosis#paper_scan が呼ぶ
 function! GnosisGuiScan() abort
   let g:gnosis_gui_scan_req = get(g:, 'gnosis_gui_scan_req', 0) + 1
+  call s:snapshot(1)
+endfunction
+
+" \D / \E（時系列記録の日付指定・上位の設定）をアプリの画面で開く合図。payload = {mode: date|parent, kinds: […], …}
+function! GnosisGuiRecord(payload) abort
+  let g:gnosis_gui_record_req = extend({'n': get(get(g:, 'gnosis_gui_record_req', {}), 'n', 0) + 1}, a:payload)
   call s:snapshot(1)
 endfunction
 

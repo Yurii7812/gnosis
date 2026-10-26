@@ -104,6 +104,7 @@ gnosis#csv_to_table
 gnosis#csv_to_table_current
 gnosis#current_file
 gnosis#current_title
+gnosis#daily_notes_sync
 gnosis#day_record
 gnosis#debate
 gnosis#dedupe
@@ -343,10 +344,13 @@ gnosis#realtime_sync_on_text_changed
 gnosis#realtime_sync_snapshot
 gnosis#recent
 gnosis#recent_map
+gnosis#record_create
+gnosis#record_date
 gnosis#record_merge
 gnosis#record_migrate
 gnosis#record_new
 gnosis#record_open
+gnosis#record_parent
 gnosis#record_pick
 gnosis#refresh_guide
 gnosis#refresh_link_hints

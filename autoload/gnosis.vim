@@ -21516,6 +21516,77 @@ function! s:record_month(root, notes, kg, kind, date) abort
   return [s:diary_new_group(a:root, a:notes, l:month, a:kg, a:kind), l:month]
 endfunction
 
+" ---- DailyNotes:（時系列記録の包含関係と、同じ日付のノートへの自動リンク。python/daily_notes.py）----------
+let s:daily_busy = 0
+
+function! s:daily_script() abort
+  return fnamemodify(g:gnosis_python, ':h') . s:sep() . 'daily_notes.py'
+endfunction
+
+" 値の書き方: 記号を含むときだけ引用符で囲む（python/daily_notes.py の _quote と同じ）
+function! s:daily_yaml_value(v) abort
+  return a:v =~# '[:#\[\]{}",&*!|>''%@`]\|^\s\|\s$' ? json_encode(a:v) : a:v
+endfunction
+
+" date の DailyNotes: を整える。上位の記録がその日に無くても、下位へのリンクが 2 つ以上つくなら、その日の上位のノートを作る
+" （作ったら整え直す）。開いているノートは、バッファを通して安全に書き換える。
+function! s:daily_sync(root, date) abort
+  if s:daily_busy || !exists('g:gnosis_python') || !filereadable(s:daily_script())
+    return
+  endif
+  let s:daily_busy = 1
+  try
+    let l:dir = fnamemodify(a:root, ':p')
+    for l:round in range(8)
+      let l:notes = s:diary_scan(a:root)
+      let l:rec = s:record_top(a:root, l:notes)
+      let l:ks = empty(l:rec) ? [] : s:record_kinds(a:root, l:notes, l:rec)
+      let l:out = gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:daily_script()) . ' plan '
+            \ . shellescape(substitute(a:root, '/\+$', '', '')) . ' ' . shellescape(a:date) . ' '
+            \ . shellescape(join(map(copy(l:ks), 'v:val.title'), ',')))
+      try
+        let l:d = json_decode(l:out)
+      catch
+        return
+      endtry
+      if type(l:d) != v:t_dict || !get(l:d, 'ok', 0)
+        return
+      endif
+      if !empty(l:d.create)
+        for l:k in l:d.create
+          let l:kg = ''
+          for l:kk in l:ks
+            if l:kk.title ==# l:k | let l:kg = l:kk.file | endif
+          endfor
+          if !empty(l:kg)
+            call s:record_day(a:root, l:notes, l:kg, l:k, a:date)
+          endif
+        endfor
+        continue
+      endif
+      for [l:rel, l:lines] in items(l:d.files)
+        call s:diary_edit_file_raw(l:dir . l:rel, {_ -> l:lines})
+      endfor
+      break
+    endfor
+  finally
+    let s:daily_busy = 0
+  endtry
+endfunction
+
+" 同じ系列の、その日より前の直近のノートから引き継ぐ上位（YAML の行）。引き継ぐものが無ければ ''
+function! s:daily_inherit_line(root, kind, date) abort
+  if !exists('g:gnosis_python') || !filereadable(s:daily_script())
+    return ''
+  endif
+  let l:v = trim(gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:daily_script()) . ' inherit '
+        \ . shellescape(substitute(a:root, '/\+$', '', '')) . ' ' . shellescape(a:kind) . ' ' . shellescape(a:date)))
+  if l:v ==# 'unset' || empty(l:v) || gnosis#sh#error()
+    return ''
+  endif
+  return l:v ==# 'none' ? 'parent_record:' : 'parent_record: ' . s:daily_yaml_value(l:v)
+endfunction
+
 " 日記の上（Group: などの直後、空行のあと）に、時系列記録のリンクを並べる。同じリンクは足さない。
 function! s:record_op_top_link(link, file, lines) abort
   let l:lines = copy(a:lines)
@@ -21571,7 +21642,8 @@ function! s:record_link_diary(root, notes, date, file, title, ...) abort
     let l:st.days[a:date] = l:diary
     call s:diary_state_write(l:st)
   endif
-  call s:diary_edit_file(l:dir . l:diary, function('s:record_op_top_link', [s:diary_link(a:file, a:title), a:file]))
+  " リンクは DailyNotes: の下に、包含関係に従って整える（日記には最上位の記録だけ）
+  call s:daily_sync(a:root, a:date)
 endfunction
 
 " 記録 a:kind のその日のノート（無ければ作る）。ファイル名を返す。
@@ -21589,6 +21661,11 @@ function! s:record_day(root, notes, kg, kind, date) abort
   let l:lines = s:diary_new_lines(l:title, 0, s:diary_link(l:mg, l:month))
   let l:t = match(l:lines, '^time:')
   call insert(l:lines, 'record: ' . json_encode(a:kind), l:t >= 0 ? l:t + 1 : 1)
+  " 上位の記録は、その日より前の直近の同じ系列のノートから引き継ぐ（未来の設定は使わない・解除も引き継ぐ）
+  let l:inh = s:daily_inherit_line(a:root, a:kind, a:date)
+  if !empty(l:inh)
+    call insert(l:lines, l:inh, (l:t >= 0 ? l:t + 1 : 1) + 1)
+  endif
   call s:syn_writefile(l:lines, l:dir . l:file)
   call s:diary_edit_file(l:dir . l:mg, function('s:diary_op_add', [s:diary_link(l:file, l:title), '']))
   call add(a:notes, {'file': l:file, 'title': l:title, 'group': 0, 'time': '', 'record': a:kind})
@@ -21598,8 +21675,19 @@ endfunction
 
 " 記録 a:kind の今日のノートを作る・開く（a:kind が無ければ作らない。作るのは :GnosisRecordNew）
 function! gnosis#record_open(kind) abort
+  return gnosis#record_create(a:kind, s:diary_day_of_time(''))
+endfunction
+
+" 記録 a:kind の a:date（YYYY-MM-DD）のノートを作る・開く。\R（今日）も \D（日付指定）も、GUI の画面も、これを使う。
+" 新しく作るときは、同じ系列の、その日より前の直近のノートから上位（parent_record）を引き継ぎ、
+" その日の DailyNotes:（上位の記録・日記のリンク）を整える。同じ日のノートがすでにあれば、それを開く。
+function! gnosis#record_create(kind, date) abort
+  if a:date !~# '^\d\{4}-\d\d-\d\d$' || (exists('*strptime') && strftime('%Y-%m-%d', strptime('%Y-%m-%d', a:date)) !=# a:date)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('日付は YYYY-MM-DD の形で、実在する日を入れてください: ') . a:date | echohl NONE
+    return 0
+  endif
   let l:root = gnosis#ensure_root_and_index()
-  if empty(l:root) | return | endif
+  if empty(l:root) | return 0 | endif
   let l:dir = fnamemodify(l:root, ':p')
   let l:notes = s:diary_scan(l:root)
   call s:diary_ensure_top(l:root, l:notes)
@@ -21610,10 +21698,12 @@ function! gnosis#record_open(kind) abort
   endfor
   if empty(l:kg)
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('その時系列記録はありません: ') . a:kind | echohl NONE
-    return
+    return 0
   endif
   call gnosis#save_current_note()
-  let l:file = s:record_day(l:root, l:notes, l:kg, a:kind, s:diary_day_of_time(''))
+  let l:file = s:record_day(l:root, l:notes, l:kg, a:kind, a:date)
+  " 日記・上位の記録の DailyNotes: を整える（新しく作ったときだけでなく、あるノートを開くときも、取りこぼしを直す）
+  call s:daily_sync(l:root, a:date)
   call gnosis#push_history()
   " 呼び出し元が try の中だと、開くときの自動コマンドの silent! のエラーが例外になって止まる。
   " 開くこと自体はできているので、受け止めて続ける
@@ -21621,9 +21711,168 @@ function! gnosis#record_open(kind) abort
     execute 'edit ' . fnameescape(l:dir . l:file)
   catch
   endtry
-  " 本文の最初の空行（Group: のブロックのあと）から書けるように
-  let l:e = s:top_blocks_end(getline(1, '$'), max([0, search('^# ', 'nw') - 1]), ['Group:', 'Context:'])
-  call cursor(max([1, l:e + 2]), 1)
+  " 本文の最初の空行（上部のブロック・DailyNotes: のあと）から書けるように
+  let l:h1 = max([0, search('^# ', 'nw') - 1])
+  let l:e = s:top_blocks_end(getline(1, '$'), l:h1, ['ParentBranch:', 'Group:', 'Context:'])
+  let l:i = max([l:e, l:h1 + 1])
+  while l:i < line('$') && getline(l:i + 1) =~# '^\s*$'
+    let l:i += 1
+  endwhile
+  if getline(l:i + 1) ==# 'DailyNotes:'
+    let l:i += 1
+    while l:i < line('$') && getline(l:i + 1) =~# '^\s*\[[^]]*\]([^)]\+)\s*$'
+      let l:i += 1
+    endwhile
+    let l:i += 1
+  endif
+  call cursor(max([1, min([l:i + 1, line('$')])]), 1)
+  return 1
+endfunction
+
+" \D: 日付を指定して時系列記録を作る・開く。系列を選んでから、日付を聞く（空 Enter = 今日・Esc = 取り消し・日付が不正ならエラー）
+function! gnosis#record_date(...) abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:kinds = s:record_kind_names(l:root)
+  if empty(l:kinds)
+    echo 'Gnosis: ' . gnosis#i18n#tr('時系列記録がまだありません。:GnosisRecordNew 名前 で作れます')
+    return
+  endif
+  let l:date = a:0 && !empty(a:1) ? a:1 : ''
+  " アプリ（GUI）では、カレンダーと系列の選択の画面を開く（決めると gnosis#record_create が呼ばれる）
+  if empty(l:date) && exists('*GnosisGuiRecord') && !exists('g:gnosis_test_record_pick')
+    call GnosisGuiRecord({'mode': 'date', 'kinds': l:kinds, 'today': s:diary_day_of_time('')})
+    return
+  endif
+  call s:record_choose(gnosis#i18n#tr('時系列記録（日付を指定して作る）> '), l:kinds, function('s:record_date_chosen', [l:date]))
+endfunction
+
+function! s:record_date_chosen(date, kind) abort
+  if empty(a:kind) | return | endif
+  let l:date = a:date
+  if empty(l:date)
+    let l:today = s:diary_day_of_time('')
+    if exists('g:gnosis_test_record_date')
+      let l:r = g:gnosis_test_record_date
+    else
+      try
+        let l:r = inputdialog(gnosis#i18n#tr('Record の日付 (YYYY-MM-DD。空 Enter で今日・Esc で取り消し): '), l:today, "\x01gnosis-cancel")
+      catch /^Vim:Interrupt$/
+        let l:r = "\x01gnosis-cancel"
+      endtry
+      redraw
+    endif
+    if l:r ==# "\x01gnosis-cancel"
+      echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました')
+      return
+    endif
+    let l:date = empty(trim(l:r)) ? l:today : trim(l:r)
+  endif
+  call gnosis#record_create(a:kind, l:date)
+endfunction
+
+" 「時系列記録」の中の系列名の一覧（日記を除く）
+function! s:record_kind_names(root) abort
+  let l:notes = s:diary_scan(a:root)
+  let l:rec = s:diary_find_group(l:notes, '時系列記録')
+  return empty(l:rec) ? [] : map(s:record_kinds(a:root, l:notes, l:rec), 'v:val.title')
+endfunction
+
+" 一覧から検索して選ぶ（fzf があれば fzf、無ければ番号で選ぶ）。選んだ名前を Cb(名前) に渡す。取り消しは Cb('')。
+" g:gnosis_test_record_pick（試験用）があれば、それを選んだことにする
+function! s:record_choose(prompt, items, Cb) abort
+  if exists('g:gnosis_test_record_pick')
+    return a:Cb(g:gnosis_test_record_pick)
+  endif
+  if exists('*fzf#run')
+    call fzf#run(fzf#wrap({'source': a:items, 'sink': a:Cb, 'options': ['--prompt', a:prompt]}))
+    return
+  endif
+  let l:n = gnosis#ui#inputlist([a:prompt] + map(copy(a:items), '(v:key + 1) . ". " . v:val'))
+  if l:n >= 1 && l:n <= len(a:items)
+    call a:Cb(a:items[l:n - 1])
+  endif
+endfunction
+
+" \E: 今開いている時系列記録のノートの上位概念を、時系列記録の一覧から検索して選ぶ（解除もできる）。
+" 上位はその日のノートの front matter（parent_record）に入り、その日以降の新しいノートに引き継がれる（過去の日は変わらない）。
+" 今開いているノートが時系列記録の日ごとのノートなら [系列名, 日付]。そうでなければ []
+function! s:record_cur_kind_date() abort
+  let l:kind = ''
+  for l:ln in getline(1, min([40, line('$')]))
+    if l:ln =~# '^record:'
+      try
+        let l:kind = json_decode(matchstr(l:ln, '^record:\s*\zs.*'))
+      catch
+        let l:kind = trim(matchstr(l:ln, '^record:\s*\zs.*'))
+      endtry
+    endif
+  endfor
+  let l:date = matchstr(getline(search('^# ', 'nw')), '^# \zs\d\{4}-\d\d-\d\d')
+  return (empty(l:kind) || empty(l:date)) ? [] : [l:kind, l:date]
+endfunction
+
+function! gnosis#record_parent() abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:kd = s:record_cur_kind_date()
+  if empty(l:kd)
+    echo 'Gnosis: ' . gnosis#i18n#tr('時系列記録の日ごとのノートを開いて実行してください')
+    return
+  endif
+  let l:none = gnosis#i18n#tr('（上位なし）')
+  let l:items = [l:none] + filter(s:record_kind_names(l:root), 'v:val !=# l:kd[0]')
+  if exists('*GnosisGuiRecord') && !exists('g:gnosis_test_record_pick')
+    call GnosisGuiRecord({'mode': 'parent', 'kinds': l:items, 'kind': l:kd[0], 'date': l:kd[1]})
+    return
+  endif
+  call s:record_choose(gnosis#i18n#tr('上位の時系列記録> '), l:items, function('s:record_parent_chosen', [l:kd[0], l:kd[1], l:none]))
+endfunction
+
+" アプリの画面で選んだ上位を、今の記録のノートに設定する（name が空・（上位なし）なら解除）
+function! gnosis#record_parent_apply(name) abort
+  let l:kd = s:record_cur_kind_date()
+  if empty(l:kd) | return | endif
+  let l:none = gnosis#i18n#tr('（上位なし）')
+  call s:record_parent_chosen(l:kd[0], l:kd[1], l:none, empty(a:name) ? l:none : a:name)
+endfunction
+
+function! s:record_parent_chosen(kind, date, none, name) abort
+  if empty(a:name) | return | endif
+  let l:root = s:get_pkm_root()
+  call gnosis#save_current_note()
+  let l:ks = join(s:record_kind_names(l:root), ',')
+  let l:out = gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:daily_script()) . ' plan-parent '
+        \ . shellescape(substitute(l:root, '/\+$', '', '')) . ' ' . shellescape(a:kind) . ' ' . shellescape(a:date) . ' '
+        \ . shellescape(a:name ==# a:none ? 'none' : a:name) . ' ' . shellescape(l:ks))
+  try
+    let l:d = json_decode(l:out)
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . l:out | echohl NONE
+    return
+  endtry
+  if !get(l:d, 'ok', 0)
+    echohl WarningMsg | echo 'Gnosis: ' . get(l:d, 'error', '') | echohl NONE
+    return
+  endif
+  let l:lines = l:d.lines
+  call s:diary_edit_file_raw(fnamemodify(l:root, ':p') . l:d.file, {_ -> l:lines})
+  call s:daily_sync(l:root, a:date)
+  echo 'Gnosis: ' . (a:name ==# a:none ? gnosis#i18n#tr('上位を解除しました') : gnosis#i18n#tr('上位の時系列記録: ') . a:name)
+endfunction
+
+" 全部の日の DailyNotes: を整える（昔の日記の見出し無しのリンクを、DailyNotes: に直す移行にも使う）
+function! gnosis#daily_notes_sync(...) abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  call gnosis#save_current_note()
+  if a:0 && !empty(a:1)
+    call s:daily_sync(l:root, a:1)
+    return
+  endif
+  let l:out = gnosis#sh#system(s:python_cmd() . ' ' . shellescape(s:daily_script()) . ' sync-all ' . shellescape(substitute(l:root, '/\+$', '', '')))
+  silent! checktime
+  echo 'Gnosis: ' . gnosis#i18n#tr('DailyNotes: を整えました') . ' ' . substitute(l:out, '\n\+$', '', '')
 endfunction
 
 " 新しい時系列記録（夢など）を作り、今日のノートを開く

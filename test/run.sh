@@ -82,6 +82,7 @@ python3 "$REPO/python/test_import_notes.py"
 python3 "$REPO/python/test_collector.py"
 python3 "$REPO/python/test_merge_notes.py"
 python3 "$REPO/python/test_diary_tree.py"
+python3 "$REPO/python/test_daily_notes.py"
 sh "$REPO/test/record_rename_net.sh"
 python3 "$REPO/python/test_search_ops.py"
 sh "$REPO/test/search_query_net.sh"
@@ -196,6 +197,7 @@ sh "$REPO/test/time_mode_net.sh"
 
 # 時系列記録（:GnosisRecordNew・\R・:GnosisRecordMigrate）
 sh "$REPO/test/record_net.sh"
+sh "$REPO/test/daily_notes_net.sh"
 sh "$REPO/test/heading_links_net.sh"
 
 # \F の GUI（日記として登録）。tkinter・Pillow・xvfb があるときだけ

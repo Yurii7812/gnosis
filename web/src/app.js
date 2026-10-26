@@ -8,6 +8,7 @@ import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
 import { createMandala } from "./mandala.js";
 import { createScan } from "./scan.js";
+import { createRecord } from "./record.js";
 
 const gui = window.gui;
 const $ = (id) => document.getElementById(id);
@@ -20,6 +21,8 @@ let mandala = null;
 let shownFile = null;
 let scan = null;
 let scanReq = 0;
+let recordReq = 0;
+let record = null;
 let quitReq = 0;
 let cell = { w: 8, h: 18 };
 let last = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
@@ -143,6 +146,11 @@ function applyState(s) {
   if (typeof s.scanReq === "number") {
     if (s.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
     scanReq = s.scanReq;
+  }
+  // \D / \E: Vim から「時系列記録の日付指定・上位の設定の画面を開いて」
+  if (s.recordReq && typeof s.recordReq.n === "number") {
+    if (s.recordReq.n > recordReq && record && !record.isOpen()) record.open(s.recordReq);
+    recordReq = s.recordReq.n;
   }
   // \x / \X: Vim から「アプリを閉じて」（キーボードだけで閉じる。CUI から開いたなら、閉じて CUI に戻る）
   if (typeof s.quitReq === "number") {
@@ -391,6 +399,16 @@ async function boot() {
     api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q) => gui.scanFind(d, q) },
     // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
     onClose: (changed) => { if (changed) gui.write("\x1b:checktime|redraw\r"); term.focus(); },
+  });
+
+  const q = (v) => String(v).replace(/'/g, "''");
+  record = createRecord($("recordpick"), {
+    onSubmit: (mode, v) => {
+      // 共通の作成処理（gnosis#record_create）を Vim で呼ぶ。CUI の \D と同じ
+      if (mode === "date") gui.write(`\x1b:call gnosis#record_create('${q(v.kind)}', '${q(v.date)}')\r`);
+      else gui.write(`\x1b:call gnosis#record_parent_apply('${q(v.name)}')\r`);
+    },
+    onClose: () => term.focus(),
   });
 
   term = new Terminal({

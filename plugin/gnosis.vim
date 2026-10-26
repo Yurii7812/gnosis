@@ -520,7 +520,13 @@ augroup gnosis_time_mode
 augroup END
 " 時系列記録（夢など。日記と同じ形で日ごとのノート）: \R で選んで今日のノートを作る・開く
 nnoremap <silent> \R   <Cmd>call gnosis#record_pick()<CR>
+" \D = 日付を指定して時系列記録を作る・開く（\R は今日のまま）。\E = 今の記録の上位概念を選ぶ
+nnoremap <silent> \D   <Cmd>call gnosis#record_date()<CR>
+nnoremap <silent> \E   <Cmd>call gnosis#record_parent()<CR>
 command! GnosisRecord call gnosis#record_pick()
+command! -nargs=? GnosisRecordDate call gnosis#record_date(<q-args>)
+command! GnosisRecordParent call gnosis#record_parent()
+command! -nargs=? GnosisDailyNotes call gnosis#daily_notes_sync(<q-args>)
 command! -nargs=? GnosisRecordNew call gnosis#record_new(<q-args>)
 command! -nargs=+ GnosisRecordMigrate call gnosis#record_migrate(<f-args>)
 command! -nargs=* GnosisRecordMerge call gnosis#record_merge(<f-args>)

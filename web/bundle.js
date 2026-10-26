@@ -17149,7 +17149,7 @@ ${h3.join(`
   }
   function computeHandlers(plugins) {
     let result = /* @__PURE__ */ Object.create(null);
-    function record(type) {
+    function record2(type) {
       return result[type] || (result[type] = { observers: [], handlers: [] });
     }
     for (let plugin of plugins) {
@@ -17158,19 +17158,19 @@ ${h3.join(`
         for (let type in handlers2) {
           let f = handlers2[type];
           if (f)
-            record(type).handlers.push(bindHandler(plugin.value, f));
+            record2(type).handlers.push(bindHandler(plugin.value, f));
         }
       if (observers2)
         for (let type in observers2) {
           let f = observers2[type];
           if (f)
-            record(type).observers.push(bindHandler(plugin.value, f));
+            record2(type).observers.push(bindHandler(plugin.value, f));
         }
     }
     for (let type in handlers)
-      record(type).handlers.push(handlers[type]);
+      record2(type).handlers.push(handlers[type]);
     for (let type in observers)
-      record(type).observers.push(observers[type]);
+      record2(type).observers.push(observers[type]);
     return result;
   }
   var PendingKeys = [
@@ -19723,8 +19723,8 @@ ${h3.join(`
       if (records.length)
         this.queue = [];
       let from = -1, to = -1, typeOver = false;
-      for (let record of records) {
-        let range = this.readMutation(record);
+      for (let record2 of records) {
+        let range = this.readMutation(record2);
         if (!range)
           continue;
         if (range.typeOver)
@@ -34771,6 +34771,151 @@ ${h3.join(`
     };
   }
 
+  // src/record.js
+  function createRecord(root, { onSubmit, onClose }) {
+    root.className = "recordpick";
+    root.innerHTML = `
+    <div class="rp-box" role="dialog" aria-modal="true">
+      <div class="rp-title"></div>
+      <label class="rp-daterow"><span class="rp-dl"></span><input class="rp-date" type="date"></label>
+      <input class="rp-search" type="text" autocomplete="off" spellcheck="false">
+      <div class="rp-list" role="listbox"></div>
+      <div class="rp-msg"></div>
+      <div class="rp-keys"></div>
+    </div>`;
+    const $4 = (s15) => root.querySelector(s15);
+    const title = $4(".rp-title"), dateRow = $4(".rp-daterow"), dl2 = $4(".rp-dl"), date = $4(".rp-date");
+    const search = $4(".rp-search"), list = $4(".rp-list"), msg = $4(".rp-msg"), keys = $4(".rp-keys");
+    const en2 = document.documentElement.lang === "en";
+    const T = en2 ? {
+      dateTitle: "Create a chronological record for a date",
+      parentTitle: "Parent of this record",
+      date: "Date",
+      search: "Search the records",
+      none: "No matches.",
+      bad: "Enter a real date.",
+      dateKeys: "Tab: date \u21C4 search   \u2191 \u2193: choose   Enter: create / open   Esc: close",
+      parentKeys: "\u2191 \u2193: choose   Enter: decide   Esc: close"
+    } : {
+      dateTitle: "\u65E5\u4ED8\u3092\u6307\u5B9A\u3057\u3066\u6642\u7CFB\u5217\u8A18\u9332\u3092\u4F5C\u308B",
+      parentTitle: "\u3053\u306E\u8A18\u9332\u306E\u4E0A\u4F4D\u306E\u8A18\u9332",
+      date: "\u65E5\u4ED8",
+      search: "\u8A18\u9332\u3092\u691C\u7D22",
+      none: "\u8A72\u5F53\u3059\u308B\u8A18\u9332\u304C\u3042\u308A\u307E\u305B\u3093\u3002",
+      bad: "\u5B9F\u5728\u3059\u308B\u65E5\u4ED8\u3092\u5165\u308C\u3066\u304F\u3060\u3055\u3044\u3002",
+      dateKeys: "Tab: \u65E5\u4ED8 \u21C4 \u691C\u7D22   \u2191 \u2193: \u9078\u3076   Enter: \u4F5C\u308B\u30FB\u958B\u304F   Esc: \u9589\u3058\u308B",
+      parentKeys: "\u2191 \u2193: \u9078\u3076   Enter: \u6C7A\u3081\u308B   Esc: \u9589\u3058\u308B"
+    };
+    let mode = "date", kinds = [], shown = [], sel2 = 0, opened = false;
+    const realDate = (s15) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s15)) return false;
+      const d = /* @__PURE__ */ new Date(s15 + "T12:00:00");
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s15;
+    };
+    function render2() {
+      const q2 = search.value.trim().toLowerCase();
+      shown = kinds.filter((k) => !q2 || k.toLowerCase().includes(q2));
+      sel2 = Math.max(0, Math.min(sel2, shown.length - 1));
+      list.textContent = "";
+      if (!shown.length) {
+        const e = document.createElement("div");
+        e.className = "rp-empty";
+        e.textContent = T.none;
+        list.appendChild(e);
+        return;
+      }
+      shown.forEach((k, i) => {
+        const row = document.createElement("div");
+        row.className = "rp-item" + (i === sel2 ? " sel" : "");
+        row.setAttribute("role", "option");
+        row.textContent = k;
+        row.onclick = () => {
+          sel2 = i;
+          submit();
+        };
+        list.appendChild(row);
+      });
+      list.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
+    }
+    function submit() {
+      if (!shown.length) return;
+      if (mode === "date") {
+        if (!realDate(date.value)) {
+          msg.textContent = T.bad;
+          date.focus();
+          return;
+        }
+        const k = shown[sel2];
+        close();
+        onSubmit("date", { kind: k, date: date.value });
+      } else {
+        const k = shown[sel2];
+        close();
+        onSubmit("parent", { name: k });
+      }
+    }
+    function close() {
+      if (!opened) return;
+      opened = false;
+      root.hidden = true;
+      onClose?.();
+    }
+    root.addEventListener("keydown", (e) => {
+      if (!opened) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.ctrlKey && e.key === "n") {
+        e.preventDefault();
+        sel2 = Math.min(shown.length - 1, sel2 + 1);
+        render2();
+        return;
+      }
+      if (e.key === "ArrowUp" || e.ctrlKey && e.key === "p") {
+        e.preventDefault();
+        sel2 = Math.max(0, sel2 - 1);
+        render2();
+        return;
+      }
+      if (e.key === "Tab" && mode === "date") {
+        e.preventDefault();
+        (document.activeElement === date ? search : date).focus();
+      }
+    });
+    search.addEventListener("input", () => {
+      sel2 = 0;
+      render2();
+    });
+    return {
+      isOpen: () => opened,
+      open(req) {
+        mode = req.mode === "parent" ? "parent" : "date";
+        kinds = Array.isArray(req.kinds) ? req.kinds.slice() : [];
+        title.textContent = mode === "date" ? T.dateTitle : T.parentTitle + (req.kind ? ` \u2014 ${req.kind}` : "");
+        dateRow.hidden = mode !== "date";
+        dl2.textContent = T.date;
+        date.value = req.today || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+        search.placeholder = T.search;
+        search.value = "";
+        msg.textContent = "";
+        keys.textContent = mode === "date" ? T.dateKeys : T.parentKeys;
+        sel2 = 0;
+        root.hidden = false;
+        opened = true;
+        render2();
+        (mode === "date" ? date : search).focus();
+      },
+      close
+    };
+  }
+
   // src/app.js
   var gui = window.gui;
   var $3 = (id2) => document.getElementById(id2);
@@ -34782,6 +34927,8 @@ ${h3.join(`
   var shownFile = null;
   var scan = null;
   var scanReq = 0;
+  var recordReq = 0;
+  var record = null;
   var quitReq = 0;
   var cell = { w: 8, h: 18 };
   var last2 = { file: "", mode: "n", bt: "", popups: 0, mod: 0, cmdtype: "" };
@@ -34885,6 +35032,10 @@ ${h3.join(`
     if (typeof s15.scanReq === "number") {
       if (s15.scanReq > scanReq && scan && !scan.isOpen()) scan.open();
       scanReq = s15.scanReq;
+    }
+    if (s15.recordReq && typeof s15.recordReq.n === "number") {
+      if (s15.recordReq.n > recordReq && record && !record.isOpen()) record.open(s15.recordReq);
+      recordReq = s15.recordReq.n;
     }
     if (typeof s15.quitReq === "number") {
       if (s15.quitReq > quitReq) {
@@ -35131,12 +35282,20 @@ ${h3.join(`
     view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
     mandala = createMandala($3("mandala"), { onCell: onMandalaCell });
     scan = createScan($3("scan"), {
-      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q2) => gui.scanFind(d, q2) },
+      api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q3) => gui.scanFind(d, q3) },
       // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す
       onClose: (changed) => {
         if (changed) gui.write("\x1B:checktime|redraw\r");
         term.focus();
       }
+    });
+    const q2 = (v2) => String(v2).replace(/'/g, "''");
+    record = createRecord($3("recordpick"), {
+      onSubmit: (mode, v2) => {
+        if (mode === "date") gui.write(`\x1B:call gnosis#record_create('${q2(v2.kind)}', '${q2(v2.date)}')\r`);
+        else gui.write(`\x1B:call gnosis#record_parent_apply('${q2(v2.name)}')\r`);
+      },
+      onClose: () => term.focus()
     });
     term = new Dl({
       fontFamily: '"JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace',
