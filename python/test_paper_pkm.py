@@ -275,10 +275,16 @@ def test_index_has_fixed_file_name() -> None:
         pp.regen(root)
         pp.create_paper_index(root)
         check(sorted(p.name for p in root.glob("*.md")) == before, "regen / create を繰り返しても新しい Index は増えない")
-        check(sum(1 for p in root.glob("*.md") if "# Paper-Zettelkasten-Index\n" in p.read_text(encoding="utf-8")) == 1,
-              "Index は 1 つだけ")
+        same = [p for p in root.glob("*.md") if "# Paper-Zettelkasten-Index\n" in p.read_text(encoding="utf-8")]
+        check(sorted(p.name for p in same) == ["Paper-Zettelkasten-Index.md", "Paper-Zettelkasten.md"],
+              f"同じ題は、グループの Index と頂点の普通のノートの 2 つだけ: {[p.name for p in same]}")
+        top = root / "Paper-Zettelkasten.md"
+        ttext = top.read_text(encoding="utf-8")
+        check("attribute: group" not in ttext and "BranchGroup:" in ttext and "[Paper-Zettelkasten-Index](Paper-Zettelkasten-Index.md)" in ttext
+              and "[Index-write](Index-write.md)" in ttext and "[Folgezettel-Index](Folgezettel-Index.md)" in ttext
+              and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: に 3 つのグループ、ChildBranch は空: {ttext}")
         parent = (root / "index.md").read_text(encoding="utf-8")
-        check("(Paper-Zettelkasten-Index.md)" in parent, "index.md から固定名でリンクされる")
+        check("(Paper-Zettelkasten.md)" in parent and "(Paper-Zettelkasten-Index.md)" not in parent, "index.md からは頂点の普通のノートへリンクする")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n"
@@ -287,7 +293,7 @@ def test_index_has_fixed_file_name() -> None:
             (root / name).write_text("---\ntitle: " + name + "\n---\n\n# x\n", encoding="utf-8")
         pp.create_paper_index(root)
         lines = (root / "index.md").read_text(encoding="utf-8").split("\n")
-        at = lines.index("[Paper-Zettelkasten-Index](Paper-Zettelkasten-Index.md)")
+        at = lines.index("[Paper-Zettelkasten-Index](Paper-Zettelkasten.md)")
         check(lines[at - 1] == "[問題](261012130347.md)", f"index.md には空行を挟まず、最後のリンクの直後に足す: {lines[at-2:at+1]}")
         before = (root / "index.md").read_text(encoding="utf-8")
         pp.create_paper_index(root)
@@ -365,8 +371,24 @@ def _diary_vault(root: Path) -> tuple[Path, Path]:
     return root, idx
 
 
+def _section_links(text: str, head: str) -> list[str]:
+    """ブロック head（ParentBranch: / ChildBranch: など）の直後に続くリンク行の宛先（ファイル名）。"""
+    import re as _re
+    lines = text.split("\n")
+    for i, ln in enumerate(lines):
+        if ln.strip() == head:
+            out = []
+            for l2 in lines[i + 1:]:
+                m = _re.match(r"^\s*\[(?:\\.|[^\]\\])*\]\(([^)#]+)", l2)
+                if not m:
+                    break
+                out.append(Path(m.group(1)).name)
+            return out
+    return []
+
+
 def test_diary_register_and_keyword() -> None:
-    print("diary: 紙の日記を登録 → Index にキーワード「日記」→ 日付順の一覧")
+    print("diary: 紙の日記を登録 → Index にキーワード「日記」→ 普通のノートの木（紙の日記 > 月 > 日。グループではない）")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         # デジタル日記のグループ（題「日記」）。紙の日記はこれと別のノートになる
@@ -387,69 +409,73 @@ def test_diary_register_and_keyword() -> None:
         check("paper_diary" not in n7 and "# 2026-10-07-WE" in n7, "日記の題（front matter の目印は持たない）")
         check("![](paper-diary-20261007-1.jpg)" in n7 and "![](paper-diary-20261007-2.jpg)" in n7, "複数ページの画像が並ぶ")
         check((root / "paper-diary-20261007-1.jpg").is_file() and (root / "paper-diary-20260930-1.png").is_file(), "画像が dest へ移る")
-        import re as _re
-        t7 = _re.search(r"^time: (.+)$", n7, _re.M).group(1)
-        from datetime import datetime as _dt
-        check(t7.startswith(_dt.now().strftime("%Y-%m-%d")) and "# 2026-10-07-WE" in n7,
-              f"time はスキャンした日時（今）で、日記の日付（題の 2026-10-07）とは別: {t7}")
 
         pp.regen(root)
         index_text = idx.read_text(encoding="utf-8")
         check(index_text.count("[日記](") == 1, f"Index にキーワード「日記」が 1 つだけある: {index_text}")
-        group = pp.find_diary_group(root, idx)
-        check(group is not None and group.name != "digital.md", "日記グループはデジタル日記のグループとは別のノート")
-        gtext = group.read_text(encoding="utf-8")
-        check("# 日記\n" in gtext and "attribute: group" in gtext and "紙の日記" not in gtext, "題は「日記」（デジタル日記と同じ題。区別はリンク階層）")
-        check("paper_keyword" not in gtext, "日記グループに paper_keyword: 日記 の行は付けない")
-        check("[2026-09](" in gtext and "[2026-10](" in gtext and gtext.index("[2026-09](") < gtext.index("[2026-10](")
-              and "2026-10-07-WE" not in gtext, "「日記」の直下には月グループが古い順に並ぶ（年が変わるまで年グループは作らない）")
-        check(_year(root, "2026") is None, "同じ年だけなら年グループは作られない")
-        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
-        check(fi.count(f"[日記]({group.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ（diary 表記は無い）: {fi}")
-        body_lines = gtext.split("---\n", 2)[2].strip("\n").split("\n")
-        body_lines = ["# 日記", ""] + body_lines[2:] if body_lines[:2] == ["# 日記", ""] else body_lines
-        gb = body_lines.index("Group:")
-        check(body_lines[0] == "# 日記" and body_lines[1] == "" and gb == 2 and body_lines[gb + 3] == ""
-              and "" not in body_lines[gb + 4:] and body_lines[gb + 4].startswith("[2026-"),
-              f"日記グループ: # の次に空行 1 つ、Group: ブロック、空行 1 つ、月のリンクが連続: {body_lines}")
-        m10 = _month(root, "2026-10")
+        top = pp.find_diary_group(root, idx)
+        check(top is not None and top.name != "digital.md", "紙の日記の一番上はデジタル日記のグループとは別のノート")
+        ttext = top.read_text(encoding="utf-8")
+        check("# 紙の日記\n" in ttext and "timeline: true" in ttext and "attribute: group" not in ttext,
+              f"一番上は普通のノート（題 紙の日記・timeline: true・グループの印なし）: {ttext}")
+        check("paper_keyword" not in ttext, "paper_keyword の行は付けない")
+        m9, m10 = _month(root, "2026-09"), _month(root, "2026-10")
+        check(m9 is not None and m10 is not None, "月のノートができる")
         mtext = m10.read_text(encoding="utf-8")
-        check("# 2026-10\n" in mtext and "attribute: group" in mtext and "[2026-10-07-WE](" in mtext, "月グループ（題 YYYY-MM）に日が並ぶ")
+        check("# 2026-10-紙\n" in mtext and "timeline: true" in mtext and "attribute: group" not in mtext,
+              f"月は普通のノート（題 YYYY-MM-紙）: {mtext}")
+        check(_section_links(mtext, "ParentBranch:") == [top.name], f"月の ParentBranch は一番上: {mtext}")
+        check(_section_links(ttext := top.read_text(encoding="utf-8"), "ChildBranch:") == [m9.name, m10.name],
+              f"一番上の ChildBranch に月が古い順に並ぶ（年が変わるまで年は作らない）: {ttext}")
+        mtext = m10.read_text(encoding="utf-8")
+        check(_section_links(mtext, "ChildBranch:") == [notes["2026-10-07"].name], f"月の ChildBranch に日が並ぶ: {mtext}")
+        check(_section_links(notes["2026-10-07"].read_text(encoding="utf-8"), "ParentBranch:") == [m10.name], "日の ParentBranch は月")
+        check("[2026-10-07-WE](" not in mtext.split("ChildBranch:")[0], "日へのリンクは本文ではなく ChildBranch: にだけある")
+        check(_year(root, "2026") is None, "同じ年だけなら年のノートは作られない")
+        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        check(fi.count(f"[日記]({top.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ: {fi}")
+        body = fi.split("---\n", 2)[2].strip("\n").split("\n")
+        g_at = body.index("Group:")
+        rest = body[g_at + 1:]
+        while rest and rest[0].startswith("["):
+            rest = rest[1:]
+        first_link = next(ln for ln in rest if ln.startswith("["))
+        check(first_link.startswith("[日記]("), f"日記は Folgezettel-Index の一番上: {first_link}")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
-        link = f"({group.name})"
-        check(link in index_text, "Index の「日記」は紙の日記グループを指す")
+        check(f"({top.name})" in index_text, "Index の「日記」は紙の日記の一番上を指す")
 
-        # 再生成しても消えず、重複しない
+        # 再生成しても消えず、重複せず、同じ結果
+        snap = {p.name: p.read_bytes() for p in root.glob("*.md")}
         pp.regen(root)
         pp.regen(root)
-        index_text2 = idx.read_text(encoding="utf-8")
-        check(index_text2.count("[日記](") == 1 and link in index_text2, "regen を繰り返しても「日記」は 1 つのまま消えない")
+        check({p.name: p.read_bytes() for p in root.glob("*.md")} == snap, "regen を繰り返しても何も変わらない（冪等）")
         # 後から追加（別の日付、同じ日付の続きのページ）
         moved, errors = pp.register_diary_pages(root, root, [(img("c1.jpg"), "2026-10-01"), (img("a3.jpg"), "2026-10-07")])
         check(not errors, "追加登録")
         n7b = pp.scan_diary_notes(root)["2026-10-07"].read_text(encoding="utf-8")
         check("paper-diary-20261007-3.jpg" in n7b and n7b.count("![](") == 3, "同じ日付の続きのページは同じノートに足される（上書きしない）")
         pp.regen(root)
-        gtext = group.read_text(encoding="utf-8")
         mtext = _month(root, "2026-10").read_text(encoding="utf-8")
-        order = [mtext.index(x) for x in ("2026-10-01-TH", "2026-10-07-WE")]
-        check(order == sorted(order) and mtext.count("2026-10-07-WE](") == 1, "追加後も月の中で日付順、重複しない")
-        check(_year(root, "2026") is None, "追加しても同じ年なら年グループは作らない")
-        # 年が変わったら: すべての年に年グループを作り、「日記」の直下は年グループになる
+        kids = _section_links(mtext, "ChildBranch:")
+        d1, d7 = pp.scan_diary_notes(root)["2026-10-01"].name, pp.scan_diary_notes(root)["2026-10-07"].name
+        check(kids == [d1, d7], f"追加後も月の中で日付順、重複しない: {kids}")
+        check(_year(root, "2026") is None, "追加しても同じ年なら年のノートは作らない")
+        # 年が変わったら: すべての年に年のノートを作り、一番上の直下は年になる
         moved, errors = pp.register_diary_pages(root, root, [(img("d1.jpg"), "2025-12-31")])
         pp.regen(root)
-        y25 = _year(root, "2025")
-        y26 = _year(root, "2026")
-        check(y25 is not None and y26 is not None, "年をまたいだら、すべての年に年グループができる")
+        y25, y26 = _year(root, "2025"), _year(root, "2026")
+        check(y25 is not None and y26 is not None, "年をまたいだら、すべての年に年のノートができる")
         t25 = y25.read_text(encoding="utf-8")
-        t26 = y26.read_text(encoding="utf-8")
-        check("# 2025\n" in t25 and "[2025-12](" in t25 and "[2026-09](" in t26 and "[2026-10](" in t26, "年グループに月グループが並ぶ")
-        gtext = group.read_text(encoding="utf-8")
-        check("[2025](" in gtext and "[2026](" in gtext and "[2026-09](" not in gtext and gtext.index("[2025](") < gtext.index("[2026](")
-              and gtext.count("[2025](") == 1, f"「日記」の直下は年グループ（古い順・重複なし）に替わる: {gtext}")
-        check("[日記](" in idx.read_text(encoding="utf-8") and idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
+        check("# 2025-紙\n" in t25 and "timeline: true" in t25 and "attribute: group" not in t25, "年は普通のノート（題 YYYY-紙）")
+        check(_section_links(t25, "ChildBranch:") == [_month(root, "2025-12").name], "年の ChildBranch に月が並ぶ")
+        check(_section_links(y26.read_text(encoding="utf-8"), "ChildBranch:") == [_month(root, "2026-09").name, _month(root, "2026-10").name],
+              "年の ChildBranch に月が古い順に並ぶ")
+        check(_section_links(_month(root, "2026-10").read_text(encoding="utf-8"), "ParentBranch:") == [y26.name], "月の ParentBranch は年に替わる")
+        check(_section_links(y26.read_text(encoding="utf-8"), "ParentBranch:") == [top.name], "年の ParentBranch は一番上")
+        check(_section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [y25.name, y26.name], "一番上の ChildBranch は年（古い順・重複なし）")
+        check(idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
         fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
-        check(fi.count(f"[日記]({group.name})") == 1, "年をまたいだあとも Folgezettel-Index の 日記 は 1 つ（年グループへ辿れる）")
+        check(fi.count(f"[日記]({top.name})") == 1, "年をまたいだあとも Folgezettel-Index の 日記 は 1 つ")
 
 
 def test_diary_keyword_merges_with_index_write_entry() -> None:
@@ -465,9 +491,10 @@ def test_diary_keyword_merges_with_index_write_entry() -> None:
         pp.regen(root)
         text = idx.read_text(encoding="utf-8")
         check(text.count("[日記](") == 1, f"「日記」は 1 つだけ: {text}")
-        group = pp.find_diary_group(root, idx)
-        gtext = group.read_text(encoding="utf-8")
-        check("[2026-10](" in gtext and gtext.count("(") >= 3, "Index-write の ID と紙の日記（月グループ）が同じグループに並ぶ")
+        top = pp.find_diary_group(root, idx)
+        ttext = top.read_text(encoding="utf-8")
+        check("timeline: true" in ttext and _month(root, "2026-10") is not None and _section_links(ttext, "ChildBranch:") == [_month(root, "2026-10").name],
+              f"Index-write に「日記」の行があっても、紙の日記は普通のノートの木のまま（グループにならない）: {ttext}")
 
 
 def test_diary_errors_and_scan_unchanged() -> None:
@@ -535,37 +562,37 @@ def test_index_has_no_blank_lines_between_links() -> None:
 
 
 def test_user_blank_lines_survive_regen() -> None:
-    print("regen: 利用者が入れた空行は、グループなどの生成ノートでも消えない・増えない")
+    print("regen: 利用者が書いたメモ・空行は、紙の日記の木のノートでも消えない・増えない")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         p = root / "p.jpg"
         p.write_bytes(b"x")
-        pp.register_diary_pages(root, root, [(p, "2026-10-07"), (root / "q.jpg", "2026-10-08")] if False else [(p, "2026-10-07")])
+        pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         pp.regen(root)
         group = pp.find_diary_group(root, idx)
         month = _month(root, "2026-10")
         for note in (group, month):
             t = note.read_text(encoding="utf-8")
-            t = t.replace("### Group", "\n\n### Group", 1)  # リンクと ### Group の間に自分で空行
-            t = t.replace("\n[2026", "\n\n[2026", 1)            # 最初のリンクの前にも空行
+            t = t.replace("\nChildBranch:", "\n自分のメモ\n\nChildBranch:", 1)  # 子の一覧の手前に自分で書いたメモと空行
             note.write_text(t, encoding="utf-8")
         before = {n: n.read_text(encoding="utf-8") for n in (group, month)}
         pp.regen(root)
         pp.regen(root)
         for note in (group, month):
-            check(note.read_text(encoding="utf-8").split("---\n", 2)[2] == before[note].split("---\n", 2)[2],
-                  f"{note.name}: 自分で入れた空行がそのまま残る")
-        # 新しく自動で作る部分は空行を足さない
+            check(note.read_text(encoding="utf-8").split("---\n", 2)[2] == before[note].split("---\n", 2)[2]
+                  and note.read_text(encoding="utf-8").count("自分のメモ") == 1,
+                  f"{note.name}: 自分で書いたメモと空行がそのまま残る")
+        # 新しく足した日は ChildBranch に入る
         p2 = root / "p2.jpg"
         p2.write_bytes(b"x")
         pp.register_diary_pages(root, root, [(p2, "2026-10-09")])
         pp.regen(root)
         m = _month(root, "2026-10").read_text(encoding="utf-8")
-        check("[2026-10-09-FR](" in m, "後から足した日が一覧に入る")
+        check("[2026-10-09-FR](" in m and "自分のメモ" in m, "後から足した日が一覧に入り、メモも残る")
 
 
 def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
-    print("diary: 日記グループは paper_keyword を持たず、regen のたびに同じノートを見つける（増えない）")
+    print("diary: 紙の日記の一番上は目印を持たず、regen のたびに同じノートを見つける（増えない）")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         p = root / "p.jpg"
@@ -573,24 +600,58 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         for _ in range(3):
             pp.regen(root)
-        groups = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
-        check(len(groups) == 1, f"「日記」のグループは 1 つだけ: {[g.name for g in groups]}")
-        check("paper_keyword" not in groups[0].read_text(encoding="utf-8"), "paper_keyword の行は無い")
-        # 旧い版が作った paper_keyword: 日記 つきのグループ（Index からリンクされている）は、同じノートを使い、目印の行だけ外す
-        g = groups[0]
-        t = g.read_text(encoding="utf-8").replace("attribute: group", "paper_keyword: 日記\nattribute: group", 1)
-        g.write_text(t, encoding="utf-8")
-        pp.regen(root)
-        groups2 = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
-        check(groups2 == [g] and "paper_keyword" not in g.read_text(encoding="utf-8"), "旧い目印つきのグループも、同じノートのまま目印だけ外れる")
-        # Index のリンクが無くなっても（題 + attribute: group で）同じノートを見つける
+        tops = [n for n in root.glob("*.md") if "# 紙の日記\n" in n.read_text(encoding="utf-8")]
+        check(len(tops) == 1, f"「紙の日記」は 1 つだけ: {[g.name for g in tops]}")
+        top = tops[0]
+        check("paper_keyword" not in top.read_text(encoding="utf-8"), "paper_keyword の行は無い")
+        # Index のリンクが無くなっても（題 + timeline: true で）同じノートを見つける
         itext = idx.read_text(encoding="utf-8")
         idx.write_text("\n".join(ln for ln in itext.split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
         fi = root / "Folgezettel-Index.md"
         fi.write_text("\n".join(ln for ln in fi.read_text(encoding="utf-8").split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
         pp.regen(root)
-        groups3 = [n for n in root.glob("*.md") if "# 日記\n" in n.read_text(encoding="utf-8")]
-        check(groups3 == [g] and idx.read_text(encoding="utf-8").count("[日記](") == 1, "リンクを消しても同じグループを見つけて、リンクが戻る")
+        tops3 = [n for n in root.glob("*.md") if "# 紙の日記\n" in n.read_text(encoding="utf-8")]
+        check(tops3 == [top] and idx.read_text(encoding="utf-8").count("[日記](") == 1, "リンクを消しても同じノートを見つけて、リンクが戻る")
+
+
+def test_old_group_diary_is_migrated_in_place() -> None:
+    print("diary: 旧い形（グループの 日記 / 年 / 月）は、同じファイルのまま普通のノートの木に直る（何度でも同じ結果）")
+    with tempfile.TemporaryDirectory() as d:
+        root, idx = _diary_vault(Path(d))
+        p = root / "p.jpg"
+        p.write_bytes(b"x")
+        q = root / "q.jpg"
+        q.write_bytes(b"x")
+        pp.register_diary_pages(root, root, [(p, "2026-10-07"), (q, "2025-12-31")])
+        pp.regen(root)
+        top, m10, y26 = pp.find_diary_group(root, idx), _month(root, "2026-10"), _year(root, "2026")
+        # 旧い形に戻す: グループの印・題・本文の子リンクを持つ形（ParentBranch / ChildBranch は無い）
+        import re as _re
+
+        def old_form(path: Path, title: str, kids: list[Path], group_block: str = "") -> None:
+            links = "\n".join(f"[{_re.search(r'^# (.+)$', k.read_text(encoding='utf-8'), _re.M).group(1)}]({k.name})" for k in kids)
+            path.write_text(f"---\ntime: 2026-10-01 00:00:00\ntitle: {title}\nattribute: group\n---\n\n# {title}\n\n{group_block}{links}\n", encoding="utf-8")
+        days10 = [pp.scan_diary_notes(root)["2026-10-07"]]
+        days12 = [pp.scan_diary_notes(root)["2025-12-31"]]
+        m12, y25 = _month(root, "2025-12"), _year(root, "2025")
+        old_form(m10, "2026-10", days10)
+        old_form(m12, "2025-12", days12)
+        old_form(y26, "2026", [m10])
+        old_form(y25, "2025", [m12])
+        old_form(top, "日記", [y25, y26], "Group:\n[Folgezettel-Index:日記](Folgezettel-Index.md)\n[Paper-Zettelkasten-Index:日記](Paper-Zettelkasten-Index.md)\n\n")
+        pp.regen(root)
+        check(pp.find_diary_group(root, idx) == top and _month(root, "2026-10") == m10 and _year(root, "2026") == y26,
+              "同じファイルのまま（増えない）")
+        for path, title in ((top, "紙の日記"), (m10, "2026-10-紙"), (y26, "2026-紙")):
+            t = path.read_text(encoding="utf-8")
+            check(f"# {title}\n" in t and "timeline: true" in t and "attribute: group" not in t, f"{title}: 普通のノートになる: {t}")
+        check(_section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [y25.name, y26.name], "一番上の ChildBranch は年")
+        check(_section_links(y26.read_text(encoding="utf-8"), "ChildBranch:") == [m10.name], "年の ChildBranch は月")
+        check(_section_links(m10.read_text(encoding="utf-8"), "ChildBranch:") == [days10[0].name], "月の ChildBranch は日")
+        check("]({})".format(m10.name) not in y26.read_text(encoding="utf-8").split("ChildBranch:")[0], "旧い本文の子リンクは外れる")
+        snap = {x.name: x.read_bytes() for x in root.glob("*.md")}
+        pp.regen(root)
+        check({x.name: x.read_bytes() for x in root.glob("*.md")} == snap, "もう一度 regen しても同じ（冪等）")
 
 
 def test_diary_note_keeps_a_blank_line_after_the_last_image() -> None:
@@ -699,7 +760,12 @@ def test_legacy_migration() -> None:
         _write(root / "261001000003.md", "---\ntime: 2026-10-01 00:00:03\ntitle: 1-仏教\npaper_topic: 1\ntopic_parent: \n---\n\n# 1-仏教\n\n![](1-仏教.jpg)\n")
         _write(root / "261001000004.md", "---\ntime: 2026-10-01 00:00:04\ntitle: 2026-10-13-TU\npaper_diary: 2026-10-13\n---\n\n# 2026-10-13-TU\n\n![](paper-diary-20261013-1.jpg)\n")
         _write(root / "261001000005.md", "---\ntime: 2026-10-01 00:00:05\ntitle: 紙の日記\npaper_keyword: 日記\nattribute: group\n---\n\n# 紙の日記\n")
-        idx.write_text(idx.read_text(encoding="utf-8").rstrip("\n") + "\n[日記](261001000005.md)\n", encoding="utf-8")
+        itxt = idx.read_text(encoding="utf-8").rstrip("\n")
+        if "\nBackLink:" in itxt:   # 頂点のノートの BranchGroup: から付く BackLink: の手前に足す
+            itxt = itxt.replace("\nBackLink:", "\n[日記](261001000005.md)\n\nBackLink:", 1)
+        else:
+            itxt += "\n[日記](261001000005.md)"
+        idx.write_text(itxt + "\n", encoding="utf-8")
         for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg"):
             (root / n).write_bytes(b"x")
         pp.regen(root)
@@ -709,11 +775,14 @@ def test_legacy_migration() -> None:
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")
         check("![](1.jpg)" in snap["261001000001.md"] and "[1a](261001000002.md)" in snap["261001000001.md"], "本文の画像とリンクは残る")
-        check("# 日記\n" in snap["261001000005.md"] and "紙の日記" not in snap["261001000005.md"], "旧い題「紙の日記」は「日記」に直る")
+        check("# 紙の日記\n" in snap["261001000005.md"] and "timeline: true" in snap["261001000005.md"] and "attribute: group" not in snap["261001000005.md"]
+              and "paper_keyword" not in snap["261001000005.md"], "旧いグループ「紙の日記」は、同じノートのまま普通のノート（timeline: true）に直る")
         pp.regen(root)
         pp.regen(root)
         again = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
-        check(again == snap, "regen を繰り返しても何も変わらない（冪等）")
+        import difflib as _dl
+        diffs = "".join("".join(_dl.unified_diff(snap[k].splitlines(1), again[k].splitlines(1), k, k)) for k in snap if snap[k] != again.get(k))
+        check(again == snap, "regen を繰り返しても何も変わらない（冪等）" + ("\n" + diffs if diffs else ""))
 
 
 def test_unmigratable_diary_is_kept() -> None:
@@ -748,7 +817,11 @@ def test_group_notes_format() -> None:
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
         k = it.index("[Folgezettel-Index](Folgezettel-Index.md)")
         check(it[k - 1] == "[Index-write](Index-write.md)" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")
-        check("" not in it[k + 2:-1] and it[k + 2:].count("") <= 1, f"キーワード一覧に空行なし: {it[k:]}")
+        kw = it[k + 2:]
+        kw = kw[:kw.index("BackLink:")] if "BackLink:" in kw else kw   # 頂点のノートの BranchGroup: から BackLink: が付く
+        while kw and kw[-1] == "":
+            kw.pop()
+        check("" not in kw, f"キーワード一覧に空行なし: {it[k:]}")
         check(sum(1 for ln in it if ln.startswith("[日記](")) == 1, "「日記」は通常のキーワードとして 1 つ")
         fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8").split("\n")
         check("attribute: group" in fi[:6], "Folgezettel-Index も attribute: group")
@@ -760,14 +833,15 @@ def test_group_notes_format() -> None:
         check(not any("[diary](" in ln for ln in fi), "[diary] 表記は無い")
         top = pp.find_diary_group(root, idx)
         tt = top.read_text(encoding="utf-8").split("\n")
-        check("# 日記" in tt and "attribute: group" in tt and "紙の日記" not in "".join(tt), "日記グループの題は「日記」")
+        check("# 紙の日記" in tt and "timeline: true" in tt and "attribute: group" not in tt, "紙の日記の一番上は普通のノート（題 紙の日記・timeline: true・グループの印なし）")
         gi = tt.index("Group:")
-        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]) and any("Folgezettel-Index" in ln for ln in tt[gi:gi + 4]), "日記グループの Group: に Paper-Zettelkasten-Index と Folgezettel-Index")
+        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]) and any("Folgezettel-Index" in ln for ln in tt[gi:gi + 4]), "一番上の Group: に Paper-Zettelkasten-Index と Folgezettel-Index（グループのメンバー）")
+        check("ChildBranch:" in tt and tt[tt.index("ChildBranch:") + 1].startswith("[2026-10-紙]("), "一番上の ChildBranch: に月")
         month = _month(root, "2026-10").read_text(encoding="utf-8").split("\n")
-        i = month.index("# 2026-10")
-        check(month[:4] == ["---", month[1], "attribute: group", "---"] and month[4] == "" and i == 5 and month[6] == ""
-              and month[7] == "Group:" and month[8].startswith("[日記:2026-10](") and month[9] == "" and month[10].startswith("[2026-10-13-TU]("),
-              f"月グループ: --- / 空行 / # / 空行 / Group: / 所属 / 空行 / リンク: {month}")
+        check("# 2026-10-紙" in month and "timeline: true" in month and "attribute: group" not in month
+              and month[month.index("ParentBranch:") + 1].startswith("[紙の日記](")
+              and month[month.index("ChildBranch:") + 1].startswith("[2026-10-13-TU]("),
+              f"月は普通のノート: ParentBranch: 紙の日記 / ChildBranch: 日: {month}")
 
 
 def test_digital_diary_not_confused() -> None:

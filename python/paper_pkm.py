@@ -70,7 +70,8 @@ INDEX_WRITE = "Index-write.md"
 OLD_INDEX_WRITE = "Index_write.md"
 FOLGE_INDEX = "Folgezettel-Index.md"
 DEFAULT_INDEX_TITLE = "Paper-Zettelkasten-Index"
-PAPER_INDEX_NAME = "Paper-Zettelkasten-Index.md"  # Index のファイル名は常にこれ
+PAPER_INDEX_NAME = "Paper-Zettelkasten-Index.md"  # Index（グループ）のファイル名は常にこれ
+PAPER_TOP_NAME = "Paper-Zettelkasten.md"          # 頂点の普通のノート（題は Index と同じ Paper-Zettelkasten-Index。BranchGroup: に 3 つのグループ）
 
 ID_PATTERN = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*$")
 # キーと ID 部に `:` を許さない（`time: 2026-01-01 00:00:00` のような front matter を
@@ -86,8 +87,10 @@ LEGACY_FM_KEYS = (
     "paper_keyword", "paper_topic", "paper_topic_index", "folgezettel_index",
 )
 DIARY_KEYWORD = "日記"                   # Paper-Zettelkasten-Index のキーワード表示名
-DIARY_GROUP_TITLE = "日記"               # 紙の日記の一番上のグループの題（デジタル日記のグループも「日記」。区別はリンク階層）
-OLD_DIARY_GROUP_TITLE = "紙の日記"       # 旧い題（regen が「日記」に直す）
+DIARY_GROUP_TITLE = "紙の日記"           # 紙の日記の木の一番上のノートの題（グループではない普通のノート。timeline: true）
+OLD_DIARY_GROUP_TITLE = "日記"           # 旧い題（グループだった頃。regen が「紙の日記」の普通のノートに直す）
+PAPER_YEAR_RE = re.compile(r"^(\d{4})-紙$")        # 木の年のノートの題（デジタル日記の 2026 や夢の 2026-夢 と同じ付け方）
+PAPER_MONTH_RE = re.compile(r"^(\d{4}-\d{2})-紙$")  # 木の月のノートの題
 DIARY_IMAGE_PREFIX = "paper-diary-"
 # スキャン由来のノート（紙の日記・スキャンノート・トピックノート）の印。デジタル日記の「今日のノート」に載せない
 SCAN_SOURCE_LINE = "source: scan"
@@ -522,7 +525,8 @@ def _legacy_paper_indexes(root: Path) -> list[Path]:
     for n in load_notes(root):
         if n.path == fixed:
             continue
-        if n.title == DEFAULT_INDEX_TITLE or fm_value(n.fm, "paper_index"):
+        # 旧いものはグループ。頂点の普通のノート（題が同じ・グループではない）は含めない
+        if fm_value(n.fm, "paper_index") or (n.group and n.title == DEFAULT_INDEX_TITLE):
             found.append(n.path)
     return sorted(found, key=lambda p: p.name)
 
@@ -1250,26 +1254,45 @@ def find_id_index(root: Path, fid: str, notes: Optional[list] = None) -> Optiona
     return None
 
 
+def _is_timeline_note(n) -> bool:
+    return any(re.match(r"^\s*timeline\s*:\s*true\s*$", ln, re.I) for ln in n.fm)
+
+
 def paper_diary_groups(notes: list) -> dict:
-    """紙の日記の月・年・一番上のグループを、リンク階層で見つける（front matter の目印は使わない）。
-    戻り値: {"months": {YYYY-MM: path}, "years": {YYYY: path}, "tops": [path…]}。
+    """紙の日記の月・年・一番上のノートを見つける。戻り値: {"months": {YYYY-MM: path}, "years": {YYYY: path}, "tops": [path…]}。
+    新しい形（2026-10-26 から）: グループではない普通のノート（timeline: true）で、題が
+      月 `YYYY-MM-紙`、年 `YYYY-紙`、一番上 `紙の日記`。デジタル日記の月（題 `YYYY-MM`）とは題が違うので取り違えない。
+    旧い形（グループ）も見つける（regen が新しい形に直す）:
     - 月 … title が YYYY-MM の attribute: group で、リンク先に紙の日記ノートがある
     - 年 … title が YYYY の attribute: group で、リンク先に紙の日記の月グループがある
-    - 一番上 … title が「日記」（旧: 紙の日記）の attribute: group で、リンク先に紙の日記の月/年グループがある
+    - 一番上 … title が「日記」「紙の日記」の attribute: group で、リンク先に紙の日記の月/年グループがある
     デジタル日記の同名のグループは、リンク先が紙の日記ではないので含まれない。"""
     diaries = {os.path.normpath(str(n.path)) for n in notes if diary_date_of(n)}
     months: dict[str, Path] = {}
+    years: dict[str, Path] = {}
+    tops: list[Path] = []
+    for n in notes:
+        m = PAPER_MONTH_RE.match(n.title)
+        if m and _is_timeline_note(n) and not n.group:
+            months.setdefault(m.group(1), n.path)
+            continue
+        m = PAPER_YEAR_RE.match(n.title)
+        if m and _is_timeline_note(n) and not n.group:
+            years.setdefault(m.group(1), n.path)
+            continue
+        if n.title == DIARY_GROUP_TITLE and _is_timeline_note(n) and not n.group:
+            tops.append(n.path)
     for n in notes:
         if n.group and re.fullmatch(r"\d{4}-\d{2}", n.title) and any(l in diaries for l in n.links):
             months.setdefault(n.title, n.path)
     month_norms = {os.path.normpath(str(p)) for p in months.values()}
-    years: dict[str, Path] = {}
     for n in notes:
         if n.group and re.fullmatch(r"\d{4}", n.title) and any(l in month_norms for l in n.links):
             years.setdefault(n.title, n.path)
     child_norms = month_norms | {os.path.normpath(str(p)) for p in years.values()}
-    tops = [n.path for n in notes
-            if n.group and n.title in (DIARY_GROUP_TITLE, OLD_DIARY_GROUP_TITLE) and any(l in child_norms for l in n.links)]
+    tops += [n.path for n in notes
+             if n.group and n.title in (DIARY_GROUP_TITLE, OLD_DIARY_GROUP_TITLE) and any(l in child_norms for l in n.links)
+             and n.path not in tops]
     return {"months": months, "years": years, "tops": tops}
 
 
@@ -1540,34 +1563,52 @@ def _sync_link_block(body: list[str], base: Path, strip_targets: set[str],
     return out
 
 
-def _write_diary_group(root: Path, existing: Optional[Path], value: str, links: list[str],
-                       strip_targets: set[str], desired: list[tuple[Path, str]],
-                       extra_tail: Optional[list[str]] = None) -> Path:
-    """紙の日記の月／年グループを作る／作り直す（題 = 値。`attribute: group`。目印の front matter は持たない）。
-    本文のリンクはその場で直し（古い構造のリンクは strip_targets で外す）、それ以外の手書きは残す。"""
+def _timeline_fm(fm: list[str], title: str) -> list[str]:
+    """木のノートの front matter: 時刻・title・timeline: true（グループの印 attribute は付けない）。"""
+    rest = [ln for ln in fm if not re.match(r"^\s*(title|attribute|timeline)\s*:", ln)]
+    at = next((i for i, ln in enumerate(rest) if ln.startswith("time:")), -1)
+    rest[at + 1:at + 1] = [f"title: {title}", "timeline: true"]
+    return rest
+
+
+def _write_tree_node(root: Path, existing: Optional[Path], title: str, strip: set[str]) -> Path:
+    """紙の日記の木のノート（一番上・年・月）を作る／作り直す。グループだった旧い形は、その場で普通のノートに直す。
+    子は本文ではなく ChildBranch:（同期が書く）に出るので、本文の古い構造リンクは外す。手書きは残す。"""
     path = existing
     if path is None:
         path = unique_note_path(root)
-        write_note(path, [_time_line(), f"title: {value}", "attribute: group"], [f"# {value}", ""],
+        write_note(path, [_time_line(), f"title: {title}", "timeline: true"], [f"# {title}", ""],
                    keep_trailing_blank=True)
-    fm, old_body = read_note(path)
-    base = path.parent
-    old_body = _sync_link_block(old_body, base, strip_targets, desired)
-    fm = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
-    fm.insert(1 if fm else 0, f"title: {value}")
-    fm.insert(2 if len(fm) > 1 else len(fm), "attribute: group")
-    write_note(path, fm, merge_note_body(old_body, [f"# {value}", "", *links, *(extra_tail or [])]))
+    fm, body = read_note(path)
+    old_title = title_of(fm, body, "")
+    body = _sync_link_block(body, path.parent, strip, [])
+    if old_title and old_title != title:
+        body = [f"# {title}" if ln.strip() == f"# {old_title}" else ln for ln in body]
+    write_note(path, _timeline_fm(fm, title), body, keep_trailing_blank=True)
     return path
 
 
-def build_diary_hierarchy(root: Path, diaries: dict[str, Path],
-                          notes: Optional[list] = None) -> tuple[list[Path], set[str]]:
-    """紙の日記を 年・月別のグループにまとめる。戻り値: (一番上のグループ「日記」の直下に並べるノート, 構造ノートの正規化パス)。
+def _set_tree_parent(child: Path, parent: Path, parent_title: str, tree_names: set[str]) -> None:
+    """child の ParentBranch: を parent の 1 本にする。旧い形（グループ）の所属 Group: は外す。"""
+    import branch_ops as bo
+    import diary_tree as dt
+    import note_format_v2 as nf
+    text = child.read_text(encoding="utf-8")
+    new = dt.remove_block_links(text, nf.GROUP_MARK, tree_names)
+    new = dt.set_parent(new, bo._link(child.parent, parent, parent_title))
+    if new != text:
+        child.write_text(new, encoding="utf-8")
 
-    - 日（日記ノート）は月グループ（題 YYYY-MM）の本文に日付順に並ぶ。
-    - **年グループ（題 YYYY）は、日記が 2 つ以上の年にまたがってから**作る（年が変わるまでは作らない）。
-      またがったら、すべての年に年グループを作り、その本文に月グループを並べる。
-    - 年が変わる前は「日記」の直下に月グループが並び、変わったあとは年グループが並ぶ。
+
+def build_diary_tree(root: Path, diaries: dict[str, Path], notes: Optional[list] = None,
+                     top_existing: Optional[Path] = None) -> tuple[Path, set[str]]:
+    """紙の日記を、グループではない普通のノートの木にする。戻り値: (一番上のノート「紙の日記」, 構造ノートの正規化パス)。
+
+        紙の日記 > （年 `YYYY-紙` >）月 `YYYY-MM-紙` > その日のノート（`YYYY-MM-DD-曜日2文字`）
+
+    - どれも timeline: true の普通のノート。子の ParentBranch: に親が入り、親の ChildBranch: は同期が書く。Folgezettel の番号も付く。
+    - **年のノートは、日記が 2 つ以上の年にまたがってから**作る（年が変わるまでは月が「紙の日記」の直下）。
+    - 旧い形（グループの月・年・日記）は、同じファイルのまま普通のノートに直す（regen のたびに同じ結果になる）。
     """
     notes = notes if notes is not None else load_notes(root)
     groups = paper_diary_groups(notes)
@@ -1576,30 +1617,33 @@ def build_diary_hierarchy(root: Path, diaries: dict[str, Path],
         by_month.setdefault(date[:7], []).append((date, path))
     years = sorted({m[:4] for m in by_month})
     use_years = len(years) >= 2
-
     month_paths: dict[str, Path] = dict(groups["months"])
     year_paths: dict[str, Path] = dict(groups["years"])
-    # 古い構造のリンク（日・月・年）は、どのグループからも必要なものだけその場で直す
+    top_path = top_existing or (groups["tops"][0] if groups["tops"] else None)
+
     strip = {os.path.normpath(str(p)) for p in diaries.values()}
     strip |= {os.path.normpath(str(p)) for p in month_paths.values()}
     strip |= {os.path.normpath(str(p)) for p in year_paths.values()}
 
-    for month, days in sorted(by_month.items()):
-        links = [markdown_link(diary_title(d), p, root) for d, p in days]
-        month_paths[month] = _write_diary_group(root, month_paths.get(month), month, links, strip,
-                                                [(p, lk) for (d, p), lk in zip(days, links)])
+    top = _write_tree_node(root, top_path, DIARY_GROUP_TITLE, strip)
+    strip.add(os.path.normpath(str(top)))
+    for month in sorted(by_month):
+        month_paths[month] = _write_tree_node(root, month_paths.get(month), f"{month}-紙", strip)
         strip.add(os.path.normpath(str(month_paths[month])))
-    if not use_years:
-        # 年グループを作らなかった（まだ作らない）。前に作っていたら残す（消さない）が、並べない
-        return [month_paths[m] for m in sorted(month_paths) if m in by_month], strip
-    top: list[Path] = []
-    for y in years:
-        ms = [m for m in sorted(by_month) if m.startswith(y)]
-        links = [markdown_link(m, month_paths[m], root) for m in ms]
-        year_paths[y] = _write_diary_group(root, year_paths.get(y), y, links, strip,
-                                           [(month_paths[m], lk) for m, lk in zip(ms, links)])
-        strip.add(os.path.normpath(str(year_paths[y])))
-        top.append(year_paths[y])
+    if use_years:
+        for y in years:
+            year_paths[y] = _write_tree_node(root, year_paths.get(y), f"{y}-紙", strip)
+            strip.add(os.path.normpath(str(year_paths[y])))
+    tree_names = {Path(p).name for p in strip} | {top.name}
+    for month, days in sorted(by_month.items()):
+        parent = year_paths[month[:4]] if use_years else top
+        parent_title = f"{month[:4]}-紙" if use_years else DIARY_GROUP_TITLE
+        _set_tree_parent(month_paths[month], parent, parent_title, tree_names)
+        for _d, p in days:
+            _set_tree_parent(p, month_paths[month], f"{month}-紙", tree_names)
+    if use_years:
+        for y in years:
+            _set_tree_parent(year_paths[y], top, DIARY_GROUP_TITLE, tree_names)
     return top, strip
 
 
@@ -1679,16 +1723,13 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         seen_groups.add(display)
         group_title = entry.get("title", display)
         if entry.get("diary"):
-            # 紙の日記の「日記」: デジタル日記のグループも題が「日記」なので、題ではなく Index のリンク階層で見つける
-            group_path = find_diary_group(root, index_path, notes)
-            if group_path is None and not entry["ids"]:
-                group_path = _new_group_note(root, display, readings[display], title=group_title)
-        else:
-            group_path = None
+            # 紙の日記はグループではなく、普通のノートの木（紙の日記 > 年 > 月 > 日）。キーワード「日記」は一番上のノートへのリンク
+            group_paths[display], _structure = build_diary_tree(
+                root, diaries, load_notes(root), find_diary_group(root, index_path, notes))
+            continue
+        group_path = find_group(root, display, index_path, notes)
         if group_path is None:
-            group_path = find_group(root, display, index_path, notes)
-            if group_path is None:
-                group_path = _new_group_note(root, display, readings[display])
+            group_path = _new_group_note(root, display, readings[display])
         group_paths[display] = group_path
 
         inner = [
@@ -1697,31 +1738,16 @@ def regen(root: Path, do_sync: bool = True) -> bool:
                 (f for f in entry["ids"] if f in folge), key=natural_key
             )
         ]
-        old_group_body_extra = None
-        if entry.get("diary"):
-            # 紙の日記は 年・月別のグループにまとめる（年グループは年が変わってから）。
-            # 一番上の「日記」グループには、月グループ（年が変わったあとは年グループ）を並べる
-            top_children, diary_structure = build_diary_hierarchy(root, diaries, load_notes(root))
-            top_links = [markdown_link(title_of(*read_note(p), p.stem), p, group_path.parent)
-                         for p in top_children]
-            inner += top_links
-            old_group_body_extra = (diary_structure, list(zip(top_children, top_links)))
         inner.append(CONTEXT_HEAD)
         inner.append(markdown_link(index_display, index_path, group_path.parent))
 
         fm, old_group_body = read_note(group_path)
-        old_title = title_of(fm, old_group_body, "")
-        if old_title in (OLD_DIARY_GROUP_TITLE,) and entry.get("diary"):
-            old_group_body = [f"# {group_title}" if ln.strip() == f"# {old_title}" else ln for ln in old_group_body]
-        if old_group_body_extra:
-            structure, desired_top = old_group_body_extra
-            old_group_body = _sync_link_block(old_group_body, group_path.parent, structure, desired_top)
         # キーワードから外した ID のリンクは、グループの本文からも外す（残りのリンクはその場のまま）
         id_ids = sorted((f for f in entry["ids"] if f in folge), key=natural_key)
         old_group_body = _sync_link_block(
             old_group_body, group_path.parent, {os.path.normpath(str(p)) for p in folge.values()},
             [(folge[f], markdown_link(f, folge[f], group_path.parent)) for f in id_ids])
-        fm = _fm_title_attr(fm, group_title if entry.get("diary") else display)
+        fm = _fm_title_attr(fm, display)
         fm = _update_yomi(fm, {display: readings[display]})
         write_note(group_path, fm, merge_note_body(old_group_body, inner))
 
@@ -1857,6 +1883,9 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             if msg:
                 added_report.append(msg)
 
+    # --- 頂点の普通のノート（題 Paper-Zettelkasten-Index）。BranchGroup: に 3 つのグループ ------------
+    ensure_paper_top(root, index_path, root / INDEX_WRITE, root / FOLGE_INDEX)
+
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
         _ensure_fm_line(dpath, "source", SCAN_SOURCE_LINE)
@@ -1871,6 +1900,51 @@ def regen(root: Path, do_sync: bool = True) -> bool:
 
         note_format_v2.simple_sync(root)
     return True
+
+
+def find_paper_top(root: Path) -> Optional[Path]:
+    """頂点の普通のノート（題 Paper-Zettelkasten-Index・グループではない）。固定名を優先し、無ければ題で探す。"""
+    root = Path(root)
+    fixed = root / PAPER_TOP_NAME
+    if fixed.is_file():
+        return fixed
+    idx = root / PAPER_INDEX_NAME
+    for n in load_notes(root):
+        if n.title == DEFAULT_INDEX_TITLE and not n.group and n.path != idx:
+            return n.path
+    return None
+
+
+def ensure_paper_top(root: Path, index_path: Path, index_write: Path, folge_index: Path) -> Path:
+    """頂点の普通のノートを作る／直す。
+
+        Paper-Zettelkasten-Index（普通のノート。ChildBranch: は空）
+          BranchGroup: Paper-Zettelkasten-Index（グループ。キーワードは全部ここ）・Index-write・Folgezettel-Index
+
+    vault の index.md からは、グループではなくこの頂点のノートへリンクする（グループへのリンクは頂点へ張り替える）。"""
+    top = find_paper_top(root)
+    if top is None:
+        top = Path(root) / PAPER_TOP_NAME
+        write_note(top, [_time_line(), f"title: {DEFAULT_INDEX_TITLE}"], [f"# {DEFAULT_INDEX_TITLE}", ""],
+                   keep_trailing_blank=True)
+    lines = [markdown_link(DEFAULT_INDEX_TITLE, index_path, top.parent)]
+    for p in (index_write, folge_index):
+        if p.is_file():
+            lines.append(markdown_link(p.stem, p, top.parent))
+    _write_branch_group(top, lines)
+    parent_index = Path(root) / "index.md"
+    if parent_index.is_file():
+        fm, body = read_note(parent_index)
+        new_link = markdown_link(DEFAULT_INDEX_TITLE, top, parent_index.parent)
+        old_target = f"({_rel(parent_index.parent, index_path)})"
+        changed = False
+        for i, ln in enumerate(body):
+            if ln.strip().startswith("[") and ln.strip().endswith(old_target):
+                body[i] = new_link
+                changed = True
+        if changed:
+            write_note(parent_index, fm, body)
+    return top
 
 
 def _write_new_paper_index(index_path: Path) -> None:
@@ -1937,7 +2011,7 @@ def create_paper_index(root: Path) -> Path:
     parent_index = root / "index.md"
     if parent_index.is_file():
         fm, body = read_note(parent_index)
-        if all(index_path.name not in ln for ln in body):
+        if all(index_path.name not in ln and PAPER_TOP_NAME not in ln for ln in body):
             # 空行は入れない: 最後のリンク行（内容のある最後の行）の直後に 1 行足す
             link = f"[{DEFAULT_INDEX_TITLE}]({_rel(parent_index.parent, index_path)})"
             last = max((i for i, ln in enumerate(body) if ln.strip()), default=-1)
