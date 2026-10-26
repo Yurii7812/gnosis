@@ -2,7 +2,7 @@
 # 時系列記録（:GnosisRecordNew・\R・:GnosisRecordMigrate）
 set -eu
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-W=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/record.XXXXXX")
+W=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/record.XXXXXX")
 trap 'rm -rf "$W"' EXIT
 V="$W/v"
 mkdir -p "$V" "$W/home"

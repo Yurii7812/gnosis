@@ -6,7 +6,7 @@
 # 確かめること: 専用 vimrc とプラグイン領域ができる / ランチャーとアプリメニュー（アイコン付き）ができる /
 #   ふだんの ~/.vimrc・~/.vim は変わらず、Gnosis の Vim はそれを読まない / ふつうの vim はそれを読む
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

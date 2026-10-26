@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Context ブロック（`Context:` + 直下のリンク）の回帰試験。一時フォルダ（~/Desktop/test）だけを使う。"""
+"""Context ブロック（`Context:` + 直下のリンク）の回帰試験。一時フォルダ（~/gnosis-work/test）だけを使う。"""
 from __future__ import annotations
 
 import os

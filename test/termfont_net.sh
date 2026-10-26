@@ -1,8 +1,8 @@
 #!/bin/sh
 # 文字サイズの回帰網: Vim 側の保存・説明と、ランチャーが新しい窓に渡す引数（実際には起動しない）。
-# HOME と GNOSIS_HOME は一時フォルダ（既定 ~/Desktop/test の下）。端末の環境変数は空にして動かす。
+# HOME と GNOSIS_HOME は一時フォルダ（既定 ~/gnosis-work/test の下）。端末の環境変数は空にして動かす。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

@@ -1,7 +1,7 @@
 #!/bin/sh
 # ライト・ダークの色（曼荼羅など）のコントラストの回帰網。一時フォルダだけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

@@ -5,7 +5,7 @@
 #   - 2 回目は更新（ff）。未コミットの変更があれば止まって、変更を消さない
 #   - git が無くパッケージ管理も無い環境では、成功と言わず理由を出して終わる
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

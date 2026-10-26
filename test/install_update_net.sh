@@ -3,7 +3,7 @@
 #   - 古い版のフォルダで install.sh を動かすと、新しい版を取り込んでから入れ直す
 #   - 未コミットの変更があるときは、ファイルを残してエラー終了する
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

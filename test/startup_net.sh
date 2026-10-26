@@ -1,7 +1,7 @@
 #!/bin/sh
 # 起動の軽さの回帰網: 配色（colors/gnosis.vim）を起動中に何度も読み直さない。一時フォルダだけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

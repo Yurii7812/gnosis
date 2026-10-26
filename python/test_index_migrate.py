@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """index_migrate.py の試験: Index に直接載っているグループを、Index → ノート → BranchGroup に直す。
-一時フォルダ（既定 ~/Desktop/test）の vault だけを使う。"""
+一時フォルダ（既定 ~/gnosis-work/test）の vault だけを使う。"""
 import os
 import sys
 import tempfile

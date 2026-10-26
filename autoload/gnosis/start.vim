@@ -285,10 +285,7 @@ function! gnosis#start#render() abort
   endif
   let l:cols = winwidth(0)
   let l:rows = winheight(0)
-  " 文言は選択中の vault の言語。配色はダークの背景と、ダークのリンクの色の Chnoubis。
-  let l:sv = s:current_vault()
-  let l:lang = !empty(l:sv) && l:sv.exists ? gnosis#settings#load(l:sv.path).language : gnosis#settings#defaults().language
-  call gnosis#i18n#set_lang(l:lang)
+  " 文言の言語は Gnosis ホーム全体の設定（l で選ぶ。初めは英語）。配色はダークの背景と、ダークのリンクの色の Chnoubis。
   let l:lines = []
   let l:hl = []
   if s:mode ==# 'start'
@@ -467,8 +464,10 @@ function! gnosis#start#key(k) abort
         call gnosis#start#begin(l:v.path)
         return
       endif
-    elseif a:k ==# 'v' || a:k ==# 'l'
+    elseif a:k ==# 'v'
       let s:mode = 'vaults'
+    elseif a:k ==# 'l'
+      call gnosis#i18n#choose(gnosis#i18n#lang() ==# 'ja' ? 'en' : 'ja')
     elseif a:k ==# 's'
       call gnosis#settings_ui#open({'from_start': 1})
       return

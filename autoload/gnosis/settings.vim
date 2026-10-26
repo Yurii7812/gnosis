@@ -39,10 +39,7 @@ endfunction
 let s:palette_file = expand('<sfile>:p:h:h:h') . '/assets/themes/builtin.json'
 
 function! gnosis#settings#defaults() abort
-  let l:lang = get(g:, 'gnosis_language', '')
-  if l:lang !~# '^\(ja\|en\)$'
-    let l:lang = gnosis#i18n#system_lang()
-  endif
+  let l:lang = gnosis#i18n#lang()
   return {
         \ 'version': 1,
         \ 'language': l:lang,
@@ -140,7 +137,10 @@ function! gnosis#settings#load(vault) abort
     return l:def
   endif
   let l:raw = gnosis#home#read_json(gnosis#settings#file(a:vault), {})
-  return gnosis#settings#merge(l:def, l:raw)
+  let l:s = gnosis#settings#merge(l:def, l:raw)
+  " 言語は vault ごとではなく Gnosis ホーム全体の設定（vault の language は写し）
+  let l:s.language = l:def.language
+  return l:s
 endfunction
 
 function! gnosis#settings#save(vault, settings) abort

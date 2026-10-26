@@ -102,7 +102,7 @@ function! s:load(...) abort
     let l:first = 1
   endif
   if l:first
-    echo 'Gnosis: 曼荼羅の索引を作っています（初回だけ時間がかかります）…'
+    echo 'Gnosis: ' . gnosis#i18n#tr('曼荼羅の索引を作っています（初回だけ時間がかかります）…')
     redraw
   endif
   " 走査が重い vault（1 秒を超える）では、開くのを待たせず、走査は裏で行う。終わって変わっていれば描き直す
@@ -113,7 +113,7 @@ function! s:load(...) abort
     let l:r = s:pyc(['refresh', l:root] + (l:force ? ['--force'] : []))
   endif
   if type(l:r) != v:t_dict
-    echohl WarningMsg | echo 'Gnosis: 曼荼羅のデータを読めませんでした' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('曼荼羅のデータを読めませんでした') | echohl NONE
     return 0
   endif
   let s:S.data = {'nodes': {}}
@@ -521,7 +521,7 @@ function! s:near_ids(c, have) abort
   for l:d in s:S.nearc[a:c]
     if index(a:have, l:d.id) < 0 && index(l:out, l:d.id) < 0
       call add(l:out, l:d.id)
-      let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
+      let s:S.why[l:d.id] = join(map(copy(l:d.why[0 : 2]), 's:why_tr(v:val)'), gnosis#i18n#tr('・'))
     endif
   endfor
   if empty(s:S.nearc[a:c])
@@ -555,7 +555,7 @@ function! s:rel_ids(c, have) abort
     if index(a:have, l:d.id) < 0 && index(l:out, l:d.id) < 0
       call add(l:out, l:d.id)
       let s:S.pred[l:d.id] = 1
-      let s:S.why[l:d.id] = join(l:d.why[0 : 2], '・')
+      let s:S.why[l:d.id] = join(map(copy(l:d.why[0 : 2]), 's:why_tr(v:val)'), gnosis#i18n#tr('・'))
     endif
   endfor
   return l:out
@@ -852,7 +852,7 @@ endfunction
 
 " + : 下の入力欄に深さの数字を打って決める（空で今のまま）
 function! s:depth_ask() abort
-  let l:r = trim(s:ask('外向きの深さ（1〜10。1 は直接のつながりだけ）: ', string(get(s:S, 'depth', 1))))
+  let l:r = trim(s:ask(gnosis#i18n#tr('外向きの深さ（1〜10。1 は直接のつながりだけ）: '), string(get(s:S, 'depth', 1))))
   if l:r =~# '^\d\+$'
     call gnosis#mview#set_depth(str2nr(l:r))
   endif
@@ -906,7 +906,7 @@ function! s:board() abort
   call s:set_kinds(l:b)
   if !empty(s:S.rquery)
     let l:c = s:S.size == 3 ? 1 : 4
-    let l:b[l:c][l:c] = {'id': '', 'role': 'center', 'n': 0, 'text': '検索: ' . s:S.rquery}
+    let l:b[l:c][l:c] = {'id': '', 'role': 'center', 'n': 0, 'text': gnosis#i18n#tr('検索: ') . s:S.rquery}
   endif
   return l:b
 endfunction
@@ -1137,8 +1137,8 @@ function! s:info_text() abort
   let l:txt = ''
   if s:has(l:cell.id)
     let l:why = (empty(s:S.rquery) && has_key(s:S.why, l:cell.id)) ? '  ' . s:S.why[l:cell.id] : ''
-    let l:dp = (get(s:S, 'out_on', 0) && get(s:S, 'depth', 1) > 1 && has_key(get(s:S, 'dmap', {}), l:cell.id)) ? '  深さ ' . s:S.dmap[l:cell.id] : ''
-    let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:dp . l:why
+    let l:dp = (get(s:S, 'out_on', 0) && get(s:S, 'depth', 1) > 1 && has_key(get(s:S, 'dmap', {}), l:cell.id)) ? '  ' . gnosis#i18n#tr('深さ') . ' ' . s:S.dmap[l:cell.id] : ''
+    let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . gnosis#i18n#tr(s:kinds[l:cell.kind][1]) . ']' . l:dp . l:why
   endif
   return l:txt . s:query_tags()
 endfunction
@@ -1154,10 +1154,10 @@ endfunction
 " モードの行: ' モード: [全体:a] 索引:i   近いグループ:c[オン] 予測関連:r[オフ]'（今のモードを目立たせる位置も返す）
 function! s:mode_bar(W) abort
   let l:lines = []
-  let l:cur = ' モード:'
+  let l:cur = ' ' . gnosis#i18n#tr('モード') . ':'
   let l:span = []
   for [l:k, l:m] in s:mode_keys
-    let l:cell = s:mode_label[l:m] . ':' . l:k
+    let l:cell = gnosis#i18n#tr(s:mode_label[l:m]) . ':' . l:k
     let l:on = l:m ==# s:S.mode
     if l:on
       let l:cell = '[' . l:cell . ']'
@@ -1170,15 +1170,15 @@ function! s:mode_bar(W) abort
   endfor
   let l:cur .= '  '
   for [l:k, l:st, l:name] in s:over_keys
-    let l:cell = l:name . ':' . l:k . '[' . (get(s:S, l:st, 0) ? 'オン' : 'オフ') . ']'
-    if strdisplaywidth(l:cur . ' ' . l:cell) > a:W && l:cur !~# '^ モード:$'
+    let l:cell = gnosis#i18n#tr(l:name) . ':' . l:k . '[' . gnosis#i18n#tr(get(s:S, l:st, 0) ? 'オン' : 'オフ') . ']'
+    if strdisplaywidth(l:cur . ' ' . l:cell) > a:W && l:cur !~# '^ ' . gnosis#i18n#tr('モード') . ':$'
       call add(l:lines, l:cur)
       let l:cur = '        '
     endif
     let l:cur .= ' ' . l:cell
   endfor
   " 数字キーの動き（t で切り替え）
-  let l:d = '数字:' . (s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(t)'
+  let l:d = gnosis#i18n#tr('数字') . ':' . gnosis#i18n#tr(s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(t)'
   if strdisplaywidth(l:cur . '  ' . l:d) > a:W
     call add(l:lines, l:cur)
     let l:cur = '        '
@@ -1219,7 +1219,7 @@ endfunction
 
 function! s:cancel_hint() abort
   let l:n = s:newest()
-  return empty(l:n) ? '' : 'q で' . s:layer_label[l:n] . 'をやめる'
+  return empty(l:n) ? '' : gnosis#i18n#tr('q で%sをやめる', gnosis#i18n#tr(s:layer_label[l:n]))
 endfunction
 
 function! s:end_pick() abort
@@ -1310,9 +1310,9 @@ function! s:help_lines() abort
         \ ['動く', [['h j k l  矢印', 'マスを動く（右のノートも切り替わる）'], ['1-8', 'そのマスへ（9 か 0 は中心）'], ['Enter', 'カーソルのマスを中心にする'],
         \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['b  BS', '一つ前に戻る'], ['Space', 'ノートへ移る']]],
         \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループだけ'], ['C', '近いグループを重ねる'], ['r', '予測関連だけ'], ['R', '予測関連を重ねる'],
-        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['B', '通常9×9の外側の基準（中心 ⇔ 各ブロック）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
+        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['B', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
-        \ ['リンクを入れる（\\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
+        \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
         \   ['z  Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
         \ ['設定とやめる', [['Z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
@@ -1321,14 +1321,14 @@ function! s:help_lines() abort
   let l:sec[4][1] = filter(copy(l:sec[4][1]), 'v:val[1] !=# "（上と同じ）"')
   let l:cells = []
   for [l:name, l:items] in l:sec
-    let l:blk = [' ■ ' . l:name]
+    let l:blk = [' ■ ' . gnosis#i18n#tr(l:name)]
     for [l:k, l:t] in l:items
-      call add(l:blk, '   ' . l:k . repeat(' ', max([1, 13 - strdisplaywidth(l:k)])) . l:t)
+      call add(l:blk, '   ' . l:k . repeat(' ', max([1, 13 - strdisplaywidth(l:k)])) . gnosis#i18n#tr(l:t))
     endfor
     call add(l:cells, l:blk)
   endfor
   let l:two = &columns >= 112
-  let l:out = [' 曼荼羅ビュー', '']
+  let l:out = [' ' . gnosis#i18n#tr('曼荼羅ビュー'), '']
   if !l:two
     for l:b in l:cells
       call extend(l:out, l:b + [''])
@@ -1352,7 +1352,7 @@ function! s:help_lines() abort
       call add(l:out, l:a . repeat(' ', max([1, l:w - strdisplaywidth(l:a)])) . get(l:right, l:i, ''))
     endfor
   endif
-  call add(l:out, ' 色')
+  call add(l:out, ' ' . gnosis#i18n#tr('色'))
   return l:out
 endfunction
 
@@ -1376,7 +1376,7 @@ function! s:toggle_help() abort
   let l:str = l:lines[-1]
   let l:props = []
   for l:k in s:kind_legend
-    let l:cell = s:kinds[l:k][1]
+    let l:cell = gnosis#i18n#tr(s:kinds[l:k][1])
     if !empty(s:kinds[l:k][2])
       call s:ensure_prop(l:k)
       call add(l:props, {'col': strlen(l:str) + 1, 'length': strlen(l:cell), 'type': 'gnosis_mv_' . l:k})
@@ -1385,7 +1385,7 @@ function! s:toggle_help() abort
   endfor
   let l:lines[-1] = l:str
   let l:items = map(copy(l:lines[0 : -2]), '{"text": v:val}') + [{'text': l:str, 'props': l:props}]
-  let s:S.popup = popup_create(l:items, {'title': ' ガイド（q で閉じる） ', 'pos': 'center', 'border': [], 'padding': [1, 2, 1, 2],
+  let s:S.popup = popup_create(l:items, {'title': ' ' . gnosis#i18n#tr('ガイド（q で閉じる）') . ' ', 'pos': 'center', 'border': [], 'padding': [1, 2, 1, 2],
         \ 'zindex': 300, 'mapping': 0, 'filter': function('s:help_filter'), 'wrap': 0,
         \ 'maxheight': max([6, &lines - 4]), 'maxwidth': max([20, &columns - 4])})
 endfunction
@@ -1401,16 +1401,33 @@ function! s:pick_label() abort
   let l:p = get(s:S, 'pick', '')
   if l:p ==# 'link'
     if has_key(get(s:S, 'origin', {}), 'vis')
-      return '選んだ文字をリンクにするノートを選ぶ（e で決定・o 元のノート）: '
+      return gnosis#i18n#tr('選んだ文字をリンクにするノートを選ぶ（e で決定・o 元のノート）: ')
     endif
-    return '入れるノートを選ぶ（e で決定・o 元のノート）: '
+    return gnosis#i18n#tr('入れるノートを選ぶ（e で決定・o 元のノート）: ')
   elseif l:p ==# 'group'
-    return 'グループを選ぶ（e 決定・I Index・t 見出し・o 元のノート）: '
+    return gnosis#i18n#tr('グループを選ぶ（e 決定・I Index・t 見出し・o 元のノート）: ')
   endif
   return ''
 endfunction
 
 " 上の状態の 1 行: 中心・何枚目・盤面の大きさ・モードと重ねるもの・かかっているもの（q でやめる）
+" 近さ順の理由（python が日本語で返すもの）を今の言語で。「つながり 3」「同じ索引: 題」は数や題をそのまま残す
+function! s:why_tr(w) abort
+  let l:m = matchlist(a:w, '^\(つながり\) \(\d\+\)$')
+  if !empty(l:m)
+    return gnosis#i18n#tr('つながり %s', l:m[2])
+  endif
+  let l:m = matchlist(a:w, '^同じ索引: \(.*\)$')
+  if !empty(l:m)
+    return gnosis#i18n#tr('同じ索引: %s', l:m[1])
+  endif
+  return gnosis#i18n#tr(a:w)
+endfunction
+
+function! s:rank_basis_name() abort
+  return get(s:S, 'dbasis', 'center') ==# 'self' ? 'block' : 'center'
+endfunction
+
 function! s:status(ctitle, pages, ptop, extra) abort
   " オンのものだけ、英字の短い単語で（# と t の表示は出さない）。near=c / rel=r / out=v（dep=深さ）/ rank=w / outl=U / heads=u / nopv=右のノートを隠している
   let l:on = []
@@ -1423,16 +1440,14 @@ function! s:status(ctitle, pages, ptop, extra) abort
   if get(s:S, 'out_on', 0)
     call add(l:on, 'out')
     if s:down_only()
-      call add(l:on, '配下・深さ' . get(s:S, 'depth', 1))
+      call add(l:on, 'down-dep' . get(s:S, 'depth', 1))
     elseif get(s:S, 'depth', 1) > 1
       call add(l:on, 'dep' . s:S.depth)
     endif
   endif
   if get(s:S, 'rank_on', 0)
-    call add(l:on, 'rank')
-    if s:S.size == 9 && !get(s:S, 'out_on', 0)
-      call add(l:on, get(s:S, 'dbasis', 'center') ==# 'self' ? '基準:各ブロック' : '基準:中心')
-    endif
+    " 通常の 9×9 では、外側の近さ順の基準を rank(center) / rank(block) と書く（B で切り替え。日本語でも同じ表記）
+    call add(l:on, s:S.size == 9 && !get(s:S, 'out_on', 0) ? 'rank(' . s:rank_basis_name() . ')' : 'rank')
   endif
   if get(s:S, 'ol_only', 0) | call add(l:on, 'heads') | elseif get(s:S, 'ol_on', 0) | call add(l:on, 'outl') | endif
   if !get(s:S, 'nv', 1) | call add(l:on, 'nopv') | endif
@@ -1470,7 +1485,7 @@ function! s:legend_build(W) abort
   let l:rows = [' ']
   let l:spans = []
   for l:k in s:kind_legend
-    let l:cell = s:kinds[l:k][1]
+    let l:cell = gnosis#i18n#tr(s:kinds[l:k][1])
     if strdisplaywidth(l:rows[-1] . l:cell) > a:W - 1 && len(l:rows) < 3 && l:rows[-1] !=# ' '
       call add(l:rows, ' ')
     endif
@@ -1517,9 +1532,9 @@ function! s:render() abort
   " ページ（1/2）は中央のマスの一番上に。マスが小さくて入らないときだけ見出しに出す
   let l:mid = l:n == 3 ? 1 : 4
   let l:ptop = (l:pages > 1 && l:ch >= 3 && get(s:S, 'nums', 1)) ? (s:S.page + 1) . '/' . l:pages : ''
-  let l:extra = (empty(s:S.rquery) ? '' : '  検索: ' . s:S.rquery . '（' . len(s:S.results) . '件）')
-        \ . (empty(s:S.query) ? '' : '   絞り込み: ' . s:S.query)
-        \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' (ヒットなし)'))
+  let l:extra = (empty(s:S.rquery) ? '' : '  ' . gnosis#i18n#tr('検索: ') . s:S.rquery . gnosis#i18n#tr('（%d件）', len(s:S.results)))
+        \ . (empty(s:S.query) ? '' : '   ' . gnosis#i18n#tr('絞り込み: ') . s:S.query)
+        \ . (empty(get(s:S, 'find', '')) ? '' : '   /' . s:S.find . (get(s:S, 'hit_n', 0) > 0 ? ' ' . s:S.hit_i . '/' . s:S.hit_n : ' ' . gnosis#i18n#tr('(ヒットなし)')))
   call add(l:lines, s:fit(s:status(l:ctitle, l:pages, l:ptop, l:extra), l:W))
   let s:S.legend_spans = []
   for l:k in range(l:top)
@@ -1885,7 +1900,7 @@ function! s:gs_center(path, timer) abort
     silent! call remove(s:S.data.nodes, l:id)
   endif
   if !s:has(l:id)
-    echohl WarningMsg | echo 'Gnosis: 曼荼羅に載っていないノートです: ' . l:id | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('曼荼羅に載っていないノートです: ') . l:id | echohl NONE
     return
   endif
   if l:id !=# s:S.center
@@ -1975,7 +1990,7 @@ function! s:jump(dir, ...) abort
   let s:S.page = l:hits[l:target][0]
   let s:S.cur = [l:hits[l:target][1], l:hits[l:target][2]]
   call s:render()
-  echo 'ハイライト: ' . s:S.find . '  ' . s:S.hit_i . '/' . s:S.hit_n
+  echo gnosis#i18n#tr('ハイライト: ') . s:S.find . '  ' . s:S.hit_i . '/' . s:S.hit_n
 endfunction
 
 " 下の入力欄で文字を聞く（m x s）。曼荼羅では端末のカーソルを隠しているので、聞いている間だけ出す。
@@ -1995,7 +2010,7 @@ function! s:ask(prompt, default) abort
 endfunction
 
 function! s:find_prompt() abort
-  let s:S.find = trim(s:ask('ハイライト: ', get(s:S, 'find', '')))
+  let s:S.find = trim(s:ask(gnosis#i18n#tr('ハイライト: '), get(s:S, 'find', '')))
   call s:tick('find')
   let s:S.hit_n = 0
   let s:S.hit_i = 0
@@ -2008,7 +2023,7 @@ endfunction
 
 " x: 題で絞り込む（空にすると解除）。索引を選ぶとき（\l）は索引を全部から、ふだんは今の周りの中から
 function! s:filter() abort
-  let l:q = s:ask(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除。-語 で除く・a | b でどちらか）: ', s:S.query)
+  let l:q = s:ask(gnosis#i18n#tr(get(s:S, 'pick', '') ==# 'group' ? '索引を絞り込む（空で解除）: ' : '今の周りを絞り込む（空で解除。-語 で除く・a | b でどちらか）: '), s:S.query)
   let s:S.query = trim(l:q)
   call s:tick('query')
   let s:S.page = 0
@@ -2023,7 +2038,7 @@ function! s:decide_here() abort
     return
   endif
   if !empty(s:S.query) || !empty(s:S.rquery)
-    echohl WarningMsg | echo 'Gnosis: 絞り込み・検索をやめてから決めてください（q）' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('絞り込み・検索をやめてから決めてください（q）') | echohl NONE
     return
   endif
   if l:p ==# 'link'
@@ -2031,7 +2046,7 @@ function! s:decide_here() abort
     return
   endif
   if !s:nd(s:S.center).g
-    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('索引（グループ）ではありません') | echohl NONE
     return
   endif
   call s:decide(s:S.center)
@@ -2308,7 +2323,7 @@ function! s:decide_index() abort
     return
   endif
   if !s:has('index.md')
-    echohl WarningMsg | echo 'Gnosis: index.md がありません' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('index.md がありません') | echohl NONE
     return
   endif
   call s:decide('index.md')
@@ -2321,7 +2336,7 @@ function! s:t_key() abort
     return
   endif
   if !s:nd(s:S.center).g
-    echohl WarningMsg | echo 'Gnosis: 索引（グループ）ではありません' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('索引（グループ）ではありません') | echohl NONE
     return
   endif
   call gnosis#pick_heading(s:S.src, function('s:heading_chosen', [s:S.center]))
@@ -2405,7 +2420,7 @@ endfunction
 
 " 検索（s）: 題か本文に語を全部含むノートを、vault 全体から探して周りに並べる
 function! s:search() abort
-  let l:q = trim(s:ask('検索（題・本文。空で解除）: ', s:S.rquery))
+  let l:q = trim(s:ask(gnosis#i18n#tr('検索（題・本文。空で解除）: '), s:S.rquery))
   let s:S.query = ''
   if empty(l:q)
     let s:S.rquery = ''
@@ -2457,7 +2472,7 @@ endfunction
 function! s:resize(d) abort
   " < > : 画面の幅（曼荼羅の窓と右のノートの窓の境目）。3×3 も、右の窓があるときの 9×9 も
   if s:note_win() < 0
-    echo 'Gnosis: 右の窓が無いので画面の幅は動かせません（9×9 では p で右の窓を出す）'
+    echo 'Gnosis: ' . gnosis#i18n#tr('右の窓が無いので画面の幅は動かせません（9×9 では p で右の窓を出す）')
     return
   endif
   " 割合は 10 分率の整数で持つ（5 = 半々）。小数と整数を混ぜると Vim はエラーにする
@@ -2533,9 +2548,8 @@ function! s:toggle_dbasis() abort
   let s:S.dbasis = get(s:S, 'dbasis', 'center') ==# 'center' ? 'self' : 'center'
   let s:S.opage = 0
   call s:render()
-  let l:basis = s:S.dbasis ==# 'self' ? '各ブロックの中心' : '中心'
   let l:active = s:S.size == 9 && !get(s:S, 'out_on', 0) && get(s:S, 'rank_on', 0)
-  echo 'Gnosis: 近さ順の基準 → ' . l:basis . (l:active ? '' : '（通常の9×9・近さ順 w オンで外側に反映）')
+  echo 'Gnosis: ' . gnosis#i18n#tr('近さ順の基準') . ' → rank(' . s:rank_basis_name() . ')' . (l:active ? '' : gnosis#i18n#tr('（通常の9×9・近さ順 w オンで外側に反映）'))
 endfunction
 
 " { }: 外側のブロックのページを前後に（[ ] は中心の周り）
@@ -3044,7 +3058,7 @@ function! s:open(center, ...) abort
   let s:S.why = {}
   let s:S.pred = {}
   if !s:load()
-    echohl WarningMsg | echo 'Gnosis: vault が選ばれていません' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('vault が選ばれていません') | echohl NONE
     return
   endif
   let l:root = s:S.root . '/'
@@ -3108,7 +3122,7 @@ function! s:open(center, ...) abort
     let l:c = s:has('index.md') ? 'index.md' : ''
   endif
   if empty(l:c)
-    echohl WarningMsg | echo 'Gnosis: 曼荼羅にできるノートがありません' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('曼荼羅にできるノートがありません') | echohl NONE
     return
   endif
   let s:S.center = l:c
@@ -3218,7 +3232,7 @@ function! s:link_pick_start(vis) abort
     let l:file = s:S.root . '/' . s:S.center
   endif
   if empty(l:file) || (&filetype ==# 'gnosis-mandala' && l:file ==# expand('%:p')) || l:file !~? '\.md$'
-    echohl WarningMsg | echo 'Gnosis: リンクを入れるノートを開いて実行して' | echohl NONE
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('リンクを入れるノートを開いて実行して') | echohl NONE
     return
   endif
   let l:root = s:root()
@@ -3516,15 +3530,15 @@ endfunction
 "   j k 選ぶ   Enter / Space 切り替え・呼び出し   D は配下だけの切り替え。B は曼荼羅上でもこの画面内でも近さ順の基準を変える
 "   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
 function! s:panel_rows() abort
-  let l:Onoff = {v -> v ? 'オン' : 'オフ'}
+  let l:Onoff = {v -> gnosis#i18n#tr(v ? 'オン' : 'オフ')}
   let l:mode = get(s:S, 'mode', 'all')
   return [
-        \ {'key': 'a', 'name': 'モード', 'val': '[' . get(s:mode_label, l:mode, l:mode) . ']  全体:a 索引:i 親子:d', 'act': function('s:panel_mode')},
+        \ {'key': 'a', 'name': 'モード', 'val': '[' . gnosis#i18n#tr(get(s:mode_label, l:mode, l:mode)) . ']  ' . gnosis#i18n#tr('全体:a 索引:i 親子:d'), 'act': function('s:panel_mode')},
         \ {'key': 'c', 'name': '近いグループだけを出す', 'val': l:Onoff(get(s:S, 'near_only', 0)), 'act': function('s:toggle_over', ['near_only'])},
         \ {'key': 'C', 'name': '近いグループを重ねる', 'val': l:Onoff(get(s:S, 'near_on', 0)), 'act': function('s:toggle_over', ['near_on'])},
         \ {'key': 'r', 'name': '予測関連だけを出す', 'val': l:Onoff(get(s:S, 'rel_only', 0)), 'act': function('s:toggle_over', ['rel_only'])},
         \ {'key': 'R', 'name': '予測関連を重ねる', 'val': l:Onoff(get(s:S, 'rel_on', 0)), 'act': function('s:toggle_over', ['rel_on'])},
-        \ {'key': 't', 'name': '数字キーの動き', 'val': get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ', 'act': function('s:toggle_digit')},
+        \ {'key': 't', 'name': '数字キーの動き', 'val': gnosis#i18n#tr(get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ'), 'act': function('s:toggle_digit')},
         \ {'key': '#', 'name': '番号を出す', 'val': l:Onoff(get(s:S, 'nums', 1)), 'act': function('s:toggle_nums')},
         \ {'key': 'p', 'name': '右にノートの本文を出す', 'val': l:Onoff(get(s:S, 'nv', 1)), 'act': function('s:toggle_preview')},
         \ {'key': 'u', 'name': '見出しだけを出す', 'val': l:Onoff(get(s:S, 'ol_only', 0)), 'act': function('s:toggle_outline_only')},
@@ -3532,9 +3546,9 @@ function! s:panel_rows() abort
         \ {'key': 'f', 'name': '全画面（9×9）', 'val': l:Onoff(s:S.size == 9), 'act': function('s:full')},
         \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
         \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
-        \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . '（1 = 直接のつながりだけ）', 'act': function('s:depth_ask')},
-        \ {'key': 'D', 'name': '外向きに辿る方向', 'val': get(s:S, 'out_dir', 'all') ==# 'down' ? '配下だけ' : '通常', 'act': function('s:toggle_down')},
-        \ {'key': 'B', 'name': '通常9×9・外側の近さ順の基準（中心 ⇔ そのブロックの中心）', 'val': get(s:S, 'dbasis', 'center') ==# 'self' ? '外側は自分' : '中心', 'act': function('s:toggle_dbasis')},
+        \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . gnosis#i18n#tr('（1 = 直接のつながりだけ）'), 'act': function('s:depth_ask')},
+        \ {'key': 'D', 'name': '外向きに辿る方向', 'val': gnosis#i18n#tr(get(s:S, 'out_dir', 'all') ==# 'down' ? '配下だけ' : '通常'), 'act': function('s:toggle_down')},
+        \ {'key': 'B', 'name': '近さ順の基準 rank（center ⇔ block。通常9×9の外側）', 'val': 'rank(' . s:rank_basis_name() . ')', 'act': function('s:toggle_dbasis')},
         \ {'key': 'z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
@@ -3556,19 +3570,19 @@ endfunction
 function! s:panel_lines(sel, msg, w) abort
   let l:rows = s:panel_rows()
   let l:names = gnosis#mview#preset_names()
-  let l:out = [' 曼荼羅の設定', '']
+  let l:out = [' ' . gnosis#i18n#tr('曼荼羅の設定'), '']
   for l:i in range(len(l:rows))
     let l:lab = gnosis#i18n#tr(l:rows[l:i].name) . ' ' . l:rows[l:i].key
     call add(l:out, ' ' . (l:i == a:sel ? '▶' : ' ') . ' ' . l:lab . repeat(' ', max([1, 28 - strdisplaywidth(l:lab)])) . l:rows[l:i].val)
   endfor
-  call extend(l:out, ['', ' プリセット'])
+  call extend(l:out, ['', ' ' . gnosis#i18n#tr('プリセット')])
   for l:j in range(len(l:names))
     call add(l:out, printf(' %s %s %s', len(l:rows) + l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
   endfor
   if empty(l:names)
-    call add(l:out, '   （まだありません。s で今の設定を保存）')
+    call add(l:out, '   ' . gnosis#i18n#tr('（まだありません。s で今の設定を保存）'))
   endif
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' j k 選ぶ  Enter 切り替え・呼び出し', ' s 保存  o 上書き  n 名前  d 消す  q / z 閉じる'])
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え・呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す  q / z 閉じる')])
   return l:out
 endfunction
 
@@ -3602,16 +3616,16 @@ function! s:preset_menu() abort
         call l:rows[l:sel].act()
       elseif !empty(l:pre)
         call gnosis#mview#preset_apply(l:pre)
-        let l:msg = '「' . l:pre . '」を呼び出しました'
+        let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:pre)
       endif
     elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(l:names)
       call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
-      let l:msg = '「' . l:names[str2nr(l:k) - 1] . '」を呼び出しました'
+      let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:names[str2nr(l:k) - 1])
     elseif l:k ==# 'o' && !empty(l:pre)
       call gnosis#mview#preset_overwrite(l:pre)
-      let l:msg = '「' . l:pre . '」を今の設定で上書きしました'
+      let l:msg = gnosis#i18n#tr('「%s」を今の設定で上書きしました', l:pre)
     elseif l:k ==# 'n' && !empty(l:pre)
-      let l:new = s:ask('新しい名前（' . l:pre . '）: ', l:pre)
+      let l:new = s:ask(gnosis#i18n#tr('新しい名前（%s）: ', l:pre), l:pre)
       redraw
       if gnosis#mview#preset_rename(l:pre, l:new)
         let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:new))
@@ -3620,10 +3634,10 @@ function! s:preset_menu() abort
       call gnosis#mview#preset_delete(l:pre)
     elseif l:k ==# 's'
       " 名前の既定は、すでにある番号（名前が数字のもの）の次の番号。そのまま Enter で決まる
-      let l:name = s:ask('プリセットの名前: ', string(gnosis#mview#preset_next_number()))
+      let l:name = s:ask(gnosis#i18n#tr('プリセットの名前: '), string(gnosis#mview#preset_next_number()))
       redraw
       if gnosis#mview#preset_save(l:name)
-        let l:msg = 'プリセット「' . trim(l:name) . '」を保存しました'
+        let l:msg = gnosis#i18n#tr('プリセット「%s」を保存しました', trim(l:name))
         let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:name))
       endif
     elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"

@@ -1,8 +1,8 @@
 #!/bin/sh
-# Context ブロック（本文冒頭の `Context:`）と w モードの回帰網。一時フォルダ（既定 ~/Desktop/test）だけを使う。
+# Context ブロック（本文冒頭の `Context:`）と w モードの回帰網。一時フォルダ（既定 ~/gnosis-work/test）だけを使う。
 # 操作のあとに同期を 2 回かけても、新形式が維持され、旧形式が勝手に移行・再生成されないことも確かめる。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

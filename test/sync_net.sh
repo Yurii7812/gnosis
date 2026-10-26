@@ -6,7 +6,7 @@
 #   VAULT を省略すると、試験用の小さな vault をその場で作る（個人の vault には依存しない）。
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 WORK=$(mktemp -d)

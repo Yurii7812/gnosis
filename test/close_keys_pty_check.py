@@ -8,7 +8,7 @@ import fcntl, json, os, pty, select, shutil, struct, subprocess, sys, tempfile, 
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-TMP = Path(os.environ.get("TMPDIR") or Path.home() / "Desktop/test")
+TMP = Path(os.environ.get("TMPDIR") or Path.home() / "gnosis-work/test")
 TMP.mkdir(parents=True, exist_ok=True)
 work = Path(tempfile.mkdtemp(dir=TMP))
 res = []

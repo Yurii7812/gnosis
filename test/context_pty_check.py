@@ -2,7 +2,7 @@
 """新規ノート（zn → Enter）の本文入力位置を、擬似端末で本物の Vim に打鍵して確かめる。
 
 Context が H1 の直後に入った新規ノートを開いたら、すぐ挿入モードで本文が打てて、打った文字は
-Context リンクの後ろの空行（3 行の真ん中）に入ること。一時フォルダ（~/Desktop/test）だけを使う。
+Context リンクの後ろの空行（3 行の真ん中）に入ること。一時フォルダ（~/gnosis-work/test）だけを使う。
 """
 from __future__ import annotations
 

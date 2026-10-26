@@ -152,11 +152,21 @@ function noteRoot(p) {
 
 // ---------------------------------------------------------------- vault ごとの設定
 
+// 言語は vault ごとではなく Gnosis ホーム全体の設定（ホームの language ファイルに ja / en。無ければ英語）。Vim と共通
 function systemLang() {
-  for (const v of [process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG]) {
-    if (v && v !== "C" && v !== "POSIX") return /^ja/i.test(v) ? "ja" : "en";
-  }
-  try { return /^ja/i.test(Intl.DateTimeFormat().resolvedOptions().locale) ? "ja" : "en"; } catch { return "en"; }
+  try {
+    const l = fs.readFileSync(path.join(gnosisHome(), "language"), "utf8").trim();
+    if (l === "ja" || l === "en") return l;
+  } catch { /* 無ければ英語 */ }
+  return "en";
+}
+
+function saveLang(l) {
+  if (l !== "ja" && l !== "en") return;
+  try {
+    fs.mkdirSync(gnosisHome(), { recursive: true });
+    fs.writeFileSync(path.join(gnosisHome(), "language"), l + "\n");
+  } catch { /* 書けなくても続ける */ }
 }
 
 function defaultSettings() {
@@ -183,7 +193,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 function validateSettings(s) {
   const d = defaultSettings();
   const out = { ...d, ...(s && typeof s === "object" ? s : {}) };
-  out.language = out.language === "en" || out.language === "ja" ? out.language : d.language;
+  out.language = d.language;
   out.appearance = out.appearance === "dark" ? "dark" : "light";
   // GUI のダーク／ライト。無ければ appearance と同じ（Vim 側の規則）
   if (out.appAppearance !== "dark" && out.appAppearance !== "light") delete out.appAppearance;
@@ -224,6 +234,7 @@ function loadSettings(vault) {
 }
 
 function saveSettings(vault, s) {
+  if (s && (s.language === "ja" || s.language === "en")) saveLang(s.language);
   const v = validateSettings(s);
   writeJson(settingsFile(vault), v);
   return v;

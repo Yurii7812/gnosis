@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Branch（ParentBranch / ChildBranch）の回帰試験。一時フォルダ（~/Desktop/test）だけを使う。
+"""Branch（ParentBranch / ChildBranch）の回帰試験。一時フォルダ（~/gnosis-work/test）だけを使う。
 
     python3 python/test_branch_ops.py
 """

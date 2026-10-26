@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""題の移行（title_migrate.py）の試験。一時フォルダ（既定 ~/Desktop/test）の vault だけを使う。"""
+"""題の移行（title_migrate.py）の試験。一時フォルダ（既定 ~/gnosis-work/test）の vault だけを使う。"""
 import os
 import sys
 import tempfile

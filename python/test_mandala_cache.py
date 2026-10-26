@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """曼荼羅のキャッシュ（mandala_cache.py）の試験。mandala_view.dump と同じ内容になること・差分更新が効くこと。
-一時フォルダ（既定 ~/Desktop/test）の vault だけを使う。"""
+一時フォルダ（既定 ~/gnosis-work/test）の vault だけを使う。"""
 import os
 import sys
 import tempfile

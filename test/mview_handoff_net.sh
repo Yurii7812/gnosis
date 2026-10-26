@@ -1,7 +1,7 @@
 #!/bin/sh
 # CUI・GUI 間の曼荼羅の状態引き継ぎ。一時フォルダだけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

@@ -1,9 +1,9 @@
 #!/bin/sh
 # リンク操作（zn / zk / za / \l の c → Enter / t / o、表示名、zk → g、グループの \S）の回帰網。
-# 一時フォルダ（既定 ~/Desktop/test）だけを使う。本物の vault や Gnosis ホームには触らない。
+# 一時フォルダ（既定 ~/gnosis-work/test）だけを使う。本物の vault や Gnosis ホームには触らない。
 # 操作のあとに同期（note_format_v2.py update）を 2 回かけ、入れたリンクと表示名が残ることも確かめる。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

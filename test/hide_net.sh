@@ -1,7 +1,7 @@
 #!/bin/sh
-# ノートで隠すもの（YAML・上の「名前:」系・下の「名前:」系）の回帰網。一時フォルダ（既定 ~/Desktop/test）だけを使う。
+# ノートで隠すもの（YAML・上の「名前:」系・下の「名前:」系）の回帰網。一時フォルダ（既定 ~/gnosis-work/test）だけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

@@ -5,8 +5,8 @@
 "   gnosis#i18n#t('key', 引数…)  … キーで引く。%s に引数を入れる（printf と同じ）
 "   gnosis#i18n#tr('日本語の文')   … 既存の日本語メッセージ用。英語のときは
 "                                     i18n/en.json の "ja" の表で英語に置き換える（無ければ日本語のまま）
-" 言語は vault の設定（.gnosis/settings.json の language）。vault を選ぶ前は
-" g:gnosis_language、それも無ければ OS の言語（日本語なら ja、それ以外は en）。
+" 言語は Gnosis ホーム全体の設定（ホームの language ファイルに ja / en）。起動画面の l で選ぶ。
+" ファイルが無ければ英語（g:gnosis_language を指定していればそれが先）。vault の設定の language は、この値の写し。
 "
 " 注意: ノートの解析に使う見出し・識別子（### Context / ### BackLink / ## 今日のノート
 " など）は翻訳しない。表示の文言だけを切り替える。
@@ -27,12 +27,48 @@ function! gnosis#i18n#system_lang() abort
   return 'en'
 endfunction
 
+function! s:lang_file() abort
+  return gnosis#home#path('language')
+endfunction
+
+" Gnosis ホームに保存した言語（無ければ空）
+function! gnosis#i18n#saved() abort
+  try
+    let l:l = filereadable(s:lang_file()) ? trim(join(readfile(s:lang_file(), '', 1), '')) : ''
+  catch
+    let l:l = ''
+  endtry
+  return l:l =~# '^\(ja\|en\)$' ? l:l : ''
+endfunction
+
 function! gnosis#i18n#lang() abort
   if !exists('s:lang')
+    " g:gnosis_language → 環境変数 GNOSIS_LANG（試験・自動化用）→ Gnosis ホームに保存した言語 → 英語
     let l:l = get(g:, 'gnosis_language', '')
-    let s:lang = l:l =~# '^\(ja\|en\)$' ? l:l : gnosis#i18n#system_lang()
+    if l:l !~# '^\(ja\|en\)$'
+      let l:l = $GNOSIS_LANG
+    endif
+    if l:l !~# '^\(ja\|en\)$'
+      let l:l = gnosis#i18n#saved()
+    endif
+    let s:lang = l:l =~# '^\(ja\|en\)$' ? l:l : 'en'
+    " Python の補助スクリプトにも伝える（既定が日本語のままにならないように）
+    let $GNOSIS_LANG = s:lang
   endif
   return s:lang
+endfunction
+
+" 言語を選ぶ: 今すぐ切り替え、Gnosis ホームに覚える
+function! gnosis#i18n#choose(lang) abort
+  if a:lang !~# '^\(ja\|en\)$'
+    return
+  endif
+  call gnosis#i18n#set_lang(a:lang)
+  try
+    call gnosis#home#init()
+    call writefile([a:lang], s:lang_file())
+  catch
+  endtry
 endfunction
 
 function! gnosis#i18n#set_lang(lang) abort

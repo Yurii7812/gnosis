@@ -7,7 +7,7 @@ import fcntl, os, pty, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-TMP = Path(os.environ.get("TMPDIR") or Path.home() / "Desktop/test")
+TMP = Path(os.environ.get("TMPDIR") or Path.home() / "gnosis-work/test")
 TMP.mkdir(parents=True, exist_ok=True)
 from PIL import Image
 

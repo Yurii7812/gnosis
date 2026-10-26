@@ -5,7 +5,7 @@
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$REPO/test/noclip.sh"   # 本物のクリップボードを読まない・書かない
-D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/grv.XXXXXX")
+D=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/grv.XXXXXX")
 trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh"
 mk() { printf -- "---\ntime: 2026-01-01 00:00:00\ntitle: %s\n---\n\n# %s\n" "$2" "$2" > "$D/v/$1.md"; }

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const web = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const repo = path.dirname(web), base = process.env.TMPDIR || path.join(os.homedir(), 'Desktop/test');
+const repo = path.dirname(web), base = process.env.TMPDIR || path.join(os.homedir(), 'gnosis-work/test');
 fs.mkdirSync(base, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(base, 'gnosis-handoff-'));
 const home = path.join(tmp, 'home'), vault = path.join(tmp, 'vault');

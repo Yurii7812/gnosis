@@ -1,7 +1,7 @@
 #!/bin/sh
-# 曼荼羅ビュー（<Space>）の回帰網。一時フォルダ（既定 ~/Desktop/test）だけを使う。
+# 曼荼羅ビュー（<Space>）の回帰網。一時フォルダ（既定 ~/gnosis-work/test）だけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

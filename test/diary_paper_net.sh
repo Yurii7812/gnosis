@@ -3,7 +3,7 @@
 # そのリンク階層（月・年・一番上の「日記」グループ）を、デジタル日記（\d）の機能が日記として拾わないことの回帰網。
 # 一時フォルダはデスクトップの test（本物の vault には触らない）。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

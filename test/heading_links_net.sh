@@ -2,7 +2,7 @@
 # 見出しを書き換えたら、その見出しへのリンク（[題#見出し](ノート.md#スラッグ)）も直る
 set -eu
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-W=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/heading-links.XXXXXX")
+W=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/heading-links.XXXXXX")
 trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/v" "$W/home"
 printf '%s\n' '---' 'title: A' '---' '' '# A' '' '## 古い見出し' '' '本文' '' '## 別' '' 'その2' > "$W/v/a.md"

@@ -1,8 +1,8 @@
 #!/bin/sh
 # 日記と Group:（日記の節が増えない・Group: は先頭・二重の節は 1 つにまとまる）の回帰網。
-# 一時フォルダ（既定 ~/Desktop/test）だけを使う。本物の vault や Gnosis ホームには触らない。
+# 一時フォルダ（既定 ~/gnosis-work/test）だけを使う。本物の vault や Gnosis ホームには触らない。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

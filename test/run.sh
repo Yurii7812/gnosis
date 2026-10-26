@@ -3,12 +3,14 @@
 # 使い方: test/run.sh
 set -e
 # 試験の一時フォルダはデスクトップの test（本物の vault には触らない）
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 # Gnosis ホーム（vault の登録簿など）も試験用の一時フォルダにする（本物の登録簿に触らない）
 GNOSIS_HOME=${GNOSIS_HOME:-$(mktemp -d)}
 export GNOSIS_HOME
+# 既定の言語は英語になったので、日本語の画面を確かめる試験は日本語で動かす（英語の試験は i18n_check.py など）
+export GNOSIS_LANG=${GNOSIS_LANG:-ja}
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 # 試験は本物のクリップボードを読まない・書かない（vault の外のファイルを拾って書き換えた事故の再発防止）
 . "$REPO/test/noclip.sh"

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Vim の起動画面の回帰網（pty が要るので script + fifo で起動する）。一時フォルダだけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

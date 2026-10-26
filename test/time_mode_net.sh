@@ -2,7 +2,7 @@
 # 時刻の挿入（Ctrl-T）と時刻モード（\T）
 set -eu
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-W=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/time-mode.XXXXXX")
+W=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/time-mode.XXXXXX")
 trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/v" "$W/home"
 printf '%s\n' '---' 'title: t' '---' '' '# t' '' > "$W/v/t.md"

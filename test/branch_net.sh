@@ -1,8 +1,8 @@
 #!/bin/sh
-# Branch（b モード）の回帰網。一時フォルダ（既定 ~/Desktop/test）だけを使う。
+# Branch（b モード）の回帰網。一時フォルダ（既定 ~/gnosis-work/test）だけを使う。
 # 操作のあとに同期（note_format_v2.py update）を 2 回かけても、親子関係が維持されて親が増えないことも確かめる。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

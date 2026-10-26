@@ -1,8 +1,8 @@
 #!/bin/sh
 # 操作ガイドの所属関係（### Group / Context / BackLink）を、ガイドの更新・同期・言語の切り替えで
-# 失わないことの回帰網。HOME と GNOSIS_HOME は一時フォルダ（既定 ~/Desktop/test の下）。
+# 失わないことの回帰網。HOME と GNOSIS_HOME は一時フォルダ（既定 ~/gnosis-work/test の下）。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

@@ -1,7 +1,7 @@
 #!/bin/sh
 # 検索の書き方の回帰網（Python と Vim が同じ試験データで同じ答え）。一時フォルダだけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

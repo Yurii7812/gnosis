@@ -1,7 +1,7 @@
 #!/bin/sh
-# テーマ（配色）の回帰網。HOME と GNOSIS_HOME は一時フォルダ（既定 ~/Desktop/test の下）。
+# テーマ（配色）の回帰網。HOME と GNOSIS_HOME は一時フォルダ（既定 ~/gnosis-work/test の下）。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

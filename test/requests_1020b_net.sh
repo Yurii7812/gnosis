@@ -3,7 +3,7 @@
 # 使い方: test/requests_1020b_net.sh   （一時フォルダだけを使う。本物の vault には触らない）
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/r1020b.XXXXXX")
+D=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/r1020b.XXXXXX")
 [ -n "$KEEP" ] || trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh"
 note() { printf -- "---\ntime: 2026-01-01 00:00:00\ntitle: %s\n%b---\n\n# %s\n\n%b\n" "$2" "$3" "$2" "$4" > "$D/v/$1.md"; }

@@ -6,7 +6,7 @@
   - 最後のウィンドウが終わると、ロックされる
   - 別のウィンドウが使っている vault から別の vault へ切り替えても、元の vault はロックされない
   - 異常終了（SIGKILL）したウィンドウの登録は、最後の 1 人の判定を妨げない
-一時フォルダ（~/Desktop/test）の中だけで動く。gocryptfs / fusermount3 / /dev/fuse / pyte が無ければ省略する。
+一時フォルダ（~/gnosis-work/test）の中だけで動く。gocryptfs / fusermount3 / /dev/fuse / pyte が無ければ省略する。
 試験で作ったマウントだけを、試験の最後に外す（ほかの gocryptfs には触らない）。
 """
 from __future__ import annotations

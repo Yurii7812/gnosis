@@ -1,8 +1,8 @@
 #!/bin/sh
 # 複数ウィンドウで vault を同時に使う（暗号化 vault のロック管理・異常終了した登録の掃除・同時編集の上書き防止）の回帰網。
-# gocryptfs の代わりに偽の mountpoint / fusermount3 を PATH の先頭に置く。一時フォルダ（既定 ~/Desktop/test）だけを使う。
+# gocryptfs の代わりに偽の mountpoint / fusermount3 を PATH の先頭に置く。一時フォルダ（既定 ~/gnosis-work/test）だけを使う。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

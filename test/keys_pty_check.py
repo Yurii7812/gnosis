@@ -8,7 +8,7 @@
   - 起動画面・vault 一覧・設定画面・作業タブ（\\q）で ↑ ↓ が使える
   - fzf の検索画面（gs / <Space> / \\l）で ↑ ↓ が使える
 
-使い方: python3 test/keys_pty_check.py   （一時フォルダは ~/Desktop/test）
+使い方: python3 test/keys_pty_check.py   （一時フォルダは ~/gnosis-work/test）
 """
 from __future__ import annotations
 

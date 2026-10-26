@@ -250,6 +250,7 @@ function! s:change(item) abort
   let l:s = s:settings
   if a:item ==# 'language'
     let l:s.language = l:s.language ==# 'ja' ? 'en' : 'ja'
+    call gnosis#i18n#choose(l:s.language)
   elseif a:item ==# 'maximized'
     let l:s.window.maximized = l:s.window.maximized ? v:false : v:true
   elseif a:item ==# 'mandalaOnStart'

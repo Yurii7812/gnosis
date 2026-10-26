@@ -3,7 +3,7 @@
 # ほかは 1 件 = 1 ノート・Branch / Context・画像・二度目は取り込まない
 set -e
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-D=$(mktemp -d "${TMPDIR:-$HOME/Desktop/test}/cap.XXXXXX")
+D=$(mktemp -d "${TMPDIR:-$HOME/gnosis-work/test}/cap.XXXXXX")
 trap 'rm -rf "$D"' EXIT
 mkdir -p "$D/v" "$D/home" "$D/gh" "$D/pack/images"
 D="$D" python3 - <<'EOF'

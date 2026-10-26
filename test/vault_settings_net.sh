@@ -1,8 +1,8 @@
 #!/bin/sh
 # vault の登録簿・vault ごとの設定・旧環境からの移行・テーマ・ガイドの言語の回帰網。
-# HOME と GNOSIS_HOME を一時フォルダ（既定 ~/Desktop/test の下。空白と日本語を含むパス）にして動かす。
+# HOME と GNOSIS_HOME を一時フォルダ（既定 ~/gnosis-work/test の下。空白と日本語を含むパス）にして動かす。
 set -e
-TMPDIR=${TMPDIR:-$HOME/Desktop/test}
+TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

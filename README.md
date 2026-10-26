@@ -356,7 +356,7 @@ ESC O B（application cursor Down）のような端末制御コードはGnosis�
 ## 開発
 
 ```sh
-test/run.sh            # Vim・Python・インストーラーの回帰網（一時フォルダ ~/Desktop/test を使う）
+test/run.sh            # Vim・Python・インストーラーの回帰網（一時フォルダ ~/gnosis-work/test を使う）
 cd web && npm test     # アプリの E2E（xvfb・本物の Vim）
 python3 tools/build_icons.py       # アイコン・ロゴの生成（assets/*/source/ に正式な画像を置くと差し替え）
 python3 tools/extract_chnoubis.py  # assets/chnoubis/chnoubis.sh から起動画面のアートを取り出す
