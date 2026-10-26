@@ -20,7 +20,7 @@ def links(*names):
 
 class AnalysisTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         A, B = ["a1", "a2", "a3", "a4"], ["b1", "b2", "b3", "b4"]

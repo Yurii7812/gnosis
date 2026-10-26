@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 // 試験の一時フォルダは、デスクトップの test（TMPDIR があればそれ）。本物の vault には触らない。
 function testBase() {
-  const base = process.env.TMPDIR || path.join(os.homedir(), "Desktop", "test");
+  const base = process.env.TMPDIR || path.join(os.homedir(), "gnosis-work", "test");
   fs.mkdirSync(base, { recursive: true });
   return base;
 }

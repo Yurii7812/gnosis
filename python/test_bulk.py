@@ -9,7 +9,7 @@ T = dt.datetime(2026, 10, 21, 10, 0, 0)
 
 class T_(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(tmp.cleanup)
         self.r = Path(tmp.name)
         for n in ("a", "b", "c"):
@@ -72,7 +72,7 @@ class T_(unittest.TestCase):
         with self.assertRaises(ValueError):
             bulk.undo(self.r, o)                                             # 終わっていない取引
         with self.assertRaises(ValueError):
-            bulk.status(Path(tempfile.mkdtemp(dir=str(Path.home() / "Desktop" / "test"))))
+            bulk.status(Path(tempfile.mkdtemp(dir=str(Path.home() / "gnosis-work" / "test"))))
 
     def test_cli(self):
         def run(*a):

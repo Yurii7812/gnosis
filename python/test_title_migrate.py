@@ -49,7 +49,7 @@ class T(unittest.TestCase):
         self.assertEqual(tm.migrate_text(new)[1], "none")
 
     def test_run_counts_and_dry_run(self):
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=base) as d:
             r = Path(d)

@@ -33,7 +33,7 @@ from keys_pty import Session  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 VIMRC = str(REPO / "vimrc_gnosis")
-TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
 PASSWORD = "test-password-1"
 
 

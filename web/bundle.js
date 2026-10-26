@@ -25,7 +25,7 @@
     el2.classList.toggle("theme-dark", dark);
   }
 
-  // node_modules/@xterm/xterm/lib/xterm.mjs
+  // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
   var Ll = (s15, t3) => {
@@ -9140,7 +9140,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+  // ../../../gnosis/web/node_modules/@xterm/addon-fit/lib/addon-fit.mjs
   var h = 2;
   var _ = 1;
   var o = class {
@@ -9164,7 +9164,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@marijn/find-cluster-break/src/index.js
+  // ../../../gnosis/web/node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
   var rangeTo = [];
   (() => {
@@ -9238,7 +9238,7 @@ ${h3.join(`
     return code < 65536 ? 1 : 2;
   }
 
-  // node_modules/@codemirror/state/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/state/dist/index.js
   var Text2 = class _Text {
     /**
     Get the line description around the given position.
@@ -12626,7 +12626,7 @@ ${h3.join(`
     return strict === true ? -1 : string2.length;
   }
 
-  // node_modules/style-mod/src/style-mod.js
+  // ../../../gnosis/web/node_modules/style-mod/src/style-mod.js
   var C2 = "\u037C";
   var COUNT = typeof Symbol == "undefined" ? "__" + C2 : Symbol.for(C2);
   var SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : Symbol("styleSet");
@@ -12762,7 +12762,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/w3c-keyname/index.js
+  // ../../../gnosis/web/node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -12868,7 +12868,7 @@ ${h3.join(`
     return name2;
   }
 
-  // node_modules/@codemirror/view/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/view/dist/index.js
   var nav = typeof navigator != "undefined" ? navigator : { userAgent: "", vendor: "", platform: "" };
   var doc = typeof document != "undefined" ? document : { documentElement: { style: {} } };
   var ie_edge = /* @__PURE__ */ /Edge\/(\d+)/.exec(nav.userAgent);
@@ -21375,7 +21375,7 @@ ${h3.join(`
   GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
   GutterMarker.prototype.point = true;
 
-  // node_modules/@lezer/common/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/common/dist/index.js
   var DefaultBufferLength = 1024;
   var nextPropID = 0;
   var Range2 = class {
@@ -23426,7 +23426,7 @@ ${h3.join(`
     return result;
   }
 
-  // node_modules/@lezer/highlight/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/highlight/dist/index.js
   var nextTagID = 0;
   var Tag = class _Tag {
     /**
@@ -24150,7 +24150,7 @@ ${h3.join(`
     { tag: tags.punctuation, class: "tok-punctuation" }
   ]);
 
-  // node_modules/@codemirror/language/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/language/dist/index.js
   var _a2;
   var languageDataProp = /* @__PURE__ */ new NodeProp();
   function defineLanguageFacet(baseData) {
@@ -25064,7 +25064,7 @@ ${h3.join(`
     auto: /* @__PURE__ */ Decoration.mark({ class: "cm-iso", inclusive: true, attributes: { dir: "auto" }, bidiIsolate: null })
   };
 
-  // node_modules/@codemirror/autocomplete/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
     /**
     Create a new completion context. (Mostly useful for testing
@@ -25529,7 +25529,7 @@ ${h3.join(`
   closedBracket.endSide = -1;
   var android = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
 
-  // node_modules/@lezer/markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/markdown/dist/index.js
   var CompositeBlock = class _CompositeBlock {
     static create(type, value, from, parentHash, end) {
       let hash2 = parentHash + (parentHash << 8) + type + (value << 4) | 0;
@@ -27593,7 +27593,7 @@ ${h3.join(`
     }]
   };
 
-  // node_modules/@lezer/lr/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/lr/dist/index.js
   var Stack = class _Stack {
     /**
     @internal
@@ -29355,7 +29355,7 @@ ${h3.join(`
     return spec.get;
   }
 
-  // node_modules/@lezer/html/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/html/dist/index.js
   var scriptText = 55;
   var StartCloseScriptTag = 1;
   var styleText = 56;
@@ -29699,7 +29699,7 @@ ${h3.join(`
     });
   }
 
-  // node_modules/@lezer/css/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/css/dist/index.js
   var descendantOp = 148;
   var Unit = 1;
   var identifier = 149;
@@ -29878,7 +29878,7 @@ ${h3.join(`
     tokenPrec: 2433
   });
 
-  // node_modules/@codemirror/lang-css/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-css/dist/index.js
   var _properties = null;
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
@@ -30739,7 +30739,7 @@ ${h3.join(`
     return new LanguageSupport(cssLanguage, cssLanguage.data.of({ autocomplete: cssCompletionSource }));
   }
 
-  // node_modules/@lezer/javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/javascript/dist/index.js
   var noSemi = 317;
   var noSemiType = 318;
   var incdec = 1;
@@ -30951,7 +30951,7 @@ ${h3.join(`
     tokenPrec: 15178
   });
 
-  // node_modules/@codemirror/lang-javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-javascript/dist/index.js
   var snippets = [
     /* @__PURE__ */ snippetCompletion("function ${name}(${params}) {\n	${}\n}", {
       label: "function",
@@ -31263,7 +31263,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-html/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-html/dist/index.js
   var Targets = ["_blank", "_self", "_top", "_parent"];
   var Charsets = ["ascii", "utf-8", "utf-16", "latin1", "latin1"];
   var Methods = ["get", "post", "put", "delete"];
@@ -32003,7 +32003,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-markdown/dist/index.js
   var data = /* @__PURE__ */ defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
   var headingProp = /* @__PURE__ */ new NodeProp();
   var commonmark = /* @__PURE__ */ parser.configure({
@@ -33262,7 +33262,12 @@ ${h3.join(`
         view3.dispatch({ effects: setHide.of(ranges || []) });
       },
       // Vim のカーソル（行・バイト列）、モード、ビジュアルの始点を反映する
-      setVim({ cur, mode, vis }) {
+      // 先頭へスクロールする（別のノートを開いたとき。Vim の窓は先頭から出る）
+      scrollToTop() {
+        view3.scrollDOM.scrollTop = 0;
+      },
+      // follow が false のときは、カーソルが画面の外でも画面を動かさない（曼荼羅にカーソルがあるとき、ノートのカーソルは画面の一番下に置いてあるだけ）
+      setVim({ cur, mode, vis, follow = true }) {
         const doc2 = view3.state.doc;
         const lineOf = (l) => doc2.line(Math.min(Math.max(1, l), doc2.lines));
         const idxOf = (l, col) => {
@@ -33284,7 +33289,7 @@ ${h3.join(`
         }
         view3.dispatch({
           selection: { anchor: pos },
-          effects: [setVim.of({ pos, mode, visFrom, visTo }), ...this.followCursor === false ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })]]
+          effects: [setVim.of({ pos, mode, visFrom, visTo }), ...this.followCursor === false || !follow ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 4 })]]
         });
       },
       lineColAt(pos) {
@@ -34024,18 +34029,19 @@ ${h3.join(`
 
   // src/mandala.js
   var KINDS = [
-    ["index", "\u7D22\u5F15"],
-    ["group", "\u30B0\u30EB\u30FC\u30D7"],
-    ["parent", "\u89AA"],
-    ["context", "\u6587\u8108"],
-    ["cite", "\u5F15\u7528"],
-    ["back", "BackLink"],
-    ["child", "\u5B50"],
-    ["related", "\u95A2\u9023"],
-    ["pred", "\u4E88\u6E2C\u95A2\u9023"],
-    ["note", "\u30CE\u30FC\u30C8"],
-    ["outline", "\u898B\u51FA\u3057"]
+    ["index", "\u7D22\u5F15", "Index"],
+    ["group", "\u30B0\u30EB\u30FC\u30D7", "Group"],
+    ["parent", "\u89AA", "Parent"],
+    ["context", "\u6587\u8108", "Context"],
+    ["cite", "\u5F15\u7528", "Cite"],
+    ["back", "BackLink", "BackLink"],
+    ["child", "\u5B50", "Child"],
+    ["related", "\u95A2\u9023", "Related"],
+    ["pred", "\u4E88\u6E2C\u95A2\u9023", "Predicted"],
+    ["note", "\u30CE\u30FC\u30C8", "Note"],
+    ["outline", "\u898B\u51FA\u3057", "Heading"]
   ];
+  var isEn = () => document.documentElement.lang === "en";
   var DARK = { index: "#ff8798", group: "#f2d13d", parent: "#65b1ef", context: "#d194e4", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#a6abb4", outline: "#7ee8fa" };
   var LIGHT = { index: "#b81e52", group: "#8a5a00", parent: "#1864ab", context: "#862e9c", cite: "#a8400a", back: "#495057", child: "#08606f", related: "#1f6f30", pred: "#7a5530", note: "#5c6670", outline: "#0a6f8a" };
   var BG_DARK = Array(8).fill("#262b36");
@@ -34057,9 +34063,9 @@ ${h3.join(`
     function drawLegend() {
       legend.textContent = "";
       const c = colors();
-      for (const [k, label] of KINDS) {
+      for (const [k, ja2, en2] of KINDS) {
         const s15 = document.createElement("span");
-        s15.textContent = label;
+        s15.textContent = isEn() ? en2 : ja2;
         s15.style.color = c[k];
         legend.appendChild(s15);
       }
@@ -34074,9 +34080,10 @@ ${h3.join(`
       const description = m.info ? "\u25B6 " + m.info : "";
       if (info.textContent !== description) info.textContent = description;
       legend.hidden = m.legend === false || m.legend === 0;
-      if (legendTheme !== light()) {
+      const legendKey = light() + ":" + isEn();
+      if (legendTheme !== legendKey) {
         drawLegend();
-        legendTheme = light();
+        legendTheme = legendKey;
       }
       const key = JSON.stringify([n, m.nums, m.cells, light()]);
       if (key === sig && board.children.length === n * n) {
@@ -34772,6 +34779,7 @@ ${h3.join(`
   var fit = null;
   var view2 = null;
   var mandala = null;
+  var shownFile = null;
   var scan = null;
   var scanReq = 0;
   var quitReq = 0;
@@ -34910,7 +34918,7 @@ ${h3.join(`
       const why = $3("termwhy");
       if (why) {
         const r = expanded ? terminalReason(last2) : "";
-        why.textContent = r ? "\u7AEF\u672B: " + r : "";
+        why.textContent = r ? (document.documentElement.lang === "en" ? "Terminal: " : "\u7AEF\u672B: ") + r : "";
       }
     }
     const hasNote = !!s15.file && s15.bt === "";
@@ -34928,9 +34936,12 @@ ${h3.join(`
     view2.setHideImage(!!last2.hideImage);
     view2.setLinkEdit(!!last2.linkEdit);
     if (s15.lines) {
+      const fileChanged = shownFile !== s15.file;
+      shownFile = s15.file;
       view2.setText(s15.lines.join("\n"));
       view2.setHide(s15.hide || []);
       preloadImages(s15.lines);
+      if (fileChanged) view2.scrollToTop();
     }
     if (s15.vtext) {
       const vk = JSON.stringify(s15.vtext);
@@ -34939,7 +34950,7 @@ ${h3.join(`
         view2.setVtext(s15.vtext);
       }
     }
-    if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis });
+    if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis, follow: !(md && s15.focus === "mandala") });
   }
   var fitTimer = null;
   function scheduleFit() {
@@ -35070,6 +35081,12 @@ ${h3.join(`
       return;
     }
     $3("hv-name").textContent = res.name;
+    {
+      const en2 = document.documentElement.lang === "en";
+      const hint = document.querySelector(".hv-hint");
+      if (hint) hint.textContent = en2 ? "q / Esc to close" : "q / Esc \u3067\u9589\u3058\u308B";
+      $3("hv-close").setAttribute("aria-label", en2 ? "Close" : "\u9589\u3058\u308B");
+    }
     $3("hv-frame").src = res.url;
     $3("htmlview").hidden = false;
     htmlOpen = true;

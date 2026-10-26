@@ -1,9 +1,10 @@
 // アプリ（\c）の曼荼羅。Vim の曼荼羅（autoload/gnosis/mview.vim）の盤面の状態を、色つきのマスで描く。
 // 見た目だけ。キーは、Vim の曼荼羅の窓にそのまま届く（Space・hjkl・Enter・q など）。マウスのクリックは onCell で Vim に伝える。
 const KINDS = [
-  ["index", "索引"], ["group", "グループ"], ["parent", "親"], ["context", "文脈"], ["cite", "引用"],
-  ["back", "BackLink"], ["child", "子"], ["related", "関連"], ["pred", "予測関連"], ["note", "ノート"], ["outline", "見出し"],
+  ["index", "索引", "Index"], ["group", "グループ", "Group"], ["parent", "親", "Parent"], ["context", "文脈", "Context"], ["cite", "引用", "Cite"],
+  ["back", "BackLink", "BackLink"], ["child", "子", "Child"], ["related", "関連", "Related"], ["pred", "予測関連", "Predicted"], ["note", "ノート", "Note"], ["outline", "見出し", "Heading"],
 ];
+const isEn = () => document.documentElement.lang === "en";
 // 種類の色（Vim の曼荼羅と同じ。ライトは白い背景で読める濃さ）
 const DARK = { index: "#ff8798", group: "#f2d13d", parent: "#65b1ef", context: "#d194e4", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#a6abb4", outline: "#7ee8fa" };
 const LIGHT = { index: "#b81e52", group: "#8a5a00", parent: "#1864ab", context: "#862e9c", cite: "#a8400a", back: "#495057", child: "#08606f", related: "#1f6f30", pred: "#7a5530", note: "#5c6670", outline: "#0a6f8a" };
@@ -30,9 +31,9 @@ export function createMandala(root, { onCell }) {
   function drawLegend() {
     legend.textContent = "";
     const c = colors();
-    for (const [k, label] of KINDS) {
+    for (const [k, ja, en] of KINDS) {
       const s = document.createElement("span");
-      s.textContent = label;
+      s.textContent = isEn() ? en : ja;
       s.style.color = c[k];
       legend.appendChild(s);
     }
@@ -49,7 +50,8 @@ export function createMandala(root, { onCell }) {
     if (info.textContent !== description) info.textContent = description;
     // 種類の凡例（Vim の設定 mandalaLegend）。
     legend.hidden = m.legend === false || m.legend === 0;
-    if (legendTheme !== light()) { drawLegend(); legendTheme = light(); }
+    const legendKey = light() + ":" + isEn();
+    if (legendTheme !== legendKey) { drawLegend(); legendTheme = legendKey; }
     // 盤面の中身（マス・色・番号）が前と同じなら、作り直さず、選んでいるマスの枠だけ動かす（ちらつかない）
     const key = JSON.stringify([n, m.nums, m.cells, light()]);
     if (key === sig && board.children.length === n * n) {

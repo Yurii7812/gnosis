@@ -15,7 +15,7 @@ D = dt.date
 
 class SrsTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "a.md").write_text("---\ntitle: A\n---\n\n# A\n\nQ: 首都は？\nA: 東京\n\nQ: 複数行の問い\n続き\nA: 答え1\n答え2\n\n日本の首都は{{東京}}で、人口は{{c2::約1400万人::ヒント}}。\n\nふつうの文。\n\n```\nQ: コード内\nA: 無視\n{{無視}}\n```\n", encoding="utf-8")

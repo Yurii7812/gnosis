@@ -84,7 +84,7 @@ def test_images() -> None:
 
 def test_apply_note() -> None:
     print("apply_note: ファイルへの適用（原子的・競合の記録）")
-    with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")) as d:
+    with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")) as d:
         root = Path(d)
         p = root / "a.md"
         base = ["一行目", "二行目"]

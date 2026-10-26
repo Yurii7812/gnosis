@@ -17,7 +17,7 @@ def note(root, name, title, body="", fzid="", extra_fm=""):
 
 class GraphTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "index.md", "Index", "[ハーブ](herb.md)\n", extra_fm="attribute: group\n")
@@ -97,7 +97,7 @@ class GraphTest(unittest.TestCase):
         """相対パスの速い解決（realpath を呼ばない）が、従来の解決と同じ辺・壊れたリンクを返す。"""
         import tempfile
         import note_format_v2 as nf
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=base) as d:
             r = Path(d)

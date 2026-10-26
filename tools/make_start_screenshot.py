@@ -77,7 +77,7 @@ def render(screen, out: Path) -> None:
 def main() -> None:
     out = REPO / "docs" / "images" / "start-screen.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+    base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
     os.makedirs(base, exist_ok=True)
     work = Path(tempfile.mkdtemp(dir=base, prefix="shot-"))
     try:

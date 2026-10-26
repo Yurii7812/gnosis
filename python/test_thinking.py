@@ -114,7 +114,7 @@ class ThinkingTest(unittest.TestCase):
         self.assertTrue(th.check(t)["ok"])
 
     def test_cli_and_no_overwrite(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "n.md"
             self.assertEqual(th.main(["new", "feynman", str(p), "量子"]), 0)
             before = p.read_text(encoding="utf-8")

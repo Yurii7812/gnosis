@@ -17,7 +17,7 @@ NOW = dt.datetime(2026, 10, 20, 22, 30, 0)
 
 class BackupTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         base = Path(self.tmp.name)
         self.root = base / "vault"

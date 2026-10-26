@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import branch_ops as bo  # noqa: E402
 import note_format_v2 as nf  # noqa: E402
 
-TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
 
 
 def note(title: str, body: str = "", extra_fm: str = "", sections: str = "") -> str:
@@ -422,7 +422,7 @@ class TestTimelineTree(unittest.TestCase):
 
     def setUp(self) -> None:
         import tempfile
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=base)
         self.addCleanup(self.tmp.cleanup)
@@ -461,7 +461,7 @@ class TestParentBranchDeletion(unittest.TestCase):
 
     def setUp(self) -> None:
         import tempfile
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=base)
         self.addCleanup(self.tmp.cleanup)

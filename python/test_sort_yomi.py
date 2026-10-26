@@ -449,7 +449,7 @@ def test_yomi_store_json_lines() -> None:
     import json
     import os
     import hashlib
-    base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+    base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
     os.makedirs(base, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=base) as tmp:
         root = Path(tmp)
@@ -494,7 +494,7 @@ def test_sync_moves_yaml_yomi_to_store() -> None:
     print("同期: 古い front matter の yomi: を JSON へ移す・使われていない表示名は掃除する")
     import os
     import note_format_v2 as v2
-    base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+    base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
     os.makedirs(base, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=base) as tmp:
         root = Path(tmp)

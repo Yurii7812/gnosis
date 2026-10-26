@@ -7,7 +7,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const base = process.env.TMPDIR || path.join(os.homedir(), "Desktop", "test");
+const base = process.env.TMPDIR || path.join(os.homedir(), "gnosis-work", "test");
 fs.mkdirSync(base, { recursive: true });
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "..");

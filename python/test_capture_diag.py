@@ -12,7 +12,7 @@ import capture_import as ci
 
 class DiagTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         note = "---\ntitle: A\ncapture: \ntopic: \"\"\n---\n\n# A\n\n本文\n"

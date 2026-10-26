@@ -17,6 +17,7 @@ let term = null;
 let fit = null;
 let view = null;
 let mandala = null;
+let shownFile = null;
 let scan = null;
 let scanReq = 0;
 let quitReq = 0;
@@ -167,7 +168,7 @@ function applyState(s) {
     collapseTimer = setTimeout(() => { collapseTimer = null; if (!needsTerminal(last)) setExpanded(false); }, 120);
   }
   applyOverlay(last);
-  { const why = $("termwhy"); if (why) { const r = expanded ? terminalReason(last) : ""; why.textContent = r ? "端末: " + r : ""; } }
+  { const why = $("termwhy"); if (why) { const r = expanded ? terminalReason(last) : ""; why.textContent = r ? (document.documentElement.lang === "en" ? "Terminal: " : "端末: ") + r : ""; } }
 
   // 曼荼羅: 開いていれば左（全画面 9×9 で右の窓が無いときは全面）に描く
   const hasNote = !!(s.file) && s.bt === "";
@@ -187,13 +188,21 @@ function applyState(s) {
   view.setLinkSource(!!last.linkSource);
   view.setHideImage(!!last.hideImage);
   view.setLinkEdit(!!last.linkEdit);
-  if (s.lines) { view.setText(s.lines.join("\n")); view.setHide(s.hide || []); preloadImages(s.lines); }
+  if (s.lines) {
+    const fileChanged = shownFile !== s.file;
+    shownFile = s.file;
+    view.setText(s.lines.join("\n")); view.setHide(s.hide || []); preloadImages(s.lines);
+    // 別のノートに替わったら先頭から見せる（Vim の窓も先頭から。前のノートのスクロール位置を引きずらない）
+    if (fileChanged) view.scrollToTop();
+  }
   if (s.vtext) {
     // カーソルを動かすだけの状態では、仮想テキストは変わらない。同じなら編集画面へ渡さない（装飾の作り直しを避ける）
     const vk = JSON.stringify(s.vtext);
     if (vk !== vtextKey || s.lines) { vtextKey = vk; view.setVtext(s.vtext); }
   }
-  if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis });
+  // 曼荼羅にカーソルがあるあいだ、ノートのカーソルは画面の一番下に置いてあるだけ。画面は動かさない。
+  // ノートにカーソルがあるときは、カーソルが画面の下（上）の端に来るまで画面は動かさない
+  if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis, follow: !(md && s.focus === "mandala") });
 }
 
 // ペインの大きさが変わったら、Vim の端末の大きさを合わせ直す
@@ -327,6 +336,7 @@ async function openHtml(href) {
   const res = await gui.linkHtml(last.file, href);
   if (!res) { showError(document.documentElement.lang === "en" ? "Cannot open this HTML file" : "この HTML ファイルは開けません（vault の外・存在しない）"); return; }
   $("hv-name").textContent = res.name;
+  { const en = document.documentElement.lang === "en"; const hint = document.querySelector(".hv-hint"); if (hint) hint.textContent = en ? "q / Esc to close" : "q / Esc で閉じる"; $("hv-close").setAttribute("aria-label", en ? "Close" : "閉じる"); }
   $("hv-frame").src = res.url;
   $("htmlview").hidden = false;
   htmlOpen = true;

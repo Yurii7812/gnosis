@@ -20,7 +20,7 @@ def note(root, name, title, body="", extra=""):
 
 class ParaMocTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "proj.md", "引っ越し", "- [ ] 荷造り 📅 2026-11-01")

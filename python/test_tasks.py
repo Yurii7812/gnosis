@@ -55,7 +55,7 @@ class TasksTest(unittest.TestCase):
         self.assertEqual(names["not_started"], ["開始前"])
 
     def test_complete_plain_and_repeat(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "n.md"
             p.write_text("# n\n\n- [ ] 単発 📅 2026-10-20\n- [ ] 毎週 📅 2026-10-20 🔁 weekly\n- 箇条書き\n- [ ] 期限なしの繰り返し 🔁 daily\n", encoding="utf-8")
             r = tk.complete(p, 3, D(2026, 10, 20))
@@ -79,7 +79,7 @@ class TasksTest(unittest.TestCase):
             self.assertEqual([x.name for x in Path(d).iterdir()], ["n.md"])
 
     def test_collect_skips_hidden_dirs(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             r = Path(d)
             (r / "a.md").write_text("- [ ] A\n", encoding="utf-8")
             (r / ".trash").mkdir()
@@ -132,7 +132,7 @@ class TasksTest(unittest.TestCase):
         self.assertEqual(tk.edit_line("ふつうの行", due="2026-11-01"), "ふつうの行")
 
     def test_repeating_task_keeps_new_marks_in_next_occurrence(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "a.md"
             p.write_text("- [ ] 週報 📅 2026-10-21 09:00 ⌛ 30m 🔔 10m,1d 🔁 weekly\n", encoding="utf-8")
             tk.complete(str(p), 1, D(2026, 10, 21))

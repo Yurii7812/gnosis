@@ -38,7 +38,7 @@ title: 睡眠の研究
 
 class HypothesesTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         (r / "sleep.md").write_text(NOTE, encoding="utf-8")

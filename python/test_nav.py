@@ -24,7 +24,7 @@ def note(root, name, title, body="", tm="2026-01-01 00:00:00"):
 
 class NavTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "a.md", "甲", "? これは本当にそうなのか調べる\n? 解決した問い ✅\n仮説: 睡眠は記憶に効く\n❓ 2026-10-01 半年後の自分は\n❓ 2027-04-01 まだ先の問い")
@@ -93,7 +93,7 @@ class NavTest(unittest.TestCase):
         v = nav.recent(self.root, "viewed")["notes"]
         self.assertEqual([x["path"] for x in v], ["a.md", "b.md"])                 # 新しい順・重複と無いファイルと外のパスは除く
         self.assertEqual(nav.recent(self.root, "viewed", 1)["notes"][0]["path"], "a.md")
-        self.assertEqual(nav.recent(Path(tempfile.mkdtemp(dir=str(Path.home() / "Desktop" / "test"))), "viewed")["notes"], [])
+        self.assertEqual(nav.recent(Path(tempfile.mkdtemp(dir=str(Path.home() / "gnosis-work" / "test"))), "viewed")["notes"], [])
         (self.root / "ph.md").write_text("---\ntime: 2026-10-19 09:00:00\ntitle: 電話\ncapture_id: 261019090000\n---\n\n# 電話\n", encoding="utf-8")
         (self.root / "ph2.md").write_text("---\ntime: 2026-10-20 09:00:00\ntitle: 電話2\ncapture_id: 261020090000\n---\n\n# 電話2\n", encoding="utf-8")
         self.assertEqual([x["path"] for x in nav.recent(self.root, "imported")["notes"]], ["ph2.md", "ph.md"])

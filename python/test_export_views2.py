@@ -48,7 +48,7 @@ class RebaseTest(unittest.TestCase):
 
 class ExportViews2Test(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         base = Path(self.tmp.name)
         self.root, self.out = base / "v", base / "site"

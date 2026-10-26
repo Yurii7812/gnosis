@@ -65,7 +65,7 @@ class CollectorTest(unittest.TestCase):
         cls.srv.shutdown(); cls.other.shutdown()
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "keep.md").write_text("# 既存\n", encoding="utf-8")

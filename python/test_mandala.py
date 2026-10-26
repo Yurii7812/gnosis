@@ -66,7 +66,7 @@ class MandalaTest(unittest.TestCase):
         self.assertEqual(h.count('class="m theme'), 1)
 
     def test_cli_new_does_not_overwrite(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "m.md"
             self.assertEqual(md.main(["new", str(p), "主題", "a", "b"]), 0)
             before = p.read_text(encoding="utf-8")
@@ -76,7 +76,7 @@ class MandalaTest(unittest.TestCase):
             self.assertEqual(p.read_text(encoding="utf-8"), before)    # 揃っていれば書き換えない
 
     def test_link_cell_creates_real_note_and_keeps_mirror_in_sync(self):
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "m.md"
             p.write_text(md.new_text("健康", ["運動", "食事"]), encoding="utf-8")
             r = md.link_cell(p, 3, 3, "note")                # 中心ブロックの副題「運動」
@@ -132,7 +132,7 @@ class MandalaTest(unittest.TestCase):
         row = lines[blk[0] + 2 + 3]
         pipes = [i for i, ch in enumerate(row) if ch == "|"]
         self.assertEqual(md.locate_page(new, blk[0] + 2 + 3 + 1, len(row[:pipes[3] + 1].encode()) + 2), (1, 3, 3))
-        with tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test")) as d:
+        with tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test")) as d:
             p = Path(d) / "m.md"
             p.write_text(new, encoding="utf-8")
             r = md.link_cell(p, 3, 3, "note", 1)

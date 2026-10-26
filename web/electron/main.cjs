@@ -65,6 +65,8 @@ function send(channel, ...args) {
 let win = null;
 let bridge = null;
 let server = null;
+// 画面の文言の言語（Gnosis ホーム全体の設定）に合わせた短い文言
+const L = (ja, en) => (cfg.systemLang() === "ja" ? ja : en);
 let vimSock = null; // Vim（gui.vim）とつないだソケット。アプリ → Vim の知らせにも使う
 let activeVault = "";
 let noteRootDir = ""; // 開いている vault のノートのフォルダ（GUI 編集モードの読み書きの範囲）
@@ -74,9 +76,9 @@ const pendingAck = new Map(); // id → resolve（Vim へ送った知らせの�
 // Vim（gui.vim）へ知らせを送り、{ack: id, ...} の応答を待つ。Vim がつながっていない・応答が無いときは {ok:false, error}。
 function vimCall(msg, timeoutMs = 10000) {
   return new Promise((resolve) => {
-    if (!vimSock) return resolve({ ok: false, error: "Vim がつながっていません" });
+    if (!vimSock) return resolve({ ok: false, error: L("Vim がつながっていません", "Vim is not connected") });
     const id = ++ackSeq;
-    const timer = setTimeout(() => { pendingAck.delete(id); resolve({ ok: false, error: "Vim から応答がありません" }); }, timeoutMs);
+    const timer = setTimeout(() => { pendingAck.delete(id); resolve({ ok: false, error: L("Vim から応答がありません", "No response from Vim") }); }, timeoutMs);
     pendingAck.set(id, (r) => { clearTimeout(timer); resolve(r); });
     try { vimSock.write(JSON.stringify({ ...msg, id }) + "\n"); } catch (e) { clearTimeout(timer); pendingAck.delete(id); resolve({ ok: false, error: String(e) }); }
   });
@@ -377,14 +379,14 @@ ipcMain.on("app:quit", () => app.quit());
 const SCAN_PY = path.join(REPO, "python", "scan_inbox.py");
 const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0, importmove: 1 }; // 名前 → 必要な引数の数（vault のあとに）
 ipcMain.handle("scan:run", (_e, cmd, args) => new Promise((resolve) => {
-  if (!noteRootDir || !(cmd in SCAN_CMDS) || !Array.isArray(args)) return resolve({ ok: false, error: "vault が開かれていません" });
+  if (!noteRootDir || !(cmd in SCAN_CMDS) || !Array.isArray(args)) return resolve({ ok: false, error: L("vault が開かれていません", "No vault is open") });
   const list = args.map(String);
-  if (list.length < SCAN_CMDS[cmd] || list.length > SCAN_CMDS[cmd] + 1) return resolve({ ok: false, error: "引数が違います" });
+  if (list.length < SCAN_CMDS[cmd] || list.length > SCAN_CMDS[cmd] + 1) return resolve({ ok: false, error: L("引数が違います", "Wrong arguments") });
   const child = spawn(process.platform === "win32" ? "python" : "python3", [SCAN_PY, cmd, noteRootDir, ...list], { stdio: ["ignore", "pipe", "pipe"] });
   let out = "";
   child.stdout.on("data", (d) => { out += d; });
   child.on("error", (e) => resolve({ ok: false, error: String(e.message || e) }));
-  child.on("close", () => { try { resolve(JSON.parse(out.trim().split("\n").pop())); } catch { resolve({ ok: false, error: out.slice(0, 200) || "scan_inbox.py の出力を読めません" }); } });
+  child.on("close", () => { try { resolve(JSON.parse(out.trim().split("\n").pop())); } catch { resolve({ ok: false, error: out.slice(0, 200) || L("scan_inbox.py の出力を読めません", "Cannot read the output of scan_inbox.py") }); } });
 }));
 // vault の外のフォルダを選ぶ画面用: フォルダの中のフォルダと、写真の枚数（キーボードだけで辿る）
 ipcMain.handle("scan:ls", async (_e, dir) => {

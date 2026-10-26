@@ -823,7 +823,10 @@ export function createView(opts) {
       view.dispatch({ effects: setHide.of(ranges || []) });
     },
     // Vim のカーソル（行・バイト列）、モード、ビジュアルの始点を反映する
-    setVim({ cur, mode, vis }) {
+    // 先頭へスクロールする（別のノートを開いたとき。Vim の窓は先頭から出る）
+    scrollToTop() { view.scrollDOM.scrollTop = 0; },
+    // follow が false のときは、カーソルが画面の外でも画面を動かさない（曼荼羅にカーソルがあるとき、ノートのカーソルは画面の一番下に置いてあるだけ）
+    setVim({ cur, mode, vis, follow = true }) {
       const doc = view.state.doc;
       const lineOf = (l) => doc.line(Math.min(Math.max(1, l), doc.lines));
       const idxOf = (l, col) => { const ln = lineOf(l); return ln.from + byteColToIndex(ln.text, col); };
@@ -840,7 +843,7 @@ export function createView(opts) {
       }
       view.dispatch({
         selection: { anchor: pos },
-        effects: [setVim.of({ pos, mode, visFrom, visTo }), ...(this.followCursor === false ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 90 })])],
+        effects: [setVim.of({ pos, mode, visFrom, visTo }), ...(this.followCursor === false || !follow ? [] : [EditorView.scrollIntoView(pos, { y: "nearest", yMargin: 4 })])],
       });
     },
     lineColAt(pos) {

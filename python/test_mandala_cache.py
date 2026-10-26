@@ -16,7 +16,7 @@ from test_mandala_view import note  # noqa: E402
 
 class T(unittest.TestCase):
     def setUp(self):
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=base)
         self.r = r = Path(self.tmp.name)

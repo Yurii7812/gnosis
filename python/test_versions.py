@@ -9,7 +9,7 @@ T0 = dt.datetime(2026, 10, 21, 10, 0, 0)
 
 class T(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(tmp.cleanup)
         self.r = Path(tmp.name)
         self.n = self.r / "a.md"

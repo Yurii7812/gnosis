@@ -20,7 +20,7 @@ def note(root, name, title, body="", fm=""):
 
 class ReadingTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "book.md", "知識の本", "==知識は力である== (p.12)\n普通の文。==二つ目の強調==（34ページ）\n==ページなし==\n```\n==コード内==\n```", "source: book\nauthor: 山田\nyear: 2020\n")

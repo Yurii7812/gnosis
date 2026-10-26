@@ -18,7 +18,7 @@ def note(root, name, title, body, time_="2026-10-01 09:00:00", extra=""):
 
 class IndexTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "a.md", "ハーブ", "ローズマリーとタイムを育てる。水は少なめ。 [栽培](b.md)", "2026-10-01 09:00:00", 'folgezettel: "1"\n')

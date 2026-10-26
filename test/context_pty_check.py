@@ -23,7 +23,7 @@ except ImportError:
 from keys_pty import ESC, Session  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
 
 
 class TestNewNoteCursor(unittest.TestCase):

@@ -22,7 +22,7 @@ def note(title, time="2026-01-01 00:00:00", attr=False, head=(), body=()):
 
 class T(unittest.TestCase):
     def setUp(self):
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=base)
         self.bk = tempfile.TemporaryDirectory(dir=base)

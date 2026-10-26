@@ -30,7 +30,7 @@ from keys_pty import ESC, Session  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 VIMRC = str(REPO / "vimrc_gnosis")
-TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+TMP_BASE = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
 REAL_PLUGINS = Path(os.environ.get("GNOSIS_TEST_PLUGINS", str(Path.home() / ".local/share/gnosis/plugins")))
 MODES = ("ss3", "csi")
 

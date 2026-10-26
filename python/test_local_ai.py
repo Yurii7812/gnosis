@@ -21,7 +21,7 @@ def note(root, name, title, body, time_="2026-10-01 09:00:00", extra=""):
 
 class AiTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "rose.md", "ローズマリー", "ローズマリーは地中海原産のハーブです。乾燥した土を好み、水やりは控えめにします。挿し木で増やせます。")

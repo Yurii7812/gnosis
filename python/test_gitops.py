@@ -17,7 +17,7 @@ def git(root, *a):
 
 class GitOpsTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "vault"
         self.root.mkdir()

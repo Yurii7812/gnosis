@@ -15,7 +15,7 @@ def note(title, body):
 
 class T(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(tmp.cleanup)
         self.r = Path(tmp.name)
 

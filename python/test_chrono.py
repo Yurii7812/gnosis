@@ -20,7 +20,7 @@ def note(root, name, title, time_, body=""):
 
 class ChronoTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "a.md", "十月の一", "2026-10-05 09:00:00", "- [ ] 提出 📅 2026-10-25\n- [x] 買い物 ✅ 2026-10-06")

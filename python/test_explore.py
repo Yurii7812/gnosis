@@ -20,7 +20,7 @@ def note(root, name, title, body=""):
 
 class ExploreTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         # 鎖: a - b - c - d - e（リンク）。f は a とつながらないが内容が近い。g は孤立。

@@ -13,7 +13,7 @@ import note_tools as nt
 
 class NoteToolsTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         (r / "a.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: 甲\n---\n\n# 甲\n\n日本語の本文です。Hello world foo-bar.\n[リンク先](b.md)を見る\n- [ ] 未完了\n- [x] 完了\n\n## 小見出し\n\n終わり\n\nParentBranch:\n[親の長い名前](p.md)\n", encoding="utf-8")
@@ -106,7 +106,7 @@ class NoteToolsTest(unittest.TestCase):
 
     def test_activity_empty_and_md(self):
         import datetime as dt
-        e = Path(tempfile.mkdtemp(dir=str(Path.home() / "Desktop" / "test")))
+        e = Path(tempfile.mkdtemp(dir=str(Path.home() / "gnosis-work" / "test")))
         self.addCleanup(__import__("shutil").rmtree, e, True)
         a = nt.activity(e, dt.date(2026, 10, 21), 3, 2)
         self.assertEqual((a["streak"], a["longest_streak"], a["busiest_day"], a["recent"]), (0, 0, None, []))

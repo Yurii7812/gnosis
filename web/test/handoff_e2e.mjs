@@ -68,8 +68,8 @@ delete env.WAYLAND_DISPLAY;delete env.DISPLAY;delete env.XDG_SESSION_TYPE;
 try {
  execFileSync('xvfb-run',['-a','-s','-screen 0 1100x880x24',path.join(web,'node_modules/.bin/electron'),web,'--no-sandbox','--disable-gpu','--ozone-platform=x11'],{env,timeout:65000,stdio:['ignore','ignore','pipe']});
  const r=JSON.parse(fs.readFileSync(out));assert(!r.fatal,r.fatal);assert.deepEqual((r.__console || []).filter(s => !s.includes('Electron Security Warning')), []);assert.deepEqual(r.__uncaught, []);
- assert.equal(r.initial.size,9);assert.equal(r.initial.center,'topic.md');assert.deepEqual(r.initial.cur,[3,5]);assert.equal(r.initial.nums,0);assert.equal(r.initial.focus,'mandala');assert.equal(r.initial.dir,'down');assert(r.initial.header.includes('配下'));
- assert(!r.normalHeader.includes('配下'));assert(r.downHeader.includes('配下・深さ2'));
+ assert.equal(r.initial.size,9);assert.equal(r.initial.center,'topic.md');assert.deepEqual(r.initial.cur,[3,5]);assert.equal(r.initial.nums,0);assert.equal(r.initial.focus,'mandala');assert.equal(r.initial.dir,'down');assert(r.initial.header.includes('down-dep'));
+ assert(!r.normalHeader.includes('down-dep'));assert(r.downHeader.includes('down-dep2'));
  assert.deepEqual(r.reusedGui,[3,5]);assert.equal(r.returned.size,3);assert.equal(r.returned.focus,'mandala');
  const c=JSON.parse(fs.readFileSync(state));assert.equal(c.mandala.size,3);assert.equal(c.focus,'gnosis-mandala');
  assert.equal(fs.readdirSync(path.join(home,'run')).filter(n=>/^cui-.*json$/.test(n)).length,0);

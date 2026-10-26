@@ -19,7 +19,7 @@ def note(title, attr=False, groups=(), body=(), fzid=""):
 
 class T(unittest.TestCase):
     def setUp(self):
-        base = os.environ.get("TMPDIR") or str(Path.home() / "Desktop" / "test")
+        base = os.environ.get("TMPDIR") or str(Path.home() / "gnosis-work" / "test")
         os.makedirs(base, exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=base)
         r = Path(self.tmp.name)

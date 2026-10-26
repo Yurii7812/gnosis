@@ -14,7 +14,7 @@ import tracker as tr
 
 class TrackerTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "hand.md").write_text("---\ntitle: 手書き\n---\n\n# 手書き\n\n- ⏱ 2026-10-20 22:30-00:15 夜の作業 #仕事\n- 🌱 運動 2026-10-19\n```\n- ⏱ 2026-10-20 01:00-02:00 コード内\n```\n", encoding="utf-8")

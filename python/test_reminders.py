@@ -18,7 +18,7 @@ def note(root, name, body):
 
 class RemindersTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "a.md", "- [ ] 薬を飲む ⏰ 2026-10-25 09:30\n- [x] 終えたもの ⏰ 2026-10-25 08:00\n歯医者の予約 ⏰ 2026-10-26\n```\n- [ ] コード内 ⏰ 2026-10-25 07:00\n```\nremind:2026-10-27T18:00 英語の書き方")

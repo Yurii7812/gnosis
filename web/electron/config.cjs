@@ -347,7 +347,7 @@ function art() {
 }
 
 module.exports = {
-  REPO, gnosisHome, normalize, same, loadRegistry, listVaults, lastVault, addVault, createVault, removeVault, selectVault,
+  REPO, gnosisHome, systemLang, normalize, same, loadRegistry, listVaults, lastVault, addVault, createVault, removeVault, selectVault,
   noteRoot, defaultSettings, validateSettings, loadSettings, saveSettings, builtinPalettes, paletteFor, appPaletteFor, luminance, parseThemeSpec,
   installedThemes, installTheme, catalog, art, legacyRootFile, isDir,
 };

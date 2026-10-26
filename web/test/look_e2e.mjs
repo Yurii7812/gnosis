@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(here, "..");
 const repo = path.resolve(web, "..");
-const base = process.env.TMPDIR || path.join(os.homedir(), "Desktop", "test");
+const base = process.env.TMPDIR || path.join(os.homedir(), "gnosis-work", "test");
 fs.mkdirSync(base, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(base, "look-e2e-"));
 const pal = JSON.parse(fs.readFileSync(path.join(repo, "assets", "themes", "builtin.json"), "utf8"));

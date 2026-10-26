@@ -17,7 +17,7 @@ def note(root, name, title, body):
 
 class TranscludeTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "Desktop" / "test"))
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
         self.addCleanup(self.tmp.cleanup)
         r = self.root = Path(self.tmp.name)
         note(r, "src.md", "資料", "導入の文。\n\n## 栽培\n\n水やりは控えめに。\n\n要点の段落。 ^key\n\n## 料理\n\n焼く。\n\nParentBranch:\n[親](p.md)")
