@@ -66,21 +66,21 @@ call s:keys(' ')
 call s:ok('1 枚だけなら 1/1', s:head() =~# '\[a\] 1/1', s:head())
 call s:keys('Q')
 
-" B は設定画面の外でも動き、表示条件を勝手に切り替えない
+" b は設定画面の外でも動き、表示条件を勝手に切り替えない
 execute 'edit ' . s:v . '/a0.md'
 call s:keys(' ')
 let s:before = deepcopy(s:st())
 let s:basis = get(s:before, 'dbasis', 'center')
-call s:keys('B')
-call s:ok('3x3 の B も基準を変更・近さ順と大きさは維持', get(s:st(), 'dbasis', 'center') !=# s:basis && s:st().size == s:before.size && get(s:st(), 'rank_on', 0) == get(s:before, 'rank_on', 0))
+call s:keys('b')
+call s:ok('3x3 の b も基準を変更・近さ順と大きさは維持', get(s:st(), 'dbasis', 'center') !=# s:basis && s:st().size == s:before.size && get(s:st(), 'rank_on', 0) == get(s:before, 'rank_on', 0))
 call s:keys('f')
 if !get(s:st(), 'rank_on', 0) | call s:keys('w') | endif
-call s:keys('B')
-call s:ok('通常9x9 の B は現在の基準も表示', s:head() =~# (get(s:st(), 'dbasis', 'center') ==# 'self' ? 'rank(block)' : 'rank(center)'))
+call s:keys('b')
+call s:ok('通常9x9 の b は現在の基準も表示', s:head() =~# (get(s:st(), 'dbasis', 'center') ==# 'self' ? 'rank(block)' : 'rank(center)'))
 call s:keys('v')
 let s:before = deepcopy(s:st())
-call s:keys('B')
-call s:ok('外向きの B は基準を保存して方向と深さを維持', s:st().dbasis !=# s:before.dbasis && s:st().out_on && s:st().depth == s:before.depth && get(s:st(), 'out_dir', 'all') ==# get(s:before, 'out_dir', 'all') && s:head() !~# 'rank(')
+call s:keys('b')
+call s:ok('外向きの b は基準を保存して方向と深さを維持', s:st().dbasis !=# s:before.dbasis && s:st().out_on && s:st().depth == s:before.depth && get(s:st(), 'out_dir', 'all') ==# get(s:before, 'out_dir', 'all') && s:head() !~# 'rank(')
 call s:keys('vwfQ')
 
 " 外向きの深さ
@@ -149,7 +149,7 @@ let s:basis = get(s:st(), 'dbasis', 'center')
 let s:direction_row = match(split(gnosis#mview#panel_text(), "\n"), '外向きに辿る方向 D') - 2
 call gnosis#mview#panel_act(s:direction_row)
 call s:ok('Z の D も同じ切り替え', s:st().out_dir ==# 'all' && get(s:st(), 'dbasis', 'center') ==# s:basis)
-call s:ok('設定に D の方向・B の近さ基準がある', gnosis#mview#panel_text() =~# '外向きに辿る方向 D' && gnosis#mview#panel_text() =~# '近さ順の基準 rank（center ⇔ block。通常9×9の外側） B')
+call s:ok('設定に D の方向・b の近さ基準がある', gnosis#mview#panel_text() =~# '外向きに辿る方向 D' && gnosis#mview#panel_text() =~# '近さ順の基準 rank（center ⇔ block。通常9×9の外側） b')
 call s:keys('D')
 call gnosis#mview#preset_save('配下')
 call s:keys('D')

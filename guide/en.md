@@ -74,7 +74,7 @@ When you change the language in the settings (`:GnosisSettings`), this guide is 
 ## Moving and reading
 
 - `<Tab>` / `<S-Tab>` … next / previous link ・ `<CR>` … open the link under the cursor
-- `<BS>` … back ・ `<S-BS>` / `\.` … forward ・ `_` … toggle with the previous note
+- `<BS>` … back ・ `<S-BS>` / `\.` … undo the back ・ `_` … toggle with the previous note
 - `1`〜`9` / `0` … open links by their running number (top to bottom of the document, including the Context at the top)
 - `\k` / `\m` / `\j` / `\J` … to the topmost "Name:" line (Group:, Context:, etc.) / to the "Name:" line nearest after the body (ChildBranch:, BackLink:, etc.) / to the first BackLink / to the last BackLink
 - `\bu` … last link near Context ・ `<S-Space>` … pick from the link list and move

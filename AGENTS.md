@@ -12,9 +12,10 @@ Claude Code 向けの入口は `CLAUDE.md`。ここは Codex など `AGENTS.md` 
 
 ## 試験
 - 場所は必ず `~/gnosis-work/test`（`TMPDIR`）と一時の `GNOSIS_HOME`。**本物の vault・Gnosis ホームに触らない。プロセスは名前で kill しない。**
-- 速く流す: `test/run_parallel.sh`（同時に 10 本。数字で本数を変える）。API 一覧などを含む全体は `sh test/run.sh`。直した部分だけなら関係する試験だけでもよい。
+- 小さな直し: `test/related.sh`（変えたファイルに関係する試験だけを同時に流す。共通部分が変わっていれば自動で全部）。
+- 大きな直し・マージ前: `test/run_parallel.sh`（約 3〜6 分。同時に 12 本。落ちたものは 1 本ずつ流し直し、それでも落ちるものだけ失敗にする。`test/known_ng.txt` の既知の失敗は数えない）。API 一覧などを含む全体は `sh test/run.sh`（直列で遅い）。
 - 言語の既定は英語。日本語の画面を確かめる試験は `GNOSIS_LANG=ja` で流す（`run.sh` は自動で ja）。
-- `requests_1020b`・`theme_pty_check.py` は、全体を同時に流すと時々落ちる。単独で通れば問題なし。
+- 同時に流すと時々落ちる試験がある（`theme_pty_check`・`requests_1020b`・`mview_panel_pty_check` など）。流し直しで通れば問題なし。調べ直さない。
 - 未実施の試験は未実施と書く。スタブを「実装済み」と書かない。
 
 ## 見た目の言葉

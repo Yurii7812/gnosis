@@ -835,7 +835,10 @@
     "つながりが近い": "close in the graph",
     "Context": "Context",
     "BackLink": "BackLink",
-    "種類の凡例を出す・隠す": "Show / hide the kind legend"
+    "種類の凡例を出す・隠す": "Show / hide the kind legend",
+    "戻るを戻す": "Undo the back",
+    "BS": "BS",
+    "Del": "Del"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

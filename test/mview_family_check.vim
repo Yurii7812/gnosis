@@ -57,7 +57,7 @@ call s:ok('a で全体に戻る', s:st().mode ==# 'all' && index(s:names(), 'lin
 call s:keys('i')
 call s:ok('i は今までどおり索引だけ', s:st().mode ==# 'groups' && index(s:names(), 'kid1.md') < 0, string(s:names()))
 call s:keys('a')
-call s:keys('b')
+call s:keys("\<BS>")
 
 " 設定の画面（'）の行と操作
 let s:t = gnosis#mview#panel_text()

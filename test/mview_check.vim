@@ -120,8 +120,12 @@ call s:ok('数字キー 4 で栽培が中心に', s:st.center ==# 'grow.md', s:s
 call s:ok('右に栽培が開く', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'grow.md') >= 0)
 call s:ok('栽培の周りに所属の植物', s:text() =~# '1 植物', s:text())
 " 戻る
-call s:keys('b')
-call s:ok('b で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
+call s:keys("\<BS>")
+call s:ok('BS で植物に戻る', s:st.center ==# 'plant.md', s:st.center)
+call s:keys("\<S-BS>")
+call s:ok('S-BS で戻るを戻して栽培へ', s:st.center ==# 'grow.md', s:st.center)
+call s:keys("\<BS>")
+call s:ok('BS で戻れる（b は rank の基準に変わった）', s:st.center ==# 'plant.md', s:st.center)
 " カーソルを動かすだけで右のノートが切り替わる（曼荼羅の中心は変わらない）
 call s:keys('k')
 call s:keys('l')
@@ -581,7 +585,7 @@ let s:gs_done = function('gnosis#mview#gs_done')
 call s:gs_done(s:v . '/cook.md', 1)
 sleep 50m
 call s:ok('gs で選んだノートが中心になる', s:st.center ==# 'cook.md' && &filetype ==# 'gnosis-mandala', s:st.center)
-call s:keys('b')
+call s:keys("\<BS>")
 call s:ok('b で戻れる', s:st.center ==# 'herb.md', s:st.center)
 call s:mk('brandnew.md', '作ったばかり', 0, [], [])
 call s:gs_done(s:v . '/brandnew.md', 1)

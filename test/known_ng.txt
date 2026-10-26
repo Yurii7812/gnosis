@@ -1,0 +1,2 @@
+keys_pty_check.py_TestFzf.test_gs_up_down
+keys_pty_check.py_TestFzf.test_other_pickers

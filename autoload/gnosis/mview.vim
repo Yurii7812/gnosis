@@ -11,7 +11,7 @@
 "   1-8              そのマスへ（8 1 2 / 7 _ 3 / 6 5 4。9 か 0 が中心）。t で「移動して中心に」⇔「カーソルだけ」
 "                    Enter  カーソルのマスを中心にする
 "   ノートのマスで Enter           右にそのノートを開く（カーソルは曼荼羅に残る）
-"   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    b / <BS> 一つ前に戻る
+"   [ ]              前後の曼荼羅（ページ (1/2) は中央のマスの上）    <BS> 一つ前に戻る / <S-BS> 戻るを戻す
 "   a i d            モード: a 全体（標準）/ i グループ・索引だけ / d 親子だけ（親と子。相手の ParentBranch: に自分が書かれているものも子に出す）
 "   c r u            それだけを出すモード（オン/オフ）: c 近いグループだけ / r 予測関連だけ（関連の強い順。Related: の明示とは別の色）/ u 見出しだけ
 "   C R U            今出ているものに重ねる（オン/オフ。c r u のモードにも重なる）: C 近いグループ / R 予測関連 / U 見出し
@@ -1308,9 +1308,9 @@ function! s:help_lines() abort
   " 用途ごとの見出しと、「キー → 何が起きるか」を 1 行ずつ。幅が足りるときは 2 列に並べる（最後の行は色の凡例。toggle_help が色をつける）
   let l:sec = [
         \ ['動く', [['h j k l  矢印', 'マスを動く（右のノートも切り替わる）'], ['1-8', 'そのマスへ（9 か 0 は中心）'], ['Enter', 'カーソルのマスを中心にする'],
-        \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['b  BS', '一つ前に戻る'], ['Space', 'ノートへ移る']]],
+        \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['BS', '一つ前に戻る'], ['S-BS  \\.', '戻るを戻す'], ['Space', 'ノートへ移る']]],
         \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループだけ'], ['C', '近いグループを重ねる'], ['r', '予測関連だけ'], ['R', '予測関連を重ねる'],
-        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['B', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
+        \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['b', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['L', '種類の凡例を出す・隠す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
@@ -1446,7 +1446,7 @@ function! s:status(ctitle, pages, ptop, extra) abort
     endif
   endif
   if get(s:S, 'rank_on', 0)
-    " 通常の 9×9 では、外側の近さ順の基準を rank(center) / rank(block) と書く（B で切り替え。日本語でも同じ表記）
+    " 通常の 9×9 では、外側の近さ順の基準を rank(center) / rank(block) と書く（b で切り替え。日本語でも同じ表記）
     call add(l:on, s:S.size == 9 && !get(s:S, 'out_on', 0) ? 'rank(' . s:rank_basis_name() . ')' : 'rank')
   endif
   if get(s:S, 'ol_only', 0) | call add(l:on, 'heads') | elseif get(s:S, 'ol_on', 0) | call add(l:on, 'outl') | endif
@@ -1864,6 +1864,7 @@ function! s:enter() abort
   let s:S.query = ''
   let s:S.rquery = ''
   call add(s:S.hist, [s:S.center, s:S.page])
+  let s:S.fwd = []
   call s:set_center(l:cell.id, 0)
 endfunction
 
@@ -1908,6 +1909,7 @@ function! s:gs_center(path, timer) abort
     let s:S.rquery = ''
     let s:S.results = []
     call add(s:S.hist, [s:S.center, s:S.page])
+    let s:S.fwd = []
     call s:set_center(l:id, 0)
   endif
 endfunction
@@ -2083,6 +2085,7 @@ function! s:back_to_mandala(rels, ...) abort
   let l:orel = a:0 && !empty(a:1) ? s:rel_of(a:1) : ''
   if !empty(l:orel) && s:has(l:orel) && l:orel !=# s:S.center
     call add(s:S.hist, [s:S.center, s:S.page])
+    let s:S.fwd = []
     call s:set_center(l:orel, 0)
     return
   endif
@@ -2360,7 +2363,22 @@ function! s:back() abort
   if !s:has(l:id)
     return
   endif
+  " 戻る前の場所を覚える（<S-BS> で戻るのを戻せる）
+  let s:S.fwd = get(s:S, 'fwd', []) + [[s:S.center, s:S.page]]
   call s:set_center(l:id, l:pg)
+endfunction
+
+" <S-BS> / \.: 戻る（<BS>）を戻す
+function! s:forward() abort
+  let l:fwd = get(s:S, 'fwd', [])
+  while !empty(l:fwd)
+    let [l:id, l:pg] = remove(l:fwd, -1)
+    if s:has(l:id)
+      call add(s:S.hist, [s:S.center, s:S.page])
+      call s:set_center(l:id, l:pg)
+      return
+    endif
+  endwhile
 endfunction
 
 " [ ] : 前後の曼荼羅（ページ）。9×9 では、カーソルがある所のブロックのページ（中心のブロックは中心のページ、周りのブロックはそのブロックのページ）。
@@ -2535,7 +2553,7 @@ function! s:toggle_preview() abort
   endif
 endfunction
 
-" w: 近さ順のオン/オフ。基準（中心 / そのブロック自身）は B（Z 内でも同じ）で切り替える
+" w: 近さ順のオン/オフ。基準（中心 / そのブロック自身）は b（Z 内でも同じ）で切り替える
 function! s:toggle_rank() abort
   let s:S.rank_on = !get(s:S, 'rank_on', 0)
   let s:S.page = 0
@@ -2639,6 +2657,10 @@ function! s:leader_to_note() abort
     call gnosis#mview#link_pick()
     return
   endif
+  if l:c ==# '.'
+    call s:forward()
+    return
+  endif
   if l:c ==# "\<Esc>"
     return
   endif
@@ -2692,7 +2714,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> ) <Cmd>call <SID>stretch(1)<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call <SID>toggle_preview()<CR>
   nnoremap <buffer><nowait><silent> w <Cmd>call <SID>toggle_rank()<CR>
-  nnoremap <buffer><nowait><silent> B <Cmd>call <SID>toggle_dbasis()<CR>
+  nnoremap <buffer><nowait><silent> b <Cmd>call <SID>toggle_dbasis()<CR>
   nnoremap <buffer><nowait><silent> v <Cmd>call <SID>toggle_out()<CR>
   nnoremap <buffer><nowait><silent> + <Cmd>call <SID>depth_ask()<CR>
   nnoremap <buffer><nowait><silent> D <Cmd>call <SID>toggle_down()<CR>
@@ -2701,7 +2723,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> # <Cmd>call <SID>toggle_nums()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>page_key(1)<CR>
   nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>page_key(-1)<CR>
-  nnoremap <buffer><nowait><silent> b <Cmd>call <SID>back()<CR>
+  nnoremap <buffer><nowait><silent> <S-BS> <Cmd>call <SID>forward()<CR>
+  nnoremap <buffer><nowait><silent> \. <Cmd>call <SID>forward()<CR>
   nnoremap <buffer><nowait><silent> <BS> <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> a <Cmd>call <SID>setmode('all')<CR>
   nnoremap <buffer><nowait><silent> i <Cmd>call <SID>setmode('groups')<CR>
@@ -2817,6 +2840,7 @@ function! s:center_on(path) abort
     return
   endif
   call add(s:S.hist, [s:S.center, s:S.page])
+  let s:S.fwd = []
   let s:S.center = l:rel
   let s:S.page = 0
   let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
@@ -3528,7 +3552,7 @@ function! gnosis#mview#preset_apply(name) abort
 endfunction
 
 " Z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
-"   j k 選ぶ   Enter / Space 切り替え・呼び出し   D は配下だけの切り替え。B は曼荼羅上でもこの画面内でも近さ順の基準を変える
+"   j k 選ぶ   Enter / Space 切り替え・呼び出し   D は配下だけの切り替え。b は曼荼羅上でもこの画面内でも近さ順の基準を変える
 "   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
 function! s:panel_rows() abort
   let l:Onoff = {v -> gnosis#i18n#tr(v ? 'オン' : 'オフ')}
@@ -3549,7 +3573,7 @@ function! s:panel_rows() abort
         \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
         \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . gnosis#i18n#tr('（1 = 直接のつながりだけ）'), 'act': function('s:depth_ask')},
         \ {'key': 'D', 'name': '外向きに辿る方向', 'val': gnosis#i18n#tr(get(s:S, 'out_dir', 'all') ==# 'down' ? '配下だけ' : '通常'), 'act': function('s:toggle_down')},
-        \ {'key': 'B', 'name': '近さ順の基準 rank（center ⇔ block。通常9×9の外側）', 'val': 'rank(' . s:rank_basis_name() . ')', 'act': function('s:toggle_dbasis')},
+        \ {'key': 'b', 'name': '近さ順の基準 rank（center ⇔ block。通常9×9の外側）', 'val': 'rank(' . s:rank_basis_name() . ')', 'act': function('s:toggle_dbasis')},
         \ {'key': 'z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
         \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
         \ ]
