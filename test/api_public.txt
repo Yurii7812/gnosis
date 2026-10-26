@@ -283,6 +283,7 @@ gnosis#mview#saved
 gnosis#mview#set_depth
 gnosis#mview#start
 gnosis#mview#state
+gnosis#mview#time_sorted
 gnosis#mview#toggle
 gnosis#new_child
 gnosis#new_here_typed

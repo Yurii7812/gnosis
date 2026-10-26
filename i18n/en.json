@@ -858,7 +858,12 @@
     "2 つをマージする": "Merge the two notes",
     "切り替える（%s に %s のリンクを書く）": "Switch (write a link to %s in %s)",
     "ほか%d件": "and %d more",
-    "選んだノートに書けません（同じノート、または見つかりません）": "Cannot write to the chosen note (same note, or not found)"
+    "選んだノートに書けません（同じノート、または見つかりません）": "Cannot write to the chosen note (same note, or not found)",
+    "時間順": "Time order",
+    "時間順（作成日時）": "Time order (creation time)",
+    "古い順": "oldest first",
+    "新しい順": "newest first",
+    "時間順（作成日時）: 古い順 → 新しい順 → オフ": "Time order (creation time): oldest first → newest first → off"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

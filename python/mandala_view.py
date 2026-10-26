@@ -212,11 +212,17 @@ def _near(g, note: str, limit: int = 60) -> list[dict]:
     if note not in g.nodes:
         return []
     me = g.nodes[note]
-    groups = [n.id for n in g.nodes.values() if (n.is_group or n.id == "index.md") and n.id != note]
-    members_of = {gid: _members(g, gid) for gid in groups}
+    gc = _gcache(g)
+    if "members_of" not in gc:   # グループとその中身・近所の表は、グラフ 1 つにつき 1 回だけ作る
+        all_groups = [n.id for n in g.nodes.values() if n.is_group or n.id == "index.md"]
+        gc["groups_all"] = all_groups
+        gc["members_of"] = {gid: _members(g, gid) for gid in all_groups}
+        gc["adj"] = g.adjacency(kinds=("parent_branch", "child_branch", "context", "related", "backlink", "link", "folgezettel"),
+                                undirected=True)
+    groups = [gid for gid in gc["groups_all"] if gid != note]
+    members_of = gc["members_of"]
     # note の近所（番号の親子を含む）。グループ関係の辺は除く（その索引に載っている手がかりにならない）
-    nb_kinds = ("parent_branch", "child_branch", "context", "related", "backlink", "link", "folgezettel")
-    adj = g.adjacency(kinds=nb_kinds, undirected=True)
+    adj = gc["adj"]
     neighbors = {m for m, _k in adj.get(note, []) if m != note}
     my_tokens = _tokens(me.title)
     out = []
@@ -277,13 +283,19 @@ _WALK = {"parent_branch": 3.0, "child_branch": 3.0, "context": 2.5, "related": 2
 
 def _walk_scores(g, note: str, restart: float = 0.25, iters: int = 18) -> dict[str, float]:
     """note から出発して、辺を重みに比例して歩き、確率 restart で戻る。各ノートにいる確率（近さ）を返す。"""
-    nbr: dict[str, list[tuple[str, float]]] = {n: [] for n in g.nodes}
-    for e in g.edges:
-        w = _WALK.get(e.kind)
-        if w and e.src in nbr and e.dst in nbr and e.src != e.dst:
-            nbr[e.src].append((e.dst, w))
-            nbr[e.dst].append((e.src, w))
-    tot = {n: sum(w for _d, w in v) for n, v in nbr.items()}
+    gc = _gcache(g)
+    if "nbr" not in gc:   # 辺の隣り合わせ表は、グラフ 1 つにつき 1 回だけ作る
+        nbr0: dict[str, list[tuple[str, float]]] = {n: [] for n in g.nodes}
+        for e in g.edges:
+            w = _WALK.get(e.kind)
+            if w and e.src in nbr0 and e.dst in nbr0 and e.src != e.dst:
+                nbr0[e.src].append((e.dst, w))
+                nbr0[e.dst].append((e.src, w))
+        gc["nbr"] = nbr0
+        gc["tot"] = {n: sum(w for _d, w in v) for n, v in nbr0.items()}
+    nbr, tot = gc["nbr"], gc["tot"]
+    if note not in tot:
+        return {}
     p = {note: 1.0}
     for _ in range(iters):
         q: dict[str, float] = {note: restart}
@@ -294,7 +306,8 @@ def _walk_scores(g, note: str, restart: float = 0.25, iters: int = 18) -> dict[s
             share = (1 - restart) * pv / tot[n]
             for d, w in nbr[n]:
                 q[d] = q.get(d, 0.0) + share * w
-        p = q
+        # 確率が極端に小さいノートは捨てる（結果に使うのは、いちばん近いものの 5% 以上だけ。大きな vault で歩く数が膨らむのを防ぐ）
+        p = {k: v for k, v in q.items() if v > 1e-7 or k == note}
     p.pop(note, None)
     return p
 
@@ -346,9 +359,36 @@ def related(root: str | Path, note: str, limit: int = 80) -> list[dict]:
     return _related(g, note, limit)
 
 
+_GCACHE: dict = {}
+
+
+def _gcache(g) -> dict:
+    """グラフ 1 つにつき 1 回だけ作る前処理（題の言葉・出入りの辺の索引）。ノートごとに全体をなめ直さないため
+    （related_many で何百ものノートを求めるとき、ここが無いと 1 万ノートで何分もかかる）。"""
+    c = _GCACHE.get(id(g))
+    if c is not None and c["g"] is g:
+        return c
+    toks_of = {nid: _tokens(n.title) for nid, n in g.nodes.items()}
+    df: dict[str, int] = {}
+    for tk in toks_of.values():
+        for t in tk:
+            df[t] = df.get(t, 0) + 1
+    out_by: dict[str, list] = {}
+    in_by: dict[str, list] = {}
+    for e in g.edges:
+        out_by.setdefault(e.src, []).append(e)
+        in_by.setdefault(e.dst, []).append(e)
+    fz_nodes = [(nid, n) for nid, n in g.nodes.items() if getattr(n, "fz", None)]
+    c = {"g": g, "toks_of": toks_of, "df": df, "out": out_by, "in": in_by, "fz": fz_nodes}
+    _GCACHE.clear()
+    _GCACHE[id(g)] = c
+    return c
+
+
 def _related(g, note: str, limit: int = 80) -> list[dict]:
     if note not in g.nodes:
         return []
+    gc = _gcache(g)
     me = g.nodes[note]
     score: dict[str, dict[str, float]] = {}
 
@@ -359,12 +399,16 @@ def _related(g, note: str, limit: int = 80) -> list[dict]:
         d[why] = max(d.get(why, 0.0), pts)
 
     my_groups = set()
-    for e in g.edges:
-        if e.src == note and e.dst in g.nodes and e.kind in _OUT:
+    for e in gc["out"].get(note, ()):
+        if e.dst in g.nodes and e.kind in _OUT:
             add(e.dst, *_OUT[e.kind])
             if e.kind in GROUP_KINDS:
                 my_groups.add(e.dst)
-        elif e.dst == note and e.src in g.nodes and e.kind in _IN:
+    for e in gc["in"].get(note, ()):
+        # 元の実装は「自分から出る辺」を先に見て、そうでなければ入る辺を見る（自己ループは前者だけ）
+        if e.src == note:
+            continue
+        if e.src in g.nodes and e.kind in _IN:
             add(e.src, *_IN[e.kind])
             if e.kind == "link" and g.nodes[e.src].is_group:
                 my_groups.add(e.src)
@@ -373,18 +417,15 @@ def _related(g, note: str, limit: int = 80) -> list[dict]:
         for m in _members(g, gid):
             add(m, "同じ索引: " + g.nodes[gid].title, 2.0)
     # Folgezettel の枝
-    for nid, n in g.nodes.items():
+    for nid, n in gc["fz"]:
         rel = _fz_relation(me.fz, n.fz) if nid != note else None
         if rel:
             add(nid, rel[0], rel[1])
     # 題の言葉（珍しい語ほど重い）
     my_tok = _tokens(me.title)
     if my_tok:
-        df: dict[str, int] = {}
-        toks_of = {nid: _tokens(n.title) for nid, n in g.nodes.items()}
-        for tk in toks_of.values():
-            for t in tk:
-                df[t] = df.get(t, 0) + 1
+        df = gc["df"]
+        toks_of = gc["toks_of"]
         import math
         for nid, tk in toks_of.items():
             common = my_tok & tk
@@ -392,7 +433,9 @@ def _related(g, note: str, limit: int = 80) -> list[dict]:
                 pts = sum(1.5 * math.log(1 + len(g.nodes) / df[t]) / 3 for t in common)
                 add(nid, "題が近い", min(pts, 4.0))
     # 本文の内容
-    vec, _idf = _body_vectors(g)
+    if "vec" not in gc:   # 全ノートの本文の語の重みは、グラフ 1 つにつき 1 回だけ求める
+        gc["vec"] = _body_vectors(g)
+    vec, _idf = gc["vec"]
     mv = vec.get(note, {})
     if mv:
         for nid, v in vec.items():

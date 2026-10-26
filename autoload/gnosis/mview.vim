@@ -152,6 +152,7 @@ function! s:after_async() abort
   let s:S.missing = {}
   let s:S.nearc = {}
   let s:S.relc = {}
+  let s:S.tmc = {}
   if !s:has(s:S.center)
     let s:S.center = 'index.md'
   endif
@@ -508,7 +509,13 @@ function! s:prefetch_over(ids) abort
   endfor
 endfunction
 
+" 外向きの深さを広げるとき、予測関連・近いグループを求める元のノートの数の上限（これを超える分は求めない）
+let s:deep_over_cap = 40
+
 function! s:near_ids(c, have) abort
+  if !has_key(s:S.nearc, a:c) && get(s:S, 'over_only_cached', 0)
+    return []
+  endif
   if !has_key(s:S.nearc, a:c)
     let l:d = s:py(['near', s:S.root, a:c])
     if type(l:d) != v:t_list
@@ -543,6 +550,9 @@ endfunction
 
 " 予測関連（python/mandala_view.py の related）。関連の強い順。理由は強い 2 つまで。Related: に書かれたものとは別の色
 function! s:rel_ids(c, have) abort
+  if !has_key(s:S.relc, a:c) && get(s:S, 'over_only_cached', 0)
+    return []
+  endif
   if !has_key(s:S.relc, a:c)
     let l:d = s:py(['related', s:S.root, a:c])
     if type(l:d) != v:t_list
@@ -663,7 +673,62 @@ function! s:rank_map(basis) abort
   return s:S.rankc[a:basis]
 endfunction
 
+" ノートの作成日時（front matter の time:）。ファイルの更新時刻は同期が書き換えるので使わない。無ければ ''。見出しのマスは、そのノートの時刻
+function! s:note_time(id) abort
+  let l:b = s:h_base(a:id)
+  if empty(l:b)
+    return ''
+  endif
+  let l:c = get(s:S, 'tmc', {})
+  if !has_key(l:c, l:b)
+    let l:t = ''
+    try
+      for l:ln in readfile(s:S.root . '/' . l:b, '', 12)
+        if l:ln =~# '^time:'
+          let l:t = trim(substitute(l:ln, '^time:\s*', '', ''))
+          break
+        endif
+      endfor
+    catch
+    endtry
+    let l:c[l:b] = l:t
+    let s:S.tmc = l:c
+  endif
+  return l:c[l:b]
+endfunction
+
+" t: 時間順（作成日時）。古い順 → 新しい順 → なし の順に切り替える。時刻の無いノートは最後
+function! s:time_order(list) abort
+  let l:dec = []
+  let l:i = 0
+  for l:e in a:list
+    call add(l:dec, [s:note_time(l:e[0]), l:i, l:e])
+    let l:i += 1
+  endfor
+  let l:desc = get(s:S, 'tsort', '') ==# 'desc'
+  call sort(l:dec, {x, y -> empty(x[0]) && empty(y[0]) ? x[1] - y[1] : empty(x[0]) ? 1 : empty(y[0]) ? -1
+        \ : x[0] ==# y[0] ? x[1] - y[1] : ((x[0] <# y[0]) == l:desc ? 1 : -1)})
+  return map(l:dec, 'v:val[2]')
+endfunction
+
+" 試験用: 今の時間順（tsort）で ids を並べ替える
+function! gnosis#mview#time_sorted(ids) abort
+  return map(s:time_order(map(copy(a:ids), '[v:val, ""]')), 'v:val[0]')
+endfunction
+
+function! s:toggle_tsort() abort
+  let l:cur = get(s:S, 'tsort', '')
+  let s:S.tsort = l:cur ==# '' ? 'asc' : (l:cur ==# 'asc' ? 'desc' : '')
+  let s:S.opage = 0
+  call s:render()
+  call s:preview()
+  echo 'Gnosis: ' . gnosis#i18n#tr('時間順') . ' → ' . gnosis#i18n#tr({'': 'オフ', 'asc': '古い順', 'desc': '新しい順'}[s:S.tsort])
+endfunction
+
 function! s:order(list, c) abort
+  if !empty(get(s:S, 'tsort', '')) && len(a:list) > 1
+    return s:time_order(a:list)
+  endif
   if !get(s:S, 'rank_on', 0) || len(a:list) < 2
     return a:list
   endif
@@ -711,6 +776,10 @@ function! s:deepen(first) abort
     let l:front = copy(l:out)
     for l:d in range(2, get(s:S, 'depth', 1))
       call s:fetch(map(copy(l:front), 'v:val[0]'))
+      " 近いグループ・予測関連が重なっているときは、この段の分をまとめて 1 回で求める（ノートごとに python を起こすと何分もかかる）
+      " 重なっている予測関連・近いグループは、外へ広げるときに使う数を絞る（s:deep_over_cap 件まで。残りは辺をたどるだけ）
+      call s:prefetch_over(map(copy(l:front)[: s:deep_over_cap - 1], 'v:val[0]'))
+      let s:S.over_only_cached = 1
       let l:next = []
       for l:e in l:front
         for l:x in s:base(l:e[0])
@@ -722,9 +791,11 @@ function! s:deepen(first) abort
           endif
         endfor
       endfor
+      let s:S.over_only_cached = 0
       let l:front = l:next
       if empty(l:front) | break | endif
     endfor
+    let s:S.over_only_cached = 0
     let s:S.deep_memo = {'key': l:key, 'list': l:out}
   endif
   return s:S.deep_memo.list
@@ -1178,7 +1249,7 @@ function! s:mode_bar(W) abort
     let l:cur .= ' ' . l:cell
   endfor
   " 数字キーの動き（t で切り替え）
-  let l:d = gnosis#i18n#tr('数字') . ':' . gnosis#i18n#tr(s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(t)'
+  let l:d = gnosis#i18n#tr('数字') . ':' . gnosis#i18n#tr(s:S.digit ==# 'jump' ? '移動' : 'カーソルだけ') . '(T)'
   if strdisplaywidth(l:cur . '  ' . l:d) > a:W
     call add(l:lines, l:cur)
     let l:cur = '        '
@@ -1314,7 +1385,7 @@ function! s:help_lines() abort
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['L', '種類の凡例を出す・隠す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
-        \   ['z  Ctrl-L', '盤面を中央に戻す'], ['t', '数字キー: 移動 ⇔ カーソルだけ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
+        \   ['z  Ctrl-L', '盤面を中央に戻す'], ['T', '数字キー: 移動 ⇔ カーソルだけ'], ['t', '時間順（作成日時）: 古い順 → 新しい順 → オフ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
         \ ['設定とやめる', [['Z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
         \ ]
   " 'p' が 2 回出ないように、画面の重複を除く
@@ -1444,6 +1515,9 @@ function! s:status(ctitle, pages, ptop, extra) abort
     elseif get(s:S, 'depth', 1) > 1
       call add(l:on, 'dep' . s:S.depth)
     endif
+  endif
+  if !empty(get(s:S, 'tsort', ''))
+    call add(l:on, get(s:S, 'tsort', '') ==# 'asc' ? 'old-first' : 'new-first')
   endif
   if get(s:S, 'rank_on', 0)
     " 通常の 9×9 では、外側の近さ順の基準を rank(center) / rank(block) と書く（b で切り替え。日本語でも同じ表記）
@@ -1824,7 +1898,7 @@ endfunction
 
 " 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
 " 閉じても、Vim を再起動しても、前回のまま
-let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'out_dir', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth']
+let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'out_dir', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth', 'tsort']
 let s:saved_json = ''
 
 function! s:save_state() abort
@@ -2350,7 +2424,7 @@ endfunction
 " t（グループを選ぶ最中）: 入れるノートの見出しを選んで、その見出しへ飛ぶリンクで中心のグループに入れる（表示名はそのまま）
 function! s:t_key() abort
   if get(s:S, 'pick', '') !=# 'group'
-    call s:toggle_digit()
+    call s:toggle_tsort()
     return
   endif
   if !s:nd(s:S.center).g
@@ -2759,6 +2833,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> x <Cmd>call <SID>filter()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>decide_here()<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call <SID>t_key()<CR>
+  nnoremap <buffer><nowait><silent> T <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> I <Cmd>call <SID>decide_index()<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call <SID>toggle_origin()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
@@ -2898,6 +2973,7 @@ function! s:ingest(rel) abort
   let s:S.missing = {}
   let s:S.nearc = {}
   let s:S.relc = {}
+  let s:S.tmc = {}
 endfunction
 
 " 右の窓が出しているノートに、左の曼荼羅の中心を合わせる（開き方によらず。保存・窓の移動のあとにも呼ぶ）
@@ -2995,6 +3071,7 @@ function! s:reload_dirty() abort
   let s:S.missing = {}
   let s:S.nearc = {}
   let s:S.relc = {}
+  let s:S.tmc = {}
   if !s:has(s:S.center)
     let s:S.center = 'index.md'
   endif
@@ -3005,6 +3082,7 @@ endfunction
 function! s:reload(...) abort
   let s:S.nearc = {}
   let s:S.relc = {}
+  let s:S.tmc = {}
   if s:load(a:0 ? a:1 : 0)
     if !s:has(s:S.center)
       let s:S.center = 'index.md'
@@ -3095,6 +3173,7 @@ function! s:open(center, ...) abort
   let s:S.find = ''
   let s:S.nearc = {}
   let s:S.relc = {}
+  let s:S.tmc = {}
   let s:S.why = {}
   let s:S.pred = {}
   if !s:load()
@@ -3138,6 +3217,9 @@ function! s:open(center, ...) abort
           let s:S[l:k] = l:all[l:k] ? 1 : 0
         endif
       endfor
+      if get(l:all, 'tsort', '') =~# '^\(asc\|desc\)$' && !has_key(s:S, 'tsort')
+        let s:S.tsort = l:all.tsort
+      endif
       if get(l:all, 'dbasis', '') =~# '^\(center\|self\)$' && !has_key(s:S, 'dbasis')
         let s:S.dbasis = l:all.dbasis
       endif
@@ -3533,7 +3615,7 @@ function! gnosis#mview#preset_apply(name) abort
       let s:S[l:k] = l:d[l:k] ? 1 : 0
     endif
   endfor
-  for l:k in ['dbasis', 'digit', 'mode']
+  for l:k in ['dbasis', 'digit', 'mode', 'tsort']
     if type(get(l:d, l:k, 0)) == v:t_string
       let s:S[l:k] = l:d[l:k]
     endif
@@ -3578,7 +3660,8 @@ function! s:panel_rows() abort
         \ {'key': 'C', 'name': '近いグループを重ねる', 'val': l:Onoff(get(s:S, 'near_on', 0)), 'act': function('s:toggle_over', ['near_on'])},
         \ {'key': 'r', 'name': '予測関連だけを出す', 'val': l:Onoff(get(s:S, 'rel_only', 0)), 'act': function('s:toggle_over', ['rel_only'])},
         \ {'key': 'R', 'name': '予測関連を重ねる', 'val': l:Onoff(get(s:S, 'rel_on', 0)), 'act': function('s:toggle_over', ['rel_on'])},
-        \ {'key': 't', 'name': '数字キーの動き', 'val': gnosis#i18n#tr(get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ'), 'act': function('s:toggle_digit')},
+        \ {'key': 'T', 'name': '数字キーの動き', 'val': gnosis#i18n#tr(get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ'), 'act': function('s:toggle_digit')},
+        \ {'key': 't', 'name': '時間順（作成日時）', 'val': gnosis#i18n#tr({'': 'オフ', 'asc': '古い順', 'desc': '新しい順'}[get(s:S, 'tsort', '')]), 'act': function('s:toggle_tsort')},
         \ {'key': '#', 'name': '番号を出す', 'val': l:Onoff(get(s:S, 'nums', 1)), 'act': function('s:toggle_nums')},
         \ {'key': 'p', 'name': '右にノートの本文を出す', 'val': l:Onoff(get(s:S, 'nv', 1)), 'act': function('s:toggle_preview')},
         \ {'key': 'u', 'name': '見出しだけを出す', 'val': l:Onoff(get(s:S, 'ol_only', 0)), 'act': function('s:toggle_outline_only')},
