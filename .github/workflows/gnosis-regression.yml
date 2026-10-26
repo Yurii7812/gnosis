@@ -61,7 +61,9 @@ jobs:
       - name: Test mandala direction, GUI and CUI state handoff and close keys
         env:
           TMPDIR: ${{ runner.temp }}
+          GNOSIS_LANG: ja
         run: |
+          sh test/mview_net.sh
           sh test/mview_depth_net.sh
           sh test/mview_handoff_net.sh
           python3 test/close_keys_pty_check.py
