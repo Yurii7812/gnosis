@@ -283,9 +283,12 @@ private fun NumberScreen(store: ScanStore, scan: Scan, all: List<Scan>, last: St
         if (!ok && !scan.imported) Text("番号は 1 / 1a / 1a2 のように（数字と小文字）", color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { onMove(-1) }, modifier = Modifier.heightIn(min = 64.dp)) { Icon(Icons.Filled.ChevronLeft, "前の 1 枚") }
-            if (scan.imported) Spacer(Modifier.weight(1f)) else
-            Button(onClick = { onAssign(clean) }, enabled = ok && clean.isNotEmpty(), shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.weight(1f).heightIn(min = 64.dp)) { Text("決めて次へ", fontSize = 22.sp) }
+            if (scan.imported) {
+                Spacer(Modifier.weight(1f))
+            } else {
+                Button(onClick = { onAssign(clean) }, enabled = ok && clean.isNotEmpty(), shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 64.dp)) { Text("決めて次へ", fontSize = 22.sp) }
+            }
             OutlinedButton(onClick = { onMove(1) }, modifier = Modifier.heightIn(min = 64.dp)) { Icon(Icons.Filled.ChevronRight, "次の 1 枚") }
         }
     }
