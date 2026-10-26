@@ -15,7 +15,14 @@ let s:timer = 0
 function! gnosis#run#dir() abort
   let l:d = gnosis#home#dir() . '/run'
   if !isdirectory(l:d)
-    call mkdir(l:d, 'p')
+    try
+      call mkdir(l:d, 'p')
+    catch
+      " 同時起動した相手が先に作った場合は、そのフォルダを使って登録を続ける。
+      if !isdirectory(l:d)
+        throw 'Gnosis: ' . v:exception
+      endif
+    endtry
   endif
   return l:d
 endfunction
