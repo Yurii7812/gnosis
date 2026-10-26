@@ -4,7 +4,7 @@
   - 片方で \\x → その Vim だけ終了、もう片方は残る
   - 片方で \\X → どちらも終了（登録も消える）
   - GUI（Electron）の登録の代わりに、生きているダミーのプロセスの登録を置く → \\X が、そのダミーに閉じる依頼のファイルを置く"""
-import fcntl, json, os, pty, select, shutil, struct, subprocess, sys, tempfile, termios, time
+import fcntl, json, os, pty, re, select, shutil, struct, subprocess, sys, tempfile, termios, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -19,18 +19,20 @@ def ok(name, cond):
 
 
 procs = []
+output = {}
 
 
 def start_vim():
-    env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
+    env = dict(os.environ, TERM="xterm-256color", HOME=str(work / "userhome"), GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
     env.pop("GNOSIS_GUI_PORT", None)
     pid, fd = pty.fork()
     if pid == 0:
-        os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "--cmd",
+        os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "-n", "-i", "NONE", "--cmd",
                            "let g:gnosis_open_index_on_startup=0|let g:gnosis_skip_interactive_mount=1|let g:gnosis_autosync=0|let g:gnosis_root='" + str(work / "vault") + "/'",
                            str(work / "vault" / "a.md")], env)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
     procs.append((pid, fd))
+    output[fd] = bytearray()
     return pid, fd
 
 
@@ -52,7 +54,9 @@ def wait_for(predicate, timeout=15):
         ready, _, _ = select.select(fds, [], [], 0.05)
         for fd in ready:
             try:
-                if not os.read(fd, 65536):
+                data = os.read(fd, 65536)
+                output[fd].extend(data)
+                if not data:
                     fds.remove(fd)
             except OSError:
                 fds.remove(fd)
@@ -61,6 +65,7 @@ def wait_for(predicate, timeout=15):
 
 try:
     (work / "home").mkdir()
+    (work / "userhome").mkdir()
     (work / "vault").mkdir()
     (work / "vault" / "a.md").write_text("# a\n", encoding="utf-8")
     (work / "vault" / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n", encoding="utf-8")
@@ -87,6 +92,12 @@ try:
     ok("\\X は、登録されている GUI に閉じる依頼のファイルを置く", (run / f"close-gui-{dummy.pid}").exists())
     dummy.kill()
     print("\n".join(res))
+    if any(r.startswith("NG") for r in res):
+        for pid, fd in procs:
+            text = output[fd].decode("utf-8", "replace")
+            text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+            text = re.sub(r"[ \t]{2,}", " ", text)
+            print(f"Vim {pid} startup output:\n{text[-4000:]}")
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:
     for pid, fd in procs:
