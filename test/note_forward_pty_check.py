@@ -86,6 +86,15 @@ try:
     os.write(fd, b"\\.")
     pump(1.0)
     ok("普通のノートでも \\. で戻るを戻せる", cur_file() == f1)
+    # gs・:edit など、リンク以外の経路で開いても、BS で本当に前のノートに戻る
+    here = cur_file()
+    other = "plant.md" if here != "plant.md" else "herb.md"
+    os.write(fd, (":edit " + other + "\r").encode())
+    pump(1.0)
+    ok(":edit で別のノートへ移った", cur_file() == other)
+    os.write(fd, b"\x7f")
+    pump(1.0)
+    ok(":edit で開いたあと BS で、前に開いていたノートに戻る", cur_file() == here)
     os.write(fd, b"\x1b")
     pump(0.6)
     os.write(fd, b":qa!\r")

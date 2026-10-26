@@ -254,7 +254,7 @@ call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==
 " ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 n）は何もしない
 "（i は 2026-10-20 に復活: 行の中へそのまま入れる。requests_1020_net.sh で確かめる）
 call s:mk('h.md', 'ノートH', ['H の本文。'])
-for s:k in ['n', 'x']
+for s:k in ['n', 'z']
   execute 'edit ' . fnameescape(s:v . '/c.md')
   let s:c_before = getline(1, '$')
   let g:gnosis_test_keys = [s:k]
@@ -267,15 +267,15 @@ let &columns = 200
 call s:ok('\l の案内: 選択先がグループのときだけ g を出す', gnosis#insert_prompt_text(1, 1) =~# 'g=' && gnosis#insert_prompt_text(1, 0) !~# 'g=')
 let &columns = s:cols_save
 
-" ------------------------------------------------------------------ \l → 選ぶ → g（選んだノートを入れるグループを、曼荼羅で選ぶ）
-" （グループへの追加そのものは test/mview_check.vim。ここでは g が曼荼羅の選ぶモードを始めることだけ）
+" ------------------------------------------------------------------ \l → 選ぶ → g（選んだグループに今のノートを入れる。置き場所は聞かず、表示名とよみを聞いて終わり）
 call s:mk('jg4.md', 'ノートJG4', ['JG4 の本文。'])
 execute 'edit ' . fnameescape(s:v . '/jg4.md')
 let g:gnosis_test_keys = ['g']
-let s:ret = gnosis#insert_links_pick(['[ノートJG4](jg4.md)'], getpos('.'))
-let s:mst = gnosis#mview#state()
-call s:ok('\l g: 入れ先のグループを選ぶモードが始まる', get(s:mst, 'pick', '') ==# 'group' && s:mst.src ==# fnamemodify(s:v . '/jg4.md', ':p'), string(get(s:mst, 'pick', '')) . ' ' . string(get(s:mst, 'src', '')))
-call gnosis#mview#close()
+let g:gnosis_test_display_name = ['ジー四']
+let g:gnosis_test_yomi = ['じーよん']
+let s:ret = gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
+call s:ok('\l g: 選んだグループ G に今のノートが表示名で入り、もう一度グループを選ぶ画面にならない', index(s:file('g.md'), '[ジー四](jg4.md)') >= 0 && get(gnosis#mview#state(), 'pick', '') !=# 'group', string(s:file('g.md')))
+silent! call gnosis#mview#close()
 
 " ------------------------------------------------------------------ キー待ちの案内は 1 行（2 行になると ENTER 待ちの画面が出て、次のキー g などが食われる）
 let s:cols_save = &columns

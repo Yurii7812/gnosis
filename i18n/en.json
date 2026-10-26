@@ -838,7 +838,22 @@
     "種類の凡例を出す・隠す": "Show / hide the kind legend",
     "戻るを戻す": "Undo the back",
     "BS": "BS",
-    "Del": "Del"
+    "Del": "Del",
+    "%s に %s のリンクを書く": "Write a link to %s in %s",
+    "本文の最後に": "At the end of the body",
+    "カーソルの文字のすぐ後ろに": "Right after the character under the cursor",
+    "カーソルのある行の下に": "Below the cursor line",
+    "見出しを選んで、その下に": "Pick a heading and put it under it",
+    "関係": "relation",
+    "%s を %s の親にする": "Make %s the parent of %s",
+    "%s を %s の子にする": "Make %s a child of %s",
+    "%s の Context に %s を入れる": "Put %s in the Context of %s",
+    "お互いを Related にする": "Make them Related to each other",
+    "%s のグループに %s を入れる": "Add %s to the group %s",
+    "2 つをマージする": "Merge the two notes",
+    "切り替える（%s に %s のリンクを書く）": "Switch (write a link to %s in %s)",
+    "ほか%d件": "and %d more",
+    "選んだノートに書けません（同じノート、または見つかりません）": "Cannot write to the chosen note (same note, or not found)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

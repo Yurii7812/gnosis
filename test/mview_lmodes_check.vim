@@ -122,17 +122,6 @@ call cursor(search('^最初の行', 'nw'), 1)
 call gnosis#mview#place_decide()
 call s:ok('c → h: Enter で、元のノートにリンクが入り、相手の Context に元のノートが入る', s:file('src.md') =~# '\[相手\](tgt.md)' && s:file('tgt.md') =~# 'src.md', s:file('src.md') . ' // ' . s:file('tgt.md'))
 
-" ---- e → g → q: グループ選びをやめると、置き場所の選択に戻る（\l は続く）
-call s:start('^節Aの本文')
-let g:gnosis_test_keys = ['g']
-call s:keys('e')
-call s:ok('e → g: グループを選ぶモード', s:st().pick ==# 'group', s:st().pick)
-let g:gnosis_test_keys = ["\<Esc>"]
-call s:keys('q')
-call s:ok('g のあと q: グループ選びだけやめて、置き場所の選択に戻る（そこで Esc）。\l は続く', s:st().pick ==# 'link' && &filetype ==# 'gnosis-mandala', string([s:st().pick, &filetype]))
-call s:keys('q')
-call s:ok('続けて q で \l をやめる', s:st().pick ==# '' && &filetype ==# 'gnosis-mandala')
-
 " ---- 選ぶモードで s / x / m をかけて q: かけたものだけやめる（選ぶモードは残る）
 call s:start('^節Aの本文')
 let s:d = gnosis#mview#state()

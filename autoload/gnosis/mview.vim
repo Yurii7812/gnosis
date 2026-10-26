@@ -1454,9 +1454,24 @@ function! s:status(ctitle, pages, ptop, extra) abort
   let l:cancel = s:cancel_hint()
   " 何枚目の曼荼羅か（1/1・3/10 など）は、# の数字の表示に関わらず、左上の [モード] のすぐ後ろに常に出す
   " 検索（s:）・絞り込み（x:）・ハイライト（m:）の語は、下の行（カーソルのマスの説明）に出す
-  return printf(' %s%s [%s] %d/%d%s%s', s:pick_label(), s:S.size == 3 ? '3×3' : '9×9',
-        \ get({'all': 'a', 'groups': 'i', 'family': 'd'}, s:S.mode, 'a'), s:S.page + 1, max([1, a:pages]),
+  return printf(' %s%s [%s] %d/%d%s%s%s', s:pick_label(), s:S.size == 3 ? '3×3' : '9×9',
+        \ get({'all': 'a', 'groups': 'i', 'family': 'd'}, s:S.mode, 'a'), s:S.page + 1, max([1, a:pages]), s:ring_page_text(),
         \ empty(l:on) ? '' : ' ' . join(l:on, ' '), empty(l:cancel) ? '' : '  ' . l:cancel)
+endfunction
+
+" 通常の 9×9 のとき、中央の曼荼羅の枚数 1/2 の横に、周りのブロックの枚数の一番多いものを (1/3) と出す
+" （{ } で動く周りのブロックのページ。収まりきらないブロックの数にばらつきがあるため、一番多いものに合わせる）
+function! s:ring_page_text() abort
+  if s:S.size != 9 || get(s:S, 'out_on', 0)
+    return ''
+  endif
+  let l:max = 1
+  for l:e in s:ring(s:S.center, s:S.page)
+    if !empty(l:e[0])
+      let l:max = max([l:max, s:pages(l:e[0])])
+    endif
+  endfor
+  return printf(' (%d/%d)', get(s:S, 'opage', 0) + 1, l:max)
 endfunction
 
 " 下の行に出す、検索の語: s:検索語(N件)  x:絞り込み  m:ハイライト n/m

@@ -9570,6 +9570,40 @@ function! gnosis#push_history() abort
   call s:recent_touch(l:file)
 endfunction
 
+" ---- 履歴の自動記録（2026-10-26）----------------------------------------------------------------
+" gs・:edit・fzf など、どの経路でノートを開いても、離れたノートを戻る履歴（BS）に積む。
+" 明示の移動（リンクを開く・BS・進む・往復）が先に積んだときは二重に積まない。曼荼羅が開いているあいだは、
+" 右のノートが曼荼羅の動きで替わるだけなので積まない。
+let s:ah_prev = {}
+let s:ah_nav = 0
+
+function! gnosis#auto_history_leave() abort
+  if &buftype ==# '' && expand('%:p') =~? '\.md$'
+    let s:ah_prev = {'file': expand('%:p'), 'pos': getpos('.')}
+  endif
+endfunction
+
+function! gnosis#auto_history_enter() abort
+  let l:cur = expand('%:p')
+  let l:prev = s:ah_prev
+  if &buftype !=# '' || empty(l:prev) || empty(l:cur) || l:prev.file ==# l:cur || s:ah_nav
+    return
+  endif
+  if exists('*gnosis#mview#is_open') && gnosis#mview#is_open()
+    return
+  endif
+  if !exists('g:gnosis_history') | let g:gnosis_history = [] | endif
+  if !empty(g:gnosis_history) && g:gnosis_history[-1].file ==# l:prev.file
+    return
+  endif
+  call add(g:gnosis_history, l:prev)
+  if len(g:gnosis_history) > get(g:, 'gnosis_history_max', 200)
+    call remove(g:gnosis_history, 0)
+  endif
+  let g:gnosis_forward = []
+  let g:gnosis_alt = l:prev.file
+endfunction
+
 " 直前に居たノートとの1キー往復。押すたび A→B→A→B。
 function! gnosis#toggle_alternate() abort
   let l:cur = expand('%:p')
@@ -9591,7 +9625,12 @@ function! gnosis#toggle_alternate() abort
   endif
   let g:gnosis_forward = []
   let g:gnosis_alt = l:cur
-  silent! execute 'hide edit ' . fnameescape(l:alt)
+  let s:ah_nav = 1
+  try
+    silent! execute 'hide edit ' . fnameescape(l:alt)
+  finally
+    let s:ah_nav = 0
+  endtry
   call s:recent_touch(l:alt)
 endfunction
 
@@ -9612,7 +9651,12 @@ function! gnosis#go_forward() abort
     call add(g:gnosis_history, {'file': l:cur, 'pos': getpos('.')})
     let g:gnosis_alt = l:cur
   endif
-  silent! execute 'hide edit ' . fnameescape(l:item.file)
+  let s:ah_nav = 1
+  try
+    silent! execute 'hide edit ' . fnameescape(l:item.file)
+  finally
+    let s:ah_nav = 0
+  endtry
   call setpos('.', l:item.pos)
   call s:snap_cursor_to_link()
   call s:recent_touch(l:item.file)
@@ -9686,7 +9730,12 @@ function! gnosis#go_back() abort
     endif
     let g:gnosis_alt = l:cur
   endif
-  silent! execute 'hide edit ' . fnameescape(l:item.file)
+  let s:ah_nav = 1
+  try
+    silent! execute 'hide edit ' . fnameescape(l:item.file)
+  finally
+    let s:ah_nav = 0
+  endtry
   call setpos('.', l:item.pos)
   call s:snap_cursor_to_link()
   call s:recent_touch(l:item.file)
@@ -14279,14 +14328,31 @@ function! s:insert_links_core_raw(links, ...) abort
     return s:group_add_links_named(l:links) > 0 ? 1 : 0
   endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
-  " 今のノートがグループかどうかでは決めない。
-  let l:can_g = exists('*gnosis#mview#group_pick') && !empty(get(g:, 'gnosis_root', ''))
+  " 今のノートがグループかどうかでは決めない。置き場所は聞かず、表示名とよみを聞いて終わる。
+  let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
   " m（マージ）は \l で 1 つだけ選んだとき
   let l:can_m = !empty(s:inline_pos) && len(l:links) == 1
-  let l:pw = s:place_popup(a:0 > 0, l:can_g, l:can_m)
-  let l:ch = s:getkey()
-  call s:place_popup_close(l:pw)
+  " x（向きの入れ替え）は 1 つだけ選んだとき。入れ替えると、選んだノート側にリンクを書く／関係の向きが逆になる
+  let l:single = len(l:links) == 1
+  let l:swap = 0
+  while 1
+    let l:pw = s:place_menu(l:links, a:0 > 0, l:can_g, l:can_m, l:single, l:swap)
+    let l:ch = s:getkey()
+    call s:place_popup_close(l:pw)
+    if l:ch ==# 'x' && l:single
+      let l:swap = !l:swap
+      continue
+    endif
+    break
+  endwhile
   redraw
+  if l:swap
+    " 向きを入れ替えた: 選んだノート側に今のノートのリンクを書く（Enter i h t）／関係の向きを逆にする
+    if l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch ==# 'i' || l:ch ==# 'h' || (l:ch ==# 't' && a:0 > 0)
+      return s:swapped_write(l:ch, l:links)
+    endif
+    let l:ch = get({'p': 'b', 'b': 'p', 'c': 'a', 'a': 'c', 'g': ''}, l:ch, l:ch)
+  endif
   let l:num = char2nr(l:ch)
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
@@ -14344,8 +14410,11 @@ function! s:insert_links_core_raw(links, ...) abort
     return -1
   endif
   if l:ch ==# 'g' && l:can_g
-    " g: 選んだノートを入れるグループを、曼荼羅で選ぶ（e で決定・I で Index・t で見出しへのリンクにする）。選ぶ間は -1
-    return gnosis#mview#group_pick(l:links) ? -1 : 0
+    " g: 選んだノート（グループ）に、今のノートを入れる。選んだノートの本文に今のノートへのリンクが入り、
+    " 今のノートの Group: に選んだノートが出る。置き場所は聞かず、表示名とよみを聞いて終わる（空 Enter = 今のノートのタイトル）。
+    " 名前の入力を取り消したときは、置き場所の選択に戻る（曼荼羅の \l のとき。ふつうは何もしない）
+    let l:gn = s:join_groups(l:links)
+    return l:gn > 0 ? 1 : (s:want_raw ? -2 : 0)
   endif
   if l:ch ==# 'm' && l:can_m
     " m: 選んだノートと開いているノートをマージする（どちらへまとめるかは続けて聞く。:GnosisMergeUndo で戻せる）
@@ -14731,6 +14800,197 @@ function! gnosis#insert_prompt_lines(has_t, has_g, ...) abort
     call add(l:rel, '  m      ' . gnosis#i18n#tr('マージ'))
   endif
   return l:body + [''] + l:rel + ['', '  Esc    ' . gnosis#i18n#tr('やめる')]
+endfunction
+
+" ---- \l の「何をする？」画面（2026-10-26）---------------------------------------------------
+" 開いているノート A と、選んだノート B の題を見せ、A / B の記号で説明する。x で向きを入れ替える（B に A のリンクを書く）。
+function! s:trunc(str, width) abort
+  if strdisplaywidth(a:str) <= a:width
+    return a:str
+  endif
+  let l:out = ''
+  for l:ch in split(a:str, '\zs')
+    if strdisplaywidth(l:out . l:ch) > a:width - 1
+      break
+    endif
+    let l:out .= l:ch
+  endfor
+  return l:out . '…'
+endfunction
+
+" 日本語と英語で 2 つの語の順が逆になる文（「R に I のリンクを書く」⇔ "Write a link to I in R"）。英語のときだけ引数を逆にする
+function! s:tr2(fmt, x, y) abort
+  return gnosis#i18n#lang() ==# 'en' ? gnosis#i18n#tr(a:fmt, a:y, a:x) : gnosis#i18n#tr(a:fmt, a:x, a:y)
+endfunction
+
+function! s:menu_titles(links) abort
+  let l:a = gnosis#current_title()
+  let l:b = matchstr(a:links[0], '^\[\zs\%(\\.\|[^\]\\]\)*\ze\]')
+  if len(a:links) > 1
+    let l:b .= ' ' . gnosis#i18n#tr('ほか%d件', len(a:links) - 1)
+  endif
+  return [l:a, l:b]
+endfunction
+
+" ctx: 受ける側 R・入れるもの I（x で入れ替わる）。説明は記号 A / B で書く
+function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
+  let [l:ta, l:tb] = s:menu_titles(a:links)
+  let [l:R, l:I] = a:swap ? ['B', 'A'] : ['A', 'B']
+  let l:t = {'A': l:ta, 'B': l:tb}
+  let l:w = max([20, a:width - 12])
+  let l:head = s:tr2('%s に %s のリンクを書く', l:R, l:I)
+  let l:out = [' A = ' . s:trunc(l:ta, l:w), ' B = ' . s:trunc(l:tb, l:w), '', ' ' . l:head,
+        \ '   Enter  ' . gnosis#i18n#tr('本文の最後に'),
+        \ '   i      ' . gnosis#i18n#tr('カーソルの文字のすぐ後ろに'),
+        \ '   h      ' . gnosis#i18n#tr('カーソルのある行の下に')]
+  if a:has_t
+    call add(l:out, '   t      ' . gnosis#i18n#tr('見出しを選んで、その下に'))
+  endif
+  call add(l:out, '')
+  call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
+  call add(l:out, '   p      ' . gnosis#i18n#tr('%s を %s の親にする', l:I, l:R))
+  call add(l:out, '   b      ' . gnosis#i18n#tr('%s を %s の子にする', l:I, l:R))
+  call add(l:out, '   c      ' . s:tr2('%s の Context に %s を入れる', l:I, l:R))
+  call add(l:out, '   a      ' . s:tr2('%s の Context に %s を入れる', l:R, l:I))
+  call add(l:out, '   r      ' . gnosis#i18n#tr('お互いを Related にする'))
+  if a:can_g && !a:swap
+    call add(l:out, '   g      ' . s:tr2('%s のグループに %s を入れる', l:I, l:R))
+  endif
+  if a:can_m
+    call add(l:out, '')
+    call add(l:out, '   m      ' . gnosis#i18n#tr('2 つをマージする'))
+  endif
+  call add(l:out, '')
+  if a:single
+    call add(l:out, '   x      ' . s:tr2('切り替える（%s に %s のリンクを書く）', l:I, l:R))
+  endif
+  call add(l:out, '   q      ' . gnosis#i18n#tr('やめる'))
+  return l:out
+endfunction
+
+function! s:place_menu(links, has_t, can_g, can_m, single, swap) abort
+  let l:width = max([40, &columns - 4])
+  let l:lines = s:menu_lines(a:links, a:has_t, a:can_g, a:can_m, a:single, a:swap, l:width)
+  if !exists('*popup_create')
+    echo join(map(copy(l:lines), 'trim(v:val)'), ' / ')
+    return 0
+  endif
+  let [l:ta, l:tb] = s:menu_titles(a:links)
+  let [l:R, l:I] = a:swap ? [l:tb, l:ta] : [l:ta, l:tb]
+  let l:title = ' ' . s:trunc(s:tr2('%s に %s のリンクを書く', '[' . l:R . ']', '[' . l:I . ']'), l:width - 6) . ' '
+  let l:id = popup_create(l:lines, {'title': l:title, 'pos': 'center', 'border': [], 'padding': [1, 3, 1, 2],
+        \ 'minwidth': min([l:width, 72]), 'maxwidth': l:width, 'zindex': 200})
+  redraw
+  return l:id
+endfunction
+
+" 向きを入れ替えたときの Enter i h t: 選んだノート B を開き、今のノート A へのリンクを B に書く
+function! s:swapped_write(ch, links) abort
+  let l:a = {'path': expand('%:p'), 'title': gnosis#current_title(), 'pos': getpos('.')}
+  let l:bpath = fnamemodify(gnosis#resolve_link(substitute(s:extract_target(a:links[0]), '#.*$', '', '')), ':p')
+  if !filereadable(l:bpath) || l:bpath ==# l:a.path
+    echo 'Gnosis: ' . gnosis#i18n#tr('選んだノートに書けません（同じノート、または見つかりません）')
+    return s:want_raw ? -2 : 0
+  endif
+  if &modified && &buftype ==# ''
+    silent! update
+  endif
+  let l:kind = a:ch ==# 'i' ? 'i' : (a:ch ==# 'h' ? 'h' : (a:ch ==# 't' ? 'head' : 'end'))
+  silent! execute 'hide edit ' . fnameescape(l:bpath)
+  let l:link = s:make_link_from_dir(l:a.path, l:a.title, expand('%:p:h'))
+  if l:kind ==# 'end'
+    if s:insert_link_before_up_note(l:link)
+      call s:ensure_blank_before_up()
+    endif
+    call s:links_added_done()
+    call s:swap_return(l:a)
+    return 1
+  endif
+  let l:from_mandala = s:place_hook isnot 0
+  let l:Cont = function('s:swapped_place_cont', [l:link, l:a, l:from_mandala])
+  if l:from_mandala
+    " 曼荼羅の \l: 右の窓に B が出ている。場所を選んで Enter（決定は曼荼羅のほうで受け、終わったら元のノートに戻る）
+    return call(s:place_hook, [l:kind, l:Cont])
+  endif
+  call s:other_pick(l:kind, l:Cont, l:a)
+  return -1
+endfunction
+
+function! s:swapped_place_cont(link, a, from_mandala, kind, pos, lnum) abort
+  call s:main_place([a:link], a:kind, a:pos, a:lnum)
+  call s:links_added_done()
+  if !a:from_mandala
+    call s:swap_return(a:a)
+  endif
+  return 1
+endfunction
+
+function! s:swap_return(a) abort
+  silent! execute 'hide edit ' . fnameescape(a:a.path)
+  call setpos('.', a:a.pos)
+endfunction
+
+" 曼荼羅を使わない \l: 開いた B の中で場所を選ぶ（Enter で決定・q / Esc でやめて元のノートに戻る）
+function! s:other_pick(kind, Cont, a) abort
+  let s:other = {'kind': a:kind, 'Cont': a:Cont, 'a': a:a, 'buf': bufnr('%'), 'saved': {}}
+  for l:k in ['<CR>', 'q', '<Esc>']
+    let l:m = maparg(l:k, 'n', 0, 1)
+    let s:other.saved[l:k] = (!empty(l:m) && get(l:m, 'buffer', 0)) ? l:m : {}
+  endfor
+  nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>other_decide()<CR>
+  nnoremap <buffer><nowait><silent> q <Cmd>call <SID>other_cancel()<CR>
+  nnoremap <buffer><nowait><silent> <Esc> <Cmd>call <SID>other_cancel()<CR>
+  let l:hint = {'h': '置く行(この行の下に入る)にカーソルを動かして Enter で決定 / q でやめる',
+        \ 'i': '置く文字(この文字のすぐ後ろに入る)にカーソルを動かして Enter で決定 / q でやめる',
+        \ 'head': '置く節(カーソルがある節の最後に入る)にカーソルを動かして Enter で決定 / q でやめる'}
+  echo 'Gnosis: ' . gnosis#i18n#tr(l:hint[a:kind])
+endfunction
+
+function! s:other_maps_off() abort
+  if !exists('s:other')
+    return
+  endif
+  for l:k in ['<CR>', 'q', '<Esc>']
+    silent! execute 'nunmap <buffer> ' . l:k
+    if !empty(get(s:other.saved, l:k, {}))
+      call mapset('n', 0, s:other.saved[l:k])
+    endif
+  endfor
+endfunction
+
+function! s:other_decide() abort
+  if !exists('s:other')
+    return
+  endif
+  let l:o = s:other
+  let l:lnum = 0
+  if l:o.kind ==# 'head'
+    let l:lnum = gnosis#heading_lnum_at_cursor()
+    if l:lnum == 0
+      echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('見出しの下にカーソルを動かしてください（q でやめる）') | echohl NONE
+      return
+    endif
+  endif
+  let l:pos = getpos('.')
+  call s:other_maps_off()
+  unlet s:other
+  try
+    call l:o.Cont(l:o.kind, l:pos, l:lnum)
+  catch
+    echohl ErrorMsg | echo 'Gnosis: ' . v:exception | echohl NONE
+    call s:swap_return(l:o.a)
+  endtry
+endfunction
+
+function! s:other_cancel() abort
+  if !exists('s:other')
+    return
+  endif
+  let l:o = s:other
+  call s:other_maps_off()
+  unlet s:other
+  call s:swap_return(l:o.a)
+  echo 'Gnosis: ' . gnosis#i18n#tr('何も追加しない')
 endfunction
 
 function! s:place_popup(has_t, has_g, has_m) abort
@@ -16402,6 +16662,10 @@ function! s:paper_index_path(root) abort
   endif
   let l:found = []
   for l:f in glob(a:root . s:sep() . '*.md', 0, 1)
+    " 頂点の普通のノート（Paper-Zettelkasten.md。題は同じ）はグループの Index ではない
+    if fnamemodify(l:f, ':t') ==# 'Paper-Zettelkasten.md'
+      continue
+    endif
     if s:is_paper_index_head(readfile(l:f, '', 8))
       call add(l:found, l:f)
     endif

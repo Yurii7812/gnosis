@@ -621,6 +621,8 @@ command! GnosisHistory call gnosis#history()
 augroup gnosis_history
   autocmd!
   autocmd BufEnter *.md call gnosis#hist_visit()
+  autocmd BufLeave *.md call gnosis#auto_history_leave()
+  autocmd BufEnter *.md call gnosis#auto_history_enter()
   autocmd VimLeavePre * call gnosis#hist_save()
 augroup END
 command! -nargs=? GnosisHighlights call gnosis#highlights(<f-args>)

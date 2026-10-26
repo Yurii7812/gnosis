@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """\\l → （曼荼羅で選ぶ）→ e を、実 Vim を擬似端末で動かして確かめる（2026-10-24 の不具合の回帰）。
   前回の検索（@/）が残っていて、typeahead に <Cmd>nohlsearch<CR> が積まれていても、
-  e のあとに「どこに置く？」の選択肢が出て、E486 が出ず、ノートの中身も変わらない。
+  e のあとに「のリンクを書く」の選択肢が出て、E486 が出ず、ノートの中身も変わらない。
 一時 vault だけを使う。"""
 import fcntl, os, pty, re, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
@@ -76,7 +76,7 @@ try:
     os.write(fd, b"e")
     pump(2.0)
     after_e = text(out[mark:])
-    ok("e のあとに置き場所の選択肢が出る（どこに置く？）", "どこに置く" in after_e)
+    ok("e のあとに置き場所の選択肢が出る（のリンクを書く）", "のリンクを書く" in after_e)
     ok("E486 が出ない", "E486" not in after_e)
     ok("ここまでノートの中身は変わっていない", (v / "plant.md").read_text(encoding="utf-8") == before)
     # h: 右の元のノートで場所を選ぶモードへ。q でやめると置き場所の選択に戻る（\l は続く）
@@ -89,7 +89,7 @@ try:
     os.write(fd, b"q")
     pump(1.5)
     after_q = text(out[mark:])
-    ok("h のあと q: 置き場所の選択に戻る（どこに置く？がもう一度出る）", "どこに置く" in after_q)
+    ok("h のあと q: 置き場所の選択に戻る（のリンクを書くがもう一度出る）", "のリンクを書く" in after_q)
     # もう一度 h → 1 行下へ動いて Enter で決める → リンクがその行の下に入る
     os.write(fd, b"h")
     pump(1.0)
