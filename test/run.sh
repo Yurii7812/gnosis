@@ -228,6 +228,7 @@ sh "$REPO/test/link_ops_net.sh"
 
 # vault の登録簿・vault ごとの設定・移行・テーマ・ガイドの言語
 sh "$REPO/test/vault_settings_net.sh"
+sh "$REPO/test/legacy_root_gone_net.sh"
 
 # Terminal: Chnoubis の図案・GNOSIS点描ロゴ・リンク省略・配色（コントラスト）
 sh "$REPO/test/terminal_visual_net.sh"

@@ -736,7 +736,8 @@ function! s:state_dir() abort
       let l:rootfile = l:legacy . s:sep() . 'root.txt'
       if filereadable(l:rootfile)
         let l:lines = readfile(l:rootfile)
-        if !empty(l:lines) && !empty(trim(l:lines[0]))
+        " 消した vault を指す古い root.txt では、フォルダ（と .state）を作り直さない
+        if !empty(l:lines) && !empty(trim(l:lines[0])) && isdirectory(fnamemodify(s:expand_path(trim(l:lines[0])), ':p'))
           let l:root = trim(l:lines[0])
         endif
       endif

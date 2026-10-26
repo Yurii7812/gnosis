@@ -117,7 +117,8 @@ endfunction
 " ロック中の暗号化 vault（マウント前）は読めないが、マウント後にプラグインが読み直す。
 function! gnosis#home#setup_viminfo() abort
   let l:root = gnosis#vault#note_root(gnosis#vault#last())
-  if !empty(l:root)
+  " 消した vault の場所には viminfo を置かない（フォルダを作り直さない）
+  if !empty(l:root) && isdirectory(l:root)
     execute 'set viminfofile=' . fnameescape(l:root . s:sep() . '.state' . s:sep() . 'viminfo')
   else
     execute 'set viminfofile=' . fnameescape(gnosis#home#path('state', 'viminfo'))

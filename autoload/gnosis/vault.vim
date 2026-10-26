@@ -97,7 +97,7 @@ function! gnosis#vault#load() abort
     let l:legacy = gnosis#vault#legacy_root_file()
     if filereadable(l:legacy) && !get(g:, 'gnosis_skip_legacy_import', 0)
       let l:root = trim(get(readfile(l:legacy), 0, ''))
-      if !empty(l:root)
+      if !empty(l:root) && isdirectory(gnosis#vault#normalize(l:root))   " 消えた場所の vault は取り込まない
         let l:path = gnosis#vault#normalize(l:root)
         if fnamemodify(l:path, ':t') ==# 'note'
           let l:path = fnamemodify(l:path, ':h')
