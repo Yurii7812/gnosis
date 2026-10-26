@@ -34,22 +34,29 @@ def start_vim():
     return pid, fd
 
 
-def pump(fd, t):
-    end = time.time() + t
-    while time.time() < end:
-        if select.select([fd], [], [], 0.05)[0]:
-            try:
-                os.read(fd, 65536)
-            except OSError:
-                return
-
-
 def alive(pid):
     try:
         r, status = os.waitpid(pid, os.WNOHANG)
         return r == 0
     except ChildProcessError:
         return False
+
+
+def wait_for(predicate, timeout=15):
+    """Drain every PTY while waiting for observable startup/exit, even on slow CI."""
+    end = time.monotonic() + timeout
+    fds = [fd for _, fd in procs]
+    while time.monotonic() < end:
+        if predicate():
+            return True
+        ready, _, _ = select.select(fds, [], [], 0.05)
+        for fd in ready:
+            try:
+                if not os.read(fd, 65536):
+                    fds.remove(fd)
+            except OSError:
+                fds.remove(fd)
+    return predicate()
 
 
 try:
@@ -60,14 +67,12 @@ try:
     run = work / "home" / "run"
     p1, f1 = start_vim()
     p2, f2 = start_vim()
-    pump(f1, 2.5)
-    pump(f2, 1.0)
+    wait_for(lambda: len(list(run.glob("cui-*.json"))) == 2)
     regs = sorted(x.name for x in run.glob("cui-*.json")) if run.exists() else []
     ok("CUI の Vim が起動時に自分を登録する（2 つ）: " + str(regs), len(regs) == 2)
     # \x: 片方（p1）だけ閉じる
     os.write(f1, b"\\x")
-    pump(f1, 2.0)
-    pump(f2, 0.5)
+    wait_for(lambda: not alive(p1))
     ok("\\x で、その Vim だけ終了する（もう片方は残る）", (not alive(p1)) and alive(p2))
     regs = sorted(x.name for x in run.glob("cui-*.json"))
     ok("終了した Vim の登録は消える: " + str(regs), len(regs) == 1 and str(p2) in regs[0])
@@ -75,10 +80,9 @@ try:
     dummy = subprocess.Popen(["sleep", "30"])
     (run / f"gui-{dummy.pid}.json").write_text(json.dumps({"kind": "gui", "pid": dummy.pid}))
     p3, f3 = start_vim()
-    pump(f3, 2.5)
+    wait_for(lambda: (run / f"cui-{p3}.json").exists())
     os.write(f3, b"\\X")
-    pump(f3, 2.0)
-    pump(f2, 2.0)
+    wait_for(lambda: not alive(p3) and not alive(p2))
     ok("\\X で、押した Vim も、ほかの CUI の Vim も終了する", (not alive(p3)) and (not alive(p2)))
     ok("\\X は、登録されている GUI に閉じる依頼のファイルを置く", (run / f"close-gui-{dummy.pid}").exists())
     dummy.kill()

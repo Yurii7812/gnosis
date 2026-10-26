@@ -200,6 +200,19 @@ function iconPath() {
   return fs.existsSync(p) ? p : undefined;
 }
 
+function focusWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  // KDE Wayland のフォーカス制限にも対応する（アプリ本体は XWayland）。
+  if (process.platform === "linux" && process.env.WAYLAND_DISPLAY) {
+    const child = spawn("python3", [path.join(REPO, "python", "focus_window.py"), String(process.pid)], { stdio: "ignore" });
+    child.on("error", (e) => log("focus: " + e.message));
+    child.unref();
+  }
+}
+
 function createWindow() {
   const s = initialSettings();
   win = new BrowserWindow({
@@ -233,7 +246,7 @@ function createWindow() {
     else if (input.key === "-" || input.key === "_") { wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -4)); e.preventDefault(); }
     else if (input.key === "0" && !input.shift) { wc.setZoomLevel(0); e.preventDefault(); }
   });
-  win.once("ready-to-show", () => { applyWindow(s, true); win.show(); win.focus(); });
+  win.once("ready-to-show", () => { applyWindow(s, true); focusWindow(); });
   if (SCAN_ONLY && EXPLICIT_ROOT) noteRootDir = EXPLICIT_ROOT;
   win.loadFile(path.join(WEB, "index.html"), SCAN_ONLY ? { query: { scan: "1" } } : undefined);
   win.on("page-title-updated", (e) => e.preventDefault());
@@ -473,13 +486,27 @@ function registerRun() {
   try {
     const dir = runDir();
     const file = path.join(dir, `gui-${process.pid}.json`);
-    fs.writeFileSync(file, JSON.stringify({ kind: "gui", pid: process.pid, parent: Number(process.env.GNOSIS_PARENT_PID || 0) || 0, started: Date.now() }));
+    let registeredVault = null;
+    let focusing = false;
+    const record = () => fs.writeFileSync(file, JSON.stringify({ kind: "gui", pid: process.pid, vault: noteRootDir || EXPLICIT_ROOT, parent: Number(process.env.GNOSIS_PARENT_PID || 0) || 0, started: Date.now() }));
+    record();
+    registeredVault = noteRootDir || EXPLICIT_ROOT;
     const req = path.join(dir, `close-gui-${process.pid}`);
     const timer = setInterval(() => {
-      try { if (fs.existsSync(req)) { fs.unlinkSync(req); app.quit(); } } catch { /* ignore */ }
+      try {
+        if (registeredVault !== (noteRootDir || EXPLICIT_ROOT)) { record(); registeredVault = noteRootDir || EXPLICIT_ROOT; }
+        const focus = path.join(dir, `focus-gui-${process.pid}`);
+        if (bridge && !focusing && fs.existsSync(focus)) {
+          focusing = true;
+          vimCall({ type: "handoff", path: focus }).then((r) => {
+            if (r.ok) focusWindow();
+          }).finally(() => { focusing = false; });
+        }
+        if (fs.existsSync(req)) { fs.unlinkSync(req); app.quit(); }
+      } catch { /* ignore */ }
     }, 500);
     timer.unref();
-    const clean = () => { try { fs.unlinkSync(file); } catch { /* ignore */ } try { fs.unlinkSync(req); } catch { /* ignore */ } };
+    const clean = () => { try { fs.unlinkSync(file); } catch { /* ignore */ } try { fs.unlinkSync(req); } catch { /* ignore */ } try { fs.unlinkSync(path.join(dir, `focus-gui-${process.pid}`)); } catch { /* ignore */ } };
     app.on("will-quit", clean);
     process.on("exit", clean);
   } catch { /* ignore */ }

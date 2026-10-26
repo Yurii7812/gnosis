@@ -20,7 +20,9 @@ export function createMandala(root, { onCell }) {
   board.className = "m-board";
   const legend = document.createElement("div");
   legend.className = "m-legend";
-  root.append(head, board, legend);
+  const info = document.createElement("div");
+  info.className = "m-info";
+  root.append(head, board, legend, info);
 
   const light = () => document.documentElement.classList.contains("theme-light");
   const colors = () => (light() ? LIGHT : DARK);
@@ -37,35 +39,43 @@ export function createMandala(root, { onCell }) {
   }
 
   let sig = "";
+  let selected = null;
+  let legendTheme = null;
   function render(m) {
     last = m;
     const n = m.size;
-    head.textContent = m.status || "";
-    // 種類の凡例（Vim の設定 mandalaLegend）。選んでいるノートの題は出さない（右のノートに出ている）
-    legend.hidden = m.legend === false;
+    if (head.textContent !== (m.status || "")) head.textContent = m.status || "";
+    const description = m.info ? "▶ " + m.info : "";
+    if (info.textContent !== description) info.textContent = description;
+    // 種類の凡例（Vim の設定 mandalaLegend）。
+    legend.hidden = m.legend === false || m.legend === 0;
+    if (legendTheme !== light()) { drawLegend(); legendTheme = light(); }
     // 盤面の中身（マス・色・番号）が前と同じなら、作り直さず、選んでいるマスの枠だけ動かす（ちらつかない）
     const key = JSON.stringify([n, m.nums, m.cells, light()]);
     if (key === sig && board.children.length === n * n) {
-      board.querySelectorAll(".m-cell.sel").forEach((e) => e.classList.remove("sel"));
-      const el = m.cur && board.children[m.cur[0] * n + m.cur[1]];
-      if (el) el.classList.add("sel");
+      select(m.cur, n);
       return;
     }
     sig = key;
-    board.textContent = "";
+    if (board.children.length !== n * n) {
+      board.replaceChildren(...Array.from({ length: n * n }, () => document.createElement("div")));
+      selected = null;
+    }
     board.style.setProperty("--n", String(n));
     board.classList.toggle("n9", n === 9);
     const c = colors();
     const bgs = light() ? BG_LIGHT : BG_DARK;
     m.cells.forEach((row, r) => row.forEach((cell, col) => {
-      const el = document.createElement("div");
+      const el = board.children[r * n + col];
+      const cellKey = JSON.stringify([cell, m.nums, light()]);
+      if (el.dataset.content === cellKey) return;
+      el.dataset.content = cellKey;
+      el.replaceChildren();
+      el.removeAttribute("style");
       el.className = "m-cell role-" + cell.role;
       el.dataset.r = String(r);
       el.dataset.c = String(col);
-      // 3×3 の線は太く、9×9 は 3×3 のまとまりの境目を太く
-      if (n === 9) { if (col % 3 === 0) el.classList.add("bl"); if (r % 3 === 0) el.classList.add("bt"); if (col === 8) el.classList.add("br"); if (r === 8) el.classList.add("bb"); }
-      const sel = m.cur && m.cur[0] === r && m.cur[1] === col;
-      if (sel) el.classList.add("sel");
+
       if (cell.role === "center") el.classList.add("ctr");
       if (cell.t) {
         const color = c[cell.k] || c.note;
@@ -80,11 +90,18 @@ export function createMandala(root, { onCell }) {
         t.textContent = (cell.n > 0 && m.nums ? cell.n + " " : "") + cell.t;
         el.appendChild(t);
       }
-      el.addEventListener("click", () => onCell(r, col, false));
-      el.addEventListener("dblclick", (e) => { e.preventDefault(); onCell(r, col, true); });
-      board.appendChild(el);
+      el.onclick = () => onCell(r, col, false);
+      el.ondblclick = (e) => { e.preventDefault(); onCell(r, col, true); };
+
     }));
-    drawLegend();
+    select(m.cur, n);
+  }
+
+  function select(cur, n) {
+    const next = cur && board.children[cur[0] * n + cur[1]];
+    if (selected !== next) selected?.classList.remove("sel");
+    next?.classList.add("sel");
+    selected = next;
   }
 
   // 曼荼羅の窓にカーソルがあるときだけ、選んでいるマスをハイライトする（右のノートにカーソルがあるときは消す。CUI も同じ）

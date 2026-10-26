@@ -77,10 +77,10 @@ set background=dark
 set t_ut=
 " 端末の窓は起動の直後に最大化などで大きさが変わる。その通知（SIGWINCH）を Vim が取りこぼすと、
 " 初期状態だけ画面の大きさが古いまま崩れる（フォントを -/+ で変えると直る）。起動後に何度か大きさを読み直す
-if !has('gui_running')
+if !has('gui_running') && empty($GNOSIS_GUI_PORT)
   augroup gnosis_size_sync
     autocmd!
-    autocmd VimEnter * for s:ms in [200, 700, 1500, 3000] | call timer_start(s:ms, {-> execute('silent! mode | silent! call gnosis#mview#rerender()')}) | endfor
+    autocmd VimEnter * for s:ms in [200, 700, 1500, 3000] | call timer_start(s:ms, {-> empty(state('moxS')) ? execute('silent! mode | silent! call gnosis#mview#rerender()') : ''}) | endfor
   augroup END
 endif
 " syntax on を先に済ませてから配色を読む（配色を読んだあとの syntax on は配色を読み直して、起動が約 130ms 遅くなる）

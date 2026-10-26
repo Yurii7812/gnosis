@@ -1065,10 +1065,7 @@ function! s:geometry(n, W, H, chrome) abort
 endfunction
 
 " カーソルのマスの説明を 1 行で（題・種類・理由）
-function! s:info() abort
-  if get(s:S, 'info_line', 0) <= 0
-    return
-  endif
+function! s:info_text() abort
   let l:cell = s:cur_cell()
   let l:txt = ''
   if s:has(l:cell.id)
@@ -1076,7 +1073,12 @@ function! s:info() abort
     let l:dp = (get(s:S, 'out_on', 0) && get(s:S, 'depth', 1) > 1 && has_key(get(s:S, 'dmap', {}), l:cell.id)) ? '  深さ ' . s:S.dmap[l:cell.id] : ''
     let l:txt = ' ▶ ' . s:S.data.nodes[l:cell.id].t . '  [' . s:kinds[l:cell.kind][1] . ']' . l:dp . l:why
   endif
-  let l:txt .= s:query_tags()
+  return l:txt . s:query_tags()
+endfunction
+
+function! s:info() abort
+  if get(s:S, 'info_line', 0) <= 0 | return | endif
+  let l:txt = s:info_text()
   setlocal modifiable
   call setline(s:S.info_line, s:fit(l:txt, winwidth(0)))
   setlocal nomodifiable nomodified
@@ -1568,6 +1570,12 @@ function! s:addpos(group, pos, prio) abort
 endfunction
 
 function! s:mark() abort
+  " GUI の盤面は DOM で描く。端末の81マス分の装飾は不要。
+  if !empty($GNOSIS_GUI_PORT)
+    call s:info()
+    if exists("*GnosisGuiChanged") | call GnosisGuiChanged() | endif
+    return
+  endif
   if exists('w:mview_match')
     for l:m in w:mview_match
       silent! call matchdelete(l:m)
@@ -2547,6 +2555,11 @@ endfunction
 function! s:setup_buffer() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=0 sidescrolloff=0
+  " 画面の切替・終了はノート操作ではないため、曼荼羅から直接実行する。
+  nnoremap <buffer><silent> \c <Cmd>call gnosis#open_web()<CR>
+  nnoremap <buffer><silent> \C <Cmd>call gnosis#run#switch('cui')<CR>
+  nnoremap <buffer><silent> \x <Cmd>call gnosis#run#close_here()<CR>
+  nnoremap <buffer><silent> \X <Cmd>call gnosis#run#close_all()<CR>
   " ノートにカーソルがないとできない操作（\ で始まるもの）は、曼荼羅にカーソルがあっても、ノートにカーソルがあるのと同じに動く:
   " 右のノートの窓へ移ってから、続きのキーを渡す
   nnoremap <buffer><nowait><silent> h <Cmd>call <SID>move(0, -1)<CR>
@@ -2778,6 +2791,7 @@ endfunction
 
 " 窓の大きさが変わったとき、曼荼羅の窓を今の大きさで描き直す（今いる窓は変えない）
 function! gnosis#mview#rerender() abort
+  if !empty(state('moxS')) | return | endif
   let l:mw = s:mwin()
   if l:mw < 0 || !has_key(s:S, 'data') || !has_key(s:S, 'cells')
     return
@@ -3211,6 +3225,10 @@ function! gnosis#mview#gui_state() abort
   if winbufnr(s:S.win) != get(s:S, 'buf', -1)
     return {}
   endif
+  " 3×3/9×9 を切り替えて窓を作り直している途中は、古い盤面を送らない。
+  if len(s:S.cells) != s:S.size || !empty(filter(copy(s:S.cells), 'len(v:val) != s:S.size'))
+    return {}
+  endif
   let l:cells = []
   for l:row in s:S.cells
     let l:r = []
@@ -3220,14 +3238,13 @@ function! gnosis#mview#gui_state() abort
     endfor
     call add(l:cells, l:r)
   endfor
-  let l:cur = s:cur_cell()
   let l:pg = s:pages_memo()
   return {'size': s:S.size, 'cur': s:S.cur, 'cells': l:cells, 'nums': get(s:S, 'nums', 1),
         \ 'center': s:S.center, 'title': s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center,
         \ 'page': s:S.page, 'pages': l:pg,
         \ 'status': trim(s:status(s:has(s:S.center) ? s:S.data.nodes[s:S.center].t : s:S.center, l:pg, '', '')),
         \ 'pickLabel': s:pick_label(), 'cancel': s:cancel_hint(),
-        \ 'info': s:has(l:cur.id) ? (s:S.data.nodes[l:cur.id].t . '  [' . s:kinds[get(l:cur, 'kind', 'note')][1] . ']' . (has_key(s:S.why, l:cur.id) ? '  ' . s:S.why[l:cur.id] : '')) : '',
+        \ 'info': substitute(trim(s:info_text()), '^▶\s*', '', ''),
         \ 'flags': {'near': get(s:S, 'near_on', 0), 'rel': get(s:S, 'rel_on', 0), 'rank': get(s:S, 'rank_on', 0), 'out': get(s:S, 'out_on', 0),
         \           'mode': s:S.mode, 'nv': get(s:S, 'nv', 1), 'dbasis': get(s:S, 'dbasis', 'center')},
         \ 'legend': s:legend_on(),
@@ -3519,4 +3536,57 @@ function! gnosis#mview#panel_text() abort
 endfunction
 function! gnosis#mview#panel_act(i) abort
   call s:panel_rows()[a:i].act()
+endfunction
+
+" CUI / GUI 間で表示状態だけを渡す。ジョブやキャッシュは渡さない。
+function! gnosis#mview#handoff() abort
+  let l:d = {}
+  for l:k in s:mode_keys + ['tenths', 'stretch', 'center', 'cur', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
+    if has_key(s:S, l:k)
+      let l:d[l:k] = deepcopy(s:S[l:k])
+    endif
+  endfor
+  let l:d.open = s:mwin() > 0
+  return l:d
+endfunction
+
+function! gnosis#mview#restore_handoff(d) abort
+  if !get(a:d, 'open', 0)
+    let l:w = s:mwin()
+    if l:w > 0
+      call win_gotoid(l:w)
+      if s:note_win() < 0
+        let s:S.nv = 1
+        call s:ensure_note_win()
+        call s:show_note(s:S.center)
+      endif
+      close
+    endif
+    return
+  endif
+  call s:open(get(a:d, 'center', 'index.md'))
+  if s:mwin() <= 0 | return | endif
+  let l:size = get(a:d, 'size', 3)
+  if s:S.size != l:size
+    call s:full()
+  endif
+  for l:k in s:mode_keys + ['tenths', 'stretch', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
+    if has_key(a:d, l:k)
+      let s:S[l:k] = deepcopy(a:d[l:k])
+    endif
+  endfor
+  let s:S.cur = copy(get(a:d, 'cur', l:size == 9 ? [4, 4] : [1, 1]))
+  if len(s:S.cur) != 2 || min(s:S.cur) < 0 || max(s:S.cur) >= s:S.size
+    let s:S.cur = s:S.size == 9 ? [4, 4] : [1, 1]
+  endif
+  call win_gotoid(s:mwin())
+  if get(s:S, 'nv', 1)
+    call s:ensure_note_win()
+    execute 'vertical resize ' . s:win_width()
+  else
+    silent! only
+  endif
+  call s:render()
+  call s:preview()
+  call win_gotoid(s:mwin())
 endfunction
