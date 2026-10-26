@@ -512,6 +512,20 @@ endfunction
 " 外向きの深さを広げるとき、予測関連・近いグループを求める元のノートの数の上限（これを超える分は求めない）
 let s:deep_over_cap = 40
 
+" 予測関連を 1 つ求める時間はノート数にほぼ比例する（1 万ノートで約 0.14 秒）。4 秒に収まる件数を上限にし、
+" 8 件にも満たない大きな vault では 0（最初から求めない）にする。ノート数は最上位のノートの数（開いている間 1 回だけ数える）
+function! s:deep_cap() abort
+  if !has_key(s:S, 'nnotes')
+    let s:S.nnotes = len(glob(s:S.root . '/*.md', 0, 1))
+  endif
+  let l:n = max([s:S.nnotes, len(get(get(s:S, 'data', {}), 'nodes', {}))])
+  if l:n <= 0
+    return s:deep_over_cap
+  endif
+  let l:k = float2nr(4.0 / (l:n * 1.4e-5))
+  return l:k < 8 ? 0 : min([s:deep_over_cap, l:k])
+endfunction
+
 function! s:near_ids(c, have) abort
   if !has_key(s:S.nearc, a:c) && get(s:S, 'over_only_cached', 0)
     return []
@@ -774,11 +788,16 @@ function! s:deepen(first) abort
       endif
     endfor
     let l:front = copy(l:out)
+    " 重くなりすぎるときは、予測関連・近いグループを最初から求めない（辺をたどるだけ）。状態の行に deep-over-off と出す
+    let l:cap = s:deep_cap()
+    let s:S.deep_over_off = l:cap == 0 && get(s:S, 'depth', 1) > 1 && (get(s:S, 'rel_on', 0) || get(s:S, 'near_on', 0))
     for l:d in range(2, get(s:S, 'depth', 1))
       call s:fetch(map(copy(l:front), 'v:val[0]'))
       " 近いグループ・予測関連が重なっているときは、この段の分をまとめて 1 回で求める（ノートごとに python を起こすと何分もかかる）
       " 重なっている予測関連・近いグループは、外へ広げるときに使う数を絞る（s:deep_over_cap 件まで。残りは辺をたどるだけ）
-      call s:prefetch_over(map(copy(l:front)[: s:deep_over_cap - 1], 'v:val[0]'))
+      if l:cap > 0
+        call s:prefetch_over(map(copy(l:front)[: l:cap - 1], 'v:val[0]'))
+      endif
       let s:S.over_only_cached = 1
       let l:next = []
       for l:e in l:front
@@ -1518,6 +1537,9 @@ function! s:status(ctitle, pages, ptop, extra) abort
   endif
   if !empty(get(s:S, 'tsort', ''))
     call add(l:on, get(s:S, 'tsort', '') ==# 'asc' ? 'old-first' : 'new-first')
+  endif
+  if get(s:S, 'out_on', 0) && get(s:S, 'depth', 1) > 1 && (get(s:S, 'rel_on', 0) || get(s:S, 'near_on', 0)) && s:deep_cap() == 0
+    call add(l:on, 'deep-over-off')
   endif
   if get(s:S, 'rank_on', 0)
     " 通常の 9×9 では、外側の近さ順の基準を rank(center) / rank(block) と書く（b で切り替え。日本語でも同じ表記）

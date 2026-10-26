@@ -190,5 +190,19 @@ execute 'edit ' . s:v . '/root.md'
 call s:keys(' ')
 call s:ok('再起動相当でも方向と深さを復元', get(s:st(), 'out_dir', '') ==# 'down' && get(s:st(), 'depth', 0) == 3 && get(s:st(), 'out_on', 0))
 call s:keys('Q')
+" ---- 大きな vault では、深さを広げるときの予測関連・近いグループを最初から求めない
+let s:big = gnosis#mview#state()
+let s:big.out_on = 1
+let s:big.out_dir = 'all'
+let s:big.depth = 2
+let s:big.rel_on = 1
+let s:big.nnotes = 100000
+let s:big.deep_memo = {}
+call gnosis#mview#set_depth(2)
+call s:ok('10 万ノート: 深さ 2 + R でも予測関連を求めず、deep-over-off が出る', get(s:big, 'deep_over_off', 0) == 1 && gnosis#mview#gui_state().status =~# 'deep-over-off', string(get(s:big, 'deep_over_off', -1)) . ' ' . gnosis#mview#gui_state().status)
+let s:big.nnotes = 300
+let s:big.deep_memo = {}
+call gnosis#mview#set_depth(2)
+call s:ok('300 ノート: 求める（deep-over-off は出ない）', get(s:big, 'deep_over_off', 1) == 0 && gnosis#mview#gui_state().status !~# 'deep-over-off', string(get(s:big, 'deep_over_off', -1)) . ' ' . gnosis#mview#gui_state().status)
 call writefile(s:res + ['DONE'], s:work . '/result.txt')
 qa!
