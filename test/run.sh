@@ -212,6 +212,7 @@ sh "$REPO/test/branch_net.sh"
 sh "$REPO/test/tabs_board_net.sh"
 sh "$REPO/test/mview_net.sh"
 sh "$REPO/test/mview_handoff_net.sh"
+sh "$REPO/test/mview_syncdone_net.sh"
 
 # Context（本文冒頭の Context: ブロック）と w モード・旧 ### Context の保護・同期後の維持
 sh "$REPO/test/context_net.sh"

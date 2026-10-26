@@ -3079,6 +3079,19 @@ function! gnosis#mview#refresh() abort
   noautocmd call win_gotoid(l:back)
 endfunction
 
+" 同期が終わった: 同期は開いていない別のノートにも BackLink: などを書く（保存のイベントは来ない）。
+" 曼荼羅が開いていれば、少し待って、変わったノートを全部読み直す（控えを空にすると vault の変更分を走査する）
+function! gnosis#mview#sync_done() abort
+  if !exists('s:S') || type(s:S) != v:t_dict || !has_key(s:S, 'root') || s:mwin() < 0
+    return
+  endif
+  let s:S.dirty = []
+  if exists('s:sync_timer')
+    call timer_stop(s:sync_timer)
+  endif
+  let s:sync_timer = timer_start(300, {-> gnosis#mview#refresh()})
+endfunction
+
 " 保存されたノートだけ読み直して描き直す
 function! s:reload_dirty() abort
   let l:rels = get(s:S, 'dirty', [])

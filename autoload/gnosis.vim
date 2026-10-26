@@ -11267,6 +11267,11 @@ function! s:related_links(links) abort
     let l:view = winsaveview()
     silent noautocmd edit!
     call winrestview(l:view)
+    " noautocmd だと FileType / Syntax が走らず、読み直したあとリンクの隠し（[ と ](…)）が効かなくなる。構文を入れ直す
+    if &filetype ==# 'markdown' || &filetype ==# 'vimwiki'
+      silent! execute 'setlocal syntax=' . &filetype
+      call gnosis#link_syntax()
+    endif
     checktime
     return 1
   catch
@@ -13033,6 +13038,10 @@ function! s:autosync_done(file, job, status) abort
     call s:sync_problem('sync failed: exit=' . a:status . ' file=' . a:file)
   endif
   call s:reload_current()
+  " 同期は、開いていない別のノートにも BackLink: などを書く。曼荼羅が開いていれば、変わったノートを読み直す
+  if exists('*gnosis#mview#sync_done')
+    call gnosis#mview#sync_done()
+  endif
 endfunction
 
 " 任意のファイルパスに対して update_one を起動するヘルパー
