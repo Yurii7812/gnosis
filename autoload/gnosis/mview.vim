@@ -968,7 +968,7 @@ function! s:board_cells() abort
     if empty(l:id)
       continue
     endif
-    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i], 'bgi': l:i}
+    let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
     let l:br = s:pos[l:i][0] * 3
     let l:bc = s:pos[l:i][1] * 3
     let l:b[l:br + 1][l:bc + 1] = {'id': l:id, 'name': l:ring[l:i][1], 'role': 'center', 'n': s:nums[l:i], 'bgi': l:i}
@@ -988,7 +988,7 @@ function! s:board_cells() abort
   " 真ん中のブロックの周り 8 マスは、周りのブロックの上書きで消えないように置き直す
   for l:i in range(8)
     if !empty(l:ring[l:i][0])
-      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i], 'bgi': l:i}
+      let l:b[3 + s:pos[l:i][0]][3 + s:pos[l:i][1]] = {'id': l:ring[l:i][0], 'name': l:ring[l:i][1], 'role': 'item', 'n': s:nums[l:i]}
     endif
   endfor
   return l:b

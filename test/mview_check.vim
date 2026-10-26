@@ -552,17 +552,20 @@ sleep 50m
 call s:ok('載っていない新しいノートも読み直して中心になる', s:st.center ==# 'brandnew.md', s:st.center)
 call s:keys('q')
 
-" 9×9 の背景: 周りの 8 マスと、それぞれの曼荼羅の中心のマスが同じ薄い色で塗られる
+" 9×9 の背景: 周辺ブロックの中心だけ色を付け、中央の周り 8 マスには付けない
 execute 'edit ' . s:v . '/plant.md'
 call s:keys(' ')
 call s:keys('f')
 let s:st = gnosis#mview#state()
 let s:bw = bufwinid(s:st.buf)
 let s:groups = map(getmatches(s:bw), 'v:val.group')
-call s:ok('9×9: 周りの 8 色の背景が付く', len(filter(copy(s:groups), 'v:val =~# "B[0-7]$" || v:val =~# "Bg[0-7]$"')) >= 2, string(s:groups))
+call s:ok('9×9: 周辺ブロックの中心には背景が残る', len(filter(copy(s:groups), 'v:val =~# "CB[0-7]$" || v:val =~# "CBg[0-7]$"')) >= 2, string(s:groups))
+call s:ok('9×9: 通常マスの背景ハイライトは無い', empty(filter(copy(s:groups), 'v:val =~# "GnosisMv\a\+B[0-7]$" && v:val !~# "CB[0-7]$"')), string(s:groups))
 let s:c1 = s:st.cells[3][4]
 let s:c2 = s:st.cells[1][4]
-call s:ok('周りのマスとその曼荼羅の中心のマスは同じ色の番号', s:c1.bgi == 0 && s:c2.bgi == 0 && s:c1.id ==# s:c2.id, string([s:c1, s:c2]))
+call s:ok('中央の周りは背景なし、対応する周辺ブロックの中心は従来の色', !has_key(s:c1, 'bgi') && s:c2.bgi == 0 && s:c1.id ==# s:c2.id, string([s:c1, s:c2]))
+let s:inner = s:st.cells[3][3:5] + s:st.cells[4][3:5] + s:st.cells[5][3:5]
+call s:ok('中央ブロックの全マスに背景色の指定が無い', empty(filter(copy(s:inner), 'has_key(v:val, "bgi")')), string(s:inner))
 call s:ok('真ん中の中心には背景色の番号が無い', !has_key(s:st.cells[4][4], 'bgi'))
 call s:keys('f')
 call s:keys('q')
