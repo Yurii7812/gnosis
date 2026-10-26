@@ -83,6 +83,25 @@ class RecordRenameTest(unittest.TestCase):
     def read(self, name):
         return (self.root / name).read_text(encoding="utf-8")
 
+    def test_rename_updates_parent_record_references(self):
+        """他の記録が `parent_record: 夢` で上位として指していれば、新しい名前に直す（kind-only でも）。"""
+        r = self.root
+        put(r, "sub-day.md", "2026-10-19-MO-うたた寝", ["本文。"], 'record: "うたた寝"\nparent_record: 夢\n')
+        put(r, "sub-quoted.md", "2026-10-20-TU-うたた寝", ["本文。"], 'record: "うたた寝"\nparent_record: "夢"\n')
+        put(r, "other.md", "2026-10-19-MO-別", ["本文。"], 'record: "別"\nparent_record: ほか\n')
+        before = self.snapshot()
+        preview = dt.rename_kind(r, "夢", "夢日記", dry_run=True)
+        self.assertTrue(preview["ok"])
+        self.assertEqual(preview["parent_records"], 2)
+        self.assertEqual(self.snapshot(), before)
+        result = dt.rename_kind(r, "夢", "夢日記", include_descendants=False)
+        self.assertTrue(result["ok"])
+        self.assertIn("parent_record: 夢日記", self.read("sub-day.md"))
+        self.assertIn("parent_record: 夢日記", self.read("sub-quoted.md"))
+        self.assertIn("parent_record: ほか", self.read("other.md"))
+        self.assertEqual(bo.note_title(self.read("sub-day.md"), r / "sub-day.md"), "2026-10-19-MO-うたた寝")
+        self.assertEqual(dt.rename_kind(r, "夢", "夢日記")["parent_records"], 0)
+
     def test_rename_dates_and_repeat(self):
         before = self.snapshot()
         preview = dt.rename_kind(self.root, "夢", "夢日記", dry_run=True)

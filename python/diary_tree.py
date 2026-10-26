@@ -217,13 +217,37 @@ def _rename_h1(text: str, title: str) -> str:
     raise ValueError("H1 not found")
 
 
+def _fm_value(v: str) -> str:
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        try:
+            return json.loads(v) if v[0] == '"' else v[1:-1]
+        except ValueError:
+            return v[1:-1]
+    return v
+
+
+def _replace_parent_record(text: str, old: str, new: str) -> tuple[str, bool]:
+    """front matter の `parent_record:`（上位の時系列記録の名前）が old なら new にする。"""
+    lines, nl = _split(text)
+    fm, _ = nf._split_front_matter(lines)
+    changed = False
+    for i in range(1, max(1, len(fm) - 1)):
+        m = re.match(r"^parent_record\s*:\s*(.*?)\s*$", lines[i])
+        if m and _fm_value(m[1]) == old:
+            quote = re.search(r'[:#\[\]{}",&*!|>\'%@`]|^\s|\s$', new)
+            lines[i] = "parent_record: " + (json.dumps(new, ensure_ascii=False) if quote else new)
+            changed = True
+    return _join(lines, nl), changed
+
+
 def _rename_kind_locked(root, old, new, dry_run, kind_file, include_descendants):
     v = bo.Vault(root)
     # symlink の先を含む vault 外のファイルは対象にしない。
     texts = {p: t for p, t in v.texts.items() if p.is_relative_to(v.root)}
     titles = {p: _title(t, p) for p, t in texts.items()}
     tops = [p for p, t in texts.items() if titles[p] == "時系列記録" and _is_timeline(t)]
-    result = {"ok": True, "applicable": False, "changed": [], "counts": {"year": 0, "month": 0, "day": 0}}
+    result = {"ok": True, "applicable": False, "changed": [], "counts": {"year": 0, "month": 0, "day": 0}, "parent_records": 0}
     if not tops:
         return result
     if len(tops) != 1:
@@ -272,12 +296,18 @@ def _rename_kind_locked(root, old, new, dry_run, kind_file, include_descendants)
                 entries.append({"path": str(p), "old": titles[p], "new": match[1] + "-" + new, "type": kind})
                 result["counts"][kind] += 1
                 break
+    # 他の記録の `parent_record: 旧名` も新しい名前に直す（上位として名前で指しているため。--kind-only でも直す）
+    in_entries = {Path(e["path"]) for e in entries}
+    for p in sorted(texts):
+        if p not in in_entries and _replace_parent_record(texts[p], old, new)[1]:
+            entries.append({"path": str(p), "old": titles[p], "new": titles[p], "type": "parent_record"})
+    result["parent_records"] = sum(1 for p in texts if _replace_parent_record(texts[p], old, new)[1])
     plan = []
     for entry in entries:
         p = Path(entry["path"])
         if not dry_run and nf._editor_has_unsaved_changes(p):
             return dict(result, ok=False, code="dirty", path=str(p))
-        updated = _rename_h1(texts[p], entry["new"])
+        updated = _rename_h1(texts[p], entry["new"]) if entry["type"] != "parent_record" else texts[p]
         if entry["type"] == "day":
             lines, nl = _split(updated)
             fm, _ = nf._split_front_matter(lines)
@@ -291,6 +321,7 @@ def _rename_kind_locked(root, old, new, dry_run, kind_file, include_descendants)
                     if value == old:
                         lines[i] = "record: " + json.dumps(new, ensure_ascii=False)
             updated = _join(lines, nl)
+        updated = _replace_parent_record(updated, old, new)[0]
         plan.append((p, texts[p], updated))
     result.update(changed=[str(p) for p, _, _ in plan], entries=entries)
     if not dry_run:
@@ -344,7 +375,10 @@ def main(argv: list[str]) -> int:
                         kind_file=args.kind_file, include_descendants=not args.kind_only)
         if r["ok"] and not args.dry_run and args.sync and r["changed"]:
             try:
-                nf.simple_sync(args.root, {e["path"]: e["old"] for e in r["entries"]})
+                nf.simple_sync(args.root, {e["path"]: e["old"] for e in r["entries"] if e["type"] != "parent_record"})
+                # DailyNotes: のリンクの表示名は系列名なので、名前が変わった分を整え直す
+                import daily_notes
+                r["daily_notes"] = daily_notes.sync_all(args.root)
             except Exception as exc:
                 r.update(ok=False, code="sync_failed", message=str(exc))
         print(json.dumps(r, ensure_ascii=False))

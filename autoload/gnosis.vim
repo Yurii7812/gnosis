@@ -13407,6 +13407,9 @@ function! s:try_record_rename(old, new) abort
   call s:checktime_others()
   echom printf(gnosis#i18n#tr('記録の題を変更しました（年 %d・月 %d・日 %d）'),
         \ l:result.counts.year, l:result.counts.month, l:result.counts.day)
+  if get(l:result, 'parent_records', 0) > 0
+    echom printf(gnosis#i18n#tr('上位の記録として名前で指していたノート %d 件の parent_record も直しました'), l:result.parent_records)
+  endif
   return 1
 endfunction
 

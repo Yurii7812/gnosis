@@ -874,7 +874,8 @@
     "上位の時系列記録> ": "Parent chronological record> ",
     "上位を解除しました": "Parent cleared",
     "上位の時系列記録: ": "Parent chronological record: ",
-    "DailyNotes: を整えました": "DailyNotes: updated"
+    "DailyNotes: を整えました": "DailyNotes: updated",
+    "上位の記録として名前で指していたノート %d 件の parent_record も直しました": "Also updated parent_record in %d notes that referred to it as their parent"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",
