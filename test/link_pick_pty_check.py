@@ -61,7 +61,8 @@ try:
         pump(0.6)
         return f.read_text().strip() if f.exists() else ""
 
-    for k, w in [("8G", 0.4), ("\\l", 2.0)]:
+    # ノートで <Space> → 曼荼羅にカーソルがある状態で \\l（ノートにカーソルがあるときの \\l は、ふつうの全文検索）
+    for k, w in [("8G", 0.4), (" ", 1.5), ("\\l", 2.0)]:
         os.write(fd, k.encode())
         pump(w)
     # ハーブを中心にする（曼荼羅の状態を直接書き換えて、z で描き直す）
@@ -99,6 +100,11 @@ try:
     body = (v / "plant.md").read_text(encoding="utf-8")
     print(repr(body)) if os.environ.get("DBG") else None
     ok("h → Enter: 先頭行(gg)の下に、選んだノートへのリンクが入る", "[ハーブ](herb.md)" in body and body.index("[ハーブ](herb.md)") < body.index("あいうえお"))
+    ok("h → Enter のあと、曼荼羅の中心も右のノートも元のノート(plant.md)のまま", center() == "plant.md")
+    f2 = work / "win.txt"
+    os.write(fd, (":call writefile(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), \":t\")'), '" + str(f2) + "')\r").encode())
+    pump(0.6)
+    ok("右の窓に開いているのは plant.md", f2.exists() and "plant.md" in f2.read_text().split() and "herb.md" not in f2.read_text().split())
     os.write(fd, b"\x1b")
     pump(0.6)
     os.write(fd, b":qa!\r")

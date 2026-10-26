@@ -333,7 +333,7 @@ call s:ok('Enter だけではまだ載らない', join(readfile(s:v . '/empty.md
 call s:keys('e')
 call s:ok('e で載る', join(readfile(s:v . '/empty.md'), "\n") =~# '\[雑記\](misc.md)', join(readfile(s:v . '/empty.md'), "\n"))
 call s:ok('載せたあとも曼荼羅は閉じず、選ぶモードだけ終わる', &filetype ==# 'gnosis-mandala' && s:st.pick ==# '', &filetype . ' pick=' . string(s:st.pick))
-call s:ok('右の窓は入れ先のグループ（中心）を見せる', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') >= 0)
+call s:ok('終わったあとも右の窓は元のノート（\\l を押したノート）のまま', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'misc.md') >= 0 && index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') < 0)
 call s:keys('Q')
 
 " キー待ち（ポップアップの選択肢）は、typeahead に積まれた <Cmd>…<CR>（nohlsearch）を読み捨てる。

@@ -1974,7 +1974,9 @@ function! s:goto_note_win() abort
 endfunction
 
 " 選ぶモードが終わったあと、曼荼羅の窓に戻って、変わったノートだけ読み直す
-function! s:back_to_mandala(rels) abort
+" a:1 は \l を押したノート（origin）の絶対パス。あれば、終わったあとも右にはそのノートを出し続け、曼荼羅の中心もそこに戻す
+" （選んだノートが勝手に開いて、画面が変わらないように）
+function! s:back_to_mandala(rels, ...) abort
   let l:mw = s:mwin()
   if l:mw > 0
     call win_gotoid(l:mw)
@@ -1985,6 +1987,12 @@ function! s:back_to_mandala(rels) abort
     endif
   endfor
   call s:reload_dirty()
+  let l:orel = a:0 && !empty(a:1) ? s:rel_of(a:1) : ''
+  if !empty(l:orel) && s:has(l:orel) && l:orel !=# s:S.center
+    call add(s:S.hist, [s:S.center, s:S.page])
+    call s:set_center(l:orel, 0)
+    return
+  endif
   call s:show_note(s:S.center)
 endfunction
 
@@ -2091,7 +2099,7 @@ endfunction
 function! s:link_finish() abort
   let l:lk = get(s:S, 'lk', {})
   call s:end_pick()
-  call s:back_to_mandala(filter([empty(l:lk) ? '' : s:rel_of(l:lk.origin.path), get(l:lk, 'rel', '')], '!empty(v:val)'))
+  call s:back_to_mandala(filter([empty(l:lk) ? '' : s:rel_of(l:lk.origin.path), get(l:lk, 'rel', '')], '!empty(v:val)'), empty(l:lk) ? '' : l:lk.origin.path)
 endfunction
 
 " ---- 右のノートで置く場所を選ぶ（\l の h / i / 見出し） ------------------------------------------------
@@ -2210,7 +2218,7 @@ function! s:decide(id, ...) abort
     execute 'silent! hide edit ' . fnameescape(l:o.path)
     call setpos('.', l:o.pos)
   endif
-  call s:back_to_mandala([a:id, s:rel_of(l:src)])
+  call s:back_to_mandala([a:id, s:rel_of(l:src)], empty(l:o) ? '' : l:o.path)
 endfunction
 
 " I: 選んでいるノートを Index に追加する（そのトピックの入り口にする）
@@ -2533,11 +2541,21 @@ endfunction
 " ---- 入口 -------------------------------------------------------------------
 
 function! s:leader_to_note() abort
+  " \l だけは、カーソルを動かさずに曼荼羅のまま選ぶ（ノートにカーソルがあるときの \l は、ふつうの全文検索）。
+  " 次のキーを先に読んで決める。ほかのキーはこれまでどおりノートの窓へ渡す
+  let l:c = getcharstr()
+  if l:c ==# 'l'
+    call gnosis#mview#link_pick()
+    return
+  endif
+  if l:c ==# "\<Esc>"
+    return
+  endif
   let l:nw = s:note_win()
   if l:nw > 0
     call win_gotoid(l:nw)
   endif
-  call feedkeys('\', 'mi')
+  call feedkeys('\' . l:c, 'mi')
 endfunction
 
 " 右にノートの窓があるときだけ、\ で始まる操作をそのノートの窓へ渡す（窓が無い全画面では \ はそのまま）
@@ -2556,6 +2574,8 @@ function! s:setup_buffer() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=0 sidescrolloff=0
   " 画面の切替・終了はノート操作ではないため、曼荼羅から直接実行する。
+  " \l は曼荼羅にカーソルがあるときだけ曼荼羅で選ぶ（ノートにカーソルがあるときは、ふつうの全文検索の \l）
+  nnoremap <buffer><silent> \l <Cmd>call gnosis#mview#link_pick()<CR>
   nnoremap <buffer><silent> \c <Cmd>call gnosis#open_web()<CR>
   nnoremap <buffer><silent> \C <Cmd>call gnosis#run#switch('cui')<CR>
   nnoremap <buffer><silent> \x <Cmd>call gnosis#run#close_here()<CR>

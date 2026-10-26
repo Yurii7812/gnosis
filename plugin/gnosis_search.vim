@@ -34,7 +34,8 @@ if !exists('g:gnosis_search_no_mappings')
   " <Space> は曼荼羅ビュー（plugin/gnosis.vim → autoload/gnosis/mview.vim）。旧「今のノートのリンクを fzf で一覧」は
   " アーカイブして、:GnosisLocalLinks だけ残した。
   " \l … タイトル優先の全文検索 → カーソル位置に [タイトル](相対.md) を挿入。
-  " ビジュアルでも同じ（曼荼羅で選び、e で選択範囲をリンクに置き換える。表示テキストは選択文字列。位置キーは聞かない）。
-  nnoremap <silent> \l        <Cmd>call gnosis#mview#link_pick()<CR>
-  xnoremap <silent> \l        :<C-u>call gnosis#mview#link_pick_visual()<CR>
+  " ビジュアルでも同じ（選択範囲をリンクに置き換える。表示テキストは選択文字列。位置キーは聞かない）。
+  " 曼荼羅ビューにカーソルがあるときだけ、曼荼羅で選ぶ \l になる（autoload/gnosis/mview.vim）。
+  nnoremap <silent> \l        <Cmd>LinkPick<CR>
+  xnoremap <silent> \l        :<C-u>call gnosis_search#pick_insert_link_visual()<CR>
 endif
