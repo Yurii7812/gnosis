@@ -7,6 +7,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { createView } from "./view.js";
 import { showLauncher } from "./launcher.js";
 import { createMandala } from "./mandala.js";
+import { createOutlinePane } from "./outlinepane.js";
 import { createScan } from "./scan.js";
 import { createRecord } from "./record.js";
 
@@ -18,6 +19,7 @@ let term = null;
 let fit = null;
 let view = null;
 let mandala = null;
+let outlinePane = null;
 let shownFile = null;
 let scan = null;
 let scanReq = 0;
@@ -96,7 +98,7 @@ function terminalReason(s) {
   if (m === "r" || s.mode === "rm") return "hit-enter/prompt";
   if (m === "!") return "shell";
   if ((s.popups || 0) > 0) return "popup×" + s.popups;
-  if (s.curbt && s.curft !== "gnosis-mandala") return "buffer:" + s.curbt + (s.curft ? "/" + s.curft : "");
+  if (s.curbt && s.curft !== "gnosis-mandala" && s.curft !== "gnosis-outline") return "buffer:" + s.curbt + (s.curft ? "/" + s.curft : "");
   return "";
 }
 
@@ -106,7 +108,7 @@ function needsTerminal(s) {
   // ノートでも曼荼羅でもない特別なバッファ（:GnosisSettings の画面・ヘルプなど。buftype が nofile / help / quickfix など）は、
   // マークダウンとしては描けないので、端末の画面をそのまま見せる
   // （今いる窓のバッファで見る。曼荼羅が開いていても、設定の画面などを窓に出していればそちらが要る）
-  const special = !!s.curbt && s.curbt !== "terminal" && s.curft !== "gnosis-mandala";
+  const special = !!s.curbt && s.curbt !== "terminal" && s.curft !== "gnosis-mandala" && s.curft !== "gnosis-outline";
   return special || s.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s.popups || 0) > 0 || s.mode === "rm";
 }
 
@@ -159,9 +161,10 @@ function applyState(s) {
   }
   last = { ...last, ...s, lines: undefined };
   const m = (s.mode || "n")[0];
-  const md = s.mandala && s.mandala.cells ? s.mandala : null;
+  const md = s.mandala && (s.mandala.cells || s.mandala.view === "fz") ? s.mandala : null;
+  const ol = s.outline && s.outline.lines ? s.outline : null;
   const mEl = $("mode");
-  mEl.textContent = (md && s.focus === "mandala" && m === "n") ? "MANDALA" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
+  mEl.textContent = (md && s.focus === "mandala" && m === "n") ? (md.view === "fz" ? "FOLGEZETTEL" : "MANDALA") : (s.focus === "outline" && m === "n") ? "OUTLINE" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
   if (last.copyStack) mEl.textContent += " · COPY STACK";
   mEl.className = "mode " + (MODE_CLASS[m] || "normal");
   $("file").textContent = s.file ? s.file.split("/").pop() : "";
@@ -191,6 +194,16 @@ function applyState(s) {
     mandala.render(md);
   }
 
+  // アウトライン窓: ノートの右（Vim で左に置いていれば左）に、独立した窓として出す。位置と幅は Vim の窓の配置のとおり
+  $("outline").hidden = !ol;
+  if (ol) {
+    $("outline").style.flexBasis = ol.wcols && s.cols ? (100 * ol.wcols / s.cols).toFixed(2) + "%" : "";
+    $("outline").style.order = ol.pos === "left" ? "0" : "3";
+    $("view").style.order = "2";
+    $("mandala").style.order = "1";
+    outlinePane.render(ol);
+  }
+
   // ノート（曼荼羅が開いていれば、右の窓のノート）の内容とカーソルをマークダウンで映す
   if (s.bt === "terminal" || !hasNote) return;
   view.setLinkSource(!!last.linkSource);
@@ -210,7 +223,7 @@ function applyState(s) {
   }
   // 曼荼羅にカーソルがあるあいだ、ノートのカーソルは画面の一番下に置いてあるだけ。画面は動かさない。
   // ノートにカーソルがあるときは、カーソルが画面の下（上）の端に来るまで画面は動かさない
-  if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis, follow: !(md && s.focus === "mandala") });
+  if (s.cur) view.setVim({ cur: s.cur, mode: md && s.focus === "mandala" ? "n" : (s.mode || "n"), vis: s.vis, follow: !(md && s.focus === "mandala") && s.focus !== "outline" });
 }
 
 // ペインの大きさが変わったら、Vim の端末の大きさを合わせ直す
@@ -330,8 +343,9 @@ function onClick({ pos, link, anyHref, alt, mod }) {
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
   // 曼荼羅が開いているときは、まず右のノートの窓へ移る（Vim の窓の移動）
-  const toNote = last.mandala && last.mandala.cells && last.focus === "mandala" && last.mandala.noteWin > 0
-    ? `call win_gotoid(${last.mandala.noteWin})|` : "";
+  const nwin = (last.mandala && (last.mandala.cells || last.mandala.view === "fz") && last.focus === "mandala" && last.mandala.noteWin > 0) ? last.mandala.noteWin
+    : (last.focus === "outline" && last.outline && last.outline.srcWin > 0) ? last.outline.srcWin : 0;
+  const toNote = nwin ? `call win_gotoid(${nwin})|` : "";
   // 打った :call … が下の行に残らないよう、直後に redraw して空のメッセージで消す
   const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
   if (m === "n") gui.write(mv + (link ? "\r" : ""));
@@ -359,6 +373,21 @@ function closeHtml() {
 }
 
 // 曼荼羅のマスのクリック（enter が真なら中心にする）
+function onFzClick(n, enter) {
+  gui.write(`\x1b:call gnosis#fznav#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
+}
+function onFzScroll(n) {
+  gui.write(`\x1b:call gnosis#fznav#gui_scroll(${n})|redraw|echo ""\r`);
+}
+function onOutlineClick(n, jump) {
+  gui.write(`\x1b:call gnosis#outline#gui_click(${n},${jump ? 1 : 0})|redraw|echo ""\r`);
+}
+function onOutlineFold(n) {
+  gui.write(`\x1b:call gnosis#outline#gui_fold(${n})|redraw|echo ""\r`);
+}
+function onOutlineScroll(n) {
+  gui.write(`\x1b:call gnosis#outline#gui_scroll(${n})|redraw|echo ""\r`);
+}
 function onMandalaCell(r, c, enter) {
   gui.write(`\x1b:call gnosis#mview#gui_click(${r},${c},${enter ? 1 : 0})|redraw|echo ""\r`);
 }
@@ -394,7 +423,8 @@ async function boot() {
   window.addEventListener("error", (e) => showError(e.message || e.error));
   window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
   view = createView({ parent: $("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
-  mandala = createMandala($("mandala"), { onCell: onMandalaCell });
+  mandala = createMandala($("mandala"), { onCell: onMandalaCell, onFz: onFzClick, onFzScroll: onFzScroll });
+  outlinePane = createOutlinePane($("outline"), { onClick: onOutlineClick, onFold: onOutlineFold, onScroll: onOutlineScroll });
   scan = createScan($("scan"), {
     api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q) => gui.scanFind(d, q) },
     // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す

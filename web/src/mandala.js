@@ -12,7 +12,9 @@ const LIGHT = { index: "#b81e52", group: "#8a5a00", parent: "#1864ab", context: 
 const BG_DARK = Array(8).fill("#262b36");
 const BG_LIGHT = Array(8).fill("#e9edf3");
 
-export function createMandala(root, { onCell }) {
+import { createFznav } from "./fznav.js";
+
+export function createMandala(root, { onCell, onFz, onFzScroll }) {
   let last = null;
   root.classList.add("mandala");
   const head = document.createElement("div");
@@ -24,6 +26,11 @@ export function createMandala(root, { onCell }) {
   const info = document.createElement("div");
   info.className = "m-info";
   root.append(head, board, legend, info);
+  // Folgezettel ビュー（曼荼羅と同じ場所に、Ctrl-←/→ で切り替わって出る）
+  const fzRoot = document.createElement("div");
+  const fz = createFznav(fzRoot, { onClick: onFz, onScroll: onFzScroll });
+  fzRoot.hidden = true;
+  root.append(fzRoot);
 
   const light = () => document.documentElement.classList.contains("theme-light");
   const colors = () => (light() ? LIGHT : DARK);
@@ -44,6 +51,10 @@ export function createMandala(root, { onCell }) {
   let legendTheme = null;
   function render(m) {
     last = m;
+    const isFz = m.view === "fz";
+    root.classList.toggle("fz-mode", isFz);
+    fzRoot.hidden = !isFz;
+    if (isFz) { fz.render(m); return; }
     const n = m.size;
     if (head.textContent !== (m.status || "")) head.textContent = m.status || "";
     const description = m.info ? "▶ " + m.info : "";
@@ -107,7 +118,7 @@ export function createMandala(root, { onCell }) {
   }
 
   // 曼荼羅の窓にカーソルがあるときだけ、選んでいるマスをハイライトする（右のノートにカーソルがあるときは消す。CUI も同じ）
-  function setFocus(on) { root.classList.toggle("unfocused", !on); }
+  function setFocus(on) { root.classList.toggle("unfocused", !on); fz.setFocus(on); }
 
   return { render, rerender: () => last && render(last), setFocus, el: root };
 }

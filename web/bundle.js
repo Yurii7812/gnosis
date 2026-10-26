@@ -34027,6 +34027,81 @@ ${h3.join(`
     render();
   }
 
+  // src/fznav.js
+  var isEn = () => document.documentElement.lang === "en";
+  var ACCENT = { dark: "#f2d13d", light: "#8a5a00" };
+  function createFznav(root, { onClick: onClick2, onScroll }) {
+    root.classList.add("fz");
+    const head = document.createElement("div");
+    head.className = "fz-head";
+    const list = document.createElement("div");
+    list.className = "fz-list";
+    const detail = document.createElement("div");
+    detail.className = "fz-detail";
+    root.append(head, list, detail);
+    const light = () => document.documentElement.classList.contains("theme-light");
+    let wheel = 0;
+    list.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      wheel += e.deltaY / 40;
+      const n = Math.trunc(wheel);
+      if (n) {
+        wheel -= n;
+        onScroll(n);
+      }
+    }, { passive: false });
+    let sig = "";
+    function render2(m) {
+      const title = "FOLGEZETTEL" + (m.mode === "upper" ? " / " + (isEn() ? "Upper" : "\u4E0A\u4F4D\u8868\u793A") : "");
+      if (head.textContent !== title) head.textContent = title;
+      const key = JSON.stringify([m.lines, m.numw, m.top, light()]);
+      if (m.detail !== detail.textContent) detail.textContent = m.detail || "";
+      if (key === sig) return;
+      sig = key;
+      root.style.setProperty("--numw", String(m.numw || 8));
+      const accent = light() ? ACCENT.light : ACCENT.dark;
+      const rows = [];
+      for (const c of m.lines) {
+        if (c.ln <= 2 && c.k === "h") continue;
+        const el2 = document.createElement("div");
+        el2.dataset.n = String(c.ln);
+        if (c.k === "s") {
+          el2.className = c.t ? "fz-sep" : "fz-gap";
+          rows.push(el2);
+          continue;
+        }
+        if (c.k === "h") {
+          el2.className = "fz-note-line";
+          el2.textContent = c.t;
+          rows.push(el2);
+          continue;
+        }
+        el2.className = "fz-row k-" + c.k + (c.sel ? " sel" : "") + (c.cur ? " cur" : "");
+        const mark = document.createElement("span");
+        mark.className = "fz-mark";
+        mark.textContent = c.cur ? "\u25B8" : "";
+        const num = document.createElement("span");
+        num.className = "fz-num";
+        num.textContent = c.n || "";
+        const t3 = document.createElement("span");
+        t3.className = "fz-title";
+        t3.textContent = c.t + (c.c || "");
+        el2.append(mark, num, t3);
+        if (c.k === "g") el2.style.color = accent;
+        if (c.id && c.id !== c.n) el2.title = c.id;
+        el2.onclick = () => onClick2(c.ln, false);
+        el2.ondblclick = (e) => {
+          e.preventDefault();
+          onClick2(c.ln, true);
+        };
+        rows.push(el2);
+      }
+      list.replaceChildren(...rows);
+    }
+    return { render: render2, rerender: () => {
+    }, el: root, setFocus: (on2) => root.classList.toggle("unfocused", !on2) };
+  }
+
   // src/mandala.js
   var KINDS = [
     ["index", "\u7D22\u5F15", "Index"],
@@ -34041,12 +34116,12 @@ ${h3.join(`
     ["note", "\u30CE\u30FC\u30C8", "Note"],
     ["outline", "\u898B\u51FA\u3057", "Heading"]
   ];
-  var isEn = () => document.documentElement.lang === "en";
+  var isEn2 = () => document.documentElement.lang === "en";
   var DARK = { index: "#ff8798", group: "#f2d13d", parent: "#65b1ef", context: "#d194e4", cite: "#ff9e4a", back: "#d8dee9", child: "#2ec4b6", related: "#8fd14f", pred: "#d2b48c", note: "#a6abb4", outline: "#7ee8fa" };
   var LIGHT = { index: "#b81e52", group: "#8a5a00", parent: "#1864ab", context: "#862e9c", cite: "#a8400a", back: "#495057", child: "#08606f", related: "#1f6f30", pred: "#7a5530", note: "#5c6670", outline: "#0a6f8a" };
   var BG_DARK = Array(8).fill("#262b36");
   var BG_LIGHT = Array(8).fill("#e9edf3");
-  function createMandala(root, { onCell }) {
+  function createMandala(root, { onCell, onFz, onFzScroll: onFzScroll2 }) {
     let last3 = null;
     root.classList.add("mandala");
     const head = document.createElement("div");
@@ -34058,6 +34133,10 @@ ${h3.join(`
     const info = document.createElement("div");
     info.className = "m-info";
     root.append(head, board, legend, info);
+    const fzRoot = document.createElement("div");
+    const fz = createFznav(fzRoot, { onClick: onFz, onScroll: onFzScroll2 });
+    fzRoot.hidden = true;
+    root.append(fzRoot);
     const light = () => document.documentElement.classList.contains("theme-light");
     const colors = () => light() ? LIGHT : DARK;
     function drawLegend() {
@@ -34065,7 +34144,7 @@ ${h3.join(`
       const c = colors();
       for (const [k, ja2, en2] of KINDS) {
         const s15 = document.createElement("span");
-        s15.textContent = isEn() ? en2 : ja2;
+        s15.textContent = isEn2() ? en2 : ja2;
         s15.style.color = c[k];
         legend.appendChild(s15);
       }
@@ -34075,12 +34154,19 @@ ${h3.join(`
     let legendTheme = null;
     function render2(m) {
       last3 = m;
+      const isFz = m.view === "fz";
+      root.classList.toggle("fz-mode", isFz);
+      fzRoot.hidden = !isFz;
+      if (isFz) {
+        fz.render(m);
+        return;
+      }
       const n = m.size;
       if (head.textContent !== (m.status || "")) head.textContent = m.status || "";
       const description = m.info ? "\u25B6 " + m.info : "";
       if (info.textContent !== description) info.textContent = description;
       legend.hidden = m.legend === false || m.legend === 0;
-      const legendKey = light() + ":" + isEn();
+      const legendKey = light() + ":" + isEn2();
       if (legendTheme !== legendKey) {
         drawLegend();
         legendTheme = legendKey;
@@ -34147,8 +34233,62 @@ ${h3.join(`
     }
     function setFocus(on2) {
       root.classList.toggle("unfocused", !on2);
+      fz.setFocus(on2);
     }
     return { render: render2, rerender: () => last3 && render2(last3), setFocus, el: root };
+  }
+
+  // src/outlinepane.js
+  var isEn3 = () => document.documentElement.lang === "en";
+  function createOutlinePane(root, { onClick: onClick2, onFold, onScroll }) {
+    root.classList.add("olp");
+    const head = document.createElement("div");
+    head.className = "olp-head";
+    head.textContent = "OUTLINE";
+    const list = document.createElement("div");
+    list.className = "olp-list";
+    root.append(head, list);
+    let wheel = 0;
+    list.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      wheel += e.deltaY / 40;
+      const n = Math.trunc(wheel);
+      if (n) {
+        wheel -= n;
+        onScroll(n);
+      }
+    }, { passive: false });
+    let sig = "";
+    function render2(o2) {
+      root.classList.toggle("unfocused", !o2.focus);
+      const key = JSON.stringify([o2.lines, o2.top]);
+      if (key === sig) return;
+      sig = key;
+      const rows = [];
+      for (const c of o2.lines) {
+        if (c.n <= 2) continue;
+        const el2 = document.createElement("div");
+        el2.dataset.n = String(c.n);
+        if (c.k === "h") {
+          el2.className = "olp-note";
+          el2.textContent = c.t;
+          rows.push(el2);
+          continue;
+        }
+        el2.className = "olp-row" + (c.a ? " active" : "") + (c.sel ? " sel" : "");
+        el2.style.paddingLeft = 8 + (c.d || 0) * 14 + "px";
+        el2.textContent = c.t + (c.c || "");
+        el2.onclick = () => onClick2(c.n, true);
+        el2.oncontextmenu = (e) => {
+          e.preventDefault();
+          onFold(c.n);
+        };
+        el2.title = isEn3() ? "Click: jump / Right click: fold" : "\u30AF\u30EA\u30C3\u30AF: \u672C\u6587\u3078 / \u53F3\u30AF\u30EA\u30C3\u30AF: \u6298\u308A\u305F\u305F\u307F";
+        rows.push(el2);
+      }
+      list.replaceChildren(...rows);
+    }
+    return { render: render2, el: root };
   }
 
   // src/scan.js
@@ -34924,6 +35064,7 @@ ${h3.join(`
   var fit = null;
   var view2 = null;
   var mandala = null;
+  var outlinePane = null;
   var shownFile = null;
   var scan = null;
   var scanReq = 0;
@@ -34991,12 +35132,12 @@ ${h3.join(`
     if (m === "r" || s15.mode === "rm") return "hit-enter/prompt";
     if (m === "!") return "shell";
     if ((s15.popups || 0) > 0) return "popup\xD7" + s15.popups;
-    if (s15.curbt && s15.curft !== "gnosis-mandala") return "buffer:" + s15.curbt + (s15.curft ? "/" + s15.curft : "");
+    if (s15.curbt && s15.curft !== "gnosis-mandala" && s15.curft !== "gnosis-outline") return "buffer:" + s15.curbt + (s15.curft ? "/" + s15.curft : "");
     return "";
   }
   function needsTerminal(s15) {
     const m = (s15.mode || "n")[0];
-    const special = !!s15.curbt && s15.curbt !== "terminal" && s15.curft !== "gnosis-mandala";
+    const special = !!s15.curbt && s15.curbt !== "terminal" && s15.curft !== "gnosis-mandala" && s15.curft !== "gnosis-outline";
     return special || s15.bt === "terminal" || m === "t" || m === "r" || m === "!" || (s15.popups || 0) > 0 || s15.mode === "rm";
   }
   var MODE_LABEL = { n: "NORMAL", i: "INSERT", v: "VISUAL", V: "V-LINE", "": "V-BLOCK", R: "REPLACE", c: "COMMAND", t: "TERMINAL", r: "PROMPT", s: "SELECT", S: "S-LINE", "": "S-BLOCK", "!": "SHELL" };
@@ -35047,9 +35188,10 @@ ${h3.join(`
     }
     last2 = { ...last2, ...s15, lines: void 0 };
     const m = (s15.mode || "n")[0];
-    const md = s15.mandala && s15.mandala.cells ? s15.mandala : null;
+    const md = s15.mandala && (s15.mandala.cells || s15.mandala.view === "fz") ? s15.mandala : null;
+    const ol2 = s15.outline && s15.outline.lines ? s15.outline : null;
     const mEl = $3("mode");
-    mEl.textContent = md && s15.focus === "mandala" && m === "n" ? "MANDALA" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
+    mEl.textContent = md && s15.focus === "mandala" && m === "n" ? md.view === "fz" ? "FOLGEZETTEL" : "MANDALA" : s15.focus === "outline" && m === "n" ? "OUTLINE" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
     if (last2.copyStack) mEl.textContent += " \xB7 COPY STACK";
     mEl.className = "mode " + (MODE_CLASS[m] || "normal");
     $3("file").textContent = s15.file ? s15.file.split("/").pop() : "";
@@ -35082,6 +35224,14 @@ ${h3.join(`
       mandala.setFocus(s15.focus === "mandala");
       mandala.render(md);
     }
+    $3("outline").hidden = !ol2;
+    if (ol2) {
+      $3("outline").style.flexBasis = ol2.wcols && s15.cols ? (100 * ol2.wcols / s15.cols).toFixed(2) + "%" : "";
+      $3("outline").style.order = ol2.pos === "left" ? "0" : "3";
+      $3("view").style.order = "2";
+      $3("mandala").style.order = "1";
+      outlinePane.render(ol2);
+    }
     if (s15.bt === "terminal" || !hasNote) return;
     view2.setLinkSource(!!last2.linkSource);
     view2.setHideImage(!!last2.hideImage);
@@ -35101,7 +35251,7 @@ ${h3.join(`
         view2.setVtext(s15.vtext);
       }
     }
-    if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis, follow: !(md && s15.focus === "mandala") });
+    if (s15.cur) view2.setVim({ cur: s15.cur, mode: md && s15.focus === "mandala" ? "n" : s15.mode || "n", vis: s15.vis, follow: !(md && s15.focus === "mandala") && s15.focus !== "outline" });
   }
   var fitTimer = null;
   function scheduleFit() {
@@ -35219,7 +35369,8 @@ ${h3.join(`
     }
     const [l, c] = view2.lineColAt(pos);
     const m = (last2.mode || "n")[0];
-    const toNote = last2.mandala && last2.mandala.cells && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? `call win_gotoid(${last2.mandala.noteWin})|` : "";
+    const nwin = last2.mandala && (last2.mandala.cells || last2.mandala.view === "fz") && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? last2.mandala.noteWin : last2.focus === "outline" && last2.outline && last2.outline.srcWin > 0 ? last2.outline.srcWin : 0;
+    const toNote = nwin ? `call win_gotoid(${nwin})|` : "";
     const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
     if (m === "n") gui.write(mv + (link ? "\r" : ""));
     else if (m === "i") gui.write("" + mv);
@@ -35249,6 +35400,21 @@ ${h3.join(`
     $3("htmlview").hidden = true;
     $3("hv-frame").src = "about:blank";
     term.focus();
+  }
+  function onFzClick(n, enter) {
+    gui.write(`\x1B:call gnosis#fznav#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
+  }
+  function onFzScroll(n) {
+    gui.write(`\x1B:call gnosis#fznav#gui_scroll(${n})|redraw|echo ""\r`);
+  }
+  function onOutlineClick(n, jump) {
+    gui.write(`\x1B:call gnosis#outline#gui_click(${n},${jump ? 1 : 0})|redraw|echo ""\r`);
+  }
+  function onOutlineFold(n) {
+    gui.write(`\x1B:call gnosis#outline#gui_fold(${n})|redraw|echo ""\r`);
+  }
+  function onOutlineScroll(n) {
+    gui.write(`\x1B:call gnosis#outline#gui_scroll(${n})|redraw|echo ""\r`);
   }
   function onMandalaCell(r, c, enter) {
     gui.write(`\x1B:call gnosis#mview#gui_click(${r},${c},${enter ? 1 : 0})|redraw|echo ""\r`);
@@ -35280,7 +35446,8 @@ ${h3.join(`
     window.addEventListener("error", (e) => showError(e.message || e.error));
     window.addEventListener("unhandledrejection", (e) => showError(e.reason && e.reason.message || e.reason));
     view2 = createView({ parent: $3("view"), getImageURL: imageURL, getImageSize: imageSize, onImageSize, onClick });
-    mandala = createMandala($3("mandala"), { onCell: onMandalaCell });
+    mandala = createMandala($3("mandala"), { onCell: onMandalaCell, onFz: onFzClick, onFzScroll });
+    outlinePane = createOutlinePane($3("outline"), { onClick: onOutlineClick, onFold: onOutlineFold, onScroll: onOutlineScroll });
     scan = createScan($3("scan"), {
       api: { run: (cmd, args) => gui.scan(cmd, args), image: (n) => gui.scanImage(n), ls: (d) => gui.scanLs(d), recent: () => gui.scanRecent(), remember: (d) => gui.scanRemember(d), find: (d, q3) => gui.scanFind(d, q3) },
       // 終わったら Vim にファイルの更新を読ませ、キー入力を端末へ戻す

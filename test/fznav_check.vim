@@ -1,0 +1,215 @@
+" Folgezettel ビュー・アウトライン窓の回帰網（test/fznav_net.sh から呼ぶ）。結果は $FZ_WORK/result.txt。
+set nomore
+let s:work = $FZ_WORK
+let s:v = s:work . '/vault'
+let s:res = []
+let g:gnosis_root = s:v . '/'
+let g:gnosis_autosync = 0
+let g:gnosis_skip_interactive_mount = 1
+let g:gnosis_diary_auto = 0
+let g:gnosis_test_review_skip = 1
+let g:gnosis_mview_restore = 0
+
+function! s:ok(name, cond, ...) abort
+  call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:cond || !a:0 ? '' : ': ' . a:1))
+  call writefile(s:res, s:work . '/result.txt')
+endfunction
+function! s:keys(k) abort
+  call feedkeys(a:k, 'xt')
+endfunction
+function! s:lines() abort
+  return getbufline(gnosis#mview#state().buf, 1, '$')
+endfunction
+function! s:cursor_text() abort
+  return getbufline(gnosis#mview#state().buf, line('.'), line('.'))[0]
+endfunction
+function! s:mk(name, title, fz, attr, bg, body) abort
+  let l:ls = ['---', 'time: 2026-01-01 00:00:00', 'title: ' . a:title] + (a:attr ? ['attribute: group'] : []) + (empty(a:fz) ? [] : ['folgezettel: "' . a:fz . '"']) + ['---', '', '# ' . a:title, '']
+  if !empty(a:bg)
+    let l:ls += ['BranchGroup:'] + map(copy(a:bg), '"[" . v:val[0] . "](" . v:val[1] . ")"') + ['']
+  endif
+  call writefile(l:ls + a:body, s:v . '/' . a:name)
+endfunction
+
+call mkdir(s:v, 'p')
+call s:mk('index.md', 'Index', '', 0, [], ['[認識](n1.md)'])
+call s:mk('n1.md', '認識', '1', 0, [['認識G', 'g1.md']], [])
+call s:mk('g1.md', '認識G', '1', 1, [], ['[知覚](n1a.md)'])
+call s:mk('n1a.md', '知覚', '1a', 0, [['知覚G', 'g1a.md']], [])
+call s:mk('g1a.md', '知覚G', '1a', 1, [], [])
+call s:mk('n1a1a.md', '言語', '1a1a', 0, [], ['## 意味', '本文', '### 細部', '## 用法'])
+call s:mk('n1a1b.md', '意味', '1a1b', 0, [], [])
+call s:mk('n1a2.md', '記憶', '1a2', 0, [], [])
+call s:mk('n1b.md', '意識', '1b', 0, [], [])
+call s:mk('n2.md', '二番', '2', 0, [], [])
+call s:mk('deep.md', '深い', '1a2b3c4d5e6f', 0, [], [])
+call s:mk('free.md', '番号なし', '', 0, [], [])
+" 大量: 3000 件（画面に収まらない）
+for s:i in range(1, 3000)
+  call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: B' . s:i, 'folgezettel: "5a' . s:i . '"', '---', '', '# B' . s:i], s:v . '/bulk' . s:i . '.md')
+endfor
+call s:mk('n5.md', '五', '5', 0, [], [])
+
+execute 'edit ' . s:v . '/n1a1a.md'
+call s:keys(' ')
+let s:st = gnosis#mview#state()
+call s:ok('Space で曼荼羅（ナビゲーション）が開く', &filetype ==# 'gnosis-mandala' && gnosis#mview#view() ==# 'mandala')
+call s:keys("\<C-Right>")
+call s:ok('Ctrl-→ で Folgezettel ビューに切り替わる', gnosis#mview#view() ==# 'fz' && s:lines()[0] ==# 'FOLGEZETTEL', string(s:lines()[0 : 2]))
+let s:note = fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t')
+call s:ok('切り替えても右のノートはそのまま', s:note ==# 'n1a1a.md', s:note)
+let s:L = s:lines()
+call s:ok('番号と題が固定幅の列に揃う（題は全行で同じ桁から）', len(filter(copy(s:L[2 : 12]), 'strdisplaywidth(matchstr(v:val, "^.\\{2}\\S\\+\\s*")) > 0')) > 0
+      \ && len(uniq(sort(map(filter(copy(s:L[2 : 12]), 'v:val =~# "^[▸ ] \\S"'), 'strdisplaywidth(matchstr(v:val, "^.\\{2}\\S*\\s*"))')))) >= 1, string(s:L[0 : 14]))
+let s:col = {}
+for s:l in s:L[2 : 14]
+  let s:m = matchlist(s:l, '^\(. \)\(\S\+\)\( \+\)')
+  if !empty(s:m) | let s:col[strdisplaywidth(s:m[1] . s:m[2] . s:m[3])] = 1 | endif
+endfor
+call s:ok('題の開始桁は 1 種類（2+8+2=12）', keys(s:col) ==# ['12'], string(s:col) . string(s:L[0 : 12]))
+call s:ok('Group の行が上・Note の行が下（同じ番号）', s:L[2] =~# '^  1 \+認識G' && s:L[3] =~# '^  1 \+認識$' && s:L[4] =~# '^  1a \+知覚G' && s:L[5] =~# '^  1a \+知覚$', string(s:L[2 : 6]))
+call s:ok('番号の自然順（1a1a が 1a2 の前・1b の前・10 以外の 2 の前）', index(s:L, '  1a2       記憶') > index(s:L, '  1a1b      意味') && index(s:L, '  2         二番') > index(s:L, '  1b        意識'), string(s:L[0 : 14]))
+call s:ok('現在のノートに ▸（1a1a）', len(filter(copy(s:L), 'v:val =~# "^▸ 1a1a  "')) == 1, string(s:L[0 : 10]))
+let s:deep = filter(copy(s:L), 'v:val =~# "深い"')
+call s:ok('長い番号は先頭を ~ で省く（番号欄 8 桁・題の桁は変わらない）', len(s:deep) == 1 && s:deep[0] =~# '^  \~c4d5e6f  深い$', string(s:deep))
+call s:ok('番号なしのノートは行にならない', len(filter(copy(s:L), 'v:val =~# "番号なし"')) == 0)
+" 現在位置が縦の中央に（フォーカスが他の窓のとき）
+call win_gotoid(gnosis#mview#note_win())
+call gnosis#mview#rerender()
+let s:wi = getwininfo(s:st.win)[0]
+let s:curl = 0
+for s:i in range(len(s:L))
+  if s:L[s:i] =~# '^▸ ' | let s:curl = s:i + 1 | endif
+endfor
+call s:ok('現在位置の行は窓に見える', s:curl >= s:wi.topline && s:curl <= s:wi.botline, string([s:curl, s:wi.topline, s:wi.botline]))
+" 移動
+call win_gotoid(s:st.win)
+call s:keys('gg')
+call s:keys('j')
+call s:ok('j で先頭の項目から次へ（見出しの行は飛ばす）', line('.') >= 3, string(line('.')))
+call s:keys('G')
+call s:ok('G で最後の項目（大量でも）', line('.') == line('$') && s:cursor_text() =~# '5a3000', s:cursor_text())
+let s:before = line('.')
+call s:keys('k')
+call s:ok('k で 1 つ戻る', line('.') == s:before - 1)
+" 先頭から j を 200 回: 画面外まで動ける
+call s:keys('gg')
+call s:keys('200j')
+redraw
+call s:ok('200j: 画面に収まらない分まで移動し、窓が追従する', line('.') > 100 && line('.') >= getwininfo(s:st.win)[0].topline && line('.') <= getwininfo(s:st.win)[0].botline, string([line('.'), getwininfo(s:st.win)[0]]))
+call s:keys('gg')
+call s:keys('3j')
+" 1a の Note 行（Group 行, Note 行の順）で h / l
+call cursor(5, 1)
+call s:keys('j')
+call s:ok('Note 1a に居る', s:cursor_text() =~# '1a \+知覚$', s:cursor_text())
+call s:keys('l')
+call s:ok('l: 下位の番号へ（欠番 1a1 を飛ばして 1a1a）', s:cursor_text() =~# '1a1a \+言語', s:cursor_text())
+call s:keys('h')
+call s:ok('h: 上位の番号へ（Note からは Note）', s:cursor_text() =~# '1a \+知覚$', s:cursor_text())
+call s:keys('h')
+call s:ok('h: さらに上位 1 の Note', s:cursor_text() =~# '1 \+認識$', s:cursor_text())
+call s:keys('h')
+call s:ok('最上位でさらに h しても留まる（新規作成しない）', s:cursor_text() =~# '1 \+認識$' && !filereadable(s:v . '/new.md'))
+call s:keys('2j')
+call s:keys('l')
+" 1b は 1a の子孫ではない
+call cursor(index(s:lines(), '  1b        意識') + 1, 1)
+call s:keys('l')
+call s:ok('子孫の無い 1b で l は動かない', s:cursor_text() =~# '1b \+意識', s:cursor_text())
+call s:keys('h')
+call s:ok('1b の上位は 1（1a ではない）', s:cursor_text() =~# '^  1 \+認識$', s:cursor_text())
+" Enter で開く
+call cursor(index(s:lines(), '  1a2       記憶') + 1, 1)
+call s:keys("\<CR>")
+call s:ok('Enter でそのノートが右に開く', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'n1a2.md')
+call s:ok('Enter のあと現在位置の ▸ が移る', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a2 "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
+" Group の行を開く
+call cursor(index(s:lines(), '  1a        知覚G') + 1, 1)
+call s:keys("\<CR>")
+call s:ok('Group の行 Enter でトピック索引（グループ）が開く', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'g1a.md')
+" 本文側で別のノートを開いたら追従
+call win_gotoid(gnosis#mview#note_win())
+execute 'edit ' . s:v . '/n1b.md'
+sleep 100m
+doautocmd BufEnter
+call timer_start(0, {-> 0})
+sleep 50m
+call s:ok('本文側で別のノートを開くと、ビューが追従する', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1b "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
+call win_gotoid(s:st.win)
+" 折りたたみ
+call cursor(index(s:lines(), '  1a        知覚') + 1, 1)
+let s:n_before = len(s:lines())
+call s:keys('zc')
+call s:ok('zc で 1a の下位が隠れる', len(s:lines()) < s:n_before && len(filter(copy(s:lines()), 'v:val =~# "1a1a "')) == 0 && join(s:lines(), "\n") =~# '知覚 \+ +[0-9]', string(s:lines()[0 : 10]))
+call s:keys('u')
+call s:ok('u: 上位表示に切り替わる', s:lines()[0] =~# 'FOLGEZETTEL / 上位表示', s:lines()[0])
+call s:keys('u')
+call s:ok('通常に戻っても折りたたみは保持される', len(s:lines()) < s:n_before && join(s:lines(), "\n") =~# '知覚 \+ +[0-9]')
+call s:keys('zR')
+call s:ok('zR で全部開く', len(s:lines()) == s:n_before)
+call s:keys('zM')
+call s:ok('zM で全部閉じる', len(s:lines()) < s:n_before - 5)
+call s:keys('zR')
+" 現在のノートが折りたたまれた枝の中にあるとき
+call win_gotoid(gnosis#mview#note_win())
+execute 'edit ' . s:v . '/n1a1a.md'
+sleep 50m
+call win_gotoid(s:st.win)
+call s:ok('現在のノートが開いている枝は自動で開く', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a1a "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
+call cursor(index(s:lines(), '  1a        知覚') + 1, 1)
+call s:keys('zc')
+call s:ok('現在位置が隠れた枝の中なら、閉じた番号の行に ▸ が残る', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a "')) >= 1, string(s:lines()[0 : 10]))
+call s:keys('zR')
+" 上位表示
+call s:keys('u')
+let s:U = s:lines()
+call s:ok('上位表示: 祖先の Group（1・1a）→ 現在のノート', s:U[2] =~# '^  1 \+認識G' && s:U[3] =~# '^  1a \+知覚G' && s:U[4] =~# '^▸ 1a1a \+言語', string(s:U[0 : 9]))
+call s:ok('上位表示: 欠番 1a1 や Group の無い番号は出さない', len(filter(copy(s:U[2 : 4]), 'v:val =~# "^  1a1 "')) == 0)
+call s:ok('上位表示: 関連グループの見出し（無ければ空の候補を作らない）', join(s:U, "\n") =~# '関連グループ', string(s:U))
+call s:keys('h')
+call s:ok('上位表示で h: 祖先を 1 つ上へ', s:cursor_text() =~# '1a \+知覚G', s:cursor_text())
+call s:keys('u')
+" 曼荼羅へ戻る
+call s:keys("\<C-Left>")
+call s:ok('Ctrl-← でも切り替わる（曼荼羅へ）', gnosis#mview#view() ==# 'mandala' && join(s:lines(), "\n") =~# '┃')
+call s:ok('曼荼羅に戻っても右のノートは同じ', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'n1a1a.md')
+call s:keys("\<C-Left>")
+call s:ok('Ctrl-← で Folgezettel ビューへ（2 ビューは左右どちらでも）', gnosis#mview#view() ==# 'fz')
+call s:keys('gv')
+call s:ok('gv（互換キー）でも切り替わる', gnosis#mview#view() ==# 'mandala')
+call s:keys('gv')
+" アウトライン窓
+call win_gotoid(gnosis#mview#note_win())
+call s:keys('\o')
+call s:ok('\o でアウトライン窓が開く', gnosis#outline#is_open() && &filetype ==# 'gnosis-outline', &filetype)
+let s:O = getbufline(bufnr('%'), 1, '$')
+call s:ok('見出しが階層で出る', s:O[0] ==# 'OUTLINE' && s:O[2] ==# '言語' && s:O[3] ==# '  意味' && s:O[4] ==# '    細部' && s:O[5] ==# '  用法', string(s:O))
+call s:ok('3 つの窓（Folgezettel・本文・アウトライン）が同時に出る', len(filter(map(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype")'), 'v:val =~# "gnosis-"')) == 2 && winnr('$') == 3)
+" 見出しへジャンプ
+call cursor(4, 1)
+call s:keys("\<CR>")
+call s:ok('Enter で本文の見出しへジャンプ', fnamemodify(bufname('%'), ':t') ==# 'n1a1a.md' && getline('.') =~# '^## 意味', getline('.') . ' @' . bufname('%'))
+" 本文のカーソルの見出しを強調
+call cursor(search('細部', 'nw'), 1)
+doautocmd CursorMoved
+sleep 150m
+call timer_start(0, {-> 0})
+sleep 50m
+call s:ok('本文のカーソルがある見出しを強調（アクティブ）', gnosis#outline#state().active == 2, string(gnosis#outline#state().active))
+" 編集で更新
+call append('$', ['## 追加', '### 孫'])
+doautocmd TextChanged
+sleep 200m
+call s:ok('本文の編集に応じて自動更新', index(getbufline(gnosis#outline#state().buf, 1, '$'), '  追加') >= 0 && index(getbufline(gnosis#outline#state().buf, 1, '$'), '    孫') >= 0, string(getbufline(gnosis#outline#state().buf, 1, '$')))
+silent! undo
+" 折りたたみ
+call win_gotoid(gnosis#outline#win())
+call cursor(4, 1)
+call s:keys('zc')
+call s:ok('見出しの折りたたみ（意味の下の 細部 が隠れる）', index(getbufline(bufnr('%'), 1, '$'), '    細部') < 0 && join(getbufline(bufnr('%'), 1, '$'), "\n") =~# '意味  +1', string(getbufline(bufnr('%'), 1, '$')))
+call s:keys('zR')
+call s:ok('zR で展開', index(getbufline(bufnr('%'), 1, '$'), '    細部') >= 0)
+call s:keys('q')
+call s:ok('q でアウトライン窓が閉じる', !gnosis#outline#is_open() && winnr('$') == 3 - 1 + 0 || !gnosis#outline#is_open())
+call s:keys('Q')

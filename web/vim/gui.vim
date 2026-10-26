@@ -151,9 +151,18 @@ function! s:snapshot(force) abort
   if gnosis#mview#is_open() && empty(l:ms)
     return
   endif
+  " アウトライン窓（独立した窓）。曼荼羅の有無にかかわらず出せる
+  let l:ol = {}
+  try
+    let l:ol = gnosis#outline#gui_state()
+  catch
+  endtry
+  let l:on_outline = !empty(l:ol) && win_getid() == l:ol.win
   let l:wid = win_getid()
   if !empty(l:ms)
     let l:wid = l:ms.noteWin > 0 ? l:ms.noteWin : -1
+  elseif l:on_outline
+    let l:wid = l:ol.srcWin > 0 ? l:ol.srcWin : -1
   endif
   let l:b = l:wid > 0 ? winbufnr(l:wid) : -1
   let l:cur = l:wid > 0 ? getcurpos(l:wid)[1 : 2] : [1, 1]
@@ -161,7 +170,8 @@ function! s:snapshot(force) abort
         \ 'file': l:b > 0 ? fnamemodify(bufname(l:b), ':p') : '',
         \ 'buf': l:b,
         \ 'mode': l:m,
-        \ 'focus': empty(l:ms) ? 'note' : (win_getid() == l:ms.win ? 'mandala' : 'note'),
+        \ 'focus': l:on_outline ? 'outline' : (empty(l:ms) ? 'note' : (win_getid() == l:ms.win ? 'mandala' : 'note')),
+        \ 'outline': l:ol,
         \ 'copyStack': get(g:, 'gnosis_stack_copy_mode', 0),
         \ 'linkSource': l:b > 0 ? getbufvar(l:b, 'gnosis_link_source_on', 0) : 0,
         \ 'cur': l:cur,

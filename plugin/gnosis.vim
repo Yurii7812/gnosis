@@ -891,6 +891,9 @@ nnoremap <nowait> <silent> \P <Cmd>call gnosis#add_current_as_parent_here()<CR>
 xnoremap <nowait> <silent> \P :<C-u>call gnosis#add_current_as_parent_range(line("'<"), line("'>"))<CR>
 " \o を2打で確定させるため、従来の \oe は \O へ移動。
 nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
+" \o … アウトライン窓（今のノートの見出し。曼荼羅・Folgezettel ビューと同時に出せる）の表示 ⇔ 非表示
+nnoremap <silent> \o        <Cmd>call gnosis#outline#toggle()<CR>
+command! GnosisOutline call gnosis#outline#toggle()
 " zo … カーソル下の .md リンク先ノートの見出し（アウトライン）を選び、
 " リンク先に #スラッグ（GitHub 互換）を付ける。先頭の「（見出しなし）」で解除。
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>

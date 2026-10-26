@@ -148,6 +148,7 @@ function! s:after_async() abort
   endif
   let l:back = win_getid()
   noautocmd call win_gotoid(s:mwin())
+  call gnosis#fznav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -1607,6 +1608,11 @@ function! s:legend_build(W) abort
 endfunction
 
 function! s:render() abort
+  " Folgezettel ビュー（Ctrl-←/→ で曼荼羅と切り替える）のときは、同じ窓にそちらを描く
+  if get(s:S, 'view', 'mandala') ==# 'fz'
+    call gnosis#fznav#render()
+    return
+  endif
   " 色の定義が消えていたら戻す（default なので、利用者の指定は上書きしない）
   call s:hl()
   let s:S.deep_memo = {}
@@ -1774,6 +1780,10 @@ function! s:addpos(group, pos, prio) abort
 endfunction
 
 function! s:mark() abort
+  if get(s:S, 'view', 'mandala') ==# 'fz'
+    call gnosis#fznav#mark()
+    return
+  endif
   " GUI の盤面は DOM で描く。端末の81マス分の装飾は不要。
   if !empty($GNOSIS_GUI_PORT)
     call s:info()
@@ -2870,6 +2880,11 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> q <Cmd>call <SID>quit()<CR>
   nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
+  " 曼荼羅 ⇔ Folgezettel ビュー（Ctrl-←/→ のどちらでも。端末が Ctrl-矢印を送らないときは gv）
+  nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view()<CR>
+  nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#mview#switch_view()<CR>
+  nnoremap <buffer><nowait><silent> gv <Cmd>call gnosis#mview#switch_view()<CR>
+  nnoremap <buffer><nowait><silent> \o <Cmd>call gnosis#outline#toggle()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
     autocmd VimResized,WinResized * call gnosis#mview#rerender()
@@ -2991,6 +3006,7 @@ endfunction
 " できたばかりのノート 1 つをキャッシュに入れ、曼荼羅のデータを読み直す（描き直しはしない）
 function! s:ingest(rel) abort
   call s:pyc(['refresh', s:S.root, '--only', a:rel])
+  call gnosis#fznav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -3015,6 +3031,12 @@ function! gnosis#mview#focus(on) abort
     return
   endif
   let s:S.focus = a:on ? 1 : 0
+  if get(s:S, 'view', 'mandala') ==# 'fz'
+    if &filetype ==# 'gnosis-mandala'
+      call gnosis#fznav#focus(a:on)
+    endif
+    return
+  endif
   if &filetype ==# 'gnosis-mandala' && has_key(s:S, 'cells')
     call s:mark()
   endif
@@ -3102,6 +3124,7 @@ function! s:reload_dirty() abort
     return
   endif
   call s:pyc(['refresh', s:S.root, '--only'] + l:rels)
+  call gnosis#fznav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -3119,6 +3142,7 @@ function! s:reload(...) abort
   let s:S.relc = {}
   let s:S.tmc = {}
   if s:load(a:0 ? a:1 : 0)
+    call gnosis#fznav#invalidate()
     if !s:has(s:S.center)
       let s:S.center = 'index.md'
     endif
@@ -3479,6 +3503,90 @@ function! gnosis#mview#close() abort
   redraw!
 endfunction
 
+" ---- Folgezettel ビュー（autoload/gnosis/fznav.vim）との接点 ------------------------------------------------
+
+" 曼荼羅 ⇔ Folgezettel ビュー。同じ窓・同じバッファを使い、右のノートの窓（本文・スクロール位置）には触らない。
+" a:1 が 'mandala' / 'fz' ならそちらへ、無ければ切り替える
+function! gnosis#mview#switch_view(...) abort
+  let l:mw = s:mwin()
+  if l:mw < 0
+    return
+  endif
+  let l:from = get(s:S, 'view', 'mandala')
+  let l:to = a:0 && !empty(a:1) ? a:1 : (l:from ==# 'fz' ? 'mandala' : 'fz')
+  if l:to ==# l:from
+    return
+  endif
+  " 索引を選ぶ・リンクの置き場所を選ぶなどの最中は、曼荼羅のまま
+  if !empty(get(s:S, 'pick', '')) || !empty(get(s:S, 'lk', {}))
+    echo 'Gnosis: ' . gnosis#i18n#tr('選んでいる最中は、ビューを切り替えられません')
+    return
+  endif
+  let s:S.view = l:to
+  call win_execute(l:mw, 'mapclear <buffer>')
+  if l:to ==# 'fz'
+    call win_execute(l:mw, 'call gnosis#fznav#setup()')
+  else
+    call win_execute(l:mw, 'call gnosis#fznav#teardown() | call gnosis#mview#setup_maps()')
+  endif
+  call win_execute(l:mw, 'call gnosis#mview#render_here()')
+  call win_execute(l:mw, 'call gnosis#mview#cursor(0)')
+  redraw!
+  if exists('*GnosisGuiChanged') | call GnosisGuiChanged() | endif
+endfunction
+
+function! gnosis#mview#view() abort
+  return exists('s:S') && type(s:S) == v:t_dict ? get(s:S, 'view', 'mandala') : 'mandala'
+endfunction
+
+function! gnosis#mview#setup_maps() abort
+  call s:setup_buffer()
+endfunction
+
+function! gnosis#mview#sync_leader() abort
+  call s:sync_leader()
+endfunction
+
+function! gnosis#mview#note_win() abort
+  return exists('s:S') ? s:note_win() : -1
+endfunction
+
+" Folgezettel ビューで項目を開く: ノートを右の窓に出し、曼荼羅の中心（=現在のノート）をそれに合わせる
+function! gnosis#mview#open_rel(rel) abort
+  if empty(a:rel)
+    return
+  endif
+  if !s:has(a:rel) && filereadable(s:S.root . '/' . a:rel)
+    call s:ingest(a:rel)
+  endif
+  if a:rel !=# s:S.center
+    call add(s:S.hist, [s:S.center, s:S.page])
+    let s:S.fwd = []
+  endif
+  let s:S.query = ''
+  let s:S.rquery = ''
+  call s:set_center(a:rel, 0)
+endfunction
+
+" 窓の操作（Folgezettel ビューのキーから）: resize- resize+ equalize full preview reload
+function! gnosis#mview#win_op(name) abort
+  if a:name ==# 'resize-'
+    call s:resize(-1)
+  elseif a:name ==# 'resize+'
+    call s:resize(1)
+  elseif a:name ==# 'equalize'
+    call s:equalize()
+  elseif a:name ==# 'full'
+    call s:full()
+  elseif a:name ==# 'preview'
+    call s:toggle_preview()
+  elseif a:name ==# 'reload'
+    call s:reload(1)
+  elseif a:name ==# 'quit'
+    call gnosis#mview#close()
+  endif
+endfunction
+
 " ---- アプリ（\c）の曼荼羅: 盤面の状態を渡す・クリックを受ける ----------------------------------------------
 " アプリは曼荼羅を自分で描く（Vim の窓のバッファは罫線の文字なので、マークダウンとしては描けない）。
 " 操作は Vim の曼荼羅のキーがそのまま効く（アプリは見た目だけ）。マウスのクリックは gui_click で受ける。
@@ -3496,6 +3604,9 @@ function! s:pages_memo() abort
 endfunction
 
 function! gnosis#mview#gui_state() abort
+  if exists('s:S') && get(s:S, 'view', 'mandala') ==# 'fz' && get(s:S, 'win', -1) > 0 && !empty(getwininfo(get(s:S, 'win', -1)))
+    return gnosis#fznav#gui_state()
+  endif
   if !exists('s:S') || !has_key(s:S, 'cells') || get(s:S, 'win', -1) < 0 || empty(getwininfo(get(s:S, 'win', -1)))
     return {}
   endif
@@ -3530,6 +3641,9 @@ endfunction
 
 " アプリでマスをクリック: そのマスへカーソルを動かし、a:enter が 1 なら中心にする（Enter と同じ）
 function! gnosis#mview#gui_click(r, c, enter) abort
+  if exists('s:S') && get(s:S, 'view', 'mandala') ==# 'fz'
+    return
+  endif
   if !exists('s:S') || !has_key(s:S, 'cells') || a:r < 0 || a:r >= s:S.size || a:c < 0 || a:c >= s:S.size
     return
   endif

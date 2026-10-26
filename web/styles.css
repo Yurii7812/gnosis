@@ -381,3 +381,31 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .recordpick .rp-empty { padding: 10px; color: var(--fg-dim); }
 .recordpick .rp-msg { color: #c0392b; min-height: 1.2em; }
 .recordpick .rp-keys { color: var(--fg-dim); font-size: 12px; }
+
+/* ---- Folgezettel ビュー（src/fznav.js）: 番号と題を縦に並べるだけ。固定幅フォントで番号欄を揃える ---- */
+.mandala.fz-mode > :not(.fz) { display: none; }
+.fz { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; font-family: "JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace; font-size: var(--content-font-size, 16px); }
+.fz[hidden] { display: none; }
+.fz-head { flex: 0 0 auto; padding: 6px 12px; font-size: 13px; color: var(--fg-dim); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.fz-list { flex: 1 1 0; min-height: 0; overflow: hidden; padding: 6px 0; }
+.fz-row { display: flex; white-space: pre; line-height: 1.6; padding: 0 12px; cursor: pointer; }
+.fz-mark { flex: 0 0 2ch; width: 2ch; color: var(--fg-dim); }
+.fz-num { flex: 0 0 calc(var(--numw, 8) * 1ch); width: calc(var(--numw, 8) * 1ch); margin-right: 2ch; overflow: hidden; }
+.fz-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fz-row.sel { background: var(--bg-3); }
+.fz.unfocused .fz-row.sel { background: transparent; }
+.fz-sep { margin: 6px 12px; border-top: 1px solid var(--line); }
+.fz-gap { height: .8em; }
+.fz-note-line { padding: 0 12px; line-height: 1.6; color: var(--fg-dim); white-space: pre; }
+.fz-detail { flex: 0 0 auto; padding: 4px 12px 8px; font-size: 12px; color: var(--fg-dim); min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- アウトライン窓（src/outlinepane.js）---- */
+#outline { flex: 0 0 22%; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bg); overflow: hidden; }
+#outline[hidden] { display: none; }
+.olp-head { flex: 0 0 auto; padding: 6px 12px; font-size: 13px; color: var(--fg-dim); border-bottom: 1px solid var(--line); }
+.olp-list { flex: 1 1 0; min-height: 0; overflow: hidden; padding: 6px 0; }
+.olp-row { line-height: 1.6; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; font-size: var(--content-font-size, 16px); }
+.olp-row.active { font-weight: 700; }
+.olp-row.sel { background: var(--bg-3); }
+.olp.unfocused .olp-row.sel { background: transparent; }
+.olp-note { padding: 0 12px; color: var(--fg-dim); font-size: 13px; }
