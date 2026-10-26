@@ -3752,7 +3752,8 @@ function! s:preset_menu() abort
       let l:sel = (l:sel + 1) % l:n
     elseif l:k ==# 'k' || l:k ==# "\<Up>"
       let l:sel = (l:sel + l:n - 1) % l:n
-    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# 'd'
+    elseif l:k ==# 'a' || l:k ==# 'i' || (l:k ==# 'd' && empty(l:pre))
+      " d は、プリセットの行を選んでいるときは「消す」（下の分岐）。それ以外のときは親子モード
       call s:setmode(get({'a': 'all', 'i': 'groups', 'd': 'family'}, l:k))
     elseif !empty(l:hot)
       call l:rows[l:hot[0]].act()
@@ -3777,6 +3778,7 @@ function! s:preset_menu() abort
       endif
     elseif l:k ==# 'd' && !empty(l:pre)
       call gnosis#mview#preset_delete(l:pre)
+      let l:msg = gnosis#i18n#tr('「%s」を消しました', l:pre)
     elseif l:k ==# 's'
       " 名前の既定は、すでにある番号（名前が数字のもの）の次の番号。そのまま Enter で決まる
       let l:name = s:ask(gnosis#i18n#tr('プリセットの名前: '), string(gnosis#mview#preset_next_number()))

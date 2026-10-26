@@ -77,6 +77,16 @@ call gnosis#mview#panel_act(5)
 call s:ok('数字キーの動きの行の操作で切り替わる', s:st().digit !=# 'jump', s:st().digit)
 call gnosis#mview#panel_act(5)
 
+" Z の画面: プリセットの行を選んで d で消せる（d は親子モードの切り替えにも使うので、プリセットの行のときだけ消す）
+for s:pn in gnosis#mview#preset_names()
+  call gnosis#mview#preset_delete(s:pn)
+endfor
+call gnosis#mview#preset_save('消す試験')
+let s:mode_before = s:st().mode
+call feedkeys('Zkdq', 'x')
+call s:ok('Z の画面でプリセットの行を選んで d: プリセットが消える', index(gnosis#mview#preset_names(), '消す試験') < 0, string(gnosis#mview#preset_names()))
+call s:ok('そのとき親子モードには切り替わらない', s:st().mode ==# s:mode_before, s:st().mode)
+
 " プリセットに親子モードも入る
 call s:keys('d')
 call gnosis#mview#preset_save('親子用')

@@ -863,7 +863,8 @@
     "時間順（作成日時）": "Time order (creation time)",
     "古い順": "oldest first",
     "新しい順": "newest first",
-    "時間順（作成日時）: 古い順 → 新しい順 → オフ": "Time order (creation time): oldest first → newest first → off"
+    "時間順（作成日時）: 古い順 → 新しい順 → オフ": "Time order (creation time): oldest first → newest first → off",
+    "「%s」を消しました": "Deleted \"%s\""
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",
