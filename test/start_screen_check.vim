@@ -36,7 +36,7 @@ function! s:vaults(t) abort
 endfunction
 function! s:settings(t) abort
   let l:text = join(getline(1, '$'), "\n")
-  call s:ok('s: 設定画面（vault の言語で表示）', bufname('%') =~# 'Settings' && l:text =~# 'Language' && l:text =~# 'Font size' && l:text =~# 'Maximize', l:text)
+  call s:ok('s: 設定画面（英語で表示）', bufname('%') =~# 'Settings' && l:text =~# 'Language' && l:text =~# 'Font size' && l:text =~# 'Maximize', l:text)
   call feedkeys('q', 't')
   call timer_start(400, function('s:back'))
 endfunction
@@ -50,7 +50,7 @@ function! s:second(t) abort
   let l:paths = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":p")')
   call s:ok('Enter: vault の Index が開く', !empty(filter(copy(l:paths), 'fnamemodify(v:val, ":t") ==# "index.md" && stridx(v:val, $START_VAULT) == 0')), string(l:paths))
   call s:ok('Enter: vault の設定のテーマ（ダーク）', &background ==# 'dark' && tolower(s:hl('bg')) ==# '#1e1e1e', &background . ' ' . s:hl('bg'))
-  call s:ok('Enter: vault の言語（英語）', gnosis#i18n#lang() ==# 'en', execute('messages'))
+  call s:ok('Enter: 言語は英語のまま', gnosis#i18n#lang() ==# 'en', execute('messages'))
   call writefile(s:res, s:w . '/result.txt')
   qa!
 endfunction

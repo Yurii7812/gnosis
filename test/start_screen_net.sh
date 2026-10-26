@@ -4,6 +4,8 @@ set -e
 TMPDIR=${TMPDIR:-$HOME/gnosis-work/test}
 mkdir -p "$TMPDIR"
 export TMPDIR
+# 言語は Gnosis ホーム全体の設定（初期は英語）。この試験は英語の画面を確かめる
+export GNOSIS_LANG=en
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 if ! command -v script >/dev/null 2>&1 || ! command -v mkfifo >/dev/null 2>&1; then
   echo "skip: script / mkfifo が無いため起動画面の確認を省略"; exit 0
