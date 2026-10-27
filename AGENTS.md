@@ -8,6 +8,8 @@ Claude Code 向けの入口は `CLAUDE.md`。ここは Codex など `AGENTS.md` 
 - 調査・修正・試験は、まずローカルでまとめて終える。GitHub への書き込み（コミット・ブランチ・PR・push）を途中で細かく繰り返さない。
 - 作業は worktree（`~/src/gnosis-*`）で行う。`~/gnosis` の作業ツリーに他のエージェントの書きかけ（未コミット）があれば、消さずに、内容を自分のブランチへ取り込んでから進める。
 - マージは最後。**試験が通ってから** `main` へ ff-only でマージして push する。先にマージしない。依頼にマージまで含まれていれば、再確認せず進める。
+- **時間をかけない流れ（Codex もこれに従う）**: ① 作業中は関係する試験だけ（`test/related.sh`）を流す。② 区切りまで、直す・調べるをまとめて進める（そのたびに全試験・マージをしない）。③ 最後に `test/run_parallel.sh` を **1 回だけ**回す（直列の `sh test/run.sh` を何度も回さない。API 一覧など `run.sh` でしか見ない所を直したときだけ最後に 1 回）。④ 通ったら、まとめて `main` へ ff-only でマージして push。途中でマージしない・細かく push しない。
+- GitHub の CI（`.github/workflows/gnosis-regression.yml`）は **pull request のときだけ**動く。マージを依頼されたら、ブランチを push して PR を作り、CI が通ってから ff-only でマージする。
 - 破壊的操作（実 vault の書換・削除・force push・外部通信・課金）は止まって確認。それ以外は確認なしで進める。
 
 ## 試験
