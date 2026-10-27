@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# agents — 複数の AI（Codex・Claude Code など）が、同じ Gnosis リポジトリで並行して作業するための補助。
+# 取り決めの全体は docs/AGENT_PROTOCOL.md。
+#
+#   tools/agents start 名前 [--agent codex|claude] [--desc 説明] [--area パス…]   専用の worktree とブランチを作り、担当を宣言する
+#   tools/agents list                                    今動いている作業（誰が・どこで・何を・遅れ具合）
+#   tools/agents area 名前 パス…                         担当する範囲を足す（他の作業と重なれば警告）
+#   tools/agents env 名前                                試験を隔離して流すための環境変数（eval して使う）
+#   tools/agents sync 名前                               origin/main を取り込む（rebase）。衝突したら止まる
+#   tools/agents ship 名前 [--test] [--ci]               main へまとめて反映する（順番待ち→rebase→ff-only で push）
+#   tools/agents done 名前 [--force]                     作業を片づける（反映済み、または --force で破棄）
+#
+# 登録簿は ~/gnosis-work/agents/（リポジトリの外。同じ PC のすべての AI が見る）。
+# 環境変数: GNOSIS_REPO（本体の checkout）・GNOSIS_WORKTREES（worktree を置く所）・GNOSIS_AGENT_REG（登録簿）
+set -euo pipefail
+
+REPO=${GNOSIS_REPO:-$HOME/gnosis}
+WT_ROOT=${GNOSIS_WORKTREES:-$HOME/src}
+REG=${GNOSIS_AGENT_REG:-$HOME/gnosis-work/agents}
+BASE_REMOTE=${GNOSIS_REMOTE:-origin}
+BASE_BRANCH=${GNOSIS_BASE_BRANCH:-main}
+mkdir -p "$REG"
+
+die() { echo "agents: $*" >&2; exit 1; }
+claim_file() { echo "$REG/$1.claim"; }
+get() { sed -n "s/^$2=//p" "$(claim_file "$1")" | head -1; }
+need_name() { [ -n "${1:-}" ] || die "名前を指定してください"; case "$1" in *[!a-z0-9-]*|-*) die "名前は小文字の英数字とハイフンだけ（例: fz-view）";; esac; }
+need_claim() { need_name "${1:-}"; [ -f "$(claim_file "$1")" ] || die "「$1」という作業はありません（tools/agents list）"; }
+wt_of() { get "$1" worktree; }
+git_in() { local d=$1; shift; git -C "$d" "$@"; }
+
+base_ref() {
+  if git -C "$REPO" rev-parse --verify -q "$BASE_REMOTE/$BASE_BRANCH" >/dev/null; then echo "$BASE_REMOTE/$BASE_BRANCH"; else echo "$BASE_BRANCH"; fi
+}
+fetch_base() { git -C "$REPO" fetch -q "$BASE_REMOTE" "$BASE_BRANCH" 2>/dev/null || echo "agents: 注意: $BASE_REMOTE から取得できませんでした（手元の履歴で続けます）" >&2; }
+
+# 担当範囲の重なり。a が b の前方一致（ディレクトリの内側）か同じなら重なり
+overlap_of() {
+  local me=$1 a b other
+  for other in "$REG"/*.claim; do
+    [ -e "$other" ] || continue
+    local oname; oname=$(basename "$other" .claim)
+    [ "$oname" = "$me" ] && continue
+    for a in $(get "$me" areas); do
+      for b in $(get "$oname" areas); do
+        a=${a%/}; b=${b%/}
+        case "$a/" in "$b"/*) echo "$oname:$b";; esac
+        case "$b/" in "$a"/*) echo "$oname:$b";; esac
+      done
+    done
+  done | sort -u
+}
+warn_overlap() {
+  local o; o=$(overlap_of "$1")
+  [ -z "$o" ] || { echo "agents: 警告: 担当範囲が他の作業と重なっています。先に相談するか、範囲を分けてください:" >&2; echo "$o" | sed 's/^/  /' >&2; }
+}
+
+cmd_start() {
+  local name=${1:-}; shift || true; need_name "$name"
+  local agent=${AGENT_NAME:-unknown} desc="" areas=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --agent) agent=$2; shift 2;;
+      --desc) desc=$2; shift 2;;
+      --area) shift; while [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; do areas="$areas $1"; shift; done;;
+      *) die "分からない引数: $1";;
+    esac
+  done
+  [ ! -f "$(claim_file "$name")" ] || die "「$name」はすでに使われています（担当: $(get "$name" agent)、$(get "$name" worktree)）。別の名前にするか、tools/agents list で確認してください"
+  fetch_base
+  local wt="$WT_ROOT/gnosis-$name" br="agent/$name"
+  [ ! -e "$wt" ] || die "$wt がすでにあります"
+  mkdir -p "$WT_ROOT"
+  git -C "$REPO" worktree add -q -b "$br" "$wt" "$(base_ref)"
+  {
+    echo "agent=$agent"; echo "branch=$br"; echo "worktree=$wt"; echo "started=$(date +%s)"
+    echo "desc=$desc"; echo "areas=${areas# }"; echo "base=$(git -C "$wt" rev-parse HEAD)"
+  } > "$(claim_file "$name")"
+  warn_overlap "$name"
+  echo "作業「$name」を始めました。"
+  echo "  worktree : $wt"
+  echo "  ブランチ : $br"
+  echo "  試験環境 : eval \"\$(tools/agents env $name)\"   ← 試験の前に実行（本物の vault・Gnosis ホームを使わない）"
+  echo "  反映     : tools/agents ship $name --test"
+}
+
+cmd_list() {
+  local any=0 f now; now=$(date +%s)
+  printf '%-16s %-8s %-6s %-9s %s\n' 名前 担当 経過 状態 説明
+  for f in "$REG"/*.claim; do
+    [ -e "$f" ] || continue
+    any=1
+    local n; n=$(basename "$f" .claim)
+    local wt; wt=$(wt_of "$n")
+    local st="" age=$(( (now - $(get "$n" started)) / 60 ))
+    if [ ! -d "$wt" ]; then
+      st="消えている"
+    else
+      local dirty ahead behind
+      dirty=$(git_in "$wt" status --porcelain | wc -l | tr -d ' ')
+      read -r behind ahead < <(git_in "$wt" rev-list --left-right --count "$(base_ref)...HEAD" 2>/dev/null || echo "? ?")
+      st="未コミット${dirty} +${ahead}/-${behind}"
+    fi
+    printf '%-16s %-8s %-6s %-9s %s\n' "$n" "$(get "$n" agent)" "${age}分" "$st" "$(get "$n" desc)"
+    local ar; ar=$(get "$n" areas); [ -z "$ar" ] || echo "                 範囲: $ar"
+  done
+  [ "$any" = 1 ] || echo "（今動いている作業はありません）"
+  echo "  +A/-B … main より A 個進み、B 個遅れ。遅れていたら ship の前に sync（ship が自動でも rebase する）"
+}
+
+cmd_area() {
+  local name=${1:-}; shift || true; need_claim "$name"
+  [ $# -gt 0 ] || die "パスを指定してください"
+  local cur; cur=$(get "$name" areas)
+  sed -i "s|^areas=.*|areas=${cur:+$cur }$*|" "$(claim_file "$name")"
+  warn_overlap "$name"
+  echo "担当範囲: $(get "$name" areas)"
+}
+
+cmd_env() {
+  local name=${1:-}; need_claim "$name"
+  local t="$HOME/gnosis-work/test/$name" port
+  port=$(( 20000 + $(printf '%s' "$name" | cksum | cut -d' ' -f1) % 20000 ))
+  echo "mkdir -p '$t/home'"
+  echo "export TMPDIR='$t'"
+  echo "export GNOSIS_HOME='$t/home'"
+  echo "export GNOSIS_GUI_PORT_BASE='$port'"
+  echo "export AGENT_WORK_NAME='$name'"
+  echo "cd '$(wt_of "$name")'"
+}
+
+cmd_sync() {
+  local name=${1:-}; need_claim "$name"
+  local wt; wt=$(wt_of "$name")
+  fetch_base
+  git_in "$wt" diff --quiet && git_in "$wt" diff --cached --quiet || die "未コミットの変更があります。先にコミットしてください"
+  if ! git_in "$wt" rebase -q "$(base_ref)" 2>/dev/null; then
+    git_in "$wt" rebase --abort 2>/dev/null || true
+    die "origin/main と衝突しました（取り込んでいません）。衝突しやすい所: guide/ja.md と en.md（対で直す）・i18n/en.json・test/api_public.txt（作り直す）・docs/PROGRESS.md（両方残す）。手で rebase して解決してください: git -C $wt rebase $(base_ref)"
+  fi
+  echo "$(base_ref) を取り込みました"
+}
+
+cmd_ship() {
+  local name=${1:-}; shift || true; need_claim "$name"
+  local test=0 ci=0
+  while [ $# -gt 0 ]; do case "$1" in --test) test=1;; --ci) ci=1;; *) die "分からない引数: $1";; esac; shift; done
+  local wt br; wt=$(wt_of "$name"); br=$(get "$name" branch)
+  [ -d "$wt" ] || die "worktree がありません: $wt"
+  if [ -n "$(git_in "$wt" status --porcelain)" ]; then die "未コミットの変更があります。コミットしてから ship してください"; fi
+  fetch_base
+  [ "$(git_in "$wt" rev-list --count "$(base_ref)..HEAD")" -gt 0 ] || die "main に反映する新しいコミットがありません"
+
+  if [ "$test" = 1 ]; then
+    echo "== 試験（並列）を流します =="
+    ( eval "$(cmd_env "$name")"; sh test/run_parallel.sh ) || die "試験が通りませんでした。直してから、もう一度 ship してください"
+  else
+    echo "agents: 注意: --test なしです。反映の前に test/run_parallel.sh を 1 回通したことを確かめてください" >&2
+  fi
+
+  # 順番待ち（同時に 1 つだけが main を進める）。待つのは最大 20 分
+  exec 9>"$REG/merge.lock"
+  flock -w 1200 9 || die "ほかの作業の反映が終わらず、順番が来ませんでした（$REG/merge.lock）"
+  local try moved_before
+  for try in 1 2 3; do
+    fetch_base
+    moved_before=$(git_in "$wt" rev-parse HEAD)
+    if ! git_in "$wt" rebase -q "$(base_ref)" 2>/dev/null; then
+      git_in "$wt" rebase --abort 2>/dev/null || true
+      echo "agents: origin/main と衝突しました。反映していません。" >&2
+      echo "  衝突しやすい所: guide/ja.md と en.md（日本語と英語を対で直す）・i18n/en.json・test/api_public.txt（merge せず作り直す）・docs/PROGRESS.md（両方残す）" >&2
+      echo "  手で解決: git -C $wt rebase $(base_ref)  → 直したら、もう一度 tools/agents ship $name" >&2
+      exit 2
+    fi
+    if [ "$(git_in "$wt" rev-parse HEAD)" != "$moved_before" ]; then
+      echo "他の作業が main を進めていたので、取り込みました。関係する試験を流し直します"
+      ( eval "$(cmd_env "$name")"; sh test/related.sh ) || die "取り込んだあとの試験が通りません。反映していません"
+    fi
+    if [ "$ci" = 1 ]; then
+      git_in "$wt" push -q -f -u "$BASE_REMOTE" "HEAD:$br"
+      ( cd "$wt"; gh pr view "$br" >/dev/null 2>&1 || gh pr create --base "$BASE_BRANCH" --head "$br" --title "$(git log -1 --format=%s)" --body "tools/agents ship $name（$(get "$name" agent)）" >/dev/null
+        gh pr checks "$br" --watch --interval 20 ) || die "CI が通りませんでした。反映していません"
+    fi
+    if git_in "$wt" push -q "$BASE_REMOTE" "HEAD:$BASE_BRANCH" 2>/dev/null; then
+      echo "main に反映しました（$(git_in "$wt" rev-parse --short HEAD)）"
+      break
+    fi
+    echo "main が先に進みました。取り込み直します（$try/3）"
+    [ "$try" -lt 3 ] || die "3 回試しても反映できませんでした。しばらくしてからもう一度"
+  done
+
+  # 本体の checkout が main でクリーンなら、追いつかせる（他の作業を壊さない）
+  if [ "$(git -C "$REPO" branch --show-current)" = "$BASE_BRANCH" ] && [ -z "$(git -C "$REPO" status --porcelain)" ]; then
+    git -C "$REPO" merge -q --ff-only "$(base_ref)" 2>/dev/null && echo "$REPO を main に追いつかせました" || true
+  else
+    echo "agents: $REPO は main でない、または未コミットの変更があるので触っていません"
+  fi
+  cmd_done "$name" --merged
+}
+
+cmd_done() {
+  local name=${1:-}; shift || true; need_claim "$name"
+  local force=0 merged=0
+  while [ $# -gt 0 ]; do case "$1" in --force) force=1;; --merged) merged=1;; *) die "分からない引数: $1";; esac; shift; done
+  local wt br; wt=$(wt_of "$name"); br=$(get "$name" branch)
+  if [ "$merged" = 0 ] && [ "$force" = 0 ]; then
+    if [ -d "$wt" ] && [ "$(git_in "$wt" rev-list --count "$(base_ref)..HEAD" 2>/dev/null || echo 0)" -gt 0 ]; then
+      die "main に反映されていないコミットがあります。破棄するなら --force"
+    fi
+  fi
+  if [ -d "$wt" ]; then
+    git -C "$REPO" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+  fi
+  git -C "$REPO" worktree prune
+  git -C "$REPO" branch -D "$br" >/dev/null 2>&1 || true
+  git -C "$REPO" push -q "$BASE_REMOTE" --delete "$br" >/dev/null 2>&1 || true
+  rm -f "$(claim_file "$name")"
+  echo "作業「$name」を片づけました"
+}
+
+case "${cmd:-${1:-help}}" in
+  start) shift; cmd_start "$@";;
+  list) cmd_list;;
+  area) shift; cmd_area "$@";;
+  env) shift; cmd_env "$@";;
+  sync) shift; cmd_sync "$@";;
+  ship) shift; cmd_ship "$@";;
+  done) shift; cmd_done "$@";;
+  help|-h|--help|"") sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//';;
+  *) die "分からないコマンド: $1（tools/agents help）";;
+esac

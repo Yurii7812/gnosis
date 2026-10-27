@@ -8,6 +8,7 @@
 ## 作業規則
 - 返答・コミット・文書は日本語。コミットは小さく、末尾に Co-Authored-By を付ける。
 - 試験は必ず `~/gnosis-work/test`（TMPDIR）と一時 GNOSIS_HOME で。**本物の vault・Gnosis ホームに触らない。プロセスは名前で kill しない。**
+- 複数の AI が同時に動くことがある: 始める前に `tools/agents list`、作業は `tools/agents start`、反映は `tools/agents ship`（取り決めは `docs/AGENT_PROTOCOL.md`）。
 - 作業は worktree（`~/src/gnosis-*`）で。main への反映は区切りでまとめて ff-only → push。GitHub への書き込みを細かく繰り返さない。
 - 破壊的操作（実 vault の書換・削除・force push・外部通信・課金）は止まって確認。それ以外は確認なしで次へ進む。
 - 回帰: `sh test/run.sh`（`set -e` で最初の失敗で止まる）。基準線は PROGRESS.md の「テスト基準線」。
