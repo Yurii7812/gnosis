@@ -7,7 +7,8 @@ import orphans
 
 class T(unittest.TestCase):
     def test_orphans(self):
-        """Folgezettel ID の無いノートが未所属。Index から・日記から Branch でたどれるものには番号が付く（付く予定も含む）。"""
+        """Folgezettel ID が無く、かつ親（Branch）も無いノートが未所属。Index から・日記から Branch でたどれるものには番号が付く（付く予定も含む）。
+        親があるノートは、親に番号が無くても出さない。BackLink・Context だけでは所属にならない。Index にも日記にもなく親もないノートは、番号が外れて未所属になる。"""
         base = os.environ.get("TMPDIR") or None
         with tempfile.TemporaryDirectory(dir=base) as d:
             r = Path(d)
@@ -20,8 +21,10 @@ class T(unittest.TestCase):
             (r / "grow.md").write_text('# 伸びた\n\nParentBranch:\n[日記](261019110000.md)\n', encoding="utf-8")
             (r / "g.md").write_text('---\ntitle: G\nattribute: group\n---\n\n# G\n', encoding="utf-8")
             (r / "12a.md").write_text('---\ntitle: 12a\n---\n\n# 12a\n', encoding="utf-8")
+            # 番号の無い lone を親にしている子は、親をたどれるので出さない
+            (r / "kid.md").write_text("# 子\n\nParentBranch:\n[孤立](lone.md)\n", encoding="utf-8")
             got = sorted(p.name for p, _t, _c in orphans.find_orphans(r))
-            self.assertEqual(got, ["lone.md"])
+            self.assertEqual(got, ["lone.md", "old.md"])
 
     def test_topics_are_independent_of_creation_device(self):
         self.assertEqual(orphans._topic('---\ncapture: メモ\n---\n'), '')

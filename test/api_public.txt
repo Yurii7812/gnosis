@@ -188,6 +188,7 @@ gnosis#hub_jump
 gnosis#hub_list
 gnosis#hub_map
 gnosis#hub_open
+gnosis#hub_panel_file
 gnosis#hub_set
 gnosis#hypotheses
 gnosis#hypothesis
@@ -335,7 +336,6 @@ gnosis#open_link_under_cursor
 gnosis#open_web
 gnosis#orphans_open
 gnosis#outline#close
-gnosis#outline#focus
 gnosis#outline#goto
 gnosis#outline#gui_click
 gnosis#outline#gui_fold
@@ -353,6 +353,11 @@ gnosis#outline_editor_apply
 gnosis#outline_shift_current
 gnosis#outline_shift_visual
 gnosis#pad_cleanup
+gnosis#panel#close
+gnosis#panel#key
+gnosis#panel#kind
+gnosis#panel#move
+gnosis#panel#tabs_clear
 gnosis#paper_index
 gnosis#paper_scan
 gnosis#para
@@ -418,10 +423,7 @@ gnosis#rename_yomi
 gnosis#rename_yomi_with_default
 gnosis#replace_visual_selection
 gnosis#resolve_link
-gnosis#review_commit
 gnosis#review_reopen
-gnosis#review_setup
-gnosis#review_skip
 gnosis#review_write
 gnosis#run#close_all
 gnosis#run#close_here

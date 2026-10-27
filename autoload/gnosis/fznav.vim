@@ -727,7 +727,7 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><silent> \C <Cmd>call gnosis#run#switch('cui')<CR>
   nnoremap <buffer><silent> \x <Cmd>call gnosis#run#close_here()<CR>
   nnoremap <buffer><silent> \X <Cmd>call gnosis#run#close_all()<CR>
-  nnoremap <buffer><silent> \o <Cmd>call gnosis#outline#toggle()<CR>
+  nnoremap <buffer><silent> \o <Cmd>call gnosis#panel#key('outline')<CR>
   nnoremap <buffer><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
   nnoremap <buffer><silent> \l <Cmd>call gnosis#mview#link_pick()<CR>
   augroup gnosis_fz_buf

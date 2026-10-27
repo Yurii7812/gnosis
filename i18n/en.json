@@ -920,7 +920,16 @@
     "入れるノートを選ぶモード（\\l）。ビューを切り替えても続く": "Mode for choosing the note to insert (\\l); it continues when you switch views",
     "選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）": "Choosing mode: e decide, I put on the Index, o view the original note on the right (again to go back)",
     "選ぶモードなどをやめる（何も無ければ閉じる）": "Leave choosing mode and the like (close if there is nothing)",
-    "アウトラインを右に出す ⇔ しまう（どこでも）": "Show the outline on the right or hide it (anywhere)"
+    "アウトラインを右に出す ⇔ しまう（どこでも）": "Show the outline on the right or hide it (anywhere)",
+    "グループに入れる: ": "Add to group: ",
+    "j k 選ぶ   Enter 名前とよみを入力   s このまま   A 残り全部このまま   d 外す   q やめる": "j k choose   Enter type name and reading   s keep as is   A keep all the rest   d remove   q stop",
+    "残り %d 件": "%d left",
+    "名前とよみの確認: ": "Names and readings: ",
+    "Gnosis: 名前とよみを決めて並べました（%d 件。外したもの %d 件）": "Gnosis: names and readings decided and sorted (%d items; %d removed)",
+    "タブはありません": "There are no tabs",
+    "全部のタブ（%d 件）を消しますか？ (y/n): ": "Delete all tabs (%d items)? (y/n): ",
+    "やめました（何も消していません）": "Cancelled (nothing was deleted)",
+    "Gnosis: 全部のタブ（%d 件）を消しました": "Gnosis: deleted all tabs (%d items)"
   },
   "msg": {
     "settings.bad_color": "Please enter colors as #rrggbb: %s",

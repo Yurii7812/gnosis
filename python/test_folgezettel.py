@@ -227,16 +227,58 @@ class FolgezettelTest(unittest.TestCase):
         self.assertIn('重複', fz.navigate(self.root, leaf, 'up')['error'])
 
     def test_manual_branch_and_no_frontmatter(self):
-        parent = self.note('parent', '1a')
+        self.note('index', body='[parent](parent.md)')
+        parent = self.note('parent')
         child = self.note('child', body='ParentBranch:\n[parent](parent.md)\n\n本文')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(child), '1a1')
+        self.assertEqual([self.ident(parent), self.ident(child)], ['1', '1a'])
         plain = self.root / 'plain.md'
         plain.write_text('# Plain\n\nBody\n')
-        self.note('index', body='[plain](plain.md)')
+        self.note('index', body='[parent](parent.md)\n[plain](plain.md)')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(plain), '1')
+        self.assertEqual(self.ident(plain), '2')
         self.assertIn('Body', plain.read_text())
+
+    def test_numbers_are_removed_from_notes_that_lost_their_place(self):
+        # Index の本文にも日記にもなく、親もないノートは番号を持たない。親を外す・Index から外すと、番号も外れる
+        self.note('index', body='[a](a.md)\n[b](b.md)')
+        a = self.note('a')
+        b = self.note('b')
+        k = self.note('k', body='ParentBranch:\n[b](b.md)\n\n本文')
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(a), self.ident(b), self.ident(k)], ['1', '2', '2a'])
+        # k の ParentBranch を消す → 親も Index もない → 番号が外れる
+        k.write_text(k.read_text().replace('ParentBranch:\n[b](b.md)\n\n', ''))
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(k), '')
+        # b を Index から外す → 番号が外れ、その子（a の下に付け替えていない k2）も外れる
+        k2 = self.note('k2', body='ParentBranch:\n[b](b.md)\n\n本文')
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(k2), '2a')
+        idx = self.root / 'index.md'
+        idx.write_text(idx.read_text().replace('[b](b.md)\n', ''))
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(a), self.ident(b), self.ident(k2)], ['1', '', ''])
+        # もう一度 Index に載せると、新しい番号が付く
+        idx.write_text(idx.read_text().rstrip('\n') + '\n[b](b.md)\n')
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(b), self.ident(k2)], ['2', '2a'])
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+
+    def test_group_only_notes_have_no_number_except_in_the_index(self):
+        # グループに入っているだけで親がないノートは、グループが Index（index.md）のときだけ最上位の番号。他のグループなら番号なし
+        self.note('index', body='[g](g.md)\n[x](x.md)')
+        g = self.note('g')
+        g.write_text(g.read_text().replace('title: g', 'title: g\nattribute: group').replace('\n# g', '\n# g'))
+        g.write_text(g.read_text() + '[y](y.md)\n')
+        x = self.note('x')
+        y = self.note('y')
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(x), '1')       # Index の本文にあるので最上位の番号
+        self.assertEqual(self.ident(y), '')        # Index ではないグループにあるだけ
+        self.assertEqual(self.ident(g), '')
 
     def test_deferred_tree_and_alphabet_rollover(self):
         p, c, d = [self.note(n) for n in ('p', 'c', 'd')]

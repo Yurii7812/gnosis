@@ -175,7 +175,7 @@ endif
 " ---------------------------------------------------------------------------
 
 command!          GnosisToday call gnosis#diary_today()
-command!          GnosisTabs call gnosis#hub_open('tabs')
+command!          GnosisTabs call gnosis#panel#key('tabs')
 command!          GnosisWNext call gnosis#write_next()
 command! -bang -nargs=* GnosisContextMigrate call gnosis#context#migrate_command(<q-args>, <bang>0)
 command!          GnosisFolgezettelMove call gnosis#folgezettel#toggle()
@@ -557,7 +557,7 @@ nnoremap <silent> \.       <Cmd>call gnosis#go_forward()<CR>
 nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
 " \h は永続的な保管リスト。\H で現在のノートを追加する。
 " 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
-nnoremap <silent> \h       <Cmd>call gnosis#hub_open()<CR>
+nnoremap <silent> \h       <Cmd>call gnosis#panel#key('hub')<CR>
 nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
 " \a … 未所属（Folgezettel ID の無い）ノートの一覧（全体を見て整理する）。\N も同じ（押しにくいので \a を足した）
 nnoremap <silent> \a       <Cmd>call gnosis#orphans_open()<CR>
@@ -714,7 +714,7 @@ command! GnosisMergeUndo call gnosis#merge#undo()
 command! GnosisYomiReview call gnosis#yomi_review()
 command! GnosisReview call gnosis#review_reopen()
 " \q は「タブ」のボード（\h のハブと同じ仕組みで別のファイル）。\Q で今のノートを足す。
-nnoremap <silent> \q       <Cmd>call gnosis#hub_open('tabs')<CR>
+nnoremap <silent> \q       <Cmd>call gnosis#panel#key('tabs')<CR>
 nnoremap <silent> \Q       <Cmd>call gnosis#hub_set('tabs')<CR>
 " ゴミ箱（ソフト削除）: \tr=一覧（⏎=開く / ^r=復元 / ^e=空） / \tD=今のノートをゴミ箱へ / \tE=空にする
 "   （\td は \tdr/\tdc（表の行・列削除）と待ちが被るので \tD にする）
@@ -892,10 +892,14 @@ xnoremap <nowait> <silent> \P :<C-u>call gnosis#add_current_as_parent_range(line
 " \o を2打で確定させるため、従来の \oe は \O へ移動。
 nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " \o … アウトライン窓（今のノートの見出し。曼荼羅・Folgezettel ビューと同時に出せる）の表示 ⇔ 非表示
-nnoremap <silent> \o        <Cmd>call gnosis#outline#toggle()<CR>
-command! GnosisOutline call gnosis#outline#toggle()
+nnoremap <silent> \o        <Cmd>call gnosis#panel#key('outline')<CR>
+command! GnosisOutline call gnosis#panel#key('outline')
 " go … アウトライン窓 ⇔ ノートの窓 を行き来する（アウトラインが閉じていれば開く。どの窓からでも）
-nnoremap <silent> go        <Cmd>if v:count > 0 \| execute 'normal! ' . v:count . 'go' \| else \| call gnosis#outline#focus() \| endif<CR>
+" Shift+← / Shift+→（予備に gh / gl）… 窓を 1 つ左・右へ（左のビュー → ノート → 右のパネル。端では止まる）
+nnoremap <silent> <S-Left>  <Cmd>call gnosis#panel#move(-1)<CR>
+nnoremap <silent> <S-Right> <Cmd>call gnosis#panel#move(1)<CR>
+nnoremap <silent> gh        <Cmd>call gnosis#panel#move(-1)<CR>
+nnoremap <silent> gl        <Cmd>call gnosis#panel#move(1)<CR>
 " \W … ノートだけを表示する（曼荼羅・Folgezettel ビュー・アウトラインなど、全部の窓を閉じる。どの窓にカーソルがあっても同じ）
 nnoremap <silent> \W        <Cmd>call gnosis#mview#only_note()<CR>
 command! GnosisOnlyNote call gnosis#mview#only_note()
@@ -1251,7 +1255,6 @@ autocmd BufReadPre,BufNewFile *.md if gnosis#is_vault_path(expand('<afile>:p')) 
 autocmd BufReadPre,BufNewFile */.state/hubs/*.md setlocal noswapfile noundofile
 execute 'autocmd BufReadPre,BufNewFile ' . escape(printf('%s/hubs/*.md', gnosis#state_dir()), '\\ ') . ' setlocal noswapfile noundofile'
 " vault を切り替えても効くよう、場所は決め打ちしない（.state/hubs/review-*.md）
-autocmd BufEnter */.state/hubs/review-*.md call gnosis#review_setup()
 
 augroup gnosis_lock
   autocmd!

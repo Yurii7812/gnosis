@@ -2205,11 +2205,6 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 削除（ゴミ箱移動を含む）されたフォルゲゼッテル/トピックノートの画像も退避（2026-10-09）
     _trash_zk_note_images(root, cache, set(keys.values()),
                           [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
-    import folgezettel as fz
-    for p, ident in fz.allocation(root, notes).items():
-        fm = notes[p]["fm"] or ["---", "---"]
-        updated = fz.set_value("\n".join(fm), ident) if ident else fz.remove_value("\n".join(fm))
-        notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
     # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
     for cp, cn in notes.items():
         for _d, tg in _links_from(cn.get("ctx") or []):
@@ -2259,6 +2254,13 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                     continue
                 keep.append(ln)
             pn["cbranch"] = keep
+    # Folgezettel の番号は、子の ParentBranch: を消したときの「親の ChildBranch: から外す」処理のあとで決める
+    # （先に決めると、親の ChildBranch: がまだ残っていて、親を外したノートの番号が 1 回の同期で外れない）
+    import folgezettel as fz
+    for p, ident in fz.allocation(root, notes).items():
+        fm = notes[p]["fm"] or ["---", "---"]
+        updated = fz.set_value("\n".join(fm), ident) if ident else fz.remove_value("\n".join(fm))
+        notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
