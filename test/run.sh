@@ -127,6 +127,8 @@ sh "$REPO/test/sort_yomi_net.sh"
 sh "$REPO/test/group_review_net.sh"
 sh "$REPO/test/requests_7_net.sh"
 sh "$REPO/test/requests_8_net.sh"
+sh "$REPO/test/group_name_net.sh"
+sh "$REPO/test/view_live_net.sh"
 
 # i（行の中）・\L の b / c・\l → g（分岐したグループ・空のグループの空行）・\l → m（マージと取り消し）
 sh "$REPO/test/requests_1020_net.sh"

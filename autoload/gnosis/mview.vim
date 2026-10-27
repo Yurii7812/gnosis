@@ -3374,6 +3374,9 @@ function! s:open(center, ...) abort
     endif
     execute 'vertical resize ' . s:win_width()
   endif
+  " 左のビュー（曼荼羅 / Folgezettel）の幅は、他の窓を開けたり閉じたりしても、勝手に変わらない（変えるのは < > などだけ）。
+  " 空いた分・足りない分は、ノートの窓が受け持つ
+  setlocal winfixwidth
   let s:S.buf = bufnr('%')
   let s:S.win = win_getid()
   call s:render()
