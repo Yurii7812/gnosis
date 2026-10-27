@@ -52,6 +52,7 @@ function! gnosis#listnav#setup() abort
           \ 'rank': get(l:st, 'rank_on', 0), 'history': [], 'rows': [], 'cache': {}, 'pathcache': {}, 'lines': [], 'hits': {}}
     call s:load_preferences()
     let s:L.origin = s:save_origin()
+    let s:L.seen = l:st.center
   endif
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=3
@@ -110,8 +111,23 @@ function! s:rows() abort
   return l:rows
 endfunction
 
+" Enter などで開いているノート（曼荼羅の中心）が変わったら、リストの基準も今のノートに合わせる。
+" カーソルを動かしただけのプレビューでは中心は変わらないので、基準は固定のまま。
+function! s:follow_center() abort
+  let l:center = get(gnosis#mview#state(), 'center', '')
+  if empty(l:center) || get(s:L, 'seen', '') ==# l:center | return | endif
+  let s:L.seen = l:center
+  if s:L.anchor ==# l:center | return | endif
+  let s:L.anchor = l:center
+  let s:L.history = []
+  let s:L.cache = {}
+  let s:L.pathcache = {}
+  let s:L.rows = []
+endfunction
+
 function! gnosis#listnav#render() abort
   if empty(s:L) | return | endif
+  call s:follow_center()
   let l:oldrow = get(s:L.rows, line('.') - 3, {})
   let s:L.rows = s:rows()
   let l:title = gnosis#i18n#tr({'search': '検索', 'similar': '類似', 'links': 'リンク'}[s:L.mode])
@@ -119,6 +135,7 @@ function! gnosis#listnav#render() abort
   let l:pick = gnosis#mview#pick_label()
   if !empty(l:pick) | let s:L.title .= '  ' . l:pick | endif
   let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr({'all': '全部', 'index': '索引とグループ', 'no-index': '索引以外'}[s:L.scope])
+        \ : s:L.mode ==# 'similar' ? gnosis#i18n#tr('類似')
         \ : gnosis#i18n#tr('深さ') . ' ' . s:L.depth . (s:L.rank ? ' / w' : '')
   if !empty(s:L.relation) && s:L.mode ==# 'links' | let l:flags .= ' / ' . gnosis#i18n#tr(s:kinds[s:L.relation]) | endif
   if !empty(s:L.search) && s:L.mode ==# 'search' | let l:flags .= ' / s: ' . s:L.search | endif
@@ -126,7 +143,7 @@ function! gnosis#listnav#render() abort
   if !empty(s:L.highlight) | let l:flags .= ' / m: ' . s:L.highlight | endif
   let s:L.status = l:flags . ' / ' . len(s:L.rows) . (len(s:L.rows) >= 300 && s:L.mode ==# 'links' ? ' (max 300)' : '')
   let l:lines = [s:L.title, s:L.status]
-  let l:want = max([3, line('.')])
+  let l:want = 3
   let l:i = 0
   for l:row in s:L.rows
     let l:tag = gnosis#i18n#tr(get(s:kinds, !empty(s:L.relation) && s:L.mode ==# 'links' ? s:L.relation : l:row.kind, 'ノート'))
@@ -368,7 +385,6 @@ function! gnosis#listnav#next_hit(dir) abort
 endfunction
 
 function! gnosis#listnav#quit() abort
-  if !empty(s:L.history) | call gnosis#listnav#back() | return | endif
   call gnosis#listnav#origin()
   call gnosis#mview#quit_layers()
 endfunction

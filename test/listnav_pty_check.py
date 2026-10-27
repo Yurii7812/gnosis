@@ -89,6 +89,25 @@ class ListView(unittest.TestCase):
             s.send('o', .3)
             self.assertIn('a.md', self.dump(s)['file'])
 
+    def test_enter_reanchors_links_and_q_closes_despite_history(self):
+        with self.session() as s:
+            self.open_list(s)
+            s.send('2', .6)
+            s.send('3', .6)
+            s.send('j', .3)
+            s.send('\r', .8)
+            self.assertEqual(self.dump(s)['center'], 'b.md')
+            s.send(' ', .5)
+            left = '\n'.join(l.split('|')[0] for l in s.text().splitlines())
+            self.assertIn('[Parent] Alpha', left)
+            self.assertNotIn('[Child] Beta', left)
+            s.send('2', .6)
+            left = '\n'.join(l.split('|')[0] for l in s.text().splitlines())
+            self.assertIn('Alpha', left)
+            self.assertNotIn('depth', left.splitlines()[1])
+            s.send('q', .6)
+            self.assertNotIn('LIST', s.text())
+
     def test_folgezettel_search_highlight_and_cancel(self):
         with self.session() as s:
             s.send(' ', .7)
