@@ -595,6 +595,10 @@ function! s:enter() abort
   endif
   let s:F.recenter = 1
   call gnosis#mview#open_rel(l:it.path)
+  " 開いたノートの窓へカーソルを移す（画面は上から、カーソルは画面の一番下）。\l の選ぶモードの最中は、ビューに留まる
+  if !gnosis#mview#picking()
+    call gnosis#mview#toggle()
+  endif
 endfunction
 
 " ---- モード ---------------------------------------------------------------------------------------

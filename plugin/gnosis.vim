@@ -856,6 +856,8 @@ nnoremap <nowait> <silent> zR  <Cmd>call gnosis#rename_title('')<CR>
 nnoremap <nowait> <silent> zl  <Cmd>call gnosis#rename_link_text_with_default('')<CR>
 " zL: 現在のリンク表示名を残して編集
 nnoremap <nowait> <silent> zL  <Cmd>call gnosis#rename_link_text('')<CR>
+" zg … このノートが、グループの中でどう表示されているか（グループの本文にある、このノートへのリンクの表示名）を変える
+nnoremap <nowait> <silent> zg  <Cmd>call gnosis#group_name_here()<CR>
 " zy: 今開いているノートのタイトルのよみを
 "     空欄から変更する（zr と同じ流儀。Esc で中止）。
 "     よみは \S / :SortYomi の表示名ソートで使う。

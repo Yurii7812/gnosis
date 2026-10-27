@@ -5,7 +5,7 @@
 " アウトライン窓のキー
 "   j k / ↓ ↑      見出しを選ぶ        Enter  本文のその見出しへ（カーソルも本文へ移る）
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
-"   < >            幅を狭く・広く      s  左右を入れ替える      Space  本文の窓へ      q  閉じる
+"   < >            境目を左・右へ（右のパネルでは < で広く、> で狭く）      s  左右を入れ替える      Space  本文の窓へ      q  閉じる
 " 本文を編集すると自動で更新し、本文のカーソルがある見出しを強調する。ノートは書き換えない。
 let s:O = {'win': -1, 'buf': -1, 'src': -1, 'collapsed': {}, 'items': [], 'lines': [], 'cells': [], 'sel': {}, 'tick': '', 'active': 0,
       \ 'side': 'right', 'mid': -1, 'timer': -1}
@@ -169,11 +169,17 @@ function! s:maps() abort
   nnoremap <buffer><nowait><silent> zo <Cmd>call <SID>fold('o')<CR>
   nnoremap <buffer><nowait><silent> zM <Cmd>call <SID>fold('M')<CR>
   nnoremap <buffer><nowait><silent> zR <Cmd>call <SID>fold('R')<CR>
-  nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>width(-4)<CR>
-  nnoremap <buffer><nowait><silent> > <Cmd>call <SID>width(4)<CR>
+  " < > は境目を動かす向き（曼荼羅の < > と同じ）。右のパネルでは < で境目が左へ（広がる）、> で右へ（狭まる）。左に入れ替えたときは逆
+  nnoremap <buffer><nowait><silent> <lt> <Cmd>call <SID>width_dir(-1)<CR>
+  nnoremap <buffer><nowait><silent> > <Cmd>call <SID>width_dir(1)<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>swap_side()<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#outline#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call <SID>to_src()<CR>
+endfunction
+
+" 境目を左(-1)・右(1)へ動かす。右のパネルでは、境目が左へ動くとパネルは広がる
+function! s:width_dir(dir) abort
+  call s:width((s:O.side ==# 'left' ? 4 : -4) * a:dir)
 endfunction
 
 function! s:width(d) abort

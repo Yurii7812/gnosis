@@ -1,5 +1,14 @@
 {
   "ja": {
+    "j k 選ぶ   Enter 決める   q やめる": "j k choose   Enter confirm   q cancel",
+    "ノートで実行して": "Run this in a note",
+    "このノートはグループに入っていません（Group: / BranchGroup: がありません）": "This note is not in any group (there is no Group: / BranchGroup:)",
+    "どのグループ？": "Which group?",
+    "そのグループを開けません（または、並べ替えの対象のグループではありません）": "Cannot open that group (or it is not a group that gets sorted)",
+    "このノートは「%s」の本文に載っていません（表示名はありません）": "This note is not listed in the body of \"%s\" (it has no display name there)",
+    "「%s」での表示名": "Display name in \"%s\"",
+    "「%s」での ": "In \"%s\": ",
+    "「%s」での表示名を「%s」にしました": "Changed the display name in \"%s\" to \"%s\"",
     "上位表示": "Upper view",
     "Folgezettel 番号を持つノートがありません": "No notes with a Folgezettel number",
     "このノートはまだ読み込まれていません": "This note is not loaded yet",

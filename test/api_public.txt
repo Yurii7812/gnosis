@@ -152,6 +152,7 @@ gnosis#go_forward
 gnosis#graph_paths
 gnosis#graph_query
 gnosis#graph_report
+gnosis#group_name_here
 gnosis#group_review_check
 gnosis#group_review_snapshot
 gnosis#guard_vault_write
@@ -358,6 +359,7 @@ gnosis#panel#key
 gnosis#panel#kind
 gnosis#panel#move
 gnosis#panel#tabs_clear
+gnosis#panel#width
 gnosis#paper_index
 gnosis#paper_scan
 gnosis#para

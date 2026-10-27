@@ -13284,6 +13284,149 @@ function! gnosis#rename_link_text_with_default(default) abort
   endif
 endfunction
 
+" ---------------------------------------------------------------------------
+" zg: このノートが、グループの中でどう表示されているか（グループの本文にある、このノートへのリンクの表示名）を変える。
+"   ノートの Group: / BranchGroup: のリンクの上で押すと、そのグループ。それ以外の場所では、入っているグループが複数なら選ぶ。
+"   表示名が複数（[B:aaa,bbb]）なら、どれを変えるか選ぶ。続けて表示名、漢字を含む名前ならよみも聞く（\l → g と同じ）。
+" ---------------------------------------------------------------------------
+
+" 先頭のブロック（BranchGroup: / Group:）にあるグループへのリンク [{lnum, text, target, kind}]
+function! s:note_group_links(lines) abort
+  let l:out = []
+  let l:i = 0
+  while l:i < len(a:lines)
+    if a:lines[l:i] =~# '^\s*\%(ChildBranch\|Related\|BackLink\)\s*[:：]\s*$'
+      break
+    endif
+    if a:lines[l:i] =~# '^\s*\%(BranchGroup\|Group\)\s*[:：]\s*$'
+      let l:kind = substitute(trim(a:lines[l:i]), '\s*[:：]$', '', '')
+      let l:j = l:i + 1
+      while l:j < len(a:lines) && a:lines[l:j] =~# s:link_only_rx
+        let l:m = s:extract_markdown_link(trim(a:lines[l:j]))
+        if !empty(l:m.target)
+          call add(l:out, {'lnum': l:j + 1, 'text': l:m.text, 'target': l:m.target, 'kind': l:kind})
+        endif
+        let l:j += 1
+      endwhile
+      let l:i = l:j
+    else
+      let l:i += 1
+    endif
+  endwhile
+  return l:out
+endfunction
+
+" 一覧から 1 つ選ぶ（ポップアップ。j k ↓ ↑ で選び、Enter で決める、1〜9 で直接、q / Esc でやめる）。選んだ番号（0 始まり）、やめたら -1
+function! s:pick_one(title, labels) abort
+  let l:sel = 0
+  let l:id = 0
+  if !get(g:, 'gnosis_test_review_skip', 0) && exists('*popup_create')
+    let l:id = popup_create([], {'title': ' ' . a:title . ' ', 'pos': 'center', 'padding': [0, 1, 0, 1], 'border': [], 'minwidth': 40, 'zindex': 220})
+  endif
+  try
+    while 1
+      if l:id > 0
+        let l:lines = []
+        for l:i in range(len(a:labels))
+          call add(l:lines, (l:i == l:sel ? '▶ ' : '  ') . (l:i < 9 ? (l:i + 1) . '. ' : '   ') . a:labels[l:i])
+        endfor
+        call extend(l:lines, ['', gnosis#i18n#tr('j k 選ぶ   Enter 決める   q やめる')])
+        call popup_settext(l:id, l:lines)
+        redraw
+      endif
+      let l:k = s:getkey()
+      if index(['j', "\<Down>", "\<Tab>"], l:k) >= 0
+        let l:sel = min([l:sel + 1, len(a:labels) - 1])
+      elseif index(['k', "\<Up>", "\<S-Tab>"], l:k) >= 0
+        let l:sel = max([l:sel - 1, 0])
+      elseif l:k ==# "\<CR>" || l:k ==# "\<NL>"
+        return l:sel
+      elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(a:labels)
+        return str2nr(l:k) - 1
+      elseif l:k ==# 'q' || l:k ==# "\<Esc>" || char2nr(l:k) == 3
+        return -1
+      endif
+    endwhile
+  finally
+    if l:id > 0 | call popup_close(l:id) | endif
+  endtry
+  return -1
+endfunction
+
+function! gnosis#group_name_here() abort
+  let l:note = fnamemodify(expand('%:p'), ':p')
+  if &buftype !=# '' || l:note !~? '\.md$'
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('ノートで実行して') | echohl NONE
+    return
+  endif
+  let l:dir = expand('%:p:h')
+  let l:links = s:note_group_links(getline(1, '$'))
+  if empty(l:links)
+    echo 'Gnosis: ' . gnosis#i18n#tr('このノートはグループに入っていません（Group: / BranchGroup: がありません）')
+    return
+  endif
+  " カーソルが Group: / BranchGroup: のリンクの上なら、そのグループ。そうでなければ、複数のときは選ぶ
+  let l:cur = filter(copy(l:links), 'v:val.lnum == line(".")')
+  if !empty(l:cur)
+    let l:g = l:cur[0]
+  elseif len(l:links) == 1
+    let l:g = l:links[0]
+  else
+    let l:labels = map(copy(l:links), 'v:val.kind . ": " . v:val.text')
+    let l:n = s:pick_one(gnosis#i18n#tr('どのグループ？'), l:labels)
+    if l:n < 0 | return | endif
+    let l:g = l:links[l:n]
+  endif
+  let l:gpath = fnamemodify(gnosis#resolve_link(substitute(l:g.target, '#.*$', '', ''), l:dir), ':p')
+  if !filereadable(l:gpath) || !s:group_path_reviewable(l:gpath)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('そのグループを開けません（または、並べ替えの対象のグループではありません）') | echohl NONE
+    return
+  endif
+  if s:review_group_buffer_dirty(l:gpath)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('グループに未保存の変更があります。先に保存してください') | echohl NONE
+    return
+  endif
+  " このノートへのリンク（グループの本文にある表示名）
+  let l:mine = filter(s:group_members(l:gpath, readfile(l:gpath)), 'resolve(v:val.abs) ==# resolve(l:note)')
+  if empty(l:mine)
+    echo 'Gnosis: ' . printf(gnosis#i18n#tr('このノートは「%s」の本文に載っていません（表示名はありません）'), s:group_label(l:gpath))
+    return
+  endif
+  let l:m = l:mine[0]
+  if len(l:mine) > 1
+    let l:n = s:pick_one(printf(gnosis#i18n#tr('「%s」での表示名'), s:group_label(l:gpath)), map(copy(l:mine), 'v:val.name'))
+    if l:n < 0 | return | endif
+    let l:m = l:mine[l:n]
+  endif
+  " 表示名（入力欄に今の名前）→ よみ
+  let l:r = s:ask_display_name(l:m.name, printf(gnosis#i18n#tr('「%s」での '), s:group_label(l:gpath)))
+  if !l:r.ok
+    echo 'Gnosis: ' . gnosis#i18n#tr('取り消しました（何も変更していません）')
+    return
+  endif
+  let l:yomi = s:ask_yomi(l:gpath, l:note, l:r.name)
+  " グループの本文のリンクの名前を書き換える（同じ行のリンクだけ）
+  let l:lines = readfile(l:gpath)
+  let l:at = l:m.idx
+  if l:at < len(l:lines) && trim(l:lines[l:at]) ==# l:m.line
+    let l:lines[l:at] = substitute(l:lines[l:at], '\V[' . escape(l:m.name, '\') . '](', '[' . escape(s:md_link_text(l:r.name), '\&') . '](', '')
+    call s:syn_writefile(l:lines, l:gpath)
+  endif
+  if !empty(l:yomi)
+    call s:save_member_yomis([{'abs': l:note, 'name': l:r.name, 'yomi': l:yomi}])
+  endif
+  call s:sort_group_file(l:gpath)
+  " 開いているグループは読み直し、このノートの Group: の表示（[グループ名:表示名]）は同期で更新する
+  let l:gnr = bufnr(l:gpath)
+  if l:gnr > 0 && bufloaded(l:gnr) && !getbufvar(l:gnr, '&modified')
+    silent! execute 'checktime ' . l:gnr
+  endif
+  call gnosis#save_current_note()
+  call s:run_update_one_for_sync(l:note)
+  call s:reload_current()
+  echo 'Gnosis: ' . printf(gnosis#i18n#tr('「%s」での表示名を「%s」にしました'), s:group_label(l:gpath), l:r.name)
+endfunction
+
 function! gnosis#rename_link_text(args) abort
   let l:link = gnosis#get_link_under_cursor()
   if empty(l:link) || empty(get(l:link, 'target', ''))

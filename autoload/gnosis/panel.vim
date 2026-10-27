@@ -94,6 +94,9 @@ function! s:open(kind) abort
   silent! execute 'edit ' . fnameescape(l:file)
   setlocal bufhidden=hide noundofile nowrap winfixwidth
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#panel#close()<CR>
+  " < > は境目を動かす向き（右のパネルでは < で境目が左へ＝広がる、> で右へ＝狭まる）
+  nnoremap <buffer><nowait><silent> <lt> <Cmd>call gnosis#panel#width(4)<CR>
+  nnoremap <buffer><nowait><silent> > <Cmd>call gnosis#panel#width(-4)<CR>
   nnoremap <buffer><nowait><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
   if a:kind ==# 'tabs'
     nnoremap <buffer><nowait><silent> D <Cmd>call gnosis#panel#tabs_clear()<CR>
@@ -102,6 +105,14 @@ function! s:open(kind) abort
     autocmd! * <buffer>
     autocmd BufWinLeave <buffer> let s:P.win = -1 | let s:P.kind = ''
   augroup END
+endfunction
+
+" パネルの幅を d だけ変える（< > から）
+function! gnosis#panel#width(d) abort
+  let l:w = s:panel_win()
+  if l:w > 0
+    call win_execute(l:w, 'vertical resize ' . max([12, winwidth(0) + a:d]))
+  endif
 endfunction
 
 " パネルを閉じて、ノートの窓に戻る（パネルの中の q）
