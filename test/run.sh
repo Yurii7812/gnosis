@@ -281,6 +281,7 @@ python3 "$REPO/test/link_swap_pty_check.py"
 python3 "$REPO/test/mview_forward_pty_check.py"
 python3 "$REPO/test/note_forward_pty_check.py"
 python3 "$REPO/test/imgview_pty_check.py"
+python3 "$REPO/test/imgview_html_check.py"
 python3 "$REPO/python/test_sixel_view.py"
 # 本物の gocryptfs の暗号化 vault を複数のウィンドウで使う（gocryptfs / fusermount3 / /dev/fuse が無ければ省略）
 python3 "$REPO/test/session_real_check.py"

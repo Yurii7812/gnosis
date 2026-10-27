@@ -272,6 +272,8 @@ function! s:scan(buf) abort
     endif
     if l:fence | continue | endif
     let l:m = matchlist(l:ln, '^\s*!\[[^\]]*\](\s*<\?\([^)>]\+\)>\?\s*)\s*$')
+    " <img src="…" width="25%"> の行も画像（アプリと同じ。大きさの指定は、この端末の表示では使わない）
+    if empty(l:m) | let l:m = matchlist(l:ln, '^\s*<img\s\%([^>]*\s\)\?src\s*=\s*["'']\([^"'']\+\)["''][^>]*>\s*$') | endif
     if empty(l:m) | continue | endif
     let l:u = substitute(l:m[1], '\s\+"[^"]*"$', '', '')
     if l:u =~# '^\a\+://' | continue | endif
