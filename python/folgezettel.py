@@ -282,14 +282,12 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     old = dict(ids)
     roots = [p for p in top if managed(p) and not parents[p]]
     root_set = set(roots)
-    # Branch の根: 管理できる最上位、または、番号を持つのに親も索引もない（外れた）ノート
-    fixed_roots = [p for p in notes if p not in root_set and not primaries[p] and ID_RE.fullmatch(ids[p])
-                   and not is_group(notes[p]) and p.name != 'index.md']
+    # 番号を残すノート: 紙のノート・未保存の編集中のもの（これらの番号はそのまま。下に続くデジタルの子は、その番号の下に振る）
+    def kept(p) -> bool:
+        return p.name != 'index.md' and not is_group(notes[p]) and (is_paper(notes[p]) or p in unsaved)
     # 管理するノート（番号を決め直すもの）を、根から木をたどって集める
     managed_set = set(roots)
-    stack = list(roots) + [p for p in fixed_roots] + [p for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])
-                                                      and not managed(p) and not is_group(notes[p]) and p not in fixed_roots
-                                                      and p.name != 'index.md']
+    stack = list(roots) + [p for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p]) and kept(p)]
     seen = set(stack)
     while stack:
         p = stack.pop()
@@ -299,7 +297,14 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             seen.add(c)
             managed_set.add(c)
             stack.append(c)
-    # 管理しないものの番号は、そのまま使われているものとして避ける
+    # 木に入れなかったのに番号を持つノート（Index の本文にも日記にもなく、親もない。親を外した・Index から外した、など）は、番号を外す。
+    # 番号のないノートを親にしている子も、同じ理由で外れる。番号が無く親も無いノートは、\a（未所属）に出る
+    for p, n in notes.items():
+        if (ID_RE.fullmatch(ids[p]) and p not in managed_set and p.name != 'index.md' and not is_group(n)
+                and not kept(p) and n['title'] not in SHARED_ID_TITLES):
+            ids[p] = ''
+            plan[p] = ''
+    # 残した番号は、そのまま使われているものとして避ける
     fixed = {ids[p] for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])}
 
     def sibling_order(p, c):
@@ -346,11 +351,9 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         else:
             plan.pop(p, None)
         work.append(p)
-    # 管理しない根（外れたノートなど）の子は、その番号の下に続ける
-    for p in fixed_roots:
-        work.append(p)
+    # 管理しないもの（紙のノート・編集中のもの）の子は、その番号の下に続ける
     for p in notes:
-        if p not in managed_set and p not in done and ID_RE.fullmatch(ids[p]) and not is_group(notes[p]) and p not in fixed_roots:
+        if p not in managed_set and p not in done and ID_RE.fullmatch(ids[p]) and kept(p):
             work.append(p)
     while work:
         p = work.pop()

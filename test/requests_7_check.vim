@@ -28,17 +28,14 @@ call gnosis#index_add($D . '/v/a.md', $D . '/v/g.md')
 execute 'silent! edit ' . fnameescape($D . '/v/a.md')
 call assert_equal([], g:gnosis_test_display_name)
 call assert_true(index(F('g.md'), '[bbb](a.md)') >= 0)
-" 確認画面でも同じファイルの別名を独立に編集・削除できる。
+" 一覧画面でも同じファイルの別名を独立に編集・削除できる。
 execute 'edit ' . fnameescape($D . '/v/g.md')
+let g:gnosis_test_display_name = ['ccc']
+let g:gnosis_test_keys = ["\x01goto:bbb", "\<CR>", "\x01goto:別名", 'd', 'q']
 GnosisYomiReview
-sleep 100m
-let s:line = search('^\[bbb\]')
-call assert_true(s:line > 0)
-call setline(s:line, substitute(getline(s:line), '^\[bbb\]', '[ccc]', ''))
-let s:line = search('^\[別名\]')
-execute s:line . 'delete _'
-call gnosis#review_commit()
-sleep 100m
+sleep 400m
+call assert_equal([], g:gnosis_test_keys)
+execute 'edit! ' . fnameescape($D . '/v/g.md')
 call assert_true(index(F('g.md'), '[aaa](a.md)') >= 0)
 call assert_true(index(F('g.md'), '[ccc](a.md)') >= 0)
 call assert_equal(-1, index(F('g.md'), '[bbb](a.md)'))
@@ -66,6 +63,7 @@ call assert_equal(s:oldmap.rhs, maparg('y', 'n', 0, 1).rhs)
 execute 'edit ' . fnameescape($D . '/v/h.md')
 let g:gnosis_test_display_name = ['', '']
 let g:gnosis_test_yomi = ['えー', 'びー']
+let g:gnosis_test_keys = ["\<CR>", "\<CR>"]
 call gnosis#add_clipboard_before_up_note()
 call assert_true(index(F('h.md'), '[A](a.md)') >= 0)
 call assert_true(index(F('h.md'), '[B](b.md)') >= 0)

@@ -1937,7 +1937,10 @@ function! s:save_state() abort
   if !has_key(s:S, 'tenths') && !has_key(s:S, 'stretch') && !has_key(s:S, 'size')
     return
   endif
-  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0), 'open': get(s:S, 'open_pref', 1)}
+  " 画面の幅（< >）は、曼荼羅ビューと Folgezettel ビューで別々に持つ。今の幅は、今のビューの幅
+  let s:S[get(s:S, 'view', 'mandala') ==# 'fz' ? 'tenths_f' : 'tenths_m'] = get(s:S, 'tenths', 5)
+  let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0), 'open': get(s:S, 'open_pref', 1),
+        \ 'tenths_m': get(s:S, 'tenths_m', get(s:S, 'tenths', 5)), 'tenths_f': get(s:S, 'tenths_f', get(s:S, 'tenths', 5))}
   let l:old = s:state_all()
   if type(get(l:old, 'presets', 0)) == v:t_dict
     let l:d.presets = l:old.presets
@@ -2222,6 +2225,35 @@ function! s:rel_of(abs) abort
   return stridx(a:abs, s:S.root . '/') == 0 ? strpart(a:abs, len(s:S.root) + 1) : ''
 endfunction
 
+" 右の窓に出したノートは、画面を一番上から出して、カーソルだけをその同じ画面の一番下の行に置く
+" （\zz で隠した部分は折りたたまれているので、見えている最後の行になる。窓の高さ・幅にも合わせる）。
+" 置いたあとに利用者がその窓でカーソルを動かしたら、そのままにする（置いた行のままなら、窓の大きさが変わったとき置き直す）
+function! s:note_cursor_bottom(nw) abort
+  call win_execute(a:nw, 'keepjumps normal! gg')
+  call win_execute(a:nw, 'keepjumps normal! L')
+  call win_execute(a:nw, 'let w:gnosis_view_placed = [bufnr("%"), line("."), winheight(0), winwidth(0), &l:foldenable]')
+endfunction
+
+" すでに出ているノートの窓: まだカーソルを動かしていなければ（置いた行のまま、または一度も置いておらず 1 行目）、置き直す
+function! s:note_cursor_fix(nw) abort
+  if a:nw < 0 || empty(getwininfo(a:nw))
+    return
+  endif
+  let l:placed = getwinvar(a:nw, 'gnosis_view_placed', [])
+  let l:buf = winbufnr(a:nw)
+  let l:cur = getcurpos(a:nw)[1]
+  let l:wi = getwininfo(a:nw)[0]
+  if empty(l:placed) || l:placed[0] != l:buf
+    if l:cur == 1 && !getbufvar(l:buf, '&modified')
+      call s:note_cursor_bottom(a:nw)
+    endif
+    return
+  endif
+  if l:cur == l:placed[1] && (l:placed[2] != l:wi.height || l:placed[3] != l:wi.width)
+    call s:note_cursor_bottom(a:nw)
+  endif
+endfunction
+
 " 元のノート（\l を押したノート）を右の窓に出す
 function! s:show_origin() abort
   let l:o = get(s:S, 'origin', {})
@@ -2234,7 +2266,7 @@ function! s:show_origin() abort
   endif
   call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
   call win_execute(l:nw, 'silent! hide edit ' . fnameescape(l:o.path))
-  call win_execute(l:nw, 'keepjumps normal! ggL')
+  call s:note_cursor_bottom(l:nw)
 endfunction
 
 " o: 入れるノート（\l を押したときのノート）を右に見る。もう一度で中心のノートに戻る
@@ -2754,6 +2786,8 @@ function! s:show_note(id) abort
   if fnamemodify(bufname(winbufnr(l:nw)), ':p') ==# fnamemodify(l:path, ':p')
     if l:hl > 0
       call win_execute(l:nw, 'keepjumps call cursor(' . l:hl . ', 1) | normal! zt')
+    else
+      call s:note_cursor_fix(l:nw)
     endif
     return
   endif
@@ -2763,7 +2797,7 @@ function! s:show_note(id) abort
     call win_execute(l:nw, 'keepjumps call cursor(' . l:hl . ', 1) | normal! zt')
   else
     " 上から表示して、カーソルは画面のいちばん下の行に置く
-    call win_execute(l:nw, 'keepjumps normal! ggL')
+    call s:note_cursor_bottom(l:nw)
   endif
   let s:S.note = l:path
 endfunction
@@ -2884,7 +2918,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> gv <Cmd>call gnosis#mview#switch_view()<CR>
-  nnoremap <buffer><nowait><silent> \o <Cmd>call gnosis#outline#toggle()<CR>
+  nnoremap <buffer><nowait><silent> \o <Cmd>call gnosis#panel#key('outline')<CR>
   nnoremap <buffer><nowait><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
@@ -3075,6 +3109,7 @@ function! gnosis#mview#rerender() abort
     call win_execute(l:mw, 'call gnosis#mview#render_here()')
   catch
   endtry
+  call s:note_cursor_fix(s:note_win())
   redraw!
 endfunction
 
@@ -3261,6 +3296,17 @@ function! s:open(center, ...) abort
     if type(l:t) == v:t_number && l:t >= 2 && l:t <= 8
       let s:S.tenths = l:t
     endif
+    " ビューごとの幅（無ければ共通の幅）。最初に開くビューの幅を、今の幅にする
+    for [l:k, l:key] in [['tenths_m', 'tenths_m'], ['tenths_f', 'tenths_f']]
+      let l:tv = get(l:all, l:key, l:t)
+      if type(l:tv) == v:t_number && l:tv >= 2 && l:tv <= 8
+        let s:S[l:k] = l:tv
+      endif
+    endfor
+    " 最初は曼荼羅ビューとして開く（前回 Folgezettel ビューだったら、そのあと切り替えて、そのビューの幅にする）
+    if has_key(s:S, 'tenths_m')
+      let s:S.tenths = s:S.tenths_m
+    endif
     let l:sv = get(l:all, 'stretch', 0)
     if (type(l:sv) == v:t_float || type(l:sv) == v:t_number) && l:sv >= 0.5 && l:sv <= 3.0 && !has_key(s:S, 'stretch')
       let s:S.stretch = l:sv + 0.0
@@ -3360,6 +3406,7 @@ function! gnosis#mview#toggle() abort
     endif
     let l:nw = s:note_win()
     if l:nw > 0
+      call s:note_cursor_fix(l:nw)
       call win_gotoid(l:nw)
     endif
     return
@@ -3535,6 +3582,12 @@ function! gnosis#mview#switch_view(...) abort
   if !empty(get(s:S, 'lk', {}))
     echo 'Gnosis: ' . gnosis#i18n#tr('置き場所を選んでいる最中は、ビューを切り替えられません')
     return
+  endif
+  " 幅は、ビューごとに別々に持つ。今のビューの幅をしまい、切り替え先のビューの幅にする
+  let s:S[l:from ==# 'fz' ? 'tenths_f' : 'tenths_m'] = get(s:S, 'tenths', 5)
+  let s:S.tenths = get(s:S, l:to ==# 'fz' ? 'tenths_f' : 'tenths_m', get(s:S, 'tenths', 5))
+  if get(s:S, 'size', 3) == 3 && s:note_win() > 0
+    call win_execute(l:mw, 'vertical resize ' . s:win_width())
   endif
   let s:S.view = l:to
   " 切り替えの最中は、fz の題の表示（echo）を止める（「ENTER を押して」が出るため）

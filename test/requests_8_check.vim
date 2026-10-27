@@ -67,6 +67,7 @@ call setreg('"', "[未所属](orphan.md)\n[既存](existing.md)", 'V')
 call setreg('0', getreg('"'))
 let g:gnosis_test_display_name = ['追加した子', '既存の子']
 let g:gnosis_test_yomi = ['ついか', 'きそん']
+let g:gnosis_test_keys = ["\<CR>", "\<CR>"]
 call gnosis#add_clipboard_before_up_note()
 call assert_equal(['[A](a.md)'], PB($D . '/v/orphan.md'))
 call assert_equal(['[元の親](parent.md)'], PB($D . '/v/existing.md'))

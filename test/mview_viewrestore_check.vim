@@ -29,3 +29,21 @@ call s:ok('曼荼羅で閉じたことが記録される', get(json_decode(join(
 call gnosis#mview#switch_view('fz')
 doautocmd VimLeavePre
 call s:ok('Folgezettel で閉じたことが記録される', get(json_decode(join(readfile($GNOSIS_HOME . '/mandala.json'), "\n")), 'view', '') ==# 'fz')
+" 画面の幅は、曼荼羅ビューと Folgezettel ビューで別々に持つ
+call gnosis#mview#switch_view('mandala')
+let s:w_m0 = winwidth(gnosis#mview#state().win)
+call gnosis#mview#win_op('resize+')
+call gnosis#mview#win_op('resize+')
+let s:w_m1 = winwidth(gnosis#mview#state().win)
+call gnosis#mview#switch_view('fz')
+let s:w_f0 = winwidth(gnosis#mview#state().win)
+call s:ok('Folgezettel ビューの幅は、曼荼羅ビューで変えた幅と別', s:w_m1 > s:w_m0 && s:w_f0 == s:w_m0, string([s:w_m0, s:w_m1, s:w_f0]))
+call gnosis#mview#win_op('resize-')
+let s:w_f1 = winwidth(gnosis#mview#state().win)
+call gnosis#mview#switch_view('mandala')
+call s:ok('Folgezettel ビューで変えた幅は、曼荼羅ビューに影響しない', winwidth(gnosis#mview#state().win) == s:w_m1 && s:w_f1 < s:w_f0, string([winwidth(gnosis#mview#state().win), s:w_m1, s:w_f1, s:w_f0]))
+call gnosis#mview#switch_view('fz')
+call s:ok('戻ると、それぞれの幅に戻る', winwidth(gnosis#mview#state().win) == s:w_f1)
+doautocmd VimLeavePre
+let s:j = json_decode(join(readfile($GNOSIS_HOME . '/mandala.json'), "\n"))
+call s:ok('幅は両方とも覚える', get(s:j, 'tenths_m', 0) > get(s:j, 'tenths_f', 0), string(s:j))

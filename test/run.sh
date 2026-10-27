@@ -216,6 +216,7 @@ sh "$REPO/test/mview_net.sh"
 python3 "$REPO/python/test_fznav.py"
 sh "$REPO/test/fznav_net.sh"
 python3 "$REPO/test/fznav_pty_check.py"
+python3 "$REPO/test/note_cursor_pty_check.py"
 sh "$REPO/test/mview_handoff_net.sh"
 sh "$REPO/test/mview_syncdone_net.sh"
 
