@@ -322,7 +322,7 @@ endfunction
 
 " 検索・並び・強調は note_search.py。fzf は --disabled で表示とモード切替を受け持つ。
 function! s:note_search_run(prompt, with_nth, Sink, ...) abort
-  " <Space> の --only は従来どおり。gs / 通常・ビジュアル \l は共通の四モード。
+  " <Space> の --only は従来どおり。gs / 通常・ビジュアル \l は共通の三モード。
   let l:extra = a:0 > 0 ? a:1 : ''
   let l:modefile = ''
   if a:0 == 0

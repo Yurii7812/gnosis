@@ -11,7 +11,7 @@ CH=$( (git diff --name-only "$BASE"; git diff --name-only; git ls-files -o --exc
 PAT=""
 add() { PAT="$PAT|$1"; }
 echo "$CH" | grep -q '^autoload/gnosis/mview.vim\|^python/mandala_view.py\|^test/mview' && add 'mview'
-echo "$CH" | grep -q '^plugin/gnosis_search.vim\|^autoload/gnosis_search.vim' && add 'link_pick|search_query'
+echo "$CH" | grep -q '^plugin/gnosis_search.vim\|^autoload/gnosis_search.vim\|^python/note_search.py\|^python/test_note_search.py\|^test/search_modes_pty.py' && add 'link_pick|search_query|note_search|search_modes'
 echo "$CH" | grep -q '^autoload/gnosis/start.vim' && add 'start_screen|start_size'
 echo "$CH" | grep -q '^autoload/gnosis/i18n.vim\|^i18n/\|^autoload/gnosis/settings' && add 'i18n|vault_settings|start_screen|settings'
 echo "$CH" | grep -q '^autoload/gnosis/theme\|^colors/\|^assets/themes' && add 'theme|light_contrast'

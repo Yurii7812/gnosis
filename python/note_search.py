@@ -10,8 +10,9 @@
   クエリ語を強調し、3列目のヒット行へスクロールする。
 - fzf 側は --disabled で検索しない（検索・並び・強調はこのスクリプトが行う）。
 
-使い方: note_search.py [--mode all|groups|index|notes] [--mode-file FILE] [--only <paths-file>] <root> [query...]
+使い方: note_search.py [--mode all|index|no-index] [--mode-file FILE] [--only <paths-file>] <root> [query...]
   --cycle next|previous … mode-file のモードを切り替えて画面の見出しを出す。
+  all は全ノートと索引の表示名、no-index は全ノート（グループを含む）だけ。
   index はグループと、リンク先の Group: に登録元があるグループ本文のリンク表示名。宛先＋表示名で重複を除く。
   --only <paths-file> … そのファイルに列挙した絶対パスだけを検索対象にする
                         （<Space>=今のノートのリンク先に絞る用）。各行は
@@ -114,7 +115,7 @@ def first_hit_line(lines: list[str], tokens: list[str]) -> int:
 # Reuse the note-format parser for group attributes and body/relationship boundaries.
 # Only registered group body links define index entries; a normal note's incidental links do not.
 INDEX_LINK_RE = re.compile(r"(?<!!)\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
-MODES = ("all", "groups", "index", "notes")
+MODES = ("all", "index", "no-index")
 
 
 def is_group(path: str, text: str) -> bool:
@@ -174,11 +175,11 @@ def search_rows(root: str, query: str, mode: str = "all", only: dict[str, str] |
         if only is not None and os.path.realpath(path) not in only:
             continue
         group = is_group(path, text)
-        if (mode in ("groups", "index") and not group) or (mode == "notes" and group):
+        if mode == "index" and not group:
             continue
         name = only.get(os.path.realpath(path), "") if only is not None else ""
         candidates.append((path, name, ""))
-    if mode == "index":
+    if mode in ("all", "index") and only is None:
         candidates.extend(index_entries(notes))
     rows = []
     seen = set()
@@ -214,8 +215,8 @@ def search_rows(root: str, query: str, mode: str = "all", only: dict[str, str] |
 
 
 MODE_LABELS = {
-    "ja": ("全部", "グループだけ", "グループ＋索引の表示名", "ノートだけ"),
-    "en": ("All", "Groups", "Groups + index names", "Notes"),
+    "ja": ("全部", "索引とグループ", "索引以外"),
+    "en": ("All", "Index names + groups", "Without index names"),
 }
 
 

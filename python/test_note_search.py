@@ -32,9 +32,22 @@ class SearchModes(unittest.TestCase):
 
     def test_modes(self):
         self.assertEqual(self.paths('all'), {'a', 'b', 'g', 'index', 'topic'})
-        self.assertEqual(self.paths('groups'), {'g', 'index', 'topic'})
-        self.assertEqual(self.paths('notes'), {'a', 'b'})
+        self.assertEqual(self.paths('no-index'), {'a', 'b', 'g', 'index', 'topic'})
         self.assertTrue({'a', 'g', 'index', 'topic'} <= self.paths('index'))
+
+    def test_all_includes_aliases_and_no_index_keeps_groups(self):
+        for mode in ('all', 'index'):
+            rows = ns.search_rows(str(self.root), '別の呼び名', mode)
+            self.assertTrue(any(Path(r[3]).name == 'a.md' and r[4] == '別の呼び名'
+                                and r[6] for r in rows))
+        rows = ns.search_rows(str(self.root), '', 'no-index')
+        self.assertTrue(all(not r[6] for r in rows))
+        self.assertFalse(any(Path(r[3]).name == 'a.md' for r in
+                             ns.search_rows(str(self.root), '別の呼び名', 'no-index')))
+        self.assertTrue(any(Path(r[3]).name == 'g.md' for r in rows))
+        self.assertTrue(ns.search_rows(str(self.root), 'Needle body', 'no-index'))
+        for lang in ('ja', 'en'):
+            self.assertEqual(len({ns.mode_header(mode, lang) for mode in ns.MODES}), 3)
 
     def test_index_entries(self):
         entries = list(ns.index_entries(dict(ns.load_notes(str(self.root)))))
@@ -79,9 +92,11 @@ class SearchModes(unittest.TestCase):
 
     def test_regular_body_hit_and_and_search(self):
         rows = ns.search_rows(str(self.root), 'Needle body', 'all')
-        self.assertEqual(len(rows), 1)
+        self.assertEqual({Path(row[3]).name for row in rows}, {'a.md'})
+        self.assertEqual({row[4] for row in rows},
+                         {'ハーブガーデンを作ってみたい', 'ハーブ', '別の呼び名', 'topic alias'})
         text = (self.root / 'a.md').read_text().splitlines()
-        self.assertEqual(rows[0][5], text.index('Needle in body') + 1)
+        self.assertTrue(all(row[5] == text.index('Needle in body') + 1 for row in rows))
         self.assertEqual(ns.search_rows(str(self.root), 'Needle absent', 'all'), [])
 
     def test_cli_mode_state_and_empty_results(self):
@@ -90,13 +105,15 @@ class SearchModes(unittest.TestCase):
         def run(*args):
             return subprocess.check_output([sys.executable, ns.__file__,
                 '--mode-file', str(state), *args], text=True)
-        self.assertTrue(run('--cycle', 'next').startswith('Groups |'))
-        self.assertEqual(state.read_text(), 'groups')
+        self.assertTrue(run('--cycle', 'next').startswith('Index names + groups |'))
+        self.assertEqual(state.read_text(), 'index')
         self.assertEqual(run(str(self.root), 'definitely absent'), '')
         self.assertTrue(run('--cycle', 'previous').startswith('All |'))
         self.assertIn('b.md', run(str(self.root), 'Ordinary B'))
-        self.assertTrue(run('--cycle', 'previous').startswith('Notes |'))
-        self.assertNotIn('index.md', run(str(self.root)))
+        self.assertTrue(run('--cycle', 'previous').startswith('Without index names |'))
+        self.assertIn('index.md', run(str(self.root)))
+        self.assertTrue(run('--cycle', 'previous').startswith('Index names + groups |'))
+        self.assertTrue(run('--cycle', 'previous').startswith('All |'))
 
     def test_only_keeps_existing_link_name_search(self):
         only = {str((self.root / 'b.md').resolve()): 'Local name'}
