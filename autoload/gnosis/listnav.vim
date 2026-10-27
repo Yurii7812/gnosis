@@ -221,6 +221,12 @@ function! gnosis#listnav#moved() abort
   let s:timer = timer_start(60, function('s:preview'))
 endfunction
 
+" 行 L を窓の一番上に出す。`normal! zt` は、feedkeys で積まれて残ったキー（起動時の nohlsearch など）まで
+" 実行してしまい、n が前回の検索（E486）になることがあるので使わない。
+function! s:top_line(win, lnum) abort
+  call win_execute(a:win, 'keepjumps call winrestview({"lnum": ' . a:lnum . ', "col": 0, "topline": ' . a:lnum . '})')
+endfunction
+
 function! s:preview(timer) abort
   let s:timer = -1
   let l:st = gnosis#mview#state()
@@ -230,7 +236,7 @@ function! s:preview(timer) abort
   call gnosis#mview#preview_rel(l:row.path)
   let l:nw = gnosis#mview#note_win()
   if l:nw > 0 && get(l:row, 'line', 0) > 0
-    call win_execute(l:nw, 'call cursor(' . l:row.line . ', 1) | normal! zt')
+    call s:top_line(l:nw, l:row.line)
   endif
 endfunction
 
@@ -252,7 +258,7 @@ function! gnosis#listnav#enter() abort
   call gnosis#mview#open_rel(l:row.path)
   if !gnosis#mview#picking()
     call gnosis#mview#toggle()
-    if get(l:row, 'line', 0) > 0 | call cursor(l:row.line, 1) | normal! zt | endif
+    if get(l:row, 'line', 0) > 0 | call s:top_line(win_getid(), l:row.line) | endif
   endif
 endfunction
 
