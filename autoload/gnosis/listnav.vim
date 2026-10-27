@@ -123,6 +123,7 @@ function! s:follow_center() abort
   let s:L.cache = {}
   let s:L.pathcache = {}
   let s:L.rows = []
+  let s:L.origin = s:save_origin()
 endfunction
 
 function! gnosis#listnav#render() abort
@@ -259,6 +260,7 @@ function! gnosis#listnav#enter() abort
   if !gnosis#mview#picking()
     call gnosis#mview#toggle()
     if get(l:row, 'line', 0) > 0 | call s:top_line(win_getid(), l:row.line) | endif
+    let s:L.origin = s:save_origin()
   endif
 endfunction
 

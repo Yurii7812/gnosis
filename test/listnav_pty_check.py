@@ -71,8 +71,10 @@ class ListView(unittest.TestCase):
             s.send('\r', .6)
             self.assertIn('b.md', self.dump(s)['file'])
             s.send(' ', .3)
-            s.send('o', .3)
-            self.assertIn('a.md', self.dump(s)['file'])
+            s.send('sGroup\r', .8)  # 別のノートをプレビューしてから o で、Enter で開いた b.md へ戻る
+            s.send('G', .6)
+            s.send('o', .4)
+            self.assertIn('b.md', self.dump(s)['file'])
 
     def test_filter_preserves_preview_and_alias_search_preview_returns(self):
         with self.session() as s:
