@@ -24,6 +24,16 @@ def fake_reader(text: str) -> str:
     return _YOMI.get(text, text)
 
 
+def T(root, title, group=None):
+    """題でノートを探す（生成物はふつうのノート＝タイムスタンプ名）。無ければ、昔の固定名のパス（書き込み用）。"""
+    found = pp.find_titled(root, title, group)
+    return found if found is not None else Path(root) / (title + ".md")
+
+
+def N(root, title, group=None):
+    return T(root, title, group).name
+
+
 def check(cond: bool, msg: str) -> None:
     if cond:
         print(f"  ok   {msg}")
@@ -114,8 +124,8 @@ def test_create_and_regen() -> None:
         root = _make_vault(Path(d))
         index_path = pp.create_paper_index(root)
         check(index_path.is_file(), "Paper-Zettelkasten-Index ができる")
-        check((root / "Index-write.md").is_file(), "Index-write.md ができる")
-        check((root / "Folgezettel-Index.md").is_file(), "Folgezettel-Index.md ができる")
+        check(T(root, "Index-write").is_file(), "Index-write.md ができる")
+        check(T(root, "Folgezettel-Index", True).is_file(), "Folgezettel-Index.md ができる")
         check(pp.find_paper_index(root) == index_path, "固定ファイル名で見つかる")
         check(pp.create_paper_index(root) == index_path, "2回目は同じ Index を再利用")
 
@@ -126,7 +136,7 @@ def test_create_and_regen() -> None:
         notes = {fid: p for fid, p in moved}
         check(notes["1"].name != notes["1a"].name, "ノートはタイムスタンプ名")
 
-        (root / "Index-write.md").write_text(
+        T(root, "Index-write").write_text(
             "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n"
             "# Index-write\n\n"
             "バナナ: 1,1a,2\n"
@@ -155,9 +165,9 @@ def test_create_and_regen() -> None:
         check(f"[オザーク]({notes['2'].name})" in index_text,
               "単一IDは Index から直接リンク")
 
-        folge_text = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
-        check(folge_text.index("[1](folgezettel-Index-1.md#1)")
-              < folge_text.index("[2](folgezettel-Index-2.md#2)"), "Folgezettel-Index は自然順")
+        folge_text = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
+        check(folge_text.index(f"[1]({N(root, 'folgezettel-Index-1')}#1)")
+              < folge_text.index(f"[2]({N(root, 'folgezettel-Index-2')}#2)"), "Folgezettel-Index は自然順")
         check("[1a](" not in folge_text, "Folgezettel-Index は最上位IDだけ（1a 等は出ない）")
         check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
@@ -171,7 +181,7 @@ def test_create_and_regen() -> None:
             check("![](" in d_text, "専用ノートに画像")
             check("[Paper-Zettelkasten-Index:" in d_text
                   or "[Folgezettel-Index:" in d_text, "専用ノートの Parent")
-        iw_text = (root / "Index-write.md").read_text(encoding="utf-8")
+        iw_text = T(root, "Index-write").read_text(encoding="utf-8")
         check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
         check("PAPER:START" not in index_text and "PAPER:END" not in folge_text,
@@ -182,13 +192,13 @@ def test_create_and_regen() -> None:
 
         note1 = notes["1"].read_text(encoding="utf-8")
         check(f"[1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
-        check("[folgezettel-Index-1](folgezettel-Index-1.md#1)" in note1,
+        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" in note1,
               "根のノートの Parent は folgezettel-Index-1#1")
         note1a = notes["1a"].read_text(encoding="utf-8")
         check(f"[1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
 
         # キーワードから外した ID のグループ Parent 行は掃除される
-        (root / "Index-write.md").write_text(
+        T(root, "Index-write").write_text(
             "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n"
             "# Index-write\n\nバナナ: 1,1a\nオザーク: 2\n",
             encoding="utf-8",
@@ -219,14 +229,14 @@ def test_topic_index() -> None:
         check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
         n1 = notes["1"].read_text(encoding="utf-8")
         check("BranchGroup:\n[1-仏教](" in n1, "ID ノートの BranchGroup: にトピック")
-        check("[folgezettel-Index-1](folgezettel-Index-1.md#1)" in n1,
+        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" in n1,
               "ID ノートの Parent は folgezettel-Index-1#1")
         d_text = pp.folge_index_path(root, "1").read_text(encoding="utf-8")
         check("[1-Index]" not in d_text, "専用ノートに 1-Index へのリンクは無い")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
         check("[folgezettel-Index-1]" in topic_text and "1-Index" not in topic_text,
               "トピックノートの Context は folgezettel-Index-1 だけ")
-        folge_text = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        folge_text = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
         check("[1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
         # 階層トピック: 仏教/四念処 → 1-四念処（親: 1-仏教）は、BranchGroup の並びで 仏教 の下に 2 スペース下げる
@@ -261,30 +271,35 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_index_has_fixed_file_name() -> None:
-    print("index: 新規作成は常に Paper-Zettelkasten-Index.md（タイムスタンプ名を作らない）")
+def test_index_is_an_ordinary_note() -> None:
+    print("index: 生成物はふつうのノート（タイムスタンプ名）。ファイル名ではなく題で探す")
     with tempfile.TemporaryDirectory() as d:
         root = _make_vault(Path(d))
         path = pp.create_paper_index(root)
-        check(path.name == "Paper-Zettelkasten-Index.md" and path.is_file(), f"固定名で作られる: {path.name}")
-        check(pp.find_paper_index(root) == path, "find_paper_index は固定名を返す")
+        import re as _re
+        check(_re.fullmatch(r"\d{12}\.md", path.name) is not None and path.is_file(), f"タイムスタンプ名で作られる: {path.name}")
+        for title, grp in (("Index-write", None), ("Folgezettel-Index", True)):
+            f = pp.find_titled(root, title, grp)
+            check(f is not None and _re.fullmatch(r"\d{12}\.md", f.name) is not None, f"{title} もタイムスタンプ名: {f.name if f else None}")
+        check(not any((root / n).exists() for n in ("Paper-Zettelkasten-Index.md", "Paper-Zettelkasten.md", "Index-write.md", "Folgezettel-Index.md")),
+              "固定のファイル名は作らない")
+        check(pp.find_paper_index(root) == path, "find_paper_index は題で見つける")
         text = path.read_text(encoding="utf-8")
         check("paper_index" not in text and "# Paper-Zettelkasten-Index" in text and "attribute: group" in text,
               "題と attribute: group（paper_index マーカーは無い）")
         before = sorted(p.name for p in root.glob("*.md"))
         pp.regen(root)
         pp.create_paper_index(root)
-        check(sorted(p.name for p in root.glob("*.md")) == before, "regen / create を繰り返しても新しい Index は増えない")
+        check(sorted(p.name for p in root.glob("*.md")) == before, "regen / create を繰り返しても新しいノートは増えない")
         same = [p for p in root.glob("*.md") if "# Paper-Zettelkasten-Index\n" in p.read_text(encoding="utf-8")]
-        check(sorted(p.name for p in same) == ["Paper-Zettelkasten-Index.md", "Paper-Zettelkasten.md"],
-              f"同じ題は、グループの Index と頂点の普通のノートの 2 つだけ: {[p.name for p in same]}")
-        top = root / "Paper-Zettelkasten.md"
+        check(len(same) == 2, f"同じ題は、グループの Index と頂点の普通のノートの 2 つだけ: {[p.name for p in same]}")
+        top = pp.find_paper_top(root)
         ttext = top.read_text(encoding="utf-8")
-        check("attribute: group" not in ttext and "BranchGroup:" in ttext and "[Paper-Zettelkasten-Index](Paper-Zettelkasten-Index.md)" in ttext
-              and "[Index-write](Index-write.md)" in ttext and "[Folgezettel-Index](Folgezettel-Index.md)" in ttext
+        check("attribute: group" not in ttext and "BranchGroup:" in ttext and f"[Paper-Zettelkasten-Index]({N(root, 'Paper-Zettelkasten-Index', True)})" in ttext
+              and f"[Index-write]({N(root, 'Index-write')})" in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" in ttext
               and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: に 3 つのグループ、ChildBranch は空: {ttext}")
         parent = (root / "index.md").read_text(encoding="utf-8")
-        check("(Paper-Zettelkasten.md)" in parent and "(Paper-Zettelkasten-Index.md)" not in parent, "index.md からは頂点の普通のノートへリンクする")
+        check(f"({top.name})" in parent and f"({path.name})" not in parent, "index.md からは頂点の普通のノートへリンクする")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         (root / "index.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n"
@@ -293,76 +308,28 @@ def test_index_has_fixed_file_name() -> None:
             (root / name).write_text("---\ntitle: " + name + "\n---\n\n# x\n", encoding="utf-8")
         pp.create_paper_index(root)
         lines = (root / "index.md").read_text(encoding="utf-8").split("\n")
-        at = lines.index("[Paper-Zettelkasten-Index](Paper-Zettelkasten.md)")
+        at = lines.index(f"[Paper-Zettelkasten-Index]({N(root, 'Paper-Zettelkasten-Index', False)})")
         check(lines[at - 1] == "[問題](261012130347.md)", f"index.md には空行を挟まず、最後のリンクの直後に足す: {lines[at-2:at+1]}")
         before = (root / "index.md").read_text(encoding="utf-8")
         pp.create_paper_index(root)
         check((root / "index.md").read_text(encoding="utf-8") == before, "2 回目はリンクを足さない（冪等）")
 
 
-def test_index_migrates_from_timestamp_name() -> None:
-    print("index: 旧タイムスタンプ名の Index を固定名へ移行（内容・メタデータ保持、リンク更新）")
+def test_existing_notes_are_kept_as_they_are() -> None:
+    print("index: 昔の固定ファイル名・旧タイムスタンプ名のノートも、題で見つけてそのまま使う（改名しない）")
     with tempfile.TemporaryDirectory() as d:
         root = _make_vault(Path(d))
-        old = root / "261001120000.md"
-        _write(old, "---\ntime: 2026-10-01 12:00:00\ntitle: Paper-Zettelkasten-Index\npaper_index: true\nextra: 残す\n---\n"
-                    "# Paper-Zettelkasten-Index\n\n[Index-write](Index-write.md)\n[Folgezettel-Index](Folgezettel-Index.md)\n\n"
-                    "[バナナ](261001120001.md)\n")
-        _write(root / "index.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index\nattribute: group\n---\n\n# Index\n\n"
-                                  "[Paper-Zettelkasten-Index](261001120000.md)\n")
-        _write(root / "Index-write.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\n"
-                                         "### Parent\n[Paper-Zettelkasten-Index](261001120000.md)\n")
-        _write(root / "sub" / "n.md", "---\ntitle: sub\n---\n\n# sub\n\n[戻る](../261001120000.md#見出し)と[外部](https://example.com/261001120000.md)\n")
-        _write(root / "other.md", "---\ntitle: other\n---\n\n# other\n\n[別](261001120009.md)\n")
-        old_text = old.read_text(encoding="utf-8")
-        result = pp.migrate_paper_index(root)
-        new = root / "Paper-Zettelkasten-Index.md"
-        check(result == new and new.is_file() and not old.exists(), "改名された")
-        check(new.read_text(encoding="utf-8") == old_text, "中身（キーワード・リンク・メタデータ）は 1 バイトも変わらない")
-        check("(Paper-Zettelkasten-Index.md)" in (root / "index.md").read_text(encoding="utf-8")
-              and "261001120000" not in (root / "index.md").read_text(encoding="utf-8"), "index.md のリンクが更新される")
-        check("(Paper-Zettelkasten-Index.md)" in (root / "Index-write.md").read_text(encoding="utf-8"), "他のノートのリンクも更新される")
-        sub = (root / "sub" / "n.md").read_text(encoding="utf-8")
-        check("(../Paper-Zettelkasten-Index.md#見出し)" in sub, "サブフォルダの相対リンクと #見出し を保つ")
-        check("https://example.com/261001120000.md" in sub, "外部 URL は書き換えない")
-        check("261001120009.md" in (root / "other.md").read_text(encoding="utf-8"), "別のノートへのリンクは触らない")
-        check(pp.find_paper_index(root) == new, "find_paper_index は固定名")
-        check(pp.migrate_paper_index(root) == new, "移行済みなら何もしない（冪等）")
-        pp.regen(root)
-        check(not list(root.glob("2610*.md")) or all(p.name != "261001120000.md" for p in root.glob("*.md")),
-              "regen で旧名が復活しない")
-
-
-def test_index_migration_never_overwrites() -> None:
-    print("index: 固定名のファイルが既にあるとき、上書き・データ消失をしない")
-    with tempfile.TemporaryDirectory() as d:
-        root = _make_vault(Path(d))
-        old = root / "261001120000.md"
-        _write(old, "---\ntime: 2026-10-01 12:00:00\ntitle: Paper-Zettelkasten-Index\npaper_index: true\n---\n# Paper-Zettelkasten-Index\n")
-        other = root / "Paper-Zettelkasten-Index.md"
-        _write(other, "---\ntitle: 別のノート\n---\n# 別のノート\n\n大事な内容\n")
-        before_old = old.read_text(encoding="utf-8")
-        before_other = other.read_text(encoding="utf-8")
-        result = pp.migrate_paper_index(root)
-        check(result == old, "固定名が別のノートなら移行せず旧 Index を使い続ける")
-        check(other.read_text(encoding="utf-8") == before_other and old.read_text(encoding="utf-8") == before_old,
-              "どちらのファイルも変わらない")
-    with tempfile.TemporaryDirectory() as d:
-        root = _make_vault(Path(d))
-        _write(root / "Paper-Zettelkasten-Index.md", "---\ntitle: 別のノート\n---\n# 別のノート\n\n大事な内容\n")
-        try:
-            pp.create_paper_index(root)
-            check(False, "別のノートが固定名を使っていたら create は止まる")
-        except RuntimeError:
-            check(True, "別のノートが固定名を使っていたら create は止まる（上書きしない）")
-        check("大事な内容" in (root / "Paper-Zettelkasten-Index.md").read_text(encoding="utf-8"), "中身は残る")
-    with tempfile.TemporaryDirectory() as d:
-        root = _make_vault(Path(d))
-        _write(root / "Paper-Zettelkasten-Index.md", "---\ntitle: Paper-Zettelkasten-Index\n---\n# Paper-Zettelkasten-Index\n\n手書き\n")
+        _write(root / "Paper-Zettelkasten-Index.md", "---\ntitle: Paper-Zettelkasten-Index\nattribute: group\n---\n# Paper-Zettelkasten-Index\n\n手書き\n")
         idx = pp.create_paper_index(root)
         text = idx.read_text(encoding="utf-8")
-        check(idx.name == "Paper-Zettelkasten-Index.md" and "paper_index" not in text and "手書き" in text,
-              "題が Index の固定名ファイルはそのまま使う（中身は残る）")
+        check(idx.name == "Paper-Zettelkasten-Index.md" and "手書き" in text, "題が Index の昔の固定名ファイルはそのまま使う（中身は残る・改名しない）")
+        check(pp.migrate_paper_index(root) == idx, "migrate_paper_index は改名せず、使う Index を返す")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        old = root / "261001120000.md"
+        _write(old, "---\ntime: 2026-10-01 12:00:00\ntitle: Paper-Zettelkasten-Index\npaper_index: true\nextra: 残す\n---\n# Paper-Zettelkasten-Index\n")
+        before = old.read_text(encoding="utf-8")
+        check(pp.migrate_paper_index(root) == old and old.read_text(encoding="utf-8") == before, "旧タイムスタンプ名の Index もそのまま（改名しない）")
 
 
 def _diary_vault(root: Path) -> tuple[Path, Path]:
@@ -432,7 +399,7 @@ def test_diary_register_and_keyword() -> None:
         check(_section_links(notes["2026-10-07"].read_text(encoding="utf-8"), "ParentBranch:") == [m10.name], "日の ParentBranch は月")
         check("[2026-10-07-WE](" not in mtext.split("ChildBranch:")[0], "日へのリンクは本文ではなく ChildBranch: にだけある")
         check(_year(root, "2026") is None, "同じ年だけなら年のノートは作られない")
-        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ: {fi}")
         body = fi.split("---\n", 2)[2].strip("\n").split("\n")
         g_at = body.index("Group:")
@@ -474,7 +441,7 @@ def test_diary_register_and_keyword() -> None:
         check(_section_links(y26.read_text(encoding="utf-8"), "ParentBranch:") == [top.name], "年の ParentBranch は一番上")
         check(_section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [y25.name, y26.name], "一番上の ChildBranch は年（古い順・重複なし）")
         check(idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
-        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8")
+        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1, "年をまたいだあとも Folgezettel-Index の 日記 は 1 つ")
 
 
@@ -483,7 +450,7 @@ def test_diary_keyword_merges_with_index_write_entry() -> None:
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
-        _write(root / "Index-write.md", "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\n日記: 1,2\nバナナ: 1\n")
+        _write(T(root, "Index-write"), "---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\n日記: 1,2\nバナナ: 1\n")
         p = root / "p.jpg"
         p.write_bytes(b"x")
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
@@ -510,7 +477,7 @@ def test_diary_errors_and_scan_unchanged() -> None:
         moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
         pp.regen(root)
         check("[日記](" not in idx.read_text(encoding="utf-8"), "日記を登録していなければ「日記」は出ない")
-        check("[diary](" not in (root / "Folgezettel-Index.md").read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
+        check("[diary](" not in T(root, "Folgezettel-Index", True).read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
         check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"1", "2"}, "通常の ID 登録は今までどおり")
 
 
@@ -542,21 +509,21 @@ def test_index_has_no_blank_lines_between_links() -> None:
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index("[Folgezettel-Index](Folgezettel-Index.md)")
+        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
         check(lines[at + 1] == "" and lines[at + 2].startswith("[日記]("),
               f"Folgezettel-Index とキーワード一覧のあいだは空行 1 行: {lines[at:at+4]}")
-        check(lines[at - 1] == "[Index-write](Index-write.md)", "Index-write と Folgezettel-Index は連続")
+        check(lines[at - 1] == f"[Index-write]({N(root, 'Index-write')})", "Index-write と Folgezettel-Index は連続")
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
-                      and lines[i - 1] != "[Folgezettel-Index](Folgezettel-Index.md)"
+                      and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})"
                       and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
-        text = idx.read_text(encoding="utf-8").replace("[Folgezettel-Index](Folgezettel-Index.md)\n\n[日記](", "[Folgezettel-Index](Folgezettel-Index.md)\n\n\n[日記](")
+        text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})\n\n\n[日記](")
         idx.write_text(text, encoding="utf-8")
         pp.regen(root)
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index("[Folgezettel-Index](Folgezettel-Index.md)")
+        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
         check(lines[at + 1:at + 4] == ["", "", lines[at + 3]] and lines[at + 3].startswith("[日記]("),
               f"自分で入れた空行（2 つ）は regen しても消えない・増えない: {lines[at:at+5]}")
 
@@ -607,7 +574,7 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         # Index のリンクが無くなっても（題 + timeline: true で）同じノートを見つける
         itext = idx.read_text(encoding="utf-8")
         idx.write_text("\n".join(ln for ln in itext.split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
-        fi = root / "Folgezettel-Index.md"
+        fi = T(root, "Folgezettel-Index", True)
         fi.write_text("\n".join(ln for ln in fi.read_text(encoding="utf-8").split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
         pp.regen(root)
         tops3 = [n for n in root.glob("*.md") if "# 紙の日記\n" in n.read_text(encoding="utf-8")]
@@ -638,7 +605,7 @@ def test_old_group_diary_is_migrated_in_place() -> None:
         old_form(m12, "2025-12", days12)
         old_form(y26, "2026", [m10])
         old_form(y25, "2025", [m12])
-        old_form(top, "日記", [y25, y26], "Group:\n[Folgezettel-Index:日記](Folgezettel-Index.md)\n[Paper-Zettelkasten-Index:日記](Paper-Zettelkasten-Index.md)\n\n")
+        old_form(top, "日記", [y25, y26], f"Group:\n[Folgezettel-Index:日記]({N(root, 'Folgezettel-Index', True)})\n[Paper-Zettelkasten-Index:日記]({N(root, 'Paper-Zettelkasten-Index', True)})\n\n")
         pp.regen(root)
         check(pp.find_diary_group(root, idx) == top and _month(root, "2026-10") == m10 and _year(root, "2026") == y26,
               "同じファイルのまま（増えない）")
@@ -718,11 +685,11 @@ def test_title_is_the_id() -> None:
         _write(root / "plain2.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 6\n---\n\n# 6\n\n![](other.jpg)\n")
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "IDらしい title の普通のノート／別の画像を参照するノートはスキャンノートではない")
         before = (root / "plain.md").read_bytes()
-        (root / "Index-write.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
+        T(root, "Index-write").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
         pp.regen(root)
         check((root / "plain.md").read_bytes() == before, "普通のノートは regen でも変わらない")
         # リンクの表示名を変えても ID は変わらない
-        text = (root / "Index-write.md").read_text(encoding="utf-8")
+        text = T(root, "Index-write").read_text(encoding="utf-8")
         g = pp.find_group(root, "バナナ")
         gt = g.read_text(encoding="utf-8").replace(f"[1]({notes['1'].name})", f"[あああ]({notes['1'].name})")
         g.write_text(gt, encoding="utf-8")
@@ -754,7 +721,7 @@ def test_legacy_migration() -> None:
     print("移行: 旧メタデータを確かめられたものだけ外す。リンク・画像・本文は失わない。複数回で冪等")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
-        (root / "Index-write.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
+        T(root, "Index-write").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
         _write(root / "261001000001.md", "---\ntime: 2026-10-01 00:00:01\ntitle: 1\nfolgezettel: 1\n---\n\n# 1\n\n![](1.jpg)\n")
         _write(root / "261001000002.md", "---\ntime: 2026-10-01 00:00:02\ntitle: 1a\nfolgezettel: 1a\n---\n\n# 1a\n\n![](1a.jpg)\n")
         _write(root / "261001000003.md", "---\ntime: 2026-10-01 00:00:03\ntitle: 1-仏教\npaper_topic: 1\ntopic_parent: \n---\n\n# 1-仏教\n\n![](1-仏教.jpg)\n")
@@ -770,7 +737,7 @@ def test_legacy_migration() -> None:
             (root / n).write_bytes(b"x")
         pp.regen(root)
         snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
-        check("folgezettel: 1\n" in snap["261001000001.md"], "title と同じ現役 folgezettel も保持")
+        check('folgezettel: "PA_1"\n' in snap["261001000001.md"], "紙のスキャンノートの folgezettel は PA_ + 題（同期が付ける）")
         check(_no_legacy(root) == [], f"旧メタデータが外れた: {_no_legacy(root)}")
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")
@@ -802,7 +769,7 @@ def test_group_notes_format() -> None:
     print("Paper-Zettelkasten-Index / Folgezettel-Index / 日記グループの書式（行単位）")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
-        (root / "Index-write.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a,2\nオザーク: 2\n", encoding="utf-8")
+        T(root, "Index-write").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a,2\nオザーク: 2\n", encoding="utf-8")
         moved, _ = pp.move_images(root, root, _add_images(root, ["1", "1a", "2", "10"]))
         p = root / "dp.jpg"
         p.write_bytes(b"x")
@@ -815,15 +782,15 @@ def test_group_notes_format() -> None:
               and "attribute: group" in it[1:header_end]
               and it[header_end + 1:header_end + 3] == ["", "# Paper-Zettelkasten-Index"],
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
-        k = it.index("[Folgezettel-Index](Folgezettel-Index.md)")
-        check(it[k - 1] == "[Index-write](Index-write.md)" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")
+        k = it.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
+        check(it[k - 1] == f"[Index-write]({N(root, 'Index-write')})" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")
         kw = it[k + 2:]
         kw = kw[:kw.index("BackLink:")] if "BackLink:" in kw else kw   # 頂点のノートの BranchGroup: から BackLink: が付く
         while kw and kw[-1] == "":
             kw.pop()
         check("" not in kw, f"キーワード一覧に空行なし: {it[k:]}")
         check(sum(1 for ln in it if ln.startswith("[日記](")) == 1, "「日記」は通常のキーワードとして 1 つ")
-        fi = (root / "Folgezettel-Index.md").read_text(encoding="utf-8").split("\n")
+        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8").split("\n")
         check("attribute: group" in fi[:6], "Folgezettel-Index も attribute: group")
         body = fi[fi.index("# Folgezettel-Index"):]
         # Group: は先頭の関係ブロック（表示名つき）。続けて空行 1 つ、その後にキーワードのリンク
@@ -896,7 +863,7 @@ def test_simple_sync_keeps_format_and_trash_images() -> None:
     import note_format_v2 as nf
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
-        (root / "Index-write.md").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
+        T(root, "Index-write").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
         moved, _ = pp.move_images(root, root, _add_images(root, ["1", "1a"]))
         notes = dict(moved)
         pp.regen(root)

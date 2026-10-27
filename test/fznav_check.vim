@@ -137,30 +137,30 @@ call timer_start(0, {-> 0})
 sleep 50m
 call s:ok('本文側で別のノートを開くと、ビューが追従する', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1b "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
 call win_gotoid(s:st.win)
-" 折りたたみ
-call cursor(index(s:lines(), '  1a        知覚') + 1, 1)
-let s:n_before = len(s:lines())
-call s:keys('zc')
-call s:ok('zc で 1a の下位が隠れる', len(s:lines()) < s:n_before && len(filter(copy(s:lines()), 'v:val =~# "1a1a "')) == 0 && join(s:lines(), "\n") =~# '知覚 \+ +[0-9]', string(s:lines()[0 : 10]))
-call s:keys('u')
-call s:ok('u: 上位表示に切り替わる', s:lines()[0] =~# 'FOLGEZETTEL / 上位表示', s:lines()[0])
-call s:keys('u')
-call s:ok('通常に戻っても折りたたみは保持される', len(s:lines()) < s:n_before && join(s:lines(), "\n") =~# '知覚 \+ +[0-9]')
-call s:keys('zR')
-call s:ok('zR で全部開く', len(s:lines()) == s:n_before)
-call s:keys('zM')
-call s:ok('zM で全部閉じる', len(s:lines()) < s:n_before - 5)
-call s:keys('zR')
-" 現在のノートが折りたたまれた枝の中にあるとき
+" 現在のノートを n1a1a にしておく（折りたたみのキーは廃止した）
 call win_gotoid(gnosis#mview#note_win())
 execute 'edit ' . s:v . '/n1a1a.md'
 sleep 50m
 call win_gotoid(s:st.win)
-call s:ok('現在のノートが開いている枝は自動で開く', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a1a "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
-call cursor(index(s:lines(), '  1a        知覚') + 1, 1)
-call s:keys('zc')
-call s:ok('現在位置が隠れた枝の中なら、閉じた番号の行に ▸ が残る', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a "')) >= 1, string(s:lines()[0 : 10]))
-call s:keys('zR')
+call s:ok('現在のノートの行に ▸ が付く', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a1a "')) == 1, string(filter(copy(s:lines()), 'v:val =~# "^▸"')))
+" 動かすと右のノートが追従する（印・中心は変わらない）。c で印の行と右のノートに戻る
+call cursor(index(s:lines(), '  1a2       記憶') + 1, 1)
+call s:keys('j')
+call s:keys('k')
+sleep 200m
+call timer_start(0, {-> 0})
+sleep 50m
+call s:ok('動かすと右のノートが、カーソルの項目に変わる', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'n1a2.md', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t'))
+call s:ok('印（▸）は動かさない', len(filter(copy(s:lines()), 'v:val =~# "^▸ 1a1a "')) == 1)
+call s:keys('c')
+call s:ok('c で印のついたノートの行にカーソルが戻る', s:cursor_text() =~# '1a1a', s:cursor_text())
+call s:ok('c で右のノートも印のノートに戻る', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'n1a1a.md')
+" 兄弟移動
+call cursor(index(s:lines(), '  1a1a      言語') + 1, 1)
+call s:keys(']')
+call s:ok('] で次の兄弟へ', s:cursor_text() =~# '1a1b', s:cursor_text())
+call s:keys('[')
+call s:ok('[ で前の兄弟へ', s:cursor_text() =~# '1a1a', s:cursor_text())
 " 上位表示
 call s:keys('u')
 let s:U = s:lines()
@@ -179,6 +179,20 @@ call s:ok('Ctrl-← で Folgezettel ビューへ（2 ビューは左右どちら
 call s:keys('gv')
 call s:ok('gv（互換キー）でも切り替わる', gnosis#mview#view() ==# 'mandala')
 call s:keys('gv')
+" \l（入れるノートを選ぶモード）は Folgezettel ビューでも使え、ビューを切り替えても続く
+call win_gotoid(s:st.win)
+call s:keys('\l')
+call s:ok('Folgezettel ビューで \l: 選ぶモードになる', gnosis#mview#state().pick ==# 'link' && s:lines()[0] =~# 'FOLGEZETTEL.*入れるノートを選ぶ', s:lines()[0])
+call s:keys("\<C-Left>")
+call s:ok('選ぶモードのまま曼荼羅ビューに切り替えられる', gnosis#mview#view() ==# 'mandala' && gnosis#mview#state().pick ==# 'link')
+call s:keys("\<C-Left>")
+call s:ok('選ぶモードのまま Folgezettel ビューへ戻れる', gnosis#mview#view() ==# 'fz' && gnosis#mview#state().pick ==# 'link')
+call s:keys('o')
+call s:ok('o: 元のノートを右に見る', gnosis#mview#state().origin_view == 1)
+call s:keys('o')
+call s:ok('もう一度 o で戻る', gnosis#mview#state().origin_view == 0)
+call s:keys('q')
+call s:ok('q: 選ぶモードをやめる（ビューは閉じない）', empty(gnosis#mview#state().pick) && gnosis#mview#view() ==# 'fz' && winnr('$') >= 2)
 " アウトライン窓
 call win_gotoid(gnosis#mview#note_win())
 call s:keys('\o')
@@ -213,3 +227,47 @@ call s:ok('zR で展開', index(getbufline(bufnr('%'), 1, '$'), '    細部') >=
 call s:keys('q')
 call s:ok('q でアウトライン窓が閉じる', !gnosis#outline#is_open() && winnr('$') == 3 - 1 + 0 || !gnosis#outline#is_open())
 call s:keys('Q')
+" \W: ノートだけを表示する（どの窓にカーソルがあっても、全部の窓を閉じてノートの窓 1 つにする）
+function! s:reopen() abort
+  if winnr('$') == 1
+    call gnosis#mview#toggle()
+    sleep 100m
+  endif
+  if !gnosis#outline#is_open()
+    call win_gotoid(gnosis#mview#note_win())
+    call s:keys('\o')
+  endif
+endfunction
+call s:reopen()
+call s:ok('前提: 曼荼羅（またはビュー）・ノート・アウトラインが出ている', winnr('$') >= 3, string(winnr('$')))
+call win_gotoid(gnosis#outline#win())
+call s:keys('\W')
+call s:ok('\W: アウトライン窓から押しても、ノートの窓 1 つになる', winnr('$') == 1 && &buftype ==# '' && &filetype !~# '^gnosis-', winnr('$') . ' ' . &filetype)
+call s:reopen()
+call win_gotoid(gnosis#mview#state().win)
+call s:keys('\W')
+call s:ok('\W: 曼荼羅・Folgezettel の窓から押しても、ノートの窓 1 つになる', winnr('$') == 1 && &filetype !~# '^gnosis-', winnr('$') . ' ' . &filetype)
+call s:reopen()
+call win_gotoid(gnosis#mview#note_win())
+call s:keys('\W')
+call s:ok('\W: ノートの窓から押しても、ノートの窓 1 つになる', winnr('$') == 1 && &filetype !~# '^gnosis-' && !gnosis#outline#is_open(), winnr('$') . ' ' . &filetype)
+" アウトラインを閉じて開き直しても、中身が出る（以前は 2 回目から空だった）。go でアウトライン ⇔ ノート
+call s:reopen()
+call win_gotoid(gnosis#mview#note_win())
+execute 'edit ' . s:v . '/n1a1a.md'
+sleep 100m
+if gnosis#outline#is_open() | call gnosis#outline#close() | endif
+call gnosis#outline#open()
+sleep 200m
+call s:ok('アウトライン: 開き直しても見出しが出る', index(getbufline(gnosis#outline#state().buf, 1, '$'), '言語') >= 0, string(getbufline(gnosis#outline#state().buf, 1, '$')))
+call gnosis#outline#close()
+call gnosis#outline#open()
+sleep 200m
+call s:ok('アウトライン: 3 回目でも見出しが出る', index(getbufline(gnosis#outline#state().buf, 1, '$'), '言語') >= 0)
+call s:keys('go')
+call s:ok('go: アウトラインからノートの窓へ', win_getid() != gnosis#outline#win() && &filetype !=# 'gnosis-outline', &filetype)
+call s:keys('go')
+call s:ok('go: ノートからアウトライン窓へ', win_getid() == gnosis#outline#win())
+call gnosis#outline#close()
+call s:keys('go')
+call s:ok('go: 閉じていれば開いて、アウトラインへ移る', gnosis#outline#is_open() && win_getid() == gnosis#outline#win())

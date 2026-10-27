@@ -29,7 +29,8 @@ class FolgezettelTest(unittest.TestCase):
         new = self.note('new')
         orphan = self.note('orphan')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(new), '6')
+        # 番号は欠番なしに詰める（5 → 1・新しいものは最後）
+        self.assertEqual([self.ident(self.root / 'five.md'), self.ident(new)], ['1', '2'])
         self.assertEqual(self.ident(orphan), '')
         before = {p: p.read_text() for p in self.root.glob('*.md')}
         nf.simple_sync(self.root)
@@ -94,8 +95,8 @@ class FolgezettelTest(unittest.TestCase):
         y.write_text(y.read_text().replace('title: y', 'title: 2026').replace('# y', '# 2026'))
         m.write_text(m.read_text().replace('[d](d.md)', '[2026](y.md)'))
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(y), '1b')
-        self.assertEqual([self.ident(m), self.ident(day)], ['1b1', '1b1a'])
+        self.assertEqual(self.ident(y), '1a')
+        self.assertEqual([self.ident(m), self.ident(day)], ['1a1', '1a1a'])
         before = {p: p.read_text() for p in self.root.glob('*.md')}
         nf.simple_sync(self.root)
         self.assertEqual(before, {p: p.read_text() for p in before})
@@ -109,7 +110,7 @@ class FolgezettelTest(unittest.TestCase):
         late.write_text(late.read_text().replace('title: late', 'title: 2026-10-02-FR').replace('# late', '# 2026-10-02-FR').replace('---\n', '---\ntime: 2026-10-02 10:00:00\n', 1))
         early.write_text(early.read_text().replace('title: early', 'title: 2026-10-01-TH').replace('# early', '# 2026-10-01-TH').replace('---\n', '---\ntime: 2026-10-20 10:00:00\n', 1))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(early), self.ident(late)], ['3a', '3b'])
+        self.assertEqual([self.ident(early), self.ident(late)], ['1a', '1b'])
 
     def test_backfill_uses_creation_time_not_index_order(self):
         index = self.note('index', body='[new](a.md)\n[old](z.md)')
@@ -126,6 +127,90 @@ class FolgezettelTest(unittest.TestCase):
         self.assertEqual([self.ident(older), self.ident(newer), self.ident(late)], ['1', '2', '3'])
         self.assertLess(fz.creation_key(Path('261014120000.md'), {'fm': []}),
                         fz.creation_key(Path('261015120000.md'), {'fm': []}))
+
+    def snapshot(self):
+        return {p.name: p.read_text() for p in self.root.glob('*.md')}
+
+    def test_gaps_are_closed_and_stale_children_follow_parent(self):
+        # 3 が無い・親が 3a1a なのに子が 2a のまま、といったズレは、同期で Branch の形にそろう
+        self.note('index', body='[a](a.md)\n[b](b.md)\n[c](c.md)')
+        self.note('a', '1')
+        self.note('b', '4', body='ChildBranch:\n[x](x.md)\n[y](y.md)')
+        self.note('c', '9')
+        self.note('x', '2a', body='ParentBranch:\n[b](b.md)')       # 親は 4 なのに 2a
+        self.note('y', '4d', body='ParentBranch:\n[b](b.md)')       # 4a〜4c が無い
+        self.note('z', '4d1', body='ParentBranch:\n[y](y.md)')
+        nf.simple_sync(self.root)
+        got = {n: fz.value(self.root.joinpath(n + '.md').read_text()) for n in 'abcxyz'}
+        self.assertEqual(got, {'a': '1', 'b': '2', 'c': '3', 'x': '2a', 'y': '2b', 'z': '2b1'})
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+
+    def test_deleting_a_note_closes_the_gap(self):
+        self.note('index', body='[a](a.md)\n[b](b.md)\n[c](c.md)')
+        for n in 'abc':
+            self.note(n)
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'abc'], ['1', '2', '3'])
+        (self.root / 'b.md').unlink()
+        idx = self.root / 'index.md'
+        idx.write_text(idx.read_text().replace('[b](b.md)\n', ''))
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'ac'], ['1', '2'])
+
+    def test_note_with_two_parents_follows_one_of_them(self):
+        self.note('index', body='[a](a.md)\n[b](b.md)')
+        self.note('a', '1', body='ChildBranch:\n[k](k.md)')
+        self.note('b', '2')
+        self.note('k', '2a', body='ParentBranch:\n[b](b.md)\n\n[a](a.md)')
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(self.root / 'k.md'), '2a')       # 今の番号の親（b）を選ぶ
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+
+    def test_paper_generated_notes_share_the_top_note_id(self):
+        # 紙の PKM の Paper-Zettelkasten-Index（グループ）・Index-write・Folgezettel-Index は、頂点のノートと同じ番号
+        self.note('index', body='[a](a.md)\n[top](top.md)')
+        self.note('a')
+        top = self.note('top', body='BranchGroup:\n[Paper-Zettelkasten-Index](pidx.md)\n[Index-write](iw.md)\n[Folgezettel-Index](fidx.md)')
+        top.write_text(top.read_text().replace('title: top', 'title: Paper-Zettelkasten-Index').replace('# top', '# Paper-Zettelkasten-Index'))
+        for name, title, grp in (('pidx', 'Paper-Zettelkasten-Index', True), ('iw', 'Index-write', False), ('fidx', 'Folgezettel-Index', True)):
+            p = self.note(name)
+            p.write_text(p.read_text().replace(f'title: {name}', f'title: {title}' + ('\nattribute: group' if grp else '')).replace(f'# {name}', f'# {title}'))
+        nf.simple_sync(self.root)
+        got = [self.ident(self.root / f'{n}.md') for n in ('top', 'pidx', 'iw', 'fidx')]
+        self.assertEqual(got, ['2', '2', '2', '2'])
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+
+    def test_paper_notes_use_their_own_prefix(self):
+        # 紙のスキャンノートの番号は PA_ + 題。デジタルの番号とぶつからず、デジタル側に飛び番も作らない。印は設定で変えられる
+        self.note('index', body='[a](a.md)\n[b](b.md)')
+        self.note('a')
+        self.note('b')
+        scan = self.note('scan')
+        scan.write_text(scan.read_text().replace('title: scan', 'title: 1a2\nsource: scan').replace('# scan', '# 1a2'))
+        scan1 = self.note('scan1')
+        scan1.write_text(scan1.read_text().replace('title: scan1', 'title: 1\nsource: scan').replace('# scan1', '# 1'))
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PA_1', 'PA_1a2'])
+        self.assertEqual(fz.parent_id('PA_1a2'), 'PA_1a')
+        self.assertEqual(fz.parent_id('PA_1'), '')
+        self.assertTrue(fz.ID_RE.fullmatch('PA_1a2'))
+        self.assertLess(fz.natural_key('10'), fz.natural_key('PA_1'))
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+        # 印を PB に変える
+        (self.root / '.gnosis').mkdir()
+        (self.root / '.gnosis' / 'settings.json').write_text('{"paperIdPrefix": "PB"}')
+        nf.simple_sync(self.root)
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PB_1', 'PB_1a2'])
+        self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
 
     def test_branch_assignment_and_navigation(self):
         parent = self.note('parent', '1a')

@@ -1,5 +1,5 @@
 // 紙のスキャンの番号付け（`\F`）。大きく・シンプルに・キーボードだけ。
-//   1. 場所を選ぶ: Enter = vault の外のフォルダ（パソコンの中の写真）/ v = vault の中（`\M` で取り込んだ、番号のないもの）/ q 閉じる
+//   1. 場所を選ぶ: Enter = vault の外のフォルダ（パソコンの中の写真）/ v = vault の中（`\M` で取り込んだ、番号のないもの）/ p 紙の番号の印（PA → PA_1a2）を変える / q 閉じる
 //   2. （外のとき）フォルダを選ぶ:
 //        一覧の先頭に「このフォルダを使う」、その下に Desktop・前回使ったフォルダ、そのあと今いるフォルダの中のフォルダ。
 //        数字キー 1〜9 でその行へすぐ移って開く / j k ↑ ↓ で選ぶ / Enter 開く / u このフォルダを使う / ← Backspace 上へ
@@ -16,6 +16,7 @@ export function createScan(root, { api, onClose }) {
       <div class="scan-title"></div>
       <div class="scan-choice c-out"></div>
       <div class="scan-choice c-in"></div>
+      <div class="scan-prefix"><span class="sp-label"></span><b class="sp-value"></b><input class="sp-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" hidden aria-label=""></div>
       <div class="scan-keys k-source"></div>
     </div>
     <div class="scan-stage scan-folder" hidden>
@@ -49,7 +50,8 @@ export function createScan(root, { api, onClose }) {
     keysInput: "Enter: set and go next   Esc: close this input   Tab: put the previous number",
     done: (id) => `Saved as ${id}`, bad: (e) => e,
     title: "Which scans do you want to number?", out: "Enter   A folder outside the vault (photos on this computer)", in: (n) => `v   Inside the vault (unnumbered scans taken in with \\M)  ${n} scans`,
-    srcKeys: "Enter / v: choose   q: close", folderTitle: "Choose the folder with the scans", use: (n) => `▶ Use this folder (${n} photos)`, up: "↑ (go up)",
+    srcKeys: "Enter / v: choose   p: change the paper number prefix   q: close",
+    prefixLabel: "Paper note number prefix (p to change):  ", prefixHint: "1-4 capital letters (e.g. PA → PA_1a2). Enter: set   Esc: cancel", prefixBad: "Use 1-4 capital letters.", prefixDone: (p) => `Paper numbers now start with ${p}_`, folderTitle: "Choose the folder with the scans", use: (n) => `▶ Use this folder (${n} photos)`, up: "↑ (go up)",
     folderKeys: "1-9: open that row   j k: choose   Enter: open   u: use this folder   ← Backspace: up   /: search   Esc: back   q: close",
     searchKeys: "Type to filter   ↑ ↓: choose   Enter: open   Esc: stop searching", searchLabel: "Search folders",
     moving: "Moving the photos…", emptyFolder: "There are no photos in that folder.",
@@ -63,7 +65,8 @@ export function createScan(root, { api, onClose }) {
     keysInput: "Enter 決めて次へ　Esc この入力を閉じる　Tab 前の番号を入れる",
     done: (id) => `${id} にしました`, bad: (e) => e,
     title: "どのスキャンに番号を付ける？", out: "Enter　vault の外のフォルダ（パソコンの中の写真）", in: (n) => `v　vault の中（\\M で取り込んだ、番号のないもの）　${n} 枚`,
-    srcKeys: "Enter / v で選ぶ　q 閉じる", folderTitle: "スキャンが入っているフォルダを選ぶ", use: (n) => `▶ このフォルダを使う（写真 ${n} 枚）`, up: "↑ 上のフォルダへ",
+    srcKeys: "Enter / v で選ぶ　p 紙の番号の印を変える　q 閉じる",
+    prefixLabel: "紙のノートの番号の印（p で変える）：", prefixHint: "英大文字 1〜4 字（例: PA → PA_1a2）。Enter 決める　Esc やめる", prefixBad: "英大文字 1〜4 字にしてください。", prefixDone: (p) => `紙の番号は ${p}_ から始まります`, folderTitle: "スキャンが入っているフォルダを選ぶ", use: (n) => `▶ このフォルダを使う（写真 ${n} 枚）`, up: "↑ 上のフォルダへ",
     folderKeys: "1〜9 その行を開く　j k 選ぶ　Enter 開く　u このフォルダを使う　← Backspace 上へ　/ 検索　Esc 戻る　q 閉じる",
     searchKeys: "文字で絞り込み　↑ ↓ 選ぶ　Enter 開く　Esc 検索をやめる", searchLabel: "フォルダを検索",
     moving: "写真を移しています…", emptyFolder: "そのフォルダに写真がありません。",
@@ -74,7 +77,8 @@ export function createScan(root, { api, onClose }) {
   const SORT_ORDER = ["name-asc", "name-desc", "mtime-asc", "mtime-desc", "size-asc", "size-desc"];
   let stage = "source", scans = [], info = {}, idx = 0, last = "", mode = "id", pendingTopicId = "", changed = 0, busy = false, url = "";
   let dirInfo = null, sel = 0, inCount = 0, suggest = [], searching = false, found = [], sortKey = "name-asc", sortPop = null;
-  let inputOpen = false;
+  let inputOpen = false, prefix = "PA", prefixOpen = false;
+  const pInput = $(".sp-input");
 
   const show = (name) => {
     stage = name;
@@ -93,8 +97,36 @@ export function createScan(root, { api, onClose }) {
     $(".c-in").textContent = T.in(inCount);
     $(".c-in").classList.toggle("dim", !inCount);
     $(".k-source").textContent = T.srcKeys;
+    prefix = r.ok && r.prefix ? r.prefix : prefix;
+    $(".sp-label").textContent = T.prefixLabel;
+    $(".sp-value").textContent = prefix + "_";
     show("source");
   }
+
+  // 紙の番号の印（設定 paperIdPrefix）。変えると、紙のノートの番号が新しい印に付け直される
+  function openPrefix() {
+    prefixOpen = true; pInput.hidden = false; pInput.value = prefix; $(".sp-value").hidden = true;
+    $(".k-source").textContent = T.prefixHint; pInput.focus(); pInput.select();
+  }
+  function closePrefix() {
+    prefixOpen = false; pInput.hidden = true; $(".sp-value").hidden = false; $(".k-source").textContent = T.srcKeys; root.focus();
+  }
+  async function commitPrefix() {
+    const v = pInput.value.trim().toUpperCase();
+    if (!/^[A-Z]{1,4}$/.test(v)) { $(".k-source").textContent = T.prefixBad; return; }
+    closePrefix();
+    if (v === prefix) return;
+    $(".k-source").textContent = T.busy;
+    const r = await api.run("prefix", [v]);
+    if (r.ok) { prefix = r.prefix; $(".sp-value").textContent = prefix + "_"; $(".k-source").textContent = T.prefixDone(prefix); }
+    else $(".k-source").textContent = r.error || "";
+  }
+  pInput.addEventListener("keydown", async (e) => {
+    if (e.isComposing) return;
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); await commitPrefix(); }
+    else if (e.key === "Escape") { e.preventDefault(); closePrefix(); }
+  });
 
   // ---- 2. フォルダを選ぶ ----
   const lastDir = () => { try { return localStorage.getItem("scanDir") || ""; } catch { return ""; } };
@@ -365,7 +397,7 @@ export function createScan(root, { api, onClose }) {
 
   // 場所の選択・フォルダ選び・番号を付ける「見る」状態・並べ替えの、ルート全体のキー
   root.addEventListener("keydown", async (e) => {
-    if (e.target === input || e.target === search || e.isComposing) return;
+    if (e.target === input || e.target === search || e.target === pInput || e.isComposing) return;
     const k = e.key;
     if (!$(".scan-sort").hidden) {
       const at = SORT_ORDER.indexOf(sortKey);
@@ -378,6 +410,7 @@ export function createScan(root, { api, onClose }) {
     if (stage === "source") {
       if (k === "Enter") { e.preventDefault(); await openFolder(""); }
       else if (k === "v" || k === "V") { e.preventDefault(); if (inCount) await startNumbering(); }
+      else if (k === "p" || k === "P") { e.preventDefault(); openPrefix(); }
       else if (k === "q") { e.preventDefault(); await close(); }
     } else if (stage === "folder") {
       // 検索中にキーが検索欄の外に来たとき（フォーカスが外れた）も、Esc は検索をやめるだけ。ほかのキーは検索欄へ

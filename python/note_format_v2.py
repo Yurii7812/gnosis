@@ -1936,8 +1936,8 @@ def _rstrip_blank(lines: list[str]) -> list[str]:
     return lines[:k]
 
 
-# BackLink 見出しを出さない生成ノート（紙PKM の Folgezettel-Index など）
-_NO_BACKLINK_NAMES = ("Folgezettel-Index.md",)
+# BackLink 見出しを出さない生成ノート（紙PKM の Folgezettel-Index。ファイル名はふつうのタイムスタンプ名なので、題で見分ける）
+_NO_BACKLINK_TITLES = ("Folgezettel-Index",)
 
 
 def _body_with_context(n: dict, links: list[str], enabled: bool,
@@ -2089,7 +2089,7 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         return bool(ls) and any(ln.strip() for ln in ls)
 
     related = [ln for ln in n.get("related", [])]
-    back_lines = [f"[{titles[t]}]({_rel(path.parent, t)})" for t in back] if name not in _NO_BACKLINK_NAMES else []
+    back_lines = [f"[{titles[t]}]({_rel(path.parent, t)})" for t in back] if n.get('title') not in _NO_BACKLINK_TITLES else []
     sections: list[tuple[str, list[str]]] = []
     # 本文の下の節の並びは ChildBranch → Related → BackLink（ParentBranch は本文の上の先頭のブロック）
     if not use_block and _has(parent_lines):
@@ -2112,10 +2112,15 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         have = len(lines) - len(_rstrip_blank(lines))
         lines += [""] * max(0, int(n.get("tail_blanks", 0)) - have)
         return "\n".join(lines) + "\n"
-    # 本文の最後と、その下の節（ChildBranch: など）のあいだの空行は、いつも 1 つだけ
+    # 本文の最後と、その下の節（ChildBranch: など）のあいだの空行は、いつも 1 つだけ。
+    # ただし本文がまだ空（見出しの下が空行だけ）の新しいノートは、書き出しの余白（見出しの下に 3 行）を残す。
+    # 残さないと、最初の同期で書き込み位置の空行が消え、カーソルが BackLink: の行に来てしまう
+    blanks = max(len(lines) - len(_rstrip_blank(lines)), int(n.get("tail_blanks", 0)))
     while lines and lines[-1].strip() == "":
         lines.pop()
-    lines.append("")
+    body_text = [ln for ln in (n.get("body") or []) if ln.strip()]
+    empty_body = len(body_text) <= 1 and all(ln.startswith("# ") for ln in body_text)
+    lines += [""] * (3 if blanks >= 3 and empty_body else 1)
     for mark, ls in sections:
         lines.append(mark)
         lines += ls

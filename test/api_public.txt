@@ -19,6 +19,8 @@ gnosis#ai_complete
 gnosis#apk_install
 gnosis#at_add
 gnosis#at_add_reverse
+gnosis#auto_history_enter
+gnosis#auto_history_leave
 gnosis#autosync_log
 gnosis#autosync_on_save
 gnosis#autosync_problem
@@ -138,6 +140,7 @@ gnosis#fznav#gui_state
 gnosis#fznav#invalidate
 gnosis#fznav#mark
 gnosis#fznav#render
+gnosis#fznav#reset
 gnosis#fznav#reset_for_test
 gnosis#fznav#setup
 gnosis#fznav#state
@@ -263,8 +266,10 @@ gnosis#multi_apply
 gnosis#multi_clear
 gnosis#mview#close
 gnosis#mview#cursor
+gnosis#mview#detach
 gnosis#mview#entries
 gnosis#mview#focus
+gnosis#mview#fz_decide
 gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click
@@ -275,9 +280,12 @@ gnosis#mview#items
 gnosis#mview#link_pick
 gnosis#mview#link_pick_visual
 gnosis#mview#note_win
+gnosis#mview#only_note
 gnosis#mview#open_rel
 gnosis#mview#panel_act
 gnosis#mview#panel_text
+gnosis#mview#pick_label
+gnosis#mview#picking
 gnosis#mview#place_cancel
 gnosis#mview#place_decide
 gnosis#mview#place_start
@@ -288,6 +296,8 @@ gnosis#mview#preset_next_number
 gnosis#mview#preset_overwrite
 gnosis#mview#preset_rename
 gnosis#mview#preset_save
+gnosis#mview#preview_rel
+gnosis#mview#quit_layers
 gnosis#mview#refresh
 gnosis#mview#render_here
 gnosis#mview#rerender
@@ -303,6 +313,7 @@ gnosis#mview#sync_done
 gnosis#mview#sync_leader
 gnosis#mview#time_sorted
 gnosis#mview#toggle
+gnosis#mview#toggle_origin
 gnosis#mview#view
 gnosis#mview#win_op
 gnosis#new_child
@@ -324,6 +335,7 @@ gnosis#open_link_under_cursor
 gnosis#open_web
 gnosis#orphans_open
 gnosis#outline#close
+gnosis#outline#focus
 gnosis#outline#goto
 gnosis#outline#gui_click
 gnosis#outline#gui_fold
@@ -382,6 +394,7 @@ gnosis#record_migrate
 gnosis#record_new
 gnosis#record_open
 gnosis#record_parent
+gnosis#record_parent_apply
 gnosis#record_pick
 gnosis#refresh_guide
 gnosis#refresh_link_hints

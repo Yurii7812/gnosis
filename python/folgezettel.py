@@ -11,7 +11,34 @@ from urllib.parse import unquote
 
 import note_format_v2 as nf
 
-ID_RE = re.compile(r"^[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*$")
+# 紙の PKM のノートの番号は、先頭に `PA_` のような印を付けて、デジタルの番号と別の空間にする（2026-10-27）。
+# 印は設定（vault の .gnosis/settings.json の paperIdPrefix。既定 PA）で変えられる。`PA_1a2` の親は `PA_1a`、`PA_1` に親は無い
+PREFIX_RE = re.compile(r"^[A-Z]{1,4}$")
+PAPER_PREFIX_DEFAULT = "PA"
+ID_RE = re.compile(r"^(?:[A-Z]{1,4}_)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*$")
+_PREFIXED_RE = re.compile(r"^([A-Z]{1,4}_)(.+)$")
+_PART_RE = re.compile(r"[A-Z]+_|\d+|[a-z]+")
+
+
+def split_prefix(ident: str) -> tuple[str, str]:
+    """`PA_1a2` → ('PA_', '1a2')。印の無い番号は ('', 番号)。"""
+    m = _PREFIXED_RE.match(ident or '')
+    return (m.group(1), m.group(2)) if m else ('', ident or '')
+
+
+def paper_prefix(root: Path) -> str:
+    """紙の番号の印（`PA_` の形。末尾の _ まで）。設定 paperIdPrefix（vault の .gnosis/settings.json。root は vault かその note/）。"""
+    value = PAPER_PREFIX_DEFAULT
+    for base in (Path(root), Path(root).parent):
+        f = base / '.gnosis' / 'settings.json'
+        try:
+            v = json.loads(f.read_text(encoding='utf-8')).get('paperIdPrefix')
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(v, str) and PREFIX_RE.fullmatch(v.strip().upper()):
+            value = v.strip().upper()
+        break
+    return value + '_'
 
 
 def value(text: str) -> str:
@@ -51,13 +78,17 @@ def remove_value(text: str) -> str:
 
 
 def parent_id(ident: str) -> str:
-    parts = re.findall(r'\d+|[a-z]+', ident)
-    return ''.join(parts[:-1])
+    prefix, body = split_prefix(ident)
+    parts = re.findall(r'\d+|[a-z]+', body)
+    parent = ''.join(parts[:-1])
+    return prefix + parent if parent else ''
 
 
 def natural_key(ident: str) -> tuple:
-    return tuple(int(p) if p.isdigit() else (len(p), p)
-                 for p in re.findall(r'\d+|[a-z]+', ident))
+    """デジタルの番号が先、紙の番号（PA_…）が後。それぞれの中は自然順。"""
+    prefix, body = split_prefix(ident)
+    return (prefix,) + tuple(int(p) if p.isdigit() else (len(p), p)
+                             for p in re.findall(r'\d+|[a-z]+', body))
 
 
 def letters(number: int) -> str:
@@ -91,7 +122,7 @@ def assign_child(parent_text: str, child_text: str, sibling_texts: list[str]) ->
 
 
 # 紙の PKM のノートの題（番号・番号-題・番号の一覧）。グループでも ID を外さない
-PAPER_TITLE_RE = re.compile(r'^(?:\d+[a-z0-9]*(?:-.*)?|[Ff]olgezettel-Index(?:-.*)?|Paper-Zettelkasten-Index)$')
+PAPER_TITLE_RE = re.compile(r'^(?:[1-9]\d{0,4}(?:[a-z]+\d{0,5})*(?:-.*)?)$')
 DAILY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}-(?:MO|TU|WE|TH|FR|SA|SU)(?:-|$)')
 
 
@@ -130,6 +161,20 @@ def creation_key(path: Path, note: dict) -> tuple:
 DATED_TITLE_RE = re.compile(r'^(\d{4}(?:-\d{2}(?:-\d{2})?)?)(?:-|$)')
 
 
+PAPER_NUMBER_RE = re.compile(r'^[1-9]\d{0,4}(?:[a-z]+\d{0,5})*$')
+
+
+def scan_number(note: dict) -> str:
+    """紙のスキャンノート（題が番号だけで、スキャンの印か、同じ名前の画像の参照がある）なら、その番号。そうでなければ ''。"""
+    title = note['title']
+    if not PAPER_NUMBER_RE.fullmatch(title) or is_group(note):
+        return ''
+    if any(ln.strip() == 'source: scan' for ln in note['fm']):
+        return title
+    pat = re.compile(r'!\[[^\]]*\]\(<?(?:[^)>]*/)?' + re.escape(title) + r'\.[A-Za-z0-9]+>?\)')
+    return title if any(pat.search(ln) for ln in note['body']) else ''
+
+
 def is_paper(note: dict) -> bool:
     """紙の PKM のノート（題が番号）。日付の題（2026-10-19-MO-… / 2026-10 / 2026）は紙の番号ではない。"""
     return bool(PAPER_TITLE_RE.match(note['title'])) and not DATED_TITLE_RE.match(note['title'])
@@ -142,12 +187,23 @@ def sibling_key(path: Path, note: dict) -> tuple:
     return (1, '', creation_key(path, note))
 
 
-def allocation(root: Path, notes: dict) -> dict[Path, str]:
-    """Plan missing IDs using the same parsed snapshot as the normal sync.
+# グループではないが、親ノートの BranchGroup: に入って親と同じ番号を持つ生成ノート（紙の PKM の Index-write。2026-10-27）
+SHARED_ID_TITLES = ('Index-write',)
 
-    番号は Branch の形に合わせる（2026-10-20 決定）: 親が 1 つのノートの番号が親の番号の子でなくなったら
-    （親を付け替えた・日記の年のノートができて月がその下に入った、など）、親の下の新しい番号に振り直す。
-    その子孫も同じく振り直す。紙の PKM の番号（題が番号）は振り直さない。"""
+
+def _suffix(parent: str, n: int) -> str:
+    return parent + (letters(n) if parent[-1].isdigit() else str(n))
+
+
+def allocation(root: Path, notes: dict) -> dict[Path, str]:
+    """Plan the IDs so that they match the Branch tree exactly (2026-10-27).
+
+    番号は Branch の木の形そのもの: 親の番号の子になり、きょうだいは 1, 2, 3 / a, b, c と欠番なしに続く。
+    ParentBranch: を変えた・ノートを消した・親を外した、などで形が変わったら、その場で全体を振り直す
+    （飛んだ番号は詰める）。きょうだいの順は、日付の題なら日付順、それ以外は今の番号の順、新しいものは作った順で最後。
+    なので、何も変わっていなければ計画は空（何度回しても同じ）。1 回の走査で、ノートの数 n に対して n log n。
+    振り直さないもの: 紙の PKM の番号（題が番号）・編集中で未保存のノート・Branch から外れていて番号を持つノート（その番号はそのまま、
+    その子は下に続ける）。"""
     known = set(notes)
     def targets(lines, base):
         out = []
@@ -160,7 +216,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                         out.append(p)
                     break
         return out
-    parents = {p: targets(n['pbranch'], p.parent) for p, n in notes.items()}
+    own_parents = {p: targets(n['pbranch'], p.parent) for p, n in notes.items()}
+    parents = {p: list(ps) for p, ps in own_parents.items()}
     children = {p: targets(n['cbranch'], p.parent) for p, n in notes.items()}
     for p, kids in children.items():
         for c in kids:
@@ -171,62 +228,139 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             if c not in children[p]:
                 children[p].append(c)
     ids = {p: value('\n'.join(n['fm'])) for p, n in notes.items()}
+    stored = dict(ids)
     plan = {}
+    unsaved = {p for p in notes if nf._editor_has_unsaved_changes(p)}
     # グループは Folgezettel ID を持たない。付いていれば外す（'' は「消す」）。
     # 例外（2026-10-20）: ブランチで作られたグループ（親ノートの BranchGroup: にあるグループ）は、親ノートと同じ ID を持つ（最後に振る）。
     # 紙の PKM の番号（題が番号）は別物なので触らない
-    stored = dict(ids)
     for p, n in notes.items():
-        if ids[p] and is_group(n) and not is_paper(n) and not nf._editor_has_unsaved_changes(p):
+        if ids[p] and (is_group(n) or n['title'] in SHARED_ID_TITLES) and not is_paper(n) and p not in unsaved:
             plan[p] = ''
             ids[p] = ''
-    # Reserve IDs across the vault, including currently disconnected notes
-    # （グループから外した番号も、取り違えないように使い回さない）.
-    reserved = set(ids.values()) | {value('\n'.join(notes[p]['fm'])) for p in plan}
+    # 紙のスキャンノートの番号は、題の番号の前に印（PA_）を付けた形にそろえる（デジタルの番号とぶつからない別の空間）。
+    # 印を設定で変えたら（PA → PB）、ここで全部付け直す
+    prefix = paper_prefix(root)
+    for p, n in notes.items():
+        num = scan_number(n)
+        if num and p not in unsaved:
+            ids[p] = prefix + num
+            if ids[p] != stored[p]:
+                plan[p] = ids[p]
     index = root / 'index.md'
     top = targets(notes[index]['body'], root) if index in notes else []
     # 日記（YYYY-MM-DD-曜日）と時系列記録のその日のノート（front matter の record:）も最上位にする。
     # グループの中にあって Branch の親を持たないので、ここで番号を振らないと、日記から伸びたノートにも番号が付かない
+    topset = set(top)
     for p, n in notes.items():
-        if p not in top and p.name != 'index.md' and not is_group(n) and is_daily(n):
+        if p not in topset and p.name != 'index.md' and not is_group(n) and is_daily(n):
             top.append(p)
-    number = max((int(i) for i in ids.values() if i.isdigit()), default=0)
-    for p in sorted(top, key=lambda p: creation_key(p, notes[p])):
-        if parents[p] or is_group(notes[p]) or nf._editor_has_unsaved_changes(p):
-            continue
-        # 最上位なのに子の番号（51a など）を持っているもの（親を外した）は、最上位の番号に振り直す
-        if ids[p] and (not ID_RE.fullmatch(ids[p]) or not parent_id(ids[p]) or is_paper(notes[p])):
-            continue
-        number += 1
-        while str(number) in reserved:
-            number += 1
-        ids[p] = plan[p] = str(number)
-        reserved.add(ids[p])
-    queue = [p for p in notes if ID_RE.fullmatch(ids[p]) and not is_group(notes[p])]
-    seen = set()
-    for p in queue:
-        if p in seen:
-            continue
-        seen.add(p)
-        for c in sorted(children[p], key=lambda c: sibling_key(c, notes[c])):
-            if len(parents[c]) != 1 or c == p or is_group(notes[c]) or nf._editor_has_unsaved_changes(c):
+            topset.add(p)
+
+    def managed(p) -> bool:
+        return p.name != 'index.md' and not is_group(notes[p]) and not is_paper(notes[p]) and p not in unsaved
+
+    def primary(c):
+        """親が複数あるノートの、番号の親にするもの: 今の番号の親 → ParentBranch: の最初 → 先頭。"""
+        ps = [q for q in parents[c] if q != c]
+        if len(ps) <= 1:
+            return ps[0] if ps else None
+        want = parent_id(ids[c]) if ID_RE.fullmatch(ids[c]) else ''
+        for q in ps:
+            if want and ids[q] == want:
+                return q
+        for q in own_parents[c]:
+            if q in ps:
+                return q
+        return ps[0]
+
+    primaries = {c: primary(c) for c in notes}
+    kids = {}
+    for c, q in primaries.items():
+        if q is not None:
+            kids.setdefault(q, []).append(c)
+    old = dict(ids)
+    roots = [p for p in top if managed(p) and not parents[p]]
+    root_set = set(roots)
+    # Branch の根: 管理できる最上位、または、番号を持つのに親も索引もない（外れた）ノート
+    fixed_roots = [p for p in notes if p not in root_set and not primaries[p] and ID_RE.fullmatch(ids[p])
+                   and not is_group(notes[p]) and p.name != 'index.md']
+    # 管理するノート（番号を決め直すもの）を、根から木をたどって集める
+    managed_set = set(roots)
+    stack = list(roots) + [p for p in fixed_roots] + [p for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])
+                                                      and not managed(p) and not is_group(notes[p]) and p not in fixed_roots
+                                                      and p.name != 'index.md']
+    seen = set(stack)
+    while stack:
+        p = stack.pop()
+        for c in kids.get(p, ()):
+            if c in seen or not managed(c) or c == p:
                 continue
-            stale = (ID_RE.fullmatch(ids[c]) and parent_id(ids[c]) != ids[p]
-                     and not is_paper(notes[c]))
-            if not ids[c] or stale:
-                # All reserved IDs prevent collisions even outside this Branch.
-                ident = next_child(ids[p], [f'---\nfolgezettel: "{i}"\n---' for i in reserved])
-                ids[c] = plan[c] = ident
-                reserved.add(ident)
-                # 先に見終わっていても、新しい番号でその子をもう一度見る（子孫も同じ回で振り直す）
-                seen.discard(c)
-            if ID_RE.fullmatch(ids[c]):
-                queue.append(c)
+            seen.add(c)
+            managed_set.add(c)
+            stack.append(c)
+    # 管理しないものの番号は、そのまま使われているものとして避ける
+    fixed = {ids[p] for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])}
+
+    def sibling_order(p, c):
+        m = DATED_TITLE_RE.match(notes[c]['title'])
+        if m:
+            return (0, m.group(1), (), creation_key(c, notes[c]))
+        if ID_RE.fullmatch(old[c]):
+            # 今の番号の順（親がずれていても、その番号の並びで）。番号の無い新しいものは作った順で最後
+            return (1, '', tuple((0, x, '') if isinstance(x, int) else (1, x[0], x[1]) if isinstance(x, tuple) else (2, 0, x) for x in natural_key(old[c])), creation_key(c, notes[c]))
+        return (2, '', (), creation_key(c, notes[c]))
+
+    def assign(p, ident):
+        n = 0
+        ordered = sorted((c for c in kids.get(p, ()) if c in managed_set and c not in done), key=lambda c: sibling_order(p, c))
+        for c in ordered:
+            n += 1
+            while _suffix(ident, n) in fixed:
+                n += 1
+            done.add(c)
+            new = _suffix(ident, n)
+            ids[c] = new
+            if new != stored[c]:
+                plan[c] = new
+            else:
+                plan.pop(c, None)
+            work.append(c)
+
+    # 最上位: 今の最上位の番号の順（新しいものは作った順で最後）に、欠番なしで振る
+    done = set()
+    work = []
+    def top_key(p):
+        if ID_RE.fullmatch(old[p]) and old[p].isdigit():
+            return (0, int(old[p]), creation_key(p, notes[p]))
+        return (1, 0, creation_key(p, notes[p]))
+    n = 0
+    for p in sorted(roots, key=top_key):
+        n += 1
+        while str(n) in fixed:
+            n += 1
+        done.add(p)
+        ids[p] = str(n)
+        if ids[p] != stored[p]:
+            plan[p] = ids[p]
+        else:
+            plan.pop(p, None)
+        work.append(p)
+    # 管理しない根（外れたノートなど）の子は、その番号の下に続ける
+    for p in fixed_roots:
+        work.append(p)
+    for p in notes:
+        if p not in managed_set and p not in done and ID_RE.fullmatch(ids[p]) and not is_group(notes[p]) and p not in fixed_roots:
+            work.append(p)
+    while work:
+        p = work.pop()
+        if ID_RE.fullmatch(ids[p]):
+            assign(p, ids[p])
     for p, n in notes.items():
         if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
             continue
         for g in targets(nf._take_branch_group_block(n['body'])[0], p.parent):
-            if not is_group(notes[g]) or is_paper(notes[g]) or nf._editor_has_unsaved_changes(g):
+            if not (is_group(notes[g]) or notes[g]['title'] in SHARED_ID_TITLES) or is_paper(notes[g]) or g in unsaved:
                 continue
             if stored[g] == ids[p]:
                 plan.pop(g, None)
@@ -247,7 +381,8 @@ def navigate(root: Path, current: Path, direction: str) -> dict:
             ident = i
         if ID_RE.fullmatch(i):
             fm, _ = nf._split_front_matter(text.splitlines())
-            (groups if nf._GROUP_ATTR_RE.search('\n'.join(fm)) else by_id).setdefault(i, []).append(p.resolve())
+            shared = any(re.match(r'^title\s*:\s*(?:%s)\s*$' % '|'.join(map(re.escape, SHARED_ID_TITLES)), ln) for ln in fm)
+            (groups if nf._GROUP_ATTR_RE.search('\n'.join(fm)) or shared else by_id).setdefault(i, []).append(p.resolve())
     # ブランチで作られたグループは親ノートと同じ ID を持つので、同じ ID のノートがあればそちらを優先する
     for i, ps in groups.items():
         by_id.setdefault(i, ps)

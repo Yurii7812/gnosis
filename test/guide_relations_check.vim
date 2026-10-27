@@ -74,7 +74,7 @@ try
   call writefile(s:guide()[: 10] + ['古い本文の行'] + s:tail(s:guide()), s:v . '/gnosis-guide.md')
   call gnosis#refresh_guide()
   let s:g = s:guide()
-  call s:ok('更新: 本文はテンプレートに戻る', index(s:g, '古い本文の行') < 0 && index(s:g, '## リンク') >= 0)
+  call s:ok('更新: 本文はテンプレートに戻る', index(s:g, '古い本文の行') < 0 && index(s:g, '## 第 1 部　はじめての人のための基本') >= 0)
   call s:ok('更新: Group の Index が残る', s:is_grp(s:tail(s:g), 'Index', 'index.md'))
   call s:ok('更新: 見出しが重複しない', s:count(s:g, '^Group:$') == 1 && s:count(s:g, '^---$') == 2)
   call s:ok('更新: 同期しても変わらない', s:sync() =~# 'updated 0 file')

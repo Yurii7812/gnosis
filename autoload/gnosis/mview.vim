@@ -1930,7 +1930,7 @@ endfunction
 
 " 覚えるもの（Gnosis ホームの mandala.json）: 幅（tenths・stretch）と、モード（# 数字・f 全画面・p・v・w・d・c・r・a/i・t）。
 " 閉じても、Vim を再起動しても、前回のまま
-let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'out_dir', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth', 'tsort']
+let s:mode_keys = ['nums', 'size', 'nv', 'ol_on', 'ol_only', 'out_on', 'out_dir', 'rank_on', 'dbasis', 'near_on', 'rel_on', 'near_only', 'rel_only', 'mode', 'digit', 'depth', 'tsort', 'view']
 let s:saved_json = ''
 
 function! s:save_state() abort
@@ -2885,6 +2885,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> gv <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> \o <Cmd>call gnosis#outline#toggle()<CR>
+  nnoremap <buffer><nowait><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
   augroup gnosis_mview_buf
     autocmd! * <buffer>
     autocmd VimResized,WinResized * call gnosis#mview#rerender()
@@ -3267,6 +3268,7 @@ function! s:open(center, ...) abort
   endif
   " モード（# f p v w d c r a/i t）も前回のまま。最初に開くときだけ読む（同じ Vim の中では s:S がそのまま残る）
   let l:want_size = 3
+  let l:want_view = ''
   if get(g:, 'gnosis_mview_restore', 1) && empty(l:pick)
     let l:all = s:state_all()
     if !get(s:S, 'modes_restored', 0)
@@ -3298,6 +3300,11 @@ function! s:open(center, ...) abort
     if get(l:all, 'size', 3) == 9
       let l:want_size = 9
     endif
+    " Folgezettel ビューで閉じていたら、Vim を起動し直したときも Folgezettel ビューで開く（最初に開くときだけ）
+    if get(l:all, 'view', '') ==# 'fz' && !has_key(s:S, 'view_restored')
+      let l:want_view = 'fz'
+    endif
+    let s:S.view_restored = 1
   endif
   if !s:has(l:c)
     let l:c = s:has('index.md') ? 'index.md' : ''
@@ -3331,6 +3338,13 @@ function! s:open(center, ...) abort
   " 前回、全画面（9×9）で閉じていたら、全画面で開く
   if l:want_size == 9 && s:S.size == 3
     call s:full()
+  endif
+  if l:want_view ==# 'fz' && get(s:S, 'view', 'mandala') !=# 'fz'
+    call gnosis#mview#switch_view('fz')
+    let l:mw = s:mwin()
+    if l:mw > 0 && win_getid() != l:mw
+      call win_gotoid(l:mw)
+    endif
   endif
 endfunction
 
@@ -3517,12 +3531,14 @@ function! gnosis#mview#switch_view(...) abort
   if l:to ==# l:from
     return
   endif
-  " 索引を選ぶ・リンクの置き場所を選ぶなどの最中は、曼荼羅のまま
-  if !empty(get(s:S, 'pick', '')) || !empty(get(s:S, 'lk', {}))
-    echo 'Gnosis: ' . gnosis#i18n#tr('選んでいる最中は、ビューを切り替えられません')
+  " リンクの置き場所を聞いている最中だけは、切り替えない。\l / 索引を選ぶモード（pick）は、ビューを切り替えても続く
+  if !empty(get(s:S, 'lk', {}))
+    echo 'Gnosis: ' . gnosis#i18n#tr('置き場所を選んでいる最中は、ビューを切り替えられません')
     return
   endif
   let s:S.view = l:to
+  " 切り替えの最中は、fz の題の表示（echo）を止める（「ENTER を押して」が出るため）
+  let s:S.switching = 1
   call win_execute(l:mw, 'mapclear <buffer>')
   if l:to ==# 'fz'
     call win_execute(l:mw, 'call gnosis#fznav#setup()')
@@ -3531,6 +3547,7 @@ function! gnosis#mview#switch_view(...) abort
   endif
   call win_execute(l:mw, 'call gnosis#mview#render_here()')
   call win_execute(l:mw, 'call gnosis#mview#cursor(0)')
+  let s:S.switching = 0
   redraw!
   if exists('*GnosisGuiChanged') | call GnosisGuiChanged() | endif
 endfunction
@@ -3549,6 +3566,48 @@ endfunction
 
 function! gnosis#mview#note_win() abort
   return exists('s:S') ? s:note_win() : -1
+endfunction
+
+" Folgezettel ビューの選ぶモード（\l など）: 見出しの案内。選んでいなければ ''
+function! gnosis#mview#pick_label() abort
+  return exists('s:S') && type(s:S) == v:t_dict ? s:pick_label() : ''
+endfunction
+
+function! gnosis#mview#picking() abort
+  return exists('s:S') && type(s:S) == v:t_dict && !empty(get(s:S, 'pick', ''))
+endfunction
+
+" Folgezettel ビューで e / I: カーソルの項目を、選ぶモードの「中心」にして決める（曼荼羅で中心を選んで e を押すのと同じ）
+function! gnosis#mview#fz_decide(rel, index) abort
+  if !gnosis#mview#picking() || empty(a:rel) || !s:has(a:rel)
+    return
+  endif
+  let s:S.center = a:rel
+  if a:index
+    call s:decide_index()
+  else
+    call s:decide_here()
+  endif
+endfunction
+
+" o: 選ぶモードで、元のノート（\l を押したノート）を右に見る / 中心に戻す
+function! gnosis#mview#toggle_origin() abort
+  if exists('s:S') && type(s:S) == v:t_dict
+    call s:toggle_origin()
+  endif
+endfunction
+
+" q: 選ぶモード・絞り込みなど重なっているものを 1 つずつやめる。何も無ければ閉じる
+function! gnosis#mview#quit_layers() abort
+  call s:quit()
+endfunction
+
+" Folgezettel ビューで動かしたとき: 右の窓にそのノートを出すだけ（曼荼羅の中心・印は変えない）
+function! gnosis#mview#preview_rel(rel) abort
+  if empty(a:rel) || !exists('s:S') || !filereadable(s:S.root . '/' . a:rel)
+    return
+  endif
+  call s:show_note(a:rel)
 endfunction
 
 " Folgezettel ビューで項目を開く: ノートを右の窓に出し、曼荼羅の中心（=現在のノート）をそれに合わせる
@@ -3659,6 +3718,61 @@ endfunction
 " 試験用: gs で選んだあとの処理を直接呼ぶ
 function! gnosis#mview#gs_done(path, line) abort
   call s:gs_done(a:path, a:line)
+endfunction
+
+" \W: ノートだけを表示する。曼荼羅・Folgezettel ビュー・アウトライン・そのほかの分割窓を全部閉じて、ノートの窓 1 つにする。
+" どの窓にカーソルがあっても同じ。曼荼羅は閉じた状態として覚える（次に Vim を起動しても閉じたまま。\c や <Space> でまた開ける）
+function! gnosis#mview#only_note() abort
+  silent! call gnosis#outline#close()
+  if exists('s:S') && type(s:S) == v:t_dict && !empty(s:S) && s:mwin() > 0
+    call gnosis#mview#close()
+  endif
+  " 残った窓から、ふつうのノートの窓を探して、それだけにする
+  let l:target = -1
+  for l:w in range(1, winnr('$'))
+    let l:b = winbufnr(l:w)
+    if getbufvar(l:b, '&buftype') ==# '' && getbufvar(l:b, '&filetype') !~# '^gnosis-'
+      let l:target = win_getid(l:w)
+      break
+    endif
+  endfor
+  if l:target > 0
+    call win_gotoid(l:target)
+    silent! only
+  endif
+  redraw!
+endfunction
+
+" vault を切り替える前に呼ぶ: 曼荼羅・Folgezettel ビュー・アウトラインの窓を閉じ、前の vault の状態（中心・履歴・キャッシュ・更新待ち）を捨てる。
+" 幅やモード（# f p v w d c r a/i t とビュー）は mandala.json に覚えるので、新しい vault で開き直すとそのまま引き継がれる。
+" 窓を閉じずに切り替えると、切り替え画面が曼荼羅の窓を上書きし、前の vault の中心のまま新しい vault の曼荼羅が壊れる
+function! gnosis#mview#detach() abort
+  if exists('s:sync_timer')
+    call timer_stop(s:sync_timer)
+    unlet s:sync_timer
+  endif
+  silent! call gnosis#outline#close()
+  if exists('s:S') && type(s:S) == v:t_dict && !empty(s:S)
+    call s:save_state()
+    let l:buf = get(s:S, 'buf', -1)
+    let l:mw = s:mwin()
+    if has_key(s:S, 'popup')
+      silent! call popup_close(s:S.popup)
+    endif
+    if l:mw > 0
+      if winnr('$') > 1
+        call win_execute(l:mw, 'close')
+      else
+        call win_execute(l:mw, 'enew')
+      endif
+    endif
+    if l:buf > 0 && bufexists(l:buf)
+      execute 'silent! bwipeout! ' . l:buf
+    endif
+  endif
+  let s:S = {}
+  let s:saved_json = ''
+  silent! call gnosis#fznav#reset()
 endfunction
 
 " 試験用: 状態を返す

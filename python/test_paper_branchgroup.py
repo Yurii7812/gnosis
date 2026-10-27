@@ -168,7 +168,7 @@ with tempfile.TemporaryDirectory() as d:
     check("topic_parent: 1-仏教" in fm_of(notes["1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["1-仏教"])),
           f"親トピックは front matter の topic_parent に残る: {fm_of(notes['1-四念処'])}")
     check(all("source: scan" in fm_of(p) for p in notes.values()), "スキャン由来のノートに source: scan")
-    fi = root / "folgezettel-Index-1.md"
+    fi = pp.find_titled(root, "folgezettel-Index-1")
     names = [ln.split("]")[0].lstrip("[") for ln in lines_of(fi) if ln.startswith("[1-")]
     check(names == ["1-仏教", "1-四念処", "1-阿含"], f"folgezettel-Index-1 にトピックを、親を子より先に（インデントなし）: {names}")
     fl = lines_of(fi)

@@ -210,6 +210,10 @@ function! gnosis#start#open() abort
   " 前回のルート文字列が残っているだけでは、使用中の vault とは扱わない。
   " VimEnter の初回起動と、実際に開いた vault からの切り替えを区別する。
   let s:had_vault = !empty(get(g:, 'gnosis_active_vault', '')) && !s:active
+  " 曼荼羅・アウトラインの窓を先に片づける（そのまま enew すると、曼荼羅の窓が切り替え画面に変わってしまう）
+  if !s:active
+    silent! call gnosis#mview#detach()
+  endif
   let s:active = 1
   let s:mode = 'start'
   let s:message = ''

@@ -145,7 +145,10 @@ function! s:run_sync(args_list) abort
   for a in a:args_list
     let l:cmd .= ' ' . shellescape(a)
   endfor
-  return gnosis#sh#system(l:cmd)
+  let l:out = gnosis#sh#system(l:cmd)
+  " 同期は番号（Folgezettel）やリンクを書き換える。開いている曼荼羅・Folgezettel ビューを読み直す
+  silent! call gnosis#mview#sync_done()
+  return l:out
 endfunction
 
 " ---------------------------------------------------------------------------
@@ -734,7 +737,8 @@ function! s:state_dir() abort
       " 障害時に古い場所へ戻せるよう既存の root.txt も尊重する
       let l:legacy = (exists('*stdpath') ? stdpath('data') : expand('~/.vim')) . s:sep() . 'simple_yurii_note'
       let l:rootfile = l:legacy . s:sep() . 'root.txt'
-      if filereadable(l:rootfile)
+      " vault の登録簿がある環境では、古い root.txt は見ない（古い場所に .state / viminfo が毎回できるため。Desktop/test2）
+      if filereadable(l:rootfile) && !filereadable(gnosis#vault#file())
         let l:lines = readfile(l:rootfile)
         " 消した vault を指す古い root.txt では、フォルダ（と .state）を作り直さない
         if !empty(l:lines) && !empty(trim(l:lines[0])) && isdirectory(fnamemodify(s:expand_path(trim(l:lines[0])), ':p'))
@@ -1919,6 +1923,7 @@ endfunction
 " まとめて切り替える。前の vault の未保存バッファは保存してから閉じ、暗号化 vault はロックする。
 function! gnosis#switch_vault(path) abort
   let l:new_root = fnamemodify(gnosis#vault#note_root(a:path), ':p')
+  silent! call gnosis#mview#detach()
   let l:prev = s:get_pkm_root()
   if !empty(l:prev) && fnamemodify(l:prev, ':p') !=# l:new_root
     call s:close_vault_buffers(l:prev)
@@ -1947,6 +1952,10 @@ function! gnosis#switch_vault(path) abort
   silent execute 'edit ' . fnameescape(l:index)
   call gnosis#refresh_guide()
   echom 'Gnosis: ' . gnosis#i18n#tr('vault を切り替えました: ') . l:new_root
+  " 新しい vault の曼荼羅（または Folgezettel ビュー）を、起動したときと同じように出す
+  if has('timers')
+    call timer_start(60, {-> gnosis#mview#start()})
+  endif
 endfunction
 
 function! gnosis#check_missing_prefix_in_current_dir() abort
@@ -20223,7 +20232,12 @@ function! s:write_new_note(lines, path) abort
     throw gnosis#i18n#tr('Gnosis: 既存のファイルを上書きしません: ') . a:path
   endif
   let l:ret = s:syn_writefile(a:lines, a:path)
-  call s:diary_place_safe(a:path, a:lines)
+  let l:placed = s:diary_place_safe(a:path, a:lines)
+  " 日記の「今日のノート」に入れたら、同期はこのノートに日記への BackLink: を書き足す。あとで書き足されて
+  " 開いているバッファが読み直される（カーソルが動く・書き込み中に衝突する）ことのないよう、最初から書いておく
+  if !empty(l:placed) && match(a:lines, '^BackLink:') < 0
+    call s:syn_writefile(a:lines + ['BackLink:', s:diary_link(l:placed[0], l:placed[1])], a:path)
+  endif
   return l:ret
 endfunction
 
@@ -21109,28 +21123,28 @@ endfunction
 " a:1 = そのノートの行（まだ読めない・読むのが重いとき用）
 function! s:diary_place(path, ...) abort
   if !get(g:, 'gnosis_diary_auto', 1)
-    return
+    return []
   endif
   let l:root = s:get_pkm_root()
   if empty(l:root) || empty(a:path) || !s:is_markdown_file(a:path)
-    return
+    return []
   endif
   let l:dir = substitute(fnamemodify(l:root, ':p'), '/$', '', '')
   if substitute(fnamemodify(a:path, ':p:h'), '/$', '', '') !=# l:dir
-    return
+    return []
   endif
   let l:tail = fnamemodify(a:path, ':t')
   if index(['index.md', 'Index-write.md', 'Folgezettel-Index.md'], l:tail) >= 0
-    return
+    return []
   endif
   let l:lines = a:0 > 0 ? a:1 : readfile(a:path, '', 30)
   let l:head = s:diary_head(l:lines)
   if l:head.group || l:head.tree || l:head.paper || l:head.scan || !empty(l:head.record)
-    return
+    return []
   endif
   let l:st = s:diary_state_read()
   if s:diary_is_diary_title(l:head.title) || index(values(l:st.days), l:tail) >= 0
-    return
+    return []
   endif
   let l:tdate = s:diary_title_date(l:head.title)
   let l:date = empty(l:tdate) ? s:diary_day_of_time(l:head.time) : l:tdate
@@ -21142,7 +21156,7 @@ function! s:diary_place(path, ...) abort
         \ && fnamemodify(l:dir . '/' . l:diary, ':p') ==# fnamemodify(s:diary_skip_from, ':p')
     let l:st.no_list[l:tail] = 1
     call s:diary_state_write(l:st)
-    return
+    return []
   endif
   if empty(l:diary)
     " 日記が見つからない日に、題が日付で始まる別のノート（昔の日記など）があるときは、
@@ -21153,7 +21167,7 @@ function! s:diary_place(path, ...) abort
         echom 'Gnosis: ' . l:date . gnosis#i18n#tr(' の日記が見つかりません（') . l:n.file
               \ . gnosis#i18n#tr(' が日付で始まっています）。日記なら、そのノートで :GnosisDiaryAdopt')
         echohl NONE
-        return
+        return []
       endif
     endfor
     let l:diary = s:diary_create(l:root, l:date, l:notes)
@@ -21169,16 +21183,20 @@ function! s:diary_place(path, ...) abort
   endif
   let l:st.notes[l:tail] = l:diary
   call s:diary_state_write(l:st)
+  " 入れた日記（ファイル名と題）。新しいノートの BackLink: を最初から書くのに使う
+  let l:dh = s:diary_head(readfile(l:dir . '/' . l:diary, '', 30))
+  return [l:diary, empty(l:dh.title) ? fnamemodify(l:diary, ':r') : l:dh.title]
 endfunction
 
 function! s:diary_place_safe(path, ...) abort
   try
-    call call('s:diary_place', [a:path] + a:000)
+    return call('s:diary_place', [a:path] + a:000)
   catch
     echohl WarningMsg
     echom gnosis#i18n#tr('Gnosis: 日記への追加に失敗: ') . v:exception
     echohl NONE
   endtry
+  return []
 endfunction
 
 " 保存時: 作成時に日記へ入れたノートの題が日付で始まるようになっていたら、その日の日記へ移す
@@ -21906,27 +21924,148 @@ function! gnosis#record_new(...) abort
 endfunction
 
 " 時系列記録の一覧から選んで、今日のノートを作る・開く（\R）
+" \R: 時系列記録の選択画面。Ctrl-← / Ctrl-→（Tab / S-Tab・← →・h l も同じ）でモードを切り替える:
+"   開く（今日のノート）/ 日付を指定 / 新しく作る / 名前を変える / まとめる（マージ）
+" j k で記録を選び、Enter で決める。Esc / q でやめる。fzf は使わない（モードの切り替えが要るため）
+let s:record_modes = [
+      \ ['open',   '開く（今日）',   '選んだ記録の、今日のノートを作る・開く'],
+      \ ['date',   '日付を指定',     '選んだ記録の、日付を決めてノートを作る・開く'],
+      \ ['new',    '新しく作る',     '記録の名前を入力して、新しい記録を作る'],
+      \ ['rename', '名前を変える',   '選んだ記録の名前を変える（年・月・日の題も直せる）'],
+      \ ['merge',  'まとめる',       '表記揺れの 2 つをまとめる: まとめる元（消える方）→ まとめる先（残る方）の順に選ぶ']]
+let s:rp = {}
+
+function! s:record_kind_list(root) abort
+  let l:notes = s:diary_scan(a:root)
+  let l:rec = s:diary_find_group(l:notes, '時系列記録')
+  return empty(l:rec) ? [] : s:record_kinds(a:root, l:notes, l:rec)
+endfunction
+
 function! gnosis#record_pick() abort
   let l:root = gnosis#ensure_root_and_index()
   if empty(l:root) | return | endif
-  let l:notes = s:diary_scan(l:root)
-  let l:rec = s:diary_find_group(l:notes, '時系列記録')
-  let l:kinds = empty(l:rec) ? [] : map(s:record_kinds(l:root, l:notes, l:rec), 'v:val.title')
-  if empty(l:kinds)
-    echo 'Gnosis: ' . gnosis#i18n#tr('時系列記録がまだありません。:GnosisRecordNew 名前 で作れます')
-    return
-  endif
+  let l:kinds = s:record_kind_list(l:root)
   if exists('g:gnosis_test_record_pick')
     return gnosis#record_open(g:gnosis_test_record_pick)
   endif
-  if exists('*fzf#run')
-    call fzf#run(fzf#wrap({'source': l:kinds, 'sink': function('gnosis#record_open'),
-          \ 'options': ['--prompt', gnosis#i18n#tr('時系列記録> ')]}))
+  if !exists('*popup_create')
+    if empty(l:kinds)
+      echo 'Gnosis: ' . gnosis#i18n#tr('時系列記録がまだありません。:GnosisRecordNew 名前 で作れます')
+      return
+    endif
+    let l:names = map(copy(l:kinds), 'v:val.title')
+    let l:n = gnosis#ui#inputlist([gnosis#i18n#tr('時系列記録（今日のノートを開く）:')] + map(copy(l:names), '(v:key + 1) . ". " . v:val'))
+    if l:n >= 1 && l:n <= len(l:names)
+      call gnosis#record_open(l:names[l:n - 1])
+    endif
     return
   endif
-  let l:n = gnosis#ui#inputlist([gnosis#i18n#tr('時系列記録（今日のノートを開く）:')] + map(copy(l:kinds), '(v:key + 1) . ". " . v:val'))
-  if l:n >= 1 && l:n <= len(l:kinds)
-    call gnosis#record_open(l:kinds[l:n - 1])
+  let s:rp = {'root': l:root, 'kinds': l:kinds, 'mode': empty(l:kinds) ? 2 : 0, 'sel': 0, 'first': ''}
+  let s:rp.id = popup_create([], {'title': ' ' . gnosis#i18n#tr('時系列記録') . ' ', 'pos': 'center', 'padding': [0, 1, 0, 1],
+        \ 'border': [], 'mapping': 0, 'minwidth': 56, 'zindex': 200, 'filter': function('s:record_pick_filter')})
+  call s:record_pick_draw()
+endfunction
+
+" 今のモードで選べる記録の名前（まとめるの 2 つ目は、1 つ目を除く）
+function! s:record_pick_items() abort
+  let l:names = map(copy(s:rp.kinds), 'v:val.title')
+  if s:record_modes[s:rp.mode][0] ==# 'merge' && !empty(s:rp.first)
+    call filter(l:names, 'v:val !=# s:rp.first')
+  endif
+  return s:record_modes[s:rp.mode][0] ==# 'new' ? [] : l:names
+endfunction
+
+function! s:record_pick_draw() abort
+  let l:m = s:record_modes[s:rp.mode]
+  let l:tabs = []
+  for l:i in range(len(s:record_modes))
+    let l:label = gnosis#i18n#tr(s:record_modes[l:i][1])
+    call add(l:tabs, l:i == s:rp.mode ? '[' . l:label . ']' : ' ' . l:label . ' ')
+  endfor
+  let l:hint = gnosis#i18n#tr(l:m[2])
+  if l:m[0] ==# 'merge' && !empty(s:rp.first)
+    let l:hint = printf(gnosis#i18n#tr('「%s」を、どれにまとめる？（まとめる先＝残る方を選ぶ）'), s:rp.first)
+  endif
+  let l:lines = [join(l:tabs, ' '), '', l:hint, '']
+  let l:items = s:record_pick_items()
+  if l:m[0] ==# 'new'
+    call add(l:lines, gnosis#i18n#tr('（Enter で名前を入力）'))
+  elseif empty(l:items)
+    call add(l:lines, gnosis#i18n#tr('（記録がまだありません。Ctrl-→ で「新しく作る」へ）'))
+  else
+    let s:rp.sel = max([0, min([s:rp.sel, len(l:items) - 1])])
+    for l:i in range(len(l:items))
+      call add(l:lines, (l:i == s:rp.sel ? '▶ ' : '  ') . l:items[l:i])
+    endfor
+  endif
+  call extend(l:lines, ['', gnosis#i18n#tr('Ctrl-← / Ctrl-→ モード切替   j k 選ぶ   Enter 決める   Esc やめる')])
+  call popup_settext(s:rp.id, l:lines)
+endfunction
+
+function! s:record_pick_filter(id, key) abort
+  if a:key ==# "\<Esc>" || a:key ==# 'q'
+    call popup_close(a:id)
+    return 1
+  endif
+  let l:n = len(s:record_modes)
+  if index(["\<C-Right>", "\<Tab>", "\<Right>", 'l'], a:key) >= 0
+    let s:rp.mode = (s:rp.mode + 1) % l:n
+    let s:rp.sel = 0
+    let s:rp.first = ''
+    call s:record_pick_draw()
+  elseif index(["\<C-Left>", "\<S-Tab>", "\<Left>", 'h'], a:key) >= 0
+    let s:rp.mode = (s:rp.mode + l:n - 1) % l:n
+    let s:rp.sel = 0
+    let s:rp.first = ''
+    call s:record_pick_draw()
+  elseif index(["\<Down>", 'j'], a:key) >= 0
+    let s:rp.sel += 1
+    call s:record_pick_draw()
+  elseif index(["\<Up>", 'k'], a:key) >= 0
+    let s:rp.sel -= 1
+    call s:record_pick_draw()
+  elseif a:key ==# "\<CR>"
+    call s:record_pick_go()
+  endif
+  return 1
+endfunction
+
+function! s:record_pick_go() abort
+  let l:mode = s:record_modes[s:rp.mode][0]
+  let l:items = s:record_pick_items()
+  let l:kind = empty(l:items) ? '' : l:items[max([0, min([s:rp.sel, len(l:items) - 1])])]
+  if l:mode !=# 'new' && empty(l:kind)
+    return
+  endif
+  if l:mode ==# 'merge' && empty(s:rp.first)
+    if len(s:rp.kinds) < 2
+      echo 'Gnosis: ' . gnosis#i18n#tr('まとめられる時系列記録が 2 つ以上ありません')
+      return
+    endif
+    let s:rp.first = l:kind
+    let s:rp.sel = 0
+    call s:record_pick_draw()
+    return
+  endif
+  call popup_close(s:rp.id)
+  call timer_start(0, {-> s:record_pick_run(l:mode, l:kind, s:rp.first, s:rp.root, s:rp.kinds)})
+endfunction
+
+function! s:record_pick_run(mode, kind, first, root, kinds) abort
+  if a:mode ==# 'open'
+    call gnosis#record_open(a:kind)
+  elseif a:mode ==# 'date'
+    call s:record_date_chosen('', a:kind)
+  elseif a:mode ==# 'new'
+    call gnosis#record_new('')
+  elseif a:mode ==# 'rename'
+    let l:k = get(filter(copy(a:kinds), 'v:val.title ==# a:kind'), 0, {})
+    if empty(l:k) | return | endif
+    call gnosis#save_current_note()
+    execute 'edit ' . fnameescape(fnamemodify(a:root, ':p') . l:k.file)
+    call gnosis#rename_title_with_default(a:kind)
+  elseif a:mode ==# 'merge'
+    call gnosis#record_merge(a:first, a:kind)
   endif
 endfunction
 

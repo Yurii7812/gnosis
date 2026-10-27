@@ -25,7 +25,7 @@
     el2.classList.toggle("theme-dark", dark);
   }
 
-  // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
+  // node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
   var Ll = (s15, t3) => {
@@ -9140,7 +9140,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+  // node_modules/@xterm/addon-fit/lib/addon-fit.mjs
   var h = 2;
   var _ = 1;
   var o = class {
@@ -9164,7 +9164,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/@marijn/find-cluster-break/src/index.js
+  // node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
   var rangeTo = [];
   (() => {
@@ -9238,7 +9238,7 @@ ${h3.join(`
     return code < 65536 ? 1 : 2;
   }
 
-  // ../../../gnosis/web/node_modules/@codemirror/state/dist/index.js
+  // node_modules/@codemirror/state/dist/index.js
   var Text2 = class _Text {
     /**
     Get the line description around the given position.
@@ -12626,7 +12626,7 @@ ${h3.join(`
     return strict === true ? -1 : string2.length;
   }
 
-  // ../../../gnosis/web/node_modules/style-mod/src/style-mod.js
+  // node_modules/style-mod/src/style-mod.js
   var C2 = "\u037C";
   var COUNT = typeof Symbol == "undefined" ? "__" + C2 : Symbol.for(C2);
   var SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : Symbol("styleSet");
@@ -12762,7 +12762,7 @@ ${h3.join(`
     }
   };
 
-  // ../../../gnosis/web/node_modules/w3c-keyname/index.js
+  // node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -12868,7 +12868,7 @@ ${h3.join(`
     return name2;
   }
 
-  // ../../../gnosis/web/node_modules/@codemirror/view/dist/index.js
+  // node_modules/@codemirror/view/dist/index.js
   var nav = typeof navigator != "undefined" ? navigator : { userAgent: "", vendor: "", platform: "" };
   var doc = typeof document != "undefined" ? document : { documentElement: { style: {} } };
   var ie_edge = /* @__PURE__ */ /Edge\/(\d+)/.exec(nav.userAgent);
@@ -21375,7 +21375,7 @@ ${h3.join(`
   GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
   GutterMarker.prototype.point = true;
 
-  // ../../../gnosis/web/node_modules/@lezer/common/dist/index.js
+  // node_modules/@lezer/common/dist/index.js
   var DefaultBufferLength = 1024;
   var nextPropID = 0;
   var Range2 = class {
@@ -23426,7 +23426,7 @@ ${h3.join(`
     return result;
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/highlight/dist/index.js
+  // node_modules/@lezer/highlight/dist/index.js
   var nextTagID = 0;
   var Tag = class _Tag {
     /**
@@ -24150,7 +24150,7 @@ ${h3.join(`
     { tag: tags.punctuation, class: "tok-punctuation" }
   ]);
 
-  // ../../../gnosis/web/node_modules/@codemirror/language/dist/index.js
+  // node_modules/@codemirror/language/dist/index.js
   var _a2;
   var languageDataProp = /* @__PURE__ */ new NodeProp();
   function defineLanguageFacet(baseData) {
@@ -25064,7 +25064,7 @@ ${h3.join(`
     auto: /* @__PURE__ */ Decoration.mark({ class: "cm-iso", inclusive: true, attributes: { dir: "auto" }, bidiIsolate: null })
   };
 
-  // ../../../gnosis/web/node_modules/@codemirror/autocomplete/dist/index.js
+  // node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
     /**
     Create a new completion context. (Mostly useful for testing
@@ -25529,7 +25529,7 @@ ${h3.join(`
   closedBracket.endSide = -1;
   var android = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
 
-  // ../../../gnosis/web/node_modules/@lezer/markdown/dist/index.js
+  // node_modules/@lezer/markdown/dist/index.js
   var CompositeBlock = class _CompositeBlock {
     static create(type, value, from, parentHash, end) {
       let hash2 = parentHash + (parentHash << 8) + type + (value << 4) | 0;
@@ -27593,7 +27593,7 @@ ${h3.join(`
     }]
   };
 
-  // ../../../gnosis/web/node_modules/@lezer/lr/dist/index.js
+  // node_modules/@lezer/lr/dist/index.js
   var Stack = class _Stack {
     /**
     @internal
@@ -29355,7 +29355,7 @@ ${h3.join(`
     return spec.get;
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/html/dist/index.js
+  // node_modules/@lezer/html/dist/index.js
   var scriptText = 55;
   var StartCloseScriptTag = 1;
   var styleText = 56;
@@ -29699,7 +29699,7 @@ ${h3.join(`
     });
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/css/dist/index.js
+  // node_modules/@lezer/css/dist/index.js
   var descendantOp = 148;
   var Unit = 1;
   var identifier = 149;
@@ -29878,7 +29878,7 @@ ${h3.join(`
     tokenPrec: 2433
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-css/dist/index.js
+  // node_modules/@codemirror/lang-css/dist/index.js
   var _properties = null;
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
@@ -30739,7 +30739,7 @@ ${h3.join(`
     return new LanguageSupport(cssLanguage, cssLanguage.data.of({ autocomplete: cssCompletionSource }));
   }
 
-  // ../../../gnosis/web/node_modules/@lezer/javascript/dist/index.js
+  // node_modules/@lezer/javascript/dist/index.js
   var noSemi = 317;
   var noSemiType = 318;
   var incdec = 1;
@@ -30951,7 +30951,7 @@ ${h3.join(`
     tokenPrec: 15178
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-javascript/dist/index.js
+  // node_modules/@codemirror/lang-javascript/dist/index.js
   var snippets = [
     /* @__PURE__ */ snippetCompletion("function ${name}(${params}) {\n	${}\n}", {
       label: "function",
@@ -31263,7 +31263,7 @@ ${h3.join(`
     return true;
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-html/dist/index.js
+  // node_modules/@codemirror/lang-html/dist/index.js
   var Targets = ["_blank", "_self", "_top", "_parent"];
   var Charsets = ["ascii", "utf-8", "utf-16", "latin1", "latin1"];
   var Methods = ["get", "post", "put", "delete"];
@@ -32003,7 +32003,7 @@ ${h3.join(`
     return true;
   });
 
-  // ../../../gnosis/web/node_modules/@codemirror/lang-markdown/dist/index.js
+  // node_modules/@codemirror/lang-markdown/dist/index.js
   var data = /* @__PURE__ */ defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
   var headingProp = /* @__PURE__ */ new NodeProp();
   var commonmark = /* @__PURE__ */ parser.configure({
@@ -34299,6 +34299,7 @@ ${h3.join(`
       <div class="scan-title"></div>
       <div class="scan-choice c-out"></div>
       <div class="scan-choice c-in"></div>
+      <div class="scan-prefix"><span class="sp-label"></span><b class="sp-value"></b><input class="sp-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" hidden aria-label=""></div>
       <div class="scan-keys k-source"></div>
     </div>
     <div class="scan-stage scan-folder" hidden>
@@ -34341,7 +34342,11 @@ ${h3.join(`
       title: "Which scans do you want to number?",
       out: "Enter   A folder outside the vault (photos on this computer)",
       in: (n) => `v   Inside the vault (unnumbered scans taken in with \\M)  ${n} scans`,
-      srcKeys: "Enter / v: choose   q: close",
+      srcKeys: "Enter / v: choose   p: change the paper number prefix   q: close",
+      prefixLabel: "Paper note number prefix (p to change):  ",
+      prefixHint: "1-4 capital letters (e.g. PA \u2192 PA_1a2). Enter: set   Esc: cancel",
+      prefixBad: "Use 1-4 capital letters.",
+      prefixDone: (p) => `Paper numbers now start with ${p}_`,
       folderTitle: "Choose the folder with the scans",
       use: (n) => `\u25B6 Use this folder (${n} photos)`,
       up: "\u2191 (go up)",
@@ -34374,7 +34379,11 @@ ${h3.join(`
       title: "\u3069\u306E\u30B9\u30AD\u30E3\u30F3\u306B\u756A\u53F7\u3092\u4ED8\u3051\u308B\uFF1F",
       out: "Enter\u3000vault \u306E\u5916\u306E\u30D5\u30A9\u30EB\u30C0\uFF08\u30D1\u30BD\u30B3\u30F3\u306E\u4E2D\u306E\u5199\u771F\uFF09",
       in: (n) => `v\u3000vault \u306E\u4E2D\uFF08\\M \u3067\u53D6\u308A\u8FBC\u3093\u3060\u3001\u756A\u53F7\u306E\u306A\u3044\u3082\u306E\uFF09\u3000${n} \u679A`,
-      srcKeys: "Enter / v \u3067\u9078\u3076\u3000q \u9589\u3058\u308B",
+      srcKeys: "Enter / v \u3067\u9078\u3076\u3000p \u7D19\u306E\u756A\u53F7\u306E\u5370\u3092\u5909\u3048\u308B\u3000q \u9589\u3058\u308B",
+      prefixLabel: "\u7D19\u306E\u30CE\u30FC\u30C8\u306E\u756A\u53F7\u306E\u5370\uFF08p \u3067\u5909\u3048\u308B\uFF09\uFF1A",
+      prefixHint: "\u82F1\u5927\u6587\u5B57 1\u301C4 \u5B57\uFF08\u4F8B: PA \u2192 PA_1a2\uFF09\u3002Enter \u6C7A\u3081\u308B\u3000Esc \u3084\u3081\u308B",
+      prefixBad: "\u82F1\u5927\u6587\u5B57 1\u301C4 \u5B57\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+      prefixDone: (p) => `\u7D19\u306E\u756A\u53F7\u306F ${p}_ \u304B\u3089\u59CB\u307E\u308A\u307E\u3059`,
       folderTitle: "\u30B9\u30AD\u30E3\u30F3\u304C\u5165\u3063\u3066\u3044\u308B\u30D5\u30A9\u30EB\u30C0\u3092\u9078\u3076",
       use: (n) => `\u25B6 \u3053\u306E\u30D5\u30A9\u30EB\u30C0\u3092\u4F7F\u3046\uFF08\u5199\u771F ${n} \u679A\uFF09`,
       up: "\u2191 \u4E0A\u306E\u30D5\u30A9\u30EB\u30C0\u3078",
@@ -34395,7 +34404,8 @@ ${h3.join(`
     const SORT_ORDER = ["name-asc", "name-desc", "mtime-asc", "mtime-desc", "size-asc", "size-desc"];
     let stage = "source", scans = [], info = {}, idx = 0, last3 = "", mode = "id", pendingTopicId = "", changed = 0, busy = false, url = "";
     let dirInfo = null, sel2 = 0, inCount = 0, suggest = [], searching = false, found = [], sortKey = "name-asc", sortPop = null;
-    let inputOpen = false;
+    let inputOpen = false, prefix = "PA", prefixOpen = false;
+    const pInput = $4(".sp-input");
     const show = (name2) => {
       stage = name2;
       for (const st3 of ["source", "folder", "number"]) $4(".scan-" + st3).hidden = st3 !== name2;
@@ -34417,8 +34427,54 @@ ${h3.join(`
       $4(".c-in").textContent = T.in(inCount);
       $4(".c-in").classList.toggle("dim", !inCount);
       $4(".k-source").textContent = T.srcKeys;
+      prefix = r.ok && r.prefix ? r.prefix : prefix;
+      $4(".sp-label").textContent = T.prefixLabel;
+      $4(".sp-value").textContent = prefix + "_";
       show("source");
     }
+    function openPrefix() {
+      prefixOpen = true;
+      pInput.hidden = false;
+      pInput.value = prefix;
+      $4(".sp-value").hidden = true;
+      $4(".k-source").textContent = T.prefixHint;
+      pInput.focus();
+      pInput.select();
+    }
+    function closePrefix() {
+      prefixOpen = false;
+      pInput.hidden = true;
+      $4(".sp-value").hidden = false;
+      $4(".k-source").textContent = T.srcKeys;
+      root.focus();
+    }
+    async function commitPrefix() {
+      const v2 = pInput.value.trim().toUpperCase();
+      if (!/^[A-Z]{1,4}$/.test(v2)) {
+        $4(".k-source").textContent = T.prefixBad;
+        return;
+      }
+      closePrefix();
+      if (v2 === prefix) return;
+      $4(".k-source").textContent = T.busy;
+      const r = await api.run("prefix", [v2]);
+      if (r.ok) {
+        prefix = r.prefix;
+        $4(".sp-value").textContent = prefix + "_";
+        $4(".k-source").textContent = T.prefixDone(prefix);
+      } else $4(".k-source").textContent = r.error || "";
+    }
+    pInput.addEventListener("keydown", async (e) => {
+      if (e.isComposing) return;
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        await commitPrefix();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closePrefix();
+      }
+    });
     const lastDir = () => {
       try {
         return localStorage.getItem("scanDir") || "";
@@ -34790,7 +34846,7 @@ ${h3.join(`
       }
     });
     root.addEventListener("keydown", async (e) => {
-      if (e.target === input || e.target === search || e.isComposing) return;
+      if (e.target === input || e.target === search || e.target === pInput || e.isComposing) return;
       const k = e.key;
       if (!$4(".scan-sort").hidden) {
         const at2 = SORT_ORDER.indexOf(sortKey);
@@ -34816,6 +34872,9 @@ ${h3.join(`
         } else if (k === "v" || k === "V") {
           e.preventDefault();
           if (inCount) await startNumbering();
+        } else if (k === "p" || k === "P") {
+          e.preventDefault();
+          openPrefix();
         } else if (k === "q") {
           e.preventDefault();
           await close();

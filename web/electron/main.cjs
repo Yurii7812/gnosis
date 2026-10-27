@@ -377,7 +377,7 @@ ipcMain.on("app:quit", () => app.quit());
 
 // ---- 紙のスキャンの番号付け画面（python/scan_inbox.py。受け皿は <vault>/.gnosis/scans/）----
 const SCAN_PY = path.join(REPO, "python", "scan_inbox.py");
-const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0, importmove: 1 }; // 名前 → 必要な引数の数（vault のあとに）
+const SCAN_CMDS = { list: 0, assign: 2, diary: 2, finish: 0, importmove: 1, prefix: 0 }; // 名前 → 必要な引数の数（vault のあとに）
 ipcMain.handle("scan:run", (_e, cmd, args) => new Promise((resolve) => {
   if (!noteRootDir || !(cmd in SCAN_CMDS) || !Array.isArray(args)) return resolve({ ok: false, error: L("vault が開かれていません", "No vault is open") });
   const list = args.map(String);

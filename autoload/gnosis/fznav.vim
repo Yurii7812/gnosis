@@ -11,7 +11,7 @@
 "   Enter         Group / Note を開く（右のノートの窓に出し、ここは現在位置に合わせる）
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
 "   u             上位表示（祖先の番号の Group と、関連 Group）⇔ 通常    m  関連 Group をもっと見る
-"   o             アウトライン窓の表示 ⇔ 非表示
+"   \o            アウトライン窓の表示 ⇔ 非表示（どこでも）。o は選ぶモード（\l）で元のノートを右に見る
 "   Ctrl-← Ctrl-→ gv  曼荼羅へ        Space  ノートの窓へ      q  閉じる      ?  この一覧
 let s:here = expand('<sfile>:p:h:h:h')
 let s:F = {'collapsed': {}, 'mode': 'normal', 'more': 0, 'dirty': 1, 'gen': 0, 'rows': [], 'pidx': {},
@@ -120,7 +120,9 @@ function! s:line(mark, num, title, tail) abort
 endfunction
 
 function! s:head_text() abort
-  return s:F.mode ==# 'upper' ? 'FOLGEZETTEL / ' . gnosis#i18n#tr('上位表示') : 'FOLGEZETTEL'
+  let l:head = s:F.mode ==# 'upper' ? 'FOLGEZETTEL / ' . gnosis#i18n#tr('上位表示') : 'FOLGEZETTEL'
+  let l:pick = gnosis#mview#pick_label()
+  return empty(l:pick) ? l:head : l:head . '  ' . l:pick
 endfunction
 
 function! s:add(lines, cells, items, line, cell, item) abort
@@ -356,13 +358,19 @@ endfunction
 
 " 選んでいる項目の、省かない番号と題（番号が ~ で省かれていても全体が分かる）
 function! s:detail() abort
-  if empty(s:F.items) || get(s:S(), 'view', 'mandala') !=# 'fz' || !get(s:S(), 'focus', 1)
+  if empty(s:F.items) || get(s:S(), 'view', 'mandala') !=# 'fz' || !get(s:S(), 'focus', 1) || get(s:S(), 'switching', 0)
     return
   endif
   let l:it = s:cur_item()
   if l:it.t ==# 'h'
     return
   endif
+  " 窓に入り直しただけ（同じ項目のまま）なら出さない。曼荼羅の窓と同じく、何も出さずに切り替わる
+  let l:key = l:it.path . '|' . l:it.id
+  if get(s:F, 'shown', '') ==# l:key
+    return
+  endif
+  let s:F.shown = l:key
   let l:kind = l:it.k ==# 'g' ? 'Group' : 'Note'
   let l:t = printf('%s  %s  %s  (%s)', empty(l:it.id) ? '-' : l:it.id, l:kind, l:it.title, l:it.path)
   let l:w = &columns - 12
@@ -376,6 +384,52 @@ endfunction
 
 function! s:goto(lnum) abort
   call cursor(a:lnum, 1)
+  call s:preview_later()
+endfunction
+
+" カーソルの項目を右の窓に出す（印・曼荼羅の中心は変えない）。続けて動かすときは、止まってから 1 回だけ
+function! s:preview_later() abort
+  if exists('s:ptimer')
+    call timer_stop(s:ptimer)
+  endif
+  let s:ptimer = timer_start(80, {-> s:preview_now()})
+endfunction
+
+function! s:preview_now() abort
+  unlet! s:ptimer
+  if &filetype !=# 'gnosis-mandala' || get(s:S(), 'view', 'mandala') !=# 'fz' || empty(s:F.items)
+    return
+  endif
+  let l:it = s:cur_item()
+  if l:it.t ==# 'h' || empty(get(l:it, 'path', ''))
+    return
+  endif
+  call gnosis#mview#preview_rel(l:it.path)
+endfunction
+
+" e / I: \l などの選ぶモードで、カーソルの項目に決める（e 入れるノート・グループに決定、I Index に載せる）
+function! s:pick_decide(index) abort
+  if !gnosis#mview#picking()
+    return
+  endif
+  let l:it = s:cur_item()
+  if l:it.t ==# 'h' || empty(get(l:it, 'path', ''))
+    return
+  endif
+  call gnosis#mview#fz_decide(l:it.path, a:index)
+endfunction
+
+" c: 印のついたノート（今開いているもの）へカーソルを戻し、右の窓もそのノートに戻す
+function! s:back() abort
+  if exists('s:ptimer')
+    call timer_stop(s:ptimer)
+    unlet s:ptimer
+  endif
+  let l:l = s:current_lnum()
+  if l:l > 0
+    call cursor(l:l, 1)
+  endif
+  call gnosis#mview#preview_rel(s:cur_path())
 endfunction
 
 function! s:move(d) abort
@@ -469,9 +523,69 @@ function! s:right() abort
     return
   endif
   silent! call remove(s:F.collapsed, s:F.rows[l:it.i][0])
-  " 下位の最初のブロックの、同じ種類の行へ（Note からは Note へ）
+  " 今開いているノートがこの枝の下にあれば、そちらへ向かう子へ。無ければ下位の最初のブロックへ
+  let l:d = s:toward_current(l:it.i, l:d)
+  " 同じ種類の行へ（Note からは Note へ）
   let l:to = l:it.k ==# 'n' ? s:F.rows[l:d][6] : l:d
   call s:goto_row(l:to)
+endfunction
+
+" 同じ番号のブロックの先頭の行
+function! s:block_head(i) abort
+  let l:h = a:i
+  while l:h > 0 && s:F.rows[l:h - 1][0] ==# s:F.rows[l:h][0]
+    let l:h -= 1
+  endwhile
+  return l:h
+endfunction
+
+" 行 a:i の下で、今開いているノートへ向かう子ブロックの先頭。下に無ければ a:dflt
+function! s:toward_current(i, dflt) abort
+  let l:c = s:cur_row()
+  let l:r = s:F.rows[a:i]
+  if l:c <= l:r[6] || l:c >= l:r[7]
+    return a:dflt
+  endif
+  let l:head = s:block_head(a:i)
+  let l:x = l:c
+  while s:F.rows[l:x][5] >= 0 && s:F.rows[l:x][5] != l:head
+    let l:x = s:F.rows[l:x][5]
+  endwhile
+  return s:F.rows[l:x][5] == l:head ? s:block_head(l:x) : a:dflt
+endfunction
+
+" [ ]: 同じ親の下の、前・次の兄弟へ（Note の行からは Note へ、Group の行からは Group へ）
+function! s:sibling(d) abort
+  let l:it = s:cur_item()
+  if s:F.mode ==# 'upper' || l:it.t !=# 'r'
+    return
+  endif
+  let l:i = l:it.i
+  let l:up = s:F.rows[l:i][5]
+  let l:n = len(s:F.rows)
+  let l:to = -1
+  if a:d > 0
+    let l:j = s:F.rows[l:i][7]
+    if l:j < l:n && s:F.rows[l:j][5] == l:up
+      let l:to = l:j
+    endif
+  else
+    let l:j = s:block_head(l:i) - 1
+    while l:j >= 0
+      if s:F.rows[l:j][5] == l:up
+        let l:to = s:block_head(l:j)
+        break
+      endif
+      if l:up >= 0 && l:j <= l:up
+        break
+      endif
+      let l:j -= 1
+    endwhile
+  endif
+  if l:to < 0
+    return
+  endif
+  call s:goto_row(l:it.k ==# 'n' ? s:F.rows[l:to][6] : l:to)
 endfunction
 
 function! s:enter() abort
@@ -481,57 +595,6 @@ function! s:enter() abort
   endif
   let s:F.recenter = 1
   call gnosis#mview#open_rel(l:it.path)
-endfunction
-
-" ---- 折りたたみ ----------------------------------------------------------------------------------
-
-function! s:fold(op) abort
-  if s:F.mode ==# 'upper'
-    return
-  endif
-  call s:load()
-  if a:op ==# 'M'
-    for l:r in s:F.rows
-      if l:r[7] > l:r[6] + 1
-        let s:F.collapsed[l:r[0]] = 1
-      endif
-    endfor
-    call gnosis#fznav#render()
-    return
-  elseif a:op ==# 'R'
-    let s:F.collapsed = {}
-    call gnosis#fznav#render()
-    return
-  endif
-  let l:it = s:cur_item()
-  if l:it.t !=# 'r'
-    return
-  endif
-  let l:r = s:F.rows[l:it.i]
-  let l:has = l:r[7] > l:r[6] + 1
-  let l:id = l:r[0]
-  let l:target = l:it.i
-  if a:op ==# 'o'
-    silent! call remove(s:F.collapsed, l:id)
-  elseif a:op ==# 'c'
-    if l:has
-      let s:F.collapsed[l:id] = 1
-    elseif l:r[5] >= 0
-      " 子がなければ、親を閉じる（Vim の折りたたみと同じ）
-      let l:target = s:F.rows[l:r[5]][6]
-      let s:F.collapsed[s:F.rows[l:r[5]][0]] = 1
-    endif
-  elseif a:op ==# 'a'
-    if !l:has
-      return
-    elseif has_key(s:F.collapsed, l:id)
-      call remove(s:F.collapsed, l:id)
-    else
-      let s:F.collapsed[l:id] = 1
-    endif
-  endif
-  call gnosis#fznav#render()
-  call s:goto_row(l:target)
 endfunction
 
 " ---- モード ---------------------------------------------------------------------------------------
@@ -554,23 +617,35 @@ function! s:more() abort
   call gnosis#fznav#render()
 endfunction
 
+" ? のガイドは、Esc / q / ? / Enter / Space / クリックでだけ閉じる（タイマーが積むキーでは閉じない）
+function! s:help_filter(id, key) abort
+  if index(["\<Esc>", 'q', '?', "\<CR>", ' ', "\<LeftMouse>"], a:key) >= 0
+    call popup_close(a:id)
+  endif
+  return 1
+endfunction
+
 function! s:help() abort
   let l:t = [
         \ 'FOLGEZETTEL',
         \ '',
         \ 'j k / ↓ ↑     ' . gnosis#i18n#tr('次・前の項目'),
-        \ 'h l / ← →     ' . gnosis#i18n#tr('上位・下位の番号へ'),
+        \ 'h / ←         ' . gnosis#i18n#tr('親の番号へ'),
+        \ 'l / →         ' . gnosis#i18n#tr('下位へ（今開いているノートが下にあれば、その方向へ）'),
+        \ '[ ]          ' . gnosis#i18n#tr('前・次の兄弟へ'),
         \ 'Enter         ' . gnosis#i18n#tr('Group / Note を開く'),
-        \ 'za zc zo      ' . gnosis#i18n#tr('折りたたみ（開閉・閉じる・開く）'),
-        \ 'zM zR         ' . gnosis#i18n#tr('全部閉じる・全部開く'),
+        \ 'c             ' . gnosis#i18n#tr('印のついたノート（Enter で開いたもの）へ戻る'),
         \ 'u             ' . gnosis#i18n#tr('上位表示 ⇔ 通常'),
         \ 'm             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
-        \ 'o             ' . gnosis#i18n#tr('アウトライン窓 ⇔ 非表示'),
+        \ '\l            ' . gnosis#i18n#tr('入れるノートを選ぶモード（\l）。ビューを切り替えても続く'),
+        \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）'),
+        \ 'q             ' . gnosis#i18n#tr('選ぶモードなどをやめる（何も無ければ閉じる）'),
+        \ '\o            ' . gnosis#i18n#tr('アウトラインを右に出す ⇔ しまう（どこでも）'),
         \ 'Ctrl-← Ctrl-→ gv  ' . gnosis#i18n#tr('曼荼羅へ'),
         \ 'Space         ' . gnosis#i18n#tr('ノートの窓へ'),
         \ 'f < > = p .   ' . gnosis#i18n#tr('全画面・幅・右の窓・読み直し'),
-        \ 'q             ' . gnosis#i18n#tr('閉じる')]
-  call popup_dialog(l:t, {'title': ' ? ', 'padding': [0, 1, 0, 1], 'border': [], 'close': 'click', 'filter': {id, key -> popup_close(id) || 1}})
+        \ 'Q             ' . gnosis#i18n#tr('閉じる')]
+  call popup_dialog(l:t, {'title': ' ? ', 'padding': [0, 1, 0, 1], 'border': [], 'close': 'click', 'filter': function('s:help_filter')})
 endfunction
 
 " ---- 窓の出入り -----------------------------------------------------------------------------------
@@ -624,17 +699,17 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> h <Cmd>call <SID>left()<CR>
   nnoremap <buffer><nowait><silent> <Left> <Cmd>call <SID>left()<CR>
   nnoremap <buffer><nowait><silent> l <Cmd>call <SID>right()<CR>
+  nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>sibling(1)<CR>
+  nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>sibling(-1)<CR>
   nnoremap <buffer><nowait><silent> <Right> <Cmd>call <SID>right()<CR>
   nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>enter()<CR>
   nnoremap <buffer><nowait><silent> <2-LeftMouse> <Cmd>call <SID>enter()<CR>
-  nnoremap <buffer><nowait><silent> za <Cmd>call <SID>fold('a')<CR>
-  nnoremap <buffer><nowait><silent> zc <Cmd>call <SID>fold('c')<CR>
-  nnoremap <buffer><nowait><silent> zo <Cmd>call <SID>fold('o')<CR>
-  nnoremap <buffer><nowait><silent> zM <Cmd>call <SID>fold('M')<CR>
-  nnoremap <buffer><nowait><silent> zR <Cmd>call <SID>fold('R')<CR>
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>toggle_upper()<CR>
+  nnoremap <buffer><nowait><silent> c <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>more()<CR>
-  nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#outline#toggle()<CR>
+  nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
+  nnoremap <buffer><nowait><silent> e <Cmd>call <SID>pick_decide(0)<CR>
+  nnoremap <buffer><nowait><silent> I <Cmd>call <SID>pick_decide(1)<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>help()<CR>
   nnoremap <buffer><nowait><silent> f <Cmd>call gnosis#mview#win_op('full')<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call gnosis#mview#win_op('resize-')<CR>
@@ -642,7 +717,7 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> = <Cmd>call gnosis#mview#win_op('equalize')<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call gnosis#mview#win_op('preview')<CR>
   nnoremap <buffer><nowait><silent> . <Cmd>call gnosis#mview#win_op('reload')<CR>
-  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#win_op('quit')<CR>
+  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#quit_layers()<CR>
   nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#win_op('quit')<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
   nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view()<CR>
@@ -653,6 +728,8 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><silent> \x <Cmd>call gnosis#run#close_here()<CR>
   nnoremap <buffer><silent> \X <Cmd>call gnosis#run#close_all()<CR>
   nnoremap <buffer><silent> \o <Cmd>call gnosis#outline#toggle()<CR>
+  nnoremap <buffer><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
+  nnoremap <buffer><silent> \l <Cmd>call gnosis#mview#link_pick()<CR>
   augroup gnosis_fz_buf
     autocmd! * <buffer>
     autocmd CursorMoved <buffer> call s:on_moved()
@@ -741,6 +818,15 @@ endfunction
 function! gnosis#fznav#state() abort
   return s:F
 endfunction
+" vault を切り替えるとき: 前の vault の行・折りたたみ・予約中の右の窓の更新を捨てる
+function! gnosis#fznav#reset() abort
+  if exists('s:ptimer')
+    call timer_stop(s:ptimer)
+    unlet s:ptimer
+  endif
+  call gnosis#fznav#reset_for_test()
+endfunction
+
 function! gnosis#fznav#reset_for_test() abort
   let s:F = {'collapsed': {}, 'mode': 'normal', 'more': 0, 'dirty': 1, 'gen': 0, 'rows': [], 'pidx': {},
         \ 'lines': [], 'cells': [], 'items': [], 'sel': [], 'selpos': {}, 'last_cur': '', 'up': {}, 'upkey': '', 'key': ''}

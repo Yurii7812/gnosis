@@ -479,7 +479,8 @@ _FZ_SCORE = {"同じ番号": 6.0, "枝の親": 5.0, "枝の子": 5.0, "枝の兄
 
 
 def _fz_parent(ident: str) -> str:
-    return "".join(re.findall(r"\d+|[a-z]+", ident)[:-1])
+    parts = re.findall(r"[A-Z]+_|\d+|[a-z]+", ident)[:-1]
+    return "" if parts and parts[-1].endswith("_") else "".join(parts)
 
 
 def _fz_chain(ident: str) -> list[str]:

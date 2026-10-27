@@ -104,5 +104,34 @@ try
 catch
   call add(s:out, 'NG 例外: ' . v:exception . ' @ ' . v:throwpoint)
 endtry
+" \R の選択画面: Ctrl-← / Ctrl-→ でモードを切り替える（popup のキー処理を直接呼んで確かめる）
+unlet! g:gnosis_test_record_pick
+function! s:T(ja) abort
+  return gnosis#i18n#tr(a:ja)
+endfunction
+let s:sid = matchstr(execute('scriptnames'), '\d\+\ze: [^\n]*autoload/gnosis.vim')
+function! s:rpkey(k) abort
+  return call('<SNR>' . s:sid . '_record_pick_filter', [s:rp_id, a:k])
+endfunction
+function! s:rptext() abort
+  return join(getbufline(winbufnr(s:rp_id), 1, '$'), "\n")
+endfunction
+enew
+call gnosis#record_pick()
+let s:rp_id = get(popup_list(), 0, 0)
+call s:ok('\R: 選択画面（popup）が出る・最初は「開く」', s:rp_id > 0 && s:rptext() =~# '\V[' . s:T('開く（今日）') . ']', s:rptext())
+call s:rpkey("\<C-Right>")
+call s:ok('Ctrl-→ で「日付を指定」', s:rptext() =~# '\V[' . s:T('日付を指定') . ']', s:rptext())
+call s:rpkey("\<C-Right>")
+call s:ok('Ctrl-→ で「新しく作る」（名前の入力）', s:rptext() =~# '\V[' . s:T('新しく作る') . ']' && stridx(s:rptext(), s:T('（Enter で名前を入力）')) >= 0, s:rptext())
+call s:rpkey("\<C-Right>")
+call s:rpkey("\<C-Right>")
+call s:ok('Ctrl-→ で「まとめる」', s:rptext() =~# '\V[' . s:T('まとめる') . ']' && s:rptext() =~# '夢' && s:rptext() =~# '読書', s:rptext())
+call s:rpkey("\<CR>")
+call s:ok('まとめる: 元を選ぶと、先を選ぶ画面になる（元は一覧から外れる）', stridx(s:rptext(), printf(s:T('「%s」を、どれにまとめる？（まとめる先＝残る方を選ぶ）'), '夢')) >= 0 && s:rptext() !~# '▶ 夢', s:rptext())
+call s:rpkey("\<C-Left>")
+call s:ok('Ctrl-← で戻る（「名前を変える」）・選び直しになる', s:rptext() =~# '\V[' . s:T('名前を変える') . ']' && stridx(s:rptext(), printf(s:T('「%s」を、どれにまとめる？（まとめる先＝残る方を選ぶ）'), '夢')) < 0, s:rptext())
+call s:rpkey("\<Esc>")
+call s:ok('Esc でやめる', empty(popup_list()))
 call writefile(s:out, $RECORD_RESULT)
 qall!

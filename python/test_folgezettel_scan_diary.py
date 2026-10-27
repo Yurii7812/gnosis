@@ -115,7 +115,7 @@ def main() -> int:
         check((vault / "paper-diary-20261007-1.jpg").is_file() and (vault / "1.jpg").is_file(), "日記の画像と通常の ID 画像が vault へ移る")
         check(pp.scan_folgezettel_notes(vault).keys() == {"1"}, "通常の ID 登録は今までどおり")
         itext = idx.read_text(encoding="utf-8")
-        check(idx.name == "Paper-Zettelkasten-Index.md" and itext.count("[日記](") == 1, "Index にキーワード「日記」が 1 つ")
+        check(idx == pp.find_paper_index(vault) and itext.count("[日記](") == 1, "Index にキーワード「日記」が 1 つ")
         check(not any(it.processed for it in app.items), "移動した分は作業一覧から消える")
     root_tk.destroy()
     print()

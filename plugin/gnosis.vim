@@ -894,6 +894,11 @@ nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " \o … アウトライン窓（今のノートの見出し。曼荼羅・Folgezettel ビューと同時に出せる）の表示 ⇔ 非表示
 nnoremap <silent> \o        <Cmd>call gnosis#outline#toggle()<CR>
 command! GnosisOutline call gnosis#outline#toggle()
+" go … アウトライン窓 ⇔ ノートの窓 を行き来する（アウトラインが閉じていれば開く。どの窓からでも）
+nnoremap <silent> go        <Cmd>if v:count > 0 \| execute 'normal! ' . v:count . 'go' \| else \| call gnosis#outline#focus() \| endif<CR>
+" \W … ノートだけを表示する（曼荼羅・Folgezettel ビュー・アウトラインなど、全部の窓を閉じる。どの窓にカーソルがあっても同じ）
+nnoremap <silent> \W        <Cmd>call gnosis#mview#only_note()<CR>
+command! GnosisOnlyNote call gnosis#mview#only_note()
 " zo … カーソル下の .md リンク先ノートの見出し（アウトライン）を選び、
 " リンク先に #スラッグ（GitHub 互換）を付ける。先頭の「（見出しなし）」で解除。
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>

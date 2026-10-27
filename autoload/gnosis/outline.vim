@@ -1,7 +1,8 @@
 " アウトライン窓。今開いている Markdown ノートの見出し（# ## ###…）を、独立した窓に出す。
 " 曼荼羅・Folgezettel ビューの代わりではなく、それらと同時に出せる（ふつうの Vim の分割窓なので、位置と幅は <C-w> の操作でも変えられる）。
 "
-"   \o（曼荼羅・Folgezettel ビューでは o）  表示 ⇔ 非表示          :GnosisOutline も同じ
+"   \o（どのビュー・どの窓でも）  右に出す ⇔ しまう          :GnosisOutline も同じ
+"   go（どの窓からでも）          アウトライン ⇔ ノート の行き来（閉じていれば開く）
 " アウトライン窓のキー
 "   j k / ↓ ↑      見出しを選ぶ        Enter  本文のその見出しへ（カーソルも本文へ移る）
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
@@ -105,6 +106,9 @@ function! gnosis#outline#open() abort
   execute (s:O.side ==# 'left' ? 'topleft' : 'botright') . ' vertical ' . l:w . 'new'
   let s:O.win = win_getid()
   let s:O.buf = bufnr('%')
+  " 新しい空の窓なので、前に出した内容の記憶は捨てる（残すと「変わっていない」と見て、書き込まない＝何も表示されない）
+  let s:O.lines = []
+  let s:O.tick = ''
   setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nowrap nolist nonumber norelativenumber nospell nofoldenable
   setlocal colorcolumn= signcolumn=no filetype=gnosis-outline scrolloff=2 winfixwidth nocursorline
   silent! file [Gnosis\ Outline]
@@ -126,6 +130,22 @@ function! gnosis#outline#open() abort
   call win_gotoid(s:O.win)
 endfunction
 
+" go: アウトライン窓 ⇔ ノートの窓 を行き来する（アウトラインが閉じていれば、開いてそこへ移る）。どの窓からでも同じ
+function! gnosis#outline#focus() abort
+  if !gnosis#outline#is_open()
+    call gnosis#outline#open()
+    return
+  endif
+  if win_getid() == s:O.win
+    let l:sw = s:src_win()
+    if l:sw > 0
+      call win_gotoid(l:sw)
+    endif
+  else
+    call win_gotoid(s:O.win)
+  endif
+endfunction
+
 function! gnosis#outline#close() abort
   if gnosis#outline#is_open()
     let l:back = s:src_win()
@@ -140,6 +160,8 @@ endfunction
 function! s:gone() abort
   let s:O.win = -1
   let s:O.buf = -1
+  let s:O.lines = []
+  let s:O.tick = ''
   augroup gnosis_outline
     autocmd!
   augroup END
@@ -156,6 +178,8 @@ function! s:hl() abort
 endfunction
 
 function! s:maps() abort
+  nnoremap <buffer><nowait><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
+  nnoremap <buffer><nowait><silent> go <Cmd>if v:count > 0 \| execute 'normal! ' . v:count . 'go' \| else \| call gnosis#outline#focus() \| endif<CR>
   nnoremap <buffer><nowait><silent> <CR> <Cmd>call <SID>jump()<CR>
   nnoremap <buffer><nowait><silent> <2-LeftMouse> <Cmd>call <SID>jump()<CR>
   nnoremap <buffer><nowait><silent> za <Cmd>call <SID>fold('a')<CR>

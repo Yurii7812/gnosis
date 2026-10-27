@@ -343,6 +343,9 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .scan-title { font-size: 40px; font-weight: 700; margin-top: 8vh; }
 .scan-choice { font-size: 38px; padding: 28px 40px; border: 3px solid var(--accent); border-radius: 18px; min-width: min(900px, 90vw); text-align: left; margin-top: 18px; }
 .scan-choice.dim { opacity: .4; border-style: dashed; }
+.scan-prefix { margin-top: 28px; font-size: 26px; display: flex; align-items: baseline; gap: 12px; }
+.scan-prefix .sp-value { color: var(--accent); font-size: 34px; }
+.scan-prefix .sp-input { font-size: 34px; width: 4.5em; text-transform: uppercase; padding: 2px 10px; border: 2px solid var(--accent); border-radius: 8px; background: transparent; color: inherit; }
 .scan-path { font-size: 26px; color: var(--fg-dim); word-break: break-all; text-align: center; }
 .scan-list { flex: 1 1 0; min-height: 0; overflow-y: auto; width: min(900px, 92vw); display: flex; flex-direction: column; gap: 6px; }
 .scan-row { font-size: 34px; padding: 12px 20px; border-radius: 12px; border: 3px solid transparent; }

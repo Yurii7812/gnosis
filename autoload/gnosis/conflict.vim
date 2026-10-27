@@ -31,6 +31,34 @@ function! gnosis#conflict#record(...) abort
 endfunction
 
 let s:id_pat = '^folgezettel\s*:'
+let s:merge_py = expand('<sfile>:p:h:h:h') . '/python/merge3.py'
+
+" 外の変更（同期が書いた BackLink: や番号など）と、このバッファの未保存の編集が、別々の場所の変更なら、
+" 両方を取り込んだ行を返す（最後に読んだ・書いた内容を元にした 3 者マージ）。同じ場所を変えていたら v:null。
+" これで「別のウィンドウが書き換えました。:e! …」の警告を出さずに済む
+function! s:merged_lines(buf) abort
+  let l:base = getbufvar(a:buf, 'gnosis_disk_lines', [])
+  let l:p = s:path_of(a:buf)
+  if empty(l:base) || !filereadable(l:p) || l:p !~? '\.md$' || !filereadable(s:merge_py)
+    return v:null
+  endif
+  let l:dir = tempname()
+  try
+    call mkdir(l:dir, 'p')
+    call writefile(l:base, l:dir . '/base')
+    call writefile(getbufline(a:buf, 1, '$'), l:dir . '/ours')
+    call writefile(readfile(l:p), l:dir . '/theirs')
+    call gnosis#sh#system(join(map([gnosis#python_cmd(), s:merge_py, l:dir . '/base', l:dir . '/ours', l:dir . '/theirs', l:dir . '/out'], 'shellescape(v:val)'), ' '))
+    if gnosis#sh#error() || !filereadable(l:dir . '/out')
+      return v:null
+    endif
+    return readfile(l:dir . '/out')
+  catch
+    return v:null
+  finally
+    silent! call delete(l:dir, 'rf')
+  endtry
+endfunction
 
 " front matter の folgezettel: の行を除いた行（なければそのまま）
 function! s:without_id(lines) abort
@@ -172,6 +200,14 @@ function! gnosis#conflict#safe_update() abort
       endif
       return s:rewrite_with(l:id is v:false ? getline(1, '$') : s:apply_id_line(getline(1, '$'), l:id))
     endif
+    " 同期の書き換えと、未保存の編集が別々の場所なら、両方を取り込んで保存する（警告も出さない）
+    let l:merged = s:merged_lines(bufnr('%'))
+    if l:merged isnot v:null
+      if mode() =~# '^[iR]'
+        return 0
+      endif
+      return s:rewrite_with(l:merged)
+    endif
     if s:own_sync_recent(bufnr('%'))
       " 自分の同期が整えた内容。次の保存でまた同期が走って整え直すので、バッファ側を優先して書く。
       " 挿入中は :edit できない。Esc で抜けたときの保存で改めて試す（黙って待つ）。
@@ -209,6 +245,10 @@ function! gnosis#conflict#on_changed_shell() abort
     " 保存時は番号だけの同期を取り込めるので、外部変更の通知でも同じ扱いにする。
     " ここでは読み直さず、未保存の本文と比較元を次の保存まで残す。
     if s:id_only_change(l:buf) isnot v:null
+      return
+    endif
+    " 別々の場所の変更なら、次の保存で両方を取り込む。警告は出さない
+    if s:merged_lines(l:buf) isnot v:null
       return
     endif
     call gnosis#conflict#handle(l:buf)
