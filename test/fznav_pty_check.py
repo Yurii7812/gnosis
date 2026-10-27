@@ -78,7 +78,9 @@ try:
             s.send(left, 1.2)
             ok(f"[{label}] Ctrl-← で曼荼羅に戻る", "┃" in s.text(), s.text()[:300])
             s.send(left, 1.2)
-            ok(f"[{label}] もう一度 Ctrl-← で Folgezettel ビュー（左右どちらでも切り替わる）", "項目30" in s.text() and "┃" not in s.text())
+            ok(f"[{label}] Ctrl-← の逆順でリストビュー", "LIST" in s.text())
+            s.send(left, 1.2)
+            ok(f"[{label}] さらに Ctrl-← で Folgezettel ビュー", "項目30" in s.text() and "┃" not in s.text())
             # 右の窓（ノート）へ移って戻っても崩れない
             s.send(" ", 0.8)
             s.send("jj", 0.5)

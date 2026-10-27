@@ -3022,9 +3022,32 @@ function! gnosis#conceal_apply_all() abort
   call win_gotoid(l:back)
 endfunction
 
+let s:conceal_eol_timer = -1
+
 function! gnosis#conceal_eol_fix() abort
   if &l:conceallevel > 0 && !get(b:, 'gnosis_link_source_on', 0)
     let &l:concealcursor = gnosis#conceal_modes()
+    " A / a で隠れたリンク先の直後に入ると、Vim が元の Markdown の列へカーソルを
+    " 描くことがある。InsertEnter の処理が済んでから描き直すと表示幅で計算される。
+    let l:last = strlen(getline('.'))
+    if &l:concealcursor =~# 'i' && col('.') > l:last && l:last > 0
+          \ && synconcealed(line('.'), l:last)[0] && s:conceal_eol_timer < 0
+      let s:conceal_eol_timer = timer_start(0,
+            \ function('s:conceal_eol_redraw', [win_getid(), bufnr('%')]))
+    endif
+  endif
+endfunction
+
+function! s:conceal_eol_redraw(win, buf, timer) abort
+  let s:conceal_eol_timer = -1
+  if win_getid() != a:win || bufnr('%') != a:buf || mode(1) !~# '^[iR]'
+        \ || &l:conceallevel == 0 || &l:concealcursor !~# 'i'
+        \ || get(b:, 'gnosis_link_source_on', 0)
+    return
+  endif
+  let l:last = strlen(getline('.'))
+  if col('.') > l:last && l:last > 0 && synconcealed(line('.'), l:last)[0]
+    redraw!
   endif
 endfunction
 
@@ -16487,6 +16510,16 @@ function! gnosis#add_clipboard_to_top() abort
 endfunction
 
 function! gnosis#linkify_filename_under_cursor() abort
+  " チェック項目は、記号と前後の空白を残し、文章だけをビジュアル版と同じ処理へ渡す。
+  let l:line = getline('.')
+  let l:head = matchstr(l:line, '^\s*\([-*+]\|\d\+[.)]\)\s\+\[[ xX]\]\s*')
+  if !empty(l:head)
+    let l:end = strlen(substitute(l:line, '\s\+$', '', ''))
+    if l:end > strlen(l:head)
+      call s:linkify_selection_new_note(0, line('.'), line('.'), strlen(l:head) + 1, l:end)
+    endif
+    return
+  endif
   let l:word = expand('<cfile>')
   if empty(l:word)
     echo 'Error: no filename under cursor'
@@ -16551,6 +16584,12 @@ function! gnosis#linkify_selection_new_note() abort range
   let l:eline = line("'>")
   let l:scol  = col("'<")
   let l:ecol  = col("'>")
+  return s:linkify_selection_new_note(l:is_linewise, l:sline, l:eline, l:scol, l:ecol)
+endfunction
+
+function! s:linkify_selection_new_note(is_linewise, sline, eline, scol, ecol) abort
+  let [l:is_linewise, l:sline, l:eline, l:scol, l:ecol] =
+        \ [a:is_linewise, a:sline, a:eline, a:scol, a:ecol]
 
   if l:sline <= 0 || l:eline <= 0
     echo 'No visual selection'

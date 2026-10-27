@@ -30,7 +30,7 @@ const script = path.join(tmp, 'scenario.js'), out = path.join(tmp, 'out.json');
 fs.writeFileSync(script, `(async () => {
  const sleep = ms => new Promise(r => setTimeout(r, ms));
  const wait = async (fn, label) => { for (let i = 0; i < 400; i++) { if (fn()) return; await sleep(50); } throw new Error(label); };
- await wait(() => window.__gui?.state()?.mandala?.size === 3, 'startup');
+ await wait(() => window.__gui?.state()?.mandala?.center === 'n1a1a.md', 'startup');
  const G = window.__gui, R = {};
  await sleep(1200);
  G.send('\\x1b[1;5C'); await sleep(2500);

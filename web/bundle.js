@@ -25,7 +25,7 @@
     el2.classList.toggle("theme-dark", dark);
   }
 
-  // node_modules/@xterm/xterm/lib/xterm.mjs
+  // ../../../gnosis/web/node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
   var Rl = Object.getOwnPropertyDescriptor;
   var Ll = (s15, t3) => {
@@ -9140,7 +9140,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+  // ../../../gnosis/web/node_modules/@xterm/addon-fit/lib/addon-fit.mjs
   var h = 2;
   var _ = 1;
   var o = class {
@@ -9164,7 +9164,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/@marijn/find-cluster-break/src/index.js
+  // ../../../gnosis/web/node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
   var rangeTo = [];
   (() => {
@@ -9238,7 +9238,7 @@ ${h3.join(`
     return code < 65536 ? 1 : 2;
   }
 
-  // node_modules/@codemirror/state/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/state/dist/index.js
   var Text2 = class _Text {
     /**
     Get the line description around the given position.
@@ -12626,7 +12626,7 @@ ${h3.join(`
     return strict === true ? -1 : string2.length;
   }
 
-  // node_modules/style-mod/src/style-mod.js
+  // ../../../gnosis/web/node_modules/style-mod/src/style-mod.js
   var C2 = "\u037C";
   var COUNT = typeof Symbol == "undefined" ? "__" + C2 : Symbol.for(C2);
   var SET = typeof Symbol == "undefined" ? "__styleSet" + Math.floor(Math.random() * 1e8) : Symbol("styleSet");
@@ -12762,7 +12762,7 @@ ${h3.join(`
     }
   };
 
-  // node_modules/w3c-keyname/index.js
+  // ../../../gnosis/web/node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -12868,7 +12868,7 @@ ${h3.join(`
     return name2;
   }
 
-  // node_modules/@codemirror/view/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/view/dist/index.js
   var nav = typeof navigator != "undefined" ? navigator : { userAgent: "", vendor: "", platform: "" };
   var doc = typeof document != "undefined" ? document : { documentElement: { style: {} } };
   var ie_edge = /* @__PURE__ */ /Edge\/(\d+)/.exec(nav.userAgent);
@@ -21375,7 +21375,7 @@ ${h3.join(`
   GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
   GutterMarker.prototype.point = true;
 
-  // node_modules/@lezer/common/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/common/dist/index.js
   var DefaultBufferLength = 1024;
   var nextPropID = 0;
   var Range2 = class {
@@ -23426,7 +23426,7 @@ ${h3.join(`
     return result;
   }
 
-  // node_modules/@lezer/highlight/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/highlight/dist/index.js
   var nextTagID = 0;
   var Tag = class _Tag {
     /**
@@ -24150,7 +24150,7 @@ ${h3.join(`
     { tag: tags.punctuation, class: "tok-punctuation" }
   ]);
 
-  // node_modules/@codemirror/language/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/language/dist/index.js
   var _a2;
   var languageDataProp = /* @__PURE__ */ new NodeProp();
   function defineLanguageFacet(baseData) {
@@ -25064,7 +25064,7 @@ ${h3.join(`
     auto: /* @__PURE__ */ Decoration.mark({ class: "cm-iso", inclusive: true, attributes: { dir: "auto" }, bidiIsolate: null })
   };
 
-  // node_modules/@codemirror/autocomplete/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
     /**
     Create a new completion context. (Mostly useful for testing
@@ -25529,7 +25529,7 @@ ${h3.join(`
   closedBracket.endSide = -1;
   var android = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
 
-  // node_modules/@lezer/markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/markdown/dist/index.js
   var CompositeBlock = class _CompositeBlock {
     static create(type, value, from, parentHash, end) {
       let hash2 = parentHash + (parentHash << 8) + type + (value << 4) | 0;
@@ -27593,7 +27593,7 @@ ${h3.join(`
     }]
   };
 
-  // node_modules/@lezer/lr/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/lr/dist/index.js
   var Stack = class _Stack {
     /**
     @internal
@@ -29355,7 +29355,7 @@ ${h3.join(`
     return spec.get;
   }
 
-  // node_modules/@lezer/html/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/html/dist/index.js
   var scriptText = 55;
   var StartCloseScriptTag = 1;
   var styleText = 56;
@@ -29699,7 +29699,7 @@ ${h3.join(`
     });
   }
 
-  // node_modules/@lezer/css/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/css/dist/index.js
   var descendantOp = 148;
   var Unit = 1;
   var identifier = 149;
@@ -29878,7 +29878,7 @@ ${h3.join(`
     tokenPrec: 2433
   });
 
-  // node_modules/@codemirror/lang-css/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-css/dist/index.js
   var _properties = null;
   function properties() {
     if (!_properties && typeof document == "object" && document.body) {
@@ -30739,7 +30739,7 @@ ${h3.join(`
     return new LanguageSupport(cssLanguage, cssLanguage.data.of({ autocomplete: cssCompletionSource }));
   }
 
-  // node_modules/@lezer/javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@lezer/javascript/dist/index.js
   var noSemi = 317;
   var noSemiType = 318;
   var incdec = 1;
@@ -30951,7 +30951,7 @@ ${h3.join(`
     tokenPrec: 15178
   });
 
-  // node_modules/@codemirror/lang-javascript/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-javascript/dist/index.js
   var snippets = [
     /* @__PURE__ */ snippetCompletion("function ${name}(${params}) {\n	${}\n}", {
       label: "function",
@@ -31263,7 +31263,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-html/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-html/dist/index.js
   var Targets = ["_blank", "_self", "_top", "_parent"];
   var Charsets = ["ascii", "utf-8", "utf-16", "latin1", "latin1"];
   var Methods = ["get", "post", "put", "delete"];
@@ -32003,7 +32003,7 @@ ${h3.join(`
     return true;
   });
 
-  // node_modules/@codemirror/lang-markdown/dist/index.js
+  // ../../../gnosis/web/node_modules/@codemirror/lang-markdown/dist/index.js
   var data = /* @__PURE__ */ defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
   var headingProp = /* @__PURE__ */ new NodeProp();
   var commonmark = /* @__PURE__ */ parser.configure({
@@ -34052,7 +34052,7 @@ ${h3.join(`
     }, { passive: false });
     let sig = "";
     function render2(m) {
-      const title = "FOLGEZETTEL" + (m.mode === "upper" ? " / " + (isEn() ? "Upper" : "\u4E0A\u4F4D\u8868\u793A") : "");
+      const title = m.view === "list" ? m.title + " / " + m.status : "FOLGEZETTEL" + (m.mode === "upper" ? " / " + (isEn() ? "Upper" : "\u4E0A\u4F4D\u8868\u793A") : "");
       if (head.textContent !== title) head.textContent = title;
       const key = JSON.stringify([m.lines, m.numw, m.top, light()]);
       if (m.detail !== detail.textContent) detail.textContent = m.detail || "";
@@ -34076,7 +34076,7 @@ ${h3.join(`
           rows.push(el2);
           continue;
         }
-        el2.className = "fz-row k-" + c.k + (c.sel ? " sel" : "") + (c.cur ? " cur" : "");
+        el2.className = "fz-row k-" + c.k + (c.sel ? " sel" : "") + (c.cur ? " cur" : "") + (c.hit ? " nav-hit" : "");
         const mark = document.createElement("span");
         mark.className = "fz-mark";
         mark.textContent = c.cur ? "\u25B8" : "";
@@ -34154,7 +34154,7 @@ ${h3.join(`
     let legendTheme = null;
     function render2(m) {
       last3 = m;
-      const isFz = m.view === "fz";
+      const isFz = m.view === "fz" || m.view === "list";
       root.classList.toggle("fz-mode", isFz);
       fzRoot.hidden = !isFz;
       if (isFz) {
@@ -35247,10 +35247,10 @@ ${h3.join(`
     }
     last2 = { ...last2, ...s15, lines: void 0 };
     const m = (s15.mode || "n")[0];
-    const md = s15.mandala && (s15.mandala.cells || s15.mandala.view === "fz") ? s15.mandala : null;
+    const md = s15.mandala && (s15.mandala.cells || (s15.mandala.view === "fz" || s15.mandala.view === "list")) ? s15.mandala : null;
     const ol2 = s15.outline && s15.outline.lines ? s15.outline : null;
     const mEl = $3("mode");
-    mEl.textContent = md && s15.focus === "mandala" && m === "n" ? md.view === "fz" ? "FOLGEZETTEL" : "MANDALA" : s15.focus === "outline" && m === "n" ? "OUTLINE" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
+    mEl.textContent = md && s15.focus === "mandala" && m === "n" ? md.view === "list" ? "LIST" : md.view === "fz" ? "FOLGEZETTEL" : "MANDALA" : s15.focus === "outline" && m === "n" ? "OUTLINE" : MODE_LABEL[m] || String(s15.mode).toUpperCase();
     if (last2.copyStack) mEl.textContent += " \xB7 COPY STACK";
     mEl.className = "mode " + (MODE_CLASS[m] || "normal");
     $3("file").textContent = s15.file ? s15.file.split("/").pop() : "";
@@ -35428,7 +35428,7 @@ ${h3.join(`
     }
     const [l, c] = view2.lineColAt(pos);
     const m = (last2.mode || "n")[0];
-    const nwin = last2.mandala && (last2.mandala.cells || last2.mandala.view === "fz") && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? last2.mandala.noteWin : last2.focus === "outline" && last2.outline && last2.outline.srcWin > 0 ? last2.outline.srcWin : 0;
+    const nwin = last2.mandala && (last2.mandala.cells || (last2.mandala.view === "fz" || last2.mandala.view === "list")) && last2.focus === "mandala" && last2.mandala.noteWin > 0 ? last2.mandala.noteWin : last2.focus === "outline" && last2.outline && last2.outline.srcWin > 0 ? last2.outline.srcWin : 0;
     const toNote = nwin ? `call win_gotoid(${nwin})|` : "";
     const mv = `:${toNote}call cursor(${l},${c})|redraw|echo ""\r`;
     if (m === "n") gui.write(mv + (link ? "\r" : ""));
@@ -35461,10 +35461,12 @@ ${h3.join(`
     term.focus();
   }
   function onFzClick(n, enter) {
-    gui.write(`\x1B:call gnosis#fznav#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
+    const module = last2.mandala?.view === "list" ? "listnav" : "fznav";
+    gui.write(`\x1B:call gnosis#${module}#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
   }
   function onFzScroll(n) {
-    gui.write(`\x1B:call gnosis#fznav#gui_scroll(${n})|redraw|echo ""\r`);
+    const module = last2.mandala?.view === "list" ? "listnav" : "fznav";
+    gui.write(`\x1B:call gnosis#${module}#gui_scroll(${n})|redraw|echo ""\r`);
   }
   function onOutlineClick(n, jump) {
     gui.write(`\x1B:call gnosis#outline#gui_click(${n},${jump ? 1 : 0})|redraw|echo ""\r`);

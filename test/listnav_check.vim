@@ -1,0 +1,99 @@
+set nomore
+let s:v = $LIST_WORK . '/v'
+let g:gnosis_root = s:v . '/'
+let g:gnosis_start_screen = 0
+let g:gnosis_skip_interactive_mount = 1
+let g:gnosis_autosync = 0
+let g:gnosis_diary_auto = 0
+let g:gnosis_test_review_skip = 1
+let g:gnosis_mview_restore = 0
+let s:res = []
+function! s:ok(name, cond, ...) abort
+  call add(s:res, (a:cond ? 'OK ' : 'NG ') . a:name . (a:0 ? ' ' . string(a:1) : ''))
+  call writefile(s:res, $LIST_WORK . '/result')
+endfunction
+function! s:mk(name, title, fz, attr, body) abort
+  call writefile(['---', 'time: 2026-01-01 00:00:00', 'folgezettel: "' . a:fz . '"']
+        \ + (a:attr ? ['attribute: group'] : []) + ['---', '', '# ' . a:title, ''] + a:body, s:v . '/' . a:name)
+endfunction
+function! s:paths() abort
+  return map(copy(gnosis#listnav#state().rows), 'v:val.path')
+endfunction
+call s:mk('index.md', 'Index', '', 1, ['[Alpha](a.md)'])
+call s:mk('a.md', 'Alpha garden', '1', 0, ['Group:', '[Garden](g.md)', '', 'ChildBranch:', '[Beta](b.md)', '', 'Context:', '[Context](c.md)', '', 'Related:', '[Related](r.md)', '', 'Original body', 'Original end'])
+call s:mk('b.md', 'Beta garden', '1a', 0, ['ParentBranch:', '[Alpha](a.md)', '', 'ChildBranch:', '[Delta](d.md)', '', 'Body beta'])
+call s:mk('d.md', 'Delta garden', '1a1', 0, ['ParentBranch:', '[Beta](b.md)', '', 'Needle body'])
+call s:mk('c.md', 'Context garden', '2', 0, ['ParentBranch:', '[Related](r.md)', '', 'Context:', '[Alpha](a.md)'])
+call s:mk('r.md', 'Related garden', '3', 0, ['Related:', '[Alpha](a.md)'])
+call s:mk('e.md', 'Alpha garden research', '5', 0, ['Garden plants and soil'])
+call s:mk('g.md', 'Garden group', '4', 1, ['[Unique alias](a.md)'])
+execute 'edit ' . s:v . '/a.md'
+call cursor(line('$') - 1, 3)
+normal! zt
+let s:origin = winsaveview()
+call gnosis#mview#start()
+call gnosis#mview#switch_view()
+call s:ok('次のビューはFolgezettel', gnosis#mview#view() ==# 'fz')
+call gnosis#mview#switch_view()
+call s:ok('その次はリスト', gnosis#mview#view() ==# 'list')
+call s:ok('リストは同じバッファで表示', &filetype ==# 'gnosis-mandala' && getline(1) =~# '^LIST')
+call s:ok('グループと子が並ぶ', index(s:paths(), 'g.md') >= 0 && index(s:paths(), 'b.md') >= 0, s:paths())
+let s:before = fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t')
+call gnosis#listnav#option('relation', 'child')
+call s:ok('b相当は子だけに絞る', index(s:paths(), 'b.md') >= 0 && empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind !=# "child"')), s:paths())
+call s:ok('絞るだけでは右を変えない', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# s:before)
+call gnosis#listnav#back()
+call s:ok('Backspaceで絞り込み前へ', index(s:paths(), 'g.md') >= 0)
+call gnosis#listnav#option('depth', 2)
+call s:ok('深さ2で孫も表示', index(s:paths(), 'd.md') >= 0, s:paths())
+let s:deep = filter(copy(gnosis#listnav#state().rows), 'v:val.path ==# "d.md"')
+call s:ok('経由と深さを表示', len(s:deep) == 1 && s:deep[0].depth == 2 && s:deep[0].via ==# 'b.md', s:deep)
+call gnosis#listnav#option('rank', 1)
+call s:ok('近さ順でも候補は同じ', index(s:paths(), 'd.md') >= 0)
+call gnosis#listnav#query('filter', 'Needle -absent')
+call s:ok('xは本文と検索式で絞る', s:paths() ==# ['d.md'], s:paths())
+call gnosis#listnav#query('filter', '')
+call gnosis#listnav#option('mode', 'search')
+call gnosis#listnav#query('search', 'Unique alias')
+call s:ok('gsと同じ索引名から検索', index(s:paths(), 'a.md') >= 0, s:paths())
+call gnosis#listnav#option('scope', 'no-index')
+call s:ok('索引以外には索引の表示名候補がない', empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind ==# "index"')))
+call gnosis#listnav#query('search', 'garden | Needle -absent')
+call s:ok('ORと除外も共用', index(s:paths(), 'd.md') >= 0)
+call gnosis#listnav#query('highlight', 'garden')
+call s:ok('mはハイライトを付ける', !empty(filter(prop_list(3), 'v:val.type ==# "gnosis_nav_match"')))
+call s:ok('GUIもリストの同じ行を受け取る', get(gnosis#mview#gui_state(), 'view', '') ==# 'list')
+let s:anchor = gnosis#listnav#state().anchor
+call gnosis#listnav#move(1)
+sleep 100m
+call s:ok('カーソル移動で右にプレビュー', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# gnosis#listnav#state().rows[line('.') - 3].path)
+call s:ok('プレビューで基準は動かない', gnosis#listnav#state().anchor ==# s:anchor && gnosis#mview#state().center ==# s:anchor)
+call gnosis#listnav#origin()
+call s:ok('oで元のノートへ戻る', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'a.md')
+let s:ov = gnosis#listnav#state().origin.view
+let s:cur = getcurpos(gnosis#mview#note_win())
+call s:ok('元のカーソル位置も復元する', s:cur[1] == s:ov.lnum && s:cur[2] == s:ov.col + 1, [s:cur, s:ov])
+call gnosis#listnav#query('search', '')
+call gnosis#listnav#query('highlight', '')
+call gnosis#listnav#option('mode', 'similar')
+call s:ok('類似は予測関連の候補を表示', !empty(gnosis#listnav#state().rows) && empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind !=# "pred"')), s:paths())
+let s:handoff = gnosis#mview#handoff()
+call gnosis#mview#switch_view('mandala')
+call gnosis#mview#restore_handoff(s:handoff)
+call s:ok('GUI/CUI引継ぎでリストのモードとキーを保つ', gnosis#mview#view() ==# 'list' && gnosis#listnav#state().mode ==# 'similar' && maparg('1','n') =~# 'listnav')
+call gnosis#mview#switch_view()
+call s:ok('リストの次は曼荼羅', gnosis#mview#view() ==# 'mandala')
+call gnosis#mview#switch_view('previous')
+call s:ok('逆方向はリスト', gnosis#mview#view() ==# 'list')
+call gnosis#mview#switch_view('previous')
+call s:ok('逆方向でFolgezettelへ', gnosis#mview#view() ==# 'fz')
+call gnosis#fznav#query('search', 'Needle')
+call s:ok('Folgezettelのsは本文検索', len(gnosis#fznav#state().sel) == 1 && join(getline(1,'$'), '\n') =~# 'Delta', getline(1,'$'))
+call gnosis#fznav#query('highlight', 'Delta')
+call s:ok('Folgezettelのmもハイライト', !empty(filter(prop_list(3), 'v:val.type ==# "gnosis_nav_match"')))
+call gnosis#fznav#quit()
+call s:ok('qはまずハイライトを解除', empty(get(gnosis#fznav#state(), 'highlight', '')) && !empty(get(gnosis#fznav#state(), 'search', '')))
+call gnosis#fznav#query('search', '')
+call s:ok('検索解除で元の番号一覧へ', len(gnosis#fznav#state().sel) >= 6)
+call gnosis#mview#close()
+qa!

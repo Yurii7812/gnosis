@@ -1,5 +1,14 @@
 {
   "ja": {
+    "前・次のビューへ": "previous / next view",
+    "（M で上位だけに戻す）": "(M shows only the top ones)",
+    "… ほか %d 件（M で全部）": "\u2026 %d more (M shows all)",
+    "全部": "All",
+    "索引以外": "Without index names",
+    "索引とグループ": "Index names + groups",
+    "検索・絞り込み・ハイライト": "Search / filter / highlight",
+    "類似": "Similar",
+    "該当なし": "No results",
     "j k 選ぶ   Enter 決める   q やめる": "j k choose   Enter confirm   q cancel",
     "ノートで実行して": "Run this in a note",
     "このノートはグループに入っていません（Group: / BranchGroup: がありません）": "This note is not in any group (there is no Group: / BranchGroup:)",

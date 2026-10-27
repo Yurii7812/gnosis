@@ -51,7 +51,7 @@ export function createMandala(root, { onCell, onFz, onFzScroll }) {
   let legendTheme = null;
   function render(m) {
     last = m;
-    const isFz = m.view === "fz";
+    const isFz = m.view === "fz" || m.view === "list";
     root.classList.toggle("fz-mode", isFz);
     fzRoot.hidden = !isFz;
     if (isFz) { fz.render(m); return; }

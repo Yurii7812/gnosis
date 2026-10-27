@@ -25,7 +25,7 @@ export function createFznav(root, { onClick, onScroll }) {
 
   let sig = "";
   function render(m) {
-    const title = "FOLGEZETTEL" + (m.mode === "upper" ? " / " + (isEn() ? "Upper" : "上位表示") : "");
+    const title = m.view === "list" ? (m.title + " / " + m.status) : "FOLGEZETTEL" + (m.mode === "upper" ? " / " + (isEn() ? "Upper" : "上位表示") : "");
     if (head.textContent !== title) head.textContent = title;
     const key = JSON.stringify([m.lines, m.numw, m.top, light()]);
     if (m.detail !== detail.textContent) detail.textContent = m.detail || "";
@@ -41,7 +41,7 @@ export function createFznav(root, { onClick, onScroll }) {
       el.dataset.n = String(c.ln);
       if (c.k === "s") { el.className = c.t ? "fz-sep" : "fz-gap"; rows.push(el); continue; }
       if (c.k === "h") { el.className = "fz-note-line"; el.textContent = c.t; rows.push(el); continue; }
-      el.className = "fz-row k-" + c.k + (c.sel ? " sel" : "") + (c.cur ? " cur" : "");
+      el.className = "fz-row k-" + c.k + (c.sel ? " sel" : "") + (c.cur ? " cur" : "") + (c.hit ? " nav-hit" : "");
       const mark = document.createElement("span");
       mark.className = "fz-mark";
       mark.textContent = c.cur ? "▸" : "";

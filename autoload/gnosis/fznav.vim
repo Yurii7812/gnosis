@@ -1,4 +1,4 @@
-" Folgezettel ビュー（CUI）。曼荼羅と同じ窓・同じバッファに、Ctrl-←/→ で切り替えて出す（ビューは曼荼羅とこれの 2 つだけ）。
+" Folgezettel ビュー（CUI）。曼荼羅と同じ窓・同じバッファに、Ctrl-←/→ で切り替えて出す（曼荼羅・Folgezettel・リストの3つを切り替える）。
 "
 " 番号と題を縦に並べるだけ。番号は左揃えの固定幅の欄、題は常に同じ桁から。Group はアクセントの色、Note は通常の色。
 " 同じ番号に BranchGroup がある Note は、Group の行が上・Note の行が下（どちらも別の項目として選べる）。
@@ -10,9 +10,9 @@
 "   h l / ← →     上位・下位の番号へ（実在する番号だけ。無ければその場に留まる）
 "   Enter         Group / Note を開く（右のノートの窓に出し、ここは現在位置に合わせる）
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
-"   u             上位表示（祖先の番号の Group と、関連 Group）⇔ 通常    m  関連 Group をもっと見る
+"   u             上位表示（祖先の番号の Group と、関連 Group）⇔ 通常    M  関連 Group をもっと見る
 "   \o            アウトライン窓の表示 ⇔ 非表示（どこでも）。o は選ぶモード（\l）で元のノートを右に見る
-"   Ctrl-← Ctrl-→ gv  曼荼羅へ        Space  ノートの窓へ      q  閉じる      ?  この一覧
+"   Ctrl-← Ctrl-→ gv  ビューを切り替える        Space  ノートの窓へ      q  閉じる      ?  この一覧
 let s:here = expand('<sfile>:p:h:h:h')
 let s:F = {'collapsed': {}, 'mode': 'normal', 'more': 0, 'dirty': 1, 'gen': 0, 'rows': [], 'pidx': {},
       \ 'lines': [], 'cells': [], 'items': [], 'sel': [], 'selpos': {}, 'last_cur': '', 'up': {}, 'upkey': '', 'key': ''}
@@ -121,6 +121,9 @@ endfunction
 
 function! s:head_text() abort
   let l:head = s:F.mode ==# 'upper' ? 'FOLGEZETTEL / ' . gnosis#i18n#tr('上位表示') : 'FOLGEZETTEL'
+  for l:k in ['search', 'filter', 'highlight']
+    if !empty(get(s:F, l:k, '')) | let l:head .= ' / ' . {'search': 's', 'filter': 'x', 'highlight': 'm'}[l:k] . ': ' . s:F[l:k] | endif
+  endfor
   let l:pick = gnosis#mview#pick_label()
   return empty(l:pick) ? l:head : l:head . '  ' . l:pick
 endfunction
@@ -206,10 +209,10 @@ function! s:build_upper() abort
           \ {'t': 'g', 'path': l:r.path, 'k': 'g', 'id': l:r.id, 'title': l:r.title})
   endfor
   if len(l:rel) > l:show
-    let l:m = printf(gnosis#i18n#tr('… ほか %d 件（m で全部）'), len(l:rel) - l:show)
+    let l:m = printf(gnosis#i18n#tr('… ほか %d 件（M で全部）'), len(l:rel) - l:show)
     call s:add(l:lines, l:cells, l:items, '  ' . l:m, {'k': 'h', 't': l:m}, {'t': 'h'})
   elseif s:F.more && len(l:rel) > s:RELATED_SHOWN
-    let l:m = gnosis#i18n#tr('（m で上位だけに戻す）')
+    let l:m = gnosis#i18n#tr('（M で上位だけに戻す）')
     call s:add(l:lines, l:cells, l:items, '  ' . l:m, {'k': 'h', 't': l:m}, {'t': 'h'})
   endif
   return [l:lines, l:cells, l:items]
@@ -249,6 +252,21 @@ function! gnosis#fznav#render() abort
   call s:hl()
   let l:keep = s:item_key(s:cur_item())
   let [l:lines, l:cells, l:items] = s:F.mode ==# 'upper' ? s:build_upper() : s:build_normal()
+  if !empty(get(s:F, 'search', '')) || !empty(get(s:F, 'filter', ''))
+    let [l:qlines, l:qcells, l:qitems] = [[], [], []]
+    for l:i in range(len(l:items))
+      let l:it = l:items[l:i]
+      if l:it.t ==# 'h' || ((empty(get(s:F, 'search', '')) || has_key(get(s:F, 'search_paths', {}), l:it.path))
+            \ && (empty(get(s:F, 'filter', '')) || has_key(get(s:F, 'filter_paths', {}), l:it.path)))
+        call add(l:qlines, l:lines[l:i]) | call add(l:qcells, l:cells[l:i]) | call add(l:qitems, l:it)
+      endif
+    endfor
+    let [l:lines, l:cells, l:items] = [l:qlines, l:qcells, l:qitems]
+    if empty(filter(copy(l:items), 'v:val.t !=# "h"'))
+      call s:add(l:lines, l:cells, l:items, '  ' . gnosis#i18n#tr('該当なし'),
+            \ {'k': 'h', 't': gnosis#i18n#tr('該当なし')}, {'t': 'h'})
+    endif
+  endif
   let s:F.cells = l:cells
   let s:F.items = l:items
   let s:F.sel = []
@@ -290,6 +308,7 @@ function! gnosis#fznav#render() abort
     endif
     let l:i += 1
   endwhile
+  call gnosis#listnav#paint(get(s:F, 'highlight', ''), map(copy(l:items), 'get(v:val, "path", "")'), get(s:F, 'highlight_paths', {}))
   setlocal nomodifiable nomodified
   " カーソルと表示位置
   let l:focus = get(s:S(), 'focus', 1)
@@ -312,6 +331,7 @@ function! gnosis#fznav#render() abort
   endif
   let l:want = s:snap(max([1, min([l:want, l:n])]))
   call cursor(l:want, 1)
+  let s:F.lastpos = getpos('.')[1:2]
   if l:want == l:curl && l:curl > 0 && (!l:focus || l:changed)
     normal! zz
   elseif l:changed && l:curl == 0
@@ -358,6 +378,7 @@ endfunction
 
 " 選んでいる項目の、省かない番号と題（番号が ~ で省かれていても全体が分かる）
 function! s:detail() abort
+  if get(b:, 'gnosis_nav_input', 0) | return | endif
   if empty(s:F.items) || get(s:S(), 'view', 'mandala') !=# 'fz' || !get(s:S(), 'focus', 1) || get(s:S(), 'switching', 0)
     return
   endif
@@ -640,12 +661,13 @@ function! s:help() abort
         \ 'Enter         ' . gnosis#i18n#tr('Group / Note を開く'),
         \ 'c             ' . gnosis#i18n#tr('印のついたノート（Enter で開いたもの）へ戻る'),
         \ 'u             ' . gnosis#i18n#tr('上位表示 ⇔ 通常'),
-        \ 'm             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
+        \ 'M             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
+        \ 's x m / n N   ' . gnosis#i18n#tr('検索・絞り込み・ハイライト'),
         \ '\l            ' . gnosis#i18n#tr('入れるノートを選ぶモード（\l）。ビューを切り替えても続く'),
         \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）'),
         \ 'q             ' . gnosis#i18n#tr('選ぶモードなどをやめる（何も無ければ閉じる）'),
         \ '\o            ' . gnosis#i18n#tr('アウトラインを右に出す ⇔ しまう（どこでも）'),
-        \ 'Ctrl-← Ctrl-→ gv  ' . gnosis#i18n#tr('曼荼羅へ'),
+        \ 'Ctrl-← Ctrl-→ gv  ' . gnosis#i18n#tr('前・次のビューへ'),
         \ 'Space         ' . gnosis#i18n#tr('ノートの窓へ'),
         \ 'f < > = p .   ' . gnosis#i18n#tr('全画面・幅・右の窓・読み直し'),
         \ 'Q             ' . gnosis#i18n#tr('閉じる')]
@@ -667,6 +689,7 @@ function! gnosis#fznav#focus(on) abort
   let l:c = s:current_lnum()
   if l:c > 0
     call cursor(l:c, 1)
+    let s:F.lastpos = getpos('.')[1:2]
     normal! zz
   endif
 endfunction
@@ -680,6 +703,10 @@ function! s:on_moved() abort
     call cursor(l:s, 1)
   endif
   call gnosis#fznav#mark()
+  if get(s:F, 'lastpos', []) !=# getpos('.')[1:2]
+    let s:F.lastpos = getpos('.')[1:2]
+    call s:preview_later()
+  endif
   call s:sync_view()
 endfunction
 
@@ -710,7 +737,12 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> <2-LeftMouse> <Cmd>call <SID>enter()<CR>
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>toggle_upper()<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>back()<CR>
-  nnoremap <buffer><nowait><silent> m <Cmd>call <SID>more()<CR>
+  nnoremap <buffer><nowait><silent> M <Cmd>call <SID>more()<CR>
+  nnoremap <buffer><nowait><silent> s <Cmd>call gnosis#fznav#prompt('search')<CR>
+  nnoremap <buffer><nowait><silent> x <Cmd>call gnosis#fznav#prompt('filter')<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#fznav#prompt('highlight')<CR>
+  nnoremap <buffer><nowait><silent> n <Cmd>call gnosis#fznav#next_hit(1)<CR>
+  nnoremap <buffer><nowait><silent> N <Cmd>call gnosis#fznav#next_hit(-1)<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>pick_decide(0)<CR>
   nnoremap <buffer><nowait><silent> I <Cmd>call <SID>pick_decide(1)<CR>
@@ -721,10 +753,10 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> = <Cmd>call gnosis#mview#win_op('equalize')<CR>
   nnoremap <buffer><nowait><silent> p <Cmd>call gnosis#mview#win_op('preview')<CR>
   nnoremap <buffer><nowait><silent> . <Cmd>call gnosis#mview#win_op('reload')<CR>
-  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#quit_layers()<CR>
+  nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#fznav#quit()<CR>
   nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#win_op('quit')<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
-  nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view()<CR>
+  nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view('previous')<CR>
   nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> gv <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><silent> \c <Cmd>call gnosis#open_web()<CR>
@@ -783,6 +815,7 @@ function! gnosis#fznav#gui_state() abort
   for l:i in range(l:top, min([len(s:F.cells), l:top + l:h - 1]))
     let l:c = copy(s:F.cells[l:i - 1])
     let l:c.sel = l:i == l:cur ? 1 : 0
+    let l:c.hit = has_key(get(s:F, 'highlight_paths', {}), get(s:F.items[l:i - 1], 'path', ''))
     let l:c.ln = l:i
     call add(l:vis, l:c)
   endfor
@@ -802,6 +835,7 @@ function! gnosis#fznav#gui_click(lnum, enter) abort
   call win_gotoid(l:s.win)
   call cursor(a:lnum, 1)
   call gnosis#fznav#mark()
+  call s:preview_later()
   if a:enter
     call s:enter()
   endif
@@ -834,4 +868,40 @@ endfunction
 function! gnosis#fznav#reset_for_test() abort
   let s:F = {'collapsed': {}, 'mode': 'normal', 'more': 0, 'dirty': 1, 'gen': 0, 'rows': [], 'pidx': {},
         \ 'lines': [], 'cells': [], 'items': [], 'sel': [], 'selpos': {}, 'last_cur': '', 'up': {}, 'upkey': '', 'key': ''}
+endfunction
+
+
+function! gnosis#fznav#query(op, text) abort
+  let s:F[a:op] = a:text
+  let l:paths = {}
+  if !empty(a:text)
+    for l:r in gnosis#listnav#search_rows(s:S().root, a:text, 'all') | let l:paths[l:r.path] = 1 | endfor
+  endif
+  let s:F[a:op . '_paths'] = l:paths
+  call gnosis#fznav#render()
+endfunction
+
+function! gnosis#fznav#prompt(op) abort
+  let l:label = gnosis#i18n#tr({'search': '検索', 'filter': '絞り込み', 'highlight': 'ハイライト'}[a:op]) . ': '
+  call gnosis#listnav#input(l:label, get(s:F, a:op, ''), function('gnosis#fznav#query', [a:op]))
+endfunction
+
+function! gnosis#fznav#next_hit(dir) abort
+  if empty(s:F.sel) || empty(get(s:F, 'highlight', '')) | return | endif
+  let l:cur = get(s:F.selpos, line('.'), 0)
+  for l:n in range(1, len(s:F.sel))
+    let l:i = (l:cur + a:dir * l:n + len(s:F.sel)) % len(s:F.sel)
+    let l:ln = s:F.sel[l:i]
+    if has_key(get(s:F, 'highlight_paths', {}), get(s:F.items[l:ln - 1], 'path', ''))
+      call s:goto(l:ln)
+      return
+    endif
+  endfor
+endfunction
+
+function! gnosis#fznav#quit() abort
+  for l:op in ['highlight', 'filter', 'search']
+    if !empty(get(s:F, l:op, '')) | call gnosis#fznav#query(l:op, '') | return | endif
+  endfor
+  call gnosis#mview#quit_layers()
 endfunction

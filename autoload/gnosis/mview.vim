@@ -149,6 +149,7 @@ function! s:after_async() abort
   let l:back = win_getid()
   noautocmd call win_gotoid(s:mwin())
   call gnosis#fznav#invalidate()
+  call gnosis#listnav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -1608,6 +1609,11 @@ function! s:legend_build(W) abort
 endfunction
 
 function! s:render() abort
+  if get(s:S, 'view', 'mandala') ==# 'list'
+    call gnosis#listnav#render()
+    call s:save_state()
+    return
+  endif
   " Folgezettel ビュー（Ctrl-←/→ で曼荼羅と切り替える）のときは、同じ窓にそちらを描く
   if get(s:S, 'view', 'mandala') ==# 'fz'
     call gnosis#fznav#render()
@@ -1780,6 +1786,10 @@ function! s:addpos(group, pos, prio) abort
 endfunction
 
 function! s:mark() abort
+  if get(s:S, 'view', 'mandala') ==# 'list'
+    call gnosis#listnav#mark()
+    return
+  endif
   if get(s:S, 'view', 'mandala') ==# 'fz'
     call gnosis#fznav#mark()
     return
@@ -1880,6 +1890,7 @@ endfunction
 
 " カーソルのマスのノートを右に出す（曼荼羅の中心は変えない）
 function! s:preview() abort
+  if get(s:S, 'view', 'mandala') !=# 'mandala' | return | endif
   let l:cell = s:cur_cell()
   if !empty(l:cell.id)
     call s:show_note(l:cell.id)
@@ -1938,9 +1949,9 @@ function! s:save_state() abort
     return
   endif
   " 画面の幅（< >）は、曼荼羅ビューと Folgezettel ビューで別々に持つ。今の幅は、今のビューの幅
-  let s:S[get(s:S, 'view', 'mandala') ==# 'fz' ? 'tenths_f' : 'tenths_m'] = get(s:S, 'tenths', 5)
+  let s:S['tenths_' . {'mandala': 'm', 'fz': 'f', 'list': 'l'}[get(s:S, 'view', 'mandala')]] = get(s:S, 'tenths', 5)
   let l:d = {'tenths': get(s:S, 'tenths', 5), 'stretch': get(s:S, 'stretch', 1.0), 'open': get(s:S, 'open_pref', 1),
-        \ 'tenths_m': get(s:S, 'tenths_m', get(s:S, 'tenths', 5)), 'tenths_f': get(s:S, 'tenths_f', get(s:S, 'tenths', 5))}
+        \ 'tenths_m': get(s:S, 'tenths_m', get(s:S, 'tenths', 5)), 'tenths_f': get(s:S, 'tenths_f', get(s:S, 'tenths', 5)), 'tenths_l': get(s:S, 'tenths_l', 5)}
   let l:old = s:state_all()
   if type(get(l:old, 'presets', 0)) == v:t_dict
     let l:d.presets = l:old.presets
@@ -2914,8 +2925,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> q <Cmd>call <SID>quit()<CR>
   nnoremap <buffer><nowait><silent> Q <Cmd>call gnosis#mview#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call gnosis#mview#toggle()<CR>
-  " 曼荼羅 ⇔ Folgezettel ビュー（Ctrl-←/→ のどちらでも。端末が Ctrl-矢印を送らないときは gv）
-  nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view()<CR>
+  " 3ビューを順・逆に切り替える（Ctrl-←/→。端末が Ctrl-矢印を送らないときは gv）
+  nnoremap <buffer><nowait><silent> <C-Left> <Cmd>call gnosis#mview#switch_view('previous')<CR>
   nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> gv <Cmd>call gnosis#mview#switch_view()<CR>
   nnoremap <buffer><nowait><silent> \o <Cmd>call gnosis#panel#key('outline')<CR>
@@ -3042,6 +3053,7 @@ endfunction
 function! s:ingest(rel) abort
   call s:pyc(['refresh', s:S.root, '--only', a:rel])
   call gnosis#fznav#invalidate()
+  call gnosis#listnav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -3066,6 +3078,10 @@ function! gnosis#mview#focus(on) abort
     return
   endif
   let s:S.focus = a:on ? 1 : 0
+  if get(s:S, 'view', 'mandala') ==# 'list'
+    if &filetype ==# 'gnosis-mandala' | call gnosis#listnav#mark() | endif
+    return
+  endif
   if get(s:S, 'view', 'mandala') ==# 'fz'
     if &filetype ==# 'gnosis-mandala'
       call gnosis#fznav#focus(a:on)
@@ -3161,6 +3177,7 @@ function! s:reload_dirty() abort
   endif
   call s:pyc(['refresh', s:S.root, '--only'] + l:rels)
   call gnosis#fznav#invalidate()
+  call gnosis#listnav#invalidate()
   let s:S.data = {'nodes': {}}
   let s:S.missing = {}
   let s:S.nearc = {}
@@ -3179,6 +3196,7 @@ function! s:reload(...) abort
   let s:S.tmc = {}
   if s:load(a:0 ? a:1 : 0)
     call gnosis#fznav#invalidate()
+  call gnosis#listnav#invalidate()
     if !s:has(s:S.center)
       let s:S.center = 'index.md'
     endif
@@ -3297,7 +3315,7 @@ function! s:open(center, ...) abort
       let s:S.tenths = l:t
     endif
     " ビューごとの幅（無ければ共通の幅）。最初に開くビューの幅を、今の幅にする
-    for [l:k, l:key] in [['tenths_m', 'tenths_m'], ['tenths_f', 'tenths_f']]
+    for [l:k, l:key] in [['tenths_m', 'tenths_m'], ['tenths_f', 'tenths_f'], ['tenths_l', 'tenths_l']]
       let l:tv = get(l:all, l:key, l:t)
       if type(l:tv) == v:t_number && l:tv >= 2 && l:tv <= 8
         let s:S[l:k] = l:tv
@@ -3347,8 +3365,8 @@ function! s:open(center, ...) abort
       let l:want_size = 9
     endif
     " Folgezettel ビューで閉じていたら、Vim を起動し直したときも Folgezettel ビューで開く（最初に開くときだけ）
-    if get(l:all, 'view', '') ==# 'fz' && !has_key(s:S, 'view_restored')
-      let l:want_view = 'fz'
+    if index(['fz', 'list'], get(l:all, 'view', '')) >= 0 && !has_key(s:S, 'view_restored')
+      let l:want_view = l:all.view
     endif
     let s:S.view_restored = 1
   endif
@@ -3388,8 +3406,8 @@ function! s:open(center, ...) abort
   if l:want_size == 9 && s:S.size == 3
     call s:full()
   endif
-  if l:want_view ==# 'fz' && get(s:S, 'view', 'mandala') !=# 'fz'
-    call gnosis#mview#switch_view('fz')
+  if index(['fz', 'list'], l:want_view) >= 0 && get(s:S, 'view', 'mandala') !=# l:want_view
+    call gnosis#mview#switch_view(l:want_view)
     let l:mw = s:mwin()
     if l:mw > 0 && win_getid() != l:mw
       call win_gotoid(l:mw)
@@ -3569,15 +3587,17 @@ endfunction
 
 " ---- Folgezettel ビュー（autoload/gnosis/fznav.vim）との接点 ------------------------------------------------
 
-" 曼荼羅 ⇔ Folgezettel ビュー。同じ窓・同じバッファを使い、右のノートの窓（本文・スクロール位置）には触らない。
-" a:1 が 'mandala' / 'fz' ならそちらへ、無ければ切り替える
+" 曼荼羅 → Folgezettel → リスト。同じ窓・同じバッファを使い、右のノートの窓（本文・スクロール位置）には触らない。
+" a:1 がビュー名ならそちらへ、previous なら逆順、無ければ次へ
 function! gnosis#mview#switch_view(...) abort
   let l:mw = s:mwin()
   if l:mw < 0
     return
   endif
   let l:from = get(s:S, 'view', 'mandala')
-  let l:to = a:0 && !empty(a:1) ? a:1 : (l:from ==# 'fz' ? 'mandala' : 'fz')
+  let l:views = ['mandala', 'fz', 'list']
+  let l:to = a:0 && index(l:views, a:1) >= 0 ? a:1
+        \ : l:views[(index(l:views, l:from) + (a:0 && a:1 ==# 'previous' ? 2 : 1)) % 3]
   if l:to ==# l:from
     return
   endif
@@ -3587,19 +3607,26 @@ function! gnosis#mview#switch_view(...) abort
     return
   endif
   " 幅は、ビューごとに別々に持つ。今のビューの幅をしまい、切り替え先のビューの幅にする
-  let s:S[l:from ==# 'fz' ? 'tenths_f' : 'tenths_m'] = get(s:S, 'tenths', 5)
-  let s:S.tenths = get(s:S, l:to ==# 'fz' ? 'tenths_f' : 'tenths_m', get(s:S, 'tenths', 5))
+  let s:S['tenths_' . {'mandala': 'm', 'fz': 'f', 'list': 'l'}[l:from]] = get(s:S, 'tenths', 5)
+  let s:S.tenths = get(s:S, 'tenths_' . {'mandala': 'm', 'fz': 'f', 'list': 'l'}[l:to], get(s:S, 'tenths', 5))
   if get(s:S, 'size', 3) == 3 && s:note_win() > 0
     call win_execute(l:mw, 'vertical resize ' . s:win_width())
   endif
   let s:S.view = l:to
   " 切り替えの最中は、fz の題の表示（echo）を止める（「ENTER を押して」が出るため）
   let s:S.switching = 1
+  if l:from ==# 'list'
+    call win_execute(l:mw, 'call gnosis#listnav#teardown()')
+  elseif l:from ==# 'fz'
+    call win_execute(l:mw, 'call gnosis#fznav#teardown()')
+  endif
   call win_execute(l:mw, 'mapclear <buffer>')
   if l:to ==# 'fz'
     call win_execute(l:mw, 'call gnosis#fznav#setup()')
+  elseif l:to ==# 'list'
+    call win_execute(l:mw, 'call gnosis#listnav#setup()')
   else
-    call win_execute(l:mw, 'call gnosis#fznav#teardown() | call gnosis#mview#setup_maps()')
+    call win_execute(l:mw, 'call gnosis#mview#setup_maps()')
   endif
   call win_execute(l:mw, 'call gnosis#mview#render_here()')
   call win_execute(l:mw, 'call gnosis#mview#cursor(0)')
@@ -3666,6 +3693,66 @@ function! gnosis#mview#preview_rel(rel) abort
   call s:show_note(a:rel)
 endfunction
 
+" 同じ相手に親子・文脈など複数の関係があるときも、それぞれで絞り込める。
+function! s:list_relations(id, of) abort
+  let l:out = [s:kind(a:id, a:of)]
+  let l:from = get(s:nd(a:of), 'o', {})
+  let l:to = get(s:nd(a:id), 'o', {})
+  for [l:a, l:b, l:kind] in [['parent_branch', 'child_branch', 'parent'], ['child_branch', 'parent_branch', 'child'],
+        \ ['context', 'context', 'context'], ['related', 'related', 'related'], ['backlink', 'link', 'back']]
+    if (index(get(l:from, l:a, []), a:id) >= 0 || index(get(l:to, l:b, []), a:of) >= 0) && index(l:out, l:kind) < 0
+      call add(l:out, l:kind)
+    endif
+  endfor
+  if index(get(l:from, 'link', []), a:id) >= 0 && index(l:out, 'index') < 0 && index(l:out, 'cite') < 0
+    call add(l:out, 'cite')
+  endif
+  return l:out
+endfunction
+
+" リストのリンク / 類似。曼荼羅と同じ entries・kind・近さの計算を使う。
+function! gnosis#mview#list_data(anchor, depth, rank, similar) abort
+  let l:out = []
+  if !s:has(a:anchor) | return l:out | endif
+  if a:similar
+    let l:entries = map(s:rel_ids(a:anchor, []), '[v:val, ""]')
+    call s:fetch(map(copy(l:entries), 'v:val[0]'))
+    for l:e in l:entries
+      call add(l:out, {'path': l:e[0], 'title': get(get(s:S.data.nodes, l:e[0], {}), 't', l:e[0]), 'kind': 'pred',
+            \ 'depth': 0, 'via': '', 'why': get(s:S.why, l:e[0], ''), 'line': 1})
+    endfor
+    return l:out
+  endif
+  let l:seen = {a:anchor: 1}
+  let l:front = [a:anchor]
+  for l:depth in range(1, max([1, min([10, a:depth])]))
+    call s:fetch(l:front)
+    let l:next = []
+    for l:via in l:front
+      let l:entries = gnosis#mview#entries(s:S.data, l:via, 'all')
+      call s:fetch(map(copy(l:entries), 'v:val[0]'))
+      for l:e in l:entries
+        if has_key(l:seen, l:e[0]) || len(l:out) >= 300 | continue | endif
+        let l:seen[l:e[0]] = 1
+        call add(l:next, l:e[0])
+        let l:nd = get(s:S.data.nodes, l:e[0], {})
+        call add(l:out, {'path': l:e[0], 'title': empty(l:e[1]) ? get(l:nd, 't', l:e[0]) : l:e[1],
+              \ 'kind': s:kind(l:e[0], l:via), 'relations': s:list_relations(l:e[0], l:via), 'depth': l:depth, 'via': l:via,
+              \ 'viaTitle': get(get(s:S.data.nodes, l:via, {}), 't', l:via), 'line': 1})
+      endfor
+    endfor
+    let l:front = l:next
+    if empty(l:front) || len(l:out) >= 300 | break | endif
+  endfor
+  if a:rank
+    let l:scores = s:rank_map(a:anchor)
+    for l:i in range(len(l:out)) | let l:out[l:i].order = l:i | endfor
+    call sort(l:out, {x, y -> get(l:scores, x.path, 0.0) == get(l:scores, y.path, 0.0)
+          \ ? x.order - y.order : (get(l:scores, y.path, 0.0) > get(l:scores, x.path, 0.0) ? 1 : -1)})
+  endif
+  return l:out
+endfunction
+
 " Folgezettel ビューで項目を開く: ノートを右の窓に出し、曼荼羅の中心（=現在のノート）をそれに合わせる
 function! gnosis#mview#open_rel(rel) abort
   if empty(a:rel)
@@ -3719,6 +3806,9 @@ function! s:pages_memo() abort
 endfunction
 
 function! gnosis#mview#gui_state() abort
+  if exists('s:S') && get(s:S, 'view', '') ==# 'list' && get(s:S, 'win', -1) > 0 && !empty(getwininfo(s:S.win))
+    return gnosis#listnav#gui_state()
+  endif
   if exists('s:S') && get(s:S, 'view', 'mandala') ==# 'fz' && get(s:S, 'win', -1) > 0 && !empty(getwininfo(get(s:S, 'win', -1)))
     return gnosis#fznav#gui_state()
   endif
@@ -3756,7 +3846,7 @@ endfunction
 
 " アプリでマスをクリック: そのマスへカーソルを動かし、a:enter が 1 なら中心にする（Enter と同じ）
 function! gnosis#mview#gui_click(r, c, enter) abort
-  if exists('s:S') && get(s:S, 'view', 'mandala') ==# 'fz'
+  if exists('s:S') && index(['fz', 'list'], get(s:S, 'view', 'mandala')) >= 0
     return
   endif
   if !exists('s:S') || !has_key(s:S, 'cells') || a:r < 0 || a:r >= s:S.size || a:c < 0 || a:c >= s:S.size
@@ -3829,6 +3919,7 @@ function! gnosis#mview#detach() abort
   let s:S = {}
   let s:saved_json = ''
   silent! call gnosis#fznav#reset()
+  silent! call gnosis#listnav#reset()
 endfunction
 
 " 試験用: 状態を返す
@@ -4113,6 +4204,7 @@ function! gnosis#mview#handoff() abort
     endif
   endfor
   let l:d.open = s:mwin() > 0
+  if get(s:S, 'view', '') ==# 'list' | let l:d.list = gnosis#listnav#handoff() | endif
   return l:d
 endfunction
 
@@ -4137,7 +4229,7 @@ function! gnosis#mview#restore_handoff(d) abort
     call s:full()
   endif
   for l:k in s:mode_keys + ['tenths', 'stretch', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
-    if has_key(a:d, l:k)
+    if l:k !=# 'view' && has_key(a:d, l:k)
       let s:S[l:k] = deepcopy(a:d[l:k])
     endif
   endfor
@@ -4153,7 +4245,10 @@ function! gnosis#mview#restore_handoff(d) abort
   else
     silent! only
   endif
+  let l:view = get(a:d, 'view', 'mandala')
+  if index(['mandala', 'fz', 'list'], l:view) >= 0 | call gnosis#mview#switch_view(l:view) | endif
   call s:render()
+  if l:view ==# 'list' && has_key(a:d, 'list') | call gnosis#listnav#restore(a:d.list) | endif
   call s:preview()
   call win_gotoid(s:mwin())
 endfunction

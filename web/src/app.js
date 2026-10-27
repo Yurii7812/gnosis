@@ -161,10 +161,10 @@ function applyState(s) {
   }
   last = { ...last, ...s, lines: undefined };
   const m = (s.mode || "n")[0];
-  const md = s.mandala && (s.mandala.cells || s.mandala.view === "fz") ? s.mandala : null;
+  const md = s.mandala && (s.mandala.cells || (s.mandala.view === "fz" || s.mandala.view === "list")) ? s.mandala : null;
   const ol = s.outline && s.outline.lines ? s.outline : null;
   const mEl = $("mode");
-  mEl.textContent = (md && s.focus === "mandala" && m === "n") ? (md.view === "fz" ? "FOLGEZETTEL" : "MANDALA") : (s.focus === "outline" && m === "n") ? "OUTLINE" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
+  mEl.textContent = (md && s.focus === "mandala" && m === "n") ? (md.view === "list" ? "LIST" : md.view === "fz" ? "FOLGEZETTEL" : "MANDALA") : (s.focus === "outline" && m === "n") ? "OUTLINE" : (MODE_LABEL[m] || String(s.mode).toUpperCase());
   if (last.copyStack) mEl.textContent += " · COPY STACK";
   mEl.className = "mode " + (MODE_CLASS[m] || "normal");
   $("file").textContent = s.file ? s.file.split("/").pop() : "";
@@ -343,7 +343,7 @@ function onClick({ pos, link, anyHref, alt, mod }) {
   const [l, c] = view.lineColAt(pos);
   const m = (last.mode || "n")[0];
   // 曼荼羅が開いているときは、まず右のノートの窓へ移る（Vim の窓の移動）
-  const nwin = (last.mandala && (last.mandala.cells || last.mandala.view === "fz") && last.focus === "mandala" && last.mandala.noteWin > 0) ? last.mandala.noteWin
+  const nwin = (last.mandala && (last.mandala.cells || (last.mandala.view === "fz" || last.mandala.view === "list")) && last.focus === "mandala" && last.mandala.noteWin > 0) ? last.mandala.noteWin
     : (last.focus === "outline" && last.outline && last.outline.srcWin > 0) ? last.outline.srcWin : 0;
   const toNote = nwin ? `call win_gotoid(${nwin})|` : "";
   // 打った :call … が下の行に残らないよう、直後に redraw して空のメッセージで消す
@@ -374,10 +374,12 @@ function closeHtml() {
 
 // 曼荼羅のマスのクリック（enter が真なら中心にする）
 function onFzClick(n, enter) {
-  gui.write(`\x1b:call gnosis#fznav#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
+  const module = last.mandala?.view === "list" ? "listnav" : "fznav";
+  gui.write(`\x1b:call gnosis#${module}#gui_click(${n},${enter ? 1 : 0})|redraw|echo ""\r`);
 }
 function onFzScroll(n) {
-  gui.write(`\x1b:call gnosis#fznav#gui_scroll(${n})|redraw|echo ""\r`);
+  const module = last.mandala?.view === "list" ? "listnav" : "fznav";
+  gui.write(`\x1b:call gnosis#${module}#gui_scroll(${n})|redraw|echo ""\r`);
 }
 function onOutlineClick(n, jump) {
   gui.write(`\x1b:call gnosis#outline#gui_click(${n},${jump ? 1 : 0})|redraw|echo ""\r`);

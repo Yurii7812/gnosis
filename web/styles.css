@@ -412,3 +412,6 @@ body.launching #stage, body.launching #statusbar { visibility: hidden; }
 .olp-row.sel { background: var(--bg-3); }
 .olp.unfocused .olp-row.sel { background: transparent; }
 .olp-note { padding: 0 12px; color: var(--fg-dim); font-size: 13px; }
+
+/* 検索・ハイライトに一致する行。選択の色は既存の .sel を優先する。 */
+.fz-row.nav-hit .fz-title { text-decoration: underline; text-decoration-thickness: 2px; }
