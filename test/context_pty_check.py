@@ -65,6 +65,23 @@ class TestNewNoteCursor(unittest.TestCase):
         self.assertIn(f"[{new[0].stem}]({new[0].name})", a)
         self.assertNotIn("Context:", a)
 
+    def test_zn_enter_adds_no_blank_lines_around_the_link(self) -> None:
+        # Enter で入れたリンクは、下の「見出し:」の節にくっつく（挿入でも、保存のあとの同期でも空行を入れない）
+        (self.v / "a.md").write_text(
+            "---\ntime: 2026-01-01 00:00:00\ntitle: ノートA\n---\n\n# ノートA\n\n本文A。\n\nBackLink:\n[X](x.md)\n", encoding="utf-8")
+        (self.v / "x.md").write_text("---\ntime: 2026-01-01 00:00:00\n---\n\n# X\n\n[ノートA](a.md)\n", encoding="utf-8")
+        with Session(self.rc, str(self.home), str(self.home), args=[str(self.v / "a.md")]) as s:
+            s.send("zn", 0.6)
+            s.send("\r", 1.5)
+            s.send(ESC, 0.9)
+            s.send(":wa\r", 0.6)
+            s.send(":qa!\r", 0.4)
+        new = sorted(self.v.glob("2*.md"))
+        self.assertEqual(len(new), 1)
+        lines = (self.v / "a.md").read_text(encoding="utf-8").split("\n")
+        i = lines.index(f"[{new[0].stem}]({new[0].name})")
+        self.assertNotEqual(lines[i + 1], "", lines)               # リンクの下に空行を足さない
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

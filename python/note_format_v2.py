@@ -1940,6 +1940,14 @@ def _rstrip_blank(lines: list[str]) -> list[str]:
 _NO_BACKLINK_TITLES = ("Folgezettel-Index",)
 
 
+def _ends_in_label_block(lines: list[str]) -> bool:
+    """末尾のリンク行の連なりが、`Group:` のような見出し行（末尾が `:`）の下にあるか（ブロックの一部か）。"""
+    i = len(lines) - 1
+    while i >= 0 and _SIMPLE_LINK_LINE_RE.match(lines[i]):
+        i -= 1
+    return i >= 0 and bool(re.match(r"^[^\s\[\]()]+:\s*$", lines[i]))
+
+
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
     """本文冒頭のブロックを BranchGroup: → Group: → ParentBranch: → Context: の順で出力する（2026-10-20 に変更）。
@@ -2120,7 +2128,11 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         lines.pop()
     body_text = [ln for ln in (n.get("body") or []) if ln.strip()]
     empty_body = len(body_text) <= 1 and all(ln.startswith("# ") for ln in body_text)
-    lines += [""] * (3 if blanks >= 3 and empty_body else 1)
+    # 本文の最後がリンク行なら、下の節にくっつける（空行を入れない）。文章なら空行 1 つで区切る。
+    # 上の先頭のブロック（Group: など）の一部のリンク・日記の一覧は、今までどおり空行で区切る。
+    glue = (not empty_body and not is_timeline and bool(lines) and bool(_SIMPLE_LINK_LINE_RE.match(lines[-1]))
+            and not _ends_in_label_block(lines))
+    lines += [] if glue else [""] * (3 if blanks >= 3 and empty_body else 1)
     for mark, ls in sections:
         lines.append(mark)
         lines += ls

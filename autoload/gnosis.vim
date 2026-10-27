@@ -11049,17 +11049,14 @@ function! s:simple_body_append(link) abort
     if l:last < line('$')
       silent execute (l:last + 1) . ',$delete _'
     endif
-    let l:prev = trim(getline(l:last))
-    let l:glue = l:blk != l:last - 1 && l:prev =~# '\]\s*(\S\+)\s*$' && !s:in_diary_list(l:last)
-    call append(l:last, l:glue ? [a:link] : ['', a:link])
+    " Enter では空行を足さない。ただし上のブロックのすぐ下だけは、空行を挟む（挟まないとブロックの一部になる）
+    call append(l:last, l:blk == l:last - 1 ? ['', a:link] : [a:link])
     return
   endif
-  " ### Context の直前（本文の最後）にリンクを挿入。
-  " 直前が**散文**なら空行 1 つを挟む。直前が**リンク行**なら空行なしで並べる。
-  " Enter で連続で置いても空行が累積しない。既存の空行はそのまま。
+  " ### Context の直前（本文の最後）にリンクを挿入。Enter では空行を足さない（既存の空行はそのまま）。
+  " 上のブロックのすぐ下だけは、空行を挟む（挟まないとブロックの一部になる）。
   let l:prev = l:up - 1
-  if l:prev >= 1 && trim(getline(l:prev)) !=# ''
-        \ && (trim(getline(l:prev)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:prev) || l:blk == l:prev - 1)
+  if l:prev >= 1 && trim(getline(l:prev)) !=# '' && l:blk == l:prev - 1
     call append(l:prev, ['', a:link])
   else
     call append(l:prev, a:link)
@@ -11958,7 +11955,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let l:added = 1
   endif
   " o … リンク無し（孤立）
-  if l:added
+  if l:added && !l:is_enter
     call s:ensure_blank_before_up()
   endif
   let &autoindent = l:save_ai | let &smartindent = l:save_si
@@ -12456,7 +12453,8 @@ function! s:insert_link_in_lines(lines, link, mode, hl) abort
     endwhile
   endif
   let l:prev = l:at > 0 ? trim(l:lines[l:at - 1]) : ''
-  if l:prev !=# '' && l:prev !~# '\]\s*(\S\+)\s*$' && l:prev !~# '^---\s*$'
+  " 空行を足さない。上のブロックのすぐ下だけは、空行を挟む（挟まないとブロックの一部になる）
+  if l:prev !=# '' && s:top_block_last_index(l:lines) == l:at - 1
     call extend(l:lines, ['', a:link], l:at)
   else
     call insert(l:lines, a:link, l:at)
@@ -14795,9 +14793,7 @@ function! s:insert_links_core_raw(links, ...) abort
       let l:added += 1
     endif
   endfor
-  if l:added
-    call s:ensure_blank_before_up()
-  endif
+  " Enter では空行を足さない
   return l:added > 0
 endfunction
 
@@ -14964,7 +14960,7 @@ function! s:c_links_apply(bs, a, Done, place) abort
   if l:mode ==# 'w'
     " w: A には自動で置かない。B を yn と同じ方法でヤンクする（A は開いたまま）
     call s:yank_like_yn(map(copy(a:bs), 'v:val.path'))
-  elseif l:mode ==# 'end' || l:mode ==# 'head' || l:mode ==# 'here'
+  elseif l:mode ==# 'head' || l:mode ==# 'here'  " end（Enter）は空行を足さない
     call s:ensure_blank_before_up()
   endif
   call a:Done()
@@ -15242,9 +15238,7 @@ function! s:swapped_write(ch, links) abort
   silent! execute 'hide edit ' . fnameescape(l:bpath)
   let l:link = s:make_link_from_dir(l:a.path, l:a.title, expand('%:p:h'))
   if l:kind ==# 'end'
-    if s:insert_link_before_up_note(l:link)
-      call s:ensure_blank_before_up()
-    endif
+    call s:insert_link_before_up_note(l:link)  " Enter は空行を足さない
     call s:links_added_done()
     call s:swap_return(l:a)
     return 1
@@ -15493,9 +15487,8 @@ function! s:insert_link_before_up_note(link) abort
   endif
 
   let l:ins = l:up - 1
-  " 本文末尾が散文のときだけ、空行を 1 つ開けてからリンクを置く
-  if l:ins >= 1 && trim(getline(l:ins)) !=# ''
-        \ && (trim(getline(l:ins)) !~# '\]\s*(\S\+)\s*$' || s:in_diary_list(l:ins) || l:blk == l:ins - 1)
+  " Enter では空行を足さない。上のブロックのすぐ下だけは、空行を 1 つ開ける（開けないとブロックの一部になる）
+  if l:ins >= 1 && trim(getline(l:ins)) !=# '' && l:blk == l:ins - 1
     call append(l:ins, '')
     let l:ins += 1
   endif

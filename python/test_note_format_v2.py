@@ -1391,6 +1391,30 @@ def test_branch_group_canonical_and_fenced_literals() -> None:
               "コード中の文字列は関係として解釈しない")
         check(v2.simple_sync(root) == 0, "再同期は冪等")
 
+def test_body_ending_in_link_glues_to_next_section() -> None:
+    """本文の最後がリンク行なら、下の節（BackLink: など）にくっつける。文章なら空行 1 つで区切る。
+    上の先頭のブロック（Group: など）の一部のリンクは、これまでどおり空行で区切る。"""
+    print("# body ending in a link glues to the next section")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        head = "---\ntime: 2026-01-01 00:00:00\n---\n\n"
+        (root / "index.md").write_text("---\ntitle: Index\nattribute: group\n---\n\n# Index\n", encoding="utf-8")
+        (root / "b.md").write_text(head + "# B\n\nb\n", encoding="utf-8")
+        (root / "x.md").write_text(head + "# X\n\n[A](a.md)\n[P](p.md)\n", encoding="utf-8")
+        (root / "p.md").write_text(head + "# P\n\n[P2](a.md)\n", encoding="utf-8")
+        a = root / "a.md"
+        a.write_text(head + "# A\n\n本文A。\n\n[B](b.md)\n\nBackLink:\n[X](x.md)\n", encoding="utf-8")
+        v2.update_one(str(a), str(root))
+        lines = a.read_text(encoding="utf-8").split("\n")
+        i = lines.index("[B](b.md)")
+        check(lines[i + 1] == "BackLink:", f"link line glued to BackLink: {lines[i:i + 3]}")
+        a.write_text(head + "# A\n\n本文A。\n\nBackLink:\n[X](x.md)\n", encoding="utf-8")
+        v2.update_one(str(a), str(root))
+        lines = a.read_text(encoding="utf-8").split("\n")
+        i = lines.index("BackLink:")
+        check(lines[i - 1] == "" and lines[i - 2] == "本文A。", f"prose keeps one blank line before BackLink: {lines[i - 2:i + 1]}")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
