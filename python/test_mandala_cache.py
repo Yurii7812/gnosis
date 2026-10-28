@@ -86,6 +86,15 @@ class T(unittest.TestCase):
         self.assertEqual(r["removed"], 1)
         self.assertIsNone(mc.node(self.r, "herb.md"))
 
+    def test_only_ignores_dot_dirs(self):
+        # \e の展開結果（.trash/T_*.md）を右の窓で開いても、曼荼羅のノートとして取り込まない
+        mc.refresh(self.r)
+        (self.r / ".trash").mkdir()
+        (self.r / ".trash" / "T_1.md").write_text(note("展開: Index", False, [("Index", "../index.md")]))
+        r = mc.refresh(self.r, only=[".trash/T_1.md"])
+        self.assertEqual(r["changed"], 0)
+        self.assertIsNone(mc.node(self.r, ".trash/T_1.md"))
+
     def test_skip_recent_full_scan(self):
         mc.refresh(self.r)
         mc.FULL_FLOOR = 3600; self.assertTrue(mc.refresh(self.r).get("skipped"))

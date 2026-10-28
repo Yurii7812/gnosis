@@ -263,6 +263,11 @@ def _take_dirty(root: Path) -> list[str]:
     return out
 
 
+def _hidden(rel: str) -> bool:
+    """_walk が降りない場所（ドット始まり・_expand_tmp）の中のノートか。"""
+    return any(n.startswith(".") or n == "_expand_tmp" for n in Path(rel).parts[:-1]) or Path(rel).name.startswith(".")
+
+
 def refresh(root: str | Path, full: bool = False, only: list[str] | None = None, force: bool = False) -> dict:
     """キャッシュを更新する。only があればそのノートだけ。full は作り直し。force でなければ、直近に全体を走査していたら省く。"""
     root = Path(root).resolve()
@@ -278,7 +283,11 @@ def refresh(root: str | Path, full: bool = False, only: list[str] | None = None,
             gone, todo, stats = [], [], {}
             for rel in only:
                 f = root / rel
-                if f.is_file():
+                if _hidden(rel):
+                    # ドット始まりの中（.trash の展開結果など）は曼荼羅のノートではない。入っていたら外す
+                    if rel in ids:
+                        gone.append(ids[rel])
+                elif f.is_file():
                     st = f.stat()
                     stats[rel] = (st.st_mtime_ns, st.st_size)
                     todo.append(rel)

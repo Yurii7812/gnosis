@@ -591,7 +591,7 @@ call writefile(['---', 'time: 2026-01-01 00:00:00', 'title: 長いノート', '-
 execute 'edit ' . s:v . '/herb.md'
 call s:keys(' ')
 call gnosis#mview#gs_done(s:v . '/long.md', 1)
-sleep 100m
+for s:w in range(10) | sleep 50m | endfor
 let s:nw = filter(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype") !=# "gnosis-mandala"')[0]
 let s:info = getwininfo(win_getid(s:nw))[0]
 let s:cur = getcurpos(win_getid(s:nw))
@@ -605,7 +605,7 @@ call s:keys(' ')
 let s:st = gnosis#mview#state()
 call s:ok('曼荼羅の窓にいる', &filetype ==# 'gnosis-mandala')
 execute 'edit ' . fnameescape(s:v . '/guard.md')
-sleep 100m
+for s:w in range(10) | sleep 50m | endfor
 let s:ft = map(range(1, winnr('$')), 'getbufvar(winbufnr(v:val), "&filetype")')
 let s:nm = map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")')
 call s:ok('曼荼羅の窓は曼荼羅のまま', index(s:ft, 'gnosis-mandala') >= 0, string(s:ft))
@@ -1003,13 +1003,10 @@ call s:keys("\<C-l>")
 let s:before = gnosis#mview#state().center
 call s:keys(' ')
 execute 'edit ' . s:v . '/ol.md'
-sleep 100m
+for s:w in range(10) | sleep 50m | endfor
 let s:st = gnosis#mview#state()
 call s:ok('右でノートを開くと曼荼羅の中心も動く', s:before !=# 'ol.md' && s:st.center ==# 'ol.md', string([s:before, s:st.center]))
 call s:keys('Q')
-
-call writefile(s:res, s:work . '/result.txt')
-qa!
 
 " プリセットが増えても、プリセットの画面は選んでいる行の前後だけを出す（Z の設定の画面とは別）
 for s:i in range(1, 40)
@@ -1024,3 +1021,18 @@ for s:n in gnosis#mview#preset_names()
     call gnosis#mview#preset_delete(s:n)
   endif
 endfor
+
+" \e の展開結果（.trash/T_*.md）を右の窓に開いても、曼荼羅のノートとして取り込まない（2026-10-29）
+call mkdir(s:v . '/.trash', 'p')
+call writefile(['# 展開: 試験', '', '- [Index](../index.md)'], s:v . '/.trash/T_trash1.md')
+call gnosis#mview#toggle()
+call gnosis#mview#goto_note_win()
+execute 'edit ' . fnameescape(s:v . '/.trash/T_trash1.md')
+let s:sid = filter(getscriptinfo({'name': 'autoload/gnosis/mview.vim'}), 'v:val.name =~# "gnosis/mview.vim$"')[0].sid
+let s:nw = gnosis#mview#note_win()
+call call('<SNR>' . s:sid . '_follow_do', [s:nw, winbufnr(s:nw), 0])
+call s:ok('.trash の展開結果は曼荼羅のデータに入らない', !has_key(get(gnosis#mview#state().data, 'nodes', {}), '.trash/T_trash1.md'), string(keys(get(gnosis#mview#state().data, 'nodes', {}))))
+call s:keys('Q')
+
+call writefile(s:res, s:work . '/result.txt')
+qa!

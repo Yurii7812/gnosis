@@ -3075,6 +3075,10 @@ function! s:follow_do(wid, buf, timer) abort
     return
   endif
   let l:rel = s:rel_of(l:path)
+  " .trash の展開結果などドット始まりの中は曼荼羅のノートではない（取り込まない・中心にしない）
+  if l:rel =~# '\(^\|/\)\.'
+    return
+  endif
   " できたばかりのノート（\n など）は曼荼羅のデータにまだ無い。その 1 つだけ読み込んでから合わせる
   if !empty(l:rel) && !s:has(l:rel) && filereadable(l:path)
     call s:ingest(l:rel)
