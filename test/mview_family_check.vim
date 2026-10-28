@@ -59,7 +59,7 @@ call s:ok('i は今までどおり索引だけ', s:st().mode ==# 'groups' && ind
 call s:keys('a')
 call s:keys("\<BS>")
 
-" 設定の画面（'）の行と操作
+" 設定の画面（Z）の行と操作
 let s:t = gnosis#mview#panel_text()
 call s:ok('設定の画面に モード の段がある', s:t =~# 'モード' && s:t =~# '近いグループ', s:t)
 call s:ok('設定の画面にモードの 3 つが出る', s:t =~# '全体' && s:t =~# '索引' && s:t =~# '親子', s:t)
@@ -83,8 +83,8 @@ for s:pn in gnosis#mview#preset_names()
 endfor
 call gnosis#mview#preset_save('消す試験')
 let s:mode_before = s:st().mode
-call feedkeys("'dq", 'x')
-call s:ok('プリセットの画面（''）で d: プリセットが消える', index(gnosis#mview#preset_names(), '消す試験') < 0, string(gnosis#mview#preset_names()))
+call feedkeys('Pdq', 'x')
+call s:ok('プリセットの画面（P）で d: プリセットが消える', index(gnosis#mview#preset_names(), '消す試験') < 0, string(gnosis#mview#preset_names()))
 call s:ok('そのとき親子モードには切り替わらない', s:st().mode ==# s:mode_before, s:st().mode)
 
 " プリセットに親子モードも入る

@@ -2938,7 +2938,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
   nnoremap <buffer><nowait><silent> Z <Cmd>call <SID>settings_menu()<CR>
-  nnoremap <buffer><nowait><silent> ' <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> P <Cmd>call <SID>preset_menu()<CR>
   nnoremap <buffer><nowait><silent> L <Cmd>call <SID>toggle_legend()<CR>
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
@@ -4126,7 +4126,7 @@ function! gnosis#mview#preset_apply(name) abort
   return 1
 endfunction
 
-" Z: 設定の画面（モードや重ねるものの切り替え。その場で曼荼羅に反映）。' はプリセットだけの画面（呼び出し・保存・上書き・名前・消す。数が増えても選んでいる行の前後だけ出す）。
+" Z: 設定の画面（モードや重ねるものの切り替え。その場で曼荼羅に反映）。P はプリセットだけの画面（呼び出し・保存・上書き・名前・消す。数が増えても選んでいる行の前後だけ出す）。
 "   j k 選ぶ   Enter / Space 切り替え   D は配下だけの切り替え。b は曼荼羅上でもこの画面内でも近さ順の基準を変える
 "   画面が低いときは、一覧のほうを送って出す（見切れない）
 function! s:panel_rows() abort
@@ -4191,7 +4191,7 @@ function! s:panel_lines(sel, msg, room) abort
     let l:lab = gnosis#i18n#tr(l:rows[l:i].name) . ' ' . l:rows[l:i].key
     call add(l:out, ' ' . (l:i == a:sel ? '▶' : ' ') . ' ' . l:lab . repeat(' ', max([1, 28 - strdisplaywidth(l:lab)])) . l:rows[l:i].val)
   endfor
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え'), ' ' . gnosis#i18n#tr("' プリセットの画面  q / Z 閉じる")])
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え'), ' ' . gnosis#i18n#tr('P プリセットの画面  q / Z 閉じる')])
   return l:out
 endfunction
 
@@ -4207,7 +4207,7 @@ function! s:preset_lines(sel, msg, room) abort
   for l:j in range(l:r[0], l:r[1] - 1)
     call add(l:out, printf(' %s %s %s', l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
   endfor
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter / 番号 1-9 で呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す'), ' ' . gnosis#i18n#tr("Z 設定の画面  q / ' 閉じる")])
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter / 番号 1-9 で呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す'), ' ' . gnosis#i18n#tr('Z 設定の画面  q / P 閉じる')])
   return l:out
 endfunction
 
@@ -4216,7 +4216,7 @@ function! s:panel_popup(lines, w, title) abort
         \ 'minwidth': a:w, 'maxwidth': a:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': a:title})
 endfunction
 
-" Z: 設定の画面。' でプリセットの画面へ移る
+" Z: 設定の画面。P でプリセットの画面へ移る
 function! s:settings_menu() abort
   let l:sel = 0
   let l:msg = ''
@@ -4241,7 +4241,7 @@ function! s:settings_menu() abort
       call l:rows[l:hot[0]].act()
     elseif l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' '
       call l:rows[l:sel].act()
-    elseif l:k ==# "'"
+    elseif l:k ==# 'P'
       call s:preset_menu(1)
     elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
       " Z で開いて、もう一度 Z で閉じる
@@ -4250,7 +4250,7 @@ function! s:settings_menu() abort
   endwhile
 endfunction
 
-" ': プリセットだけの画面
+" P: プリセットだけの画面
 function! s:preset_menu(...) abort
   let l:from_settings = a:0 && a:1
   let l:sel = 0
@@ -4310,7 +4310,7 @@ function! s:preset_menu(...) abort
         call s:settings_menu()
       endif
       return
-    elseif l:k ==# 'q' || l:k ==# "'" || l:k ==# "\<Esc>"
+    elseif l:k ==# 'q' || l:k ==# 'P' || l:k ==# "\<Esc>"
       return
     endif
   endwhile
