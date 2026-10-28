@@ -31,7 +31,6 @@ one() {
   echo "$r $(( $(date +%s) - start ))s $name" >> "$LOG/result"
   rm -rf "$H"
 }
-export -f one 2>/dev/null || true
 while IFS= read -r line; do
   printf '%s\n' "$line"
 done < "$LOG/list" | xargs -P "$JOBS" -I{} bash -c '
