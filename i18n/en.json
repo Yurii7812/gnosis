@@ -459,6 +459,8 @@
     "Gnosis: バックアップ完了 → ": "Gnosis: backup done → ",
     "Gnosis: パスワードが一致しません。中止": "Gnosis: the passwords do not match. Cancelled",
     "Gnosis: パスワードが違う (": "Gnosis: wrong password (",
+    "リスト: 検索・リンク・類似（r と m は同じ）。リストの中で f で Folgezettel に戻る": "List: search / links / similar (r and m are the same). Press f in the list to return to Folgezettel",
+    "検索語を入れてください（s）": "Enter a search term (s)",
     "Gnosis: パスワードが違う（または暗号箱が壊れています）": "Gnosis: wrong password (or the encrypted store is damaged)",
     "Gnosis: 暗号箱の検査で問題が見つかりました（パスワードは正しいのでバックアップは続けます・終了コード ": "Gnosis: fsck found problems in the encrypted store (password is correct; continuing backup, exit code ",
     "Gnosis: パスワードを変更しました（次回のマウントから有効）": "Gnosis: password changed (effective from the next mount)",

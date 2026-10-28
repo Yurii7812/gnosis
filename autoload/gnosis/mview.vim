@@ -3587,7 +3587,7 @@ endfunction
 
 " ---- Folgezettel ビュー（autoload/gnosis/fznav.vim）との接点 ------------------------------------------------
 
-" 曼荼羅 → Folgezettel → リスト。同じ窓・同じバッファを使い、右のノートの窓（本文・スクロール位置）には触らない。
+" 曼荼羅 ⇔ Folgezettel（Folgezettel の中にリストのモードがある）。同じ窓・同じバッファを使い、右のノートの窓（本文・スクロール位置）には触らない。
 " a:1 がビュー名ならそちらへ、previous なら逆順、無ければ次へ
 function! gnosis#mview#switch_view(...) abort
   let l:mw = s:mwin()
@@ -3595,9 +3595,11 @@ function! gnosis#mview#switch_view(...) abort
     return
   endif
   let l:from = get(s:S, 'view', 'mandala')
-  let l:views = ['mandala', 'fz', 'list']
-  let l:to = a:0 && index(l:views, a:1) >= 0 ? a:1
-        \ : l:views[(index(l:views, l:from) + (a:0 && a:1 ==# 'previous' ? 2 : 1)) % 3]
+  " リスト（検索・リンク・類似）は Folgezettel ビューのモード。Ctrl-矢印の巡回は曼荼羅 ⇔ Folgezettel の 2 つだけ
+  " （リストにいるときは Folgezettel の位置として数える）
+  let l:views = ['mandala', 'fz']
+  let l:to = a:0 && index(['mandala', 'fz', 'list'], a:1) >= 0 ? a:1
+        \ : l:views[(index(l:views, l:from ==# 'list' ? 'fz' : l:from) + 1) % 2]
   if l:to ==# l:from
     return
   endif

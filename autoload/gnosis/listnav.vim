@@ -54,20 +54,24 @@ function! gnosis#listnav#setup() abort
     let s:L.origin = s:save_origin()
     let s:L.seen = l:st.center
   endif
+  if exists('s:want_mode')
+    let s:L.mode = s:want_mode
+    unlet s:want_mode
+  endif
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=3
   for [l:key, l:cmd] in items({'j': "call gnosis#listnav#move(1)", 'k': "call gnosis#listnav#move(-1)",
         \ '<Down>': "call gnosis#listnav#move(1)", '<Up>': "call gnosis#listnav#move(-1)",
         \ 'gg': "call gnosis#listnav#edge(0)", 'G': "call gnosis#listnav#edge(1)",
         \ '<CR>': "call gnosis#listnav#enter()", '<2-LeftMouse>': "call gnosis#listnav#enter()",
-        \ 's': "call gnosis#listnav#prompt('search')", 'x': "call gnosis#listnav#prompt('filter')",
-        \ 'm': "call gnosis#listnav#prompt('highlight')", 'n': "call gnosis#listnav#next_hit(1)", 'N': "call gnosis#listnav#next_hit(-1)",
-        \ '1': "call gnosis#listnav#option('mode', 'search')", '2': "call gnosis#listnav#option('mode', 'similar')",
-        \ '3': "call gnosis#listnav#option('mode', 'links')", 'S': "call gnosis#listnav#scope()",
+        \ 's': "call gnosis#listnav#mode('search')", 'x': "call gnosis#listnav#prompt('filter')",
+        \ 'l': "call gnosis#listnav#mode('links')", 'r': "call gnosis#listnav#mode('similar')", 'm': "call gnosis#listnav#mode('similar')",
+        \ 'H': "call gnosis#listnav#prompt('highlight')", 'n': "call gnosis#listnav#next_hit(1)", 'N': "call gnosis#listnav#next_hit(-1)",
+        \ 'S': "call gnosis#listnav#scope()",
         \ 'w': "call gnosis#listnav#option('rank', !gnosis#listnav#state().rank)",
         \ '+': "call gnosis#listnav#depth()", 'o': "call gnosis#listnav#origin()", '<BS>': "call gnosis#listnav#back()",
         \ 'q': "call gnosis#listnav#quit()", 'Q': "call gnosis#mview#win_op('quit')",
-        \ '<Space>': "call gnosis#mview#toggle()", 'f': "call gnosis#mview#win_op('full')",
+        \ '<Space>': "call gnosis#mview#toggle()", 'f': "call gnosis#mview#switch_view('fz')", 'F': "call gnosis#mview#win_op('full')",
         \ '<lt>': "call gnosis#mview#win_op('resize-')", '>': "call gnosis#mview#win_op('resize+')",
         \ '=': "call gnosis#mview#win_op('equalize')", '.': "call gnosis#mview#win_op('reload')",
         \ '<C-Right>': "call gnosis#mview#switch_view()", '<C-Left>': "call gnosis#mview#switch_view('previous')",
@@ -75,7 +79,7 @@ function! gnosis#listnav#setup() abort
         \ 'e': "call gnosis#listnav#decide(0)", 'I': "call gnosis#listnav#decide(1)"})
     execute 'nnoremap <buffer><nowait><silent> ' . l:key . ' <Cmd>' . l:cmd . '<CR>'
   endfor
-  for [l:key, l:kind] in items({'a': '', 'b': 'child', 'p': 'parent', 'g': 'group', 'c': 'context', 'r': 'related', 'v': 'cite', 'B': 'back', 'i': 'index'})
+  for [l:key, l:kind] in items({'a': '', 'b': 'child', 'p': 'parent', 'g': 'group', 'c': 'context', 'R': 'related', 'v': 'cite', 'B': 'back', 'i': 'index'})
     execute 'nnoremap <buffer><nowait><silent> ' . l:key . ' <Cmd>call gnosis#listnav#option("relation", "' . l:kind . '")<CR>'
   endfor
   nnoremap <buffer><silent> \l <Cmd>call gnosis#mview#link_pick()<CR>
@@ -93,6 +97,8 @@ function! gnosis#listnav#setup() abort
 endfunction
 
 function! s:rows() abort
+  " 検索のモードは、検索語を入れたときだけ結果を出す（何も入れていないときは一覧を出さない）
+  if s:L.mode ==# 'search' && empty(s:L.search) | return [] | endif
   let l:key = string([s:L.mode, s:L.scope, s:L.search, s:L.depth, s:L.rank])
   if len(s:L.cache) > 16 | let s:L.cache = {} | endif
   if !has_key(s:L.cache, l:key)
@@ -132,7 +138,7 @@ function! gnosis#listnav#render() abort
   let l:oldrow = get(s:L.rows, line('.') - 3, {})
   let s:L.rows = s:rows()
   let l:title = gnosis#i18n#tr({'search': '検索', 'similar': '類似', 'links': 'リンク'}[s:L.mode])
-  let s:L.title = 'LIST / ' . l:title
+  let s:L.title = 'FOLGEZETTEL / ' . l:title
   let l:pick = gnosis#mview#pick_label()
   if !empty(l:pick) | let s:L.title .= '  ' . l:pick | endif
   let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr({'all': '全部', 'index': '索引とグループ', 'no-index': '索引以外'}[s:L.scope])
@@ -154,7 +160,9 @@ function! gnosis#listnav#render() abort
     if get(l:oldrow, 'path', '') ==# l:row.path && get(l:oldrow, 'title', '') ==# l:row.title | let l:want = l:i + 3 | endif
     let l:i += 1
   endfor
-  if empty(s:L.rows) | call add(l:lines, '  ' . gnosis#i18n#tr('該当なし')) | endif
+  if empty(s:L.rows)
+    call add(l:lines, '  ' . gnosis#i18n#tr(s:L.mode ==# 'search' && empty(s:L.search) ? '検索語を入れてください（s）' : '該当なし'))
+  endif
   let s:L.hits = empty(s:L.highlight) ? {} : s:paths(s:L.highlight)
   let l:save = winsaveview()
   let l:old = getline(1, '$')
@@ -257,9 +265,9 @@ function! gnosis#listnav#enter() abort
   if empty(l:row) | return | endif
   if s:timer >= 0 | call timer_stop(s:timer) | let s:timer = -1 | endif
   call gnosis#mview#open_rel(l:row.path)
+  " 曼荼羅と同じく、右のノートの窓へはカーソルを移さない（Space で移る）
   if !gnosis#mview#picking()
-    call gnosis#mview#toggle()
-    if get(l:row, 'line', 0) > 0 | call s:top_line(win_getid(), l:row.line) | endif
+    if get(l:row, 'line', 0) > 0 && gnosis#mview#note_win() > 0 | call s:top_line(gnosis#mview#note_win(), l:row.line) | endif
     let s:L.origin = s:save_origin()
   endif
 endfunction
@@ -277,6 +285,23 @@ function! gnosis#listnav#option(key, value) abort
   let s:L[a:key] = a:value
   call s:save_preferences()
   call gnosis#listnav#render()
+endfunction
+
+" Folgezettel ビューのキー s / l / r / m: リストのモード（検索・リンク・類似）へ。リストにいればモードだけ替える。
+" 検索は、検索語を聞く（何も入れずにやめたら Folgezettel に戻る）
+function! gnosis#listnav#enter_mode(mode) abort
+  if gnosis#mview#view() !=# 'list'
+    let s:want_mode = a:mode
+    call gnosis#mview#switch_view('list')
+    if gnosis#mview#view() !=# 'list' | return | endif
+  else
+    call gnosis#listnav#option('mode', a:mode)
+  endif
+  if a:mode ==# 'search' | call gnosis#listnav#prompt('search') | endif
+endfunction
+
+function! gnosis#listnav#mode(mode) abort
+  call gnosis#listnav#enter_mode(a:mode)
 endfunction
 
 function! gnosis#listnav#back() abort
@@ -353,6 +378,7 @@ function! gnosis#listnav#prompt(op) abort
     call remove(s:L, 'view')
     call gnosis#listnav#render()
     call winrestview(l:old.view)
+    if a:op ==# 'search' && empty(s:L.search) | call gnosis#mview#switch_view('fz') | endif
   endif
 endfunction
 
@@ -403,8 +429,8 @@ function! gnosis#listnav#decide(index) abort
 endfunction
 
 function! gnosis#listnav#help() abort
-  echo 'LIST: 1 ' . gnosis#i18n#tr('検索') . '  2 ' . gnosis#i18n#tr('類似') . '  3 ' . gnosis#i18n#tr('リンク')
-        \ . ' | s/x/m  n/N  S  +  w  b/p/g/c/r/a  o  Backspace  Enter  Ctrl+←/→'
+  echo 'FOLGEZETTEL: s ' . gnosis#i18n#tr('検索') . '  l ' . gnosis#i18n#tr('リンク') . '  r/m ' . gnosis#i18n#tr('類似') . '  f Folgezettel'
+        \ . ' | x H  n/N  S  +  w  b/p/g/c/R/a  o  Backspace  Enter  Ctrl+←/→'
 endfunction
 
 function! gnosis#listnav#gui_state() abort

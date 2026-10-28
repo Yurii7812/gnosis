@@ -7,8 +7,9 @@
 "
 " キー（Folgezettel ビューの窓）
 "   j k / ↓ ↑     次・前の項目（最後まで。画面に出ていない分も）   gg G  先頭・末尾
-"   h l / ← →     上位・下位の番号へ（実在する番号だけ。無ければその場に留まる）
+"   h / ← →       上位・下位の番号へ（実在する番号だけ。無ければその場に留まる）
 "   Enter         Group / Note を開く（右のノートの窓に出し、ここは現在位置に合わせる）
+"   s l r m       リスト（検索・リンク・類似）のモードへ。リストの中で f で戻る
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
 "   u             上位表示（祖先の番号の Group と、関連 Group）⇔ 通常    M  関連 Group をもっと見る
 "   \o            アウトライン窓の表示 ⇔ 非表示（どこでも）。o は選ぶモード（\l）で元のノートを右に見る
@@ -656,20 +657,20 @@ function! s:help() abort
         \ '',
         \ 'j k / ↓ ↑     ' . gnosis#i18n#tr('次・前の項目'),
         \ 'h / ←         ' . gnosis#i18n#tr('親の番号へ'),
-        \ 'l / →         ' . gnosis#i18n#tr('下位へ（今開いているノートが下にあれば、その方向へ）'),
+        \ '→            ' . gnosis#i18n#tr('下位へ（今開いているノートが下にあれば、その方向へ）'),
         \ '[ ]          ' . gnosis#i18n#tr('前・次の兄弟へ'),
         \ 'Enter         ' . gnosis#i18n#tr('Group / Note を開く'),
         \ 'c             ' . gnosis#i18n#tr('印のついたノート（Enter で開いたもの）へ戻る'),
         \ 'u             ' . gnosis#i18n#tr('上位表示 ⇔ 通常'),
         \ 'M             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
-        \ 's x m / n N   ' . gnosis#i18n#tr('検索・絞り込み・ハイライト'),
+        \ 's l r m       ' . gnosis#i18n#tr('リスト: 検索・リンク・類似（r と m は同じ）。リストの中で f で Folgezettel に戻る'),
         \ '\l            ' . gnosis#i18n#tr('入れるノートを選ぶモード（\l）。ビューを切り替えても続く'),
         \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）'),
         \ 'q             ' . gnosis#i18n#tr('選ぶモードなどをやめる（何も無ければ閉じる）'),
         \ '\o            ' . gnosis#i18n#tr('アウトラインを右に出す ⇔ しまう（どこでも）'),
         \ 'Ctrl-← Ctrl-→ gv  ' . gnosis#i18n#tr('前・次のビューへ'),
         \ 'Space         ' . gnosis#i18n#tr('ノートの窓へ'),
-        \ 'f < > = p .   ' . gnosis#i18n#tr('全画面・幅・右の窓・読み直し'),
+        \ 'F < > = p .   ' . gnosis#i18n#tr('全画面・幅・右の窓・読み直し'),
         \ 'Q             ' . gnosis#i18n#tr('閉じる')]
   call popup_dialog(l:t, {'title': ' ? ', 'padding': [0, 1, 0, 1], 'border': [], 'close': 'click', 'filter': function('s:help_filter')})
 endfunction
@@ -729,7 +730,6 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> G <Cmd>call <SID>edge(1)<CR>
   nnoremap <buffer><nowait><silent> h <Cmd>call <SID>left()<CR>
   nnoremap <buffer><nowait><silent> <Left> <Cmd>call <SID>left()<CR>
-  nnoremap <buffer><nowait><silent> l <Cmd>call <SID>right()<CR>
   nnoremap <buffer><nowait><silent> ] <Cmd>call <SID>sibling(1)<CR>
   nnoremap <buffer><nowait><silent> [ <Cmd>call <SID>sibling(-1)<CR>
   nnoremap <buffer><nowait><silent> <Right> <Cmd>call <SID>right()<CR>
@@ -738,16 +738,16 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> u <Cmd>call <SID>toggle_upper()<CR>
   nnoremap <buffer><nowait><silent> c <Cmd>call <SID>back()<CR>
   nnoremap <buffer><nowait><silent> M <Cmd>call <SID>more()<CR>
-  nnoremap <buffer><nowait><silent> s <Cmd>call gnosis#fznav#prompt('search')<CR>
-  nnoremap <buffer><nowait><silent> x <Cmd>call gnosis#fznav#prompt('filter')<CR>
-  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#fznav#prompt('highlight')<CR>
-  nnoremap <buffer><nowait><silent> n <Cmd>call gnosis#fznav#next_hit(1)<CR>
-  nnoremap <buffer><nowait><silent> N <Cmd>call gnosis#fznav#next_hit(-1)<CR>
+  " s l r m: リスト（検索・リンク・類似）のモードへ。リストでは f で Folgezettel に戻る
+  nnoremap <buffer><nowait><silent> s <Cmd>call gnosis#listnav#enter_mode('search')<CR>
+  nnoremap <buffer><nowait><silent> l <Cmd>call gnosis#listnav#enter_mode('links')<CR>
+  nnoremap <buffer><nowait><silent> r <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>pick_decide(0)<CR>
   nnoremap <buffer><nowait><silent> I <Cmd>call <SID>pick_decide(1)<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>help()<CR>
-  nnoremap <buffer><nowait><silent> f <Cmd>call gnosis#mview#win_op('full')<CR>
+  nnoremap <buffer><nowait><silent> F <Cmd>call gnosis#mview#win_op('full')<CR>
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call gnosis#mview#win_op('resize-')<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call gnosis#mview#win_op('resize+')<CR>
   nnoremap <buffer><nowait><silent> = <Cmd>call gnosis#mview#win_op('equalize')<CR>
@@ -881,27 +881,6 @@ function! gnosis#fznav#query(op, text) abort
   call gnosis#fznav#render()
 endfunction
 
-function! gnosis#fznav#prompt(op) abort
-  let l:label = gnosis#i18n#tr({'search': '検索', 'filter': '絞り込み', 'highlight': 'ハイライト'}[a:op]) . ': '
-  call gnosis#listnav#input(l:label, get(s:F, a:op, ''), function('gnosis#fznav#query', [a:op]))
-endfunction
-
-function! gnosis#fznav#next_hit(dir) abort
-  if empty(s:F.sel) || empty(get(s:F, 'highlight', '')) | return | endif
-  let l:cur = get(s:F.selpos, line('.'), 0)
-  for l:n in range(1, len(s:F.sel))
-    let l:i = (l:cur + a:dir * l:n + len(s:F.sel)) % len(s:F.sel)
-    let l:ln = s:F.sel[l:i]
-    if has_key(get(s:F, 'highlight_paths', {}), get(s:F.items[l:ln - 1], 'path', ''))
-      call s:goto(l:ln)
-      return
-    endif
-  endfor
-endfunction
-
 function! gnosis#fznav#quit() abort
-  for l:op in ['highlight', 'filter', 'search']
-    if !empty(get(s:F, l:op, '')) | call gnosis#fznav#query(l:op, '') | return | endif
-  endfor
   call gnosis#mview#quit_layers()
 endfunction
