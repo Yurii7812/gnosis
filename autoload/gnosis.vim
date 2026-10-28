@@ -10661,6 +10661,9 @@ endfunction
 " 再利用できる）を選ぶ。出力は ROOT/.trash/T_<timestamp>.md（sync・検索の対象外、
 " 編集しても元ノートへは反映されない使い捨てスナップショット）。
 function! gnosis#v2_expand() abort
+  if &filetype ==# 'gnosis-mandala'
+    return s:v2_expand_shown()
+  endif
   let l:cur = expand('%:p')
   if empty(l:cur)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE
@@ -10702,6 +10705,33 @@ function! gnosis#v2_expand() abort
     return
   endif
   execute 'edit ' . fnameescape(l:result_path)
+endfunction
+
+" 左窓（曼荼羅ビュー・リストビュー）で \e: 左窓に出ているノート全部を、出ている順に 1 つの md にまとめる
+" （リンクは辿らない。曼荼羅は全ページ分、リストビューは Folgezettel / 類似 / 検索の一覧そのまま）。出力は普通の \e と同じ .trash/T_*.md
+function! s:v2_expand_shown() abort
+  let l:root = s:get_pkm_root()
+  let l:py = get(g:, 'gnosis_expand_v2_python', '')
+  if empty(l:root) || empty(l:py) || !filereadable(l:py)
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: expand_v2.py が見つからない: ') . l:py | echohl NONE
+    return
+  endif
+  let l:paths = gnosis#mview#shown_paths()
+  if empty(l:paths)
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 出力するノートがありません') | echohl NONE
+    return
+  endif
+  let l:tmp = tempname()
+  call writefile(l:paths, l:tmp)
+  let l:out = gnosis#sh#systemlist(join(map([s:python_cmd(), l:py, 'files', l:root, l:tmp], 'shellescape(v:val)'), ' '))
+  call delete(l:tmp)
+  if gnosis#sh#error() != 0 || empty(l:out) || !filereadable(l:out[-1])
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 展開に失敗: ') . join(l:out, ' ') | echohl NONE
+    return
+  endif
+  call gnosis#mview#goto_note_win()
+  execute 'edit ' . fnameescape(l:out[-1])
+  echo printf(gnosis#i18n#tr('Gnosis: %d 件を 1 つにまとめました'), len(l:paths))
 endfunction
 
 " ---------------------------------------------------------------------------

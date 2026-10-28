@@ -132,6 +132,11 @@ function! s:follow_center() abort
   let s:L.origin = s:save_origin()
 endfunction
 
+" 一覧に出ているノートの vault 相対パス（上から順）
+function! gnosis#listnav#shown_paths() abort
+  return empty(s:L) ? [] : map(copy(s:rows()), 'v:val.path')
+endfunction
+
 function! gnosis#listnav#render() abort
   if empty(s:L) | return | endif
   call s:follow_center()

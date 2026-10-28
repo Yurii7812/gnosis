@@ -489,6 +489,8 @@
     "Gnosis: 変更失敗: ": "Gnosis: change failed: ",
     "Gnosis: 対象なし": "Gnosis: nothing to do",
     "Gnosis: 展開に失敗: ": "Gnosis: expansion failed: ",
+    "Gnosis: 出力するノートがありません": "Gnosis: no notes to output",
+    "Gnosis: %d 件を 1 つにまとめました": "Gnosis: merged %d notes into one",
     "Gnosis: 展開ファイルが見つからない: ": "Gnosis: expanded file not found: ",
     "Gnosis: 巻き戻し中断（マウントが残っています）。平文は ": "Gnosis: rollback stopped (a mount is still active). The plain files are in ",
     "Gnosis: 復元先が既に存在します: ": "Gnosis: the restore destination already exists: ",

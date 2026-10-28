@@ -135,6 +135,20 @@ function! s:add(lines, cells, items, line, cell, item) abort
   call add(a:items, a:item)
 endfunction
 
+" 見えている行（折りたたみの中は除く）のノートの vault 相対パス（上から順）
+function! gnosis#fznav#shown_paths() abort
+  call s:load()
+  let l:out = []
+  let l:i = 0
+  let l:n = len(s:F.rows)
+  while l:i < l:n
+    let l:r = s:F.rows[l:i]
+    call add(l:out, l:r[1])
+    let l:i = (l:r[6] == l:i && has_key(s:F.collapsed, l:r[0]) && l:r[7] > l:i + 1) ? l:r[7] : l:i + 1
+  endwhile
+  return l:out
+endfunction
+
 function! s:build_normal() abort
   call s:load()
   let l:rows = s:F.rows

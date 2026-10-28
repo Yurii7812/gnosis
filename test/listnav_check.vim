@@ -111,5 +111,23 @@ redir => s:imsg
 silent call gnosis#imgview#open()
 redir END
 call s:ok('ビューの窓から , を押すと右のノートの画像を調べる', s:imsg =~# '画像はありません' || s:imsg =~# 'Markdown', s:imsg)
+" \e は左窓に出ているノート全部を、出ている順に 1 つの md にまとめる（リストビュー・Folgezettel・曼荼羅）
+call gnosis#listnav#enter_mode('links')
+let s:shown = gnosis#mview#shown_paths()
+call s:ok('リストの \e の入力は一覧そのまま', s:shown ==# s:paths() && len(s:shown) > 1, s:shown)
+call gnosis#mview#switch_view('mandala')
+let s:mp = gnosis#mview#shown_paths()
+call s:ok('曼荼羅の入力は中心と周り全部', s:mp[0] ==# gnosis#mview#state().center && len(s:mp) > 2, s:mp)
+call gnosis#mview#switch_view('fz')
+let s:fzp = gnosis#mview#shown_paths()
+call s:ok('Folgezettel の入力は番号順の全部', len(s:fzp) > 2 && s:fzp[0] ==# 'a.md' && index(s:fzp, 'd.md') > index(s:fzp, 'b.md'), s:fzp)
+call gnosis#mview#switch_view('list')
+let s:want = gnosis#mview#shown_paths()
+call gnosis#v2_expand()
+let s:outf = expand('%:p')
+call s:ok('\e の出力は .trash の md', s:outf =~# '/\.trash/T_.*\.md$', s:outf)
+let s:txt = join(getline(1, '$'), "\n")
+let s:heads = map(filter(split(s:txt, "\n"), 'v:val =~# "^## " && v:val !=# "## 目次"'), 'strpart(v:val, 3)')
+call s:ok('\e の出力は一覧の順', s:heads ==# ['Alpha garden', 'Delta garden', 'Context garden', 'Related garden', 'Garden group'], s:heads)
 call gnosis#mview#close()
 qa!

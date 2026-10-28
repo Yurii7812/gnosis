@@ -313,7 +313,9 @@ def _relation_lines(note_path: Path, n: dict, root: Path, by_name, tmp_dir: Path
 def _toc_lines(start_id: str, order: list[str], parent_of: dict, notes_by_id: dict[str, dict],
                anchors: dict[str, str]) -> list[str]:
     """`parent_of`（＝どのノートを辿ってこの id に着いたか）に沿って、
-    段落（インデント）で経路が分かる目次を作る。"""
+    段落（インデント）で経路が分かる目次を作る。経路が無ければ（files モード）order 順に平らに並べる。"""
+    if not parent_of:
+        return [f"- [{notes_by_id[nid]['title']}](#{anchors[nid]})" for nid in order]
     children: dict[str, list[str]] = {}
     for nid in order:
         p = parent_of.get(nid)
@@ -338,7 +340,8 @@ def _render(order: list[str], parent_of: dict, notes_by_id: dict[str, dict],
     start_id = order[0]
     start_title = notes_by_id[start_id]["title"]
 
-    out = [f"# 展開: {start_title}", "", "## 目次", ""]
+    head = f"# 一覧: {len(order)} 件" if not parent_of else f"# 展開: {start_title}"
+    out = [head, "", "## 目次", ""]
     out.extend(_toc_lines(start_id, order, parent_of, notes_by_id, anchors))
     out.append("")
     out.append("---")
@@ -513,6 +516,25 @@ def _run(root: Path, start_file: Path, order_fn, holder: dict | None = None) -> 
     return out_path
 
 
+def _run_files(root: Path, rel_paths: list[str]) -> Path:
+    """画面に出ているノートを、与えた順のまま 1 つの md にまとめる（リンクは辿らない）。"""
+    by_name, notes, ids, id_to_path = _build_index(root)
+    order: list[str] = []
+    for rel in rel_paths:
+        nid = ids.get((root / rel).resolve())
+        if nid is not None and nid not in order:
+            order.append(nid)
+    if not order:
+        raise SystemExit("expand_v2: 一覧のノートが vault 内で見つからない")
+    notes_by_id = {i: notes[id_to_path[i]] for i in order}
+    tmp_dir = root / TRASH_DIR
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    text = _render(order, {}, notes_by_id, root, by_name, id_to_path, tmp_dir)
+    out_path = tmp_dir / _make_filename()
+    out_path.write_text(text, encoding="utf-8")
+    return out_path
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__, file=sys.stderr)
@@ -546,6 +568,15 @@ def main(argv: list[str]) -> int:
         return 0
     if mode == "preset_delete":
         print("deleted" if delete_preset(root, argv[3] if len(argv) > 3 else "") else "notfound")
+        return 0
+
+    if mode == "files":
+        # files ROOT LISTFILE（LISTFILE: vault 相対パスを 1 行に 1 つ、出す順に）
+        if len(argv) < 4:
+            print("usage: expand_v2.py files ROOT LISTFILE", file=sys.stderr)
+            return 2
+        lines = Path(argv[3]).read_text(encoding="utf-8").splitlines()
+        print(str(_run_files(root, [x for x in lines if x.strip()])))
         return 0
 
     if len(argv) < 4:

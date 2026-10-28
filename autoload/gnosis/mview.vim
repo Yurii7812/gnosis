@@ -3649,6 +3649,35 @@ function! gnosis#mview#sync_leader() abort
   call s:sync_leader()
 endfunction
 
+" 左窓に出ているノート全部の vault 相対パス（\e の入力）。出ている順で、重複なし。
+" 曼荼羅は中心と、全ページ分の周り。リストビューは Folgezettel / 類似 / 検索 / リンクの一覧そのまま
+function! gnosis#mview#shown_paths() abort
+  if !exists('s:S') || type(s:S) != v:t_dict || empty(get(s:S, 'center', ''))
+    return []
+  endif
+  if s:S.view ==# 'fz'
+    let l:raw = gnosis#fznav#shown_paths()
+  elseif s:S.view ==# 'list'
+    let l:raw = gnosis#listnav#shown_paths()
+  else
+    let l:raw = [s:S.center] + map(copy(s:items(s:S.center)), 'v:val[0]')
+  endif
+  let l:out = []
+  let l:seen = {}
+  for l:p in l:raw
+    let l:p = matchstr(l:p, '^[^#]*')
+    if !empty(l:p) && !has_key(l:seen, l:p) && l:p =~# '\.md$'
+      let l:seen[l:p] = 1
+      call add(l:out, l:p)
+    endif
+  endfor
+  return l:out
+endfunction
+
+function! gnosis#mview#goto_note_win() abort
+  return exists('s:S') && type(s:S) == v:t_dict ? s:goto_note_win() : -1
+endfunction
+
 function! gnosis#mview#note_win() abort
   return exists('s:S') ? s:note_win() : -1
 endfunction
