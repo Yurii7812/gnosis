@@ -147,7 +147,7 @@ function! gnosis#listnav#render() abort
   if !empty(s:L.relation) && s:L.mode ==# 'links' | let l:flags .= ' / ' . gnosis#i18n#tr(s:kinds[s:L.relation]) | endif
   if !empty(s:L.search) && s:L.mode ==# 'search' | let l:flags .= ' / s: ' . s:L.search | endif
   if !empty(s:L.filter) | let l:flags .= ' / x: ' . s:L.filter | endif
-  if !empty(s:L.highlight) | let l:flags .= ' / m: ' . s:L.highlight | endif
+  if !empty(s:L.highlight) | let l:flags .= ' / H: ' . s:L.highlight | endif
   let s:L.status = l:flags . ' / ' . len(s:L.rows) . (len(s:L.rows) >= 300 && s:L.mode ==# 'links' ? ' (max 300)' : '')
   let l:lines = [s:L.title, s:L.status]
   let l:want = 3

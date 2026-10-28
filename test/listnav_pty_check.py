@@ -53,8 +53,8 @@ class ListView(unittest.TestCase):
         s.send(' ', .7)
         s.send(NEXT, .5)
         self.assertIn('FOLGEZETTEL', s.text())
-        s.send(NEXT, .5)
-        self.assertIn('LIST', s.text())
+        s.send('l', .5)
+        self.assertIn('FOLGEZETTEL / ', s.text())
 
     def test_cycles_both_directions_and_plain_list_search(self):
         with self.session() as s:
@@ -62,6 +62,8 @@ class ListView(unittest.TestCase):
             s.send(NEXT, .3)
             self.assertEqual(self.dump(s)['view'], 'mandala')
             s.send(PREV, .3)
+            self.assertEqual(self.dump(s)['view'], 'fz')
+            s.send('l', .5)
             self.assertEqual(self.dump(s)['view'], 'list')
             s.send('sNeedle\r', 1)
             self.assertIn('Beta', s.text())
@@ -94,36 +96,34 @@ class ListView(unittest.TestCase):
     def test_enter_reanchors_links_and_q_closes_despite_history(self):
         with self.session() as s:
             self.open_list(s)
-            s.send('2', .6)
-            s.send('3', .6)
+            s.send('r', .6)
+            s.send('l', .6)
             s.send('j', .3)
             s.send('\r', .8)
             self.assertEqual(self.dump(s)['center'], 'b.md')
-            s.send(' ', .5)
+            self.assertEqual(self.dump(s)['view'], 'list')  # Enter でも右のノートへカーソルは移らない
             left = '\n'.join(l.split('|')[0] for l in s.text().splitlines())
             self.assertIn('[Parent] Alpha', left)
             self.assertNotIn('[Child] Beta', left)
-            s.send('2', .6)
+            s.send('r', .6)
             left = '\n'.join(l.split('|')[0] for l in s.text().splitlines())
             self.assertIn('Alpha', left)
             self.assertNotIn('depth', left.splitlines()[1])
             s.send('q', .6)
-            self.assertNotIn('LIST', s.text())
+            self.assertNotIn('FOLGEZETTEL / ', s.text())
 
     def test_folgezettel_search_highlight_and_cancel(self):
         with self.session() as s:
             s.send(' ', .7)
             s.send(NEXT, .5)
+            s.send('s', .5)
+            s.send(ESC, .5)  # 検索語を入れずにやめたら Folgezettel に戻る
+            self.assertEqual(self.dump(s)['view'], 'fz')
             s.send('sNeedle\r', .8)
             self.assertIn('Beta', s.text())
-            s.send('mBeta\r', .6)
-            self.assertIn('m: Beta', s.text())
-            s.send('q', .3)
-            self.assertNotIn('m: Beta', s.text())
-            s.send('xabsent', .7)
-            self.assertIn('No results', s.text())
-            s.send(ESC, .4)
-            self.assertIn('Beta', s.text())
+            s.send('HBeta\r', .6)
+            self.assertIn('H: Beta', s.text())
+            s.send('f', .5)
             self.assertEqual(self.dump(s)['view'], 'fz')
 
 
