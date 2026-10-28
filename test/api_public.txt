@@ -325,6 +325,7 @@ gnosis#mview#pick_label
 gnosis#mview#picking
 gnosis#mview#place_cancel
 gnosis#mview#place_decide
+gnosis#mview#place_range
 gnosis#mview#place_start
 gnosis#mview#preset_apply
 gnosis#mview#preset_delete

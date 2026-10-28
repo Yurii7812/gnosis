@@ -14729,6 +14729,10 @@ function! s:insert_links_core_raw(links, ...) abort
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
     return s:want_raw ? -3 : 0
   endif
+  if l:ch ==# 'v' && l:single && !l:swap && s:place_hook isnot 0
+    " 曼荼羅の \l: 選んだノートを右に開き、v で範囲を選んで Enter。範囲を本文にした新しいノートを入れるノートにする
+    return call(s:place_hook, ['target', function('s:main_place_cont', [l:links, 'h'])])
+  endif
   if l:ch ==# 't' && a:0 > 0
     if s:place_hook isnot 0
       " 曼荼羅の \l: 右のノートで見出しを選んで（カーソルがある節）Enter で決める。q で置き場所の選択に戻る
@@ -15214,6 +15218,9 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
         \ '   h      ' . gnosis#i18n#tr('カーソルのある行の下に')]
   if a:has_t
     call add(l:out, '   t      ' . gnosis#i18n#tr('見出しを選んで、その下に'))
+  endif
+  if a:single && !a:swap && s:place_hook isnot 0
+    call add(l:out, '   v      ' . gnosis#i18n#tr('選んだノートの一部（範囲）を新しいノートにして入れる'))
   endif
   call add(l:out, '')
   call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
@@ -20548,6 +20555,29 @@ endfunction
 " writefile を全部ここに統一（ロック中 vault へ作成する経路も止めるため）
 " 新規ノート作成用: 既存ファイルを上書きしない（同秒タイムスタンプ衝突や同名タイトルで
 " 既存本文を無言で消すのを防ぐ）
+" 選んだ範囲（行のリスト）を本文にした新しいノートを、元のノート a:src と同じ場所に作る（元のノートは変えない）。
+" 題は範囲の最初の文字のある行。先頭に元のノートへのリンクを入れる。作ったノートの [パス, 題] を返す
+function! gnosis#note_from_range(src, lines) abort
+  let l:body = copy(a:lines)
+  while !empty(l:body) && l:body[0] =~# '^\s*$' | call remove(l:body, 0) | endwhile
+  if empty(l:body) | return [] | endif
+  let l:title = substitute(substitute(l:body[0], '^\s*\(#\+\|[-*+]\|>\)\s*', '', ''), '\s\+$', '', '')
+  let l:title = empty(l:title) ? gnosis#i18n#tr('抜き出し') : strcharpart(l:title, 0, 40)
+  if l:body[0] =~# '^\s*#\+\s' | call remove(l:body, 0) | endif
+  let l:dir = fnamemodify(a:src, ':p:h')
+  let l:ts = gnosis#timestamp_filename()
+  let l:k = 1
+  while filereadable(s:join_path(l:dir, l:ts . '.md')) && l:k < 600
+    let l:ts = strftime('%y%m%d%H%M%S', localtime() + l:k)
+    let l:k += 1
+  endwhile
+  let l:file = s:join_path(l:dir, l:ts . '.md')
+  let l:from = s:make_link_from_dir(a:src, '', l:dir)
+  let l:tpl = gnosis#note_template(l:title, 0)
+  call s:write_new_note(l:tpl[: index(l:tpl, '# ' . l:title)] + [''] + l:body + ['', gnosis#i18n#tr('出典') . ': ' . l:from], l:file)
+  return [l:file, l:title]
+endfunction
+
 function! s:write_new_note(lines, path) abort
   if filereadable(a:path) || isdirectory(a:path)
     throw gnosis#i18n#tr('Gnosis: 既存のファイルを上書きしません: ') . a:path

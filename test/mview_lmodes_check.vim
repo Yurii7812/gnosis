@@ -133,6 +133,28 @@ call s:ok('m（ハイライト）をかけて q: ハイライトだけやめる�
 call s:keys('q')
 call s:ok('もう一度 q で、選ぶモードをやめる（曼荼羅は閉じない）', s:st().pick ==# '' && &filetype ==# 'gnosis-mandala')
 
+" ---- e → v: 右の相手のノートで範囲を選び、Enter で決める。その範囲を本文にした新しいノートが、入れるノートになる
+call s:start('^節Aの本文')
+call s:mk('tgt.md', '相手', 0, ['一行目の話。', '二行目の話。', '三行目。'])
+let g:gnosis_test_keys = ['v', 'h']
+call s:keys('e')
+call s:ok('e → v: 右の相手のノートで範囲を選ぶモードになる', has_key(s:st(), 'place') && s:st().place.kind ==# 'target' && fnamemodify(bufname('%'), ':t') ==# 'tgt.md', string([has_key(s:st(), 'place'), bufname('%')]))
+call s:ok('e → v: 相手のノートで Enter（ビジュアル）の割り当てがある', maparg('<CR>', 'x') =~# 'place_range')
+call s:ok('e → v: まだ何も作られていない', len(glob(s:v . '/2*.md', 0, 1)) == 0)
+call cursor(search('^一行目', 'nw'), 1)
+call feedkeys("Vj\<CR>", 'x')
+let s:made = glob(s:v . '/2*.md', 0, 1)
+call s:ok('v: 範囲から新しいノートが 1 つできる', len(s:made) == 1, string(s:made))
+let s:txt = empty(s:made) ? '' : join(readfile(s:made[0]), "\n")
+call s:ok('新しいノートの題と本文は範囲、元のノートへの出典がある', s:txt =~# '# 一行目の話' && s:txt =~# '二行目の話' && s:txt =~# 'tgt.md' && s:txt !~# '三行目', s:txt)
+call s:ok('相手のノートは変わっていない', s:file('tgt.md') =~# '三行目' && s:file('tgt.md') !~# '出典')
+call s:ok('続けて置き場所の質問へ進み、h で元のノートの場所選びになる', has_key(s:st(), 'place') && fnamemodify(bufname('%'), ':t') ==# 'src.md', string([has_key(s:st(), 'place'), bufname('%')]))
+call cursor(search('^最初の行', 'nw'), 1)
+call gnosis#mview#place_decide()
+call s:ok('Enter で、元のノートに新しいノートへのリンクが入る（相手へは入らない）元のノートに新しいノートへのリンクが入る', s:file('src.md') =~# '\[一行目の話[^\]]*\](2' && s:file('src.md') !~# '\](tgt.md)', s:file('src.md'))
+call s:reset()
+call map(glob(s:v . '/2*.md', 0, 1), 'delete(v:val)')
+
 call s:reset()
 call writefile(s:res, s:work . '/result.txt')
 qa!

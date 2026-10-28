@@ -2365,6 +2365,10 @@ endfunction
 " ---- 右のノートで置く場所を選ぶ（\l の h / i / 見出し） ------------------------------------------------
 " 右のノートが元のノート（\l を押したノート）になり、そこでカーソルを動かして Enter で決める。q / Esc でやめると置き場所の選択に戻る。
 function! gnosis#mview#place_start(kind, Cont) abort
+  if a:kind ==# 'target'
+    " リンク先をノートの一部にする: 選んだノートを右に開き、その中で v → 範囲を選んで Enter
+    execute 'silent! hide edit ' . fnameescape(s:S.lk.path)
+  endif
   let s:S.place = {'kind': a:kind, 'Cont': a:Cont, 'buf': bufnr('%'), 'saved': {}}
   call s:place_maps(1)
   augroup gnosis_mview_place
@@ -2377,7 +2381,9 @@ endfunction
 
 function! s:place_hint() abort
   let l:k = get(get(s:S, 'place', {}), 'kind', '')
-  if l:k ==# 'h'
+  if l:k ==# 'target'
+    echo 'Gnosis: ' . gnosis#i18n#tr('v を押して範囲をカーソルで選び、Enter で決定 / q でやめる(置き場所の選択に戻る)')
+  elseif l:k ==# 'h'
     echo 'Gnosis: ' . gnosis#i18n#tr('置く行(この行の下に入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
   elseif l:k ==# 'i'
     echo 'Gnosis: ' . gnosis#i18n#tr('置く文字(この文字のすぐ後ろに入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
@@ -2402,7 +2408,17 @@ function! s:place_maps(on) abort
     nnoremap <buffer><nowait><silent> <CR> <Cmd>call gnosis#mview#place_decide()<CR>
     nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#place_cancel()<CR>
     nnoremap <buffer><nowait><silent> <Esc> <Cmd>call gnosis#mview#place_cancel()<CR>
+    if l:p.kind ==# 'target'
+      xnoremap <buffer><nowait><silent> <CR> <Esc><Cmd>call gnosis#mview#place_range()<CR>
+    endif
   else
+    if l:p.kind ==# 'target'
+      if bufnr('%') == l:b
+        silent! xunmap <buffer> <CR>
+      else
+        call win_execute(bufwinid(l:b), 'silent! xunmap <buffer> <CR>')
+      endif
+    endif
     for l:k in ['<CR>', 'q', '<Esc>']
       if bufnr('%') == l:b
         silent! execute 'nunmap <buffer> ' . l:k
@@ -2429,6 +2445,10 @@ function! gnosis#mview#place_decide() abort
   if empty(l:p)
     return
   endif
+  if l:p.kind ==# 'target'
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('v で範囲を選んでから Enter（q でやめる）') | echohl NONE
+    return
+  endif
   let l:lnum = 0
   if l:p.kind ==# 'head'
     let l:lnum = gnosis#heading_lnum_at_cursor()
@@ -2447,6 +2467,31 @@ function! gnosis#mview#place_decide() abort
     echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
   endtry
   call s:link_finish()
+endfunction
+
+" リンク先をノートの一部にする: v で選んだ範囲を本文にした新しいノートを作り、それを入れるノートに決めて、置き場所の質問へ進む
+function! gnosis#mview#place_range() abort
+  let l:p = get(s:S, 'place', {})
+  if empty(l:p) || l:p.kind !=# 'target'
+    return
+  endif
+  let l:a = getpos("'<")[1]
+  let l:b = getpos("'>")[1]
+  let l:lines = getline(min([l:a, l:b]), max([l:a, l:b]))
+  let l:src = s:S.lk.path
+  call s:place_maps(0)
+  if has_key(s:S, 'place') | call remove(s:S, 'place') | endif
+  silent! autocmd! gnosis_mview_place
+  let l:made = gnosis#note_from_range(l:src, l:lines)
+  if empty(l:made)
+    echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('範囲が空です') | echohl NONE
+    call s:link_place()
+    return
+  endif
+  let s:S.lk.path = l:made[0]
+  let s:S.lk.title = l:made[1]
+  let s:S.lk.rel = fnamemodify(l:made[0], ':t')
+  call s:link_place()
 endfunction
 
 function! gnosis#mview#place_cancel() abort
