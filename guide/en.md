@@ -173,7 +173,7 @@ When the shape of the tree changes (you change a parent, delete a note and so on
 - `\e` … expand the notes around the current one into one md (`expand_v2.py`; choose **simple/detailed**; detailed takes 5 values and can save / load / delete named presets; output `.trash/T_*.md`)
 - `\se` … expand an S note into an A note (`expand_s.py`; output `.trash/T_*.md`)
 - `\gi` … image gallery (the note's images, or all images under the Index, in the browser)
-- `gz` / `:GnosisImages` … pick one of this note's images in a popup list (`j` `k` `Enter` `q`) and open it. By default it opens in an external viewer (xdg-open; zoom and quality are up to the viewer). The "How gz opens images" row in the `\zz` window switches it to showing the image inside the terminal with sixel.
+- `,` (comma; works in the note and every view) / `:GnosisImages` … opens the image nearest the cursor directly, with no list (with sixel, `h` `l` go to the previous/next image, `q` closes). By default it opens in an external viewer (xdg-open; zoom and quality are up to the viewer). The "How , opens images" row in the `\zz` window switches it to showing the image inside the terminal with sixel.
 - `\oe` / `\O` … edit headings in a separate buffer (`:write` applies them to the note; `:OutlineEdit`)
 - `\sc` … CopyStack (`y` adds lines / selections, `d` cuts and adds them, across notes. Press `\sc` again to finish as one yank for `za` or pasting)
 - `mx` … toggle the checkbox `[ ]` / `[x]` of the line (visual: the selection)
@@ -355,7 +355,7 @@ A list with minimal explanation. See Parts 1 and 2 for details. Keys that start 
 
 - `<Tab>` `<S-Tab>` next and previous link ・ `<CR>` open ・ `<BS>` back ・ `\.` undo back ・ `_` toggle with the previous note ・ `1`–`9` `0` numbered links ・ `<Space>` mandala ⇔ note ・ `<S-Space>` link list
 - `\i` index.md ・ `\k` `\m` `\j` `\J` to the "Name:" lines and BackLink ・ `\bu` near Context ・ `\h` `\0` hub (right panel) ・ `\H` add to hub ・ `\q` tab board (right panel; `D` inside deletes all) ・ `\Q` add to board ・ `gs` full-text search ・ `rg` ripgrep
-- `\o` outline (right panel; again to switch note ⇔ panel; `q` inside closes) ・ `Shift+→` `Shift+←` `gl` `gh` move between windows ・ `\oe` `\O` edit headings in another buffer ・ `\e` `\se` expand ・ `\gi` image gallery ・ `gz` image list ・ `gm` open with the default app
+- `\o` outline (right panel; again to switch note ⇔ panel; `q` inside closes) ・ `Shift+→` `Shift+←` `gl` `gh` move between windows ・ `\oe` `\O` edit headings in another buffer ・ `\e` `\se` expand ・ `\gi` image gallery ・ `,` nearest image ・ `gm` open with the default app
 
 ### Diary, records, paper and phone
 

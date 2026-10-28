@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gz の画像ポップアップを、実 Vim を擬似端末で動かして確かめる（キーボードだけ）。
+"""`,` の画像ポップアップを、実 Vim を擬似端末で動かして確かめる（キーボードだけ）。
 一時フォルダだけを使う。確かめること:
   一覧が出る → Enter で sixel が出る → j で次 → q で一覧 → q で閉じる → カーソルが Vim にあり、編集できる。
   オフにすると出ない。"""
@@ -68,13 +68,13 @@ try:
     def ok(name, cond):
         res.append(("OK " if cond else "NG ") + name)
 
-    # 1) gz → 一覧。 3(行)に画像リンクがあるので a.jpg が最初に選ばれる。Enter で表示 → j → q → q → Gx で編集できる
-    out, m = run([("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("j", 4.0), ("q", 0.8), ("q", 0.8), ("Goedit\x1b", 0.6)])
-    ok("一覧の題が出る", "画像（Enter".encode() in out[: m[1]])
-    ok("Enter で sixel が出る", b"\x1bP0;1;0q" in out[m[1]: m[2]])
-    ok("j で 2 枚目の sixel が出る", b"\x1bP0;1;0q" in out[m[2]: m[3]])
-    ok("q で一覧に戻る", "画像（Enter".encode() in out[m[3]: m[4]])
-    ok("もう一度 q で閉じたあと Vim で編集できる", b"edit" in out[m[5]:])
+    # 1) , → 一覧なしで、カーソルに一番近い画像（3 行目の a.jpg）がそのまま sixel で出る。l で次（b.png）→ h で戻る → q で閉じる
+    out, m = run([("3G", 0.3), (",", 4.0), ("l", 4.0), ("h", 4.0), ("q", 0.8), ("Goedit\x1b", 0.6)])
+    ok("一覧の題は出ない（そのまま開く）", "画像（Enter".encode() not in out)
+    ok(", でそのまま sixel が出る", b"\x1bP0;1;0q" in out[m[0]: m[1]])
+    ok("l で 2 枚目の sixel が出る", b"\x1bP0;1;0q" in out[m[1]: m[2]])
+    ok("h で 1 枚目に戻る", b"\x1bP0;1;0q" in out[m[2]: m[3]])
+    ok("q で閉じたあと Vim で編集できる", b"edit" in out[m[4]:])
     # 2) ノートを開くだけで、画像の行の下に画像が出る（hide.image が既定でオフ＝表示する）
     out, m = run([("3G", 3.0), ("j", 1.0), ("G", 1.0)])
     ok("開くと画像が sixel で出る", out.count(b"\x1bP0;1;0q") >= 1 or out.count(b"\x1bP0;") >= 1)
@@ -84,25 +84,21 @@ try:
     # 4) a（全部オン）を押しても、画像はオンにならない
     out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
     ok("a で YAML などはオンになり、画像の項目はオンにならない", "[x] YAML".encode() in out and "[x] 画像".encode() not in out)
-    # 5) 既定は xdg-open（外のビューア）。sixel は出ない
-    out, m = run([("3G", 0.3), ("gz", 1.0), ("\r", 1.5)], viewer=None)
+    # 5) 既定は xdg-open（外のビューア）。sixel は出ない。カーソルに近い画像がそのまま開く（5 行目 → b.png）
+    out, m = run([("5G", 0.3), (",", 1.5), ("j", 0.3)], viewer=None)
     opened = (work / "opened.txt").read_text() if (work / "opened.txt").exists() else ""
-    ok("既定は xdg-open で開く", opened.strip().endswith("a.jpg"))
-    ok("既定では gz で sixel を出さない", b"\x1bP0;1;0q" not in out[m[1]:])
+    ok("既定は xdg-open で開く（5 行目のカーソル → 近い b.png）", opened.strip().endswith("b.png"))
+    ok("既定では , で sixel を出さない", b"\x1bP0;1;0q" not in out[m[1]:])
     staged = Path(opened.strip().splitlines()[-1]) if opened.strip() else Path("/nonexistent")
     ok("ビューアには、このノートの画像だけを入れた一時フォルダのファイルを渡す", sorted(x.name for x in staged.parent.iterdir()) == ["01-a.jpg", "02-b.png"] if staged.exists() else False)
-    # 一覧は端でループしない: 先頭で k → まだ先頭（a.jpg）、下へ何回 j しても最後（b.png）で止まる
     (work / "opened.txt").unlink()
-    run([("3G", 0.3), ("gz", 1.0), ("k", 0.3), ("\r", 1.5)], viewer=None)
-    ok("一覧の先頭で k を押しても最後へ回らない", (work / "opened.txt").read_text().strip().endswith("01-a.jpg"))
-    (work / "opened.txt").unlink()
-    run([("3G", 0.3), ("gz", 1.0), ("j", 0.2), ("j", 0.2), ("j", 0.2), ("k", 0.2), ("\r", 1.5)], viewer=None)
-    ok("最後で j を重ねても先頭へ回らない（k で 1 つ戻れば先頭）", (work / "opened.txt").read_text().strip().endswith("01-a.jpg"))
-    # 6) \zz の窓の「gz で画像を開く方法」を切り替えると、gz が sixel になり、設定に残る
-    out, m = run([("\\zz", 0.8), ("6", 0.5), ("q", 0.3), ("3G", 0.3), ("gz", 1.0), ("\r", 4.0), ("q", 0.8), ("q", 0.5)], viewer=None)
-    ok("\\zz の窓に開く方法の行がある", "gz で画像を開く方法".encode() in out[: m[0]])
+    run([("gg", 0.3), (",", 1.5)], viewer=None)
+    ok("1 行目のカーソルなら近い a.jpg", (work / "opened.txt").exists() and (work / "opened.txt").read_text().strip().endswith("01-a.jpg"), )
+    # 6) \zz の窓の「, で画像を開く方法」を切り替えると、, が sixel になり、設定に残る
+    out, m = run([("\\zz", 0.8), ("6", 0.5), ("q", 0.3), ("3G", 0.3), (",", 4.0), ("q", 0.8)], viewer=None)
+    ok("\\zz の窓に開く方法の行がある", ", で画像を開く方法".encode() in out[: m[0]])
     ok("切り替えると sixel（この端末の中）と出る", "sixel（この端末の中）".encode() in out[m[0]: m[1]])
-    ok("切り替えたあとの gz は sixel で出る", b"\x1bP0;1;0q" in out[m[4]: m[5]])
+    ok("切り替えたあとの , は sixel で出る", b"\x1bP0;1;0q" in out[m[3]: m[4]])
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

@@ -1,4 +1,4 @@
-" ノートの画像をポップアップで見る（gz）。
+" ノートの画像をポップアップで見る（, カンマ）。
 "   ノートにある画像の一覧（popup_menu）→ Enter で端末に sixel で重ねて表示 → q で一覧に戻る → もう一度 q で閉じる。
 "   キーボードだけで動く。閉じたあとは redraw! で画像を消し、カーソルは元のまま Vim にある。
 "   既定は外部のビューア（xdg-open）で開く。ズームや画質はビューアに任せる。
@@ -15,7 +15,7 @@ function! s:py(args) abort
   return system(l:cmd)
 endfunction
 
-" gz で開く方法: 'external'（xdg-open）か 'sixel'。g:gnosis_image_viewer があればそちらが先（'auto' は端末が対応していれば sixel）。
+" , で開く方法: 'external'（xdg-open）か 'sixel'。g:gnosis_image_viewer があればそちらが先（'auto' は端末が対応していれば sixel）。
 " 無ければ \zz の窓で選んだ設定（imageViewer）
 function! gnosis#imgview#viewer() abort
   if exists('g:gnosis_image_viewer')
@@ -28,7 +28,7 @@ function! gnosis#imgview#viewer() abort
   endtry
 endfunction
 
-" gz で、この端末の中に sixel で出すか
+" , で、この端末の中に sixel で出すか
 function! s:sixel_ok() abort
   let l:mode = gnosis#imgview#viewer()
   if l:mode ==# 'sixel' | return 1 | endif
@@ -195,6 +195,26 @@ function! s:menu_done(id, result) abort
 endfunction
 
 function! gnosis#imgview#open() abort
+  " 曼荼羅・Folgezettel・リストの窓からは、右のノートの窓の画像を見る（一覧を出したら元の窓へ戻る）
+  if &filetype ==# 'gnosis-mandala'
+    let l:nw = gnosis#mview#note_win()
+    if l:nw < 1
+      echo 'Markdown のノートで使います'
+      return
+    endif
+    let l:me = win_getid()
+    call win_gotoid(l:nw)
+    try
+      call s:open_here()
+    finally
+      if win_id2win(l:me) > 0 | call win_gotoid(l:me) | endif
+    endtry
+    return
+  endif
+  call s:open_here()
+endfunction
+
+function! s:open_here() abort
   if expand('%:e') !~? '^md$'
     echo 'Markdown のノートで使います'
     return
@@ -204,20 +224,30 @@ function! gnosis#imgview#open() abort
     echo 'このノートに画像はありません'
     return
   endif
-  " カーソルの行に画像があれば、その画像を最初に選んでおく
-  let l:sel = 0
-  let l:cur = getline('.')
-  for l:k in range(len(l:items))
-    if stridx(l:cur, l:items[l:k].label) >= 0 || stridx(l:cur, substitute(l:items[l:k].label, ' ', '%20', 'g')) >= 0
-      let l:sel = l:k
-      break
-    endif
+  " 一覧は出さず、カーソルに一番近い画像をそのまま開く（sixel なら h/l で前後の画像へ）
+  call s:show(l:items, s:nearest(l:items))
+endfunction
+
+" カーソルから一番近い画像（行の距離、同じ行なら桁の距離）の添字。ノートの中に見つからなければ 0
+function! s:nearest(items) abort
+  let l:cl = line('.')
+  let l:cc = col('.')
+  let l:best = 0
+  let l:bd = -1
+  for l:k in range(len(a:items))
+    let l:names = [a:items[l:k].label, substitute(a:items[l:k].label, ' ', '%20', 'g')]
+    for l:ln in range(1, line('$'))
+      let l:text = getline(l:ln)
+      for l:nm in l:names
+        let l:c = stridx(l:text, l:nm)
+        if l:c >= 0
+          let l:d = abs(l:ln - l:cl) * 1000 + (l:ln == l:cl ? abs(l:c + 1 - l:cc) : 0)
+          if l:bd < 0 || l:d < l:bd | let l:bd = l:d | let l:best = l:k | endif
+        endif
+      endfor
+    endfor
   endfor
-  if len(l:items) == 1
-    call s:show(l:items, 0)
-    return
-  endif
-  call s:menu(l:items, l:sel)
+  return l:best
 endfunction
 
 " =============================================================================

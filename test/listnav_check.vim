@@ -105,5 +105,11 @@ for s:m in ['links', 'similar', 'search']
   call s:ok('選ぶモードでは Enter でも窓に留まる(' . s:m . ')', &filetype ==# 'gnosis-mandala')
   call gnosis#mview#quit_layers()
 endfor
+" , （画像）は曼荼羅系の窓でも効く: 窓の中に , の専用割り当てが無く、全体の割り当てが生きている。右のノートに画像が無ければその旨を出す
+call s:ok(', はビューの窓でも全体の割り当て', maparg(',', 'n', 0, 1).buffer == 0 && maparg(',', 'n') =~# 'imgview#open')
+redir => s:imsg
+silent call gnosis#imgview#open()
+redir END
+call s:ok('ビューの窓から , を押すと右のノートの画像を調べる', s:imsg =~# '画像はありません' || s:imsg =~# 'Markdown', s:imsg)
 call gnosis#mview#close()
 qa!

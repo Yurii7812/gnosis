@@ -909,8 +909,8 @@ command! GnosisOnlyNote call gnosis#mview#only_note()
 " リンク先に #スラッグ（GitHub 互換）を付ける。先頭の「（見出しなし）」で解除。
 nnoremap <nowait> <silent> zo <Cmd>call gnosis#link_to_outline()<CR>
 nnoremap <silent> \gi       <Cmd>call gnosis#open_gallery_smart()<CR>
-" gz … このノートの画像を一覧のポップアップから選んで、端末に sixel で重ねて見る（j/k・Enter・q。sixel 非対応の端末は外部ビューア）
-nnoremap <silent> gz         <Cmd>call gnosis#imgview#open()<CR>
+" ,（カンマ。ノート・曼荼羅・Folgezettel・リストのどこでも1キー）… カーソルに一番近い画像をそのまま開く（sixel なら h/l で前後の画像・q で閉じる。非対応の端末は外部ビューア）。f/t の逆向き繰り返しの , は ; だけ残る
+nnoremap <silent> ,         <Cmd>call gnosis#imgview#open()<CR>
 command! GnosisImages call gnosis#imgview#open()
 " \g … 今のノートを載せる索引を曼荼羅で選ぶ（/ で絞り込み → 移動 → 中心で Enter）
 " \g は廃止（\l → e → g で同じことができる）

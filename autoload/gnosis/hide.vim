@@ -156,7 +156,7 @@ endfunction
 " 並び: ノートの表示（上の 3 つ。見出しをつける）→ そのほか（見出しなし、続けて並べる）。番号キー 1〜6 でその行を切り替える。
 " チェックが入っていると隠れる（画像も同じ向き）
 let s:items = [['yaml', 'YAML（先頭の --- で囲んだ部分）'], ['top', '上の「名前:」系（ParentBranch: など）'], ['bottom', '下の「名前:」系（BackLink: など）'],
-      \ ['image', 'ノートの中の画像'], ['insert', '挿入モードで、カーソルの行のリンクの中身を見せて編集する'], ['gz', 'gz で画像を開く方法']]
+      \ ['image', 'ノートの中の画像'], ['insert', '挿入モードで、カーソルの行のリンクの中身を見せて編集する'], ['gz', ', で画像を開く方法']]
 
 function! s:lines() abort
   let l:h = gnosis#hide#get()
@@ -168,7 +168,7 @@ function! s:lines() abort
     let l:k = s:items[l:i][0]
     let l:mark = l:i == s:sel ? ' ▶ ' : '   '
     if l:k ==# 'gz'
-      let l:txt = gnosis#i18n#tr('gz で画像を開く方法') . ': '
+      let l:txt = gnosis#i18n#tr(', で画像を開く方法') . ': '
             \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）'))
       call add(l:out, l:mark . (l:i + 1) . ' ' . l:txt)
     else
