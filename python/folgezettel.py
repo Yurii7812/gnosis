@@ -11,24 +11,24 @@ from urllib.parse import unquote
 
 import note_format_v2 as nf
 
-# 紙の PKM のノートの番号は、先頭に `PA_` のような印を付けて、デジタルの番号と別の空間にする（2026-10-27）。
-# 印は設定（vault の .gnosis/settings.json の paperIdPrefix。既定 PA）で変えられる。`PA_1a2` の親は `PA_1a`、`PA_1` に親は無い
+# 紙の PKM のノートの番号は、先頭に `PA-` のような印を付けて、デジタルの番号と別の空間にする（2026-10-27）。
+# 印は設定（vault の .gnosis/settings.json の paperIdPrefix。既定 PA）で変えられる。`PA-1a2` の親は `PA-1a`、`PA-1` に親は無い
 PREFIX_RE = re.compile(r"^[A-Z]{1,4}$")
 PAPER_PREFIX_DEFAULT = "PA"
-# `PA_0` は紙の自動作成の索引（Paper-Zettelkasten-Index など）の番号。デジタルの 0 は無い
-ID_RE = re.compile(r"^(?:[A-Z]{1,4}_0|(?:[A-Z]{1,4}_)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*)$")
-_PREFIXED_RE = re.compile(r"^([A-Z]{1,4}_)(.+)$")
-_PART_RE = re.compile(r"[A-Z]+_|\d+|[a-z]+")
+# `PA-0` は紙の自動作成の索引（Paper-Zettelkasten-Index など）の番号。デジタルの 0 は無い
+ID_RE = re.compile(r"^(?:[A-Z]{1,4}-0|(?:[A-Z]{1,4}-)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*)$")
+_PREFIXED_RE = re.compile(r"^([A-Z]{1,4}-)(.+)$")
+_PART_RE = re.compile(r"[A-Z]+-|\d+|[a-z]+")
 
 
 def split_prefix(ident: str) -> tuple[str, str]:
-    """`PA_1a2` → ('PA_', '1a2')。印の無い番号は ('', 番号)。"""
+    """`PA-1a2` → ('PA-', '1a2')。印の無い番号は ('', 番号)。"""
     m = _PREFIXED_RE.match(ident or '')
     return (m.group(1), m.group(2)) if m else ('', ident or '')
 
 
 def paper_prefix(root: Path) -> str:
-    """紙の番号の印（`PA_` の形。末尾の _ まで）。設定 paperIdPrefix（vault の .gnosis/settings.json。root は vault かその note/）。"""
+    """紙の番号の印（`PA-` の形。末尾の _ まで）。設定 paperIdPrefix（vault の .gnosis/settings.json。root は vault かその note/）。"""
     value = PAPER_PREFIX_DEFAULT
     for base in (Path(root), Path(root).parent):
         f = base / '.gnosis' / 'settings.json'
@@ -39,7 +39,7 @@ def paper_prefix(root: Path) -> str:
         if isinstance(v, str) and PREFIX_RE.fullmatch(v.strip().upper()):
             value = v.strip().upper()
         break
-    return value + '_'
+    return value + '-'
 
 
 def value(text: str) -> str:
@@ -86,7 +86,7 @@ def parent_id(ident: str) -> str:
 
 
 def natural_key(ident: str) -> tuple:
-    """デジタルの番号が先、紙の番号（PA_…）が後。それぞれの中は自然順。"""
+    """デジタルの番号が先、紙の番号（PA-…）が後。それぞれの中は自然順。"""
     prefix, body = split_prefix(ident)
     return (prefix,) + tuple(int(p) if p.isdigit() else (len(p), p)
                              for p in re.findall(r'\d+|[a-z]+', body))
@@ -181,7 +181,7 @@ _PAPER_INFRA_RE = re.compile(r'^folgezettel-Index-\S+$')
 
 def is_paper_infra(note: dict) -> bool:
     """紙の PKM が自動で作る索引（Paper-Zettelkasten-Index・Folgezettel-Index・folgezettel-Index-N、紙の Index-write）。
-    YAML の folgezettel はどれも `PA_0`（題・表示名は変えない）。"""
+    YAML の folgezettel はどれも `PA-0`（題・表示名は変えない）。"""
     title = note['title']
     if title in ('Paper-Zettelkasten-Index', 'Folgezettel-Index') or _PAPER_INFRA_RE.match(title):
         return True
@@ -251,7 +251,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         if ids[p] and (is_group(n) or n['title'] in SHARED_ID_TITLES) and not is_paper(n) and p not in unsaved:
             plan[p] = ''
             ids[p] = ''
-    # 紙のスキャンノートの番号は、題の番号の前に印（PA_）を付けた形にそろえる（デジタルの番号とぶつからない別の空間）。
+    # 紙のスキャンノートの番号は、題の番号の前に印（PA-）を付けた形にそろえる（デジタルの番号とぶつからない別の空間）。
     # 印を設定で変えたら（PA → PB）、ここで全部付け直す
     prefix = paper_prefix(root)
     for p, n in notes.items():
@@ -260,7 +260,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             ids[p] = prefix + num
             if ids[p] != stored[p]:
                 plan[p] = ids[p]
-    # 紙の自動作成の索引は、YAML の folgezettel を `PA_0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
+    # 紙の自動作成の索引は、YAML の folgezettel を `PA-0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
     for p, n in notes.items():
         if is_paper_infra(n) and p not in unsaved:
             ids[p] = prefix + '0'

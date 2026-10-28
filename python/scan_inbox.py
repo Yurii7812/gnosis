@@ -11,7 +11,7 @@
     scan_inbox.py assign ROOT NAME ID [TOPIC]  # 番号（トピック名つきならトピックのノート）
     scan_inbox.py diary ROOT NAME DATE         # 紙の日記として登録
     scan_inbox.py finish ROOT                  # Index・Folgezettel-Index などを作り直す
-    scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA_1a2）を見る / 変える（変えたら番号を付け直す）
+    scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA-1a2）を見る / 変える（変えたら番号を付け直す）
 
 どれも標準出力に JSON を 1 つ出す（失敗は {"ok": false, "error": …}）。
 """
@@ -172,7 +172,7 @@ def diary(root: Path, name: str, date: str) -> dict:
 
 
 def set_prefix(root: Path, value: str = "") -> dict:
-    """紙の番号の印（PA → `PA_1a2`）。設定は vault の .gnosis/settings.json の paperIdPrefix。
+    """紙の番号の印（PA → `PA-1a2`）。設定は vault の .gnosis/settings.json の paperIdPrefix。
     value が空なら今の印を返すだけ。変えたら regen（同期込み）で、紙のノートの番号を新しい印に付け直す。"""
     root = Path(root).resolve()
     value = value.strip().upper()

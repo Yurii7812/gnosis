@@ -699,8 +699,8 @@ def migrate_legacy_metadata(root: Path) -> list[str]:
             vals = _legacy_values(n, key)
             v = vals[0] if vals else ""
             if key == "folgezettel":
-                if re.fullmatch(r"[A-Z]{1,4}_" + re.escape(fm_title), v or ""):
-                    continue  # 紙のノートの番号（PA_ + 題）。同期が付けるもの。外さない
+                if re.fullmatch(r"[A-Z]{1,4}-" + re.escape(fm_title), v or ""):
+                    continue  # 紙のノートの番号（PA- + 題）。同期が付けるもの。外さない
                 if normalize_id(v) != fm_title:
                     msgs.append(f"{n.path.name}: folgezettel: {v!r} と title: {fm_title!r} が一致しません（消していません）")
                 elif scan_id_of(n) is None:

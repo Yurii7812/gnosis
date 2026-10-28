@@ -37,7 +37,7 @@ class FolgezettelTest(unittest.TestCase):
         self.assertEqual(before, {p: p.read_text() for p in before})
 
     def test_paper_infra_notes_get_pa_zero(self):
-        # 紙の自動作成の索引は、YAML の folgezettel が PA_0（題は変えない）。デジタルの番号には影響せず、何度同期しても変わらない
+        # 紙の自動作成の索引は、YAML の folgezettel が PA-0（題は変えない）。デジタルの番号には影響せず、何度同期しても変わらない
         self.note('index', body='[a](a.md)')
         self.note('a')
         apex = self.note('apex')
@@ -46,10 +46,10 @@ class FolgezettelTest(unittest.TestCase):
         fidx.write_text(fidx.read_text().replace('title: fidx', 'title: folgezettel-Index-1').replace('# fidx', '# folgezettel-Index-1'))
         nf.simple_sync(self.root)
         self.assertEqual(self.ident(self.root / 'a.md'), '1')
-        self.assertEqual([self.ident(apex), self.ident(fidx)], ['PA_0', 'PA_0'])
+        self.assertEqual([self.ident(apex), self.ident(fidx)], ['PA-0', 'PA-0'])
         self.assertIn('# Paper-Zettelkasten-Index', apex.read_text())
-        self.assertTrue(fz.ID_RE.fullmatch('PA_0'))
-        self.assertEqual(fz.parent_id('PA_0'), '')
+        self.assertTrue(fz.ID_RE.fullmatch('PA-0'))
+        self.assertEqual(fz.parent_id('PA-0'), '')
         self.assertIsNone(fz.ID_RE.fullmatch('0'))
         before = self.snapshot()
         nf.simple_sync(self.root)
@@ -206,7 +206,7 @@ class FolgezettelTest(unittest.TestCase):
         self.assertEqual(before, self.snapshot())
 
     def test_paper_notes_use_their_own_prefix(self):
-        # 紙のスキャンノートの番号は PA_ + 題。デジタルの番号とぶつからず、デジタル側に飛び番も作らない。印は設定で変えられる
+        # 紙のスキャンノートの番号は PA- + 題。デジタルの番号とぶつからず、デジタル側に飛び番も作らない。印は設定で変えられる
         self.note('index', body='[a](a.md)\n[b](b.md)')
         self.note('a')
         self.note('b')
@@ -216,11 +216,11 @@ class FolgezettelTest(unittest.TestCase):
         scan1.write_text(scan1.read_text().replace('title: scan1', 'title: 1\nsource: scan').replace('# scan1', '# 1'))
         nf.simple_sync(self.root)
         self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PA_1', 'PA_1a2'])
-        self.assertEqual(fz.parent_id('PA_1a2'), 'PA_1a')
-        self.assertEqual(fz.parent_id('PA_1'), '')
-        self.assertTrue(fz.ID_RE.fullmatch('PA_1a2'))
-        self.assertLess(fz.natural_key('10'), fz.natural_key('PA_1'))
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PA-1', 'PA-1a2'])
+        self.assertEqual(fz.parent_id('PA-1a2'), 'PA-1a')
+        self.assertEqual(fz.parent_id('PA-1'), '')
+        self.assertTrue(fz.ID_RE.fullmatch('PA-1a2'))
+        self.assertLess(fz.natural_key('10'), fz.natural_key('PA-1'))
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
@@ -228,7 +228,7 @@ class FolgezettelTest(unittest.TestCase):
         (self.root / '.gnosis').mkdir()
         (self.root / '.gnosis' / 'settings.json').write_text('{"paperIdPrefix": "PB"}')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PB_1', 'PB_1a2'])
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PB-1', 'PB-1a2'])
         self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
 
     def test_branch_assignment_and_navigation(self):

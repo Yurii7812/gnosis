@@ -1,5 +1,5 @@
 // 紙のスキャンの番号付け（`\F`）。大きく・シンプルに・キーボードだけ。
-//   1. 場所を選ぶ: Enter = vault の外のフォルダ（パソコンの中の写真）/ v = vault の中（`\M` で取り込んだ、番号のないもの）/ p 紙の番号の印（PA → PA_1a2）を変える / q 閉じる
+//   1. 場所を選ぶ: Enter = vault の外のフォルダ（パソコンの中の写真）/ v = vault の中（`\M` で取り込んだ、番号のないもの）/ p 紙の番号の印（PA → PA-1a2）を変える / q 閉じる
 //   2. （外のとき）フォルダを選ぶ:
 //        一覧の先頭に「このフォルダを使う」、その下に Desktop・前回使ったフォルダ、そのあと今いるフォルダの中のフォルダ。
 //        数字キー 1〜9 でその行へすぐ移って開く / j k ↑ ↓ で選ぶ / Enter 開く / u このフォルダを使う / ← Backspace 上へ
@@ -51,7 +51,7 @@ export function createScan(root, { api, onClose }) {
     done: (id) => `Saved as ${id}`, bad: (e) => e,
     title: "Which scans do you want to number?", out: "Enter   A folder outside the vault (photos on this computer)", in: (n) => `v   Inside the vault (unnumbered scans taken in with \\M)  ${n} scans`,
     srcKeys: "Enter / v: choose   p: change the paper number prefix   q: close",
-    prefixLabel: "Paper note number prefix (p to change):  ", prefixHint: "1-4 capital letters (e.g. PA → PA_1a2). Enter: set   Esc: cancel", prefixBad: "Use 1-4 capital letters.", prefixDone: (p) => `Paper numbers now start with ${p}_`, folderTitle: "Choose the folder with the scans", use: (n) => `▶ Use this folder (${n} photos)`, up: "↑ (go up)",
+    prefixLabel: "Paper note number prefix (p to change):  ", prefixHint: "1-4 capital letters (e.g. PA → PA-1a2). Enter: set   Esc: cancel", prefixBad: "Use 1-4 capital letters.", prefixDone: (p) => `Paper numbers now start with ${p}-`, folderTitle: "Choose the folder with the scans", use: (n) => `▶ Use this folder (${n} photos)`, up: "↑ (go up)",
     folderKeys: "1-9: open that row   j k: choose   Enter: open   u: use this folder   ← Backspace: up   /: search   Esc: back   q: close",
     searchKeys: "Type to filter   ↑ ↓: choose   Enter: open   Esc: stop searching", searchLabel: "Search folders",
     moving: "Moving the photos…", emptyFolder: "There are no photos in that folder.",
@@ -66,7 +66,7 @@ export function createScan(root, { api, onClose }) {
     done: (id) => `${id} にしました`, bad: (e) => e,
     title: "どのスキャンに番号を付ける？", out: "Enter　vault の外のフォルダ（パソコンの中の写真）", in: (n) => `v　vault の中（\\M で取り込んだ、番号のないもの）　${n} 枚`,
     srcKeys: "Enter / v で選ぶ　p 紙の番号の印を変える　q 閉じる",
-    prefixLabel: "紙のノートの番号の印（p で変える）：", prefixHint: "英大文字 1〜4 字（例: PA → PA_1a2）。Enter 決める　Esc やめる", prefixBad: "英大文字 1〜4 字にしてください。", prefixDone: (p) => `紙の番号は ${p}_ から始まります`, folderTitle: "スキャンが入っているフォルダを選ぶ", use: (n) => `▶ このフォルダを使う（写真 ${n} 枚）`, up: "↑ 上のフォルダへ",
+    prefixLabel: "紙のノートの番号の印（p で変える）：", prefixHint: "英大文字 1〜4 字（例: PA → PA-1a2）。Enter 決める　Esc やめる", prefixBad: "英大文字 1〜4 字にしてください。", prefixDone: (p) => `紙の番号は ${p}- から始まります`, folderTitle: "スキャンが入っているフォルダを選ぶ", use: (n) => `▶ このフォルダを使う（写真 ${n} 枚）`, up: "↑ 上のフォルダへ",
     folderKeys: "1〜9 その行を開く　j k 選ぶ　Enter 開く　u このフォルダを使う　← Backspace 上へ　/ 検索　Esc 戻る　q 閉じる",
     searchKeys: "文字で絞り込み　↑ ↓ 選ぶ　Enter 開く　Esc 検索をやめる", searchLabel: "フォルダを検索",
     moving: "写真を移しています…", emptyFolder: "そのフォルダに写真がありません。",

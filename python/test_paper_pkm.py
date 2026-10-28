@@ -737,7 +737,7 @@ def test_legacy_migration() -> None:
             (root / n).write_bytes(b"x")
         pp.regen(root)
         snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
-        check('folgezettel: "PA_1"\n' in snap["261001000001.md"], "紙のスキャンノートの folgezettel は PA_ + 題（同期が付ける）")
+        check('folgezettel: "PA-1"\n' in snap["261001000001.md"], "紙のスキャンノートの folgezettel は PA- + 題（同期が付ける）")
         check(_no_legacy(root) == [], f"旧メタデータが外れた: {_no_legacy(root)}")
         check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")

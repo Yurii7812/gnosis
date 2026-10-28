@@ -23,14 +23,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mandala_cache as mc  # noqa: E402
 
-ID_RE = re.compile(r"^(?:[A-Z]{1,4}_)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*$")
+ID_RE = re.compile(r"^(?:[A-Z]{1,4}-)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*$")
 NUMW = 8          # 番号欄の幅（文字数）。これを超える番号は先頭を「~」で省く
 
 
 # ---- 番号 ---------------------------------------------------------------------------------------
 
 def parts(ident: str) -> list[str]:
-    return re.findall(r"[A-Z]+_|\d+|[a-z]+", ident)   # 紙の番号の印（PA_）も 1 つの部品
+    return re.findall(r"[A-Z]+-|\d+|[a-z]+", ident)   # 紙の番号の印（PA-）も 1 つの部品
 
 
 def natural_key(ident: str) -> tuple:

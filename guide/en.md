@@ -254,7 +254,7 @@ When the shape of the tree changes (you change a parent, delete a note and so on
 ### Paper PKM (Folgezettel)
 
 - `\F` numbers paper scans. In the app (GUI) a dedicated large screen opens and it works with the keyboard only. On its first screen, `p` changes the prefix of paper numbers (default `PA`). `\f` opens the paper PKM Index (and creates it if needed; `:GnosisPaperIndex`). Refresh with `\ua`.
-- **Paper note numbers are written with a `PA_` prefix** (paper `1a2` becomes `PA_1a2`, its parent `PA_1a`). This is a separate space from digital note numbers (`1a2`), so they never collide and the digital numbers get no gaps. The prefix is the setting `paperIdPrefix` (`.gnosis/settings.json`). If you change it to `PB` and so on, sync renumbers all paper notes. The title stays the original number.
+- **Paper note numbers are written with a `PA-` prefix** (paper `1a2` becomes `PA-1a2`, its parent `PA-1a`). This is a separate space from digital note numbers (`1a2`), so they never collide and the digital numbers get no gaps. The prefix is the setting `paperIdPrefix` (`.gnosis/settings.json`). If you change it to `PB` and so on, sync renumbers all paper notes. The title stays the original number.
 - The notes the paper PKM makes (Paper-Zettelkasten-Index, Index-write, Folgezettel-Index, `folgezettel-Index-N` and the top note) are **all ordinary notes** (timestamp file names; they are found by title). Paper-Zettelkasten-Index, Index-write and Folgezettel-Index share the number of the top note.
 - `Index-write` … write `keyword(reading): 1,1a10b,3` by hand. Keywords with several IDs become group notes, single IDs become direct links in the paper PKM Index (regenerated on save)
 - `\S` … in Index-write, keyword lines are sorted by reading too
@@ -360,7 +360,7 @@ A list with minimal explanation. See Parts 1 and 2 for details. Keys that start 
 ### Diary, records, paper and phone
 
 - `\d` today's diary ・ `\D` diary for a given date ・ `\R` time-series records (`Ctrl-←` `Ctrl-→` switch mode: open/date/new/rename/merge) ・ `\E` set the upper record ・ `\T` time mode ・ `<C-t>` insert the time ・ `\a` `\N` unassigned notes ・ `\n` new note ・ `\ua` sync everything
-- `\f` paper PKM Index ・ `\F` number paper scans (`p` on the first screen changes the `PA_` prefix) ・ `\M` import phone memos
+- `\f` paper PKM Index ・ `\F` number paper scans (`p` on the first screen changes the `PA-` prefix) ・ `\M` import phone memos
 
 ### Screens and windows
 
