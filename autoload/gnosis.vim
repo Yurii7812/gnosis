@@ -19814,6 +19814,11 @@ function! gnosis#backup_vault_with(pw, dest) abort
   elseif l:fcode != 0
     echohl WarningMsg
     echom gnosis#i18n#tr('Gnosis: 暗号箱の検査で問題が見つかりました（パスワードは正しいのでバックアップは続けます・終了コード ') . l:fcode . '）'
+    " fsck が出した問題の行（"fsck: ..." / "Invalid" / "Warning" など）を最大 3 行見せる
+    let l:why = filter(split(l:fsck, "\n"), 'v:val =~# "^\\(fsck\\|Warning\\|Invalid\\|Error\\|Fatal\\)" || v:val =~? "invalid\\|corrupt\\|error"')
+    for l:line in l:why[0:2]
+      echom '  ' . l:line
+    endfor
     echohl NONE
   endif
   " 7z は標準入力からパスワードを読む（コマンドラインに出さない）。2 回分を一時ファイルへ。
