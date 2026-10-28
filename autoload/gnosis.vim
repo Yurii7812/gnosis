@@ -20155,7 +20155,12 @@ function! s:init_encrypted_impl() abort
     call system('rm -rf ' . shellescape(l:plaindir))
     " FUSE 内に .crypt symlink（../<cipher>）を保存しておく
     " （mount後に作ると暗号ファイルとして格納され、再マウント時も表示される）
-    call system('ln -s ' . shellescape('../' . fnamemodify(l:cipher, ':t')) . ' ' . shellescape(l:root . s:sep() . '.crypt'))
+    " 既に .crypt（ディレクトリを指す symlink）があるとき、普通の ln -s はその指す先（= 暗号箱）の中に
+    " .crypt を作ってしまい、fsck が失敗する。-n で symlink をファイルとして扱い、無ければ作るだけにする。
+    let l:lnk = l:root . s:sep() . '.crypt'
+    if getftype(l:lnk) ==# ''
+      call system('ln -sn ' . shellescape('../' . fnamemodify(l:cipher, ':t')) . ' ' . shellescape(l:lnk))
+    endif
   catch
     let l:before_err = v:exception
     " 巻き戻し: mount 中なら外し、root/退避を復元
