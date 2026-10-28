@@ -19763,7 +19763,8 @@ function! gnosis#backup_vault(...) abort
     echohl NONE
     return
   endif
-  let l:pw = inputsecret('vault password: ')
+  " ターミナルのフォーカス移動で混ざる ESC[I / ESC[O をパスワードから除く
+  let l:pw = substitute(inputsecret('vault password: '), '\e\[[IO]', '', 'g')
   if empty(l:pw)
     echom gnosis#i18n#tr('Gnosis: バックアップを中止')
     return
@@ -19800,14 +19801,20 @@ function! gnosis#backup_vault_with(pw, dest) abort
   endif
   " vault と違うパスワードで固めると復元できなくなるので、先に gocryptfs で検証する
   let l:pf = s:temp_passfile(l:pw)
-  call system('gocryptfs -fsck -passfile ' . shellescape(l:pf) . ' ' . shellescape(l:cipher) . ' 2>&1')
-  let l:ok = v:shell_error == 0
+  let l:fsck = system('gocryptfs -fsck -passfile ' . shellescape(l:pf) . ' ' . shellescape(l:cipher) . ' 2>&1')
+  let l:fcode = v:shell_error
   call s:secure_delete(l:pf)
-  if !l:ok
+  " 終了コード 12 だけがパスワード違い。それ以外の失敗（暗号箱に余計なファイルがある・壊れた項目がある など）は
+  " パスワードが合っていて fsck が問題を見つけただけなので、理由を出してバックアップは続ける。
+  if l:fcode == 12
     echohl ErrorMsg
     echom gnosis#i18n#tr('Gnosis: パスワードが違う（または暗号箱が壊れています）')
     echohl NONE
     return
+  elseif l:fcode != 0
+    echohl WarningMsg
+    echom gnosis#i18n#tr('Gnosis: 暗号箱の検査で問題が見つかりました（パスワードは正しいのでバックアップは続けます・終了コード ') . l:fcode . '）'
+    echohl NONE
   endif
   " 7z は標準入力からパスワードを読む（コマンドラインに出さない）。2 回分を一時ファイルへ。
   let l:pf2 = tempname()
