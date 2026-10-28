@@ -2937,7 +2937,8 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> y <Cmd>call <SID>over_off()<CR>
   nnoremap <buffer><nowait><silent> s <Cmd>call <SID>search()<CR>
   nnoremap <buffer><nowait><silent> gs <Cmd>call <SID>gs()<CR>
-  nnoremap <buffer><nowait><silent> Z <Cmd>call <SID>preset_menu()<CR>
+  nnoremap <buffer><nowait><silent> Z <Cmd>call <SID>settings_menu()<CR>
+  nnoremap <buffer><nowait><silent> ' <Cmd>call <SID>preset_menu()<CR>
   nnoremap <buffer><nowait><silent> L <Cmd>call <SID>toggle_legend()<CR>
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
@@ -4125,9 +4126,9 @@ function! gnosis#mview#preset_apply(name) abort
   return 1
 endfunction
 
-" Z: 設定の画面。曼荼羅の右に出る。上の段はモードや重ねるものの切り替え（その場で曼荼羅に反映）、下の段はプリセット。
-"   j k 選ぶ   Enter / Space 切り替え・呼び出し   D は配下だけの切り替え。b は曼荼羅上でもこの画面内でも近さ順の基準を変える
-"   s 今の設定を新しく保存   o 上書き保存   n 名前を変える   d 消す   q 閉じる（番号 1-9 でプリセットを呼び出すこともできる）
+" Z: 設定の画面（モードや重ねるものの切り替え。その場で曼荼羅に反映）。' はプリセットだけの画面（呼び出し・保存・上書き・名前・消す。数が増えても選んでいる行の前後だけ出す）。
+"   j k 選ぶ   Enter / Space 切り替え   D は配下だけの切り替え。b は曼荼羅上でもこの画面内でも近さ順の基準を変える
+"   画面が低いときは、一覧のほうを送って出す（見切れない）
 function! s:panel_rows() abort
   let l:Onoff = {v -> gnosis#i18n#tr(v ? 'オン' : 'オフ')}
   let l:mode = get(s:S, 'mode', 'all')
@@ -4166,60 +4167,121 @@ function! s:panel_mode() abort
   call s:setmode(l:order[(index(l:order, get(s:S, 'mode', 'all')) + 1) % len(l:order)])
 endfunction
 
-" 画面の行（試験用に外へも出す）。sel は選んでいる行の番号（設定の行 → プリセットの行の通し）
-function! s:panel_lines(sel, msg, w) abort
+" 長い一覧を、選んでいる行が見える範囲だけ切り出す。[始まり, 終わりの次]
+function! s:win_range(total, sel, size) abort
+  if a:total <= a:size
+    return [0, a:total]
+  endif
+  let l:st = max([0, min([a:sel - a:size / 2, a:total - a:size])])
+  return [l:st, l:st + a:size]
+endfunction
+
+" 画面の高さに収まる行数（枠・題・見出し・下の説明の分を引いた、一覧に使える行数）
+function! s:list_room(fixed) abort
+  return max([3, &lines - 6 - a:fixed])
+endfunction
+
+" 設定の画面の行（試験用に外へも出す）。sel は選んでいる行の番号、room は一覧に使える行数（画面が低いときは一覧のほうが送られる）
+function! s:panel_lines(sel, msg, room) abort
   let l:rows = s:panel_rows()
-  let l:names = gnosis#mview#preset_names()
-  let l:out = [' ' . gnosis#i18n#tr('曼荼羅の設定'), '']
-  for l:i in range(len(l:rows))
+  let l:r = s:win_range(len(l:rows), a:sel, a:room)
+  let l:more = len(l:rows) > a:room ? printf('  (%d/%d)', a:sel + 1, len(l:rows)) : ''
+  let l:out = [' ' . gnosis#i18n#tr('曼荼羅の設定') . l:more, '']
+  for l:i in range(l:r[0], l:r[1] - 1)
     let l:lab = gnosis#i18n#tr(l:rows[l:i].name) . ' ' . l:rows[l:i].key
     call add(l:out, ' ' . (l:i == a:sel ? '▶' : ' ') . ' ' . l:lab . repeat(' ', max([1, 28 - strdisplaywidth(l:lab)])) . l:rows[l:i].val)
   endfor
-  call extend(l:out, ['', ' ' . gnosis#i18n#tr('プリセット')])
-  for l:j in range(len(l:names))
-    call add(l:out, printf(' %s %s %s', len(l:rows) + l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
-  endfor
-  if empty(l:names)
-    call add(l:out, '   ' . gnosis#i18n#tr('（まだありません。s で今の設定を保存）'))
-  endif
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え・呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す  q / z 閉じる')])
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え'), ' ' . gnosis#i18n#tr("' プリセットの画面  q / Z 閉じる")])
   return l:out
 endfunction
 
-function! s:preset_menu() abort
+" プリセットの画面の行。数が増えても、選んでいる行の前後だけを出す
+function! s:preset_lines(sel, msg, room) abort
+  let l:names = gnosis#mview#preset_names()
+  let l:r = s:win_range(len(l:names), a:sel, a:room)
+  let l:more = len(l:names) > a:room ? printf('  (%d/%d)', a:sel + 1, len(l:names)) : ''
+  let l:out = [' ' . gnosis#i18n#tr('プリセット') . l:more, '']
+  if empty(l:names)
+    call add(l:out, '   ' . gnosis#i18n#tr('（まだありません。s で今の設定を保存）'))
+  endif
+  for l:j in range(l:r[0], l:r[1] - 1)
+    call add(l:out, printf(' %s %s %s', l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
+  endfor
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter / 番号 1-9 で呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す'), ' ' . gnosis#i18n#tr("Z 設定の画面  q / ' 閉じる")])
+  return l:out
+endfunction
+
+function! s:panel_popup(lines, w, title) abort
+  return popup_create(a:lines, {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - a:w - 1]),
+        \ 'minwidth': a:w, 'maxwidth': a:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': a:title})
+endfunction
+
+" Z: 設定の画面。' でプリセットの画面へ移る
+function! s:settings_menu() abort
   let l:sel = 0
   let l:msg = ''
   while 1
     let l:rows = s:panel_rows()
-    let l:names = gnosis#mview#preset_names()
-    let l:n = len(l:rows) + len(l:names)
+    let l:n = len(l:rows)
     let l:sel = min([l:sel, l:n - 1])
     let l:w = max([44, min([60, &columns / 2 - 2])])
-    let l:pid = popup_create(s:panel_lines(l:sel, l:msg, l:w), {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - l:w - 1]),
-          \ 'minwidth': l:w, 'maxwidth': l:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': ' z '})
+    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(5)), l:w, ' z ')
     redraw
     let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
     let l:msg = ''
-    let l:pre = l:sel >= len(l:rows) ? l:names[l:sel - len(l:rows)] : ''
-    let l:hot = filter(range(len(l:rows)), 'l:rows[v:val].key ==# l:k')
+    let l:hot = filter(range(l:n), 'l:rows[v:val].key ==# l:k')
     if l:k ==# 'j' || l:k ==# "\<Down>"
       let l:sel = (l:sel + 1) % l:n
     elseif l:k ==# 'k' || l:k ==# "\<Up>"
       let l:sel = (l:sel + l:n - 1) % l:n
-    elseif l:k ==# 'a' || l:k ==# 'i' || (l:k ==# 'd' && empty(l:pre))
-      " d は、プリセットの行を選んでいるときは「消す」（下の分岐）。それ以外のときは親子モード
+    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# 'd'
       call s:setmode(get({'a': 'all', 'i': 'groups', 'd': 'family'}, l:k))
     elseif !empty(l:hot)
       call l:rows[l:hot[0]].act()
     elseif l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' '
-      if l:sel < len(l:rows)
-        call l:rows[l:sel].act()
-      elseif !empty(l:pre)
-        call gnosis#mview#preset_apply(l:pre)
-        let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:pre)
-      endif
-    elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= len(l:names)
+      call l:rows[l:sel].act()
+    elseif l:k ==# "'"
+      call s:preset_menu(1)
+    elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
+      " Z で開いて、もう一度 Z で閉じる
+      return
+    endif
+  endwhile
+endfunction
+
+" ': プリセットだけの画面
+function! s:preset_menu(...) abort
+  let l:from_settings = a:0 && a:1
+  let l:sel = 0
+  let l:msg = ''
+  while 1
+    let l:names = gnosis#mview#preset_names()
+    let l:n = len(l:names)
+    let l:sel = max([0, min([l:sel, l:n - 1])])
+    let l:w = max([44, min([60, &columns / 2 - 2])])
+    let l:pid = s:panel_popup(s:preset_lines(l:sel, l:msg, s:list_room(6)), l:w, ' ' . gnosis#i18n#tr('プリセット') . ' ')
+    redraw
+    let l:k = gnosis#ui#getcharstr()
+    call popup_close(l:pid)
+    let l:msg = ''
+    let l:pre = l:n > 0 ? l:names[l:sel] : ''
+    if l:k ==# 'j' || l:k ==# "\<Down>"
+      let l:sel = l:n > 0 ? (l:sel + 1) % l:n : 0
+    elseif l:k ==# 'k' || l:k ==# "\<Up>"
+      let l:sel = l:n > 0 ? (l:sel + l:n - 1) % l:n : 0
+    elseif l:k ==# 'g'
+      let l:sel = 0
+    elseif l:k ==# 'G'
+      let l:sel = max([0, l:n - 1])
+    elseif l:k ==# "\<C-d>"
+      let l:sel = min([max([0, l:n - 1]), l:sel + 5])
+    elseif l:k ==# "\<C-u>"
+      let l:sel = max([0, l:sel - 5])
+    elseif (l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' ') && !empty(l:pre)
+      call gnosis#mview#preset_apply(l:pre)
+      let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:pre)
+    elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= l:n
       call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
       let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:names[str2nr(l:k) - 1])
     elseif l:k ==# 'o' && !empty(l:pre)
@@ -4229,7 +4291,7 @@ function! s:preset_menu() abort
       let l:new = s:ask(gnosis#i18n#tr('新しい名前（%s）: ', l:pre), l:pre)
       redraw
       if gnosis#mview#preset_rename(l:pre, l:new)
-        let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:new))
+        let l:sel = index(gnosis#mview#preset_names(), trim(l:new))
       endif
     elseif l:k ==# 'd' && !empty(l:pre)
       call gnosis#mview#preset_delete(l:pre)
@@ -4240,10 +4302,15 @@ function! s:preset_menu() abort
       redraw
       if gnosis#mview#preset_save(l:name)
         let l:msg = gnosis#i18n#tr('プリセット「%s」を保存しました', trim(l:name))
-        let l:sel = len(l:rows) + index(gnosis#mview#preset_names(), trim(l:name))
+        let l:sel = index(gnosis#mview#preset_names(), trim(l:name))
       endif
-    elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
-      " Z で開いて、もう一度 Z で閉じる
+    elseif l:k ==# 'Z'
+      " 設定の画面へ（設定の画面から来たときは、そちらへ戻る）
+      if !l:from_settings
+        call s:settings_menu()
+      endif
+      return
+    elseif l:k ==# 'q' || l:k ==# "'" || l:k ==# "\<Esc>"
       return
     endif
   endwhile
@@ -4256,7 +4323,10 @@ endfunction
 
 " 試験用: 設定の画面の行と、行の操作
 function! gnosis#mview#panel_text() abort
-  return join(s:panel_lines(0, '', 50), "\n")
+  return join(s:panel_lines(0, '', 999), "\n")
+endfunction
+function! gnosis#mview#preset_text(sel, room) abort
+  return join(s:preset_lines(a:sel, '', a:room), "\n")
 endfunction
 function! gnosis#mview#panel_act(i) abort
   call s:panel_rows()[a:i].act()

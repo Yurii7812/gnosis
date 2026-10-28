@@ -876,14 +876,13 @@ let s:st = gnosis#mview#state()
 let s:cur0 = copy(s:st.cur)
 call s:keys('ZZj')
 call s:ok('Z → Z で設定の画面が閉じ、次の j は曼荼羅を動かす', &filetype ==# 'gnosis-mandala' && empty(popup_list()) && s:st.cur != s:cur0, string([s:cur0, s:st.cur]))
-let s:panel_count = index(split(gnosis#mview#panel_text(), "\n"), ' プリセット') - 3
-let s:preset_row = s:panel_count + index(gnosis#mview#preset_names(), 'い')
-call s:keys('Z' . repeat('j', s:preset_row) . 'oq')
+let s:preset_row = index(gnosis#mview#preset_names(), 'い')
+call s:keys("'" . repeat('j', s:preset_row) . 'oq')
 call gnosis#mview#preset_delete('あ')
 let s:st.out_on = 0
 let s:st.rank_on = 1
 call gnosis#mview#preset_apply('い')
-call s:ok('画面で選んだプリセットだけが上書きされる（j → o）', get(s:st, 'rank_on', 1) == 0, string([get(s:st, 'rank_on', -1)]))
+call s:ok('プリセットの画面（'）で選んだプリセットだけが上書きされる（j → o）', get(s:st, 'rank_on', 1) == 0, string([get(s:st, 'rank_on', -1)]))
 call gnosis#mview#preset_delete('い')
 call gnosis#mview#preset_delete('全部')
 call s:keys('Q')
@@ -1011,3 +1010,17 @@ call s:keys('Q')
 
 call writefile(s:res, s:work . '/result.txt')
 qa!
+
+" プリセットが増えても、プリセットの画面は選んでいる行の前後だけを出す（Z の設定の画面とは別）
+for s:i in range(1, 40)
+  call gnosis#mview#preset_save('多' . printf('%02d', s:i))
+endfor
+let s:pt = split(gnosis#mview#preset_text(20, 8), "\n")
+call s:ok('プリセットの画面は 8 行ぶんだけ出す（全 40 件を出さない）', len(filter(copy(s:pt), 'v:val =~# "多"')) == 8, string(len(s:pt)))
+call s:ok('選んでいる行（21 件目）が見える', join(s:pt, "\n") =~# '▶ *多21', string(s:pt))
+call s:ok('設定の画面にはプリセットの一覧が出ない', gnosis#mview#panel_text() !~# '多01', '')
+for s:n in gnosis#mview#preset_names()
+  if s:n =~# '^多'
+    call gnosis#mview#preset_delete(s:n)
+  endif
+endfor

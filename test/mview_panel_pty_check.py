@@ -66,7 +66,7 @@ try:
     os.write(fd, b"Z")
     pump(1.2)
     seg = out[mark:]
-    ok("Z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセット".encode() in seg)
+    ok("Z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセットの画面".encode() in seg)
     i = seg.rfind("曼荼羅の設定".encode())
     m = list(re.finditer(rb"\x1b\[(\d+);(\d+)H", seg[:i]))
     col = int(m[-1].group(2)) if m else 0
