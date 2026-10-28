@@ -245,6 +245,7 @@ Global Index（index.md）
 - `:GnosisMount` … 手動マウント ・ `:GnosisLock` … 手動ロック（アンマウント）。別のウィンドウ・アプリが使っている vault は、ロックしない（`:GnosisLock!` で強制）
 - 複数のウィンドウ（Vim・`\c` のアプリ）で、別々の vault も同じ vault も同時に開ける。暗号化 vault は、**使っている最後のウィンドウ**が終わる（または別の vault へ切り替える）ときだけロックされる。登録簿は vault の外（Gnosis ホームの `sessions/`）にあり、異常終了したプロセスの登録は自動で消える。同じノートを複数のウィンドウで編集して他で書き換えられたときは、自動保存は上書きせず、未保存の内容を `.state/conflicts/` に退避して警告する
 - `:GnosisBackup` `[出力先]` … プロジェクトフォルダ（`.crypt` 他。`note/` の中身は除く）を vault のパスワードで 7z 化
+- `:GnosisImportArchive` `[zip / 7z の場所]` … zip / 7z を、**開いている vault** に取り込む。場所を指定（省略すると聞く）→ パスワードが要る書庫ならパスワードを入力（画面に出ない・3 回まで）→ 追加・更新の件数を見て `y` で vault を更新。vault に無いファイルは足し、同じ中身は何もせず、中身が違う既存ファイルは上書きするが**元のファイルは `.trash/archive-import-<時刻>/` に残る**。書庫の中が 1 つのフォルダだけなら、その中を vault の直下として扱う。`.state` `.trash` `.git` `.crypt` などドット始まりの場所とシンボリックリンクは取り込まない。7z（p7zip）が必要。ロック中の vault には使えない
 - `:GnosisSetPassword` … 未暗号化なら暗号化、暗号化済みならパスワード変更
 - `:GnosisRemovePassword` … 暗号化を解除して平文に戻す
 - `:GnosisExitCleanup` … 終了時の後始末（viminfo 書き出し等）

@@ -17,6 +17,8 @@ gnosis#agenda
 gnosis#ai
 gnosis#ai_complete
 gnosis#apk_install
+gnosis#archive#import
+gnosis#archive#run
 gnosis#at_add
 gnosis#at_add_reverse
 gnosis#auto_history_enter
@@ -139,14 +141,13 @@ gnosis#fznav#gui_scroll
 gnosis#fznav#gui_state
 gnosis#fznav#invalidate
 gnosis#fznav#mark
-gnosis#fznav#next_hit
-gnosis#fznav#prompt
 gnosis#fznav#query
 gnosis#fznav#quit
 gnosis#fznav#render
 gnosis#fznav#reset
 gnosis#fznav#reset_for_test
 gnosis#fznav#setup
+gnosis#fznav#shown_paths
 gnosis#fznav#state
 gnosis#fznav#teardown
 gnosis#get_link_under_cursor
@@ -255,6 +256,7 @@ gnosis#listnav#decide
 gnosis#listnav#depth
 gnosis#listnav#edge
 gnosis#listnav#enter
+gnosis#listnav#enter_mode
 gnosis#listnav#gui_click
 gnosis#listnav#gui_scroll
 gnosis#listnav#gui_state
@@ -263,6 +265,7 @@ gnosis#listnav#help
 gnosis#listnav#input
 gnosis#listnav#invalidate
 gnosis#listnav#mark
+gnosis#listnav#mode
 gnosis#listnav#move
 gnosis#listnav#moved
 gnosis#listnav#next_hit
@@ -278,6 +281,7 @@ gnosis#listnav#restore
 gnosis#listnav#scope
 gnosis#listnav#search_rows
 gnosis#listnav#setup
+gnosis#listnav#shown_paths
 gnosis#listnav#state
 gnosis#listnav#teardown
 gnosis#lock_add
@@ -306,6 +310,7 @@ gnosis#mview#detach
 gnosis#mview#entries
 gnosis#mview#focus
 gnosis#mview#fz_decide
+gnosis#mview#goto_note_win
 gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click
@@ -334,6 +339,7 @@ gnosis#mview#preset_next_number
 gnosis#mview#preset_overwrite
 gnosis#mview#preset_rename
 gnosis#mview#preset_save
+gnosis#mview#preset_text
 gnosis#mview#preview_rel
 gnosis#mview#quit_layers
 gnosis#mview#refresh
@@ -344,6 +350,7 @@ gnosis#mview#restore_handoff
 gnosis#mview#saved
 gnosis#mview#set_depth
 gnosis#mview#setup_maps
+gnosis#mview#shown_paths
 gnosis#mview#start
 gnosis#mview#state
 gnosis#mview#switch_view

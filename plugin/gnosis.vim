@@ -574,6 +574,8 @@ command! GnosisBacklinks call gnosis#backlinks()
 command! -nargs=+ GnosisPdf call gnosis#pdf(<f-args>)
 command! -bang -nargs=+ GnosisCollect call gnosis#collect(<bang>0, <f-args>)
 command! -nargs=+ -complete=file GnosisImport call gnosis#import(<f-args>)
+" zip / 7z を開いている vault に取り込む（場所を指定 → パスワードが要れば入力 → 確認 → vault を更新）。違う中身の元ファイルは .trash に残る
+command! -nargs=? -complete=file GnosisImportArchive call gnosis#archive#import(<q-args>)
 command! -bang -nargs=+ GnosisChain call gnosis#chain(<bang>0, <f-args>)
 command! -bang GnosisChainUndo call gnosis#chain_undo(<bang>0)
 command! GnosisRestore call gnosis#session_restore()
