@@ -881,7 +881,9 @@ function! s:load_persisted_root() abort
   if empty(l:root)
     return ''
   endif
-  return fnamemodify(s:expand_path(l:root), ':p')
+  let l:root = fnamemodify(s:expand_path(l:root), ':p')
+  " 消した vault を指す古い root.txt では、その場所（Desktop/test2 など）に .state / .undo / viminfo を作り直さない
+  return isdirectory(l:root) ? l:root : ''
 endfunction
 
 function! s:save_persisted_root(root) abort
