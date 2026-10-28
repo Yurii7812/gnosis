@@ -36,6 +36,25 @@ class FolgezettelTest(unittest.TestCase):
         nf.simple_sync(self.root)
         self.assertEqual(before, {p: p.read_text() for p in before})
 
+    def test_paper_infra_notes_get_pa_zero(self):
+        # 紙の自動作成の索引は、YAML の folgezettel が PA_0（題は変えない）。デジタルの番号には影響せず、何度同期しても変わらない
+        self.note('index', body='[a](a.md)')
+        self.note('a')
+        apex = self.note('apex')
+        apex.write_text(apex.read_text().replace('title: apex', 'title: Paper-Zettelkasten-Index').replace('# apex', '# Paper-Zettelkasten-Index'))
+        fidx = self.note('fidx')
+        fidx.write_text(fidx.read_text().replace('title: fidx', 'title: folgezettel-Index-1').replace('# fidx', '# folgezettel-Index-1'))
+        nf.simple_sync(self.root)
+        self.assertEqual(self.ident(self.root / 'a.md'), '1')
+        self.assertEqual([self.ident(apex), self.ident(fidx)], ['PA_0', 'PA_0'])
+        self.assertIn('# Paper-Zettelkasten-Index', apex.read_text())
+        self.assertTrue(fz.ID_RE.fullmatch('PA_0'))
+        self.assertEqual(fz.parent_id('PA_0'), '')
+        self.assertIsNone(fz.ID_RE.fullmatch('0'))
+        before = self.snapshot()
+        nf.simple_sync(self.root)
+        self.assertEqual(before, self.snapshot())
+
     def test_groups_have_no_id(self):
         # グループは ID を持たない（2026-10-20）: Index にあっても振らず、付いていれば外す。番号は使い回さない
         self.note('index', body='[g](g.md)\n[n](n.md)')

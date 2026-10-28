@@ -15,7 +15,8 @@ import note_format_v2 as nf
 # 印は設定（vault の .gnosis/settings.json の paperIdPrefix。既定 PA）で変えられる。`PA_1a2` の親は `PA_1a`、`PA_1` に親は無い
 PREFIX_RE = re.compile(r"^[A-Z]{1,4}$")
 PAPER_PREFIX_DEFAULT = "PA"
-ID_RE = re.compile(r"^(?:[A-Z]{1,4}_)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*$")
+# `PA_0` は紙の自動作成の索引（Paper-Zettelkasten-Index など）の番号。デジタルの 0 は無い
+ID_RE = re.compile(r"^(?:[A-Z]{1,4}_0|(?:[A-Z]{1,4}_)?[1-9]\d*(?:[a-z]+[1-9]\d*)*[a-z]*)$")
 _PREFIXED_RE = re.compile(r"^([A-Z]{1,4}_)(.+)$")
 _PART_RE = re.compile(r"[A-Z]+_|\d+|[a-z]+")
 
@@ -175,6 +176,18 @@ def scan_number(note: dict) -> str:
     return title if any(pat.search(ln) for ln in note['body']) else ''
 
 
+_PAPER_INFRA_RE = re.compile(r'^folgezettel-Index-\S+$')
+
+
+def is_paper_infra(note: dict) -> bool:
+    """紙の PKM が自動で作る索引（Paper-Zettelkasten-Index・Folgezettel-Index・folgezettel-Index-N、紙の Index-write）。
+    YAML の folgezettel はどれも `PA_0`（題・表示名は変えない）。"""
+    title = note['title']
+    if title in ('Paper-Zettelkasten-Index', 'Folgezettel-Index') or _PAPER_INFRA_RE.match(title):
+        return True
+    return title == 'Index-write' and any('Paper-Zettelkasten-Index' in ln for ln in note['body'])
+
+
 def is_paper(note: dict) -> bool:
     """紙の PKM のノート（題が番号）。日付の題（2026-10-19-MO-… / 2026-10 / 2026）は紙の番号ではない。"""
     return bool(PAPER_TITLE_RE.match(note['title'])) and not DATED_TITLE_RE.match(note['title'])
@@ -247,6 +260,14 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             ids[p] = prefix + num
             if ids[p] != stored[p]:
                 plan[p] = ids[p]
+    # 紙の自動作成の索引は、YAML の folgezettel を `PA_0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
+    for p, n in notes.items():
+        if is_paper_infra(n) and p not in unsaved:
+            ids[p] = prefix + '0'
+            if ids[p] != stored[p]:
+                plan[p] = ids[p]
+            else:
+                plan.pop(p, None)
     index = root / 'index.md'
     top = targets(notes[index]['body'], root) if index in notes else []
     # 日記（YYYY-MM-DD-曜日）と時系列記録のその日のノート（front matter の record:）も最上位にする。
@@ -301,7 +322,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # 番号のないノートを親にしている子も、同じ理由で外れる。番号が無く親も無いノートは、\a（未所属）に出る
     for p, n in notes.items():
         if (ID_RE.fullmatch(ids[p]) and p not in managed_set and p.name != 'index.md' and not is_group(n)
-                and not kept(p) and n['title'] not in SHARED_ID_TITLES):
+                and not kept(p) and n['title'] not in SHARED_ID_TITLES and not is_paper_infra(n)):
             ids[p] = ''
             plan[p] = ''
     # 残した番号は、そのまま使われているものとして避ける
