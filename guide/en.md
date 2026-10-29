@@ -46,7 +46,7 @@ When the shape of the tree changes (you change a parent, delete a note and so on
 **⑥ Use `\l` to insert a link to an existing note.** In the note where you want the link, press `\l` (that note is the "original note"). A **screen for choosing the note to insert** appears. Choose like this:
 
 - In the mandala view move between cells with `h` `j` `k` `l` (or the arrows) and press `Enter` to make a note the center. In the list view use `j` `k` (up and down), `h` (parent), `l` (child) and `[` `]` (siblings). You can also pick with full-text search (`gs`).
-- **You can switch between the mandala and the list view with `Ctrl-←` / `Ctrl-→` (or `gv`) and the choosing screen continues.** `o` shows the original note on the right (press again to return to the note you are choosing).
+- **You can switch between the mandala and the list view with `Ctrl-←` / `Ctrl-→` (or `gv`) and the choosing screen continues.** `o` shows the original note on the right (the mandala / list on the left does not move; press again to return to the note you are choosing). `O` (capital) shows the original note on the right **and also moves the center of the mandala / list on the left to it** (in the list view, `o` / `O` work the same outside `\l` too).
 - Press `e` for "**this one**" (in the list view the note on the cursor line, in the mandala the center note). Press `q` to quit.
 - Then you are asked **where to put it**: `Enter` end of the body / `t` under a heading / `h` under the cursor / `i` inside the line / `v` **turn selected text into the link** (the cursor jumps to the current note: `v` → select a range with the cursor → `Enter`; that text becomes the link to the other note; only when one note is chosen) / `c` put the current note into the other note's Context / `a` put the other note into the current note's Context / `b` make it a child / `p` make it the parent / `m` merge the two notes / `g` if it is an index, put the current note into it. When unsure, press `Enter`.
 - If you select part of the text first (press `v` and use the arrows) and then press `\l`, **the selected text becomes the link to that note**.
@@ -345,7 +345,7 @@ A list with minimal explanation. See Parts 1 and 2 for details. Keys that start 
 ### Making and connecting notes
 
 - `zn` create (`Enter` end / `t` under heading / `h` under cursor / `i` inside line / `c` Context / `b` child / `p` parent / `o` isolated / `r` Related) ・ `zk` branch group (visual too) ・ `zh` link here ・ `za` `zA` add links ・ `zw` write at the end
-- `\l` choose and connect (`e` this one / `o` original note / `I` Index / `q` quit / `Enter` `t` `h` `i` `c` `a` `b` `p` `m` `g` placement) ・ `\L` make a link ・ `\p` add a link ・ `\P` put the current note into the target's Context
+- `\l` choose and connect (`e` this one / `o` original note (right only) / `O` original note (left center too) / `I` Index / `q` quit / `Enter` `t` `h` `i` `c` `a` `b` `p` `m` `g` placement) ・ `\L` make a link ・ `\p` add a link ・ `\P` put the current note into the target's Context
 - `mx` checkbox ・ `\I` image size ・ `\sc` CopyStack ・ `\y` copy title and body ・ `yn` yank the file name ・ `mp` filetype
 
 ### Titles, names and readings

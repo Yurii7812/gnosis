@@ -1404,7 +1404,7 @@ function! s:help_lines() abort
         \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループだけ'], ['C', '近いグループを重ねる'], ['r', '予測関連だけ'], ['R', '予測関連を重ねる'],
         \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['b', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
         \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
-        \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート']]],
+        \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート（右だけ）'], ['O', '元のノートを右に出し、左の中心も元のノートに']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['L', '種類の凡例を出す・隠す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
         \   ['z  Ctrl-L', '盤面を中央に戻す'], ['T', '数字キー: 移動 ⇔ カーソルだけ'], ['t', '時間順（作成日時）: 古い順 → 新しい順 → オフ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
         \ ['設定とやめる', [['Z', '設定の画面（右。モード・重ねる・プリセット）'], ['q', 'かかっているものを 1 つやめる'], ['Q', '全部閉じる'], ['?', 'このガイドを閉じる']]],
@@ -2293,6 +2293,34 @@ function! s:toggle_origin() abort
   let s:S.origin_view = 1
 endfunction
 
+" 左の中心を、そのノート（vault 相対）に動かす（選ぶモードでも動かす。履歴に積むので - で戻れる）。動かしたら 1
+function! s:center_rel(rel) abort
+  let l:mw = get(s:S, 'win', -1)
+  if empty(a:rel) || l:mw < 0 || empty(getwininfo(l:mw)) || a:rel ==# s:S.center || !s:has(a:rel)
+    return 0
+  endif
+  call add(s:S.hist, [s:S.center, s:S.page])
+  let s:S.fwd = []
+  let s:S.center = a:rel
+  let s:S.page = 0
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call win_execute(l:mw, 'call gnosis#mview#render_here()')
+  return 1
+endfunction
+
+" O: o と同じく元のノートを右に出し、さらに左の曼荼羅・リストの中心もそのノートにする（o は右だけ。左は動かさない）
+function! s:goto_origin() abort
+  if empty(get(s:S, 'pick', ''))
+    return
+  endif
+  let l:o = get(s:S, 'origin', {})
+  call s:show_origin()
+  let s:S.origin_view = 0
+  if !empty(l:o)
+    call s:center_rel(s:rel_of(l:o.path))
+  endif
+endfunction
+
 " \l: e で、中心のノートを入れるノートに決める。続けて置き場所を聞く（元のノートの窓で）。
 " 置き場所の選択を q / Esc で閉じても \l は続く（曼荼羅で選び直せる）。h / i / 見出しは、右の元のノートで場所を選んで Enter で決める
 " （q でやめると置き場所の選択に戻る）。c などのサブの選択を q でやめたときも、置き場所の選択に戻る
@@ -2950,6 +2978,7 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> T <Cmd>call <SID>toggle_digit()<CR>
   nnoremap <buffer><nowait><silent> I <Cmd>call <SID>decide_index()<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call <SID>toggle_origin()<CR>
+  nnoremap <buffer><nowait><silent> O <Cmd>call <SID>goto_origin()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>toggle_help()<CR>
   nnoremap <buffer><nowait><silent> <Tab> <Cmd>call <SID>seq(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call <SID>seq(-1)<CR>
@@ -3749,6 +3778,20 @@ endfunction
 function! gnosis#mview#toggle_origin() abort
   if exists('s:S') && type(s:S) == v:t_dict
     call s:toggle_origin()
+  endif
+endfunction
+
+" O: 選ぶモードで、元のノートを右に出し、左の中心もそのノートにする
+function! gnosis#mview#goto_origin() abort
+  if exists('s:S') && type(s:S) == v:t_dict
+    call s:goto_origin()
+  endif
+endfunction
+
+" リストビューの O: 左の中心を、vault 相対のそのノートにする（o と違い、左も動く）
+function! gnosis#mview#center_rel(rel) abort
+  if exists('s:S') && type(s:S) == v:t_dict
+    call s:center_rel(a:rel)
   endif
 endfunction
 

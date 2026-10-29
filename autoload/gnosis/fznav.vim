@@ -679,7 +679,7 @@ function! s:help() abort
         \ 'M             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
         \ 's l r m       ' . gnosis#i18n#tr('リスト: 検索・リンク・類似（r と m は同じ）。リストの中で f で Folgezettel に戻る'),
         \ '\l            ' . gnosis#i18n#tr('入れるノートを選ぶモード（\l）。ビューを切り替えても続く'),
-        \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）'),
+        \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）・O 左の中心も元のノートに'),
         \ 'q             ' . gnosis#i18n#tr('選ぶモードなどをやめる（何も無ければ閉じる）'),
         \ '\o            ' . gnosis#i18n#tr('アウトラインを右に出す ⇔ しまう（どこでも）'),
         \ 'Ctrl-← Ctrl-→ gv  ' . gnosis#i18n#tr('前・次のビューへ'),
@@ -758,6 +758,7 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> r <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
+  nnoremap <buffer><nowait><silent> O <Cmd>call gnosis#mview#goto_origin()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>pick_decide(0)<CR>
   nnoremap <buffer><nowait><silent> I <Cmd>call <SID>pick_decide(1)<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call <SID>help()<CR>

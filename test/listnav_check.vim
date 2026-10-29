@@ -72,6 +72,11 @@ call s:ok('カーソル移動で右にプレビュー', fnamemodify(bufname(winb
 call s:ok('プレビューで基準は動かない', gnosis#listnav#state().anchor ==# s:anchor && gnosis#mview#state().center ==# s:anchor)
 call gnosis#listnav#origin()
 call s:ok('oで元のノートへ戻る', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'a.md')
+call s:ok('o は左の基準を動かさない', gnosis#listnav#state().anchor ==# s:anchor)
+call gnosis#mview#center_rel('d.md')
+call s:ok('（準備）左の基準を a.md 以外にした', gnosis#mview#state().center ==# 'd.md')
+call gnosis#listnav#goto_origin()
+call s:ok('O: 右に元のノート、左の中心も元のノート', fnamemodify(bufname(winbufnr(gnosis#mview#note_win())), ':t') ==# 'a.md' && gnosis#mview#state().center ==# gnosis#listnav#state().origin.path, string([gnosis#mview#state().center, gnosis#listnav#state().origin]))
 let s:ov = gnosis#listnav#state().origin.view
 let s:cur = getcurpos(gnosis#mview#note_win())
 call s:ok('元のカーソル位置も復元する', s:cur[1] == s:ov.lnum && s:cur[2] == s:ov.col + 1, [s:cur, s:ov])

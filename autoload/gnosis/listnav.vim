@@ -69,7 +69,7 @@ function! gnosis#listnav#setup() abort
         \ 'H': "call gnosis#listnav#prompt('highlight')", 'n': "call gnosis#listnav#next_hit(1)", 'N': "call gnosis#listnav#next_hit(-1)",
         \ 'S': "call gnosis#listnav#scope()",
         \ 'w': "call gnosis#listnav#option('rank', !gnosis#listnav#state().rank)",
-        \ '+': "call gnosis#listnav#depth()", 'o': "call gnosis#listnav#origin()", '<BS>': "call gnosis#listnav#back()",
+        \ '+': "call gnosis#listnav#depth()", 'o': "call gnosis#listnav#origin()", 'O': "call gnosis#listnav#goto_origin()", '<BS>': "call gnosis#listnav#back()",
         \ 'q': "call gnosis#listnav#quit()", 'Q': "call gnosis#mview#win_op('quit')",
         \ '<Space>': "call gnosis#mview#toggle()", 'f': "call gnosis#mview#switch_view('fz')", 'F': "call gnosis#mview#win_op('full')",
         \ '<lt>': "call gnosis#mview#win_op('resize-')", '>': "call gnosis#mview#win_op('resize+')",
@@ -326,6 +326,12 @@ function! gnosis#listnav#origin() abort
   if l:nw > 0 && !empty(s:L.origin.view)
     call win_execute(l:nw, 'call winrestview(' . string(s:L.origin.view) . ')')
   endif
+endfunction
+
+" O: 元のノートを右に出し（o と同じ）、さらにリストの基準（左の中心）もそのノートにする
+function! gnosis#listnav#goto_origin() abort
+  call gnosis#listnav#origin()
+  call gnosis#mview#center_rel(s:L.origin.path)
 endfunction
 
 " 下の入力欄で検索する。結果は同じビューへ描く（ポップアップは作らない）。Esc は元の条件へ戻す。
