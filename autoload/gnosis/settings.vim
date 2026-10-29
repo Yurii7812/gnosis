@@ -53,7 +53,7 @@ function! gnosis#settings#defaults() abort
         \ 'appCustomThemes': {},
         \ 'mandalaOnStart': v:true,
         \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
-        \ 'imageViewer': 'external',
+        \ 'imageViewer': 'auto',
         \ 'paperIdPrefix': 'PA',
         \ 'mandalaLegend': v:true,
         \ 'linkEditInsert': v:false,
@@ -114,8 +114,8 @@ function! gnosis#settings#validate(s) abort
   endif
   let l:s.mandalaLegend = get(l:s, 'mandalaLegend', v:true) ? v:true : v:false
   let l:s.linkEditInsert = get(l:s, 'linkEditInsert', v:false) ? v:true : v:false
-  if index(['external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
-    let l:s.imageViewer = 'external'
+  if index(['auto', 'external', 'sixel'], get(l:s, 'imageViewer', '')) < 0
+    let l:s.imageViewer = 'auto'
   endif
   if type(l:s.theme) != v:t_dict || index(['builtin', 'custom', 'plugin'], get(l:s.theme, 'kind', '')) < 0
     let l:s.theme = {'kind': 'builtin'}

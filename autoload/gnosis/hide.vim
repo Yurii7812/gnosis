@@ -169,7 +169,7 @@ function! s:lines() abort
     let l:mark = l:i == s:sel ? ' ▶ ' : '   '
     if l:k ==# 'gz'
       let l:txt = gnosis#i18n#tr(', で画像を開く方法') . ': '
-            \ . (gnosis#imgview#viewer() ==# 'sixel' ? gnosis#i18n#tr('sixel（この端末の中）') : gnosis#i18n#tr('xdg-open（外のビューア）'))
+            \ . get({'sixel': gnosis#i18n#tr('sixel（この端末の中）'), 'external': gnosis#i18n#tr('xdg-open（外のビューア）')}, gnosis#imgview#viewer(), gnosis#i18n#tr('auto（sixel に対応していれば端末の中、なければ外のビューア）'))
       call add(l:out, l:mark . (l:i + 1) . ' ' . l:txt)
     else
       let l:on = l:k ==# 'insert' ? gnosis#link_edit_insert() : l:h[l:k]
@@ -187,7 +187,8 @@ function! s:toggle(i) abort
     call gnosis#settings#set('linkEditInsert', gnosis#link_edit_insert() ? v:false : v:true)
     call gnosis#conceal_apply_all()
   elseif l:k ==# 'gz'
-    call gnosis#settings#set('imageViewer', gnosis#imgview#viewer() ==# 'sixel' ? 'external' : 'sixel')
+    " auto → sixel → external → auto の順に切り替える
+    call gnosis#settings#set('imageViewer', get({'auto': 'sixel', 'sixel': 'external'}, gnosis#imgview#viewer(), 'auto'))
   else
     call gnosis#settings#set('hide.' . l:k, !gnosis#hide#get()[l:k] ? v:true : v:false)
     if l:k ==# 'image'

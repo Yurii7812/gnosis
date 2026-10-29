@@ -28,9 +28,9 @@ try:
     (fake / "xdg-open").write_text('#!/bin/sh\necho "$1" >> "%s"\n' % (work / "opened.txt"))
     (fake / "xdg-open").chmod(0o755)
 
-    def run(keys, extra_init="", pre_hidden=False, viewer="sixel"):
+    def run(keys, extra_init="", pre_hidden=False, viewer="sixel", term_sixel=True):
         shutil.rmtree(work / "vault" / ".gnosis", ignore_errors=True)  # 前の run の設定（\\zz で変えたもの）を持ち越さない
-        env = dict(os.environ, XDG_CACHE_HOME=str(work / "cache"), PATH=str(fake) + ":" + os.environ["PATH"], TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402",
+        env = dict(os.environ, XDG_CACHE_HOME=str(work / "cache"), PATH=str(fake) + ":" + os.environ["PATH"], TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), KONSOLE_VERSION="250402" if term_sixel else "",
                    GNOSIS_CELL_PX="10x20", WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
         pid, fd = pty.fork()
         if pid == 0:
@@ -85,20 +85,34 @@ try:
     out, m = run([("\\zz", 0.8), ("a", 0.8), ("q", 0.3)])
     ok("a で YAML などはオンになり、画像の項目はオンにならない", "[x] YAML".encode() in out and "[x] 画像".encode() not in out)
     # 5) 既定は xdg-open（外のビューア）。sixel は出ない。カーソルに近い画像がそのまま開く（5 行目 → b.png）
-    out, m = run([("5G", 0.3), (",", 1.5), ("j", 0.3)], viewer=None)
+    # （既定は auto。sixel に対応していない端末では外のビューア。KONSOLE_VERSION を空にして、対応していない端末にする）
+    out, m = run([("5G", 0.3), (",", 1.5), ("j", 0.3)], viewer=None, term_sixel=False)
     opened = (work / "opened.txt").read_text() if (work / "opened.txt").exists() else ""
     ok("既定は xdg-open で開く（5 行目のカーソル → 近い b.png）", opened.strip().endswith("b.png"))
     ok("既定では , で sixel を出さない", b"\x1bP0;1;0q" not in out[m[1]:])
     staged = Path(opened.strip().splitlines()[-1]) if opened.strip() else Path("/nonexistent")
     ok("ビューアには、このノートの画像だけを入れた一時フォルダのファイルを渡す", sorted(x.name for x in staged.parent.iterdir()) == ["01-a.jpg", "02-b.png"] if staged.exists() else False)
     (work / "opened.txt").unlink()
-    run([("gg", 0.3), (",", 1.5)], viewer=None)
+    run([("gg", 0.3), (",", 1.5)], viewer=None, term_sixel=False)
     ok("1 行目のカーソルなら近い a.jpg", (work / "opened.txt").exists() and (work / "opened.txt").read_text().strip().endswith("01-a.jpg"), )
     # 6) \zz の窓の「, で画像を開く方法」を切り替えると、, が sixel になり、設定に残る
-    out, m = run([("\\zz", 0.8), ("6", 0.5), ("q", 0.3), ("3G", 0.3), (",", 4.0), ("q", 0.8)], viewer=None)
+    out, m = run([("\\zz", 0.8), ("6", 0.5), ("q", 0.3), ("3G", 0.3), (",", 4.0), ("q", 0.8)], viewer=None, term_sixel=False)
     ok("\\zz の窓に開く方法の行がある", ", で画像を開く方法".encode() in out[: m[0]])
     ok("切り替えると sixel（この端末の中）と出る", "sixel（この端末の中）".encode() in out[m[0]: m[1]])
     ok("切り替えたあとの , は sixel で出る", b"\x1bP0;1;0q" in out[m[3]: m[4]])
+    # 7) 既定の auto は、sixel に対応した端末では , を端末の中に出す（設定なしで h l が効く）
+    out, m = run([("3G", 0.3), (",", 4.0), ("l", 4.0), ("q", 0.8)], viewer=None)
+    ok("auto + sixel 対応の端末: , は sixel で出る", b"\x1bP0;1;0q" in out[m[0]: m[1]])
+    ok("auto + sixel 対応の端末: l で次の画像", b"\x1bP0;1;0q" in out[m[1]: m[2]])
+    # 8) 読めない画像があっても、下ごしらえの python を何度も起こさない（以前は止まらずに動き続けた）
+    (work / "vault" / "bad.png").write_text("not an image", encoding="utf-8")
+    note.write_text("# n\n\n![](a.jpg)\n\n![](bad.png)\n\nlast\n", encoding="utf-8")
+    pylog = work / "py.log"
+    (fake / "py").write_text('#!/bin/sh\necho "$@" >> "%s"\nexec python3 "$@"\n' % pylog)
+    (fake / "py").chmod(0o755)
+    run([("3G", 6.0)], extra_init="|let g:gnosis_python_cmd='" + str(fake / "py") + "'")
+    n_inline = sum(1 for l in pylog.read_text().splitlines() if " inline " in l) if pylog.exists() else 0
+    ok("読めない画像で python を繰り返し起こさない（%d 回）" % n_inline, 1 <= n_inline <= 3)
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

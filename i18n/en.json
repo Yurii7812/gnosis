@@ -85,6 +85,7 @@
     "g=グループに入れる / ": "g=add to a group / ",
     "YAML（先頭の --- で囲んだ部分）": "YAML (the part enclosed by --- at the top)",
     ", で画像を開く方法": "How , opens images",
+    "auto（sixel に対応していれば端末の中、なければ外のビューア）": "auto (inside the terminal if it supports sixel, otherwise an external viewer)",
     "ノートの表示": "Note display",
     "ノートの中の画像": "Images in the note",
     "挿入モードで、カーソルの行のリンクの中身を見せて編集する": "In Insert mode, show and edit the link target on the cursor line",

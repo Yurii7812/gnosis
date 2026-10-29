@@ -209,8 +209,10 @@ gnosis#i18n#t_lang
 gnosis#i18n#tr
 gnosis#imgview#apply_setting
 gnosis#imgview#imv_config
+gnosis#imgview#on_resize
 gnosis#imgview#on_text_changed
 gnosis#imgview#open
+gnosis#imgview#redraw_later
 gnosis#imgview#refresh
 gnosis#imgview#schedule
 gnosis#imgview#start

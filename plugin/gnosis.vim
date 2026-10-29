@@ -508,7 +508,8 @@ augroup gnosis_imgview
   " ノートの中の画像（\zz の「画像」で隠せる）。sixel の端末だけ
   autocmd VimEnter * call gnosis#imgview#start()
   autocmd BufWinEnter,WinEnter,TabEnter *.md call gnosis#imgview#refresh()
-  autocmd VimResized * call gnosis#imgview#refresh()
+  autocmd VimResized * call gnosis#imgview#on_resize()
+  autocmd CmdlineLeave,FocusGained,ShellCmdPost * call gnosis#imgview#redraw_later()
   autocmd TextChanged,InsertLeave *.md call gnosis#imgview#on_text_changed()
   autocmd WinScrolled,WinResized * call gnosis#imgview#schedule()
 augroup END

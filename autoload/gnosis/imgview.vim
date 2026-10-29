@@ -2,7 +2,7 @@
 "   ノートにある画像の一覧（popup_menu）→ Enter で端末に sixel で重ねて表示 → q で一覧に戻る → もう一度 q で閉じる。
 "   キーボードだけで動く。閉じたあとは redraw! で画像を消し、カーソルは元のまま Vim にある。
 "   既定は外部のビューア（xdg-open）で開く。ズームや画質はビューアに任せる。
-"   imageViewer（\zz の窓で選ぶ。既定は external）または g:gnosis_image_viewer（こちらが先）= 'external' | 'sixel'（この端末の中に sixel で出す。対応する端末だけ）| 'auto'（sixel に対応していれば sixel）。
+"   imageViewer（\zz の窓で選ぶ。既定は auto = 端末が sixel に対応していれば端末の中、そうでなければ外のビューア）または g:gnosis_image_viewer（こちらが先）= 'external' | 'sixel'（この端末の中に sixel で出す。対応する端末だけ）| 'auto'（sixel に対応していれば sixel）。
 "   ノートの中に画像を出すもの（下のほう）は、この設定とは別に、端末が sixel に対応していれば出す。
 "   Python 側: python/sixel_view.py
 
@@ -22,9 +22,9 @@ function! gnosis#imgview#viewer() abort
     return g:gnosis_image_viewer
   endif
   try
-    return get(gnosis#settings#current(), 'imageViewer', 'external')
+    return get(gnosis#settings#current(), 'imageViewer', 'auto')
   catch
-    return 'external'
+    return 'auto'
   endtry
 endfunction
 
@@ -298,9 +298,12 @@ endfunction
 "   ファイルの中身は変えない（空きの行は表示だけ）。
 " =============================================================================
 let s:ptype = 'gnosis_img'
-let s:meta = {}       " 画像のパス → {cols, rows, file}
+let s:meta = {}       " 画像のパス → {cols, rows, file, ft}
+let s:bad = {}        " 下ごしらえできなかった画像のパス → そのときの更新時刻（同じ画像で何度も試さない）
 let s:six = {}        " sixel のファイル → 中身
 let s:job = 0
+let s:asked = []      " 今の下ごしらえで頼んだ画像
+let s:fails = 0       " 下ごしらえの結果が読めなかった連続回数
 let s:pending = {}    " 作成待ちの画像
 let s:sig = ''        " 今、端末に出している画像の位置の署名
 let s:timer = 0
@@ -368,18 +371,29 @@ endfunction
 " 画像の下ごしらえ（非同期）。終わったら空きの行を付けて描き直す
 function! s:prepare(paths) abort
   for l:p in a:paths
-    if !has_key(s:meta, l:p) | let s:pending[l:p] = 1 | endif
+    if s:need(l:p) | let s:pending[l:p] = 1 | endif
   endfor
   if s:job isnot 0 && job_status(s:job) ==# 'run'
     return
   endif
   if empty(s:pending) | return | endif
   let l:ps = keys(s:pending)
+  let s:asked = copy(l:ps)
   let s:pending = {}
   let s:out = ''
   let l:cmd = split(gnosis#python_cmd()) + [s:root . '/python/sixel_view.py', 'inline', s:cache_dir(), string(s:max_cols()), string(s:max_rows())] + l:ps
   let s:job = job_start(l:cmd, {'out_mode': 'raw', 'out_cb': {ch, msg -> s:job_out(msg)},
-        \ 'exit_cb': {j, st -> s:job_done()}, 'err_io': 'null', 'in_io': 'null'})
+        \ 'close_cb': {ch -> s:job_done()}, 'err_io': 'null', 'in_io': 'null'})
+endfunction
+
+" 下ごしらえが要る画像か（まだ無い・ファイルが変わった。できなかった画像は、ファイルが変わるまで試さない）
+function! s:need(p) abort
+  let l:ft = getftime(a:p)
+  if has_key(s:bad, a:p)
+    if s:bad[a:p] == l:ft | return 0 | endif
+    call remove(s:bad, a:p)
+  endif
+  return !has_key(s:meta, a:p) || get(s:meta[a:p], 'ft', l:ft) != l:ft
 endfunction
 
 function! s:job_out(msg) abort
@@ -387,12 +401,37 @@ function! s:job_out(msg) abort
 endfunction
 
 function! s:job_done() abort
+  let l:got = v:null
   try
-    for [l:p, l:m] in items(json_decode(s:out))
-      let s:meta[l:p] = l:m
-    endfor
+    let l:got = json_decode(s:out)
   catch
   endtry
+  " 結果が JSON として読めなかったとき（python が落ちた等）は、画像のせいとは限らない。3 回続けて読めなければ諦める
+  if type(l:got) != v:t_dict
+    let s:fails += 1
+    if s:fails < 3
+      for l:p in s:asked | let s:pending[l:p] = 1 | endfor
+      let s:asked = []
+      let s:job = 0
+      call timer_start(500, {-> gnosis#imgview#refresh()})
+      return
+    endif
+    let l:got = {}
+  endif
+  let s:fails = 0
+  for [l:p, l:m] in items(l:got)
+    let l:m.ft = getftime(l:p)
+    let s:meta[l:p] = l:m
+    silent! call remove(s:six, l:m.file)
+  endfor
+  " 返ってこなかった画像（壊れている・読めない）は、更新時刻が変わるまで試さない。試し続けると python が止まらず動き続ける
+  for l:p in s:asked
+    if !has_key(l:got, l:p)
+      let s:bad[l:p] = getftime(l:p)
+      silent! call remove(s:meta, l:p)
+    endif
+  endfor
+  let s:asked = []
   let s:job = 0
   call gnosis#imgview#refresh()
 endfunction
@@ -486,6 +525,16 @@ endfunction
 " 描き直す。force=1 は、同じ位置でも出し直す（ポップアップが閉じたあとなど）
 function! s:draw(force) abort
   let s:timer = 0
+  try
+    call s:draw_do(a:force)
+  catch
+    " 窓が閉じた・キャッシュのファイルが消えた等。次の描き直しで直るので、エラーを画面に出さない
+    let s:six = {}
+    let s:sig = ''
+  endtry
+endfunction
+
+function! s:draw_do(force) abort
   if !s:inline_on() || mode() =~# '^[cr]' || s:popups()
     return
   endif
@@ -522,7 +571,7 @@ function! gnosis#imgview#refresh(...) abort
   let l:changed = 0
   for l:b in uniq(sort(map(filter(getwininfo(), 'v:val.tabnr == tabpagenr() && s:eligible(v:val.bufnr)'), 'v:val.bufnr'), 'n'))
     for l:it in s:scan(l:b)
-      if !has_key(s:meta, l:it.path) | call add(l:need, l:it.path) | endif
+      if s:need(l:it.path) | call add(l:need, l:it.path) | endif
     endfor
     let l:changed += s:apply_props(l:b)
   endfor
@@ -535,6 +584,20 @@ function! gnosis#imgview#refresh(...) abort
     call timer_start(3500, {-> execute('let s:settling = 0')})
     call s:settle()
   endif
+endfunction
+
+" 端末の大きさが変わった: 画像の大きさ（桁・行）が変わるので、下ごしらえをやり直す（ディスクのキャッシュは大きさごとなので軽い）
+function! gnosis#imgview#on_resize() abort
+  let s:meta = {}
+  let s:six = {}
+  let s:bad = {}
+  let s:sig = ''
+  call gnosis#imgview#refresh()
+endfunction
+
+" コマンド行・シェルコマンド・フォーカス復帰のあと: 画面が描き直されて画像が消えていることがあるので、同じ位置でも出し直す
+function! gnosis#imgview#redraw_later() abort
+  if s:inline_on() | call gnosis#imgview#schedule(1) | endif
 endfunction
 
 " 編集のあと（こちらが付け替えた直後の変更は除く）
