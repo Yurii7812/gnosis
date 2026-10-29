@@ -15,7 +15,7 @@
 "                               "link": …, "heading": …, "selection": …, "cursorline": …}},
 "     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
-"     "paperIdPrefix": "PA",   ← 紙の PKM のノートの Folgezettel 番号の先頭の印（PA → PA-1a2）。\F の画面の p で変える（英大文字 1〜4 字）
+"     "paperIdPrefix": "PA",   ← これから取り込む紙のノートの印（PA → 題と画像が PA-1a2）。\F の最初の画面の p で変える（英大文字 1〜4 字。今までのノートの印は変わらない）
 "     "mandalaOnStart": true,  ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
 "     "hide": {"yaml": false, "top": false, "bottom": false, "image": false}   ← ノートで隠すもの（\zz の窓で切り替える。
 "                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系 / image=ノートの中の画像（![](…) だけの行の画像。隠す＝表示しない）。オンにするまで保たれる。\c のアプリも同じ）

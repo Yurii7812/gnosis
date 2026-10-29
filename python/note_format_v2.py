@@ -881,7 +881,8 @@ Rel = tuple[str, str, str]  # (src_id, type, tgt_id)  id = root からの相対 
 
 
 _ZK_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
-_ZK_ID_RE = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*(?:-.+)?$")
+_ZK_ID_RE = re.compile(r"^(?:[A-Z]{1,4}-)?\d+(?:[a-z]+\d+)*[a-z]*(?:-.+)?$")
+_ZK_PREFIX_RE = re.compile(r"^[A-Z]{1,4}-(?=\d)")
 _ZK_DIARY_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-(?:MO|TU|WE|TH|FR|SA|SU)$")
 _ZK_IMG_LINE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)\s*$")
 
@@ -906,7 +907,8 @@ def _zk_note_images(title: str, body) -> list[str]:
         stem, ext = os.path.splitext(nm)
         if ext.lower() not in _ZK_IMAGE_EXTS:
             continue
-        if _ZK_ID_RE.match(title or "") and stem == title:
+        # 題は `PA-1a2`（印つき）か `1a2`。画像は題と同じ名前か、印を除いた名前（旧い画像 `1a2.jpg` を持つ `PA-1a2`）
+        if _ZK_ID_RE.match(title or "") and (stem == title or stem == _ZK_PREFIX_RE.sub("", title or "")):
             out.append(nm)
         elif dm and stem.startswith("paper-diary-" + "".join(dm.groups()) + "-"):
             out.append(nm)

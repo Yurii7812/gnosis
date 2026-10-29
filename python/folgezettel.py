@@ -123,7 +123,7 @@ def assign_child(parent_text: str, child_text: str, sibling_texts: list[str]) ->
 
 
 # 紙の PKM のノートの題（番号・番号-題・番号の一覧）。グループでも ID を外さない
-PAPER_TITLE_RE = re.compile(r'^(?:[1-9]\d{0,4}(?:[a-z]+\d{0,5})*(?:-.*)?)$')
+PAPER_TITLE_RE = re.compile(r'^(?:(?:[A-Z]{1,4}-)?[1-9]\d{0,4}(?:[a-z]+\d{0,5})*(?:-.*)?)$')
 DAILY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}-(?:MO|TU|WE|TH|FR|SA|SU)(?:-|$)')
 
 
@@ -162,30 +162,44 @@ def creation_key(path: Path, note: dict) -> tuple:
 DATED_TITLE_RE = re.compile(r'^(\d{4}(?:-\d{2}(?:-\d{2})?)?)(?:-|$)')
 
 
-PAPER_NUMBER_RE = re.compile(r'^[1-9]\d{0,4}(?:[a-z]+\d{0,5})*$')
+PAPER_NUMBER_RE = re.compile(r'^(?:[A-Z]{1,4}-)?[1-9]\d{0,4}(?:[a-z]+\d{0,5})*$')
 
 
 def scan_number(note: dict) -> str:
-    """紙のスキャンノート（題が番号だけで、スキャンの印か、同じ名前の画像の参照がある）なら、その番号。そうでなければ ''。"""
+    """紙のスキャンノート（題が番号だけで、スキャンの印か、同じ名前の画像の参照がある）なら、その番号。そうでなければ ''。
+    題は `PA-1a2`（印つき。新しい形）か `1a2`（印なし。旧い形）。印つきの題はそのまま返す（ノートごとに自分の印を持つ）。"""
     title = note['title']
     if not PAPER_NUMBER_RE.fullmatch(title) or is_group(note):
         return ''
     if any(ln.strip() == 'source: scan' for ln in note['fm']):
         return title
-    pat = re.compile(r'!\[[^\]]*\]\(<?(?:[^)>]*/)?' + re.escape(title) + r'\.[A-Za-z0-9]+>?\)')
+    stems = {re.escape(title), re.escape(split_prefix(title)[1])}   # 画像の名前は、題と同じか、印を除いた番号
+    pat = re.compile(r'!\[[^\]]*\]\(<?(?:[^)>]*/)?(?:' + '|'.join(sorted(stems)) + r')\.[A-Za-z0-9]+>?\)')
     return title if any(pat.search(ln) for ln in note['body']) else ''
 
 
 _PAPER_INFRA_RE = re.compile(r'^folgezettel-Index-\S+$')
+# 印が複数あるときの生成物の題: `Paper-Zettelkasten-Index-PA`・`Index-write-PA`・`Folgezettel-Index-PA`（末尾が印）
+_INFRA_SUFFIX_RE = re.compile(r'^(?:Paper-Zettelkasten-Index|Index-write|Folgezettel-Index)-([A-Z]{1,4})$')
+
+
+def infra_prefix(note: dict) -> str:
+    """紙の自動作成の索引の題の末尾が印（`...-PB`）なら、その印（`PB-`）。印なしの題なら ''。"""
+    m = _INFRA_SUFFIX_RE.match(note['title'])
+    if m:
+        return m.group(1) + '-'
+    m = re.match(r'^folgezettel-Index-([A-Z]{1,4})-\S+$', note['title'])
+    return m.group(1) + '-' if m else ''
+
 
 
 def is_paper_infra(note: dict) -> bool:
     """紙の PKM が自動で作る索引（Paper-Zettelkasten-Index・Folgezettel-Index・folgezettel-Index-N、紙の Index-write）。
     YAML の folgezettel はどれも `PA-0`（題・表示名は変えない）。"""
     title = note['title']
-    if title in ('Paper-Zettelkasten-Index', 'Folgezettel-Index') or _PAPER_INFRA_RE.match(title):
+    if title in ('Paper-Zettelkasten-Index', 'Folgezettel-Index') or _PAPER_INFRA_RE.match(title) or _INFRA_SUFFIX_RE.match(title):
         return True
-    return title == 'Index-write' and any('Paper-Zettelkasten-Index' in ln for ln in note['body'])
+    return (title == 'Index-write' or title.startswith('Index-write-')) and any('Paper-Zettelkasten-Index' in ln for ln in note['body'])
 
 
 def is_paper(note: dict) -> bool:
@@ -254,16 +268,19 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # 紙のスキャンノートの番号は、題の番号の前に印（PA-）を付けた形にそろえる（デジタルの番号とぶつからない別の空間）。
     # 印を設定で変えたら（PA → PB）、ここで全部付け直す
     prefix = paper_prefix(root)
+    scan_prefixes = {split_prefix(scan_number(n))[0] for n in notes.values() if scan_number(n) and split_prefix(scan_number(n))[0]}
+    # 印なしの旧い題のスキャンノートと、印なしの生成物は、印が 1 つだけならそれ（無ければ設定の印）に属する
+    base_prefix = next(iter(scan_prefixes)) if len(scan_prefixes) == 1 else prefix
     for p, n in notes.items():
         num = scan_number(n)
         if num and p not in unsaved:
-            ids[p] = prefix + num
+            ids[p] = num if split_prefix(num)[0] else base_prefix + num
             if ids[p] != stored[p]:
                 plan[p] = ids[p]
     # 紙の自動作成の索引は、YAML の folgezettel を `PA-0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
     for p, n in notes.items():
         if is_paper_infra(n) and p not in unsaved:
-            ids[p] = prefix + '0'
+            ids[p] = (infra_prefix(n) or base_prefix) + '0'
             if ids[p] != stored[p]:
                 plan[p] = ids[p]
             else:

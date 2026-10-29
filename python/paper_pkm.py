@@ -74,6 +74,7 @@ DEFAULT_INDEX_TITLE = "Paper-Zettelkasten-Index"
 # （ファイル名はタイムスタンプ）。ファイル名ではなく題で探す（2026-10-27）。頂点のノートの題は Index と同じ Paper-Zettelkasten-Index（グループではない）
 
 ID_PATTERN = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*$")
+FULL_ID_PATTERN = re.compile(r"^(?:[A-Z]{1,4}-)?\d+(?:[a-z]+\d+)*[a-z]*$")  # 印つきの番号も受ける
 # キーと ID 部に `:` を許さない（`time: 2026-01-01 00:00:00` のような front matter を
 # 後方一致でキーワード行と誤認しないため。`[^:]+?` の後退を防ぐ）。
 KEYWORD_LINE_RE = re.compile(
@@ -112,8 +113,30 @@ def natural_key(text: str):
     ]
 
 
+# 紙のノートの番号の印（PA・PB…）。`PA-1a2` の形（印は大文字 1〜4 字）。印の無い番号（`1a2`）は旧い形（regen が印つきに直す）
+PREFIX_PAT = r"[A-Z]{1,4}"
+ID_BODY_PAT = r"\d+(?:[a-z]+\d+)*[a-z]*"
+PREFIXED_ID_RE = re.compile(rf"^({PREFIX_PAT})-({ID_BODY_PAT})$")
+
+
 def normalize_id(raw: str) -> str:
-    return unicodedata.normalize("NFKC", raw).strip().lower()
+    """番号をそろえる。印つき（`pa-1A2` → `PA-1a2`）は印を大文字・番号を小文字に、印なしは小文字に。"""
+    t = unicodedata.normalize("NFKC", raw).strip()
+    m = re.match(r"^([A-Za-z]{1,4})-(.+)$", t)
+    if m and re.fullmatch(ID_BODY_PAT, m.group(2).lower()):
+        return m.group(1).upper() + "-" + m.group(2).lower()
+    return t.lower()
+
+
+def split_paper_title(title: str) -> tuple[str, str]:
+    """`PA-1a2` → ('PA', '1a2')。印の無い題は ('', 題)。"""
+    m = PREFIXED_ID_RE.match(title or "")
+    return (m.group(1), m.group(2)) if m else ("", title or "")
+
+
+def with_prefix(prefix: str, fid: str) -> str:
+    """印の無い番号に印を付ける（もう付いていればそのまま）。"""
+    return fid if PREFIXED_ID_RE.match(fid) or not prefix else f"{prefix}-{fid}"
 
 
 def split_id_tokens(fid: str) -> list[str]:
@@ -350,9 +373,29 @@ def markdown_link(display: str, target: Path, base_dir: Path,
     return link
 
 
-def folge_index_display(fid: str) -> str:
-    """番号専用ノート folgezettel-Index-N の表示名。"""
-    return f"folgezettel-Index-{fid}"
+# 名前空間（紙の番号の印ごとの組）。印が 1 つだけなら今までの名前（Index-write など）、複数あるときは末尾に印を付ける
+# （Paper-Zettelkasten-Index-PA・Index-write-PA・Folgezettel-Index-PA・folgezettel-Index-PA-1）。regen が名前空間ごとに切り替える
+_NS = {"prefix": "", "multi": False}
+
+
+def ns_set(prefix: str, multi: bool) -> None:
+    _NS["prefix"] = prefix
+    _NS["multi"] = bool(multi and prefix)
+
+
+def ns_title(kind: str, prefix: Optional[str] = None, multi: Optional[bool] = None) -> str:
+    """今の名前空間の生成物の題。kind: index（グループ）・iw（Index-write）・fi（Folgezettel-Index）。"""
+    base = {"index": DEFAULT_INDEX_TITLE, "iw": INDEX_WRITE[:-3], "fi": FOLGE_INDEX[:-3]}[kind]
+    p = _NS["prefix"] if prefix is None else prefix
+    m = _NS["multi"] if multi is None else multi
+    return f"{base}-{p}" if (m and p) else base
+
+
+def folge_index_display(fid: str, prefix: Optional[str] = None, multi: Optional[bool] = None) -> str:
+    """番号専用ノート folgezettel-Index-N の表示名（印が複数のときは folgezettel-Index-PA-N）。"""
+    p = _NS["prefix"] if prefix is None else prefix
+    m = _NS["multi"] if multi is None else multi
+    return f"folgezettel-Index-{p + '-' if (m and p) else ''}{fid}"
 
 
 def folge_index_path(root: Path, fid: str) -> Path:
@@ -449,7 +492,7 @@ def iter_md(root: Path):
 _IS_LINK_LINE = re.compile(r"^\s*\[(?:\\.|[^\]\\])*\]\([^)]*\)\s*$")
 _IMAGE_ONLY_RE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)\s*$")
 _MD_LINK_RE = re.compile(r"(?<!!)\[(?:\\.|[^\]\\])*\]\(([^)\s]+)\)")
-TOPIC_TITLE_RE = re.compile(r"^(\d+(?:[a-z]+\d+)*[a-z]*)-(.+)$")
+TOPIC_TITLE_RE = re.compile(r"^(?:([A-Z]{1,4})-)?(\d+(?:[a-z]+\d+)*[a-z]*)-(.+)$")
 DIARY_TITLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(MO|TU|WE|TH|FR|SA|SU)$")
 
 
@@ -504,20 +547,37 @@ def _has_image_named(n: NoteInfo, stem: str) -> bool:
     return any(Path(i).stem == stem and Path(i).suffix.lower() in IMAGE_EXTENSIONS for i in n.images)
 
 
-def scan_id_of(n: NoteInfo) -> Optional[str]:
-    """スキャンノートなら正式なID（title）を返す。普通のノートや判定できないものは None。"""
+def scan_key_of(n: NoteInfo) -> Optional[tuple[str, str]]:
+    """スキャンノートなら (印, 番号)。題は `PA-1a2`（印つき。画像は同じ名前か、印を除いた番号）か `1a2`（旧い形。印は ''）。
+    普通のノートや判定できないものは None。"""
+    m = PREFIXED_ID_RE.match(n.title)
+    if m:
+        return (m.group(1), m.group(2)) if (_has_image_named(n, n.title) or _has_image_named(n, m.group(2))) else None
     fid = normalize_id(n.title)
     if n.title != fid or not ID_PATTERN.fullmatch(fid):
         return None
-    return fid if _has_image_named(n, n.title) else None
+    return ("", fid) if _has_image_named(n, n.title) else None
+
+
+def scan_id_of(n: NoteInfo) -> Optional[str]:
+    """スキャンノートなら番号（印を除く）。普通のノートや判定できないものは None。"""
+    k = scan_key_of(n)
+    return k[1] if k else None
+
+
+def topic_ref_of(n: NoteInfo) -> Optional[tuple[str, str, str]]:
+    """トピックノートなら (印, 起点ID, 表示名=title)。題は `PA-1-仏教` か旧い `1-仏教`（印は ''）。"""
+    m = TOPIC_TITLE_RE.match(n.title)
+    if not m or not ID_PATTERN.fullmatch(m.group(2)):
+        return None
+    ok = _has_image_named(n, n.title) or (m.group(1) is not None and _has_image_named(n, n.title[len(m.group(1)) + 1:]))
+    return (m.group(1) or "", m.group(2), n.title) if ok else None
 
 
 def topic_of(n: NoteInfo) -> Optional[tuple[str, str]]:
     """トピックノートなら (起点ID, 表示名=title)。"""
-    m = TOPIC_TITLE_RE.match(n.title)
-    if not m or not ID_PATTERN.fullmatch(m.group(1)):
-        return None
-    return (m.group(1), n.title) if _has_image_named(n, n.title) else None
+    r = topic_ref_of(n)
+    return (r[1], r[2]) if r else None
 
 
 def diary_date_of(n: NoteInfo) -> Optional[str]:
@@ -535,32 +595,71 @@ def diary_date_of(n: NoteInfo) -> Optional[str]:
     return date if any(i.startswith(prefix) and Path(i).suffix.lower() in IMAGE_EXTENSIONS for i in n.images) else None
 
 
-def scan_folgezettel_notes(root: Path, notes: Optional[list] = None) -> dict[str, Path]:
+def scan_folgezettel_notes(root: Path, notes: Optional[list] = None, prefix: Optional[str] = None) -> dict[str, Path]:
     """スキャンノート（title が正式なID・本文がその画像を参照）→ {ID: ノート}。
+    prefix を渡すと、その印（'PA' など。旧い形は ''）のノートだけを、印を除いた番号 {1a2: ノート} で返す。
+    渡さないときは全部を、題そのまま {PA-1a2: ノート} で返す（旧い形は {1a2: ノート}）。
     IDが重複したときは先に見つかった（パス順の）ほうを使う。重複は find_scan_conflicts で検出する。"""
     found: dict[str, Path] = {}
     for n in (notes if notes is not None else load_notes(root)):
-        fid = scan_id_of(n)
-        if fid:
-            found.setdefault(fid, n.path)
+        k = scan_key_of(n)
+        if not k:
+            continue
+        if prefix is None:
+            found.setdefault(n.title, n.path)
+        elif k[0] == prefix:
+            found.setdefault(k[1], n.path)
     return found
 
 
 def find_scan_conflicts(root: Path, notes: Optional[list] = None) -> dict[str, list[Path]]:
-    """同じID（title）を持つスキャンノートが複数あるもの → {ID: [ノート…]}。"""
+    """同じ番号（印つき）を持つスキャンノートが複数あるもの → {PA-1a2: [ノート…]}。
+    印の無い旧い題は、今の印（既定 PA）のものとして数える。"""
+    default = default_prefix(root)
     seen: dict[str, list[Path]] = {}
     for n in (notes if notes is not None else load_notes(root)):
-        fid = scan_id_of(n)
-        if fid:
-            seen.setdefault(fid, []).append(n.path)
+        if scan_key_of(n):
+            seen.setdefault(with_prefix(default, n.title), []).append(n.path)
     return {k: v for k, v in seen.items() if len(v) > 1}
+
+
+def scan_namespaces(root: Path, notes: Optional[list] = None) -> list[str]:
+    """紙のノートにある印（スキャンノート・トピックノートの題の印）の一覧。印なし（旧い形）は含めない。"""
+    found: set[str] = set()
+    for n in (notes if notes is not None else load_notes(root)):
+        k = scan_key_of(n)
+        if k and k[0]:
+            found.add(k[0])
+        t = topic_ref_of(n)
+        if t and t[0]:
+            found.add(t[0])
+    return sorted(found)
+
+
+def adopt_legacy_prefix(root: Path, default: str, notes: Optional[list] = None) -> int:
+    """印の無い題の紙のノート（旧い形 `1a2` / `1-仏教`）を、印つき（`PA-1a2` / `PA-1-仏教`）に直す。
+    画像のファイル名は変えない（ノートは同じ名前の画像、または印を除いた番号の画像を参照していれば紙のノートと分かる）。直した数を返す。"""
+    n_done = 0
+    for n in (notes if notes is not None else load_notes(root)):
+        k = scan_key_of(n)
+        if k and not k[0]:
+            _retitle(n.path, f"{default}-{n.title}")
+            n_done += 1
+            continue
+        t = topic_ref_of(n)
+        if t and not t[0]:
+            _retitle(n.path, f"{default}-{n.title}")
+            n_done += 1
+    if n_done:
+        reset_name_cache()
+    return n_done
 
 
 def _legacy_paper_indexes(root: Path) -> list[Path]:
     """Paper-Zettelkasten-Index（グループ。題が Paper-Zettelkasten-Index、または旧マーカー `paper_index:` つき）。名前順。"""
     found: list[Path] = []
     for n in load_notes(root):
-        if fm_value(n.fm, "paper_index") or (n.group and n.title == DEFAULT_INDEX_TITLE):
+        if fm_value(n.fm, "paper_index") or (n.group and n.title == ns_title('index')):
             found.append(n.path)
     return sorted(found, key=lambda p: p.name)
 
@@ -740,7 +839,7 @@ def migrate_legacy_metadata(root: Path) -> list[str]:
                 else:
                     msgs.append(f"{n.path.name}: paper_topic_index: {v!r} を title と attribute から確認できません（消していません）")
             elif key == "paper_index":
-                if n.group and n.title == DEFAULT_INDEX_TITLE:
+                if n.group and (n.title == DEFAULT_INDEX_TITLE or n.title.startswith(DEFAULT_INDEX_TITLE + "-")):
                     drop.add(key)
         if drop:
             _drop_fm_keys(n.path, drop)
@@ -1178,21 +1277,26 @@ def create_topic_note(
     return path
 
 
-def scan_topic_notes(root: Path, notes: Optional[list] = None) -> dict[str, list[tuple[str, Path, Optional[str]]]]:
+def scan_topic_notes(root: Path, notes: Optional[list] = None, prefix: Optional[str] = None) -> dict[str, list[tuple[str, Path, Optional[str]]]]:
     """トピックノート（title が `ID-トピック名`・本文がその画像を参照）→ {起点ID: [(表示名, ノート, 親トピック名), …]}。
 
     親トピック名（例: 1-仏教）は front matter の `topic_parent:`（同じ起点IDのトピックがあるときだけ）。
     無ければ旧い形（作成時に Context の節へ書いた、同じ起点IDの別のトピックへのリンク）から読む。
-    どちらも無ければ None（親は推測しない）。"""
+    どちらも無ければ None（親は推測しない）。
+    prefix（'PA' など。旧い形は ''）を渡すと、その印のトピックだけを、印を除いた起点ID {1: …} で返す。
+    渡さないときは全部を、印つきの起点ID {PA-1: …}（旧い形は {1: …}）で返す。"""
     notes = notes if notes is not None else load_notes(root)
     topics: dict[str, tuple[str, str]] = {}  # 正規化パス → (起点ID, 表示名)
+    refs: dict[str, tuple[str, str, str]] = {}
     for n in notes:
-        t = topic_of(n)
-        if t:
-            topics[os.path.normpath(str(n.path))] = t
+        r = topic_ref_of(n)
+        if r and (prefix is None or r[0] == prefix):
+            key = r[1] if prefix is not None else with_prefix(r[0], r[1])
+            topics[os.path.normpath(str(n.path))] = (key, r[2])
+            refs[os.path.normpath(str(n.path))] = r
     found: dict[str, list[tuple[str, Path, Optional[str]]]] = {}
     for n in notes:
-        t = topic_of(n)
+        t = topics.get(os.path.normpath(str(n.path)))
         if not t:
             continue
         fid, title = t
@@ -1326,7 +1430,7 @@ def find_diary_group(root: Path, index_path: Optional[Path], notes: Optional[lis
                     return cand
         return None
 
-    found = _target(index_path) or _target(find_titled(root, FOLGE_INDEX[:-3], True) or Path(root) / FOLGE_INDEX)
+    found = _target(index_path) or _target(find_titled(root, ns_title('fi'), True) or Path(root) / FOLGE_INDEX)
     if found is not None:
         return found
     tops = paper_diary_groups(notes)["tops"]
@@ -1392,7 +1496,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
             inner.append("")
         id_index = id_index_paths.get(fid) or find_id_index(root, fid)
         inner += [CONTEXT_HEAD,
-                  markdown_link(FOLGE_INDEX[:-3], named_path(root, FOLGE_INDEX[:-3], True), path.parent)]
+                  markdown_link(ns_title('fi'), named_path(root, ns_title('fi'), True), path.parent)]
         body = merge_note_body(old_fi_body, inner)
         body = _place_topic_lines(body, path.parent, members, folge, topics, id_index)
         if body != old_fi_body:
@@ -1658,32 +1762,18 @@ def build_diary_tree(root: Path, diaries: dict[str, Path], notes: Optional[list]
     return top, strip
 
 
-def regen(root: Path, do_sync: bool = True) -> bool:
-    """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。"""
-    root = Path(root).resolve()
-    reset_name_cache()
-    index_path = migrate_paper_index(root)
-    if index_path is None:
-        return False
-    # 旧い front matter の目印（folgezettel: など）を、新しい判定で確かめられたものから外す。
-    # 確かめられないものは消さず、警告として残す。
-    report = migrate_legacy_metadata(root)
-    notes = load_notes(root)
-    for fid, paths in sorted(find_scan_conflicts(root, notes).items(), key=lambda kv: natural_key(kv[0])):
-        report.append(f"ID {fid} が重複しています（title: {fid} のスキャンノートが複数）: "
-                      + ", ".join(p.name for p in paths))
-    LAST_REPORT[:] = report
-    for msg in report:
-        print(f"paper_pkm: {msg}", file=sys.stderr)
+def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: dict, added_report: list[str]) -> None:
+    """1 つの名前空間（紙の番号の印 prefix）の Index-write・グループ・Folgezettel-Index・番号専用ノート・スキャンノートを作り直す。
+    ns_set が済んでいること。紙の日記は diaries を渡した名前空間（最初の 1 つ）だけが扱う。"""
     index_display = index_title(index_path)
 
     entries: list[dict] = []
-    index_write = named_path(root, INDEX_WRITE[:-3])
+    index_write = named_path(root, ns_title('iw'))
     keyword_line_order: list[tuple[int, dict]] = []
     if index_write.is_file():
         iw_fm, body = read_note(index_write)
         # Index-write も、索引（キーワード行）を書くグループ（attribute: group）。同名のノートを別に持たない
-        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, INDEX_WRITE[:-3]))
+        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')))
         iw_fm_changed = iw_fm_new != iw_fm
         iw_fm = iw_fm_new
         for i, line in enumerate(body):
@@ -1706,7 +1796,6 @@ def regen(root: Path, do_sync: bool = True) -> bool:
 
     # 紙の日記があれば、キーワード「日記」を 1 つだけ入れる（Index-write に同名のキーワードが
     # あればそれに日記を足す。無ければ自動で追加する）。regen のたびに作り直すので消えない。
-    diaries = scan_diary_notes(root, notes)
     for date, dpath in diaries.items():
         fm_d, body_d = read_note(dpath)
         # 画像の次に空行が無ければ 1 つ足す（画像と ### Group などの節をくっつけない。あれば触らない）
@@ -1725,7 +1814,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         entries.sort(key=keyword_sort_key)
     readings = _entry_readings(entries)
 
-    folge = scan_folgezettel_notes(root, notes)
+    folge = scan_folgezettel_notes(root, notes, prefix=prefix)
 
     # --- グループ（複数IDのキーワード）と、紙の日記の「日記」 ----------------------
     group_paths: dict[str, Path] = {}
@@ -1782,8 +1871,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
 
     fm, old_index_body = read_note(index_path)
     fm = _fm_title_attr(fm, title_of(fm, old_index_body, DEFAULT_INDEX_TITLE))
-    fixed_links = [markdown_link(INDEX_WRITE[:-3], named_path(root, INDEX_WRITE[:-3]), index_path.parent),
-                   markdown_link(FOLGE_INDEX[:-3], named_path(root, FOLGE_INDEX[:-3], True), index_path.parent)]
+    fixed_links = [markdown_link(ns_title('iw'), named_path(root, ns_title('iw')), index_path.parent),
+                   markdown_link(ns_title('fi'), named_path(root, ns_title('fi'), True), index_path.parent)]
     body = [f"# {index_display}", "", *fixed_links, *inner]
     merged = merge_note_body(old_index_body, body)
     # Index-write・Folgezettel-Index の固定リンクは連続させ、その次のキーワード一覧との間に空行を 1 行置く
@@ -1793,7 +1882,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     write_note(index_path, fm, merged)
 
     # --- Folgezettel-Index（日記 → 最上位IDを自然順。各リンクは専用ノート folgezettel-Index-N#N） ---
-    folge_index = named_path(root, FOLGE_INDEX[:-3], True)
+    folge_index = named_path(root, ns_title('fi'), True)
     id_links = [
         (folge_index_path(root, fid), markdown_link(fid, folge_index_path(root, fid), folge_index.parent, frag=fid))
         for fid in top_level_ids(folge)
@@ -1805,8 +1894,8 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     if diary_top is not None:
         desired.insert(0, (diary_top, markdown_link(DIARY_KEYWORD, diary_top, folge_index.parent)))
     if not folge_index.is_file():
-        write_note(folge_index, [_time_line(), f"title: {FOLGE_INDEX[:-3]}", "attribute: group"],
-                   [f"# {FOLGE_INDEX[:-3]}", ""], keep_trailing_blank=True)
+        write_note(folge_index, [_time_line(), f"title: {ns_title('fi')}", "attribute: group"],
+                   [f"# {ns_title('fi')}", ""], keep_trailing_blank=True)
     fm, old_folge_body = read_note(folge_index)
     # 旧い `[diary](…)` の行（英語表記）は、日記グループへの `[日記](…)` に置き換える（位置も一番上へ）
     old_folge_body = [ln for ln in old_folge_body if ln.strip() != f"[diary]({_rel(folge_index.parent, diary_top)})"] \
@@ -1815,9 +1904,9 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     if diary_top is not None:
         structure.add(os.path.normpath(str(diary_top)))
     old_folge_body = _sync_link_block(old_folge_body, folge_index.parent, structure, desired)
-    fm = _fm_title_attr(fm, FOLGE_INDEX[:-3])
+    fm = _fm_title_attr(fm, ns_title('fi'))
     write_note(folge_index, fm, merge_note_body(old_folge_body, [
-        f"# {FOLGE_INDEX[:-3]}", "", *[ln for _, ln in desired],
+        f"# {ns_title('fi')}", "", *[ln for _, ln in desired],
         CONTEXT_HEAD,
         markdown_link(index_display, index_path, folge_index.parent)]))
 
@@ -1826,7 +1915,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     # 紙ノート 1 がトピックの ParentBranch（1 の ChildBranch にトピック）。Context では代用しない。
     added_report: list[str] = []
     notes = load_notes(root)
-    topics = scan_topic_notes(root, notes)
+    topics = scan_topic_notes(root, notes, prefix)
     id_index_paths: dict[str, Path] = {}
     branch_lines: dict[str, list[str]] = {}
 
@@ -1870,7 +1959,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         _ensure_fm_line(note_path, "source", SCAN_SOURCE_LINE)
         fm, old_body = read_note(note_path)
         images = [ln for ln in old_body if re.match(r"^!\[\]\(", ln.strip())]
-        inner = [f"# {fid}", "", *images, CONTEXT_HEAD]
+        inner = [f"# {with_prefix(prefix, fid)}", "", *images, CONTEXT_HEAD]
         # 専用ノート folgezettel-Index-N の自ID節（#ID）を Context に入れる（親子は Branch で表す）
         root_fid = _root_id(fid)
         inner.append(markdown_link(folge_index_display(root_fid), folge_index_path(root, root_fid),
@@ -1900,8 +1989,120 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             if msg:
                 added_report.append(msg)
 
-    # --- 頂点の普通のノート（題 Paper-Zettelkasten-Index）。BranchGroup: に 3 つのグループ ------------
-    ensure_paper_top(root, index_path, named_path(root, INDEX_WRITE[:-3]), named_path(root, FOLGE_INDEX[:-3], True))
+
+def has_paper_pkm(root: Path) -> bool:
+    """紙の PKM（Paper-Zettelkasten-Index のグループ。印が複数なら Paper-Zettelkasten-Index-PA など）があるか。"""
+    for n in load_notes(Path(root)):
+        if fm_value(n.fm, "paper_index") or (n.group and (n.title == DEFAULT_INDEX_TITLE or n.title.startswith(DEFAULT_INDEX_TITLE + "-"))):
+            return True
+    return False
+
+
+def default_prefix(root: Path) -> str:
+    """これから取り込む紙のノートの印（設定 paperIdPrefix。既定 PA）。"""
+    import folgezettel as fz  # 遅延 import（note_format_v2 を読み込む）
+    return fz.paper_prefix(root)[:-1]
+
+
+def reconcile_names(root: Path, namespaces: list[str], notes: list) -> int:
+    """印が 1 つ ⇔ 複数 で変わる生成物の題を直す。印が 2 つ以上になったら、今までの名前（Index-write など）を
+    いちばん古いスキャンノートの印のものとして `Index-write-PA` のように改名する。1 つに戻ったら元の名前に戻す。直した数を返す。"""
+    multi = len(namespaces) > 1
+    done = 0
+    scans = []
+    for n in notes:
+        k = scan_key_of(n)
+        if k and k[0]:
+            scans.append((creation_stamp(n), k[0]))
+    if multi:
+        owner = min(scans)[1] if scans else namespaces[0]
+        mapping = [(DEFAULT_INDEX_TITLE, True), (INDEX_WRITE[:-3], None), (FOLGE_INDEX[:-3], True)]
+        for base, grp in mapping:
+            for n in notes:
+                if n.title == base and (grp is None or n.group == grp):
+                    if base == INDEX_WRITE[:-3] and not any(DEFAULT_INDEX_TITLE in ln for ln in n.body):
+                        continue   # 紙の Index-write だけ（デジタルの同名ノートは触らない）
+                    _retitle(n.path, f"{base}-{owner}")
+                    done += 1
+        for n in notes:
+            m = re.match(r"^folgezettel-Index-(\d.*)$", n.title)
+            if m:
+                _retitle(n.path, f"folgezettel-Index-{owner}-{m.group(1)}")
+                done += 1
+    elif namespaces:
+        p = namespaces[0]
+        for base in (DEFAULT_INDEX_TITLE, INDEX_WRITE[:-3], FOLGE_INDEX[:-3]):
+            for n in notes:
+                if n.title == f"{base}-{p}":
+                    _retitle(n.path, base)
+                    done += 1
+        for n in notes:
+            m = re.match(rf"^folgezettel-Index-{re.escape(p)}-(\d.*)$", n.title)
+            if m:
+                _retitle(n.path, f"folgezettel-Index-{m.group(1)}")
+                done += 1
+    if done:
+        reset_name_cache()
+    return done
+
+
+def creation_stamp(n: NoteInfo) -> str:
+    """ノートの作成の目安（front matter の time:。無ければ空）。古い順に並べるため。"""
+    return (fm_value(n.fm, "time") or "").strip()
+
+
+def ensure_ns_structure(root: Path) -> Path:
+    """今の名前空間（ns_set 済み）のグループ・Index-write・Folgezettel-Index が無ければ作る。グループのパスを返す。"""
+    index_write = named_path(root, ns_title('iw'))
+    if not index_write.is_file():
+        write_note(index_write, [_time_line(), f"title: {ns_title('iw')}", "attribute: group"], [f"# {ns_title('iw')}", ""])
+    index_path = find_paper_index(root)
+    if index_path is None:
+        index_path = named_path(root, ns_title('index'), True)
+        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi'), True))
+    return index_path
+
+
+def regen(root: Path, do_sync: bool = True) -> bool:
+    """Index・グループ・Folgezettel-Index・スキャンノートの本文を再生成する。
+    紙のノートの印（PA・PB…）ごとに、グループ Paper-Zettelkasten-Index（印が複数なら -PA など）・Index-write・Folgezettel-Index を作る。
+    頂点のノート Paper-Zettelkasten-Index の BranchGroup: に、そのグループが並ぶ。"""
+    root = Path(root).resolve()
+    reset_name_cache()
+    ns_set("", False)
+    if not has_paper_pkm(root):
+        return False
+    # 旧い front matter の目印（folgezettel: など）を、新しい判定で確かめられたものから外す。
+    # 確かめられないものは消さず、警告として残す。
+    report = migrate_legacy_metadata(root)
+    default = default_prefix(root)
+    # 印の無い題（旧い形）の紙のノートは、今の印（既定 PA）のものにする。以後は、ノートごとに自分の印を題に持つ
+    adopt_legacy_prefix(root, default)
+    notes = load_notes(root)
+    namespaces = scan_namespaces(root, notes) or [default]
+    reconcile_names(root, namespaces, notes)
+    reset_name_cache()
+    notes = load_notes(root)
+    for title, paths in sorted(find_scan_conflicts(root, notes).items(), key=lambda kv: natural_key(kv[0])):
+        report.append(f"ID {title} が重複しています（title: {title} のスキャンノートが複数）: "
+                      + ", ".join(p.name for p in paths))
+    LAST_REPORT[:] = report
+    for msg in report:
+        print(f"paper_pkm: {msg}", file=sys.stderr)
+    multi = len(namespaces) > 1
+    diaries = scan_diary_notes(root, notes)
+    added_report: list[str] = []
+    groups: list[Path] = []
+    for k, prefix in enumerate(namespaces):
+        ns_set(prefix, multi)
+        index_path = ensure_ns_structure(root)
+        reset_name_cache()
+        _regen_ns(root, prefix, index_path, load_notes(root), diaries if k == 0 else {}, added_report)
+        groups.append(index_path)
+        reset_name_cache()
+    ns_set(namespaces[0], multi)
+    # --- 頂点の普通のノート（題 Paper-Zettelkasten-Index）。BranchGroup: にグループ（印ごとに 1 つ）------------
+    ensure_paper_top(root, groups)
 
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
@@ -1924,12 +2125,12 @@ def find_paper_top(root: Path) -> Optional[Path]:
     return find_titled(root, DEFAULT_INDEX_TITLE, False)
 
 
-def ensure_paper_top(root: Path, index_path: Path, index_write: Path, folge_index: Path) -> Path:
+def ensure_paper_top(root: Path, groups: list[Path]) -> Path:
     """頂点の普通のノートを作る／直す。
 
         Paper-Zettelkasten-Index（普通のノート。ChildBranch: は空）
-          BranchGroup: Paper-Zettelkasten-Index（グループ）だけ
-            └ そのグループの中に Index-write（グループ。索引を書く）・Folgezettel-Index（グループ）・キーワード
+          BranchGroup: 紙の番号の印ごとのグループ（印が 1 つなら Paper-Zettelkasten-Index、複数なら Paper-Zettelkasten-Index-PA など）
+            └ グループの中に Index-write（グループ。索引を書く）・Folgezettel-Index（グループ）・キーワード
 
     vault の index.md からは、グループではなくこの頂点のノートへリンクする（グループへのリンクは頂点へ張り替える）。"""
     top = find_paper_top(root)
@@ -1937,35 +2138,45 @@ def ensure_paper_top(root: Path, index_path: Path, index_write: Path, folge_inde
         top = named_path(root, DEFAULT_INDEX_TITLE, False)
         write_note(top, [_time_line(), f"title: {DEFAULT_INDEX_TITLE}"], [f"# {DEFAULT_INDEX_TITLE}", ""],
                    keep_trailing_blank=True)
-    # 頂点のノートの BranchGroup: はグループ 1 つだけ。Index-write と Folgezettel-Index は、そのグループの中のグループ
-    lines = [markdown_link(DEFAULT_INDEX_TITLE, index_path, top.parent)]
+    # 頂点のノートの BranchGroup: はグループだけ（印ごとに 1 つ）。Index-write と Folgezettel-Index は、そのグループの中のグループ
+    lines = [markdown_link(index_title(g), g, top.parent) for g in groups]
     _write_branch_group(top, lines)
     parent_index = Path(root) / "index.md"
     if parent_index.is_file():
         fm, body = read_note(parent_index)
         new_link = markdown_link(DEFAULT_INDEX_TITLE, top, parent_index.parent)
-        old_target = f"({_rel(parent_index.parent, index_path)})"
         changed = False
-        for i, ln in enumerate(body):
-            if ln.strip().startswith("[") and ln.strip().endswith(old_target):
-                body[i] = new_link
-                changed = True
+        for g in groups:
+            old_target = f"({_rel(parent_index.parent, g)})"
+            for i, ln in enumerate(body):
+                if ln.strip().startswith("[") and ln.strip().endswith(old_target):
+                    body[i] = new_link
+                    changed = True
         if changed:
-            write_note(parent_index, fm, body)
+            # 同じ頂点へのリンクが重なったら 1 つにする
+            seen = False
+            out = []
+            for ln in body:
+                if ln == new_link:
+                    if seen:
+                        continue
+                    seen = True
+                out.append(ln)
+            write_note(parent_index, fm, out)
     return top
 
 
 def _write_new_paper_index(index_path: Path, index_write: Path, folge_index: Path) -> None:
     fm = [
         _time_line(),
-        f"title: {DEFAULT_INDEX_TITLE}",
+        f"title: {ns_title('index')}",
         "attribute: group",
     ]
     body = [
-        f"# {DEFAULT_INDEX_TITLE}",
+        f"# {ns_title('index')}",
         "",
-        markdown_link(INDEX_WRITE[:-3], index_write, index_path.parent),
-        markdown_link(FOLGE_INDEX[:-3], folge_index, index_path.parent),
+        markdown_link(ns_title('iw'), index_write, index_path.parent),
+        markdown_link(ns_title('fi'), folge_index, index_path.parent),
     ]
     write_note(index_path, fm, body)
 
@@ -1974,54 +2185,56 @@ def create_paper_index(root: Path) -> Path:
     """紙PKM Index一式（Index-write・Paper-Zettelkasten-Index・Folgezettel-Index）を作る。
 
     どれもふつうのノート（ファイル名はタイムスタンプ。題で探す）。既に Index があればそれを再利用する。
-    作成/更新後に regen（同期込み）を実行。
+    作成/更新後に regen（同期込み）を実行。印が複数あるときは、最初の印のグループのパスを返す。
     """
     root = Path(root).resolve()
     reset_name_cache()
-    index_write = named_path(root, INDEX_WRITE[:-3])
-    if not index_write.is_file():
-        old_index_write = find_titled(root, OLD_INDEX_WRITE[:-3])
-        if old_index_write is not None:
-            fm, body = read_note(old_index_write)
-            fm = [f"title: {INDEX_WRITE[:-3]}" if ln.startswith("title:") else ln for ln in fm]
-            body = [INDEX_WRITE[:-3] if ln.strip() == OLD_INDEX_WRITE[:-3] else ln for ln in body]
-            write_note(old_index_write, fm, body)
-            index_write = old_index_write
-            reset_name_cache()
-        else:
-            write_note(
-                index_write,
-                [_time_line(), f"title: {INDEX_WRITE[:-3]}", "attribute: group"],
-                [f"# {INDEX_WRITE[:-3]}", ""],
-            )
-    index_path = migrate_paper_index(root)
-    if index_path is None:
-        index_path = named_path(root, DEFAULT_INDEX_TITLE, True)
-        _write_new_paper_index(index_path, index_write, named_path(root, FOLGE_INDEX[:-3], True))
+    ns_set("", False)
+    index_path = None
+    if not has_paper_pkm(root):
+        index_write = named_path(root, ns_title('iw'))
+        if not index_write.is_file():
+            old_index_write = find_titled(root, OLD_INDEX_WRITE[:-3])
+            if old_index_write is not None:
+                fm, body = read_note(old_index_write)
+                fm = [f"title: {ns_title('iw')}" if ln.startswith("title:") else ln for ln in fm]
+                body = [ns_title('iw') if ln.strip() == OLD_INDEX_WRITE[:-3] else ln for ln in body]
+                write_note(old_index_write, fm, body)
+                index_write = old_index_write
+                reset_name_cache()
+            else:
+                write_note(
+                    index_write,
+                    [_time_line(), f"title: {ns_title('iw')}", "attribute: group"],
+                    [f"# {ns_title('iw')}", ""],
+                )
+        index_path = named_path(root, ns_title('index'), True)
+        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi'), True))
+        # vault 親Index（index.md）に Paper-Zettelkasten-Index へのリンクを足す
+        parent_index = root / "index.md"
+        if parent_index.is_file():
+            fm, body = read_note(parent_index)
+            top_now = find_paper_top(root)
+            if all(index_path.name not in ln and not (top_now is not None and top_now.name in ln) for ln in body):
+                # 空行は入れない: 最後のリンク行（内容のある最後の行）の直後に 1 行足す
+                link = f"[{DEFAULT_INDEX_TITLE}]({_rel(parent_index.parent, index_path)})"
+                last = max((i for i, ln in enumerate(body) if ln.strip()), default=-1)
+                body.insert(last + 1, link)
+                write_note(parent_index, fm, body)
     else:
-        fm, body = read_note(index_path)
-        old_title = title_of(fm, body, "")
-        if old_title != DEFAULT_INDEX_TITLE:
-            fm = [f"title: {DEFAULT_INDEX_TITLE}" if ln.startswith("title:") else ln
-                  for ln in fm]
-            body = [f"# {DEFAULT_INDEX_TITLE}" if ln.strip() == f"# {old_title}" else ln
-                    for ln in body]
-            write_note(index_path, fm, body)
-
-    # vault 親Index（index.md）に Paper-Zettelkasten-Index へのリンクを足す
-    parent_index = root / "index.md"
-    if parent_index.is_file():
-        fm, body = read_note(parent_index)
-        top_now = find_paper_top(root)
-        if all(index_path.name not in ln and not (top_now is not None and top_now.name in ln) for ln in body):
-            # 空行は入れない: 最後のリンク行（内容のある最後の行）の直後に 1 行足す
-            link = f"[{DEFAULT_INDEX_TITLE}]({_rel(parent_index.parent, index_path)})"
-            last = max((i for i, ln in enumerate(body) if ln.strip()), default=-1)
-            body.insert(last + 1, link)
-            write_note(parent_index, fm, body)
+        # 旧い題（paper_index: マーカーや旧い名前）のグループは、regen が今の題に直す
+        found = find_paper_index(root)
+        if found is not None:
+            index_path = found
+            fm, body = read_note(index_path)
+            old_title = title_of(fm, body, "")
+            if old_title != ns_title('index'):
+                fm = [f"title: {ns_title('index')}" if ln.startswith("title:") else ln for ln in fm]
+                body = [f"# {ns_title('index')}" if ln.strip() == f"# {old_title}" else ln for ln in body]
+                write_note(index_path, fm, body)
 
     regen(root)
-    return index_path
+    return find_paper_index(root) or index_path
 
 
 def _trash_note(root: Path, note_path: Path) -> Optional[Path]:
@@ -2057,8 +2270,10 @@ def move_images(
     """
     root = Path(root).resolve()
     dest = Path(dest).resolve()
-    existing = scan_folgezettel_notes(root)
-    topics = {disp: _p for _ids in scan_topic_notes(root).values()
+    default = default_prefix(root)
+    # 既にあるスキャンノート（印の無い旧い題は、今の印のものとして数える）
+    existing = {with_prefix(default, title): path for title, path in scan_folgezettel_notes(root).items()}
+    topics = {with_prefix(default, disp): _p for _ids in scan_topic_notes(root).values()
               for disp, _p, _t in _ids}
     seen: set[str] = set()
     moved: list[tuple[str, Path]] = []
@@ -2070,9 +2285,10 @@ def move_images(
         topic = topic or None
         parent_topic = (rest[1].strip() if len(rest) > 1 and rest[1] else None)
         fid = normalize_id(raw_id)
-        if not ID_PATTERN.fullmatch(fid):
+        if not FULL_ID_PATTERN.fullmatch(fid):
             errors.append((src, fid, "IDの形式が不正です"))
             continue
+        fid = with_prefix(default, fid)      # 印の無い番号には、今の印（既定 PA）を付ける。画像もノートの題も `PA-1a2`
         display = topic_display(fid, topic) if topic else fid
         if display in seen:
             # 同じバッチ内の重複はフォルダ内で同名 rename になるためそのまま禁止

@@ -36,12 +36,12 @@ class T(unittest.TestCase):
         r = si.assign(self.root, self.names[0], "1")
         self.assertTrue(r["ok"], r)
         r = si.step(self.root, self.names[1], "down")
-        self.assertEqual(r["display"], "1a", r)
+        self.assertEqual(r["display"], "PA-1a", r)
         r = si.step(self.root, self.names[2], "right")
-        self.assertEqual(r["display"], "1b", r)
+        self.assertEqual(r["display"], "PA-1b", r)
         r = si.step(self.root, self.names[3], "down")
-        self.assertEqual(r["display"], "1b1", r)
-        self.assertEqual(si.list_scans(self.root)["last"], "1b1")
+        self.assertEqual(r["display"], "PA-1b1", r)
+        self.assertEqual(si.list_scans(self.root)["last"], "PA-1b1")
 
     def test_step_needs_a_previous_number(self):
         r = si.step(self.root, self.names[0], "down")
@@ -51,15 +51,15 @@ class T(unittest.TestCase):
     def test_undo_restores_image_and_last(self):
         si.assign(self.root, self.names[0], "1")
         si.step(self.root, self.names[1], "down")           # 1a
-        self.assertTrue((self.root / "1a.png").is_file())
+        self.assertTrue((self.root / "PA-1a.png").is_file())
         r = si.undo(self.root)
         self.assertTrue(r["ok"], r)
-        self.assertEqual((r["name"], r["last"]), (self.names[1], "1"))
-        self.assertFalse((self.root / "1a.png").exists())
+        self.assertEqual((r["name"], r["last"]), (self.names[1], "PA-1"))
+        self.assertFalse((self.root / "PA-1a.png").exists())
         self.assertIn(self.names[1], si.list_scans(self.root)["scans"])
-        self.assertEqual(si.list_scans(self.root)["last"], "1")
+        self.assertEqual(si.list_scans(self.root)["last"], "PA-1")
         # 作ったノートは vault から無くなる（.trash にある）
-        self.assertNotIn("1a", pp.scan_folgezettel_notes(self.root))
+        self.assertNotIn("PA-1a", pp.scan_folgezettel_notes(self.root))
         self.assertTrue(list((self.root / ".trash").glob("*.md")))
         # もう一度取り消すと 1 も戻る。そのあとは取り消せない
         self.assertTrue(si.undo(self.root)["ok"])
@@ -72,7 +72,7 @@ class T(unittest.TestCase):
         r = si.undo(self.root)
         self.assertFalse(r["ok"], r)
         self.assertIn("上書き", r["error"])
-        self.assertTrue((self.root / "1.png").is_file())
+        self.assertTrue((self.root / "PA-1.png").is_file())
 
 
 if __name__ == "__main__":

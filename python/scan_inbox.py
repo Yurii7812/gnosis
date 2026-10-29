@@ -13,7 +13,7 @@
     scan_inbox.py undo ROOT                    # 直前の番号付けを取り消す（画像を受け皿へ戻し、作ったノートは .trash へ。矢印の左・h）
     scan_inbox.py diary ROOT NAME DATE         # 紙の日記として登録
     scan_inbox.py finish ROOT                  # Index・Folgezettel-Index などを作り直す
-    scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA-1a2）を見る / 変える（変えたら番号を付け直す）
+    scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA-1a2）を見る / 変える（これから取り込むものの印。今までのノートは変えない）
 
 どれも標準出力に JSON を 1 つ出す（失敗は {"ok": false, "error": …}）。
 """
@@ -155,8 +155,9 @@ def assign(root: Path, name: str, raw_id: str, topic: str = "") -> dict:
     root = Path(root).resolve()
     src = _src(root, name)
     fid = pp.normalize_id(raw_id)
-    if not pp.ID_PATTERN.fullmatch(fid):
+    if not pp.FULL_ID_PATTERN.fullmatch(fid):
         return {"ok": False, "error": "番号の形が違います: " + raw_id}
+    fid = pp.with_prefix(pp.default_prefix(root), fid)     # 印の無い番号には今の印（既定 PA）を付ける（PA-1a2）
     display = pp.topic_display(fid, topic) if topic else fid
     replaced = _same_name_exists(root, display)
     _keep_old(root, root, display)
@@ -238,7 +239,9 @@ def diary(root: Path, name: str, date: str) -> dict:
 
 def set_prefix(root: Path, value: str = "") -> dict:
     """紙の番号の印（PA → `PA-1a2`）。設定は vault の .gnosis/settings.json の paperIdPrefix。
-    value が空なら今の印を返すだけ。変えたら regen（同期込み）で、紙のノートの番号を新しい印に付け直す。"""
+    value が空なら今の印を返すだけ。変えるのは、これから取り込む紙のノートの印（題と画像の名前が `PB-1a2` になる）。
+    今までのノートは自分の印のまま（印が 2 つ以上になると、グループ・Index-write などが印ごとに分かれ、`-PA` `-PB` が付く）。
+    変える前に regen して、印の無い旧い題のノートを、今の印（変える前のもの）に直しておく。"""
     root = Path(root).resolve()
     value = value.strip().upper()
     if not value:
@@ -255,10 +258,13 @@ def set_prefix(root: Path, value: str = "") -> dict:
             data = {}
     except (OSError, ValueError):
         data = {}
+    try:
+        pp.regen(root)   # 旧い題のノートを、変える前の印に直す（変えたあとだと新しい印になってしまう）
+    except Exception:  # noqa: BLE001  紙の PKM が無い vault でも、印は変えられる
+        pass
     data["paperIdPrefix"] = value
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    pp.regen(root)
     return {"ok": True, "prefix": value}
 
 
