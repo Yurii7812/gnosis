@@ -3795,6 +3795,23 @@ function! gnosis#mview#center_rel(rel) abort
   endif
 endfunction
 
+" \l で入れるノートを選んでいる最中か（右のパネルの e が使う）
+function! gnosis#mview#pick_active() abort
+  return exists('s:S') && type(s:S) == v:t_dict && get(s:S, 'pick', '') ==# 'link' && !empty(get(s:S, 'origin', {}))
+endfunction
+
+" 右のパネルの e: \l で入れるノートを、パネルで選んだノート（絶対パス）に決める。続けて置き場所を聞く（e と同じ）
+function! gnosis#mview#decide_path(path) abort
+  if !gnosis#mview#pick_active() || !filereadable(a:path)
+    return 0
+  endif
+  let l:rel = s:rel_of(fnamemodify(a:path, ':p'))
+  let l:title = empty(l:rel) ? fnamemodify(a:path, ':t:r') : s:nd(l:rel).t
+  let s:S.lk = {'origin': copy(s:S.origin), 'path': fnamemodify(a:path, ':p'), 'rel': l:rel, 'title': empty(l:title) ? fnamemodify(a:path, ':t:r') : l:title, 'tries': 0}
+  call s:link_place()
+  return 1
+endfunction
+
 " q: 選ぶモード・絞り込みなど重なっているものを 1 つずつやめる。何も無ければ閉じる
 function! gnosis#mview#quit_layers() abort
   call s:quit()

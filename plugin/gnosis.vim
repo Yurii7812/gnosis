@@ -900,6 +900,9 @@ xnoremap <nowait> <silent> \P :<C-u>call gnosis#add_current_as_parent_range(line
 nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " \o … アウトライン窓（今のノートの見出し。曼荼羅・Folgezettel ビューと同時に出せる）の表示 ⇔ 非表示
 nnoremap <silent> \o        <Cmd>call gnosis#panel#key('outline')<CR>
+" \s … 右のパネル（アウトライン・タブ・ハブを 1 つに統合。前に使った中身で開く）
+nnoremap <silent> \s        <Cmd>call gnosis#panel#open_last()<CR>
+command! GnosisPanel call gnosis#panel#open_last()
 command! GnosisOutline call gnosis#panel#key('outline')
 " go … アウトライン窓 ⇔ ノートの窓 を行き来する（アウトラインが閉じていれば開く。どの窓からでも）
 " Shift+← / Shift+→（予備に gh / gl）… 窓を 1 つ左・右へ（左のビュー → ノート → 右のパネル。端では止まる）

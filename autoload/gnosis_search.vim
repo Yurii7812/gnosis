@@ -354,6 +354,10 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
       call extend(l:options, ['--bind', l:key . ':clear-selection+transform-header(' . l:switch . ')+reload(' . l:cmd . ' {q})'])
     endfor
   endif
+  " \l の画面だけ: Shift+← / Shift+→ で画面を閉じて、\l のまま曼荼羅・リスト / 右のパネルで選び続ける（s:link_sink_key）
+  if get(s:, 'expect_shift', 0)
+    call extend(l:options, ['--expect=shift-left,shift-right'])
+  endif
   if !empty(l:preview)
     " wrap の折り返しを考慮し、preview_highlight.py がヒット行の少し上から出す。
     call extend(l:options, [
@@ -419,7 +423,13 @@ function! gnosis_search#pick_insert_link() abort
   if !s:fzf_ok() | return | endif
   let s:insert_buf = bufnr('%')
   let s:insert_pos = getpos('.')
-  if s:note_search_run('Title> ', '2', function('s:link_sink_tab'))
+  let s:expect_shift = 1
+  try
+    let l:ran = s:note_search_run('Title> ', '2', function('s:link_sink_key', [0]))
+  finally
+    let s:expect_shift = 0
+  endtry
+  if l:ran
     return
   endif
   " フォールバック: 旧タイトルピッカー（タイトル検索・fzf 任せ）
@@ -484,7 +494,47 @@ function! gnosis_search#pick_insert_link_visual() abort range
     call s:link_sink_visual(remove(g:, 'gnosis_test_pick'))
     return
   endif
-  call s:note_search_run('Link> ', '2', function('s:link_sink_visual'))
+  let s:expect_shift = 1
+  try
+    call s:note_search_run('Link> ', '2', function('s:link_sink_key', [1]))
+  finally
+    let s:expect_shift = 0
+  endtry
+endfunction
+
+" \l の画面の確定。--expect があるので、lines[0] は押したキー（Enter なら空）。
+" Shift+← / Shift+→ なら、画面を閉じて、\l のまま曼荼羅・リスト（←）／右のパネル（→）で選び続ける
+function! s:link_sink_key(visual, lines) abort
+  let l:key = get(a:lines, 0, '')
+  let l:rest = a:lines[1 :]
+  if l:key ==# 'shift-left' || l:key ==# 'shift-right'
+    call timer_start(0, function('s:link_continue', [a:visual, l:key ==# 'shift-right']))
+    return
+  endif
+  if a:visual
+    call s:link_sink_visual(l:rest)
+  else
+    call s:link_sink_tab(l:rest)
+  endif
+endfunction
+
+" fzf のターミナルが片づいてから（timer）、元のノートに戻って \l の選ぶモードを始める。right = 右のパネルも開いてそこへ
+function! s:link_continue(visual, right, timer) abort
+  if exists('s:insert_buf') && bufexists(s:insert_buf) && bufnr('%') != s:insert_buf
+    execute 'buffer ' . s:insert_buf
+  endif
+  if exists('s:insert_pos') && !a:visual
+    call cursor(s:insert_pos[1], s:insert_pos[2])
+  endif
+  redraw
+  if a:visual
+    call gnosis#mview#link_pick_visual()
+  else
+    call gnosis#mview#link_pick()
+  endif
+  if a:right
+    call gnosis#panel#open_last()
+  endif
 endfunction
 
 " ビジュアル \l の確定: 選択範囲をリンクで置き換える。
