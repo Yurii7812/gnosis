@@ -1,5 +1,13 @@
 {
   "ja": {
+    "リンクにする単語": "Words to link",
+    "付け外し": "toggle",
+    "決定": "confirm",
+    "Gnosis: vault の中のノートで使ってください": "Gnosis: use this in a note inside the vault",
+    "Gnosis: 単語を調べられませんでした": "Gnosis: could not look up the words",
+    "Gnosis: リンクにできる単語はありません（ほかのノートの題と同じ単語が無い）": "Gnosis: no words to link (no word matches another note's title)",
+    "Gnosis: リンクにできませんでした": "Gnosis: could not make the links",
+    "Gnosis: %d 個の単語をリンクにしました": "Gnosis: linked %d word(s)",
     "メニュー": "menu",
     "説明": "help",
     "この行を隠す": "hide this line",

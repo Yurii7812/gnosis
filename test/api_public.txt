@@ -722,6 +722,8 @@ gnosis#versions
 gnosis#versions_auto
 gnosis#visual_new_prefix_note
 gnosis#visual_new_quick_no_title
+gnosis#wordlink#choose
+gnosis#wordlink#run
 gnosis#write_at_bottom
 gnosis#write_guide
 gnosis#write_next

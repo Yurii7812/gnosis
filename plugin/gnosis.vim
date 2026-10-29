@@ -565,6 +565,9 @@ nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
 " \a … 未所属（Folgezettel ID の無い）ノートの一覧（全体を見て整理する）。\N も同じ（押しにくいので \a を足した）
 nnoremap <silent> \a       <Cmd>call gnosis#orphans_open()<CR>
 nnoremap <silent> \N       <Cmd>call gnosis#orphans_open()<CR>
+" \K … ノートの中の単語を、同じ題のノートへのリンクにする（チェックボックスで選ぶ）。ビジュアルで選んだ行だけも可
+nnoremap <silent> \K       <Cmd>call gnosis#wordlink#run()<CR>
+xnoremap <silent> \K       <Esc><Cmd>call gnosis#wordlink#run(line("'<"), line("'>"))<CR>
 nnoremap <silent> \n       <Cmd>call gnosis#quick_note()<CR>
 nnoremap <silent> \M       <Cmd>call gnosis#capture_import()<CR>
 command! GnosisQuick call gnosis#quick_note()
@@ -714,6 +717,7 @@ command! -nargs=+ GnosisCaptureResolve call gnosis#capture_resolve(<f-args>)
 command! GnosisApkInstall call gnosis#apk_install()
 command! -nargs=? -range GnosisTopic call gnosis#topic#assign(<line1>, <line2>, <q-args>)
 command! GnosisOrphans call gnosis#orphans_open()
+command! -range=0 GnosisWordLink if <count> | call gnosis#wordlink#run(<line1>, <line2>) | else | call gnosis#wordlink#run() | endif
 " \l → m でマージしたノートを元に戻す
 command! GnosisMergeUndo call gnosis#merge#undo()
 command! GnosisYomiReview call gnosis#yomi_review()
