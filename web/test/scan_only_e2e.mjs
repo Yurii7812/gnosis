@@ -73,7 +73,7 @@ try {
   check(R.desktopSuggested || true, "suggestions header (Desktop / used before) is shown when there are any");
   check(R.searchHiddenAtFirst && R.searchOpen && R.searchClosed, "the search box opens only with / and Esc closes it without leaving the folder screen: " + JSON.stringify(R));
   check(R.inputHiddenAtFirst && R.inputOpen && R.inputClosedByEsc, "Space opens the number input, Esc closes only the input (the scan screen stays): " + JSON.stringify(R));
-  check(fs.existsSync(path.join(vault, "4.png")) && fs.readdirSync(outside).length === 0, "the outside photo is moved into the vault as 4.png");
+  check(fs.existsSync(path.join(vault, "PA-4.png")) && fs.readdirSync(outside).length === 0, "the outside photo is moved into the vault as PA-4.png");
   if (failed) process.exit(1);
   console.log("scan-only e2e: OK (source choice, keyboard folder walk, numbering, no Vim)");
 } catch (e) { try { console.error(fs.readFileSync(path.join(gnosisHome, "logs", "app.log"), "utf8").slice(-1500)); } catch {} throw e; } finally {

@@ -38,19 +38,19 @@ class ScanInboxTest(unittest.TestCase):
         names = si.import_files(self.root, [str(self.src)])["added"]
         r = si.assign(self.root, names[0], "1a2")
         self.assertTrue(r["ok"], r)
-        self.assertTrue((self.root / "1a2.png").is_file())
-        self.assertEqual(si.list_scans(self.root)["last"], "1a2")
+        self.assertTrue((self.root / "PA-1a2.png").is_file())
+        self.assertEqual(si.list_scans(self.root)["last"], "PA-1a2")
         self.assertEqual(len(si.list_scans(self.root)["scans"]), 2)
         note = (self.root / r["note"]).read_text("utf-8")
-        self.assertIn("![](1a2.png)", note)
+        self.assertIn("![](PA-1a2.png)", note)
 
     def test_same_id_overwrites_and_keeps_old_in_trash(self):
         names = si.import_files(self.root, [str(self.src)])["added"]
         si.assign(self.root, names[0], "3")
-        old = (self.root / "3.png").read_bytes()
+        old = (self.root / "PA-3.png").read_bytes()
         si.assign(self.root, names[1], "3")
-        self.assertNotEqual((self.root / "3.png").read_bytes(), old)
-        trashed = [p for p in (self.root / ".trash").iterdir() if p.name.endswith("_3.png")]
+        self.assertNotEqual((self.root / "PA-3.png").read_bytes(), old)
+        trashed = [p for p in (self.root / ".trash").iterdir() if p.name.endswith("_PA-3.png")]
         self.assertEqual(len(trashed), 1)
         self.assertEqual(trashed[0].read_bytes(), old)
 
@@ -81,8 +81,21 @@ class ScanInboxTest(unittest.TestCase):
             {"name": "paper-scan-20261024-090000-02.jpg", "id": ""}]))
         r = si.import_files(self.root, [str(phone)])
         self.assertEqual(r["numbered"], ["paper-scan-20261024-090000-01.jpg"])
-        self.assertTrue((self.root / "2a.jpg").is_file())
+        self.assertTrue((self.root / "PA-2a.jpg").is_file())
         self.assertEqual(si.list_scans(self.root)["scans"], ["paper-scan-20261024-090000-02.jpg"])
+
+    def test_phone_numbers_keep_their_own_prefix(self):
+        import json
+        phone = Path(self.tmp.name) / "phone3"
+        phone.mkdir()
+        for i in (1, 2):
+            (phone / f"paper-scan-20261025-090000-0{i}.jpg").write_bytes(PNG + bytes([i + 10]))
+        (phone / "scans.json").write_text(json.dumps([
+            {"name": "paper-scan-20261025-090000-01.jpg", "id": "PB-2a"},
+            {"name": "paper-scan-20261025-090000-02.jpg", "id": "PA-1"}]))
+        r = si.import_files(self.root, [str(phone)])
+        self.assertEqual(sorted(r["numbered"]), sorted(["paper-scan-20261025-090000-01.jpg", "paper-scan-20261025-090000-02.jpg"]), r)
+        self.assertTrue((self.root / "PB-2a.jpg").is_file() and (self.root / "PA-1.jpg").is_file())
 
     def test_importmove_moves_photos_from_outside_the_vault(self):
         r = si.import_files(self.root, [str(self.src)], move=True)

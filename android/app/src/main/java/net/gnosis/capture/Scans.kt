@@ -58,6 +58,12 @@ data class Scan(val name: String, val id: String, val imported: Boolean = false)
 class ScanStore(private val ctx: Context) {
     val dir: File by lazy { File(ctx.filesDir, "scans").apply { mkdirs() } }
     private val index get() = File(dir, "scans.json")
+    private val prefs get() = ctx.getSharedPreferences("scan", Context.MODE_PRIVATE)
+
+    /** これから付ける番号の印（PA → `PA-1a2`）。PC の \F の印と同じ（既定 PA）。英大文字 1〜4 字。 */
+    var prefix: String
+        get() = prefs.getString("prefix", "PA")?.takeIf { PaperId.PREFIX.matches(it) } ?: "PA"
+        set(v) { if (PaperId.PREFIX.matches(v)) prefs.edit().putString("prefix", v).apply() }
 
     fun load(): List<Scan> {
         dropImported()
@@ -89,10 +95,11 @@ class ScanStore(private val ctx: Context) {
         return list
     }
 
-    /** 番号を付ける。同じ番号がすでにあれば上書き（前のスキャンは消す）。空の番号は「番号なしに戻す」。 */
+    /** 番号を付ける。同じ番号がすでにあれば上書き（前のスキャンは消す）。空の番号は「番号なしに戻す」。
+     *  印の無い番号には今の印を付けて保存する（`PA-1a2`。PC の取り込みはそのまま題と画像の名前にする）。 */
     fun assign(name: String, id: String): List<Scan> {
         val list = load().toMutableList()
-        val clean = id.trim().lowercase()
+        val clean = PaperId.withPrefix(prefix, PaperId.normalize(id))
         if (clean.isNotEmpty()) list.filter { it.id == clean && it.name != name && !it.imported }.forEach { File(dir, it.name).delete() }
         val out = list.filter { clean.isEmpty() || it.id != clean || it.name == name || it.imported }.map { if (it.name == name) it.copy(id = clean) else it }
         save(out)
@@ -134,8 +141,6 @@ class ScanStore(private val ctx: Context) {
     }
 }
 
-private val BADGE_NUM = Regex("^[0-9]+([a-z]+[0-9]+)*[a-z]*$")
-
 /** 紙のスキャン画面: まとめてスキャン → 番号なしの一覧 → その場で番号を付ける（あとからでもよい）。 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -145,6 +150,8 @@ fun ScanScreen(onClose: () -> Unit) {
     var scans by remember { mutableStateOf(store.load()) }
     var openName by remember { mutableStateOf<String?>(null) }   // 番号を付けている 1 枚
     var last by remember { mutableStateOf("") }                  // 前に付けた番号（これだけを見せる）
+    var history by remember { mutableStateOf(listOf<String>()) } // 番号を付けた順の 1 枚ずつの名前（← の取り消し用）
+    var prefix by remember { mutableStateOf(store.prefix) }       // これから付ける番号の印
     var error by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf(0) }                    // 0 全部 / 1 未取り込み / 2 取り込み済み
     var confirmAll by remember { mutableStateOf(false) }
@@ -178,13 +185,26 @@ fun ScanScreen(onClose: () -> Unit) {
     }
     val open = openName?.let { n -> scans.firstOrNull { it.name == n } }
     if (open != null) {
-        NumberScreen(store, open, sorted, last,
+        NumberScreen(store, open, sorted, last, prefix,
             onAssign = { id ->
                 scans = store.assign(open.name, id)
-                if (id.isNotBlank()) last = id.trim().lowercase()
+                val got = scans.firstOrNull { it.name == open.name }?.id.orEmpty()
+                if (got.isNotBlank()) { last = got; history = history + open.name }
                 // 次の番号なしへ（なければ一覧へ戻る）
                 openName = scans.firstOrNull { it.id.isEmpty() && !it.imported && it.name != open.name }?.name
             },
+            onUndo = {
+                // 直前の番号付けを取り消して、その 1 枚へ戻る（番号なしに戻す。写真は消えない）
+                val prev = history.lastOrNull()
+                if (prev != null) {
+                    scans = store.assign(prev, "")
+                    history = history.dropLast(1)
+                    last = history.lastOrNull()?.let { n -> scans.firstOrNull { it.name == n }?.id }.orEmpty()
+                    openName = prev
+                }
+            },
+            canUndo = history.isNotEmpty(),
+            onPrefix = { v -> store.prefix = v; prefix = store.prefix },
             onMove = { d ->
                 val i = sorted.indexOfFirst { it.name == open.name }
                 openName = sorted.getOrNull(i + d)?.name ?: open.name
@@ -256,43 +276,90 @@ fun ScanScreen(onClose: () -> Unit) {
     }
 }
 
-/** 1 枚を大きく見せて、番号を打つ。決めると次の番号なしへ。 */
+/**
+ * 1 枚を大きく見せて、番号を付ける。決めると次の番号なしへ。
+ * 矢印（PC の \F の矢印キー・hjkl と同じ）: ↓ 前の番号の子 / → 次の連番 / ← 直前の番号付けを取り消す / ↑ 前の番号を入力欄に出して直す。
+ * 番号は `PA-1a2`（印つき）で保存する。打つときは印を省いてよい（今の印が付く）。
+ */
 @Composable
-private fun NumberScreen(store: ScanStore, scan: Scan, all: List<Scan>, last: String,
-                         onAssign: (String) -> Unit, onMove: (Int) -> Unit, onDelete: () -> Unit, onBack: () -> Unit) {
+private fun NumberScreen(store: ScanStore, scan: Scan, all: List<Scan>, last: String, prefix: String,
+                         onAssign: (String) -> Unit, onUndo: () -> Unit, canUndo: Boolean, onPrefix: (String) -> Unit,
+                         onMove: (Int) -> Unit, onDelete: () -> Unit, onBack: () -> Unit) {
+    var typing by remember(scan.name) { mutableStateOf(false) }
     var text by remember(scan.name) { mutableStateOf(scan.id) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val clean = text.trim().lowercase()
-    val ok = clean.isEmpty() || BADGE_NUM.matches(clean)
+    var editPrefix by remember { mutableStateOf(false) }
+    val clean = PaperId.normalize(text)
+    val ok = clean.isEmpty() || PaperId.isValid(clean)
+    val childId = if (last.isNotEmpty()) PaperId.child(last) else ""
+    val nextId = if (last.isNotEmpty()) PaperId.nextSibling(last) else ""
+    val numbering = !scan.imported
     Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "一覧へ") }
             Text("${all.indexOfFirst { it.name == scan.name } + 1} / ${all.size}", Modifier.weight(1f), textAlign = TextAlign.Center, fontSize = 18.sp)
+            TextButton(onClick = { editPrefix = true }) { Text("印 $prefix", fontSize = 18.sp) }
             IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, "このスキャンを消す") }
         }
         AsyncImage(File(store.dir, scan.name), null, Modifier.weight(1f).fillMaxWidth(), contentScale = ContentScale.Fit)
         if (last.isNotEmpty()) Text("前: $last", fontSize = 26.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 8.dp))
         if (scan.imported) {
             Text("取り込み済み ・ 番号 ${scan.id.ifEmpty { "なし" }}", fontSize = 28.sp, modifier = Modifier.padding(vertical = 12.dp))
-        } else OutlinedTextField(text, { text = it }, singleLine = true, isError = !ok,
-            textStyle = TextStyle(fontSize = 40.sp, textAlign = TextAlign.Center),
-            placeholder = { Text("番号", Modifier.fillMaxWidth(), fontSize = 32.sp, textAlign = TextAlign.Center) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (ok && clean.isNotEmpty()) onAssign(clean) }),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
-        if (!ok && !scan.imported) Text("番号は 1 / 1a / 1a2 のように（数字と小文字）", color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onMove(-1) }, modifier = Modifier.heightIn(min = 64.dp)) { Icon(Icons.Filled.ChevronLeft, "前の 1 枚") }
-            if (scan.imported) {
-                Spacer(Modifier.weight(1f))
-            } else {
+        } else if (typing) {
+            OutlinedTextField(text, { text = it }, singleLine = true, isError = !ok,
+                textStyle = TextStyle(fontSize = 40.sp, textAlign = TextAlign.Center),
+                placeholder = { Text("番号（$prefix- は省いてよい）", Modifier.fillMaxWidth(), fontSize = 24.sp, textAlign = TextAlign.Center) },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (ok && clean.isNotEmpty()) onAssign(clean) }),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+            if (!ok) Text("番号は 1 / 1a / 1a2 のように（数字と小文字。印をつけるなら PA-1a2）", color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { typing = false }, modifier = Modifier.heightIn(min = 64.dp)) { Text("やめる", fontSize = 18.sp) }
                 Button(onClick = { onAssign(clean) }, enabled = ok && clean.isNotEmpty(), shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.weight(1f).heightIn(min = 64.dp)) { Text("決めて次へ", fontSize = 22.sp) }
             }
-            OutlinedButton(onClick = { onMove(1) }, modifier = Modifier.heightIn(min = 64.dp)) { Icon(Icons.Filled.ChevronRight, "次の 1 枚") }
+        } else {
+            // 大きな矢印（ボタン）。前の番号が無いうちは、最初の 1 枚を「入力」で決める
+            val pad = Modifier.heightIn(min = 72.dp)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = { onAssign(childId) }, enabled = childId.isNotEmpty(), shape = RoundedCornerShape(16.dp), modifier = pad.weight(1f)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("↓", fontSize = 28.sp); Text(if (childId.isEmpty()) "子" else "子 $childId", fontSize = 15.sp, maxLines = 1) }
+                }
+                Button(onClick = { onAssign(nextId) }, enabled = nextId.isNotEmpty(), shape = RoundedCornerShape(16.dp), modifier = pad.weight(1f)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("→", fontSize = 28.sp); Text(if (nextId.isEmpty()) "次の連番" else "次 $nextId", fontSize = 15.sp, maxLines = 1) }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onUndo, enabled = canUndo, shape = RoundedCornerShape(16.dp), modifier = pad.weight(1f)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("←", fontSize = 28.sp); Text("取り消す", fontSize = 15.sp) }
+                }
+                OutlinedButton(onClick = { text = last; typing = true }, shape = RoundedCornerShape(16.dp), modifier = pad.weight(1f)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("↑", fontSize = 28.sp); Text(if (last.isEmpty()) "番号を入力" else "前の番号を直す", fontSize = 15.sp) }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { onMove(-1) }, modifier = Modifier.heightIn(min = 52.dp)) { Icon(Icons.Filled.ChevronLeft, "前の 1 枚") }
+            Spacer(Modifier.weight(1f))
+            if (numbering && !typing) TextButton(onClick = { text = ""; typing = true }) { Text("番号を打つ", fontSize = 18.sp) }
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = { onMove(1) }, modifier = Modifier.heightIn(min = 52.dp)) { Icon(Icons.Filled.ChevronRight, "次の 1 枚") }
         }
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("このスキャンを消しますか？") },
         confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("消す") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("やめる") } })
+    if (editPrefix) {
+        var pv by remember { mutableStateOf(prefix) }
+        val pOk = PaperId.PREFIX.matches(pv)
+        AlertDialog(onDismissRequest = { editPrefix = false }, title = { Text("番号の印") },
+            text = {
+                Column {
+                    Text("これから付ける番号の印です（英大文字 1〜4 字。PA → PA-1a2）。今までのノートの印は変わりません。")
+                    OutlinedTextField(pv, { pv = it.uppercase().take(4) }, singleLine = true, isError = !pOk, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(enabled = pOk, onClick = { onPrefix(pv); editPrefix = false }) { Text("決める") } },
+            dismissButton = { TextButton(onClick = { editPrefix = false }) { Text("やめる") } })
+    }
 }

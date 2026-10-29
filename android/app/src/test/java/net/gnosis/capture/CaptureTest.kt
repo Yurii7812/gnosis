@@ -6,6 +6,25 @@ import java.util.Calendar
 import java.util.TimeZone
 
 class CaptureTest {
+    @Test fun paperIdSteps() {
+        assertEquals("PA-1a2", PaperId.normalize("pa-1A2"))
+        assertEquals("1a2", PaperId.normalize(" 1A2 "))
+        assertEquals("PA-1a2", PaperId.withPrefix("PA", "1a2"))
+        assertEquals("PB-3", PaperId.withPrefix("PA", "PB-3"))
+        assertEquals("", PaperId.withPrefix("PA", ""))
+        assertTrue(PaperId.isValid("PA-1a2") && PaperId.isValid("12ab3") && !PaperId.isValid("PA-") && !PaperId.isValid("a1") && !PaperId.isValid("1-"))
+        // ↓（子）と → （次の連番）
+        assertEquals("PA-1a2a", PaperId.child("PA-1a2"))
+        assertEquals("PA-1a1", PaperId.child("PA-1a"))
+        assertEquals("PA-1a3", PaperId.nextSibling("PA-1a2"))
+        assertEquals("PA-1b", PaperId.nextSibling("PA-1a"))
+        assertEquals("PA-2", PaperId.nextSibling("PA-1"))
+        assertEquals("PA-1aa", PaperId.nextSibling("PA-1z"))
+        assertEquals("PA-1ba", PaperId.nextSibling("PA-1az"))
+        assertEquals("1b", PaperId.nextSibling("1a"))
+        assertEquals("PA-10", PaperId.nextSibling("PA-9"))
+    }
+
     private val entries = listOf(
         Entry("1", 1, UNASSIGNED, "そのまま\n本文"),
         Entry("2", 2, DIARY, "日記"),

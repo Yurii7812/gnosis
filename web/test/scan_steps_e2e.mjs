@@ -80,9 +80,9 @@ try {
   check(has(R.afterUndo, "1b"), "h undoes the last numbering (previous goes back to 1b): " + JSON.stringify(R));
   check(has(R.countAfterUndo, "/ 2"), "the undone scan is back in the list: " + JSON.stringify(R));
   check(has(R.afterUndo2, "1a"), "ArrowLeft undoes once more: " + JSON.stringify(R));
-  check(R.kOpen && R.kValue === "1a", "k opens the input with the previous number: " + JSON.stringify(R));
+  check(R.kOpen && R.kValue === "PA-1a", "k opens the input with the previous number: " + JSON.stringify(R));
   const files = fs.readdirSync(vault).filter((f) => f.endsWith(".png")).sort();
-  check(JSON.stringify(files) === JSON.stringify(["1.png", "1a.png"]), "the vault keeps 1.png and 1a.png only: " + JSON.stringify(files));
+  check(JSON.stringify(files) === JSON.stringify(["PA-1.png", "PA-1a.png"]), "the vault keeps PA-1.png and PA-1a.png only: " + JSON.stringify(files));
   if (failed) process.exit(1);
   console.log("scan-steps e2e: OK (↓ j child, → l next, ← h undo, ↑ k edit)");
 } catch (e) { try { console.error(fs.readFileSync(path.join(gnosisHome, "logs", "app.log"), "utf8").slice(-1500)); } catch {} throw e; } finally {
