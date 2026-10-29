@@ -870,7 +870,7 @@
     "プリセット": "Presets",
     "\\l で入れるノートを選んでいるとき、カーソルの行のノートに決める": "While choosing a note to insert with \\l, decide the note on the cursor row",
     "この説明": "This help",
-    "アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab）": "cycle outline → tabs → hub (Shift+Tab goes back)",
+    "アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab / Ctrl+←）": "cycle outline → tabs → hub (Shift+Tab / Ctrl+← goes back)",
     "アウトライン・タブ・ハブへ直接": "jump straight to outline / tabs / hub",
     "アウトラインで、左右を入れ替える": "in the outline, swap the panel to the other side",
     "タブのボードで、全部のタブを消す（確認あり）": "in the tab board, delete all tabs (asks to confirm)",

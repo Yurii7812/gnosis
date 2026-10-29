@@ -5,7 +5,7 @@
 "              パネルは右に 1 つだけ。同じキーをもう一度押すと、ノートの窓 ⇔ パネル を行き来する。パネルの中の q で閉じる。
 "              （\q のボードの中の D で、全部のタブを消す）
 "   パネルの中のキー（3 つの中身どれでも同じ）
-"     Tab / Shift+Tab  アウトライン → タブ → ハブ と切り替える（o t h で直接その中身へ）
+"     Tab / Shift+Tab（または Ctrl+→ / Ctrl+←）  アウトライン → タブ → ハブ と切り替える（o t h で直接その中身へ）
 "     s 検索  n N 次・前のヒット   x 絞り込み（合わない行を畳む）   m ハイライト   Esc 全部やめる
 "       書き方は gs・曼荼羅の s / x / m と同じ（空白 AND・語の前の - で NOT・| で OR・"…" で句）
 "     e   \l で入れるノートを選んでいる最中に、カーソルの行のノートに決める（決めずに動き回ってもよい）
@@ -153,6 +153,9 @@ endfunction
 function! gnosis#panel#attach() abort
   nnoremap <buffer><nowait><silent> <Tab>   <Cmd>call gnosis#panel#cycle(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call gnosis#panel#cycle(-1)<CR>
+  " Ctrl+→ / Ctrl+←: 左のビューの切り替えと同じ向きで、アウトライン → タブ → ハブ（端末が Ctrl+矢印を送らないときは Tab）
+  nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#panel#cycle(1)<CR>
+  nnoremap <buffer><nowait><silent> <C-Left>  <Cmd>call gnosis#panel#cycle(-1)<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#panel#switch('outline')<CR>
   nnoremap <buffer><nowait><silent> t <Cmd>call gnosis#panel#switch('tabs')<CR>
   nnoremap <buffer><nowait><silent> h <Cmd>call gnosis#panel#switch('hub')<CR>
@@ -172,7 +175,7 @@ function! gnosis#panel#help_lines() abort
   return [
         \ gnosis#i18n#tr('右のパネル（アウトライン・タブ・ハブを 1 つに統合）'),
         \ '',
-        \ 'Tab / Shift+Tab ' . gnosis#i18n#tr('アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab）'),
+        \ 'Tab / Ctrl+→   ' . gnosis#i18n#tr('アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab / Ctrl+←）'),
         \ 'o  t  h          ' . gnosis#i18n#tr('アウトライン・タブ・ハブへ直接'),
         \ 's  n  N          ' . gnosis#i18n#tr('検索・次のヒット・前のヒット（書き方は gs と同じ）'),
         \ 'x                ' . gnosis#i18n#tr('絞り込み（合わない行を畳む。中身は変えない）'),

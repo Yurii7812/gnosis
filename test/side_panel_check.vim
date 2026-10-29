@@ -39,6 +39,8 @@ call gnosis#panel#open_last()
 call s:ok('\s: 最初はアウトラインが開く', gnosis#panel#kind() ==# 'outline', gnosis#panel#kind())
 call s:ok('パネルは 1 つだけ（本文 + パネルの 2 窓）', winnr('$') == 2, string(winnr('$')))
 " ---- Tab / Shift+Tab / o t h
+" Ctrl+→ / Ctrl+← も同じ切り替え（パネルの窓のキーの割り当て）
+call s:ok('パネルに Ctrl+→ / Ctrl+← の割り当てがある', maparg('<C-Right>', 'n', 0, 1).buffer == 1 && maparg('<C-Left>', 'n', 0, 1).buffer == 1 && maparg('<C-Right>', 'n') =~# 'cycle(1)' && maparg('<C-Left>', 'n') =~# 'cycle(-1)')
 call gnosis#panel#cycle(1)
 call s:ok('Tab: アウトライン → タブ', gnosis#panel#kind() ==# 'tabs', gnosis#panel#kind())
 call gnosis#panel#cycle(1)
