@@ -125,6 +125,41 @@ function! s:stage(items, i) abort
   return l:want
 endfunction
 
+" 外部のビューアが imv のとき、Vim と同じ h（前の画像）・l（次の画像）で動けるようにする。
+" imv は $imv_config の設定ファイルを読むので、利用者の設定（あれば）を写した上に h / l を足したものを
+" ~/.cache/gnosis/imv.conf に作って渡す（利用者の設定ファイルは書き換えない。imv 以外のビューアには効かない）。
+" g:gnosis_image_viewer_hl = 0 で止める。作れなかった・止めているときは空を返す（imv の設定をそのまま使う）
+function! gnosis#imgview#imv_config() abort
+  if !get(g:, 'gnosis_image_viewer_hl', 1)
+    return ''
+  endif
+  let l:cfg = !empty($XDG_CONFIG_HOME) ? $XDG_CONFIG_HOME : expand('~/.config')
+  let l:src = ''
+  for l:c in [$imv_config, l:cfg . '/imv/config', expand('~/.imv_config'), expand('~/.imv/config')]
+    if !empty(l:c) && filereadable(l:c)
+      let l:src = l:c
+      break
+    endif
+  endfor
+  let l:lines = empty(l:src) ? [] : readfile(l:src)
+  let l:mine = ['# Gnosis: Vim と同じ h / l で前後の画像へ', 'h = prev', 'l = next']
+  " [binds] が既にあるなら、その直後に足す（同じ節を 2 つ作らない）。利用者が自分で h / l を決めていれば、あとの行が勝つ
+  let l:at = match(l:lines, '^\s*\[binds\]\s*$')
+  if l:at >= 0
+    call extend(l:lines, l:mine, l:at + 1)
+  else
+    let l:lines += ['', '[binds]'] + l:mine
+  endif
+  let l:dir = (!empty($XDG_CACHE_HOME) ? $XDG_CACHE_HOME : expand('~/.cache')) . '/gnosis'
+  try
+    call mkdir(l:dir, 'p')
+    call writefile(l:lines, l:dir . '/imv.conf')
+  catch
+    return ''
+  endtry
+  return l:dir . '/imv.conf'
+endfunction
+
 " 画像を 1 枚見せる。外部のビューアで開く（既定）か、この端末の中に sixel で出す。戻り値: 添字
 function! s:show(items, i) abort
   if s:sixel_ok()
@@ -135,7 +170,12 @@ function! s:show(items, i) abort
     echo ' 画像が見つかりません: ' . l:it.path
   elseif executable('xdg-open')
     let l:path = s:stage(a:items, a:i)
-    call job_start(['xdg-open', empty(l:path) ? l:it.path : l:path], {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+    let l:opt = {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'}
+    let l:conf = gnosis#imgview#imv_config()
+    if !empty(l:conf)
+      let l:opt.env = {'imv_config': l:conf}
+    endif
+    call job_start(['xdg-open', empty(l:path) ? l:it.path : l:path], l:opt)
     echo ' 開きました: ' . l:it.label
   else
     echo ' xdg-open がありません。g:gnosis_image_viewer を設定してください'
