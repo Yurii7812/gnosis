@@ -14,6 +14,7 @@
     "リスト: 検索・リンク・類似。リストの中で f で Folgezettel に戻る": "List: search / links / similar. Press f in the list to return to Folgezettel",
     "索引・グループだけ": "Index and groups only",
     "上位表示（祖先と関連グループ）": "Upper view (ancestors and related groups)",
+    "展開する範囲: j k 動かす / v 始点を決める・外す / Enter 決定（始点が無ければ全部） / a 全部 / Esc やめる": "Range to expand: j k move / v set or clear the start / Enter confirm (all if no start) / a all / Esc cancel",
     "メニュー": "menu",
     "説明": "help",
     "この行を隠す": "hide this line",

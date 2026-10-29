@@ -82,6 +82,8 @@ function! gnosis#listnav#setup() abort
   for [l:key, l:kind] in items({'a': '', 'b': 'child', 'p': 'parent', 'g': 'group', 'c': 'context', 'R': 'related', 'v': 'cite', 'B': 'back', 'i': 'index'})
     execute 'nnoremap <buffer><nowait><silent> ' . l:key . ' <Cmd>call gnosis#listnav#option("relation", "' . l:kind . '")<CR>'
   endfor
+  " V などで行を選んで \e … その行のノートだけを 1 つにまとめる（\e だけなら v で範囲を選ぶ）
+  xnoremap <buffer><silent> \e <Esc><Cmd>call gnosis#listnav#expand_selected(line("'<"), line("'>"))<CR>
   nnoremap <buffer><silent> \l <Cmd>call gnosis#mview#link_pick()<CR>
   nnoremap <buffer><silent> \o <Cmd>call gnosis#panel#key('outline')<CR>
   nnoremap <buffer><silent> \W <Cmd>call gnosis#mview#only_note()<CR>
@@ -135,6 +137,67 @@ endfunction
 " 一覧に出ているノートの vault 相対パス（上から順）
 function! gnosis#listnav#shown_paths() abort
   return empty(s:L) ? [] : map(copy(s:rows()), 'v:val.path')
+endfunction
+
+" 一覧の行 first〜last（バッファの行番号）のノートのパス
+function! s:paths_between(first, last) abort
+  let l:lo = max([3, min([a:first, a:last])]) - 3
+  let l:hi = min([len(s:L.rows) + 2, max([a:first, a:last])]) - 3
+  return l:hi < l:lo ? [] : map(copy(s:L.rows[l:lo : l:hi]), 'v:val.path')
+endfunction
+
+function! gnosis#listnav#expand_selected(first, last) abort
+  call gnosis#v2_expand_paths(s:paths_between(a:first, a:last))
+endfunction
+
+" \e のとき: 展開する範囲を選ぶ。j k で動かし、v で始点を決める（もう一度で外す）、Enter で決定（始点が無ければ全部）、
+" a で全部、Esc・q でやめる。選んだノートのパス（上から順）を返す。やめたら v:null
+function! gnosis#listnav#pick_range() abort
+  if empty(s:L.rows) | return [] | endif
+  if empty(prop_type_get('gnosis_nav_range'))
+    highlight default link GnosisNavRange Visual
+    call prop_type_add('gnosis_nav_range', {'highlight': 'GnosisNavRange'})
+  endif
+  let l:anchor = 0
+  let l:result = v:null
+  try
+    while 1
+      silent! call prop_remove({'type': 'gnosis_nav_range', 'all': 1}, 1, line('$'))
+      let l:from = l:anchor > 0 ? min([l:anchor, line('.')]) : line('.')
+      let l:to = l:anchor > 0 ? max([l:anchor, line('.')]) : line('.')
+      for l:n in range(l:from, l:to)
+        call prop_add(l:n, 1, {'type': 'gnosis_nav_range', 'length': max([1, strlen(getline(l:n))])})
+      endfor
+      redraw
+      echo gnosis#i18n#tr('展開する範囲: j k 動かす / v 始点を決める・外す / Enter 決定（始点が無ければ全部） / a 全部 / Esc やめる')
+            \ . (l:anchor > 0 ? '  [' . (abs(line('.') - l:anchor) + 1) . ']' : '')
+      let l:k = gnosis#ui#getkey()
+      if l:k ==# 'j' || l:k ==# "\<Down>"
+        call cursor(min([len(s:L.rows) + 2, line('.') + 1]), 1)
+      elseif l:k ==# 'k' || l:k ==# "\<Up>"
+        call cursor(max([3, line('.') - 1]), 1)
+      elseif l:k ==# 'g'
+        call cursor(3, 1)
+      elseif l:k ==# 'G'
+        call cursor(len(s:L.rows) + 2, 1)
+      elseif l:k ==# 'v'
+        let l:anchor = l:anchor > 0 ? 0 : line('.')
+      elseif l:k ==# 'a'
+        let l:result = s:paths_between(3, len(s:L.rows) + 2)
+        break
+      elseif l:k ==# "\<CR>" || l:k ==# "\<NL>"
+        let l:result = l:anchor > 0 ? s:paths_between(l:anchor, line('.')) : s:paths_between(3, len(s:L.rows) + 2)
+        break
+      elseif l:k ==# "\<Esc>" || l:k ==# 'q' || l:k ==# "\<C-c>"
+        break
+      endif
+    endwhile
+  finally
+    silent! call prop_remove({'type': 'gnosis_nav_range', 'all': 1}, 1, line('$'))
+    redraw
+    echo ''
+  endtry
+  return l:result
 endfunction
 
 function! gnosis#listnav#render() abort

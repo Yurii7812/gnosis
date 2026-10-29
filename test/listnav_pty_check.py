@@ -76,6 +76,19 @@ class ListView(unittest.TestCase):
             self.assertIn('[r:', s.text().splitlines()[0])
             self.assertEqual(self.dump(s)['view'], 'list')
 
+    def test_expand_range_with_v_and_visual_selection(self):
+        with self.session() as s:
+            self.open_list(s)
+            s.send('\\e', .6)                      # 範囲選び（\e）
+            self.assertIn('v', s.text().splitlines()[-1] + s.text())
+            s.send('v', .3)
+            s.send('j', .3)
+            s.send('\r', 1.2)                      # 上から 2 件だけを 1 つの md に
+            self.assertIn('/.trash/T_', self.dump(s)['file'])
+            text = Path(self.dump(s)['file']).read_text()
+            heads = [l for l in text.splitlines() if l.startswith('## ') and l != '## 目次']
+            self.assertEqual(len(heads), 2, heads)
+
     def test_cycles_both_directions_and_plain_list_search(self):
         with self.session() as s:
             self.open_list(s)

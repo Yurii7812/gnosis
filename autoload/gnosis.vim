@@ -10717,6 +10717,32 @@ function! s:v2_expand_shown() abort
     return
   endif
   let l:paths = gnosis#mview#shown_paths()
+  " リストビューは、v で範囲を選んでその範囲だけを展開できる（Enter だけなら全部）
+  if gnosis#mview#view() ==# 'list' && !empty(l:paths)
+    let l:paths = gnosis#listnav#pick_range()
+    if l:paths is v:null
+      echo gnosis#i18n#tr('Gnosis: キャンセル')
+      return
+    endif
+  endif
+  call s:v2_expand_files(l:root, l:py, l:paths)
+endfunction
+
+" ビジュアルで選んだ行（リストビュー）だけを 1 つにまとめる
+function! gnosis#v2_expand_paths(paths) abort
+  let l:root = s:get_pkm_root()
+  let l:py = get(g:, 'gnosis_expand_v2_python', '')
+  if empty(l:root) || empty(l:py) || !filereadable(l:py)
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: expand_v2.py が見つからない: ') . l:py | echohl NONE
+    return
+  endif
+  call s:v2_expand_files(l:root, l:py, a:paths)
+endfunction
+
+function! s:v2_expand_files(root, py, paths) abort
+  let l:root = a:root
+  let l:py = a:py
+  let l:paths = a:paths
   if empty(l:paths)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 出力するノートがありません') | echohl NONE
     return

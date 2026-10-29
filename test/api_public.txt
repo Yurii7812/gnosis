@@ -267,6 +267,7 @@ gnosis#listnav#depth
 gnosis#listnav#edge
 gnosis#listnav#enter
 gnosis#listnav#enter_mode
+gnosis#listnav#expand_selected
 gnosis#listnav#goto_origin
 gnosis#listnav#gui_click
 gnosis#listnav#gui_scroll
@@ -284,6 +285,7 @@ gnosis#listnav#next_hit
 gnosis#listnav#option
 gnosis#listnav#origin
 gnosis#listnav#paint
+gnosis#listnav#pick_range
 gnosis#listnav#prompt
 gnosis#listnav#query
 gnosis#listnav#quit
@@ -692,6 +694,7 @@ gnosis#update_current_buffer
 gnosis#update_md
 gnosis#v2_add_link
 gnosis#v2_expand
+gnosis#v2_expand_paths
 gnosis#v2_migrate
 gnosis#v2_new_attr
 gnosis#v2_new_child

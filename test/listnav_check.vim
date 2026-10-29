@@ -128,6 +128,22 @@ let s:fzp = gnosis#mview#shown_paths()
 call s:ok('Folgezettel の入力は番号順の全部', len(s:fzp) > 2 && s:fzp[0] ==# 'a.md' && index(s:fzp, 'd.md') > index(s:fzp, 'b.md'), s:fzp)
 call gnosis#mview#switch_view('list')
 let s:want = gnosis#mview#shown_paths()
+" やめたら何も作らない（Esc）
+let s:before = expand('%:p')
+let g:gnosis_ui_keys = ["\<Esc>"]
+call gnosis#v2_expand()
+call s:ok('\e の範囲選びを Esc でやめると何も開かない', expand('%:p') ==# s:before && g:gnosis_ui_keys == [], expand('%:p'))
+" v で始点を決めて j で広げ Enter … その範囲（上から 2 件）だけをまとめる
+call win_gotoid(gnosis#mview#state().win)
+call cursor(3, 1)
+let g:gnosis_ui_keys = ['v', 'j', "\<CR>"]
+call gnosis#v2_expand()
+let s:rtxt = join(getline(1, '$'), "\n")
+let s:rheads = filter(split(s:rtxt, "\n"), 'v:val =~# "^## " && v:val !=# "## 目次"')
+call s:ok('\e の範囲選び: v で始点・j で広げて Enter ならその 2 件だけ', len(s:rheads) == 2, s:rheads)
+call gnosis#mview#switch_view('list')
+call win_gotoid(gnosis#mview#state().win)
+let g:gnosis_ui_keys = ["\<CR>"]   " 始点が無ければ全部
 call gnosis#v2_expand()
 let s:outf = expand('%:p')
 call s:ok('\e の出力は .trash の md', s:outf =~# '/\.trash/T_.*\.md$', s:outf)
