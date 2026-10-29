@@ -5,7 +5,7 @@
 //        数字キー 1〜9 でその行へすぐ移って開く / j k ↑ ↓ で選ぶ / Enter 開く / u このフォルダを使う / ← Backspace 上へ
 //        / で検索（文字を打てるのは / を押したあとだけ。Esc で検索をやめる）/ Esc 前の画面へ / q 閉じる
 //   3. 番号を付ける（Space を押す前は「見る」状態）:
-//        j k ↑ ↓ 前後 / Space 番号を入力 / d 日記として登録 / t トピック / Tab 前の番号を入れて入力 / s 並べ替え / q 閉じる
+//        ↓ j 前の番号の子 / → l 次の連番 / ← h 取り消し / ↑ k 前の番号を直す / n p 次・前の画像 / Space 番号を入力 / d 日記として登録 / t トピック / Tab 前の番号を入れて入力 / s 並べ替え / q 閉じる
 //        入力の画面（Space・d・t で開く）は Esc で閉じる。\F の画面は閉じない。
 //   4. 並べ替え（s）: ポップアップ。↑ ↓ で基準を選ぶと、実際のファイルの一覧がその場で並び替わる。Enter で決める / Esc で元に戻す。
 // すでにある番号の一覧は出さない。出すのは、前に入れた番号だけ。
@@ -46,7 +46,8 @@ export function createScan(root, { api, onClose }) {
   const T = en ? {
     count: (i, n) => `${i} / ${n}`, none: "No unnumbered scans. Press q to close.", prev: (p) => `Previous: ${p}`, id: "Number", date: "Date written (YYYY-MM-DD)",
     topicId: "Number the topic starts from", topicName: "Topic name", busy: "Working…",
-    keys: "Space: number   d: paper diary   t: topic   Tab: previous number   s: sort   j k: back / forth   q: close",
+    keys: "↓ j: child of the previous number   → l: next number   ← h: undo   ↑ k: edit the previous number   Space: type a number   d: paper diary   t: topic   s: sort   n p: next / previous scan   q: close",
+    needFirst: "Type the first number with Space.", undone: (id) => `Undid ${id}`,
     keysInput: "Enter: set and go next   Esc: close this input   Tab: put the previous number",
     done: (id) => `Saved as ${id}`, bad: (e) => e,
     title: "Which scans do you want to number?", out: "Enter   A folder outside the vault (photos on this computer)", in: (n) => `v   Inside the vault (unnumbered scans taken in with \\M)  ${n} scans`,
@@ -61,7 +62,8 @@ export function createScan(root, { api, onClose }) {
   } : {
     count: (i, n) => `${i} / ${n}`, none: "番号のないスキャンはありません。q で閉じます。", prev: (p) => `前: ${p}`, id: "番号", date: "日記が書かれた日（YYYY-MM-DD）",
     topicId: "トピックの起点の番号", topicName: "トピック名", busy: "整理しています…",
-    keys: "Space 番号を入力　d 日記　t トピック　Tab 前の番号　s 並べ替え　j k 前後　q 閉じる",
+    keys: "↓ j 前の番号の子　→ l 次の連番　← h 取り消し　↑ k 前の番号を直す　Space 番号を入力　d 日記　t トピック　s 並べ替え　n p 次・前の画像　q 閉じる",
+    needFirst: "最初の画像は Space で番号を入力してください。", undone: (id) => `${id} を取り消しました`,
     keysInput: "Enter 決めて次へ　Esc この入力を閉じる　Tab 前の番号を入れる",
     done: (id) => `${id} にしました`, bad: (e) => e,
     title: "どのスキャンに番号を付ける？", out: "Enter　vault の外のフォルダ（パソコンの中の写真）", in: (n) => `v　vault の中（\\M で取り込んだ、番号のないもの）　${n} 枚`,
@@ -319,6 +321,38 @@ export function createScan(root, { api, onClose }) {
     await showScan();
   }
 
+  // 矢印キー・hjkl で番号を付ける（番号の入力を開いていないとき）
+  //   ↓ j … 直前の番号の子（1a → 1a1）  → l … 次の連番（1a → 1b）  ← h … 直前の番号付けを取り消して、その画像へ戻る
+  //   ↑ k … 直前の番号を入力欄に出して直す
+  async function step(dir) {
+    if (busy || !scans.length) return;
+    if (!last) { msg(T.needFirst, true); return; }
+    busy = true; msg(T.busy);
+    const r = await api.run("step", [scans[idx], dir]);
+    busy = false;
+    if (!r.ok) { msg(T.bad(r.error || "error"), true); return; }
+    changed++; last = r.display;
+    msg(T.done(r.display));
+    scans.splice(idx, 1);
+    if (idx >= scans.length) idx = Math.max(0, scans.length - 1);
+    await showScan();
+  }
+  async function undoLast() {
+    if (busy) return;
+    busy = true; msg(T.busy);
+    const r = await api.run("undo", []);
+    if (!r.ok) { busy = false; msg(T.bad(r.error || "error"), true); return; }
+    const l = await api.run("list", []);
+    busy = false;
+    if (l.ok) { scans = l.scans; info = l.info || {}; }
+    last = r.last || "";
+    idx = Math.max(0, scans.indexOf(r.name));
+    changed++;   // 取り消しも vault を変えた。閉じるときに Index などを作り直す
+    msg(T.undone(r.display));
+    await showScan();
+  }
+  const browse = async (d) => { if (scans.length) { idx = (idx + d + scans.length) % scans.length; await showScan(); } };
+
   async function close() {
     if (busy) return;
     if (changed) { busy = true; msg(T.busy); await api.run("finish", []); busy = false; }
@@ -428,12 +462,14 @@ export function createScan(root, { api, onClose }) {
       // 入力を開いているあいだ（フォーカスが入力欄の外に来たとき）: Esc は入力だけ閉じる。q など他のキーは入力の文字なので何もしない
       if (inputOpen) { if (k === "Escape") { e.preventDefault(); closeInput(); await showScan(); } return; }
       if (k === "q") { e.preventDefault(); await close(); }
+      else if (k === "ArrowLeft" || k === "h") { e.preventDefault(); await undoLast(); }
       else if (!scans.length) return;
-      else if (k === "ArrowDown" || k === "j" || k === "ArrowUp" || k === "k") {
-        e.preventDefault();
-        idx = (idx + (k === "ArrowDown" || k === "j" ? 1 : -1) + scans.length) % scans.length;
-        await showScan();
-      } else if (k === " ") { e.preventDefault(); openInput("id", ""); }
+      else if (k === "ArrowDown" || k === "j") { e.preventDefault(); await step("down"); }
+      else if (k === "ArrowRight" || k === "l") { e.preventDefault(); await step("right"); }
+      else if (k === "ArrowUp" || k === "k") { e.preventDefault(); openInput("id", last || ""); }
+      else if (k === "n") { e.preventDefault(); await browse(1); }
+      else if (k === "p") { e.preventDefault(); await browse(-1); }
+      else if (k === " ") { e.preventDefault(); openInput("id", ""); }
       else if (k === "d") { e.preventDefault(); openInput("date", ""); }
       else if (k === "t") { e.preventDefault(); openInput("topicId", ""); }
       else if (k === "Tab") { e.preventDefault(); openInput("id", last || ""); }

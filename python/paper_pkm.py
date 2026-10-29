@@ -1682,6 +1682,10 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     keyword_line_order: list[tuple[int, dict]] = []
     if index_write.is_file():
         iw_fm, body = read_note(index_write)
+        # Index-write も、索引（キーワード行）を書くグループ（attribute: group）。同名のノートを別に持たない
+        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, INDEX_WRITE[:-3]))
+        iw_fm_changed = iw_fm_new != iw_fm
+        iw_fm = iw_fm_new
         for i, line in enumerate(body):
             entry = parse_keyword_line(line)
             if entry is not None:
@@ -1696,7 +1700,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
             body += [CONTEXT_HEAD,
                      markdown_link(index_display, index_path, root)]
             write_note(index_write, iw_fm, body)
-        elif keyword_line_order:
+        elif keyword_line_order or iw_fm_changed:
             write_note(index_write, iw_fm, body)
     entries.sort(key=keyword_sort_key)
 
@@ -1924,7 +1928,8 @@ def ensure_paper_top(root: Path, index_path: Path, index_write: Path, folge_inde
     """頂点の普通のノートを作る／直す。
 
         Paper-Zettelkasten-Index（普通のノート。ChildBranch: は空）
-          BranchGroup: Paper-Zettelkasten-Index（グループ。キーワードは全部ここ）・Index-write・Folgezettel-Index
+          BranchGroup: Paper-Zettelkasten-Index（グループ）だけ
+            └ そのグループの中に Index-write（グループ。索引を書く）・Folgezettel-Index（グループ）・キーワード
 
     vault の index.md からは、グループではなくこの頂点のノートへリンクする（グループへのリンクは頂点へ張り替える）。"""
     top = find_paper_top(root)
@@ -1932,10 +1937,8 @@ def ensure_paper_top(root: Path, index_path: Path, index_write: Path, folge_inde
         top = named_path(root, DEFAULT_INDEX_TITLE, False)
         write_note(top, [_time_line(), f"title: {DEFAULT_INDEX_TITLE}"], [f"# {DEFAULT_INDEX_TITLE}", ""],
                    keep_trailing_blank=True)
+    # 頂点のノートの BranchGroup: はグループ 1 つだけ。Index-write と Folgezettel-Index は、そのグループの中のグループ
     lines = [markdown_link(DEFAULT_INDEX_TITLE, index_path, top.parent)]
-    for p in (index_write, folge_index):
-        if p.is_file():
-            lines.append(markdown_link(p.stem, p, top.parent))
     _write_branch_group(top, lines)
     parent_index = Path(root) / "index.md"
     if parent_index.is_file():
@@ -1988,7 +1991,7 @@ def create_paper_index(root: Path) -> Path:
         else:
             write_note(
                 index_write,
-                [_time_line(), f"title: {INDEX_WRITE[:-3]}"],
+                [_time_line(), f"title: {INDEX_WRITE[:-3]}", "attribute: group"],
                 [f"# {INDEX_WRITE[:-3]}", ""],
             )
     index_path = migrate_paper_index(root)

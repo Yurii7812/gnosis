@@ -34335,7 +34335,9 @@ ${h3.join(`
       topicId: "Number the topic starts from",
       topicName: "Topic name",
       busy: "Working\u2026",
-      keys: "Space: number   d: paper diary   t: topic   Tab: previous number   s: sort   j k: back / forth   q: close",
+      keys: "\u2193 j: child of the previous number   \u2192 l: next number   \u2190 h: undo   \u2191 k: edit the previous number   Space: type a number   d: paper diary   t: topic   s: sort   n p: next / previous scan   q: close",
+      needFirst: "Type the first number with Space.",
+      undone: (id2) => `Undid ${id2}`,
       keysInput: "Enter: set and go next   Esc: close this input   Tab: put the previous number",
       done: (id2) => `Saved as ${id2}`,
       bad: (e) => e,
@@ -34372,7 +34374,9 @@ ${h3.join(`
       topicId: "\u30C8\u30D4\u30C3\u30AF\u306E\u8D77\u70B9\u306E\u756A\u53F7",
       topicName: "\u30C8\u30D4\u30C3\u30AF\u540D",
       busy: "\u6574\u7406\u3057\u3066\u3044\u307E\u3059\u2026",
-      keys: "Space \u756A\u53F7\u3092\u5165\u529B\u3000d \u65E5\u8A18\u3000t \u30C8\u30D4\u30C3\u30AF\u3000Tab \u524D\u306E\u756A\u53F7\u3000s \u4E26\u3079\u66FF\u3048\u3000j k \u524D\u5F8C\u3000q \u9589\u3058\u308B",
+      keys: "\u2193 j \u524D\u306E\u756A\u53F7\u306E\u5B50\u3000\u2192 l \u6B21\u306E\u9023\u756A\u3000\u2190 h \u53D6\u308A\u6D88\u3057\u3000\u2191 k \u524D\u306E\u756A\u53F7\u3092\u76F4\u3059\u3000Space \u756A\u53F7\u3092\u5165\u529B\u3000d \u65E5\u8A18\u3000t \u30C8\u30D4\u30C3\u30AF\u3000s \u4E26\u3079\u66FF\u3048\u3000n p \u6B21\u30FB\u524D\u306E\u753B\u50CF\u3000q \u9589\u3058\u308B",
+      needFirst: "\u6700\u521D\u306E\u753B\u50CF\u306F Space \u3067\u756A\u53F7\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+      undone: (id2) => `${id2} \u3092\u53D6\u308A\u6D88\u3057\u307E\u3057\u305F`,
       keysInput: "Enter \u6C7A\u3081\u3066\u6B21\u3078\u3000Esc \u3053\u306E\u5165\u529B\u3092\u9589\u3058\u308B\u3000Tab \u524D\u306E\u756A\u53F7\u3092\u5165\u308C\u308B",
       done: (id2) => `${id2} \u306B\u3057\u307E\u3057\u305F`,
       bad: (e) => e,
@@ -34745,6 +34749,55 @@ ${h3.join(`
       if (!scans.length) inputOpen = false;
       await showScan();
     }
+    async function step(dir) {
+      if (busy || !scans.length) return;
+      if (!last3) {
+        msg(T.needFirst, true);
+        return;
+      }
+      busy = true;
+      msg(T.busy);
+      const r = await api.run("step", [scans[idx], dir]);
+      busy = false;
+      if (!r.ok) {
+        msg(T.bad(r.error || "error"), true);
+        return;
+      }
+      changed++;
+      last3 = r.display;
+      msg(T.done(r.display));
+      scans.splice(idx, 1);
+      if (idx >= scans.length) idx = Math.max(0, scans.length - 1);
+      await showScan();
+    }
+    async function undoLast() {
+      if (busy) return;
+      busy = true;
+      msg(T.busy);
+      const r = await api.run("undo", []);
+      if (!r.ok) {
+        busy = false;
+        msg(T.bad(r.error || "error"), true);
+        return;
+      }
+      const l = await api.run("list", []);
+      busy = false;
+      if (l.ok) {
+        scans = l.scans;
+        info = l.info || {};
+      }
+      last3 = r.last || "";
+      idx = Math.max(0, scans.indexOf(r.name));
+      changed++;
+      msg(T.undone(r.display));
+      await showScan();
+    }
+    const browse = async (d) => {
+      if (scans.length) {
+        idx = (idx + d + scans.length) % scans.length;
+        await showScan();
+      }
+    };
     async function close() {
       if (busy) return;
       if (changed) {
@@ -34933,11 +34986,25 @@ ${h3.join(`
         if (k === "q") {
           e.preventDefault();
           await close();
-        } else if (!scans.length) return;
-        else if (k === "ArrowDown" || k === "j" || k === "ArrowUp" || k === "k") {
+        } else if (k === "ArrowLeft" || k === "h") {
           e.preventDefault();
-          idx = (idx + (k === "ArrowDown" || k === "j" ? 1 : -1) + scans.length) % scans.length;
-          await showScan();
+          await undoLast();
+        } else if (!scans.length) return;
+        else if (k === "ArrowDown" || k === "j") {
+          e.preventDefault();
+          await step("down");
+        } else if (k === "ArrowRight" || k === "l") {
+          e.preventDefault();
+          await step("right");
+        } else if (k === "ArrowUp" || k === "k") {
+          e.preventDefault();
+          openInput("id", last3 || "");
+        } else if (k === "n") {
+          e.preventDefault();
+          await browse(1);
+        } else if (k === "p") {
+          e.preventDefault();
+          await browse(-1);
         } else if (k === " ") {
           e.preventDefault();
           openInput("id", "");

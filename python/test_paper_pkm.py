@@ -296,8 +296,15 @@ def test_index_is_an_ordinary_note() -> None:
         top = pp.find_paper_top(root)
         ttext = top.read_text(encoding="utf-8")
         check("attribute: group" not in ttext and "BranchGroup:" in ttext and f"[Paper-Zettelkasten-Index]({N(root, 'Paper-Zettelkasten-Index', True)})" in ttext
-              and f"[Index-write]({N(root, 'Index-write')})" in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" in ttext
-              and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: に 3 つのグループ、ChildBranch は空: {ttext}")
+              and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: はグループ 1 つ、ChildBranch は空: {ttext}")
+        # Index-write・Folgezettel-Index は頂点の直下ではなく、グループ Paper-Zettelkasten-Index の中のグループ
+        check(f"[Index-write]({N(root, 'Index-write')})" not in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" not in ttext,
+              "Index-write・Folgezettel-Index は頂点の BranchGroup: に並べない")
+        gtext = path.read_text(encoding="utf-8")
+        check(f"[Index-write]({N(root, 'Index-write')})" in gtext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" in gtext,
+              "グループ Paper-Zettelkasten-Index の中に Index-write・Folgezettel-Index がある")
+        for nm, cap in (("Index-write", None), ("Folgezettel-Index", True)):
+            check("attribute: group" in (root / N(root, nm, cap)).read_text(encoding="utf-8"), f"{nm} はグループ（attribute: group）")
         parent = (root / "index.md").read_text(encoding="utf-8")
         check(f"({top.name})" in parent and f"({path.name})" not in parent, "index.md からは頂点の普通のノートへリンクする")
     with tempfile.TemporaryDirectory() as d:

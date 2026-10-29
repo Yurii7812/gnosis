@@ -9,6 +9,8 @@
     scan_inbox.py import ROOT SRC...           # フォルダまたは画像ファイルを受け皿へ（名前を paper-scan-… に揃える）
     scan_inbox.py importmove ROOT DIR          # vault の外のフォルダの写真を、受け皿へ移す（元のフォルダからは無くなる）
     scan_inbox.py assign ROOT NAME ID [TOPIC]  # 番号（トピック名つきならトピックのノート）
+    scan_inbox.py step ROOT NAME down|right    # 直前の番号の子（down）／次の連番（right）を付ける（矢印キー・j l）
+    scan_inbox.py undo ROOT                    # 直前の番号付けを取り消す（画像を受け皿へ戻し、作ったノートは .trash へ。矢印の左・h）
     scan_inbox.py diary ROOT NAME DATE         # 紙の日記として登録
     scan_inbox.py finish ROOT                  # Index・Folgezettel-Index などを作り直す
     scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA-1a2）を見る / 変える（変えたら番号を付け直す）
@@ -142,6 +144,13 @@ def _src(root: Path, name: str) -> Path:
     return p
 
 
+def _same_name_exists(root: Path, display: str) -> bool:
+    """同じ表示名の画像かノートが、もう vault にあるか（上書きになるか）。"""
+    if any(p.stem == display and p.suffix.lower() in EXTS for p in Path(root).glob(display + ".*")):
+        return True
+    return display in pp.scan_folgezettel_notes(root)
+
+
 def assign(root: Path, name: str, raw_id: str, topic: str = "") -> dict:
     root = Path(root).resolve()
     src = _src(root, name)
@@ -149,16 +158,72 @@ def assign(root: Path, name: str, raw_id: str, topic: str = "") -> dict:
     if not pp.ID_PATTERN.fullmatch(fid):
         return {"ok": False, "error": "番号の形が違います: " + raw_id}
     display = pp.topic_display(fid, topic) if topic else fid
+    replaced = _same_name_exists(root, display)
     _keep_old(root, root, display)
     item = (src, fid, topic) if topic else (src, fid)
     moved, errors = pp.move_images(root, root, [item])
     if errors:
         return {"ok": False, "error": errors[0][2]}
+    st = load_state(root)
+    # 取り消し（undo）のための記録。画像の名前・作ったノート・直前の番号
+    note_path = moved[0][1]
+    st.setdefault("history", []).append({
+        "name": name, "display": display, "note": note_path.name, "image": display + src.suffix.lower(),
+        "prev_last": st.get("last", ""), "replaced": replaced,
+    })
+    st["history"] = st["history"][-200:]
     if not topic:
-        st = load_state(root)
         st["last"] = fid
-        save_state(root, st)
-    return {"ok": True, "display": display, "note": moved[0][1].name}
+    save_state(root, st)
+    return {"ok": True, "display": display, "note": note_path.name}
+
+
+def step(root: Path, name: str, direction: str) -> dict:
+    """直前の番号を基準に、down = 子の番号（1a → 1a1）・right = 次の連番（1a → 1b）を付ける。"""
+    root = Path(root).resolve()
+    last = load_state(root).get("last", "")
+    if not last:
+        return {"ok": False, "error": "最初の画像は Space で番号を入れてください"}
+    try:
+        if direction == "down":
+            nxt = pp.child_id(last)
+        elif direction == "right":
+            nxt = pp.next_sibling_id(last)
+        else:
+            return {"ok": False, "error": "down か right を指定してください"}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return assign(root, name, nxt)
+
+
+def undo(root: Path) -> dict:
+    """直前の番号付けを取り消す。画像は受け皿へ元の名前で戻し、作ったノートは .trash へ移す。
+    同じ番号を上書きした番号付けは取り消さない（古い画像・ノートは .trash にあるので、手で戻す）。"""
+    root = Path(root).resolve()
+    st = load_state(root)
+    hist = st.get("history") or []
+    if not hist:
+        return {"ok": False, "error": "取り消せる番号付けがありません"}
+    rec = hist[-1]
+    if rec.get("replaced"):
+        return {"ok": False, "error": "同じ番号を上書きした番号付けは取り消せません（古い画像・ノートは .trash にあります）"}
+    img = root / rec["image"]
+    back = inbox(root) / rec["name"]
+    if back.exists():
+        return {"ok": False, "error": "受け皿に同じ名前の画像があるため戻せません: " + rec["name"]}
+    note = next((p for p in root.rglob(rec["note"]) if not any(part.startswith(".") for part in p.relative_to(root).parts)), None)
+    try:
+        if img.is_file():
+            shutil.move(str(img), str(back))
+        if note is not None:
+            pp._trash_note(root, note)
+    except OSError as exc:
+        return {"ok": False, "error": str(exc)}
+    hist.pop()
+    st["history"] = hist
+    st["last"] = rec.get("prev_last", "")
+    save_state(root, st)
+    return {"ok": True, "name": rec["name"], "last": st["last"], "display": rec["display"]}
 
 
 def diary(root: Path, name: str, date: str) -> dict:
@@ -212,6 +277,10 @@ def main(argv: list[str]) -> int:
             out = import_files(Path(a[0]), a[1:], move=True)
         elif cmd == "assign":
             out = assign(Path(a[0]), a[1], a[2], a[3] if len(a) > 3 else "")
+        elif cmd == "step":
+            out = step(Path(a[0]), a[1], a[2])
+        elif cmd == "undo":
+            out = undo(Path(a[0]))
         elif cmd == "diary":
             out = diary(Path(a[0]), a[1], a[2])
         elif cmd == "finish":
