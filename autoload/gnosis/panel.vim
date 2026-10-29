@@ -6,7 +6,7 @@
 "              （\q のボードの中の D で、全部のタブを消す）
 "   パネルの中のキー（3 つの中身どれでも同じ）
 "     Tab / Shift+Tab（または Ctrl+→ / Ctrl+←）  アウトライン → タブ → ハブ と切り替える（o t h で直接その中身へ）
-"     s 検索  n N 次・前のヒット   x 絞り込み（合わない行を畳む）   m ハイライト   Esc 全部やめる
+"     s 検索  n N 次・前のヒット   x 絞り込み（合わない行を畳む）   H ハイライト   m メニュー   K ヒント行のオン・オフ   Esc 全部やめる
 "       書き方は gs・曼荼羅の s / x / m と同じ（空白 AND・語の前の - で NOT・| で OR・"…" で句）
 "     e   \l で入れるノートを選んでいる最中に、カーソルの行のノートに決める（決めずに動き回ってもよい）
 "   Shift+← Shift+→ （または gh gl）… 窓を 1 つ左・右へ。左のビュー（曼荼羅 / Folgezettel）・ノート・右のパネルの順で、端では止まる。
@@ -163,11 +163,55 @@ function! gnosis#panel#attach() abort
   nnoremap <buffer><nowait><silent> n <Cmd>call gnosis#panel#next(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call gnosis#panel#next(-1)<CR>
   nnoremap <buffer><nowait><silent> x <Cmd>call gnosis#panel#filter()<CR>
-  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#panel#highlight()<CR>
+  nnoremap <buffer><nowait><silent> H <Cmd>call gnosis#panel#highlight()<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#panel#menu()<CR>
+  nnoremap <buffer><nowait><silent> K <Cmd>call gnosis#panel#toggle_hint()<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call gnosis#panel#clear()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call gnosis#panel#decide()<CR>
   nnoremap <buffer><nowait><silent> ? <Cmd>call gnosis#panel#help()<CR>
   setlocal statusline=%!gnosis#panel#status()
+  call gnosis#panel#hint()
+  augroup gnosis_panel_hint
+    autocmd! * <buffer>
+    " アウトラインのように中身ごと書き換わるバッファでも、ヒント行を付け直す
+    autocmd CursorMoved,BufWinEnter,TextChanged <buffer> call gnosis#panel#hint()
+  augroup END
+endfunction
+
+" 窓の一番上のヒント行: 今の中身（[ ]）と、最低限のキー
+function! s:hint_text() abort
+  let l:k = win_getid() == s:P.win ? s:P.kind : (gnosis#outline#is_open() && win_getid() == gnosis#outline#win() ? 'outline' : s:P.kind)
+  let l:cur = get({'outline': 'o', 'tabs': 't', 'hub': 'h'}, l:k, '')
+  return gnosis#hint#line([['o', 'アウトライン'], ['t', 'タブ'], ['h', 'ハブ']], l:cur,
+        \ 'm:' . gnosis#i18n#tr('メニュー') . ' ?:' . gnosis#i18n#tr('説明'))
+endfunction
+
+function! gnosis#panel#hint() abort
+  call gnosis#hint#ensure(s:hint_text())
+endfunction
+
+function! gnosis#panel#toggle_hint() abort
+  call gnosis#hint#toggle({-> gnosis#hint#put(s:hint_text())})
+endfunction
+
+" m: やることを番号で選ぶメニュー
+function! gnosis#panel#menu() abort
+  let l:k = s:hint_kind()
+  let l:entries = [
+        \ [gnosis#hint#mark(l:k ==# 'outline', 'アウトライン（見出しの一覧）'), function('gnosis#panel#switch', ['outline'])],
+        \ [gnosis#hint#mark(l:k ==# 'tabs', 'タブ（開いているノートのボード）'), function('gnosis#panel#switch', ['tabs'])],
+        \ [gnosis#hint#mark(l:k ==# 'hub', 'ハブ（リンクの一覧）'), function('gnosis#panel#switch', ['hub'])],
+        \ ['  ' . gnosis#i18n#tr('検索') . ' …', function('gnosis#panel#search')],
+        \ ['  ' . gnosis#i18n#tr('絞り込み') . ' …', function('gnosis#panel#filter')],
+        \ ['  ' . gnosis#i18n#tr('ハイライト') . ' …', function('gnosis#panel#highlight')],
+        \ ['  ' . gnosis#i18n#tr('検索・絞り込み・ハイライトをやめる'), function('gnosis#panel#clear')],
+        \ [gnosis#hint#mark(gnosis#hint#on(), '上のヒント行を出す'), function('gnosis#panel#toggle_hint')],
+        \ ['  ' . gnosis#i18n#tr('パネルを閉じる'), function('gnosis#panel#close')]]
+  call gnosis#hint#menu(gnosis#i18n#tr('右のパネル'), l:entries)
+endfunction
+
+function! s:hint_kind() abort
+  return win_getid() == s:P.win ? s:P.kind : (gnosis#outline#is_open() && win_getid() == gnosis#outline#win() ? 'outline' : s:P.kind)
 endfunction
 
 " ? のヘルプの行（試験用に外へも出す）
@@ -179,7 +223,9 @@ function! gnosis#panel#help_lines() abort
         \ 'o  t  h          ' . gnosis#i18n#tr('アウトライン・タブ・ハブへ直接'),
         \ 's  n  N          ' . gnosis#i18n#tr('検索・次のヒット・前のヒット（書き方は gs と同じ）'),
         \ 'x                ' . gnosis#i18n#tr('絞り込み（合わない行を畳む。中身は変えない）'),
-        \ 'm                ' . gnosis#i18n#tr('ハイライト'),
+        \ 'H                ' . gnosis#i18n#tr('ハイライト'),
+        \ 'm                ' . gnosis#i18n#tr('メニュー（やることを番号で選ぶ）'),
+        \ 'K                ' . gnosis#i18n#tr('上のヒント行を出す・隠す'),
         \ 'Esc              ' . gnosis#i18n#tr('検索・絞り込み・ハイライトを全部やめる'),
         \ 'e                ' . gnosis#i18n#tr('\l で入れるノートを選んでいるとき、カーソルの行のノートに決める'),
         \ 'j k  Enter       ' . gnosis#i18n#tr('行を動く・開く（アウトラインでは本文のその見出しへ）'),
@@ -215,7 +261,7 @@ function! gnosis#panel#status() abort
     let l:s .= (l:x ==# l:k ? '[' . l:names[l:x] . ']' : ' ' . l:names[l:x] . ' ') . ' '
   endfor
   let l:parts = []
-  for [l:key, l:mark] in [['gnosis_panel_q', 's:'], ['gnosis_panel_f', 'x:'], ['gnosis_panel_h', 'm:']]
+  for [l:key, l:mark] in [['gnosis_panel_q', 's:'], ['gnosis_panel_f', 'x:'], ['gnosis_panel_h', 'H:']]
     let l:v = getwinvar(l:w, l:key, '')
     if !empty(l:v)
       call add(l:parts, l:mark . substitute(l:v, '%', '%%', 'g'))
@@ -298,7 +344,7 @@ function! s:apply_filter() abort
   let &l:foldtext = "' ⋯'"
 endfunction
 
-" m: ハイライト。語に合う文字に色を付ける（行は動かさない）。空で Enter なら解除
+" H: ハイライト。語に合う文字に色を付ける（行は動かさない）。空で Enter なら解除
 function! gnosis#panel#highlight() abort
   call gnosis#panel#set('h', input(gnosis#i18n#tr('パネルのハイライト: '), get(w:, 'gnosis_panel_h', '')))
   redraw

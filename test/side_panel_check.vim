@@ -81,9 +81,9 @@ call gnosis#panel#next(-1)
 call s:ok('n / N: 次・前のヒットへ', s:l2 != s:l1 && line('.') == s:l1, string([s:l1, s:l2, line('.')]))
 call gnosis#panel#set('q', '-ノートA ノートB')
 call s:ok('検索の書き方は共通（-語 は NOT・空白は AND）', getline('.') =~# 'ノートB' && getline('.') !~# 'ノートA', getline('.'))
-" ---- ハイライト（m）
+" ---- ハイライト（H）
 call gnosis#panel#set('h', 'ノートB')
-call s:ok('m: ハイライトが付く', !empty(filter(getmatches(), 'v:val.group ==# "Search"')))
+call s:ok('H: ハイライトが付く', !empty(filter(getmatches(), 'v:val.group ==# "Search"')))
 call gnosis#panel#clear()
 call s:ok('Esc: 検索・絞り込み・ハイライトを全部やめる', empty(filter(getmatches(), 'v:val.group ==# "Search"')) && empty(gnosis#panel#info().query) && empty(gnosis#panel#info().filter))
 " ---- 3 つの中身どれでも同じ（アウトラインでも）
@@ -127,5 +127,24 @@ call gnosis#panel#close()
 execute 'edit ' . fnameescape(s:v . '/a.md')
 call gnosis#panel#move(-1)
 call s:ok('Shift+←: 左に何も無ければ左のビュー（曼荼羅）が開く', gnosis#mview#is_open())
+" ---- ヒント行（窓の一番上。K でオン・オフ）と m のメニュー
+call gnosis#panel#close()
+execute 'edit ' . fnameescape(s:v . '/a.md')
+call gnosis#panel#key('hub')
+function! s:hint_text() abort
+  let l:p = prop_list(1, {'types': ['gnosis_hint']})
+  return empty(l:p) ? '' : l:p[0].text
+endfunction
+call s:ok('ヒント行: 既定でパネルの一番上に出る（今の中身が [ ]）', s:hint_text() =~# '\[h:', s:hint_text())
+call s:ok('ヒント行: m と ? が書いてある', s:hint_text() =~# 'm:' && s:hint_text() =~# '?:', s:hint_text())
+call s:ok('ヒント行: バッファの行は増えない', getline(1) !~# 'm:')
+call gnosis#panel#toggle_hint()
+call s:ok('K: ヒント行が消える', empty(s:hint_text()))
+call gnosis#panel#toggle_hint()
+call s:ok('K: もう一度で戻る', s:hint_text() =~# '\[h:')
+call gnosis#panel#switch('tabs')
+call s:ok('中身を替えるとヒント行の [ ] も替わる', s:hint_text() =~# '\[t:', s:hint_text())
+call s:ok('m: メニューに割り当て', maparg('m', 'n') =~# 'panel#menu')
+call s:ok('H: ハイライトに割り当て', maparg('H', 'n') =~# 'panel#highlight')
 call writefile(s:res, s:work . '/result.txt')
 qa!

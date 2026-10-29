@@ -177,6 +177,13 @@ gnosis#hide#text
 gnosis#hide#window
 gnosis#highlight_digest
 gnosis#highlights
+gnosis#hint#ensure
+gnosis#hint#line
+gnosis#hint#mark
+gnosis#hint#menu
+gnosis#hint#on
+gnosis#hint#put
+gnosis#hint#toggle
 gnosis#hint_goto
 gnosis#hist_save
 gnosis#hist_visit
@@ -269,6 +276,7 @@ gnosis#listnav#help
 gnosis#listnav#input
 gnosis#listnav#invalidate
 gnosis#listnav#mark
+gnosis#listnav#menu
 gnosis#listnav#mode
 gnosis#listnav#move
 gnosis#listnav#moved
@@ -288,6 +296,7 @@ gnosis#listnav#setup
 gnosis#listnav#shown_paths
 gnosis#listnav#state
 gnosis#listnav#teardown
+gnosis#listnav#toggle_hint
 gnosis#lock_add
 gnosis#lock_remove
 gnosis#lock_vault
@@ -416,9 +425,11 @@ gnosis#panel#foldlevel
 gnosis#panel#help
 gnosis#panel#help_lines
 gnosis#panel#highlight
+gnosis#panel#hint
 gnosis#panel#info
 gnosis#panel#key
 gnosis#panel#kind
+gnosis#panel#menu
 gnosis#panel#move
 gnosis#panel#next
 gnosis#panel#open_last
@@ -427,6 +438,7 @@ gnosis#panel#set
 gnosis#panel#status
 gnosis#panel#switch
 gnosis#panel#tabs_clear
+gnosis#panel#toggle_hint
 gnosis#panel#width
 gnosis#paper_index
 gnosis#paper_scan

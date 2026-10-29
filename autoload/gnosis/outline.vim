@@ -6,7 +6,7 @@
 "   j k / ↓ ↑      見出しを選ぶ        Enter  本文のその見出しへ（カーソルも本文へ移る）
 "   za zc zo zM zR 折りたたみ（開閉・閉じる・開く・全部閉じる・全部開く）
 "   < >            境目を左・右へ（右のパネルでは < で広く、> で狭く）      S  左右を入れ替える      Space  本文の窓へ      q  閉じる
-"   Tab / o t h    タブ・ハブへ切り替え      s x m n N  検索・絞り込み・ハイライト      Esc  それらをやめる      e  \l の最中、このノートに決める
+"   Tab / o t h    タブ・ハブへ切り替え      s x H n N  検索・絞り込み・ハイライト（m メニュー）      Esc  それらをやめる      e  \l の最中、このノートに決める
 " 本文を編集すると自動で更新し、本文のカーソルがある見出しを強調する。ノートは書き換えない。
 let s:O = {'win': -1, 'buf': -1, 'src': -1, 'collapsed': {}, 'items': [], 'lines': [], 'cells': [], 'sel': {}, 'tick': '', 'active': 0,
       \ 'side': 'right', 'mid': -1, 'timer': -1}
@@ -176,7 +176,7 @@ function! s:maps() abort
   nnoremap <buffer><nowait><silent> S <Cmd>call <SID>swap_side()<CR>
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#outline#close()<CR>
   nnoremap <buffer><nowait><silent> <Space> <Cmd>call <SID>to_src()<CR>
-  " 3 つの中身（アウトライン・タブ・ハブ）に共通のキーと状態行（Tab 切り替え・s x m n N 検索/絞り込み/ハイライト・e 決定）
+  " 3 つの中身（アウトライン・タブ・ハブ）に共通のキーと状態行（Tab 切り替え・s x H n N 検索/絞り込み/ハイライト・m メニュー・e 決定）
   call gnosis#panel#attach()
 endfunction
 

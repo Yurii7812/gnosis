@@ -65,7 +65,7 @@ function! gnosis#listnav#setup() abort
         \ 'gg': "call gnosis#listnav#edge(0)", 'G': "call gnosis#listnav#edge(1)",
         \ '<CR>': "call gnosis#listnav#enter()", '<2-LeftMouse>': "call gnosis#listnav#enter()",
         \ 's': "call gnosis#listnav#mode('search')", 'x': "call gnosis#listnav#prompt('filter')",
-        \ 'l': "call gnosis#listnav#mode('links')", 'r': "call gnosis#listnav#mode('similar')", 'm': "call gnosis#listnav#mode('similar')",
+        \ 'l': "call gnosis#listnav#mode('links')", 'r': "call gnosis#listnav#mode('similar')", 'm': "call gnosis#listnav#menu()", 'K': "call gnosis#listnav#toggle_hint()",
         \ 'H': "call gnosis#listnav#prompt('highlight')", 'n': "call gnosis#listnav#next_hit(1)", 'N': "call gnosis#listnav#next_hit(-1)",
         \ 'S': "call gnosis#listnav#scope()",
         \ 'w': "call gnosis#listnav#option('rank', !gnosis#listnav#state().rank)",
@@ -178,6 +178,8 @@ function! gnosis#listnav#render() abort
   if line('$') > len(l:lines) | execute (len(l:lines) + 1) . ',$delete _' | endif
   setlocal nomodifiable nomodified
   let s:L.lines = l:lines
+  " setline は行の text property を消すので、書き換えたあとに付け直す
+  call gnosis#hint#put(s:hint_text())
   call winrestview(l:save)
   call cursor(min([len(l:lines), l:want]), 1)
   let s:L.lastpos = getpos('.')[1:2]
@@ -439,8 +441,45 @@ function! gnosis#listnav#decide(index) abort
   if !empty(l:row) && gnosis#mview#picking() | call gnosis#mview#fz_decide(l:row.path, a:index) | endif
 endfunction
 
+" 窓の一番上に出す 1 行: 今のモード（[ ]）と、最低限のキー
+function! s:hint_text() abort
+  let l:cur = {'links': 'l', 'search': 's', 'similar': 'r'}[s:L.mode]
+  return gnosis#hint#line([['l', 'リンク'], ['s', '検索'], ['r', '類似']], l:cur,
+        \ 'm:' . gnosis#i18n#tr('メニュー') . ' ?:' . gnosis#i18n#tr('説明'))
+endfunction
+
+function! gnosis#listnav#toggle_hint() abort
+  call gnosis#hint#toggle(function('gnosis#listnav#render'))
+endfunction
+
+function! s:set(key, value) abort
+  call gnosis#listnav#option(a:key, a:value)
+endfunction
+
+" m: やることを番号で選ぶメニュー。使えるキーを覚えなくても、ここから全部たどれる
+function! gnosis#listnav#menu() abort
+  let l:m = s:L.mode
+  let l:rels = [['すべて', ''], ['子', 'child'], ['親', 'parent'], ['グループ', 'group'], ['文脈', 'context'],
+        \ ['関連', 'related'], ['引用された', 'cite'], ['BackLink', 'back'], ['索引', 'index']]
+  let l:rel_entries = map(copy(l:rels), '[gnosis#hint#mark(s:L.relation ==# v:val[1], v:val[0]), function("s:set", ["relation", v:val[1]])]')
+  let l:scopes = [['全部', 'all'], ['索引とグループ', 'index'], ['索引以外', 'no-index']]
+  let l:scope_entries = map(copy(l:scopes), '[gnosis#hint#mark(s:L.scope ==# v:val[1], v:val[0]), function("s:set", ["scope", v:val[1]])]')
+  let l:entries = [
+        \ [gnosis#hint#mark(l:m ==# 'links', 'リンク（つながっているノート）'), function('gnosis#listnav#mode', ['links'])],
+        \ [gnosis#hint#mark(l:m ==# 'search', '検索'), function('gnosis#listnav#mode', ['search'])],
+        \ [gnosis#hint#mark(l:m ==# 'similar', '類似（似ているノート）'), function('gnosis#listnav#mode', ['similar'])],
+        \ ['  ' . gnosis#i18n#tr('リンクの種類で絞る') . ' …', {'title': gnosis#i18n#tr('リンクの種類'), 'sub': l:rel_entries}],
+        \ ['  ' . gnosis#i18n#tr('検索の範囲') . ' …', {'title': gnosis#i18n#tr('検索の範囲'), 'sub': l:scope_entries}],
+        \ ['  ' . gnosis#i18n#tr('深さ') . ' (' . s:L.depth . ') …', function('gnosis#listnav#depth')],
+        \ [gnosis#hint#mark(s:L.rank, '近さ順に並べる'), {-> gnosis#listnav#option('rank', !s:L.rank)}],
+        \ ['  ' . gnosis#i18n#tr('絞り込み') . ' …', {-> gnosis#listnav#prompt('filter')}],
+        \ ['  ' . gnosis#i18n#tr('ハイライト') . ' …', {-> gnosis#listnav#prompt('highlight')}],
+        \ [gnosis#hint#mark(gnosis#hint#on(), '上のヒント行を出す'), function('gnosis#listnav#toggle_hint')]]
+  call gnosis#hint#menu(gnosis#i18n#tr('リストビュー'), l:entries)
+endfunction
+
 function! gnosis#listnav#help() abort
-  echo 'FOLGEZETTEL: s ' . gnosis#i18n#tr('検索') . '  l ' . gnosis#i18n#tr('リンク') . '  r/m ' . gnosis#i18n#tr('類似') . '  f Folgezettel'
+  echo 'FOLGEZETTEL: m ' . gnosis#i18n#tr('メニュー') . '  s ' . gnosis#i18n#tr('検索') . '  l ' . gnosis#i18n#tr('リンク') . '  r/m ' . gnosis#i18n#tr('類似') . '  f Folgezettel'
         \ . ' | x H  n/N  S  +  w  b/p/g/c/R/a  o  Backspace  Enter  Ctrl+←/→'
 endfunction
 

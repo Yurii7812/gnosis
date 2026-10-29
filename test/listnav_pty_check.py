@@ -30,7 +30,7 @@ class ListView(unittest.TestCase):
             f"let g:gnosis_root='{self.vault}/'\n"
             "let g:gnosis_skip_interactive_mount=1\nlet g:gnosis_start_screen=0\n"
             "let g:gnosis_autosync=0\nlet g:gnosis_autosave=0\nlet g:gnosis_diary_auto=0\n"
-            "let g:gnosis_mview_restore=0\nlet g:gnosis_language='en'\n"
+            "let g:gnosis_mview_restore=0\nlet g:gnosis_language='en'\nlet g:gnosis_hint=0\n"
             f"source {REPO}/vimrc_gnosis\nruntime plugin/gnosis.vim\nset eventignore=VimEnter\n"
             f"edit {self.vault}/a.md\n"
             "set nomore\n"
@@ -55,6 +55,26 @@ class ListView(unittest.TestCase):
         self.assertIn('FOLGEZETTEL', s.text())
         s.send('l', .5)
         self.assertIn('FOLGEZETTEL / ', s.text())
+
+    def test_hint_line_toggle_and_mode_menu(self):
+        with self.session() as s:
+            self.open_list(s)
+            self.assertNotIn('m:', s.text())  # 既定はこの試験ではオフ
+            s.send('K', .5)
+            top = s.text().splitlines()[0]
+            self.assertIn('[l:', top)  # 今のモードが [ ] で出る
+            self.assertIn('m:', top)
+            s.send('K', .5)
+            self.assertNotIn('[l:', s.text().splitlines()[0])
+            s.send('K', .4)
+            s.send('m', .6)  # メニュー。3 = 類似
+            self.assertIn('Similar', s.text())
+            s.send('3\r', .8)
+            self.assertIn('[r:', s.text().splitlines()[0])
+            s.send('m', .5)
+            s.send(ESC, .4)  # やめても何も変わらない
+            self.assertIn('[r:', s.text().splitlines()[0])
+            self.assertEqual(self.dump(s)['view'], 'list')
 
     def test_cycles_both_directions_and_plain_list_search(self):
         with self.session() as s:
