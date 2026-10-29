@@ -11,7 +11,8 @@ let s:type = 'gnosis_hint'
 function! gnosis#hint#on() abort
   if !exists('s:on')
     let l:d = gnosis#home#read_json(gnosis#home#path('hint.json'), {})
-    let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', 1)
+    " 保存した設定 > g:gnosis_hint > 環境変数 GNOSIS_HINT（試験は 0 にして画面を変えない）> オン
+    let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
   endif
   return s:on
 endfunction

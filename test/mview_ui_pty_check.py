@@ -2,7 +2,7 @@
 """曼荼羅まわりの見た目を、実 Vim を擬似端末で動かして確かめる（一時 vault だけを使う）。
   - ``` で囲んだコードの行が、右端まで灰色の背景になる（文字の分だけではない）
   - 曼荼羅を開いたまま右のノートで挿入モードにすると、左下（曼荼羅の窓のステータス行）にも INSERT と出る
-  - m（ハイライト）の入力欄: 入力中はカーソルが出て、q でやめたあとは入力欄の文字が残らない"""
+  - H（ハイライト）の入力欄: 入力中はカーソルが出て、q でやめたあとは入力欄の文字が残らない"""
 import fcntl, os, pty, re, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
 
@@ -79,17 +79,17 @@ try:
     mark = len(out)
     os.write(fd, b"\x17h")      # 曼荼羅の窓へ戻る
     pump(0.6)
-    # 3) m の入力欄
+    # 3) H の入力欄
     mark = len(out)
-    os.write(fd, b"m")
+    os.write(fd, b"H")
     pump(0.8)
     seg = out[mark:]
-    ok("m の入力欄が出る", "ハイライト".encode() in seg)
+    ok("H の入力欄が出る", "ハイライト".encode() in seg)
     ok("入力欄ではカーソルを出す（?25h）", b"\x1b[?25h" in seg)
     os.write(fd, b"\x1b")        # 入力欄をやめる（Esc）
     pump(0.6)
     mark = len(out)
-    os.write(fd, b"mmemo\r")
+    os.write(fd, b"Hmemo\r")
     pump(1.0)
     os.write(fd, b"q")
     pump(1.2)

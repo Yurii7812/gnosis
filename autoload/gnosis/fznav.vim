@@ -323,6 +323,7 @@ function! gnosis#fznav#render() abort
     endif
     let l:i += 1
   endwhile
+  call gnosis#hint#put(s:hint_text())
   call gnosis#listnav#paint(get(s:F, 'highlight', ''), map(copy(l:items), 'get(v:val, "path", "")'), get(s:F, 'highlight_paths', {}))
   setlocal nomodifiable nomodified
   " カーソルと表示位置
@@ -657,6 +658,30 @@ function! s:more() abort
   call gnosis#fznav#render()
 endfunction
 
+" 窓の一番上に出す 1 行: 通常 / 上位表示と、リストへ入る最低限のキー
+function! s:hint_text() abort
+  return gnosis#hint#line([['l', 'リンク'], ['s', '検索'], ['r', '類似']], '',
+        \ (s:F.mode ==# 'upper' ? '[u:' : 'u:') . gnosis#i18n#tr('上位表示') . (s:F.mode ==# 'upper' ? ']' : '')
+        \ . ' m:' . gnosis#i18n#tr('メニュー') . ' ?:' . gnosis#i18n#tr('説明'))
+endfunction
+
+function! s:toggle_hint() abort
+  call gnosis#hint#toggle({-> gnosis#fznav#render()})
+endfunction
+
+" m: やることを番号で選ぶメニュー
+function! s:menu() abort
+  let l:entries = [
+        \ ['  ' . gnosis#i18n#tr('リンク（つながっているノート）'), {-> gnosis#listnav#enter_mode('links')}],
+        \ ['  ' . gnosis#i18n#tr('検索'), {-> gnosis#listnav#enter_mode('search')}],
+        \ ['  ' . gnosis#i18n#tr('類似（似ているノート）'), {-> gnosis#listnav#enter_mode('similar')}],
+        \ [gnosis#hint#mark(s:F.mode ==# 'upper', '上位表示（祖先と関連グループ）'), {-> s:toggle_upper()}],
+        \ ['  ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'), {-> s:more()}],
+        \ ['  ' . gnosis#i18n#tr('全画面 ⇔ 戻す'), {-> gnosis#mview#win_op('full')}],
+        \ [gnosis#hint#mark(gnosis#hint#on(), '上のヒント行を出す'), {-> s:toggle_hint()}]]
+  call gnosis#hint#menu('Folgezettel', l:entries)
+endfunction
+
 " ? のガイドは、Esc / q / ? / Enter / Space / クリックでだけ閉じる（タイマーが積むキーでは閉じない）
 function! s:help_filter(id, key) abort
   if index(["\<Esc>", 'q', '?', "\<CR>", ' ', "\<LeftMouse>"], a:key) >= 0
@@ -677,7 +702,9 @@ function! s:help() abort
         \ 'c             ' . gnosis#i18n#tr('印のついたノート（Enter で開いたもの）へ戻る'),
         \ 'u             ' . gnosis#i18n#tr('上位表示 ⇔ 通常'),
         \ 'M             ' . gnosis#i18n#tr('関連グループをもっと見る（上位表示）'),
-        \ 's l r m       ' . gnosis#i18n#tr('リスト: 検索・リンク・類似（r と m は同じ）。リストの中で f で Folgezettel に戻る'),
+        \ 's l r         ' . gnosis#i18n#tr('リスト: 検索・リンク・類似。リストの中で f で Folgezettel に戻る'),
+        \ 'm             ' . gnosis#i18n#tr('メニュー（やることを番号で選ぶ）'),
+        \ 'K             ' . gnosis#i18n#tr('上のヒント行を出す・隠す'),
         \ '\l            ' . gnosis#i18n#tr('入れるノートを選ぶモード（\l）。ビューを切り替えても続く'),
         \ 'e I o         ' . gnosis#i18n#tr('選ぶモード: e 決定・I Index に載せる・o 元のノートを右に見る（もう一度で戻る）・O 左の中心も元のノートに'),
         \ 'q             ' . gnosis#i18n#tr('選ぶモードなどをやめる（何も無ければ閉じる）'),
@@ -756,7 +783,8 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> s <Cmd>call gnosis#listnav#enter_mode('search')<CR>
   nnoremap <buffer><nowait><silent> l <Cmd>call gnosis#listnav#enter_mode('links')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
-  nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call <SID>menu()<CR>
+  nnoremap <buffer><nowait><silent> K <Cmd>call <SID>toggle_hint()<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
   nnoremap <buffer><nowait><silent> O <Cmd>call gnosis#mview#goto_origin()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call <SID>pick_decide(0)<CR>

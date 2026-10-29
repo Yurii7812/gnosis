@@ -13,3 +13,6 @@ export PATH
 GNOSIS_TEST_NO_DESKTOP=1
 export GNOSIS_TEST_NO_DESKTOP
 unset WAYLAND_DISPLAY DISPLAY
+
+# 上のヒント行は試験では既定オフ（画面の行数が変わらないように。ヒント行の試験は自分でオンにする）
+export GNOSIS_HINT=0

@@ -1403,7 +1403,7 @@ function! s:help_lines() abort
         \   ['Tab  S-Tab', '中心 → 1 … 8 の順に見る'], ['[  ]', '前後の曼荼羅（9×9 は今のブロック）'], ['BS', '一つ前に戻る'], ['\\.', '戻るを戻す'], ['Space', 'ノートへ移る']]],
         \ ['見る', [['a', '全体（ふだん）'], ['i', 'グループ・索引だけ'], ['d', '親と子だけ'], ['c', '近いグループだけ'], ['C', '近いグループを重ねる'], ['r', '予測関連だけ'], ['R', '予測関連を重ねる'],
         \   ['y', 'C と R を両方同じオン/オフ（c r も全部オフ）'], ['v', '外向き（輪に並べる）'], ['+', '外向きの深さ（入力）'], ['D', '配下だけ ⇔ 通常（深さは維持）'], ['w', '近さ順に並べる'], ['b', '近さ順の基準 rank(center) ⇔ rank(block)（通常9×9の外側）'], ['u', '見出しだけ'], ['U', '見出しも一緒に']]],
-        \ ['探す', [['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['m', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
+        \ ['探す', [['m', 'メニュー（やることを番号で選ぶ）'], ['K', '上のヒント行を出す・隠す'], ['s', '検索（題・ファイル名・本文）'], ['x', '絞り込み（-語 で除外）'], ['H', 'ハイライト → n  N で次・前'], ['gs', '全文検索で選んだノートを中心に']]],
         \ ['リンクを入れる（\l のあと）', [['e', 'これにする（置き場所を聞く）'], ['o', '入れるノート ⇔ 元のノート（右だけ）'], ['O', '元のノートを右に出し、左の中心も元のノートに']]],
         \ ['画面', [['f', '9×9 ⇔ 3×3'], ['p', '右のノートを隠す・出す'], ['L', '種類の凡例を出す・隠す'], ['<  >', '曼荼羅の窓の幅'], ['(  )', '盤面の幅'], ['=', '半々・正方形に戻す'],
         \   ['z  Ctrl-L', '盤面を中央に戻す'], ['T', '数字キー: 移動 ⇔ カーソルだけ'], ['t', '時間順（作成日時）: 古い順 → 新しい順 → オフ'], ['#', '数字を出す・隠す'], ['p', '（上と同じ）'], ['.', '読み直す']]],
@@ -1638,7 +1638,7 @@ function! s:render() abort
   let s:S.modespan = []
   " 窓が低いときは凡例を出さない（盤面を潰さないため）
   let l:leg = (s:legend_on() && l:H >= 22) ? s:legend_build(l:W) : [[], []]
-  let l:fixed = 2 + len(l:leg[0])
+  let l:fixed = 2 + len(l:leg[0]) + (gnosis#hint#on() ? 1 : 0)   " 一番上のヒント行も 1 行使う
   let s:S.legend_line = 0
   let [l:cw, l:ch] = s:geometry(l:n, l:W, l:H, l:fixed)
   let l:heavy = {0: 1, 3: 1, 6: 1, 9: 1}
@@ -1738,6 +1738,8 @@ function! s:render() abort
     endif
   endfor
   setlocal nomodifiable nomodified
+  " setline は行の text property を消すので、書き換えたあとに付け直す
+  call gnosis#hint#put(s:hint_text())
   call winrestview({'topline': 1, 'leftcol': 0})
   call s:mark()
   call s:save_state()
@@ -2144,6 +2146,40 @@ function! s:ask(prompt, default) abort
     echo ''
   endtry
   return l:r
+endfunction
+
+" 窓の一番上に出す 1 行: 今のモード（[ ]）と、最低限のキー
+function! s:hint_text() abort
+  let l:cur = get({'all': 'a', 'groups': 'i', 'family': 'd'}, get(s:S, 'mode', 'all'), '')
+  return gnosis#hint#line([['a', '全体'], ['i', '索引'], ['d', '親子']], l:cur,
+        \ 'm:' . gnosis#i18n#tr('メニュー') . ' Z:' . gnosis#i18n#tr('設定') . ' ?:' . gnosis#i18n#tr('説明'))
+endfunction
+
+function! s:toggle_hint() abort
+  call gnosis#hint#toggle({-> s:render()})
+endfunction
+
+" m: やることを番号で選ぶメニュー。覚えていないキーも、ここから全部たどれる
+function! s:menu() abort
+  let l:m = get(s:S, 'mode', 'all')
+  let l:entries = [
+        \ [gnosis#hint#mark(l:m ==# 'all', '全体（ふだん）'), {-> s:setmode('all')}],
+        \ [gnosis#hint#mark(l:m ==# 'groups', '索引・グループだけ'), {-> s:setmode('groups')}],
+        \ [gnosis#hint#mark(l:m ==# 'family', '親と子だけ'), {-> s:setmode('family')}],
+        \ [gnosis#hint#mark(get(s:S, 'near_only', 0), '近いグループだけ'), {-> s:toggle_over('near_only')}],
+        \ [gnosis#hint#mark(get(s:S, 'rel_only', 0), '予測関連だけ'), {-> s:toggle_over('rel_only')}],
+        \ [gnosis#hint#mark(get(s:S, 'near_on', 0), '近いグループを重ねる'), {-> s:toggle_over('near_on')}],
+        \ [gnosis#hint#mark(get(s:S, 'rel_on', 0), '予測関連を重ねる'), {-> s:toggle_over('rel_on')}],
+        \ [gnosis#hint#mark(get(s:S, 'out_on', 0), '外向き（輪に並べる）'), {-> s:toggle_out()}],
+        \ [gnosis#hint#mark(get(s:S, 'rank_on', 0), '近さ順に並べる'), {-> s:toggle_rank()}],
+        \ [gnosis#hint#mark(get(s:S, 'ol_only', 0), '見出しだけ'), {-> s:toggle_outline_only()}],
+        \ ['  ' . gnosis#i18n#tr('検索') . ' …', {-> s:search()}],
+        \ ['  ' . gnosis#i18n#tr('絞り込み') . ' …', {-> s:filter()}],
+        \ ['  ' . gnosis#i18n#tr('ハイライト') . ' …', {-> s:find_prompt()}],
+        \ ['  ' . gnosis#i18n#tr('設定の画面') . ' (Z)', {-> s:settings_menu()}],
+        \ ['  ' . gnosis#i18n#tr('プリセット') . ' (P)', {-> s:preset_menu()}],
+        \ [gnosis#hint#mark(gnosis#hint#on(), '上のヒント行を出す'), {-> s:toggle_hint()}]]
+  call gnosis#hint#menu(gnosis#i18n#tr('曼荼羅ビュー'), l:entries)
 endfunction
 
 function! s:find_prompt() abort
@@ -2969,7 +3005,9 @@ function! s:setup_buffer() abort
   nnoremap <buffer><nowait><silent> P <Cmd>call <SID>preset_menu()<CR>
   nnoremap <buffer><nowait><silent> L <Cmd>call <SID>toggle_legend()<CR>
   nnoremap <buffer><nowait><silent> z <Cmd>call <SID>recenter()<CR>
-  nnoremap <buffer><nowait><silent> m <Cmd>call <SID>find_prompt()<CR>
+  nnoremap <buffer><nowait><silent> H <Cmd>call <SID>find_prompt()<CR>
+  nnoremap <buffer><nowait><silent> m <Cmd>call <SID>menu()<CR>
+  nnoremap <buffer><nowait><silent> K <Cmd>call <SID>toggle_hint()<CR>
   nnoremap <buffer><nowait><silent> n <Cmd>call <SID>jump(1)<CR>
   nnoremap <buffer><nowait><silent> N <Cmd>call <SID>jump(-1)<CR>
   nnoremap <buffer><nowait><silent> x <Cmd>call <SID>filter()<CR>
