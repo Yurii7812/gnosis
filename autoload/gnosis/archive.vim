@@ -1,7 +1,9 @@
 " autoload/gnosis/archive.vim — zip / 7z を開いている vault に取り込む（:GnosisImportArchive）
 "   書庫の場所を指定 → パスワードが要れば入力 → 増えるもの・変わるものを見て確認 → vault を更新 → 完了。
 "   本体は python/archive_import.py。ドット始まりの場所（.state・.trash・.git・.crypt）は取り込まない。
-"   中身が違う既存ファイルは上書きするが、元は <vault>/.trash/archive-import-<時刻>/ に残る。
+"   既定は「置き換え」: 書庫の内容を vault の正とし、書庫に無い古いファイルは消す。置き換わる・消えるファイルの元は
+"   <vault>/.trash/archive-import-<時刻>/ に先に退避する（戻せる）。守って触らないもの: 書庫より新しい vault のファイル
+"   （書庫のあとの作業・古い記録での上書き）と、書庫側の中身が壊れていそうなファイル。別の vault の書庫・古い書庫は強く警告する。
 
 let s:here = expand('<sfile>:p:h:h:h')
 
@@ -36,8 +38,9 @@ function! s:plan(root, file, pw) abort
   endtry
 endfunction
 
-" 反映まで（確認なし）。試験はここを直接呼ぶ。返り値: {'added','updated','same','backup','files'} か {'error'} か {'need_password'}
-function! gnosis#archive#run(file, pw) abort
+" 反映まで（確認なし）。試験はここを直接呼ぶ。opts: {'merge': 1} 足す・更新するだけ／{'force': 1} 守って残すものも上書き。
+" 返り値: {'added','updated','removed','same','held','protected','backup','files'} か {'error'} か {'need_password'}
+function! gnosis#archive#run(file, pw, ...) abort
   let l:root = s:root()
   if empty(l:root)
     return {'error': gnosis#i18n#tr('vault が開かれていません')}
@@ -46,11 +49,11 @@ function! gnosis#archive#run(file, pw) abort
   if has_key(l:p, 'error') || has_key(l:p, 'need_password')
     return l:p
   endif
-  return s:apply(l:root, l:p.stage)
+  return s:apply(l:root, l:p.stage, a:0 ? a:1 : {})
 endfunction
 
-function! s:apply(root, stage) abort
-  let l:r = s:py(['apply', a:root, a:stage])
+function! s:apply(root, stage, opts) abort
+  let l:r = s:py(['apply', a:root, a:stage] + (get(a:opts, 'merge', 0) ? ['--merge'] : []) + (get(a:opts, 'force', 0) ? ['--force'] : []))
   if !has_key(l:r, 'error')
     call s:after(a:root, l:r.files)
   endif
@@ -119,36 +122,80 @@ function! gnosis#archive#import(...) abort
     echohl WarningMsg | echo "\n" . 'Gnosis: ' . l:p.error | echohl NONE
     return
   endif
-  let l:n = len(l:p.new) + len(l:p.changed)
-  if l:n == 0
+  let l:n = len(l:p.new) + len(l:p.changed) + len(l:p.removed)
+  if l:n == 0 && empty(l:p.held)
     call s:py(['discard', l:p.stage])
     echo "\n" . printf(gnosis#i18n#tr('Gnosis: 変わるものはありません（同じ %d 件）'), len(l:p.same))
     return
   endif
-  let l:lines = [printf(gnosis#i18n#tr('追加 %d 件・更新 %d 件・同じ %d 件'), len(l:p.new), len(l:p.changed), len(l:p.same))]
-  for l:f in l:p.changed[0 : 4]
-    call add(l:lines, '  ' . gnosis#i18n#tr('更新') . ' ' . l:f)
+  let l:lines = [printf(gnosis#i18n#tr('追加 %d 件・更新 %d 件・削除 %d 件・同じ %d 件'), len(l:p.new), len(l:p.changed), len(l:p.removed), len(l:p.same))]
+  for [l:tag, l:list] in [['更新', l:p.changed], ['削除', l:p.removed], ['追加', l:p.new]]
+    for l:f in l:list[0 : 3]
+      call add(l:lines, '  ' . gnosis#i18n#tr(l:tag) . ' ' . l:f)
+    endfor
   endfor
-  for l:f in l:p.new[0 : 4]
-    call add(l:lines, '  ' . gnosis#i18n#tr('追加') . ' ' . l:f)
-  endfor
-  if l:n > 10
+  if len(l:p.new) + len(l:p.changed) + len(l:p.removed) > 12
     call add(l:lines, '  …')
   endif
-  if !empty(l:p.changed)
-    call add(l:lines, gnosis#i18n#tr('（更新するファイルの元は .trash/archive-import-… に残ります）'))
+  if !empty(l:p.protected)
+    call add(l:lines, printf(gnosis#i18n#tr('書庫のあとに書いた vault のファイル %d 件は、消さずに残します'), len(l:p.protected)))
+  endif
+  if !empty(l:p.held)
+    call add(l:lines, printf(gnosis#i18n#tr('守って上書きしないもの %d 件:'), len(l:p.held)))
+    for l:h in l:p.held[0 : 4]
+      call add(l:lines, '  ' . l:h.rel . '  — ' . join(l:h.why, ' / '))
+    endfor
+    if len(l:p.held) > 5
+      call add(l:lines, '  …')
+    endif
+  endif
+  if l:n > 0
+    call add(l:lines, gnosis#i18n#tr('（置き換わる・消えるファイルの元は、先に .trash/archive-import-… に退避します）'))
   endif
   echo "\n" . join(l:lines, "\n")
-  let l:ans = input(gnosis#i18n#tr('vault を更新しますか？ [y/N] '))
-  if l:ans !~? '^y'
+  let l:strong = !empty(l:p.strong)
+  if l:strong
+    echohl ErrorMsg
+    echo "\n" . gnosis#i18n#tr('⚠ 警告: 取り込む前によく確認してください')
+    for l:w in l:p.strong
+      echo '  ・' . l:w
+    endfor
+    echohl NONE
+    let l:ask = gnosis#i18n#tr('置き換えるには yes と入力（足す・更新するだけは m、やめるは Enter）: ')
+  else
+    let l:ask = gnosis#i18n#tr('vault を置き換えますか？ [y 置き換え / m 足す・更新するだけ / N やめる]') . (empty(l:p.held) ? ' ' : gnosis#i18n#tr('（! で守っているものも上書き）') . ' ')
+  endif
+  let l:ans = trim(input(l:ask))
+  let l:opts = {}
+  if l:strong
+    if l:ans ==# 'yes' || (l:ans ==# 'yes!' && !empty(l:p.held))
+      let l:opts.force = l:ans ==# 'yes!'
+    elseif l:ans ==? 'm'
+      let l:opts.merge = 1
+    else
+      let l:opts = v:null
+    endif
+  else
+    if l:ans ==? 'y' || (l:ans ==# '!' && !empty(l:p.held)) || (l:ans ==? 'y!' && !empty(l:p.held))
+      let l:opts.force = l:ans =~# '!'
+    elseif l:ans ==? 'm'
+      let l:opts.merge = 1
+    else
+      let l:opts = v:null
+    endif
+  endif
+  if l:opts is v:null
     call s:py(['discard', l:p.stage])
     echo "\n" . gnosis#i18n#tr('Gnosis: 取り込みをやめました')
     return
   endif
-  let l:r = s:apply(l:root, l:p.stage)
+  let l:r = s:apply(l:root, l:p.stage, l:opts)
   if has_key(l:r, 'error')
     echohl WarningMsg | echo "\n" . 'Gnosis: ' . l:r.error | echohl NONE
     return
   endif
-  echo "\n" . printf(gnosis#i18n#tr('Gnosis: 取り込みました（追加 %d 件・更新 %d 件）'), l:r.added, l:r.updated)
+  echo "\n" . printf(gnosis#i18n#tr('Gnosis: 取り込みました（追加 %d 件・更新 %d 件・削除 %d 件。守って残したもの %d 件）'), l:r.added, l:r.updated, l:r.removed, l:r.held)
+  if !empty(l:r.backup)
+    echo printf(gnosis#i18n#tr('元のファイルは %s にあります'), l:r.backup)
+  endif
 endfunction
