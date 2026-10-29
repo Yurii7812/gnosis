@@ -47,7 +47,7 @@ ng=0
 chk() { if eval "$2"; then :; else echo "NG $1" >&2; ng=1; fi; }
 chk "日記の本文に時刻つきで入る" 'grep -q "^12:00 お昼はスコーン$" "$diary" && grep -q "^二切れだけ$" "$diary"'
 chk "関係のある日記はノートになり、日記には時刻つきのリンク" 'grep -q "^09:15 \[吉原駅まで歩く\](261018091500.md)$" "$diary" && [ -f "$V/261018091500.md" ]'
-chk "メモは 1 件 = 1 ノートで今日のノートに載る" 'grep -q "^\[APKに画像添付\](261018101000.md)$" "$diary" && grep -q "^topic: \"\"$" "$V/261018101000.md"'
+chk "メモは 1 件 = 1 ノートで今日のノートに載る" 'grep -q "^\[APKに画像添付\](261018101000.md)$" "$diary" && ! grep -q "^\(topic\|capture\|capture_id\|capture_topic\):" "$V/261018101000.md"'
 chk "題にした 1 行目も本文にそのまま残る" '[ "$(grep -c "^APKに画像添付$" "$V/261018101000.md")" = 1 ] && grep -q "^これ重要$" "$V/261018101000.md"'
 chk "Branch（続けて書く）" 'grep -A1 "^ParentBranch:" "$V/261018101500.md" | grep -q "261018101000.md" && grep -A1 "^ChildBranch:" "$V/261018101000.md" | grep -q "261018101500.md"'
 chk "Context（文脈）" 'grep -A1 "^Context:" "$V/261018101500.md" | grep -q "261018091500.md"'
@@ -56,8 +56,8 @@ chk "本文の中のメモへのリンクは、取り込んだノートへのリ
 chk "取り込んでいないメモへのリンクは表示名だけ" 'grep -q "^消えたメモ は文字だけ$" "$V/261018130000.md"'
 chk "親が無いときは最初の文脈が親（Branch）になる" 'grep -A1 "^ParentBranch:" "$V/261018130000.md" | grep -q "261018140000.md" && grep -A1 "^Context:" "$V/261018130000.md" | grep -q "261018140000.md"'
 chk "番号（Folgezettel ID）の無いメモは未所属（\\N）に出る（スマホでつないだだけでは番号は付かない）" 'PYTHONDONTWRITEBYTECODE=1 python3 "$REPO/python/orphans.py" "$V" | grep -q "261018101000"'
-work=$(grep -l '^capture_topic: "仕事"$' "$V"/*.md | head -1)
-book=$(grep -l '^capture_topic: "読書"$' "$V"/*.md | head -1)
+work=$(grep -l '^# 仕事$' "$V"/*.md | head -1)
+book=$(grep -l '^# 読書$' "$V"/*.md | head -1)
 chk "まとめるトピックは 1 つのノート（トピック名の題）" '[ -n "$work" ] && grep -q "^# 仕事$" "$work" && [ ! -f "$V/261018151000.md" ] && [ ! -f "$V/261019090000.md" ]'
 chk "日時あり: 日付の見出しの下に時刻つき（同じ日は見出し 1 つ）" '[ "$(grep -c "^## 2026-10-18（日）$" "$work")" = 1 ] && grep -q "^15:10 電話した$" "$work" && grep -q "^## 2026-10-19（月）$" "$work" && grep -q "^09:00 翌日の作業$" "$work"'
 chk "日時あり: 複数行の本文もそのまま" 'grep -A1 "^15:10 電話した$" "$work" | grep -q "^折り返し待ち$"'
@@ -67,7 +67,8 @@ chk "まとめる: 下に見出しが無い節は ## だけの行で閉じる" '
 chk "まとめる: 使ったメモは同じノートの中で、その見出しへのリンクの行" '[ ! -f "$V/261019091000.md" ] && grep -q "^09:10 会議の話$" "$work" && grep -q "^文脈: \[仕事#見積もりを出す\]($W#見積もりを出す)$" "$work"'
 chk "ほかのノートから: 親が節なら見出しへのリンクの行と、トピックのノートを文脈に" 'grep -q "^↳ \[仕事#電話した\]($W#電話した) の続き$" "$V/261018170000.md" && grep -q "^前の\[仕事#電話した\]($W#電話した)を参照$" "$V/261018170000.md" && grep -A1 "^Context:" "$V/261018170000.md" | grep -q "$W"'
 chk "日時なし: 本文だけを足す" '[ -n "$book" ] && grep -q "^一冊目$" "$book" && grep -q "^二冊目$" "$book" && ! grep -q "^## 2026" "$book"'
-chk "日記はまとめる設定にしない（日記のまま）" '! grep -l "^capture_topic: \"日記\"" "$V"/*.md >/dev/null 2>&1'
+chk "日記はまとめる設定にしない（日記のまま）" '! grep -q "日記" "$V/.state/capture_topic_notes.json"'
+chk "ノートにもトピックのノートにも topic: capture: capture_id: capture_topic: を書かない" '! grep -l "^\(topic\|capture\|capture_id\|capture_topic\):" "$V"/*.md >/dev/null 2>&1'
 dream=$(grep -l '^# 2026-10-18-SU-夢$' "$V"/*.md | head -1)
 recg=$(grep -l '^# 時系列記録$' "$V"/*.md | head -1)
 chk "時系列記録: その日の記録のノート（日付-曜日-夢）に時刻つき" '[ -n "$dream" ] && grep -q "^record: \"夢\"$" "$dream" && grep -q "^07:00 空を飛んだ$" "$dream" && grep -A1 "^07:00 空を飛んだ$" "$dream" | grep -q "^高かった$" && grep -q "^07:10 海の夢$" "$dream"'

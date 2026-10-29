@@ -94,8 +94,9 @@ class NavTest(unittest.TestCase):
         self.assertEqual([x["path"] for x in v], ["a.md", "b.md"])                 # 新しい順・重複と無いファイルと外のパスは除く
         self.assertEqual(nav.recent(self.root, "viewed", 1)["notes"][0]["path"], "a.md")
         self.assertEqual(nav.recent(Path(tempfile.mkdtemp(dir=str(Path.home() / "gnosis-work" / "test"))), "viewed")["notes"], [])
-        (self.root / "ph.md").write_text("---\ntime: 2026-10-19 09:00:00\ntitle: 電話\ncapture_id: 261019090000\n---\n\n# 電話\n", encoding="utf-8")
-        (self.root / "ph2.md").write_text("---\ntime: 2026-10-20 09:00:00\ntitle: 電話2\ncapture_id: 261020090000\n---\n\n# 電話2\n", encoding="utf-8")
+        (self.root / "ph.md").write_text("---\ntime: 2026-10-19 09:00:00\ntitle: 電話\n---\n\n# 電話\n", encoding="utf-8")
+        (self.root / "ph2.md").write_text("---\ntime: 2026-10-20 09:00:00\ntitle: 電話2\n---\n\n# 電話2\n", encoding="utf-8")
+        (self.root / ".state" / "capture_imported.json").write_text(json.dumps({"ids": {"1": "ph.md", "2": "ph2.md", "3": "(diary:2026-10-19)"}, "entries": {}}), encoding="utf-8")
         self.assertEqual([x["path"] for x in nav.recent(self.root, "imported")["notes"]], ["ph2.md", "ph.md"])
         self.assertIn("スマホから取り込んだ", nav.to_md("recent", nav.recent(self.root, "imported")))
         self.assertIn("なし", nav.to_md("recent", {"by": "imported", "notes": []}))

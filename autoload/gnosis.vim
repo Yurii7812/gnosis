@@ -5732,12 +5732,10 @@ function! gnosis#capture_import(...) abort
       let l:end = index(l:lines, '---', 1)
       if l:end > 0
         for l:k in reverse(range(1, l:end - 1))
-          if l:lines[l:k] =~# '^\(topic\|capture\):'
+          if l:lines[l:k] =~# '^\(topic\|capture\|capture_id\|capture_topic\):'
             call remove(l:lines, l:k)
           endif
         endfor
-        call insert(l:lines, 'topic: ' . json_encode(l:it.topic), 1)
-        call insert(l:lines, 'capture: ' . l:it.topic, 1)
         call s:syn_writefile(l:lines, l:path)
         let l:files[l:it.id] = l:path
         call add(l:made, [l:it.id, l:it.file])
@@ -5762,7 +5760,7 @@ function! gnosis#capture_import(...) abort
       " 親・文脈がまとめるトピックの中の節なら、本文の下にその見出しへのリンクの行を置く
       let l:body = split(l:it.text, "\n", 1) + s:capture_rel_lines(l:it, l:titles, extend(copy(l:sections), map(copy(l:anchors), '1')))
       " 題は表示用の抜粋。本文の最初の段落も改行もそのまま残す。
-      let l:lines = ['---', 'time: ' . l:it.time, 'capture: ' . l:it.topic, 'capture_id: ' . l:it.id, 'topic: ' . json_encode(l:it.topic), '---', '', '# ' . l:title, '']
+      let l:lines = ['---', 'time: ' . l:it.time, '---', '', '# ' . l:title, '']
             \ + l:body + (empty(l:img) ? [] : (empty(l:body) ? [] : ['']) + l:img) + ['']
       try
         if filereadable(l:root . '/' . l:name)
@@ -5973,8 +5971,9 @@ function! gnosis#capture_duplicates() abort
   setlocal nomodifiable
 endfunction
 
-" 旧ノートへ capture_id を足す（リネームしても追跡できる）: :GnosisCaptureBackfill（確認だけ） / :GnosisCaptureBackfill apply（書く）
-function! gnosis#capture_backfill(...) abort
+" 取り込みで付いた capture: / capture_id: / capture_topic:（と一緒にある topic:）を front matter から消す:
+" :GnosisCaptureStripMeta（確認だけ） / :GnosisCaptureStripMeta apply（書く。消した行は .state/capture_strip.log に残る）
+function! gnosis#capture_strip_meta(...) abort
   let l:root = s:get_pkm_root()
   if empty(l:root)
     return
@@ -5984,13 +5983,13 @@ function! gnosis#capture_backfill(...) abort
   if l:apply
     call gnosis#save_current_note()
   endif
-  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/capture_diag.py', 'backfill', l:root] + (l:apply ? ['--apply'] : []), 'shellescape(v:val)'), ' ')
+  let l:cmd = join(map([gnosis#python_cmd(), s:note_root . '/python/capture_diag.py', 'strip-meta', l:root] + (l:apply ? ['--apply'] : []), 'shellescape(v:val)'), ' ')
   let l:r = json_decode(system(l:cmd))
   if l:apply
     silent! checktime
-    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートに capture_id を足しました'), len(l:r.items))
+    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートから取り込みの印（capture / topic）を消しました'), len(l:r.items))
   else
-    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートに capture_id を足せます（書くには :GnosisCaptureBackfill apply）'), len(l:r.items))
+    echo printf(gnosis#i18n#tr('Gnosis: %d 件のノートから取り込みの印（capture / topic）を消せます（消すには :GnosisCaptureStripMeta apply）'), len(l:r.items))
   endif
 endfunction
 
@@ -9107,8 +9106,7 @@ function! s:capture_topic_note(root, topic) abort
     let l:n += 1
   endwhile
   let l:title = substitute(a:topic, '[\[\]]', '', 'g')
-  call s:write_new_note(['---', 'time: ' . gnosis#timestamp_yaml(), 'topic: ' . json_encode(a:topic),
-        \ 'capture_topic: ' . json_encode(a:topic), '---', '', '# ' . l:title, ''], a:root . '/' . l:name)
+  call s:write_new_note(['---', 'time: ' . gnosis#timestamp_yaml(), '---', '', '# ' . l:title, ''], a:root . '/' . l:name)
   let l:map[a:topic] = l:name
   call mkdir(a:root . '/.state', 'p')
   call writefile([json_encode(l:map)], l:f)

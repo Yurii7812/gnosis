@@ -9,10 +9,10 @@
 | `folgezettel: "1a1"` | デジタルの Folgezettel ID | 数字と英字が交互（`folgezettel.py` の `ID_RE`）。グループは持たない（ブランチで作ったグループは親ノートと同じ ID） |
 | `attribute: group` | グループ（容器）ノート | 既存 |
 | `topic` `capture` | スマホのメモのトピック／旧名 | 既存 |
-| `capture_id: <id>` | **スマホのメモの不変 ID**（`\M` が新規ノートに書く） | リネーム・移動しても同じメモと分かる。`:GnosisCaptureBackfill` で旧ノートにも足せる |
+| ~~`capture_id: <id>`~~ | **廃止（2026-10-29）**。`\M` は書かない | 出自は `.state/capture_imported.json` と、ノートの `time:`（スマホのメモを書いた時刻）で追う。既存ノートの印は `:GnosisCaptureStripMeta apply` で消す |
 | `mandala: true` | 曼荼羅ノート | §3 |
 | `private: true` / `export: false` | 書き出しサイトから除く | `docs/HTML_EXPORT.md` |
-| `record` `capture_topic` | 時系列記録／まとめるトピックのノート | 既存 |
+| `record` | 時系列記録のノート | 既存（`capture_topic` は廃止。まとめるトピックのノートは題と `.state/capture_topic_notes.json` で分かる） |
 
 ## 2. 関係（本文のブロック）
 `ParentBranch:` / `BranchGroup:` / `Group:` / `Context:` / `Related:` / `BackLink:`（と旧 `### …` 節）。向き・同期の規則は `docs/03-同期の規則.md`。`gnosis_graph.py` はこれを読んで型付きの辺にする（`group` `parent_branch` `branch_group` `child_branch` `context` `related` `backlink` `link` `folgezettel`）。読み取り専用で、ノートは書き換えない。
@@ -27,7 +27,7 @@
 - `capture_imported.json`: `{"ids": {メモ id: 行き先}, "entries": {メモ id: 取り込んだ時点のスマホ側の全項目}}`。行き先はノートのファイル名、日記 `(diary:YYYY-MM-DD)`、まとめるトピック `(topic:名)` または `ノート.md#見出し`、時系列記録 `(record:名:YYYY-MM-DD)`。`entries` の本文が 3-way merge の **base**。旧版の記録（`entries` に本文が無い）は merge の対象外で、従来どおり重複防止だけ。
 - `capture_conflicts/<メモ id>.json`: 競合の記録 `{id, file, base, remote, conflicts:[{base, remote, context}], entry}`。ノートは変えていない。`:GnosisCaptureResolve` で解決すると消える。
 - `capture_topic_notes.json`（まとめるトピック→ノート）、`diary_days.json`（日付→日記ノート）。
-- `capture_backfill.log`: `:GnosisCaptureBackfill apply` が足した `capture_id` の記録（1 行 1 JSON）。
+- `capture_strip.log`: `:GnosisCaptureStripMeta apply` が消した `capture:` `capture_id:` `capture_topic:` `topic:` の記録（1 行 1 JSON。戻すときの手がかり）。
 - 画像は vault の `capture-images/`。詳細は `docs/ANDROID_SYNC.md`。
 
 ## 6. 書き出し（`:GnosisExportSite`）

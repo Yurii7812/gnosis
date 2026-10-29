@@ -52,6 +52,14 @@ class CaptureImportTest(unittest.TestCase):
         dest.unlink()
         self.assertFalse(self.plan()['done'])
 
+    def test_heal_state_follows_renamed_note(self):
+        dest = self.record()
+        dest.write_text('---\ntime: ' + ci._time_of(self.entry) + '\n---\n\n# PCの原本\n')
+        dest.rename(self.root / 'new-name.md')  # アプリの外（同期など）で名前が変わった
+        self.assertEqual(ci.heal_state(self.root), 1)
+        self.assertEqual(ci.load_state(self.root)['ids'][self.entry['id']], 'new-name.md')
+        self.assertEqual(ci.heal_state(self.root), 0)  # 2 回目は何もしない
+
     def test_changed_text_is_merge_and_topic_move_preserves_pc_file(self):
         dest = self.record()
         original = dest.read_text()
@@ -67,9 +75,9 @@ class CaptureImportTest(unittest.TestCase):
         self.assertTrue(item['merge'])
         self.assertEqual(dest.read_text(), original)
 
-    def test_renamed_note_is_found_by_capture_id(self):
+    def test_renamed_note_is_found_by_time(self):
         dest = self.record()
-        dest.write_text('---\ncapture_id: ' + self.entry['id'] + '\n---\n\n# PCの原本\n')
+        dest.write_text('---\ntime: ' + ci._time_of(self.entry) + '\n---\n\n# PCの原本\n')
         sub = self.root / 'sub'; sub.mkdir()
         moved = sub / 'renamed.md'
         dest.rename(moved)  # PC で名前を変え、フォルダも移した

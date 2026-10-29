@@ -45,7 +45,7 @@ call assert_equal(s:notes, len(glob($D . '/v/*.md', 0, 1)))
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:now, readfile(s:n))
 " 3b. PC でノートのファイル名を変えても、同じノートとして追跡する（新しいノートを作らない）
-call assert_true(index(readfile(s:n), 'capture_id: 261019100000') >= 0)
+call assert_equal([], filter(readfile(s:n)[:6], 'v:val =~# "^\\(capture\\|capture_id\\|capture_topic\\|topic\\):"'))
 call assert_equal(0, rename(s:n, $D . '/v/renamed-by-user.md'))
 let s:n = $D . '/v/renamed-by-user.md'
 let s:count0 = len(glob($D . '/v/*.md', 0, 1))
@@ -92,11 +92,11 @@ call assert_equal(s:body, readfile(s:n))
 call gnosis#capture_import($D . '/pack')
 call assert_equal(s:body, readfile(s:n))
 call assert_false(filereadable($D . '/v/.state/capture_conflicts/261019100000.json'))
-" 診断コマンドが動く（別版は無いので何も作らない・capture_id は既にあるので足す件数は 0）
+" 診断コマンドが動く（別版は無いので何も作らない・印の削除は 0 件）
 let s:nb = len(glob($D . '/v/*.md', 0, 1))
 try
-  call gnosis#capture_backfill()
-  call gnosis#capture_backfill('apply')
+  call gnosis#capture_strip_meta()
+  call gnosis#capture_strip_meta('apply')
   call gnosis#capture_duplicates()
 catch
   call add(v:errors, '診断コマンドが失敗: ' . v:exception)

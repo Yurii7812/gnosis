@@ -166,10 +166,14 @@ def record_note(root: Path, kind: str, date: str) -> str:
     return ""
 
 
-def source_index(root: Path) -> dict[str, str]:
-    """vault のノートの front matter `capture_id:`（スマホのメモの不変 ID）→ vault 内の相対パス。
-    ノートがリネーム・移動されても同じメモを見つけるため。ドット始まりのフォルダには降りない。"""
-    found: dict[str, str] = {}
+def _time_of(e: dict) -> str:
+    return dt.datetime.fromtimestamp(e.get("created", 0) / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def time_index(root: Path) -> dict[str, list[str]]:
+    """vault のノートの front matter `time:`（取り込んだノートはスマホのメモを書いた時刻）→ vault 内の相対パス。
+    ノートがリネーム・移動されても同じメモを見つけるため（front matter に出自の印は書かない）。ドット始まりのフォルダには降りない。"""
+    found: dict[str, list[str]] = {}
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for name in filenames:
@@ -186,11 +190,45 @@ def source_index(root: Path) -> dict[str, str]:
             for ln in head[1:]:
                 if ln.strip() == "---":
                     break
-                if ln.startswith("capture_id:"):
-                    cid = ln.split(":", 1)[1].strip().strip('"')
-                    if cid:
-                        found.setdefault(cid, str(p.relative_to(root)))
+                if ln.startswith("time:"):
+                    found.setdefault(ln.split(":", 1)[1].strip().strip('"'), []).append(str(p.relative_to(root)))
+                    break
     return found
+
+
+def find_note(root: Path, e: dict, index: dict[str, list[str]]) -> str:
+    """スマホのメモ e が入っているはずのノート（時刻が同じ）。同じ時刻のノートが複数なら、本文の最初の行を含むもの。無ければ ''。"""
+    cands = index.get(_time_of(e), [])
+    if len(cands) > 1:
+        first = next((ln.strip() for ln in (e.get("text") or "").splitlines() if ln.strip()), "")
+        cands = [c for c in cands if first and first in (root / c).read_text(encoding="utf-8", errors="replace")]
+    return cands[0] if len(cands) == 1 else ""
+
+
+def heal_state(root: Path, entries: list[dict] | None = None) -> int:
+    """取り込み先のノートが見つからない記録を、時刻の同じノートへ付け替える（リネーム・移動された、または同期が名前を変えた）。
+    付け替えた件数を返す。見つからないものはそのまま（消さない）。"""
+    st = load_state(root)
+    index: dict[str, list[str]] | None = None
+    changed = 0
+    for key, target in list(st.get("ids", {}).items()):
+        if not target.endswith(".md") or target.startswith("(") or "#" in target or (root / target).is_file():
+            continue
+        e = st.get("entries", {}).get(key)
+        if not e:
+            continue
+        if index is None:
+            index = time_index(root)
+        rel = find_note(root, e, index)
+        if rel:
+            st["ids"][key] = rel
+            changed += 1
+    if changed:
+        p = _state_path(root)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(p)
+    return changed
 
 
 def _destination_exists(root: Path, target: str) -> bool:
@@ -228,6 +266,7 @@ def adb_mark(root: str) -> int:
     if adb_ready():
         return 0
     rp = Path(root).resolve()
+    heal_state(rp)  # リネームされたノートも「取り込み済み」のままにする
     state = load_state(rp)
     entries = [e for key, e in state.get("entries", {}).items()
                if _destination_exists(rp, state["ids"].get(key, ""))]
@@ -303,7 +342,7 @@ def plan(outdir: str, root: str) -> dict:
         for m in MEMO_LINK.finditer(e.get("text") or ""):
             related.add(e["id"]); related.add(m.group(2)); referenced.add(m.group(2).split("#", 1)[0])
     items = []
-    sources: dict[str, str] | None = None  # 行き先が見つからないときだけ、vault を capture_id で探す（遅いので 1 回だけ）
+    sources: dict[str, list[str]] | None = None  # 行き先が見つからないときだけ、vault を時刻で探す（遅いので 1 回だけ）
     for e in sorted(entries, key=lambda x: x.get("created", 0)):
         t = dt.datetime.fromtimestamp(e.get("created", 0) / 1000)
         previous = st.get("entries", {}).get(e["id"])
@@ -311,9 +350,10 @@ def plan(outdir: str, root: str) -> dict:
         exists = _destination_exists(Path(root), target)
         if not exists and not target.startswith("("):
             if sources is None:
-                sources = source_index(Path(root))
-            if e["id"] in sources:  # リネーム・移動された、または記録を失ったが、ノートは実在する
-                target, exists = sources[e["id"]], True
+                sources = time_index(Path(root))
+            found = find_note(Path(root), e, sources)
+            if found:  # リネーム・移動された、または記録を失ったが、ノートは実在する
+                target, exists = found, True
         same = previous is not None and _snapshot(previous) == _snapshot(e)
         topic = normalize_topic(e.get("topic") or "")
         single = topic in modes

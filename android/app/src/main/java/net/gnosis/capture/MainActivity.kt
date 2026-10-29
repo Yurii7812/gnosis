@@ -408,8 +408,12 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
     }
 
     fun deleteEntries(ids: Set<String>) {
+        // 消して空になった通常のトピックは、トピックの一覧からも消す（日記・時系列記録は残す）
+        val cleaned = settingsAfterImportedRemoval(entries.toList(), settings, ids, pcRecords.toSet())
         entries.filter { it.id in ids }.flatMap { it.images }.forEach { File(store.imageDir, it).delete() }
         entries.removeAll { it.id in ids }
+        if (cleaned != settings) { settings = cleaned; store.saveSettings(settings) }
+        if (topic != ALL && topic != UNASSIGNED && topic !in settings.topics && entries.none { it.topic == topic } && topic !in pcRecords) setTopic(ALL)
         for (k in entries.indices) {
             val e = entries[k]
             if (e.parent in ids || e.contexts.any { it in ids }) entries[k] = e.copy(parent = e.parent.takeIf { it !in ids }, contexts = e.contexts.filter { it !in ids }, exported = false)
@@ -963,10 +967,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
                 OutlinedButton(onClick = { cleanImportedOpen = false; cleanShownOpen = true }) { Text("このトピックのメモを全部消す（✓ に関係なく）") }
             } },
             confirmButton = { TextButton(enabled = gone.isNotEmpty(), onClick = {
-                val cleaned = settingsAfterImportedRemoval(entries.toList(), settings, gone, pcRecords.toSet())
                 deleteEntries(gone)
-                settings = cleaned; store.saveSettings(settings)
-                if (topic != ALL && topic != UNASSIGNED && topic !in settings.topics && entries.none { it.topic == topic } && topic !in pcRecords) setTopic(ALL)
                 cleanImportedOpen = false
             }) { Text("消す") } },
             dismissButton = { TextButton(onClick = { cleanImportedOpen = false }) { Text("やめる") } })
@@ -978,10 +979,7 @@ fun CaptureScreen(store: Store, promptState: MutableState<Boolean>) {
         AlertDialog(onDismissRequest = { cleanShownOpen = false }, title = { Text("「${topicLabel(topic)}」のメモを全部消す") },
             text = { Text("${all.size} 件を消します（うち ✓ の付いていない ${notYet} 件は、PC に取り込んだか確かめられません）。PC に取り込んだ記録（二重に取り込まない印）は PC 側に残るので、取り込み済みのものがまた取り込まれることはありません。画像も消え、元に戻せません。") },
             confirmButton = { TextButton(enabled = all.isNotEmpty(), onClick = {
-                val cleaned = settingsAfterImportedRemoval(entries.toList(), settings, all, pcRecords.toSet())
                 deleteEntries(all)
-                settings = cleaned; store.saveSettings(settings)
-                if (topic != ALL && topic != UNASSIGNED && topic !in settings.topics && entries.none { it.topic == topic } && topic !in pcRecords) setTopic(ALL)
                 cleanShownOpen = false
             }) { Text("全部消す") } },
             dismissButton = { TextButton(onClick = { cleanShownOpen = false }) { Text("やめる") } })

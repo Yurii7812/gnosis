@@ -50,11 +50,11 @@ gnosis#bulk
 gnosis#bulk_list
 gnosis#bulk_undo
 gnosis#calc
-gnosis#capture_backfill
 gnosis#capture_conflicts
 gnosis#capture_duplicates
 gnosis#capture_import
 gnosis#capture_resolve
+gnosis#capture_strip_meta
 gnosis#chain
 gnosis#chain_undo
 gnosis#check_missing_prefix_in_current_dir

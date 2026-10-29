@@ -120,7 +120,7 @@ def bookmark_slot(root: str | Path, slot: int) -> dict:
 
 # ---- 最近 ----
 def recent(root: str | Path, by: str = "modified", limit: int = 20) -> dict:
-    """by: modified（更新）／created（作成）／viewed（開いた順。`.state/history.json`）／imported（スマホから取り込んだ＝front matter に capture_id があるもの。作成日の新しい順）。"""
+    """by: modified（更新）／created（作成）／viewed（開いた順。`.state/history.json`）／imported（スマホから取り込んだ＝`.state/capture_imported.json` に行き先として載っているノート。作成日の新しい順）。"""
     root = Path(root).resolve()
     if by not in ("modified", "created", "viewed", "imported"):
         raise ValueError("modified・created・viewed・imported のどれかを指定してください")
@@ -136,11 +136,14 @@ def recent(root: str | Path, by: str = "modified", limit: int = 20) -> dict:
             rows.append({"path": rel, "title": d["title"], "when": ""})
         return {"by": by, "notes": rows[:limit]}
     rows = []
+    imported = set()
+    if by == "imported":
+        imported = {v.split("#", 1)[0] for v in (_load(root / ".state" / "capture_imported.json", {}).get("ids") or {}).values()}
     for p in tk.iter_notes(root):
         text = p.read_text(encoding="utf-8")
         d = nf._simple_parse_text(p, text)
         tm = next((ln.split(":", 1)[1].strip() for ln in d["fm"] if ln.startswith("time:")), "")
-        if by == "imported" and not any(ln.startswith("capture_id:") for ln in d["fm"]):
+        if by == "imported" and p.relative_to(root).as_posix() not in imported:
             continue
         key = tm if by in ("created", "imported") else dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         if not key:
