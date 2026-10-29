@@ -260,6 +260,7 @@ gnosis#listnav#depth
 gnosis#listnav#edge
 gnosis#listnav#enter
 gnosis#listnav#enter_mode
+gnosis#listnav#goto_origin
 gnosis#listnav#gui_click
 gnosis#listnav#gui_scroll
 gnosis#listnav#gui_state
@@ -307,6 +308,7 @@ gnosis#move_visible
 gnosis#multi
 gnosis#multi_apply
 gnosis#multi_clear
+gnosis#mview#center_rel
 gnosis#mview#close
 gnosis#mview#cursor
 gnosis#mview#detach
@@ -314,6 +316,7 @@ gnosis#mview#entries
 gnosis#mview#focus
 gnosis#mview#fz_decide
 gnosis#mview#goto_note_win
+gnosis#mview#goto_origin
 gnosis#mview#group_pick
 gnosis#mview#gs_done
 gnosis#mview#gui_click
