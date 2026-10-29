@@ -509,6 +509,8 @@ augroup gnosis_imgview
   autocmd VimEnter * call gnosis#imgview#start()
   autocmd BufWinEnter,WinEnter,TabEnter *.md call gnosis#imgview#refresh()
   autocmd VimResized * call gnosis#imgview#on_resize()
+  " 曼荼羅・Folgezettel・リストなど md 以外の窓との行き来、窓の増減のあとにも出し直す（同じ位置なら何もしない）
+  autocmd BufEnter,WinEnter,WinNew,WinClosed * call gnosis#imgview#schedule()
   autocmd CmdlineLeave,FocusGained,ShellCmdPost * call gnosis#imgview#redraw_later()
   autocmd TextChanged,InsertLeave *.md call gnosis#imgview#on_text_changed()
   autocmd WinScrolled,WinResized * call gnosis#imgview#schedule()

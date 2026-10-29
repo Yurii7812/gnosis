@@ -104,6 +104,13 @@ try:
     out, m = run([("3G", 0.3), (",", 4.0), ("l", 4.0), ("q", 0.8)], viewer=None)
     ok("auto + sixel 対応の端末: , は sixel で出る", b"\x1bP0;1;0q" in out[m[0]: m[1]])
     ok("auto + sixel 対応の端末: l で次の画像", b"\x1bP0;1;0q" in out[m[1]: m[2]])
+    # 7b) 画像の出し直しは、前の画像の残りを消してから（画面ごと描き直してから）出す。署名を捨てた（大きさ変更の）あとも同じ
+    note.write_text("# n\n\n![](a.jpg)\n\n![](b.png)\n\nlast\n", encoding="utf-8")
+    out, m = run([("3G", 3.0), ("\x1b:call gnosis#imgview#on_resize()\r", 4.0)])
+    after = out[m[0]:]
+    si = after.find(b"\x1bP0;")
+    # redraw! は、この端末では画面を文字（空白）で塗り直す。最後の行の状態行（NORMAL）まで書き直したあとに画像が出る
+    ok("出し直す前に画面ごと描き直す（残りの画像を消す）", si >= 0 and b"NORMAL" in after[max(0, si - 900): si])
     # 8) 読めない画像があっても、下ごしらえの python を何度も起こさない（以前は止まらずに動き続けた）
     (work / "vault" / "bad.png").write_text("not an image", encoding="utf-8")
     note.write_text("# n\n\n![](a.jpg)\n\n![](bad.png)\n\nlast\n", encoding="utf-8")

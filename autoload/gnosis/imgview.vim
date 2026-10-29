@@ -543,8 +543,9 @@ function! s:draw_do(force) abort
   if l:sig ==# s:sig && !a:force
     return
   endif
-  if !empty(s:sig) && l:sig !=# s:sig
-    " 古い位置の画像を消す（画面を描き直す）
+  if l:sig !=# s:sig
+    " 前に出した画像（別のノート・別の位置・別の大きさ）の残りを消す。端末の画像は、その上の文字を描き直しただけでは
+    " 消えないので、画面ごと描き直す。前の署名が空でも消す（署名を捨てたあと・Vim の外で出た画像のあとに、残りが重なって見える）
     redraw!
   endif
   let s:sig = l:sig
