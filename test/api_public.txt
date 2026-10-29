@@ -413,6 +413,8 @@ gnosis#panel#cycle
 gnosis#panel#decide
 gnosis#panel#filter
 gnosis#panel#foldlevel
+gnosis#panel#help
+gnosis#panel#help_lines
 gnosis#panel#highlight
 gnosis#panel#info
 gnosis#panel#key

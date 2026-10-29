@@ -163,7 +163,43 @@ function! gnosis#panel#attach() abort
   nnoremap <buffer><nowait><silent> m <Cmd>call gnosis#panel#highlight()<CR>
   nnoremap <buffer><nowait><silent> <Esc> <Cmd>call gnosis#panel#clear()<CR>
   nnoremap <buffer><nowait><silent> e <Cmd>call gnosis#panel#decide()<CR>
+  nnoremap <buffer><nowait><silent> ? <Cmd>call gnosis#panel#help()<CR>
   setlocal statusline=%!gnosis#panel#status()
+endfunction
+
+" ? のヘルプの行（試験用に外へも出す）
+function! gnosis#panel#help_lines() abort
+  return [
+        \ gnosis#i18n#tr('右のパネル（アウトライン・タブ・ハブを 1 つに統合）'),
+        \ '',
+        \ 'Tab / Shift+Tab ' . gnosis#i18n#tr('アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab）'),
+        \ 'o  t  h          ' . gnosis#i18n#tr('アウトライン・タブ・ハブへ直接'),
+        \ 's  n  N          ' . gnosis#i18n#tr('検索・次のヒット・前のヒット（書き方は gs と同じ）'),
+        \ 'x                ' . gnosis#i18n#tr('絞り込み（合わない行を畳む。中身は変えない）'),
+        \ 'm                ' . gnosis#i18n#tr('ハイライト'),
+        \ 'Esc              ' . gnosis#i18n#tr('検索・絞り込み・ハイライトを全部やめる'),
+        \ 'e                ' . gnosis#i18n#tr('\l で入れるノートを選んでいるとき、カーソルの行のノートに決める'),
+        \ 'j k  Enter       ' . gnosis#i18n#tr('行を動く・開く（アウトラインでは本文のその見出しへ）'),
+        \ 'D                ' . gnosis#i18n#tr('タブのボードで、全部のタブを消す（確認あり）'),
+        \ '< >              ' . gnosis#i18n#tr('パネルの幅（< で広く、> で狭く）'),
+        \ 'S                ' . gnosis#i18n#tr('アウトラインで、左右を入れ替える'),
+        \ 'Shift+← Shift+→  ' . gnosis#i18n#tr('窓を左・右へ。端なら、無い方（左のビュー・右のパネル）を開く'),
+        \ '\s \o \q \h      ' . gnosis#i18n#tr('パネルを出す・中身を切り替える（同じキーでノート ⇔ パネル）'),
+        \ '\W               ' . gnosis#i18n#tr('ノートだけを表示する'),
+        \ 'q                ' . gnosis#i18n#tr('パネルを閉じる'),
+        \ '?                ' . gnosis#i18n#tr('この説明')]
+endfunction
+
+" ? のガイドは、Esc / q / ? / Enter / Space / クリックでだけ閉じる（タイマーが積むキーでは閉じない）
+function! s:help_filter(id, key) abort
+  if index(["\<Esc>", 'q', '?', "\<CR>", ' ', "\<LeftMouse>"], a:key) >= 0
+    call popup_close(a:id)
+  endif
+  return 1
+endfunction
+
+function! gnosis#panel#help() abort
+  call popup_dialog(gnosis#panel#help_lines(), {'title': ' ? ', 'padding': [0, 1, 0, 1], 'border': [], 'close': 'click', 'filter': function('s:help_filter')})
 endfunction
 
 " 状態行: 3 つの中身（今のものを [ ] で囲む）と、検索・絞り込み・ハイライトの語
@@ -379,8 +415,24 @@ function! gnosis#panel#move(dir) abort
     if l:nw > 0 | call win_gotoid(l:nw) | endif
     return
   endif
-  let l:j = max([0, min([len(l:wins) - 1, l:i + a:dir])])
-  if l:j != l:i
-    call win_gotoid(l:wins[l:j])
+  let l:j = l:i + a:dir
+  if l:j < 0 || l:j >= len(l:wins)
+    " 端: その向きに窓が無いときは、開く（右 = 右のパネル、左 = 左のビュー）。すでにそれの中にいるなら動かない
+    call s:open_edge(a:dir)
+    return
+  endif
+  call win_gotoid(l:wins[l:j])
+endfunction
+
+" Shift+→ で右に何も無ければ右のパネル（前に使った中身）、Shift+← で左に何も無ければ左のビュー（曼荼羅など）を開いて、そこへ移る
+function! s:open_edge(dir) abort
+  if a:dir > 0
+    if empty(gnosis#panel#kind())
+      call gnosis#panel#open_last()
+    endif
+  else
+    if !gnosis#mview#is_open()
+      call gnosis#mview#toggle()
+    endif
   endif
 endfunction

@@ -109,5 +109,21 @@ let g:gnosis_test_keys = ["\r"]
 call gnosis#panel#decide()
 let s:a = readfile(s:v . '/a.md')
 call s:ok('e: パネルで選んだノート B へのリンクが、元のノート A に入る', !empty(filter(copy(s:a), 'v:val =~# "(b.md)"')), string(s:a))
+" ---- ? のヘルプ
+let s:help = join(gnosis#panel#help_lines(), "\n")
+call s:ok('? のヘルプに、切り替え・検索・絞り込み・ハイライト・決定・Shift+矢印の説明がある', s:help =~# 'Tab' && s:help =~# '検索' && s:help =~# '絞り込み' && s:help =~# 'ハイライト' && s:help =~# 'Shift+←' && s:help =~# '\\l', s:help)
+" ---- Shift+矢印: 端で何も無ければ開く（右 = 右のパネル・左 = 左のビュー）
+call gnosis#mview#close()
+silent! only
+execute 'edit ' . fnameescape(s:v . '/a.md')
+call s:ok('（準備）ノートだけ: パネルも曼荼羅も無い', empty(gnosis#panel#kind()) && !gnosis#mview#is_open())
+call gnosis#panel#move(1)
+call s:ok('Shift+→: 右に何も無ければ右のパネルが開く', !empty(gnosis#panel#kind()), gnosis#panel#kind())
+call gnosis#panel#move(1)
+call s:ok('Shift+→: すでにパネルの中なら動かない（増えない）', winnr('$') == 2, string(winnr('$')))
+call gnosis#panel#close()
+execute 'edit ' . fnameescape(s:v . '/a.md')
+call gnosis#panel#move(-1)
+call s:ok('Shift+←: 左に何も無ければ左のビュー（曼荼羅）が開く', gnosis#mview#is_open())
 call writefile(s:res, s:work . '/result.txt')
 qa!
