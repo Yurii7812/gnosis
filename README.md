@@ -150,6 +150,10 @@ powershell -ExecutionPolicy Bypass -File install\install.ps1
 
 Windowsの標準構成は、**Gnosisのターミナル版（Vim）**です。Windows版Electron GUIへの置換は行いません。WSL2上のUbuntuとWezTermを使用し、GnosisのLinux用依存関係・Vim・プラグインをインストールします。必要なファイルが揃ったことを確認してから、Windowsの**デスクトップとスタートメニューに「Gnosis」起動アイコン**を作成します。アイコンからGnosis専用のターミナルが開き、その中でVimを直接実行します。
 
+Windowsで日本語が文字化けする場合は、**Gnosis-Setup.exeをもう一度実行して更新**してください。インストーラーは、デスクトップの`Gnosis`ショートカットを再作成し、Windows PowerShellでのUTF-8読み取り、WSL上の`LANG=C.UTF-8`/`LC_ALL=C.UTF-8`、WezTermの日本語・記号文字のフォントフォールバックを設定します。通常のWindows Terminalや既存のUbuntuのシステム設定は書き換えません。ショートカットは**WezTerm → WSL2 Ubuntu → `~/.local/bin/gnosis --tui`**を起動し、Electronやブラウザには切り替わりません。
+
+なお、文字化け（異なる文字に置き換わる）と字形欠落（□など）は原因が異なります。上記のUTF-8・フォント設定の両方で対応しますが、実機固有のフォント/IME構成まで完全に動作保証するものではありません。
+
 Electron GUIは標準ではインストールされません。別途明示的に試したい場合のみ、`powershell -ExecutionPolicy Bypass -File install\install.ps1 -NativeApp` を使用します。WSL2や既存ノートを削除せず、通常のVim設定も変更しません。
 
 ### アンインストール

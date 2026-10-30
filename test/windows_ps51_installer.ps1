@@ -71,6 +71,14 @@ try {
   if ($vbs -notmatch '-WindowStyle Hidden' -or $vbs -notmatch 'Start-Gnosis\.ps1') { throw 'VBS does not run the hidden launcher' }
   $ps1 = [IO.File]::ReadAllText((Join-Path $script:StateDir 'Start-Gnosis.ps1'))
   if ($ps1 -notmatch "distro = 'Ubuntu'" -or $ps1 -notmatch 'gnosis --tui' -or $ps1 -match '--app|--gui|electron') { throw 'Launcher content wrong' }
+  if ($ps1 -notmatch 'LC_ALL=C.UTF-8' -or $ps1 -notmatch 'LANG=C.UTF-8' -or $ps1 -notmatch '/usr/bin/env') { throw 'WSL Gnosis launcher must force UTF-8 locale' }
+  if ($ps1 -notmatch 'Console]::OutputEncoding' -or $ps1 -notmatch 'System.Text.UTF8Encoding') { throw 'Windows PowerShell launcher must read WSL UTF-8 correctly' }
+  if ($ps1 -notmatch '--exec /usr/bin/env' -or $ps1 -notmatch 'gnosis --tui') { throw 'Shortcut must run WSL Vim Gnosis directly' }
+  $wez = [IO.File]::ReadAllText((Join-Path $script:StateDir 'wezterm-gnosis.lua'))
+  foreach ($need in @('wezterm.font_with_fallback','Consolas','Yu Gothic','Meiryo','Segoe UI Symbol')) {
+    if ($wez -notmatch [regex]::Escape($need)) { throw ('Missing CJK/Braille Windows font fallback: ' + $need) }
+  }
+  if ($wez -match 'dofile|require\s*\(\s*["''].*wezterm') { throw 'Gnosis font config must not load user config' }
   foreach ($f in @('wezterm-gnosis.lua','Start-Gnosis.ps1','Start-Gnosis.vbs')) {
     if (-not (Test-Path -LiteralPath (Join-Path $script:StateDir $f))) { throw ('Missing ' + $f) }
   }
