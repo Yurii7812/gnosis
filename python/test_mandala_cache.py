@@ -95,6 +95,31 @@ class T(unittest.TestCase):
         self.assertEqual(r["changed"], 0)
         self.assertIsNone(mc.node(self.r, ".trash/T_1.md"))
 
+    def test_content_similarity_rank_and_incremental_update(self):
+        r = self.r
+        (r / "herb.md").write_text(note("ハーブ栽培", False, [],
+            ["ハーブの栽培には土壌と水やりの工夫が必要"], "1a"))
+        (r / "matched.md").write_text(note("ハーブ栽培と水やり", False, [],
+            ["水やりと土壌を研究する"], "900"))
+        (r / "number.md").write_text(note("無関係な数学", False, [],
+            ["数学の数列と論理演算"], "1a1"))
+        (r / "diary.md").write_text(note("2026-10-30", False, [],
+            ["ハーブの栽培と土壌と水やり"], "1a2"))
+        mc.refresh(r, full=True)
+        ids = [d["id"] for d in mc.related(r, "herb.md")]
+        self.assertIn("matched.md", ids)
+        self.assertNotIn("number.md", ids)
+        self.assertNotIn("diary.md", ids)
+        self.assertNotIn("index.md", ids)
+        # w rank uses the same content scores, even with body=False.
+        rank = {d["id"]: d["score"] for d in mc.related(r, "herb.md", body=False)}
+        self.assertGreater(rank["matched.md"], 0)
+        self.assertNotIn("diary.md", rank)
+        (r / "matched.md").write_text(note("全く異なる話", False, [],
+            ["機械工学とエンジンの部品"]))
+        mc.refresh(r, only=["matched.md"])
+        self.assertNotIn("matched.md", [d["id"] for d in mc.related(r, "herb.md")])
+
     def test_skip_recent_full_scan(self):
         mc.refresh(self.r)
         mc.FULL_FLOOR = 3600; self.assertTrue(mc.refresh(self.r).get("skipped"))
