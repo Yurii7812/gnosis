@@ -4192,7 +4192,422 @@ function! gnosis#mview#preset_next_number() abort
 endfunction
 
 function! gnosis#mview#preset_names() abort
-  return sort(keys(s:presets()))
+  " 数字のプリセットは名前ではなく番号として並べる。
+  " 1, 2, 10 の順にし、新しく作られた最大+1 が最後に来る。
+  let l:nums = []
+  let l:others = []
+  for l:k in keys(s:presets())
+    if l:k =~# '^\d\+
+
+function! gnosis#mview#preset_save(name) abort
+  let l:n = trim(a:name)
+  if empty(l:n)
+    return 0
+  endif
+  let l:p = s:presets()
+  let l:p[l:n] = s:preset_snapshot()
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+" 今の設定で、すでにある名前のプリセットを上書きする（無い名前なら何もしない）
+function! gnosis#mview#preset_overwrite(name) abort
+  let l:p = s:presets()
+  if !has_key(l:p, a:name)
+    return 0
+  endif
+  let l:p[a:name] = s:preset_snapshot()
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_delete(name) abort
+  let l:p = s:presets()
+  if !has_key(l:p, a:name)
+    return 0
+  endif
+  call remove(l:p, a:name)
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_rename(old, new) abort
+  let l:n = trim(a:new)
+  let l:p = s:presets()
+  if empty(l:n) || !has_key(l:p, a:old) || (l:n !=# a:old && has_key(l:p, l:n))
+    return 0
+  endif
+  let l:p[l:n] = remove(l:p, a:old)
+  call s:presets_write(l:p)
+  return 1
+endfunction
+
+function! gnosis#mview#preset_apply(name) abort
+  let l:d = get(s:presets(), a:name, {})
+  if empty(l:d) || !exists('s:S') || !has_key(s:S, 'cells')
+    return 0
+  endif
+  for l:k in ['nums', 'nv', 'ol_on', 'ol_only', 'out_on', 'rank_on', 'near_on', 'rel_on', 'near_only', 'rel_only']
+    if has_key(l:d, l:k)
+      let s:S[l:k] = l:d[l:k] ? 1 : 0
+    endif
+  endfor
+  for l:k in ['dbasis', 'digit', 'mode', 'tsort']
+    if type(get(l:d, l:k, 0)) == v:t_string
+      let s:S[l:k] = l:d[l:k]
+    endif
+  endfor
+  let s:S.out_dir = get(l:d, 'out_dir', 'all') ==# 'down' ? 'down' : 'all'
+  if type(get(l:d, 'tenths', '')) == v:t_number
+    let s:S.tenths = l:d.tenths
+  endif
+  if type(get(l:d, 'depth', '')) == v:t_number
+    let s:S.depth = max([1, min([10, l:d.depth])])
+  endif
+  if type(get(l:d, 'stretch', '')) == v:t_float || type(get(l:d, 'stretch', '')) == v:t_number
+    let s:S.stretch = l:d.stretch + 0.0
+  endif
+  let s:S.page = 0
+  let s:S.opage = 0
+  let l:want = get(l:d, 'size', s:S.size)
+  if l:want != s:S.size
+    call s:full()
+  endif
+  if !(s:S.size == 9)
+    let s:S.out_on = 0
+  endif
+  if s:note_win() > 0 && s:S.size == 3
+    execute 'vertical resize ' . s:win_width()
+  endif
+  let s:S.cur = s:S.size == 3 ? [1, 1] : [4, 4]
+  call s:render()
+  call s:preview()
+  return 1
+endfunction
+
+" Z: 設定の画面（モードや重ねるものの切り替え。その場で曼荼羅に反映）。P はプリセットだけの画面（呼び出し・保存・上書き・名前・消す。数が増えても選んでいる行の前後だけ出す）。
+"   j k 選ぶ   Enter / Space 切り替え   D は配下だけの切り替え。b は曼荼羅上でもこの画面内でも近さ順の基準を変える
+"   画面が低いときは、一覧のほうを送って出す（見切れない）
+function! s:panel_rows() abort
+  let l:Onoff = {v -> gnosis#i18n#tr(v ? 'オン' : 'オフ')}
+  let l:mode = get(s:S, 'mode', 'all')
+  return [
+        \ {'key': 'a', 'name': 'モード', 'val': '[' . gnosis#i18n#tr(get(s:mode_label, l:mode, l:mode)) . ']  ' . gnosis#i18n#tr('全体:a 索引:i 親子:d'), 'act': function('s:panel_mode')},
+        \ {'key': 'c', 'name': '近いグループだけを出す', 'val': l:Onoff(get(s:S, 'near_only', 0)), 'act': function('s:toggle_over', ['near_only'])},
+        \ {'key': 'C', 'name': '近いグループを重ねる', 'val': l:Onoff(get(s:S, 'near_on', 0)), 'act': function('s:toggle_over', ['near_on'])},
+        \ {'key': 'r', 'name': '予測関連だけを出す', 'val': l:Onoff(get(s:S, 'rel_only', 0)), 'act': function('s:toggle_over', ['rel_only'])},
+        \ {'key': 'R', 'name': '予測関連を重ねる', 'val': l:Onoff(get(s:S, 'rel_on', 0)), 'act': function('s:toggle_over', ['rel_on'])},
+        \ {'key': 'T', 'name': '数字キーの動き', 'val': gnosis#i18n#tr(get(s:S, 'digit', 'jump') ==# 'jump' ? '移動して中心に' : 'カーソルだけ'), 'act': function('s:toggle_digit')},
+        \ {'key': 't', 'name': '時間順（作成日時）', 'val': gnosis#i18n#tr({'': 'オフ', 'asc': '古い順', 'desc': '新しい順'}[get(s:S, 'tsort', '')]), 'act': function('s:toggle_tsort')},
+        \ {'key': '#', 'name': '番号を出す', 'val': l:Onoff(get(s:S, 'nums', 1)), 'act': function('s:toggle_nums')},
+        \ {'key': 'p', 'name': '右にノートの本文を出す', 'val': l:Onoff(get(s:S, 'nv', 1)), 'act': function('s:toggle_preview')},
+        \ {'key': 'u', 'name': '見出しだけを出す', 'val': l:Onoff(get(s:S, 'ol_only', 0)), 'act': function('s:toggle_outline_only')},
+        \ {'key': 'U', 'name': '見出しも他と一緒に出す', 'val': l:Onoff(get(s:S, 'ol_on', 0)), 'act': function('s:toggle_outline')},
+        \ {'key': 'f', 'name': '全画面（9×9）', 'val': l:Onoff(s:S.size == 9), 'act': function('s:full')},
+        \ {'key': 'v', 'name': '外向き（9×9）', 'val': l:Onoff(get(s:S, 'out_on', 0)), 'act': function('s:toggle_out')},
+        \ {'key': 'L', 'name': '種類の凡例を下に出す', 'val': l:Onoff(s:legend_on()), 'act': function('s:toggle_legend')},
+        \ {'key': '+', 'name': '外向きの深さ（入力）', 'val': get(s:S, 'depth', 1) . gnosis#i18n#tr('（1 = 直接のつながりだけ）'), 'act': function('s:depth_ask')},
+        \ {'key': 'D', 'name': '外向きに辿る方向', 'val': gnosis#i18n#tr(get(s:S, 'out_dir', 'all') ==# 'down' ? '配下だけ' : '通常'), 'act': function('s:toggle_down')},
+        \ {'key': 'b', 'name': '近さ順の基準 rank（center ⇔ block。通常9×9の外側）', 'val': 'rank(' . s:rank_basis_name() . ')', 'act': function('s:toggle_dbasis')},
+        \ {'key': 'z', 'name': '盤面を中央に戻す', 'val': '', 'act': function('s:recenter')},
+        \ {'key': 'w', 'name': '近さ順', 'val': l:Onoff(get(s:S, 'rank_on', 0)), 'act': function('s:toggle_rank')},
+        \ ]
+endfunction
+
+" 種類の凡例の表示/非表示（vault の設定 mandalaLegend）
+function! s:toggle_legend() abort
+  call gnosis#settings#set('mandalaLegend', s:legend_on() ? v:false : v:true)
+  call s:render()
+endfunction
+
+" モードを 全体 → 索引 → 親子 → 全体 と順に切り替える
+function! s:panel_mode() abort
+  let l:order = ['all', 'groups', 'family']
+  call s:setmode(l:order[(index(l:order, get(s:S, 'mode', 'all')) + 1) % len(l:order)])
+endfunction
+
+" 長い一覧を、選んでいる行が見える範囲だけ切り出す。[始まり, 終わりの次]
+function! s:win_range(total, sel, size) abort
+  if a:total <= a:size
+    return [0, a:total]
+  endif
+  let l:st = max([0, min([a:sel - a:size / 2, a:total - a:size])])
+  return [l:st, l:st + a:size]
+endfunction
+
+" 画面の高さに収まる行数（枠・題・見出し・下の説明の分を引いた、一覧に使える行数）
+function! s:list_room(fixed) abort
+  return max([3, &lines - 6 - a:fixed])
+endfunction
+
+" 設定の画面の行（試験用に外へも出す）。sel は選んでいる行の番号、room は一覧に使える行数（画面が低いときは一覧のほうが送られる）
+" 設定を短く一覧にし、選択中だけ詳細を下に出す。狭い画面でも切らない。
+function! s:panel_short_name(row) abort
+  let l:names = {
+        \ 'a': '表示モード', 'c': '近いグループのみ', 'C': '近いグループ追加',
+        \ 'r': '予測関連のみ', 'R': '予測関連追加',
+        \ 'T': '数字キーの動き', 't': '時間順', '#': '番号表示',
+        \ 'p': '本文プレビュー', 'u': '見出しのみ', 'U': '見出しも追加',
+        \ 'f': '9×9表示', 'v': '外向き表示', 'L': '種類の凡例',
+        \ '+': '外向きの深さ', 'D': '辿る方向', 'b': '順位の基準',
+        \ 'z': '中央に戻す', 'w': '近さ順'}
+  return gnosis#i18n#tr(get(l:names, a:row.key, a:row.name))
+endfunction
+
+function! s:panel_wrap(text, width) abort
+  let l:out = []
+  let l:line = ''
+  for l:i in range(strchars(a:text))
+    let l:ch = strcharpart(a:text, l:i, 1)
+    if strdisplaywidth(l:line . l:ch) > a:width && !empty(l:line)
+      call add(l:out, l:line)
+      let l:line = ''
+    endif
+    let l:line .= l:ch
+  endfor
+  if !empty(l:line) | call add(l:out, l:line) | endif
+  return l:out
+endfunction
+
+function! s:panel_lines(sel, msg, room, ...) abort
+  let l:rows = s:panel_rows()
+  let l:w = a:0 ? a:1 : 56
+  let l:usable = max([10, l:w - 4])
+  let l:r = s:win_range(len(l:rows), a:sel, a:room)
+  let l:more = len(l:rows) > a:room ? printf(' (%d/%d)', a:sel + 1, len(l:rows)) : ''
+  let l:out = [' ' . gnosis#i18n#tr('曼荼羅の設定') . l:more, '']
+  for l:i in range(l:r[0], l:r[1] - 1)
+    let l:row = l:rows[l:i]
+    let l:label = l:row.key . ' ' . s:panel_short_name(l:row)
+    let l:value = l:row.val
+    let l:lead = ' ' . (l:i == a:sel ? '▶ ' : '  ')
+    if strdisplaywidth(l:lead . l:label . '  ' . l:value) <= l:usable
+      call add(l:out, l:lead . l:label . '  ' . l:value)
+    elseif strdisplaywidth(l:lead . l:label) <= l:usable
+      call add(l:out, l:lead . l:label)
+    else
+      " 最小幅ではキーだけ残し、説明は選択欄で全て確認できる。
+      call add(l:out, l:lead . l:row.key)
+    endif
+  endfor
+  let l:chosen = l:rows[a:sel]
+  call add(l:out, '')
+  call extend(l:out, s:panel_wrap(' ' . gnosis#i18n#tr(l:chosen.name) . ': ' . l:chosen.val, l:usable))
+  if !empty(a:msg) | call extend(l:out, s:panel_wrap(' ' . a:msg, l:usable)) | endif
+  call add(l:out, ' jk:選択 Enter:切替')
+  call add(l:out, ' P:プリセット  q/Z:閉じる')
+  return l:out
+endfunction
+
+" プリセットの画面の行。数が増えても、選んでいる行の前後だけを出す
+function! s:preset_lines(sel, msg, room) abort
+  let l:names = gnosis#mview#preset_names()
+  let l:r = s:win_range(len(l:names), a:sel, a:room)
+  let l:more = len(l:names) > a:room ? printf('  (%d/%d)', a:sel + 1, len(l:names)) : ''
+  let l:out = [' ' . gnosis#i18n#tr('プリセット') . l:more, '']
+  if empty(l:names)
+    call add(l:out, '   ' . gnosis#i18n#tr('（まだありません。s で今の設定を保存）'))
+  endif
+  for l:j in range(l:r[0], l:r[1] - 1)
+    call add(l:out, printf(' %s %s %s', l:j == a:sel ? '▶' : ' ', l:j < 9 ? (l:j + 1) . '' : ' ', l:names[l:j]))
+  endfor
+  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter / 番号 1-9 で呼び出し'), ' ' . gnosis#i18n#tr('s 保存  o 上書き  n 名前  d 消す'), ' ' . gnosis#i18n#tr('Z 設定の画面  q / P 閉じる')])
+  return l:out
+endfunction
+
+function! s:panel_popup(lines, w, title) abort
+  let l:w = max([12, min([a:w, &columns - 6])])
+  return popup_create(a:lines, {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - l:w - 3]),
+        \ 'minwidth': l:w, 'maxwidth': l:w, 'maxheight': max([5, &lines - 4]),
+        \ 'wrap': 1, 'scrollbar': 1, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': a:title})
+endfunction
+
+" Z: 設定の画面。P でプリセットの画面へ移る
+function! s:settings_menu() abort
+  let l:sel = 0
+  let l:msg = ''
+  while 1
+    let l:rows = s:panel_rows()
+    let l:n = len(l:rows)
+    let l:sel = min([l:sel, l:n - 1])
+    let l:w = max([12, min([58, &columns >= 110 ? &columns / 2 - 4 : &columns - 6])])
+    call gnosis#hint#cmdline_hide()
+    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(11), l:w), l:w, ' Z ')
+    redraw
+    let l:k = gnosis#ui#getcharstr()
+    call popup_close(l:pid)
+    let l:msg = ''
+    let l:hot = filter(range(l:n), 'l:rows[v:val].key ==# l:k')
+    if l:k ==# 'j' || l:k ==# "\<Down>"
+      let l:sel = (l:sel + 1) % l:n
+    elseif l:k ==# 'k' || l:k ==# "\<Up>"
+      let l:sel = (l:sel + l:n - 1) % l:n
+    elseif l:k ==# 'a' || l:k ==# 'i' || l:k ==# 'd'
+      call s:setmode(get({'a': 'all', 'i': 'groups', 'd': 'family'}, l:k))
+    elseif !empty(l:hot)
+      call l:rows[l:hot[0]].act()
+    elseif l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' '
+      call l:rows[l:sel].act()
+    elseif l:k ==# 'P'
+      call s:preset_menu(1)
+    elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
+      " Z で開いて、もう一度 Z で閉じる
+      call gnosis#hint#cmdline_schedule()
+      return
+    endif
+  endwhile
+endfunction
+
+" P: プリセットだけの画面
+function! s:preset_menu(...) abort
+  let l:from_settings = a:0 && a:1
+  let l:sel = 0
+  let l:msg = ''
+  while 1
+    let l:names = gnosis#mview#preset_names()
+    let l:n = len(l:names)
+    let l:sel = max([0, min([l:sel, l:n - 1])])
+    let l:w = max([12, min([58, &columns >= 110 ? &columns / 2 - 4 : &columns - 6])])
+    call gnosis#hint#cmdline_hide()
+    let l:pid = s:panel_popup(s:preset_lines(l:sel, l:msg, s:list_room(6)), l:w, ' ' . gnosis#i18n#tr('プリセット') . ' ')
+    redraw
+    let l:k = gnosis#ui#getcharstr()
+    call popup_close(l:pid)
+    let l:msg = ''
+    let l:pre = l:n > 0 ? l:names[l:sel] : ''
+    if l:k ==# 'j' || l:k ==# "\<Down>"
+      let l:sel = l:n > 0 ? (l:sel + 1) % l:n : 0
+    elseif l:k ==# 'k' || l:k ==# "\<Up>"
+      let l:sel = l:n > 0 ? (l:sel + l:n - 1) % l:n : 0
+    elseif l:k ==# 'g'
+      let l:sel = 0
+    elseif l:k ==# 'G'
+      let l:sel = max([0, l:n - 1])
+    elseif l:k ==# "\<C-d>"
+      let l:sel = min([max([0, l:n - 1]), l:sel + 5])
+    elseif l:k ==# "\<C-u>"
+      let l:sel = max([0, l:sel - 5])
+    elseif (l:k ==# "\<CR>" || l:k ==# "\r" || l:k ==# ' ') && !empty(l:pre)
+      call gnosis#mview#preset_apply(l:pre)
+      let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:pre)
+    elseif l:k =~# '^[1-9]$' && str2nr(l:k) <= l:n
+      call gnosis#mview#preset_apply(l:names[str2nr(l:k) - 1])
+      let l:msg = gnosis#i18n#tr('「%s」を呼び出しました', l:names[str2nr(l:k) - 1])
+    elseif l:k ==# 'o' && !empty(l:pre)
+      call gnosis#mview#preset_overwrite(l:pre)
+      let l:msg = gnosis#i18n#tr('「%s」を今の設定で上書きしました', l:pre)
+    elseif l:k ==# 'n' && !empty(l:pre)
+      let l:new = s:ask(gnosis#i18n#tr('新しい名前（%s）: ', l:pre), l:pre)
+      redraw
+      if gnosis#mview#preset_rename(l:pre, l:new)
+        let l:sel = index(gnosis#mview#preset_names(), trim(l:new))
+      endif
+    elseif l:k ==# 'd' && !empty(l:pre)
+      call gnosis#mview#preset_delete(l:pre)
+      let l:msg = gnosis#i18n#tr('「%s」を消しました', l:pre)
+    elseif l:k ==# 's'
+      " 名前の既定は、すでにある番号（名前が数字のもの）の次の番号。そのまま Enter で決まる
+      let l:name = s:ask(gnosis#i18n#tr('プリセットの名前: '), string(gnosis#mview#preset_next_number()))
+      redraw
+      if gnosis#mview#preset_save(l:name)
+        let l:msg = gnosis#i18n#tr('プリセット「%s」を保存しました', trim(l:name))
+        let l:sel = index(gnosis#mview#preset_names(), trim(l:name))
+      endif
+    elseif l:k ==# 'Z'
+      " 設定の画面へ（設定の画面から来たときは、そちらへ戻る）
+      if !l:from_settings
+        call s:settings_menu()
+      endif
+      call gnosis#hint#cmdline_schedule()
+      return
+    elseif l:k ==# 'q' || l:k ==# 'P' || l:k ==# "\<Esc>"
+      call gnosis#hint#cmdline_schedule()
+      return
+    endif
+  endwhile
+endfunction
+
+" 曼荼羅が開いているか（窓が残っているか）
+function! gnosis#mview#is_open() abort
+  return exists('s:S') && type(s:S) == v:t_dict && has_key(s:S, 'win') && !empty(getwininfo(get(s:S, 'win', -1)))
+endfunction
+
+" 試験用: 設定の画面の行と、行の操作
+function! gnosis#mview#panel_text() abort
+  return join(s:panel_lines(0, '', 999), "\n")
+endfunction
+function! gnosis#mview#preset_text(sel, room) abort
+  return join(s:preset_lines(a:sel, '', a:room), "\n")
+endfunction
+function! gnosis#mview#panel_act(i) abort
+  call s:panel_rows()[a:i].act()
+endfunction
+
+" CUI / GUI 間で表示状態だけを渡す。ジョブやキャッシュは渡さない。
+function! gnosis#mview#handoff() abort
+  let l:d = {'out_dir': get(s:S, 'out_dir', 'all')}
+  for l:k in s:mode_keys + ['tenths', 'stretch', 'center', 'cur', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
+    if has_key(s:S, l:k)
+      let l:d[l:k] = deepcopy(s:S[l:k])
+    endif
+  endfor
+  let l:d.open = s:mwin() > 0
+  if get(s:S, 'view', '') ==# 'list' | let l:d.list = gnosis#listnav#handoff() | endif
+  return l:d
+endfunction
+
+function! gnosis#mview#restore_handoff(d) abort
+  if !get(a:d, 'open', 0)
+    let l:w = s:mwin()
+    if l:w > 0
+      call win_gotoid(l:w)
+      if s:note_win() < 0
+        let s:S.nv = 1
+        call s:ensure_note_win()
+        call s:show_note(s:S.center)
+      endif
+      close
+    endif
+    return
+  endif
+  call s:open(get(a:d, 'center', 'index.md'))
+  if s:mwin() <= 0 | return | endif
+  let l:size = get(a:d, 'size', 3)
+  if s:S.size != l:size
+    call s:full()
+  endif
+  for l:k in s:mode_keys + ['tenths', 'stretch', 'page', 'opage', 'hist', 'query', 'rquery', 'results', 'find']
+    if l:k !=# 'view' && has_key(a:d, l:k)
+      let s:S[l:k] = deepcopy(a:d[l:k])
+    endif
+  endfor
+  let s:S.out_dir = get(a:d, 'out_dir', 'all') ==# 'down' ? 'down' : 'all'
+  let s:S.cur = copy(get(a:d, 'cur', l:size == 9 ? [4, 4] : [1, 1]))
+  if len(s:S.cur) != 2 || min(s:S.cur) < 0 || max(s:S.cur) >= s:S.size
+    let s:S.cur = s:S.size == 9 ? [4, 4] : [1, 1]
+  endif
+  call win_gotoid(s:mwin())
+  if get(s:S, 'nv', 1)
+    call s:ensure_note_win()
+    execute 'vertical resize ' . s:win_width()
+  else
+    silent! only
+  endif
+  let l:view = get(a:d, 'view', 'mandala')
+  if index(['mandala', 'fz', 'list'], l:view) >= 0 | call gnosis#mview#switch_view(l:view) | endif
+  call s:render()
+  if l:view ==# 'list' && has_key(a:d, 'list') | call gnosis#listnav#restore(a:d.list) | endif
+  call s:preview()
+  call win_gotoid(s:mwin())
+endfunction
+
+      call add(l:nums, l:k)
+    else
+      call add(l:others, l:k)
+    endif
+  endfor
+  call sort(l:nums, {a, b -> str2nr(a) == str2nr(b) ? (a ==# b ? 0 : (a <# b ? -1 : 1)) : str2nr(a) - str2nr(b)})
+  return sort(l:others) + l:nums
 endfunction
 
 function! gnosis#mview#preset_save(name) abort
