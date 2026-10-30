@@ -253,6 +253,23 @@ call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
 call s:ok('\l a h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
 call s:ok('\l a h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
 
+" ------------------------------------------------------------------ c/a のキー配置交換（zn → c は別動作のまま）
+call s:mk('cx_root.md', '親', ['ChildBranch:', '[起点](cx_source.md)'])
+call s:mk('cx_source.md', '起点', ['ParentBranch:', '[親](cx_root.md)', '', '内容。'])
+call s:mk('cx_target.md', '対象', ['対象の本文。'])
+execute 'edit ' . fnameescape(s:v . '/cx_source.md')
+" 新 c = 以前の a。今のノートの Context に選んだノートを追加し、
+" 相手側へは自動でリンクを書かない（o を選択）。
+let g:gnosis_test_keys = ['c', 'o']
+call gnosis#insert_links_pick(['[対象](cx_target.md)'], getpos('.'))
+call s:ok('\l c: 今のノートの Context に選んだノートを入れる',
+      \ index(gnosis#context#links(s:file('cx_source.md')), '[対象](cx_target.md)') >= 0, string(s:file('cx_source.md')))
+call s:ok('\l c: リンク先の Context は書き換えない',
+      \ empty(gnosis#context#links(s:file('cx_target.md'))), string(s:file('cx_target.md')))
+call s:ok('c/a 入替の案内も正しい',
+      \ gnosis#insert_prompt_text(1, 0) =~# 'c=自分Ctx a=相手Ctx' ||
+      \ gnosis#insert_prompt_text(1, 0) =~# 'c=Context(今のノートにリンク先)', gnosis#insert_prompt_text(1, 0))
+
 " ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 n）は何もしない
 "（i は 2026-10-20 に復活: 行の中へそのまま入れる。requests_1020_net.sh で確かめる）
 call s:mk('h.md', 'ノートH', ['H の本文。'])
