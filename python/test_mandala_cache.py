@@ -146,10 +146,8 @@ class T(unittest.TestCase):
             near = mc.near(self.r, "grow.md")
             self.assertIn("cook.md", [d["id"] for d in near])
             self.assertNotIn("plant.md", [d["id"] for d in near])   # すでに所属している索引は出さない
-            rel = mc.related(self.r, "herb.md")
-            ids = [d["id"] for d in rel]
-            self.assertIn("plant.md", ids)
-            self.assertIn("grow.md", ids)
+            # 所属 Index・リンク・短い題だけでは「内容が関連」と判定しない。
+            self.assertEqual(mc.related(self.r, "herb.md"), [])
             self.assertEqual(mc.search(self.r, ["ハーブ"])[:1], ["herb.md"])   # 題に合うものが先
         finally:
             mc.BIG_VAULT = old
