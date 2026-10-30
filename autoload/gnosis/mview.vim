@@ -1580,9 +1580,9 @@ function! s:compact_status(text, width) abort
   let l:short = a:text
   for [l:long, l:abbr] in [
         \ ['deep-over-off', 'deep!'], ['down-dep', 'D'], ['near-only', 'c'],
-        \ ['rel-only', 'r'], ['near', 'C'], ['rel', 'R'], ['out', 'v'],
+        \ ['rel-only', 'r'], ['near', 'C'], ['rel', 'R'], ['outl', 'U'], ['out', 'v'],
         \ ['rank(center)', 'w(c)'], ['rank(block)', 'w(b)'], ['rank', 'w'],
-        \ ['heads', 'u'], ['outl', 'U'], ['nopv', 'p-'],
+        \ ['heads', 'u'], ['nopv', 'p-'],
         \ ['old-first', 't↑'], ['new-first', 't↓']]
     let l:short = substitute(l:short, '\V' . escape(l:long, '\'), l:abbr, 'g')
   endfor
@@ -4337,16 +4337,61 @@ function! s:list_room(fixed) abort
 endfunction
 
 " 設定の画面の行（試験用に外へも出す）。sel は選んでいる行の番号、room は一覧に使える行数（画面が低いときは一覧のほうが送られる）
-function! s:panel_lines(sel, msg, room) abort
+" 設定を短く一覧にし、選択中だけ詳細を下に出す。狭い画面でも切らない。
+function! s:panel_short_name(row) abort
+  let l:names = {
+        \ 'a': '表示モード', 'c': '近いグループのみ', 'C': '近いグループ追加',
+        \ 'r': '予測関連のみ', 'R': '予測関連追加',
+        \ 'T': '数字キーの動き', 't': '時間順', '#': '番号表示',
+        \ 'p': '本文プレビュー', 'u': '見出しのみ', 'U': '見出しも追加',
+        \ 'f': '9×9表示', 'v': '外向き表示', 'L': '種類の凡例',
+        \ '+': '外向きの深さ', 'D': '辿る方向', 'b': '順位の基準',
+        \ 'z': '中央に戻す', 'w': '近さ順'}
+  return gnosis#i18n#tr(get(l:names, a:row.key, a:row.name))
+endfunction
+
+function! s:panel_wrap(text, width) abort
+  let l:out = []
+  let l:line = ''
+  for l:i in range(strchars(a:text))
+    let l:ch = strcharpart(a:text, l:i, 1)
+    if strdisplaywidth(l:line . l:ch) > a:width && !empty(l:line)
+      call add(l:out, l:line)
+      let l:line = ''
+    endif
+    let l:line .= l:ch
+  endfor
+  if !empty(l:line) | call add(l:out, l:line) | endif
+  return l:out
+endfunction
+
+function! s:panel_lines(sel, msg, room, ...) abort
   let l:rows = s:panel_rows()
+  let l:w = a:0 ? a:1 : 56
+  let l:usable = max([10, l:w - 4])
   let l:r = s:win_range(len(l:rows), a:sel, a:room)
-  let l:more = len(l:rows) > a:room ? printf('  (%d/%d)', a:sel + 1, len(l:rows)) : ''
+  let l:more = len(l:rows) > a:room ? printf(' (%d/%d)', a:sel + 1, len(l:rows)) : ''
   let l:out = [' ' . gnosis#i18n#tr('曼荼羅の設定') . l:more, '']
   for l:i in range(l:r[0], l:r[1] - 1)
-    let l:lab = gnosis#i18n#tr(l:rows[l:i].name) . ' ' . l:rows[l:i].key
-    call add(l:out, ' ' . (l:i == a:sel ? '▶' : ' ') . ' ' . l:lab . repeat(' ', max([1, 28 - strdisplaywidth(l:lab)])) . l:rows[l:i].val)
+    let l:row = l:rows[l:i]
+    let l:label = l:row.key . ' ' . s:panel_short_name(l:row)
+    let l:value = l:row.val
+    let l:lead = ' ' . (l:i == a:sel ? '▶ ' : '  ')
+    if strdisplaywidth(l:lead . l:label . '  ' . l:value) <= l:usable
+      call add(l:out, l:lead . l:label . '  ' . l:value)
+    elseif strdisplaywidth(l:lead . l:label) <= l:usable
+      call add(l:out, l:lead . l:label)
+    else
+      " 最小幅ではキーだけ残し、説明は選択欄で全て確認できる。
+      call add(l:out, l:lead . l:row.key)
+    endif
   endfor
-  call extend(l:out, ['', empty(a:msg) ? '' : ' ' . a:msg, ' ' . gnosis#i18n#tr('j k 選ぶ  Enter 切り替え'), ' ' . gnosis#i18n#tr('P プリセットの画面  q / Z 閉じる')])
+  let l:chosen = l:rows[a:sel]
+  call add(l:out, '')
+  call extend(l:out, s:panel_wrap(' ' . gnosis#i18n#tr(l:chosen.name) . ': ' . l:chosen.val, l:usable))
+  if !empty(a:msg) | call extend(l:out, s:panel_wrap(' ' . a:msg, l:usable)) | endif
+  call add(l:out, ' jk:選択 Enter:切替')
+  call add(l:out, ' P:プリセット  q/Z:閉じる')
   return l:out
 endfunction
 
@@ -4367,8 +4412,10 @@ function! s:preset_lines(sel, msg, room) abort
 endfunction
 
 function! s:panel_popup(lines, w, title) abort
-  return popup_create(a:lines, {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - a:w - 1]),
-        \ 'minwidth': a:w, 'maxwidth': a:w, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': a:title})
+  let l:w = max([12, min([a:w, &columns - 6])])
+  return popup_create(a:lines, {'pos': 'topleft', 'line': 2, 'col': max([1, &columns - l:w - 3]),
+        \ 'minwidth': l:w, 'maxwidth': l:w, 'maxheight': max([5, &lines - 4]),
+        \ 'wrap': 1, 'scrollbar': 1, 'border': [], 'padding': [0, 1, 0, 1], 'zindex': 220, 'title': a:title})
 endfunction
 
 " Z: 設定の画面。P でプリセットの画面へ移る
@@ -4379,8 +4426,9 @@ function! s:settings_menu() abort
     let l:rows = s:panel_rows()
     let l:n = len(l:rows)
     let l:sel = min([l:sel, l:n - 1])
-    let l:w = max([44, min([60, &columns / 2 - 2])])
-    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(5)), l:w, ' z ')
+    let l:w = max([12, min([58, &columns >= 110 ? &columns / 2 - 4 : &columns - 6])])
+    call gnosis#hint#cmdline_hide()
+    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(9), l:w), l:w, ' Z ')
     redraw
     let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
@@ -4414,7 +4462,8 @@ function! s:preset_menu(...) abort
     let l:names = gnosis#mview#preset_names()
     let l:n = len(l:names)
     let l:sel = max([0, min([l:sel, l:n - 1])])
-    let l:w = max([44, min([60, &columns / 2 - 2])])
+    let l:w = max([12, min([58, &columns >= 110 ? &columns / 2 - 4 : &columns - 6])])
+    call gnosis#hint#cmdline_hide()
     let l:pid = s:panel_popup(s:preset_lines(l:sel, l:msg, s:list_room(6)), l:w, ' ' . gnosis#i18n#tr('プリセット') . ' ')
     redraw
     let l:k = gnosis#ui#getcharstr()
