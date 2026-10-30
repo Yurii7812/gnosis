@@ -124,7 +124,7 @@ function! s:head_text() abort
   let l:head = empty($GNOSIS_GUI_PORT)
         \ ? gnosis#hint#tabs('fz', winwidth(0))
         \ : (s:F.mode ==# 'upper' ? 'FOLGEZETTEL / ' . gnosis#i18n#tr('上位表示') : 'FOLGEZETTEL')
-  if s:F.mode ==# 'upper' && strdisplaywidth(l:head . ' 上位') <= winwidth(0)
+  if empty($GNOSIS_GUI_PORT) && s:F.mode ==# 'upper' && strdisplaywidth(l:head . ' 上位') <= winwidth(0)
     let l:head .= ' 上位'
   endif
   for l:k in ['search', 'filter', 'highlight']
