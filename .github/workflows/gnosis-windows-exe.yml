@@ -1,0 +1,78 @@
+name: Build Gnosis-Setup.exe for Windows
+
+on:
+  pull_request:
+    paths:
+      - "install/gnosis-setup.iss"
+      - "install/bootstrap.ps1"
+      - ".github/workflows/gnosis-windows-exe.yml"
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bootstrap PowerShell 5.1 syntax
+        shell: powershell
+        run: |
+          $path = Join-Path (Get-Location) 'install\bootstrap.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          Write-Host 'PowerShell bootstrap syntax OK'
+      - name: Compile standalone downloadable EXE
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot install build-time Inno Setup compiler' }
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            throw 'Inno Setup compiler is unavailable'
+          }
+          $out = Join-Path $env:RUNNER_TEMP 'GnosisWindows'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          & $compiler "/O$out" "install\gnosis-setup.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Gnosis Windows EXE compilation failed' }
+          $exe = Join-Path $out 'Gnosis-Setup.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'Expected Gnosis-Setup.exe missing' }
+          $len = (Get-Item -LiteralPath $exe).Length
+          if ($len -lt 200000) { throw "Unexpectedly small installer ($len bytes)" }
+          Write-Host "EXE produced: $exe ($len bytes)"
+      - name: Upload downloadable Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gnosis-Setup-Windows
+          path: ${{ runner.temp }}/GnosisWindows/Gnosis-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows-exe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Gnosis-Setup-Windows
+          path: dist
+      - name: Publish direct .exe download to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --verify-tag --title "Gnosis $tag" --notes "Windows: download Gnosis-Setup.exe, run it and follow the setup prompts. Internet, WSL2, and administrator approval may be required."
+          fi
+          gh release upload "$tag" dist/Gnosis-Setup.exe --clobber
