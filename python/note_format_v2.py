@@ -1765,7 +1765,8 @@ def _save_branch_pairs(root: Path, pairs: set[str]) -> None:
 
 
 def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
-                            prev_titles: dict | None = None) -> list[str]:
+                            prev_titles: dict | None = None,
+                            heading_labels: dict | None = None) -> list[str]:
     """本文リンクの表示名を、リンク先の現在のタイトルに追従させる。
 
     追従させる（＝自動生成とみなす）のは次のいずれか。手書き名は残す。
@@ -1787,8 +1788,18 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
         if rp is None or rp not in titles:
             return m.group(0)
         now = titles[rp]
-        if disp == now or disp == prev_titles.get(rp) or disp == Path(base).stem:
-            return f"[{now}]({tg})"
+        stem = Path(base).stem
+        old = prev_titles.get(rp)
+        auto_base = disp.split("#", 1)[0]
+        if auto_base in (now, old, stem):
+            label = now
+            if "#" in tg:
+                frag = unquote(tg.split("#", 1)[1])
+                actual_heading = (heading_labels or {}).get(rp, {}).get(frag)
+                previous_heading = disp.partition("#")[2]
+                if actual_heading or previous_heading:
+                    label += "#" + (actual_heading or previous_heading)
+            return f"[{label}]({tg})"
         return m.group(0)
     out: list[str] = []
     for ln, fz in zip(body, _fenced(body)):
@@ -2395,7 +2406,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     body_t: dict[Path, list[Path]] = {}
     for p, n in notes.items():
         ts: list[Path] = []
-        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
+        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles, heading_labels)
         names: dict[Path, list[str]] = {}
         for display, tg in _links_from(n["body"]):
             rp = res(tg, dirs[p])
@@ -2508,7 +2519,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         # 本文リンクの表示名をリンク先タイトルに追従させ、消えたファイルへの
         # リンクは掃除する（文章中に埋もれたリンクは表示名の文字だけ残す）。
-        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
+        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles, heading_labels)
         n["body"] = _prune_dangling(n["body"], p, res)
         # Context（旧 Parent）と Group はユーザー管理（追加・削除はしない）。ただし消えた
         # ファイルへのリンクは残骸なので掃除する（行全体がリンクの行のみ）。表示名は追従。
