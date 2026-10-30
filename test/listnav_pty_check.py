@@ -52,29 +52,33 @@ class ListView(unittest.TestCase):
     def open_list(self, s):
         s.send(' ', .7)
         s.send(NEXT, .5)
-        self.assertIn('FOLGEZETTEL', s.text())
+        self.assertIn('[F', s.text().splitlines()[0])
         s.send('l', .5)
-        self.assertIn('FOLGEZETTEL / ', s.text())
+        self.assertIn('[L', s.text().splitlines()[0])
 
     def test_hint_line_toggle_and_mode_menu(self):
         with self.session() as s:
             self.open_list(s)
-            self.assertNotIn('m:', s.text())  # 既定はこの試験ではオフ
+            self.assertNotIn('Tab:切替', s.text().splitlines()[-1])  # ヒントは既定オフ
             s.send('K', .5)
-            top = s.text().splitlines()[0]
-            self.assertIn('[l:', top)  # 今のモードが [ ] で出る
-            self.assertIn('m:', top)
+            self.assertIn('[L', s.text().splitlines()[0])
+            self.assertIn('Tab:切替', s.text().splitlines()[-1])  # 最下部は全幅
+            self.assertIn('m:メニュー', s.text().splitlines()[-1])
             s.send('K', .5)
-            self.assertNotIn('[l:', s.text().splitlines()[0])
+            self.assertNotIn('Tab:切替', s.text().splitlines()[-1])
             s.send('K', .4)
             s.send('m', .6)  # メニュー。3 = 類似
             self.assertIn('Similar', s.text())
             s.send('3\r', .8)
-            self.assertIn('[r:', s.text().splitlines()[0])
+            self.assertIn('[R', s.text().splitlines()[0])
             s.send('m', .5)
             s.send(ESC, .4)  # やめても何も変わらない
-            self.assertIn('[r:', s.text().splitlines()[0])
+            self.assertIn('[R', s.text().splitlines()[0])
             self.assertEqual(self.dump(s)['view'], 'list')
+            s.send(' ', .4)
+            self.assertNotIn('Tab:切替', s.text().splitlines()[-1])  # ノートへフォーカス
+            s.send(' ', .4)
+            self.assertIn('Tab:切替', s.text().splitlines()[-1])  # リストへ戻る
 
     def test_expand_range_with_v_and_visual_selection(self):
         with self.session() as s:
@@ -143,7 +147,7 @@ class ListView(unittest.TestCase):
             self.assertIn('Alpha', left)
             self.assertNotIn('depth', left.splitlines()[1])
             s.send('q', .6)
-            self.assertNotIn('FOLGEZETTEL / ', s.text())
+            self.assertNotIn('[L:リンク]', s.text())
 
     def test_folgezettel_search_highlight_and_cancel(self):
         with self.session() as s:
