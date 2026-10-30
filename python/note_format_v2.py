@@ -1845,10 +1845,12 @@ def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict,
                     headings = (heading_labels or {}).get(rp, {})
                     label = headings.get(unquote(frag), "")
                     if not label:
-                        # Preserve an already displayed human-readable heading
-                        # even when the target note has since been edited.
-                        label = m.group(1).partition("#")[2] or unquote(frag).replace("-", " ")
-                    display += "#" + label
+                        # Don't invent a display heading for an old manually
+                        # written fragment when the heading doesn't exist.
+                        # Preserve any human-readable heading already shown.
+                        label = m.group(1).partition("#")[2]
+                    if label:
+                        display += "#" + label
                 out.append(f"[{display}]({target})")
             else:
                 out.append(ln)
