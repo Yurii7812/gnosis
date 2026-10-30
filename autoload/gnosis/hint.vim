@@ -206,6 +206,14 @@ function! gnosis#hint#cmdline_schedule() abort
   let s:cmdline_timer = timer_start(45, function('gnosis#hint#cmdline_show'))
 endfunction
 
+" SafeState は初回のヒント描画だけに使い、繰り返しタイマーを再始動しない。
+function! gnosis#hint#cmdline_initial() abort
+  if s:cmdline_timer >= 0 || !empty(s:cmdline_shown) | return | endif
+  if &filetype ==# 'gnosis-mandala' && mode(1) =~# '^n' && empty(getcmdtype())
+    call gnosis#hint#cmdline_schedule()
+  endif
+endfunction
+
 function! gnosis#hint#cmdline_install() abort
   if !empty($GNOSIS_GUI_PORT) || exists('s:cmdline_installed') | return | endif
   let s:cmdline_installed = 1
@@ -215,7 +223,7 @@ function! gnosis#hint#cmdline_install() abort
     " 初回のヒント表示を保証する（通常の表示更新でループさせない）。
     autocmd VimEnter * call gnosis#hint#cmdline_schedule()
     if exists('##SafeState')
-      autocmd SafeState * if empty(s:cmdline_shown) | call gnosis#hint#cmdline_schedule() | endif
+      autocmd SafeState * call gnosis#hint#cmdline_initial()
     endif
     autocmd BufEnter,WinEnter,CursorMoved,VimResized * call gnosis#hint#cmdline_schedule()
     autocmd WinLeave * call gnosis#hint#cmdline_hide()
