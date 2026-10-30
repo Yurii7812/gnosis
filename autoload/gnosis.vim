@@ -14740,6 +14740,9 @@ function! s:insert_links_core_raw(links, ...) abort
     endif
     break
   endwhile
+  " 既存ノートへのリンク操作だけ、物理キー c と a の役割を交換する。
+  " 元の処理本体はそのまま利用し、x による方向反転より前に交換する。
+  let l:ch = get({'c': 'a', 'a': 'c'}, l:ch, l:ch)
   redraw
   if l:swap
     " 向きを入れ替えた: 選んだノート側に今のノートのリンクを書く（Enter i h t）／関係の向きを逆にする
@@ -14868,8 +14871,8 @@ function! gnosis#insert_links_visual(links, vis, ...) abort
   let l:rel = [gnosis#i18n#tr('関係も結ぶ')]
   call add(l:rel, '  p      ' . gnosis#i18n#tr('Parent(親)'))
   call add(l:rel, '  b      ' . gnosis#i18n#tr('Branch(子)'))
-  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
-  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
   call add(l:rel, '  r      ' . gnosis#i18n#tr('Related(相互)'))
   if l:can_g
     call add(l:rel, '  g      ' . gnosis#i18n#tr('グループに入れる'))
@@ -14887,6 +14890,8 @@ function! gnosis#insert_links_visual(links, vis, ...) abort
   endif
   let l:ch = s:getkey()
   call s:place_popup_close(l:pw)
+  " ビジュアルのリンク操作も通常の \l / za と同じキー配置にする。
+  let l:ch = get({'c': 'a', 'a': 'c'}, l:ch, l:ch)
   redraw
   let l:ok = (l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch =~# '^[pbcar]$' || (l:ch ==# 'g' && l:can_g) || (l:ch ==# 'm' && l:can_m))
   if !l:ok
@@ -15165,11 +15170,11 @@ function! gnosis#insert_prompt_text(has_t, has_g, ...) abort
   let l:has_m = a:0 && a:1
   let l:full = (a:has_t ? gnosis#i18n#tr('t=見出しの下 / ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=グループに入れる / ') : '')
-        \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(リンク先に今のノート) / a=Context(今のノートにリンク先) / r=Related(相互)')
+        \ . gnosis#i18n#tr('Enter=本文の最後 / i=行の中 / p=Parent(親) / b=Branch(子) / h=カーソル直下 / c=Context(今のノートにリンク先) / a=Context(リンク先に今のノート) / r=Related(相互)')
         \ . (l:has_m ? gnosis#i18n#tr(' / m=マージ') : '') . '  (Esc)'
   let l:compact = (a:has_t ? gnosis#i18n#tr('t=節 ') : '')
         \ . (a:has_g ? gnosis#i18n#tr('g=グループ ') : '')
-        \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=相手Ctx a=自分Ctx r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
+        \ . gnosis#i18n#tr('Enter=末 i=行中 p=親 b=子 h=下 c=自分Ctx a=相手Ctx r=Related') . (l:has_m ? ' m' : '') . ' (Esc)'
   return s:fit_prompt(l:full, l:compact)
 endfunction
 
@@ -15187,8 +15192,8 @@ function! gnosis#insert_prompt_lines(has_t, has_g, ...) abort
   let l:rel = [gnosis#i18n#tr('関係を結ぶ')]
   call add(l:rel, '  p      ' . gnosis#i18n#tr('Parent(親)'))
   call add(l:rel, '  b      ' . gnosis#i18n#tr('Branch(子)'))
-  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
-  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  c      ' . gnosis#i18n#tr('Context(今のノートにリンク先)'))
+  call add(l:rel, '  a      ' . gnosis#i18n#tr('Context(リンク先に今のノート)'))
   call add(l:rel, '  r      ' . gnosis#i18n#tr('Related(相互)'))
   if a:has_g
     call add(l:rel, '  g      ' . gnosis#i18n#tr('グループに入れる'))
@@ -15250,8 +15255,8 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
   call add(l:out, '   p      ' . gnosis#i18n#tr('%s を %s の親にする', l:I, l:R))
   call add(l:out, '   b      ' . gnosis#i18n#tr('%s を %s の子にする', l:I, l:R))
-  call add(l:out, '   c      ' . s:tr2('%s の Context に %s を入れる', l:I, l:R))
-  call add(l:out, '   a      ' . s:tr2('%s の Context に %s を入れる', l:R, l:I))
+  call add(l:out, '   c      ' . s:tr2('%s の Context に %s を入れる', l:R, l:I))
+  call add(l:out, '   a      ' . s:tr2('%s の Context に %s を入れる', l:I, l:R))
   call add(l:out, '   r      ' . gnosis#i18n#tr('お互いを Related にする'))
   if a:can_g && !a:swap
     call add(l:out, '   g      ' . s:tr2('%s のグループに %s を入れる', l:I, l:R))

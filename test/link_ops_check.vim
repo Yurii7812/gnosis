@@ -205,27 +205,27 @@ execute "normal! ggVj\<Esc>"
 call gnosis#v2_new_group_visual()
 call s:ok('グループの上のビジュアル zk: 使えない（何も作らない・グループは変わらない）', s:files() ==# s:before && s:file('gz.md') ==# getline(1, '$'))
 
-" ------------------------------------------------------------------ za → c → t / Enter（B の Context に A、A に B）
+" ------------------------------------------------------------------ za → a → t / Enter（B の Context に A、A に B）
 call s:mk('d.md', 'ノートD', ['D の本文。'])
 execute 'edit ' . fnameescape(s:v . '/b.md')
 let @" = '[ノートD](d.md)'
 let @0 = @"
-let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_keys = ['a', 't']
 let g:gnosis_test_heading = '節2'
 call gnosis#add_clipboard_before_up_note()
 unlet g:gnosis_test_heading
-call s:ok('za c t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
-call s:ok('za c t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
-call s:ok('za c t: D の本文に A は置かない（Context と、親が無かったので ParentBranch だけ）', count(s:file('d.md'), '[ノートB](b.md)') == 2 && index(s:file('d.md'), 'ParentBranch:') >= 0, string(s:file('d.md')))
-" 相手がグループでも、c は Context（グループ登録にはしない）
+call s:ok('za a t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
+call s:ok('za a t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
+call s:ok('za a t: D の本文に A は置かない（Context と、親が無かったので ParentBranch だけ）', count(s:file('d.md'), '[ノートB](b.md)') == 2 && index(s:file('d.md'), 'ParentBranch:') >= 0, string(s:file('d.md')))
+" 相手がグループでも、a は Context（グループ登録にはしない）
 execute 'edit ' . fnameescape(s:v . '/c.md')
 let @" = '[グループG](g.md)'
 let @0 = @"
 let s:g_before = s:file('g.md')
-let g:gnosis_test_keys = ['c', "\r"]
+let g:gnosis_test_keys = ['a', "\r"]
 call gnosis#add_clipboard_before_up_note()
-call s:ok('za c Enter（相手がグループ）: G の Context に C・G の本文には入れない', gnosis#context#links(s:file('g.md')) ==# ['[ノートC](c.md)'] && !s:has('g.md', '^\[ノートC\](c\.md)$') || index(s:file('g.md'), 'Context:') >= 0, string(s:file('g.md')))
-call s:ok('za c Enter（相手がグループ）: C の本文の最後に G・C は G に所属しない', s:has('c.md', '^\[グループG\](g\.md)$') && index(s:file('c.md'), 'Group:') < 0, string(s:file('c.md')))
+call s:ok('za a Enter（相手がグループ）: G の Context に C・G の本文には入れない', gnosis#context#links(s:file('g.md')) ==# ['[ノートC](c.md)'] && !s:has('g.md', '^\[ノートC\](c\.md)$') || index(s:file('g.md'), 'Context:') >= 0, string(s:file('g.md')))
+call s:ok('za a Enter（相手がグループ）: C の本文の最後に G・C は G に所属しない', s:has('c.md', '^\[グループG\](g\.md)$') && index(s:file('c.md'), 'Group:') < 0, string(s:file('c.md')))
 
 " ------------------------------------------------------------------ za → Enter（相手がグループでも、暗黙のグループ登録にしない）
 call s:mk('ze.md', 'ノートZE', ['ZE の本文。'])
@@ -238,20 +238,37 @@ call gnosis#add_clipboard_before_up_note()
 call s:ok('za Enter（相手がグループ）: 本文の最後にリンク・グループの本文は変えない・Group: は作らない',
       \ s:has('ze.md', '^\[グループG\](g\.md)$') && s:file('g.md') ==# s:g_before && index(s:file('ze.md'), 'Group:') < 0, string(s:file('ze.md')))
 
-" ------------------------------------------------------------------ \l → c → Enter / h（ピッカーから）
+" ------------------------------------------------------------------ \l → a → Enter / h（ピッカーから）
 call s:mk('e.md', 'ノートE', ['E の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
-let g:gnosis_test_keys = ['c', "\r"]
+let g:gnosis_test_keys = ['a', "\r"]
 call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
-call s:ok('\l c Enter: E の Context に A', gnosis#context#links(s:file('e.md')) ==# ['[ノートA](a.md)'], string(s:file('e.md')))
-call s:ok('\l c Enter: A の本文の最後に E・A に Context は作らない', s:has('a.md', '^\[ノートE\](e\.md)$') && empty(gnosis#context#find_block(s:file('a.md'))))
+call s:ok('\l a Enter: E の Context に A', gnosis#context#links(s:file('e.md')) ==# ['[ノートA](a.md)'], string(s:file('e.md')))
+call s:ok('\l a Enter: A の本文の最後に E・A に Context は作らない', s:has('a.md', '^\[ノートE\](e\.md)$') && empty(gnosis#context#find_block(s:file('a.md'))))
 call s:mk('f.md', 'ノートF', ['F の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
 call cursor(search('^本文の文。$', 'nw'), 1)
-let g:gnosis_test_keys = ['c', 'h']
+let g:gnosis_test_keys = ['a', 'h']
 call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
-call s:ok('\l c h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
-call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
+call s:ok('\l a h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
+call s:ok('\l a h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
+
+" ------------------------------------------------------------------ c/a のキー配置交換（zn → c は別動作のまま）
+call s:mk('cx_root.md', '親', ['ChildBranch:', '[起点](cx_source.md)'])
+call s:mk('cx_source.md', '起点', ['ParentBranch:', '[親](cx_root.md)', '', '内容。'])
+call s:mk('cx_target.md', '対象', ['対象の本文。'])
+execute 'edit ' . fnameescape(s:v . '/cx_source.md')
+" 新 c = 以前の a。今のノートの Context に選んだノートを追加し、
+" 相手側へは自動でリンクを書かない（o を選択）。
+let g:gnosis_test_keys = ['c', 'o']
+call gnosis#insert_links_pick(['[対象](cx_target.md)'], getpos('.'))
+call s:ok('\l c: 今のノートの Context に選んだノートを入れる',
+      \ index(gnosis#context#links(s:file('cx_source.md')), '[対象](cx_target.md)') >= 0, string(s:file('cx_source.md')))
+call s:ok('\l c: リンク先の Context は書き換えない',
+      \ empty(gnosis#context#links(s:file('cx_target.md'))), string(s:file('cx_target.md')))
+call s:ok('c/a 入替の案内も正しい',
+      \ gnosis#insert_prompt_text(1, 0) =~# 'c=自分Ctx a=相手Ctx' ||
+      \ gnosis#insert_prompt_text(1, 0) =~# 'c=Context(今のノートにリンク先)', gnosis#insert_prompt_text(1, 0))
 
 " ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 n）は何もしない
 "（i は 2026-10-20 に復活: 行の中へそのまま入れる。requests_1020_net.sh で確かめる）
@@ -657,27 +674,27 @@ execute "normal! ggVj\<Esc>"
 call gnosis#v2_new_group_visual()
 call s:ok('グループの上のビジュアル zk: 使えない（何も作らない・グループは変わらない）', s:files() ==# s:before && s:file('gz.md') ==# getline(1, '$'))
 
-" ------------------------------------------------------------------ za → c → t / Enter（B の Context に A、A に B）
+" ------------------------------------------------------------------ za → a → t / Enter（B の Context に A、A に B）
 call s:mk('d.md', 'ノートD', ['D の本文。'])
 execute 'edit ' . fnameescape(s:v . '/b.md')
 let @" = '[ノートD](d.md)'
 let @0 = @"
-let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_keys = ['a', 't']
 let g:gnosis_test_heading = '節2'
 call gnosis#add_clipboard_before_up_note()
 unlet g:gnosis_test_heading
-call s:ok('za c t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
-call s:ok('za c t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
-call s:ok('za c t: D の本文に A は置かない（Context と、親が無かったので ParentBranch だけ）', count(s:file('d.md'), '[ノートB](b.md)') == 2 && index(s:file('d.md'), 'ParentBranch:') >= 0, string(s:file('d.md')))
-" 相手がグループでも、c は Context（グループ登録にはしない）
+call s:ok('za a t: B（D）の Context に A', gnosis#context#links(s:file('d.md')) ==# ['[ノートB](b.md)'], string(s:file('d.md')))
+call s:ok('za a t: A の「節2」の節の最後に D', s:file('b.md')[-1] ==# '[ノートD](d.md)' || index(s:file('b.md'), '[ノートD](d.md)') > index(s:file('b.md'), '## 節2'), string(s:file('b.md')))
+call s:ok('za a t: D の本文に A は置かない（Context と、親が無かったので ParentBranch だけ）', count(s:file('d.md'), '[ノートB](b.md)') == 2 && index(s:file('d.md'), 'ParentBranch:') >= 0, string(s:file('d.md')))
+" 相手がグループでも、a は Context（グループ登録にはしない）
 execute 'edit ' . fnameescape(s:v . '/c.md')
 let @" = '[グループG](g.md)'
 let @0 = @"
 let s:g_before = s:file('g.md')
-let g:gnosis_test_keys = ['c', "\r"]
+let g:gnosis_test_keys = ['a', "\r"]
 call gnosis#add_clipboard_before_up_note()
-call s:ok('za c Enter（相手がグループ）: G の Context に C・G の本文には入れない', gnosis#context#links(s:file('g.md')) ==# ['[ノートC](c.md)'] && !s:has('g.md', '^\[ノートC\](c\.md)$') || index(s:file('g.md'), 'Context:') >= 0, string(s:file('g.md')))
-call s:ok('za c Enter（相手がグループ）: C の本文の最後に G・C は G に所属しない', s:has('c.md', '^\[グループG\](g\.md)$') && index(s:file('c.md'), 'Group:') < 0, string(s:file('c.md')))
+call s:ok('za a Enter（相手がグループ）: G の Context に C・G の本文には入れない', gnosis#context#links(s:file('g.md')) ==# ['[ノートC](c.md)'] && !s:has('g.md', '^\[ノートC\](c\.md)$') || index(s:file('g.md'), 'Context:') >= 0, string(s:file('g.md')))
+call s:ok('za a Enter（相手がグループ）: C の本文の最後に G・C は G に所属しない', s:has('c.md', '^\[グループG\](g\.md)$') && index(s:file('c.md'), 'Group:') < 0, string(s:file('c.md')))
 
 " ------------------------------------------------------------------ za → Enter（相手がグループでも、暗黙のグループ登録にしない）
 call s:mk('ze.md', 'ノートZE', ['ZE の本文。'])
@@ -690,20 +707,20 @@ call gnosis#add_clipboard_before_up_note()
 call s:ok('za Enter（相手がグループ）: 本文の最後にリンク・グループの本文は変えない・Group: は作らない',
       \ s:has('ze.md', '^\[グループG\](g\.md)$') && s:file('g.md') ==# s:g_before && index(s:file('ze.md'), 'Group:') < 0, string(s:file('ze.md')))
 
-" ------------------------------------------------------------------ \l → c → Enter / h（ピッカーから）
+" ------------------------------------------------------------------ \l → a → Enter / h（ピッカーから）
 call s:mk('e.md', 'ノートE', ['E の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
-let g:gnosis_test_keys = ['c', "\r"]
+let g:gnosis_test_keys = ['a', "\r"]
 call gnosis#insert_links_pick(['[ノートE](e.md)'], getpos('.'))
-call s:ok('\l c Enter: E の Context に A', gnosis#context#links(s:file('e.md')) ==# ['[ノートA](a.md)'], string(s:file('e.md')))
-call s:ok('\l c Enter: A の本文の最後に E・A に Context は作らない', s:has('a.md', '^\[ノートE\](e\.md)$') && empty(gnosis#context#find_block(s:file('a.md'))))
+call s:ok('\l a Enter: E の Context に A', gnosis#context#links(s:file('e.md')) ==# ['[ノートA](a.md)'], string(s:file('e.md')))
+call s:ok('\l a Enter: A の本文の最後に E・A に Context は作らない', s:has('a.md', '^\[ノートE\](e\.md)$') && empty(gnosis#context#find_block(s:file('a.md'))))
 call s:mk('f.md', 'ノートF', ['F の本文。'])
 execute 'edit ' . fnameescape(s:v . '/a.md')
 call cursor(search('^本文の文。$', 'nw'), 1)
-let g:gnosis_test_keys = ['c', 'h']
+let g:gnosis_test_keys = ['a', 'h']
 call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
-call s:ok('\l c h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
-call s:ok('\l c h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
+call s:ok('\l a h: A のカーソル行の直下に F', get(s:file('a.md'), index(s:file('a.md'), '本文の文。') + 1, '') ==# '[ノートF](f.md)', string(s:file('a.md')))
+call s:ok('\l a h: F の Context に A', gnosis#context#links(s:file('f.md')) ==# ['[ノートA](a.md)'])
 
 " ------------------------------------------------------------------ \l / za の位置キー: 決められたキー以外（旧 n）は何もしない
 "（i は 2026-10-20 に復活: 行の中へそのまま入れる。requests_1020_net.sh で確かめる）
