@@ -714,7 +714,7 @@ def related(root: str | Path, rel: str, limit: int = 80, body: bool = True) -> l
             return []
         fid = row[0]
         source = dict(db.execute("SELECT tok,tf FROM ctok WHERE id=?", (fid,)))
-        if len(source) < 2:
+        if not source:
             return []
         total = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
         counts: dict[int, float] = {}
