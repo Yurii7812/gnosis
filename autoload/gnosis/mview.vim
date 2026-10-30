@@ -4428,7 +4428,7 @@ function! s:settings_menu() abort
     let l:sel = min([l:sel, l:n - 1])
     let l:w = max([12, min([58, &columns >= 110 ? &columns / 2 - 4 : &columns - 6])])
     call gnosis#hint#cmdline_hide()
-    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(9), l:w), l:w, ' Z ')
+    let l:pid = s:panel_popup(s:panel_lines(l:sel, l:msg, s:list_room(11), l:w), l:w, ' Z ')
     redraw
     let l:k = gnosis#ui#getcharstr()
     call popup_close(l:pid)
@@ -4448,6 +4448,7 @@ function! s:settings_menu() abort
       call s:preset_menu(1)
     elseif l:k ==# 'q' || l:k ==# 'Z' || l:k ==# "\<Esc>"
       " Z で開いて、もう一度 Z で閉じる
+      call gnosis#hint#cmdline_schedule()
       return
     endif
   endwhile
@@ -4513,8 +4514,10 @@ function! s:preset_menu(...) abort
       if !l:from_settings
         call s:settings_menu()
       endif
+      call gnosis#hint#cmdline_schedule()
       return
     elseif l:k ==# 'q' || l:k ==# 'P' || l:k ==# "\<Esc>"
+      call gnosis#hint#cmdline_schedule()
       return
     endif
   endwhile
