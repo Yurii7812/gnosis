@@ -29,7 +29,7 @@ from pathlib import Path
 KINDS = ("group", "branch_group", "parent_branch", "child_branch", "context", "related", "backlink", "link")
 _KID = {k: i for i, k in enumerate(KINDS)}
 INCOMING = ("parent_branch", "child_branch", "context", "related")   # node の "i"（向かってくる辺）に入れる種類
-SCHEMA = 5
+SCHEMA = 6
 _LINK_TEXT = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 FULL_FLOOR = 0     # 秒。直近の全体の走査から、走査にかかった時間の 20 倍（最低この秒数）が経つまでは、開くときの全体の走査を省く
 
