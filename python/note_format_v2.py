@@ -1999,9 +1999,9 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                         moved: list[str] | None = None, numbers: dict | None = None) -> list[str]:
     """All explicitly declared children, including links repeated in the body.
 
-    Every child's ParentBranch pointing to this parent is authoritative. Merely
-    mentioning a note in prose does not make it a child. Sort ChildBranch by
-    Folgezettel number, with unnumbered children last; do not split by Context.
+    Every child's ParentBranch pointing to this parent is authoritative, apart
+    from children already displayed in BranchGroup. Merely mentioning a note in
+    prose does not make it a child. Sort by Folgezettel number.
     """
     import folgezettel as fz
 
@@ -2018,6 +2018,16 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
+    # BranchGroup contains the structural group children already. Do not
+    # duplicate those links in ChildBranch, even when a child ParentBranch
+    # points back here or an old ChildBranch entry already exists.
+    branch_lines, _unused, _kind = _take_branch_group_block(body)
+    branch_group_children = {
+        target
+        for _display, raw in _links_from(branch_lines)
+        for target in [resolve_link(raw)]
+        if target is not None
+    }
     entries: list[tuple[str, Path | None]] = []
     listed: set[Path] = set()
 
@@ -2028,7 +2038,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
             # A single declared child is written exactly once, regardless of
             # duplicate ChildBranch lines or its appearances in the body.
             for t in targets:
-                if t not in listed and t not in (stale or set()):
+                if t not in listed and t not in (stale or set()) and t not in branch_group_children:
                     entries.append((ln, t))
                     listed.add(t)
         elif ln.strip() and not _links_from([ln]):
@@ -2040,7 +2050,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
     for ln in moved or []:
         include(ln)
     for child in pb_kids or set():
-        if base is None or child in listed or child in (stale or set()):
+        if base is None or child in listed or child in (stale or set()) or child in branch_group_children:
             continue
         title = (titles or {}).get(child) or child.stem
         link = f"[{title}]({os.path.relpath(str(child), str(base.parent))})"
