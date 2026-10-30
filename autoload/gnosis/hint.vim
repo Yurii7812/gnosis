@@ -11,8 +11,14 @@ let s:type = 'gnosis_hint'
 function! gnosis#hint#on() abort
   if !exists('s:on')
     let l:d = gnosis#home#read_json(gnosis#home#path('hint.json'), {})
-    " 保存した設定 > g:gnosis_hint > 環境変数 GNOSIS_HINT（試験は 0 にして画面を変えない）> オン
-    let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    " CUI は起動時に必ずヒントを表示。以前の hint.json の OFF は起動時に引き継がない。
+    " 明示的な g:gnosis_hint=0 / GNOSIS_HINT=0 は尊重（テスト・管理者向け）。
+    " GUI は従来の保存設定を維持する。
+    if empty($GNOSIS_GUI_PORT)
+      let s:on = get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    else
+      let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    endif
   endif
   return s:on
 endfunction
@@ -205,6 +211,12 @@ function! gnosis#hint#cmdline_install() abort
   let s:cmdline_installed = 1
   augroup gnosis_cui_command_hints
     autocmd!
+    " 起動直後は通常の再描画が続くので、VimEnter だけでなく SafeState でも
+    " 初回のヒント表示を保証する（通常の表示更新でループさせない）。
+    autocmd VimEnter * call gnosis#hint#cmdline_schedule()
+    if exists('##SafeState')
+      autocmd SafeState * if empty(s:cmdline_shown) | call gnosis#hint#cmdline_schedule() | endif
+    endif
     autocmd BufEnter,WinEnter,CursorMoved,VimResized * call gnosis#hint#cmdline_schedule()
     autocmd WinLeave * call gnosis#hint#cmdline_hide()
     autocmd CmdlineEnter * call gnosis#hint#cmdline_hide()
