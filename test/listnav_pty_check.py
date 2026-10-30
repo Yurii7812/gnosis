@@ -56,6 +56,22 @@ class ListView(unittest.TestCase):
         s.send('l', .5)
         self.assertIn('[L', s.text().splitlines()[0])
 
+    def test_initial_bottom_hints_without_any_toggle(self):
+        # 起動時は過去のOFF保存があっても、操作ヒントを最初から表示する。
+        # テスト共通設定は GNOSIS_HINT=0 なので、このケースは明示的に有効化。
+        self.rc.write_text(self.rc.read_text().replace(
+            "let g:gnosis_hint=0\n", "let g:gnosis_hint=1\n"))
+        (self.home / "hint.json").write_text('{"on": 0}')
+        with self.session() as s:
+            s.send(' ', 1.0)
+            self.assertIn('Z:設定', s.text().splitlines()[-1], s.text())
+            s.send(' ', .4)
+            self.assertNotIn('Z:設定', s.text().splitlines()[-1])
+            s.send(' ', .7)
+            self.assertIn('Z:設定', s.text().splitlines()[-1], s.text())
+            s.send(NEXT, .7)
+            self.assertIn('Tab:切替', s.text().splitlines()[-1], s.text())
+
     def test_hint_line_toggle_and_mode_menu(self):
         with self.session() as s:
             self.open_list(s)
