@@ -29,6 +29,7 @@ def organizational(path: str, title: str, is_group: bool = False) -> bool:
     """Navigation indexes and date-addressed journals are not predicted topics."""
     # A topical group is meaningful (e.g. 植物・言語). Only generic navigation
     # indexes and date-addressed journals must be excluded, not every Group.
+    if PurePosixPath(path).name.lower() == "index.md":
         return True
     stem = PurePosixPath(path).stem
     if _DATE.search(stem) or _DATE.search(title):
