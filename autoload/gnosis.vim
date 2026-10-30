@@ -13539,7 +13539,21 @@ function! s:link_to_outline_apply(frag, ...) abort
     let l:base_text = substitute(l:base_text, '#[^#]*$', '', '')
   endif
   let l:htext = a:0 ? a:1 : ''
-  let l:new_text = (!empty(a:frag) && !empty(l:htext)) ? l:base_text . '#' . l:htext : l:base_text
+  " 見出しスラッグだけが渡った場合も、リンク先の実際の見出しから表示名を取得。
+  " 非対話呼び出し・文字列だけが返るピッカーでもタイトルだけに戻さない。
+  if !empty(a:frag) && empty(l:htext)
+    let l:path = s:resolve_link_for_navigation(l:ctx.base)
+    for l:heading in s:file_heading_items(l:path)
+      if l:heading.slug ==# a:frag
+        let l:htext = l:heading.text
+        break
+      endif
+    endfor
+    if empty(l:htext)
+      let l:htext = substitute(a:frag, '-', ' ', 'g')
+    endif
+  endif
+  let l:new_text = !empty(a:frag) ? l:base_text . '#' . l:htext : l:base_text
   let l:new_raw = '[' . l:new_text . '](' . l:new_target . ')'
   execute 'buffer ' . l:ctx.buf
   call setline(l:ctx.lnum, strpart(getline(l:ctx.lnum), 0, l:lk.startcol - 1)
