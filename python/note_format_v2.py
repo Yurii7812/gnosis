@@ -1996,17 +1996,20 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
                         ctx_kids: set | None = None, pb_kids: set | None = None,
                         titles: dict | None = None, timeline: bool = False, stale: set | None = None,
-                        moved: list[str] | None = None) -> list[str]:
-    """ChildBranch: に書く子。本文（BranchGroup: の中も含む）にリンクがある子は書かない（本文の一覧が子の一覧になる）。
-    子の側の ParentBranch: にこのノートがあるのに ChildBranch: にも本文にも無い子は足す（本文から消したときに戻す）。
-    並び: 上にこのノートを Context にしている子、空行、下にただの子（それぞれの中の並びは元のまま）。"""
-    def key(tg: str) -> str:
-        return tg.split("#", 1)[0].strip()
+                        moved: list[str] | None = None, numbers: dict | None = None) -> list[str]:
+    """All explicitly declared children, including links repeated in the body.
 
-    def resolved(t: str):
+    Every child's ParentBranch pointing to this parent is authoritative. Merely
+    mentioning a note in prose does not make it a child. Sort ChildBranch by
+    Folgezettel number, with unnumbered children last; do not split by Context.
+    """
+    import folgezettel as fz
+
+    def resolve_link(tg: str) -> Path | None:
         if base is None:
             return None
-        for cand in (t, unquote(t)):
+        raw = tg.split("#", 1)[0].strip()
+        for cand in (raw, unquote(raw)):
             try:
                 q = (base.parent / cand).resolve()
             except (OSError, ValueError):
@@ -2015,37 +2018,45 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
                 return q
         return None
 
-    # 時系列の木のノート（timeline: true。日記・年・月・時系列記録）は、子の一覧を本文ではなく ChildBranch: に書く
-    # （本文にあった子のリンクだけの行は moved で渡され、ここで ChildBranch: に移る）
-    shown = set() if timeline else ({resolved(key(tg)) for _d, tg in _links_from(body)} - {None})
-    kids = ctx_kids or set()
-    entries: list[tuple[str, list]] = []
+    entries: list[tuple[str, Path | None]] = []
+    listed: set[Path] = set()
+
+    def include(ln: str):
+        targets = [resolve_link(tg) for _d, tg in _links_from([ln])]
+        targets = [t for t in targets if t is not None]
+        if targets:
+            # A single declared child is written exactly once, regardless of
+            # duplicate ChildBranch lines or its appearances in the body.
+            for t in targets:
+                if t not in listed and t not in (stale or set()):
+                    entries.append((ln, t))
+                    listed.add(t)
+        elif ln.strip() and not _links_from([ln]):
+            entries.append((ln, None))
+
     for ln in cbranch:
-        if not ln.strip():
-            continue
-        tgs = [resolved(key(tg)) for _d, tg in _links_from([ln])]
-        if tgs and all(t is not None and t in shown for t in tgs):
-            continue
-        if tgs and all(t is not None and t in (stale or ()) for t in tgs):
-            continue   # 子の ParentBranch: を手で消した: 親の ChildBranch: からも外す
-        entries.append((ln, tgs))
-    listed = {t for _ln, tgs in entries for t in tgs}
+        include(ln)
+    # Timeline's body-only child rows were already moved to ChildBranch.
     for ln in moved or []:
-        tgs = [resolved(key(tg)) for _d, tg in _links_from([ln])]
-        if tgs and all(t in listed for t in tgs):
+        include(ln)
+    for child in pb_kids or set():
+        if base is None or child in listed or child in (stale or set()):
             continue
-        entries.append((ln, tgs))
-        listed |= set(tgs)
-    for c in sorted(pb_kids or set(), key=(lambda q: ((titles or {}).get(q) or q.stem, q.name)) if timeline else (lambda q: q.name)):
-        if c in shown or c in listed or base is None:
-            continue
-        title = (titles or {}).get(c) or c.stem
-        entries.append(("[" + title + "](" + os.path.relpath(str(c), str(base.parent)) + ")", [c]))
-    if timeline:
-        entries.sort(key=lambda e: re.sub(r"^\[|\]\(.*$", "", e[0]).lower())
-    top = [ln for ln, tgs in entries if tgs and all(t in kids for t in tgs)]
-    rest = [ln for ln, tgs in entries if not (tgs and all(t in kids for t in tgs))]
-    return top + ([""] if top and rest else []) + rest
+        title = (titles or {}).get(child) or child.stem
+        link = f"[{title}]({os.path.relpath(str(child), str(base.parent))})"
+        entries.append((link, child))
+        listed.add(child)
+
+    def order(item):
+        ln, target = item
+        ident = (numbers or {}).get(target, "") if target is not None else ""
+        if ident and fz.ID_RE.fullmatch(ident):
+            return (0, fz.natural_key(ident), str(target))
+        title = (titles or {}).get(target, "") if target is not None else ""
+        return (1, (title or ln).casefold(), str(target or ""))
+
+    entries.sort(key=order)
+    return [ln for ln, _target in entries]
 
 
 _YAML_TITLE_LINE = re.compile(r"^\s*title\s*:")
@@ -2108,7 +2119,8 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
         sections.append((CONTEXT_MARK, n["_leftover"]))  # 旧節にあったリンク以外の行（メモなど）は失わない
     cbranch = _split_child_branch(n.get("cbranch") or [], n.get("body") or [], path, n.get("_ctx_kids"),
                                   n.get("_pb_kids"), titles, stale=n.get("_stale_kids"),
-                                  timeline=is_timeline, moved=moved_kids)
+                                  timeline=is_timeline, moved=moved_kids,
+                                  numbers=n.get("_child_numbers"))
     if _has(cbranch):
         sections.append((CHILD_BRANCH_MARK, cbranch))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
@@ -2275,6 +2287,11 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         fm = notes[p]["fm"] or ["---", "---"]
         updated = fz.set_value("\n".join(fm), ident) if ident else fz.remove_value("\n".join(fm))
         notes[p]["fm"], _ = _split_front_matter(updated.splitlines())
+    # Numbers are recalculated before rendering, so the ChildBranch order
+    # always matches the CURRENT Folgezettel order, not the previous sync.
+    child_numbers = {p: fz.value("\n".join(n["fm"])) for p, n in notes.items()}
+    for n in notes.values():
+        n["_child_numbers"] = child_numbers
     titles = {p: n["title"] for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
@@ -2572,6 +2589,19 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             else:
                 new_grp.append(ln)
         parent_lines, group_lines = new_ctx, new_grp
+        # ParentBranch is stronger than Context: do not repeat the same target
+        # under Context, including duplicates in previously synced vaults.
+        # Keep all unrelated Context links and non-link notes intact.
+        pb_targets = {res(tg.split("#", 1)[0], dirs[p])
+                      for _d, tg in _links_from(n.get("pbranch") or [])}
+        pb_targets.discard(None)
+        if pb_targets:
+            parent_lines = [
+                ln for ln in parent_lines
+                if not (_SIMPLE_LINK_LINE_RE.match(ln)
+                        and res((_link_target(ln) or "").split("#", 1)[0], dirs[p]) in pb_targets)
+            ]
+            parent_lines = _tidy_blanks(parent_lines)
         # 同じ相手のリンクが Group に重なったら 1 本にする
         seen_g: set[Path] = set()
         dedup: list[str] = []

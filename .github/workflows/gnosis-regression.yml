@@ -44,6 +44,7 @@ jobs:
       - name: Test Python note relationship synchronization
         run: |
           python3 python/test_note_format_v2.py
+          python3 python/test_branch_context_policy.py
           python3 python/test_context_ops.py
       - name: Test predicted content ranking and Folgezettel groups
         env:

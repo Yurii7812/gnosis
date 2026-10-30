@@ -11711,10 +11711,8 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if l:ch ==# 'c'
-    " c: 新ノート（B）の Context: に今のノート（A）を入れる。A のどこに B へのリンクを置くかを、作る前に聞く。
-    if !gnosis#branch#can_parent_here()
-      return
-    endif
+    " c は Context のみ。新ノート B の ParentBranch は作らない。
+    " A の本文へのリンク位置は作成前に選択する。
     call s:c_ask_place(function('s:v2_new_run_c', [a:attr]))
     return
   endif
@@ -11899,7 +11897,7 @@ endfunction
 "   通常のノート: Enter / t / h は今のノートにリンクを置き、b / p は Branch だけ、o は孤立、c は新ノートの Context に
 "   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
 "   r は Related だけを相互に追加し、本文リンクや自動 Branch は付けない。
-"   h / t / c / Enter は、元ノートを親・新ノートを子とする Branch を自動で記録する（index.md・グループからは記録しない）。
+"   h / t / i / Enter は Branch を自動記録。c は Context のみで Branch を作らない（index.md・グループからは記録しない）。
 "   グループの上: Enter は登録＋BranchGroup の起点が親、g は登録だけ（group_only）、o は孤立。
 "   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
 function! s:v2_new_run(attr, ch, head_lnum, ...) abort
@@ -11930,7 +11928,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
 
   let l:auto_branch = empty(a:attr) && !l:grp_src && fnamemodify(l:cur, ':t') !=# 'index.md'
-        \ && (index(['h', 'i', 't', 'c'], l:ch) >= 0 || l:is_enter)
+        \ && (index(['h', 'i', 't'], l:ch) >= 0 || l:is_enter)
   let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
   if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
     return
@@ -11962,7 +11960,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let s:diary_skip_from = ''
   endtry
 
-  " b・p は明示的な Branch。zn の h/t/c/Enter も自動 Branch（同じ検証・更新処理）。
+  " b・p は明示的な Branch。zn の h/i/t/Enter は自動 Branch。c は Context だけ。
   " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
   let l:branch_ok = 0
   if l:ch ==# 'b' || l:ch ==# 'p' || l:auto_branch || l:zk_branch_group || !empty(l:origin)

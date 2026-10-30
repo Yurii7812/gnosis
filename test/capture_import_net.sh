@@ -54,7 +54,7 @@ chk "Context（文脈）" 'grep -A1 "^Context:" "$V/261018101500.md" | grep -q "
 chk "画像は capture-images/ に置く" '[ -f "$V/capture-images/a.jpg" ] && grep -q "capture-images/a.jpg" "$V/261018091500.md"'
 chk "本文の中のメモへのリンクは、取り込んだノートへのリンクになる" 'grep -q "^前の \[APKに画像添付\](261018101000.md) を見る$" "$V/261018130000.md"'
 chk "取り込んでいないメモへのリンクは表示名だけ" 'grep -q "^消えたメモ は文字だけ$" "$V/261018130000.md"'
-chk "親が無いときは最初の文脈が親（Branch）になる" 'grep -A1 "^ParentBranch:" "$V/261018130000.md" | grep -q "261018140000.md" && grep -A1 "^Context:" "$V/261018130000.md" | grep -q "261018140000.md"'
+chk "スマホ取り込みで ParentBranch に採用された相手は Context に重複記載しない" 'grep -A1 "^ParentBranch:" "$V/261018130000.md" | grep -q "261018140000.md" && ! (grep -A3 "^Context:" "$V/261018130000.md" | grep -q "261018140000.md")'
 chk "番号（Folgezettel ID）の無いメモは未所属（\\N）に出る（スマホでつないだだけでは番号は付かない）" 'PYTHONDONTWRITEBYTECODE=1 python3 "$REPO/python/orphans.py" "$V" | grep -q "261018101000"'
 work=$(grep -l '^# 仕事$' "$V"/*.md | head -1)
 book=$(grep -l '^# 読書$' "$V"/*.md | head -1)

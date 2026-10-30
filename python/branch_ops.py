@@ -93,7 +93,7 @@ class Vault:
                     if rp is not None and rp not in out:
                         out.append(rp)
                 store[p] = out
-        # 本文（BranchGroup: の中も含む）にリンクがあるノート。本文にある子は ChildBranch: に書かない
+        # 本文リンクはノート関係の表示用。ChildBranch の省略理由にはしない。
         self.body_links: dict[Path, set[Path]] = {}
         for p, n in self.parsed.items():
             body = n["body"]
@@ -144,7 +144,7 @@ def check(root) -> dict:
         if len(ps) > 1:
             issues["multi_parent"].append({"note": rel(p), "parents": [rel(q) for q in ps]})
         for q in v.declared_parents.get(p, []):
-            if p not in v.declared_children.get(q, []) and p not in v.body_links.get(q, set()):
+            if p not in v.declared_children.get(q, []):
                 issues["one_sided"].append({"parent": rel(q), "child": rel(p), "missing": "ChildBranch"})
         for c in v.declared_children.get(p, []):
             if p not in v.declared_parents.get(c, []):
@@ -362,9 +362,9 @@ def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) 
             bad = _check_pair(v, parent, child)
             if bad is not None:
                 return bad
-        # 親の本文にリンクがある子は、親の ChildBranch: に書かない（本文の一覧が子の一覧）
-        todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])
-                   and c not in v.body_links.get(parent, set())]
+        # ChildBranch always lists EVERY explicit child, even if it already
+        # appears in the parent's prose or BranchGroup body.
+        todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])]
         todo_pb = [c for c in children if parent not in v.declared_parents.get(c, [])]
         todo_id = [c for c in children if not fz.value(v.texts[c])
                    and fz.ID_RE.fullmatch(fz.value(v.texts[parent]))]

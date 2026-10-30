@@ -196,7 +196,7 @@ class TestSyncNewForm(Base):
         self.assertIn("Context:\n[A](a.md)\n\n本文。", out)
         self.assertIn("Group:\n[G](g.md)", out)
 
-    def test_parent_branch_and_context_to_same_note_coexist(self) -> None:
+    def test_parent_branch_supersedes_duplicate_context(self) -> None:
         self.w("a.md", fm("A") + "\n# A\n\n本文A。\n")
         self.w("b.md", fm("B") + "\n# B\n\nContext:\n[A](a.md)\n\n本文B。\n")
         res = bo.add_branches(self.root, self.root / "a.md", [self.root / "b.md"])
@@ -204,9 +204,9 @@ class TestSyncNewForm(Base):
         self.sync()
         self.sync()
         b = self.r("b.md")
-        self.assertIn("Context:\n[A](a.md)", b)
+        self.assertNotIn("Context:\n[A](a.md)", b)
         self.assertIn("ParentBranch:\n[A](a.md)", b)
-        self.assertEqual(b.count("[A](a.md)"), 2)
+        self.assertEqual(b.count("[A](a.md)"), 1)
         self.assertTrue(bo.check(self.root)["ok"])
 
     def test_parent_branch_still_at_most_one_after_sync(self) -> None:

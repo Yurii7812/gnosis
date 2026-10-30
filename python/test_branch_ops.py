@@ -453,7 +453,7 @@ class TestTimelineTree(unittest.TestCase):
         (r / "m.md").write_text("---\ntime: x\n---\n\n# 親\n\n[子](d1.md)\n", encoding="utf-8")
         (r / "d1.md").write_text("---\ntime: x\n---\n\n# 子\n\nParentBranch:\n[親](m.md)\n\n本文\n", encoding="utf-8")
         nf.simple_sync(r)
-        self.assertNotIn("ChildBranch:", (r / "m.md").read_text(encoding="utf-8"))
+        self.assertIn("ChildBranch:\n[子](d1.md)", (r / "m.md").read_text(encoding="utf-8"))
 
 
 class TestParentBranchDeletion(unittest.TestCase):
