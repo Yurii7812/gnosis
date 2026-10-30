@@ -24,6 +24,7 @@ Uninstallable=no
 CreateUninstallRegKey=no
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
