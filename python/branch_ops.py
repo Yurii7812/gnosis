@@ -93,7 +93,16 @@ class Vault:
                     if rp is not None and rp not in out:
                         out.append(rp)
                 store[p] = out
-        # 本文リンクはノート関係の表示用。ChildBranch の省略理由にはしない。
+        # BranchGroup: に明示されたグループの子は ChildBranch へ重複記載しない。
+        # ただし親子の検証上は、BranchGroup も子の明示的記載として扱う。
+        self.branch_group_children: dict[Path, set[Path]] = {}
+        for p, n in self.parsed.items():
+            branch_links, _rest, _found = nf._take_branch_group_block(n["body"])
+            self.branch_group_children[p] = {
+                rp for _d, tg in nf._links_from(branch_links)
+                for rp in [_resolve(tg, p.parent, known)] if rp is not None
+            }
+        # 普通の本文リンクは ChildBranch の省略理由にはしない。
         self.body_links: dict[Path, set[Path]] = {}
         for p, n in self.parsed.items():
             body = n["body"]
@@ -144,7 +153,8 @@ def check(root) -> dict:
         if len(ps) > 1:
             issues["multi_parent"].append({"note": rel(p), "parents": [rel(q) for q in ps]})
         for q in v.declared_parents.get(p, []):
-            if p not in v.declared_children.get(q, []):
+            if (p not in v.declared_children.get(q, [])
+                    and p not in v.branch_group_children.get(q, set())):
                 issues["one_sided"].append({"parent": rel(q), "child": rel(p), "missing": "ChildBranch"})
         for c in v.declared_children.get(p, []):
             if p not in v.declared_parents.get(c, []):
@@ -362,9 +372,11 @@ def _add_branches_locked(root, parent_file, child_files, dry_run: bool = False) 
             bad = _check_pair(v, parent, child)
             if bad is not None:
                 return bad
-        # ChildBranch always lists EVERY explicit child, even if it already
-        # appears in the parent's prose or BranchGroup body.
-        todo_cb = [c for c in children if c not in v.declared_children.get(parent, [])]
+        # Ordinary children are listed even when in prose. BranchGroup links
+        # are already visible and must not be duplicated into ChildBranch.
+        group_children = v.branch_group_children.get(parent, set())
+        todo_cb = [c for c in children if c not in group_children
+                   and c not in v.declared_children.get(parent, [])]
         todo_pb = [c for c in children if parent not in v.declared_parents.get(c, [])]
         todo_id = [c for c in children if not fz.value(v.texts[c])
                    and fz.ID_RE.fullmatch(fz.value(v.texts[parent]))]
