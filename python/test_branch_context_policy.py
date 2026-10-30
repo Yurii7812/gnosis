@@ -57,6 +57,42 @@ class BranchContextRules(unittest.TestCase):
         self.sync()
         self.assertEqual(snap, (self.read("a.md"), self.read("b.md")))
 
+    def test_sync_restores_zo_outline_display_in_context(self):
+        self.write("261031012755.md", note("自分のホームページを作った",
+            body="## 相談とか軽作業とかはhaiku\n本文。"))
+        self.write("ref.md", note("参照",
+            top="Context:\n[自分のホームページを作った](261031012755.md#相談とか軽作業とかはhaiku)"))
+        self.sync()
+        expected = ("[自分のホームページを作った#相談とか軽作業とかはhaiku]"
+                    "(261031012755.md#相談とか軽作業とかはhaiku)")
+        self.assertIn(expected, self.read("ref.md"))
+        snap = self.read("ref.md")
+        self.sync()
+        self.assertEqual(self.read("ref.md"), snap)
+
+    def test_sync_restores_zo_heading_in_prose_but_keeps_custom_alias(self):
+        self.write("web.md", note("自分のホームページを作った",
+            body="## 相談とか軽作業とかはhaiku\n本文。"))
+        self.write("ref.md", note("参照",
+            body="[自分のホームページを作った](web.md#相談とか軽作業とかはhaiku)\n"
+                 "前に[見て](web.md#相談とか軽作業とかはhaiku)ね"))
+        self.sync()
+        text = self.read("ref.md")
+        self.assertIn("[自分のホームページを作った#相談とか軽作業とかはhaiku]"
+                      "(web.md#相談とか軽作業とかはhaiku)", text)
+        self.assertIn("前に[見て](web.md#相談とか軽作業とかはhaiku)ね", text)
+        self.assertEqual(nf.simple_sync(self.root), 0)
+
+    def test_zo_fragment_with_english_slug_and_duplicate_heading(self):
+        self.write("web.md", note("Website", body="## Writing a blog\nNotes\n## Memo\nA\n## Memo\nB"))
+        self.write("ref.md", note("参照", top="Context:\n"
+            "[Website](web.md#writing-a-blog)\n"
+            "[Website](web.md#memo-1)"))
+        self.sync()
+        text = self.read("ref.md")
+        self.assertIn("[Website#Writing a blog](web.md#writing-a-blog)", text)
+        self.assertIn("[Website#Memo](web.md#memo-1)", text)
+
     def test_legacy_context_duplicate_is_removed(self):
         self.write("a.md", note("親"))
         self.write("z.md", note("別"))

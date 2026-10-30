@@ -1765,7 +1765,8 @@ def _save_branch_pairs(root: Path, pairs: set[str]) -> None:
 
 
 def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
-                            prev_titles: dict | None = None) -> list[str]:
+                            prev_titles: dict | None = None,
+                            heading_labels: dict | None = None) -> list[str]:
     """本文リンクの表示名を、リンク先の現在のタイトルに追従させる。
 
     追従させる（＝自動生成とみなす）のは次のいずれか。手書き名は残す。
@@ -1787,8 +1788,18 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
         if rp is None or rp not in titles:
             return m.group(0)
         now = titles[rp]
-        if disp == now or disp == prev_titles.get(rp) or disp == Path(base).stem:
-            return f"[{now}]({tg})"
+        stem = Path(base).stem
+        old = prev_titles.get(rp)
+        auto_base = disp.split("#", 1)[0]
+        if auto_base in (now, old, stem):
+            label = now
+            if "#" in tg:
+                frag = unquote(tg.split("#", 1)[1])
+                actual_heading = (heading_labels or {}).get(rp, {}).get(frag)
+                previous_heading = disp.partition("#")[2]
+                if actual_heading or previous_heading:
+                    label += "#" + (actual_heading or previous_heading)
+            return f"[{label}]({tg})"
         return m.group(0)
     out: list[str] = []
     for ln, fz in zip(body, _fenced(body)):
@@ -1796,22 +1807,66 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
     return out
 
 
-def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict) -> list[str]:
-    """Parent は書いてあるそのまま。リンク行は表示名だけ現在のタイトルに更新し、
-    行の追加・削除（＝ユーザーの編集）はしない。"""
+def _heading_labels(body: list[str]) -> dict[str, str]:
+    """Resolve zo/GitHub fragment slugs to their visible Markdown headings."""
+    seen: dict[str, int] = {}
+    out: dict[str, str] = {}
+    for line, fenced in zip(body, _fenced(body)):
+        if fenced:
+            continue
+        match = re.match(r"^\s*#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if not match:
+            continue
+        heading = match.group(1).strip()
+        # GitHub-compatible basic slug rules, matching zo's heading picker:
+        # lowercase, keep Unicode letters and numbers, remove punctuation,
+        # replace whitespace with hyphens, and suffix duplicate headings.
+        plain = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", heading).lower()
+        slug = re.sub(r"[^\w\s-]", "", plain)
+        slug = re.sub(r"\s", "-", slug)
+        next_num = seen.get(slug, 0)
+        unique = slug if next_num == 0 else f"{slug}-{next_num}"
+        while unique in out:
+            next_num += 1
+            unique = f"{slug}-{next_num}"
+        seen[slug] = next_num + 1
+        out[unique] = heading
+    return out
+
+
+def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict,
+                     heading_labels: dict | None = None) -> list[str]:
+    """Keep typed links but follow current title and preserve zo outline labels.
+
+    In a Context/ParentBranch/Group link, title normalization used to erase the
+    visible #heading while leaving #slug in the URL. Restore the actual heading,
+    without changing the target, and handle the same pre-existing broken links.
+    """
     out: list[str] = []
     base_dir = path.parent
     for ln in existing:
         m = _SIMPLE_INLINE_LINK.search(ln)
         if m:
-            tg = m.group(2).split("#", 1)[0].strip()
-            rp = resolver(tg, base_dir)
+            target = m.group(2)
+            tg, sep, frag = target.partition("#")
+            rp = resolver(tg.strip(), base_dir)
             if rp is not None and rp in titles:
-                out.append(f"[{titles[rp]}]({m.group(2)})")  # 表示名だけ更新
+                display = titles[rp]
+                if sep and frag:
+                    headings = (heading_labels or {}).get(rp, {})
+                    label = headings.get(unquote(frag), "")
+                    if not label:
+                        # Don't invent a display heading for an old manually
+                        # written fragment when the heading doesn't exist.
+                        # Preserve any human-readable heading already shown.
+                        label = m.group(1).partition("#")[2]
+                    if label:
+                        display += "#" + label
+                out.append(f"[{display}]({target})")
             else:
                 out.append(ln)
         else:
-            out.append(ln)  # 空行・文字はそのまま保持
+            out.append(ln)
     return out
 
 
@@ -2303,6 +2358,8 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     for n in notes.values():
         n["_child_numbers"] = child_numbers
     titles = {p: n["title"] for p, n in notes.items()}
+    # One lookup per target note for zo fragment labels during this sync pass.
+    heading_labels = {p: _heading_labels(n["body"]) for p, n in notes.items()}
 
     # 変更前のタイトル（呼び出し側が渡したものだけ）。本文リンクの表示名を
     # 「追従／手書きを残す」と判定するのに使う（§_update_body_link_names）。
@@ -2349,7 +2406,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     body_t: dict[Path, list[Path]] = {}
     for p, n in notes.items():
         ts: list[Path] = []
-        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
+        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles, heading_labels)
         names: dict[Path, list[str]] = {}
         for display, tg in _links_from(n["body"]):
             rp = res(tg, dirs[p])
@@ -2389,12 +2446,12 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 書くので通常はそのまま）。片側で消されたら次回 sync で反対側からも消える。
     # 表示名はタイトルに追従し、消えたファイルへのリンクは掃除する。
     for p, n in notes.items():
-        n["related"] = _preserve_parent(n["related"], p, res, titles)
+        n["related"] = _preserve_parent(n["related"], p, res, titles, heading_labels)
         n["related"] = _prune_dangling(n["related"], p, res)
         # ParentBranch / ChildBranch もユーザーが `b` で明示した関係。同期は追加も削除もしない
         # （表示名の追従と、消えたファイルへのリンクの掃除だけ）。Context へ変換もしない。
         for key in ("pbranch", "cbranch"):
-            n[key] = _preserve_parent(n[key], p, res, titles)
+            n[key] = _preserve_parent(n[key], p, res, titles, heading_labels)
             n[key] = _prune_dangling(n[key], p, res)
     related_t: dict[Path, set[Path]] = {}
     for p, n in notes.items():
@@ -2462,7 +2519,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     for p, n in notes.items():
         # 本文リンクの表示名をリンク先タイトルに追従させ、消えたファイルへの
         # リンクは掃除する（文章中に埋もれたリンクは表示名の文字だけ残す）。
-        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles)
+        n["body"] = _update_body_link_names(n["body"], p, res, titles, prev_titles, heading_labels)
         n["body"] = _prune_dangling(n["body"], p, res)
         # Context（旧 Parent）と Group はユーザー管理（追加・削除はしない）。ただし消えた
         # ファイルへのリンクは残骸なので掃除する（行全体がリンクの行のみ）。表示名は追従。
@@ -2480,12 +2537,12 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         else:
             parent_src = list(n["parent"])
             n["_leftover"] = []
-        parent_lines = _preserve_parent(parent_src, p, res, titles)
+        parent_lines = _preserve_parent(parent_src, p, res, titles, heading_labels)
         parent_lines = _prune_dangling(parent_lines, p, res)
         branch_links, _, _ = _take_branch_group_block(n["body"])
         branch_targets = {rp for _display, tg in _links_from(branch_links)
                           for rp in [res(tg, dirs[p])] if rp is not None}
-        group_lines = _preserve_parent(n["group"], p, res, titles)
+        group_lines = _preserve_parent(n["group"], p, res, titles, heading_labels)
         group_lines = _prune_dangling(group_lines, p, res)
         parent_set: set[Path] = set()
         for _d, tg in _links_from(parent_src + n["group"]):
