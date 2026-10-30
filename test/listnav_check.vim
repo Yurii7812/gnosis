@@ -157,12 +157,15 @@ let s:rheads = filter(split(s:rtxt, "\n"), 'v:val =~# "^## " && v:val !=# "## �
 call s:ok('\e の範囲選び: v で始点・j で広げて Enter ならその 2 件だけ', len(s:rheads) == 2, s:rheads)
 call gnosis#mview#switch_view('list')
 call win_gotoid(gnosis#mview#state().win)
+" r/w の内容類似度によって一覧の構成が変わるため、表示中の実際の順を基準に検証する。
+let s:expanded_paths = gnosis#mview#shown_paths()
+let s:expected_heads = map(copy(s:expanded_paths), 'get(get(gnosis#mview#state().data.nodes, v:val, {}), "t", "")')
 let g:gnosis_ui_keys = ["\<CR>"]   " 始点が無ければ全部
 call gnosis#v2_expand()
 let s:outf = expand('%:p')
 call s:ok('\e の出力は .trash の md', s:outf =~# '/\.trash/T_.*\.md$', s:outf)
 let s:txt = join(getline(1, '$'), "\n")
 let s:heads = map(filter(split(s:txt, "\n"), 'v:val =~# "^## " && v:val !=# "## 目次"'), 'strpart(v:val, 3)')
-call s:ok('\e の出力は一覧の順', s:heads ==# ['Alpha garden', 'Delta garden', 'Context garden', 'Related garden', 'Garden group'], s:heads)
+call s:ok('\e の出力は一覧の順', s:heads ==# s:expected_heads, string([s:heads, s:expected_heads]))
 call gnosis#mview#close()
 qa!
