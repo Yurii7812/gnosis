@@ -208,7 +208,8 @@ function! gnosis#listnav#render() abort
   let l:oldrow = get(s:L.rows, line('.') - 3, {})
   let s:L.rows = s:rows()
   let l:title = gnosis#i18n#tr({'search': '検索', 'similar': '類似', 'links': 'リンク'}[s:L.mode])
-  let s:L.title = gnosis#hint#tabs(s:L.mode, winwidth(0))
+  let s:L.title = empty($GNOSIS_GUI_PORT)
+        \ ? gnosis#hint#tabs(s:L.mode, winwidth(0)) : 'FOLGEZETTEL / ' . l:title
   let l:pick = gnosis#mview#pick_label()
   if !empty(l:pick) | let s:L.title .= '  ' . l:pick | endif
   let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr({'all': '全部', 'index': '索引とグループ', 'no-index': '索引以外'}[s:L.scope])
