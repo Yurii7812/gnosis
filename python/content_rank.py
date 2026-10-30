@@ -77,6 +77,14 @@ def profile(raw: str, title: str, path: str = "", is_group: bool = False) -> dic
             lines = []  # malformed front matter must not become relevance evidence
     counts = Counter(_tokens(title))
     counts.update(_tokens(title))
+    # A one-kanji concept such as 愛 or 神 used to have zero tokens.
+    # Allow it to connect to short topic titles such as 愛情 / 神話; avoid
+    # indexing every single kanji in long body text (too many false matches).
+    short_title = title.strip()
+    if 1 <= len(short_title) <= 3:
+        for char in short_title:
+            if "\u3400" <= char <= "\u9fff":
+                counts["漢:" + char] += 2 if len(short_title) == 1 else 1
     for line in lines:
         s = line.strip()
         if not s or _SECTIONS.fullmatch(s) or _ONLY_LINKS.fullmatch(s):
