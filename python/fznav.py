@@ -164,7 +164,7 @@ def upper(root: str | Path, rel: str, numw: int = NUMW, limit: int = 30) -> dict
     """rel の上位表示。
     chain   … 番号の祖先（自分を含む）それぞれにある Group（実在するものだけ。無い番号は飛ばす。rel 自身は含めない）
     related … 本文の内容が似ているノートが入っているグループを、類似度順に（chain に出したものは除く）。
-              Folgezettel番号・リンク・所属そのものは関連度に加点しない。
+              番号は加点せず、直接の Group 所属は弱い補助証拠として使う。
               Index・日記など機械的な管理グループは候補から外す。"""
     db = mc.connect(root)
     if db is None:
@@ -202,6 +202,12 @@ def upper(root: str | Path, rel: str, numw: int = NUMW, limit: int = 30) -> dict
         for fid, groups in membership.items():
             for gid in groups:
                 evidence.setdefault(gid, []).append(similarities[fid])
+        # The center's explicitly assigned topical Group is a meaningful
+        # relationship even when its note is just a short heading. Do not
+        # infer groups from Folgezettel numbers or directory proximity.
+        mine = mc._groups_of(db, [cid]).get(cid, set())
+        for gid in mine:
+            evidence.setdefault(gid, []).append(0.22)
         cand = []
         for gid, weights in evidence.items():
             gp = files.get(gid)
@@ -224,7 +230,7 @@ def upper(root: str | Path, rel: str, numw: int = NUMW, limit: int = 30) -> dict
                 "id": fzid if valid(fzid) else "",
                 "num": abbreviate(fzid, numw) if valid(fzid) else "",
                 "path": path, "title": title, "score": round(-neg, 3),
-                "near": count, "size": size, "own": 0})
+                "near": count, "size": size, "own": 1 if gid in mine else 0})
         return out
     finally:
         db.close()

@@ -49,6 +49,7 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
         run: |
+          python3 python/test_content_rank.py
           python3 python/test_mandala_view.py
           python3 python/test_mandala_cache.py
           python3 python/test_fznav.py

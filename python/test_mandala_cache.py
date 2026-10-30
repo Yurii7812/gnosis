@@ -120,6 +120,12 @@ class T(unittest.TestCase):
         mc.refresh(r, only=["matched.md"])
         self.assertNotIn("matched.md", [d["id"] for d in mc.related(r, "herb.md")])
 
+    def test_short_title_cached_related(self):
+        (self.r / "short.md").write_text(note("言語"))
+        (self.r / "grammar.md").write_text(note("言語文法"))
+        mc.refresh(self.r, full=True)
+        self.assertIn("grammar.md", [x["id"] for x in mc.related(self.r, "short.md")])
+
     def test_skip_recent_full_scan(self):
         mc.refresh(self.r)
         mc.FULL_FLOOR = 3600; self.assertTrue(mc.refresh(self.r).get("skipped"))

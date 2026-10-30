@@ -107,6 +107,8 @@ class T(unittest.TestCase):
         u = fz.upper(self.r, "n1a1a.md")
         self.assertEqual([c["id"] for c in u["chain"]], ["1", "1a"])
         self.assertEqual([c["path"] for c in u["chain"]], ["g1.md", "g1a.md"])
+        # 本文が一行も無いノートでも、明示的な Group 所属は関連グループとして出る。
+        self.assertIn("gl.md", [d["path"] for d in u["related"]])
         # 意味のある本文を追加。番号の離れたノートでも内容が近ければ
         # それを含むグループが関連グループに現れる。
         with (self.r / "n1a1a.md").open("a") as w:

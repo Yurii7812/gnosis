@@ -751,14 +751,13 @@ function! s:order(list, c) abort
   let l:basis = (a:c ==# s:S.center || get(s:S, 'dbasis', 'center') ==# 'self') ? a:c : s:S.center
   let l:basis = s:h_base(l:basis)
   let l:m = s:rank_map(l:basis)
-  " w では内容に関連度があるノートだけを表示する。
+  " w は非破壊の並び替え。内容の点数が無いノートを消さず、
+  " 関連度がある項目を上に、未採点の項目は元の順序で後ろに残す。
   let l:dec = []
   let l:i = 0
   for l:e in a:list
     let l:pts = get(l:m, l:e[0], 0.0)
-    if l:pts > 0.0
-      call add(l:dec, [l:pts, l:i, l:e])
-    endif
+    call add(l:dec, [l:pts, l:i, l:e])
     let l:i += 1
   endfor
   call sort(l:dec, {x, y -> x[0] == y[0] ? x[1] - y[1] : (y[0] > x[0] ? 1 : -1)})
@@ -3970,7 +3969,6 @@ function! gnosis#mview#list_data(anchor, depth, rank, similar) abort
   endfor
   if a:rank
     let l:scores = s:rank_map(a:anchor)
-    call filter(l:out, 'get(l:scores, v:val.path, 0.0) > 0.0')
     for l:i in range(len(l:out)) | let l:out[l:i].order = l:i | endfor
     call sort(l:out, {x, y -> get(l:scores, x.path, 0.0) == get(l:scores, y.path, 0.0)
           \ ? x.order - y.order : (get(l:scores, y.path, 0.0) > get(l:scores, x.path, 0.0) ? 1 : -1)})
