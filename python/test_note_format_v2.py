@@ -1354,17 +1354,17 @@ def test_branch_group_and_group_auto_membership() -> None:
               "BranchGroup → Group → Context の順番")
         check("本文を残す。" in a and "Context:\n[Root](root.md)" in a,
               "文脈と本文は失わない")
-        check("ChildBranch:" not in a and "ParentBranch:\n[A](a.md)" in g2,
-              "BranchGroup にある子は ChildBranch: に書かない（子の ParentBranch: は残る）")
+        check("ChildBranch:\n[G2](g2.md)" in a and "ParentBranch:\n[A](a.md)" in g2,
+              "BranchGroup にある子も ChildBranch: に全件記載する（子の ParentBranch: は残る）")
         check(v2.simple_sync(root) == 0, "再同期は冪等")
         put("g3.md", "G3", "[A](a.md)", True)
         v2.simple_sync(root)
         a = (root / "a.md").read_text(encoding="utf-8")
         check("[G3:A](g3.md)" in a and a.count("[G1:A](g1.md)") == 1,
               "新しい所属は Group に追加し重複なし")
-        check(a.count("[G2](g2.md)") == 1 and
+        check(a.count("[G2](g2.md)") == 2 and
               "\nGroup:\n[G2](g2.md)" not in a,
-              "BranchGroup の G2 は BranchGroup: だけに書き Group を作らない")
+              "BranchGroup の G2 は BranchGroup と ChildBranch に書き Group は作らない")
 
 
 def test_branch_group_canonical_and_fenced_literals() -> None:
