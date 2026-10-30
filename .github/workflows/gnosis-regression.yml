@@ -45,6 +45,13 @@ jobs:
         run: |
           python3 python/test_note_format_v2.py
           python3 python/test_context_ops.py
+      - name: Test predicted content ranking and Folgezettel groups
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          python3 python/test_mandala_view.py
+          python3 python/test_mandala_cache.py
+          python3 python/test_fznav.py
       - name: Test zk n/g and guide relationships
         run: |
           python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
