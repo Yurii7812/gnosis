@@ -58,8 +58,9 @@ class ListView(unittest.TestCase):
 
     def test_initial_bottom_hints_without_any_toggle(self):
         # 起動時は過去のOFF保存があっても、操作ヒントを最初から表示する。
+        # テスト共通設定は GNOSIS_HINT=0 なので、このケースは明示的に有効化。
         self.rc.write_text(self.rc.read_text().replace(
-            "let g:gnosis_hint=0\n", ""))
+            "let g:gnosis_hint=0\n", "let g:gnosis_hint=1\n"))
         (self.home / "hint.json").write_text('{"on": 0}')
         with self.session() as s:
             s.send(' ', 1.0)
