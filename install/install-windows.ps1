@@ -518,6 +518,7 @@ config.font = wezterm.font_with_fallback({
   'Yu Gothic',
   'Meiryo',
   'MS Gothic',
+  'Segoe UI Symbol',
 })
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }
 config.enable_tab_bar = false
