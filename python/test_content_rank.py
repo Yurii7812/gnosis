@@ -19,6 +19,16 @@ class ContentRecall(unittest.TestCase):
         self.assertIn("grammar", got)
         self.assertNotIn("unrelated", got)
 
+    def test_single_kanji_concepts_connect_to_topic_titles(self):
+        docs = {
+            "love": rank.profile("# 愛\n", "愛"),
+            "feeling": rank.profile("# 愛情\n", "愛情"),
+            "other": rank.profile("# 地震\n", "地震"),
+        }
+        got = [name for name, _ in rank.similarities(docs, "love")]
+        self.assertIn("feeling", got)
+        self.assertNotIn("other", got)
+
     def test_short_english_acronym_and_russian_are_indexed(self):
         ai = rank.profile("# AI\n", "AI")
         aiform = rank.profile("# AI research\n", "AI research")
