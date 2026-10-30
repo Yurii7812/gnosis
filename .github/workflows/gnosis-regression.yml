@@ -46,6 +46,11 @@ jobs:
           python3 python/test_note_format_v2.py
           python3 python/test_branch_context_policy.py
           python3 python/test_context_ops.py
+      - name: Test zo visible outline anchors and heading rename
+        env:
+          TMPDIR: ${{ runner.temp }}
+          GNOSIS_LANG: ja
+        run: sh test/heading_links_net.sh
       - name: Test predicted content ranking and Folgezettel groups
         env:
           TMPDIR: ${{ runner.temp }}
