@@ -97,6 +97,37 @@ class BranchContextRules(unittest.TestCase):
         self.assertNotIn("Context:\n[親](../a.md)", self.read("sub/b.md"))
         self.assertTrue(bo.check(self.root)["ok"])
 
+    def test_branchgroup_child_not_repeated_and_old_duplicate_removed(self):
+        self.write("parent.md", note("親", fm='folgezettel: "1"\n',
+            body="BranchGroup:\n[グループ](g.md)\n\n本文に [通常の子](child.md) の記述。",
+            bottom="ChildBranch:\n[グループ](g.md)\n[通常の子](child.md)"))
+        self.write("g.md", note("グループ", fm="attribute: group\n",
+            top="ParentBranch:\n[親](parent.md)"))
+        self.write("child.md", note("通常の子", top="ParentBranch:\n[親](parent.md)"))
+        self.sync()
+        parent = self.read("parent.md")
+        self.assertIn("BranchGroup:\n[グループ](g.md)", parent)
+        self.assertIn("ChildBranch:\n[通常の子](child.md)", parent)
+        child_lines = self.parse("parent.md")["cbranch"]
+        self.assertNotIn("g.md", [tg for _d, tg in nf._links_from(child_lines)])
+        self.assertEqual([tg for _d, tg in nf._links_from(child_lines)], ["child.md"])
+        self.assertIn("ParentBranch:\n[親](parent.md)", self.read("g.md"))
+        self.assertTrue(bo.check(self.root)["ok"])
+        snap = {name: self.read(name) for name in ("parent.md", "g.md", "child.md")}
+        self.sync()
+        self.assertEqual(snap, {name: self.read(name) for name in snap})
+
+    def test_branch_ops_avoid_duplicating_existing_branchgroup(self):
+        self.write("parent.md", note("親", body="BranchGroup:\n[グループ](g.md)"))
+        self.write("g.md", note("グループ", fm="attribute: group\n"))
+        result = bo.add_branches(self.root, self.root / "parent.md", [self.root / "g.md"])
+        self.assertTrue(result.get("ok"), result)
+        self.assertIn("ParentBranch:\n[親](parent.md)", self.read("g.md"))
+        self.assertNotIn("ChildBranch:", self.read("parent.md"))
+        self.sync()
+        self.assertNotIn("ChildBranch:", self.read("parent.md"))
+        self.assertTrue(bo.check(self.root)["ok"])
+
     def test_body_link_alone_does_not_create_branch(self):
         self.write("a.md", note("文章", body="[単なる引用](b.md)"))
         self.write("b.md", note("引用"))
