@@ -432,6 +432,13 @@ function Get-LauncherPs1([string]$name) {
   $t = @'
 # Gnosis launcher (generated). Opens ordinary Vim Gnosis in WezTerm via WSL: gnosis --tui
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 defaults to a legacy code page for native commands.
+# Decode UTF-8 JSON / Japanese vault paths returned by WSL correctly.
+try {
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  [Console]::OutputEncoding = $utf8
+  $OutputEncoding = $utf8
+} catch {}
 $distro = '__DISTRO__'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 function Show-Problem([string]$m) {
@@ -474,7 +481,9 @@ try {
   # Gnosis-only WezTerm config: the user's own wezterm.lua is neither read nor changed.
   $conf = Join-Path $dir 'wezterm-gnosis.lua'
   $q = [char]34
-  $args1 = '--config-file ' + $q + $conf + $q + ' --config font_size=' + $size + ' start -- wsl.exe -d ' + $distro + ' --cd ~ --exec bash -c ' + $q + 'exec $HOME/.local/bin/gnosis --tui' + $q
+  # WSL sessions can inherit C/POSIX or a mismatched Windows locale. Force
+  # UTF-8 for the Vim process without changing the user's Ubuntu configuration.
+  $args1 = '--config-file ' + $q + $conf + $q + ' --config font_size=' + $size + ' start -- wsl.exe -d ' + $distro + ' --cd ~ --exec /usr/bin/env LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c ' + $q + 'exec $HOME/.local/bin/gnosis --tui' + $q
   Start-Process -FilePath $exe -ArgumentList $args1
 } catch {
   Show-Problem ('Gnosis could not start: ' + $_.Exception.Message)
@@ -499,6 +508,18 @@ function Get-WezTermLua {
 -- Gnosis-only WezTerm settings (generated). The user's own wezterm.lua is not used here.
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder and wezterm.config_builder() or {}
+-- Explicit Windows font fallback: ordinary ASCII, Japanese glyphs and
+-- box-drawing / Braille characters must all be renderable in the same pane.
+-- Do not depend on Windows Terminal's current font or on WSL fontconfig.
+config.font = wezterm.font_with_fallback({
+  'Consolas',
+  'Cascadia Mono',
+  'BIZ UDGothic',
+  'Yu Gothic',
+  'Meiryo',
+  'MS Gothic',
+})
+config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }
 config.enable_tab_bar = false
 config.window_close_confirmation = 'NeverPrompt'
 config.exit_behavior = 'Close'
