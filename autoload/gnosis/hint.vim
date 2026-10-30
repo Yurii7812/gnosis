@@ -118,6 +118,11 @@ function! gnosis#hint#toggle(After) abort
   let s:on = !gnosis#hint#on()
   call gnosis#home#write_json(gnosis#home#path('hint.json'), {'on': s:on})
   if type(a:After) == v:t_func | call a:After() | endif
+  if s:on
+    call gnosis#hint#cmdline_schedule()
+  else
+    call gnosis#hint#cmdline_hide()
+  endif
   echo gnosis#i18n#tr(s:on ? 'ヒント行: オン' : 'ヒント行: オフ')
 endfunction
 
@@ -196,9 +201,10 @@ endfunction
 function! s:cmdline_items() abort
   let l:view = gnosis#mview#view()
   if l:view ==# 'mandala'
-    return ['w:順位', 'r/R:関連', 'c/C:近接', 'v:外向き', 'D:配下', 'u/U:見出し',
-          \ 'f:9×9', 'a/i/d:表示', 's:検索', 'x:絞込', 'H:強調', 'P:保存設定',
-          \ 'Z:設定', 'm:メニュー', '?:ヘルプ', 't:時間', 'p:本文', 'L:凡例', '+:深さ']
+    return ['w:順位', 'r/R:関連', 'v:外向き', 'u/U:見出し', 'f:9×9',
+          \ 'Z:設定', '?:ヘルプ', 'm:メニュー', 'x:絞込', 's:検索',
+          \ 'c/C:近接', 'D:配下', 'a/i/d:表示', 'P:保存設定',
+          \ 'H:強調', 't:時間', 'p:本文', 'L:凡例', '+:深さ']
   elseif l:view ==# 'fz'
     return ['Tab:切替', 'u:上位', 'm:メニュー', '?:ヘルプ', 's:検索',
           \ 'l:リンク', 'r:類似', 'za:折畳', 'o:起点', 'F:全画面']
@@ -211,8 +217,9 @@ function! s:cmdline_items() abort
     return ['Tab:切替', 'r:類似', 'x:絞込', 'w:順位', 'H:強調',
           \ 'm:メニュー', '?:ヘルプ', 'o:起点', 'f:番号']
   endif
-  return ['Tab:切替', 'b:子', 'p:親', 'g:群', 'R:関連', '+:深さ',
-        \ 'w:順位', 'x:絞込', 'm:メニュー', '?:ヘルプ', 'f:番号', 'o:起点']
+  return ['Tab:切替', 'x:絞込', 'm:メニュー', '?:ヘルプ',
+        \ 'b:子', 'p:親', 'g:群', 'R:関連', '+:深さ',
+        \ 'w:順位', 'f:番号', 'o:起点']
 endfunction
 
 function! gnosis#hint#cmdline_hide() abort
