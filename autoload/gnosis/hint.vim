@@ -11,8 +11,14 @@ let s:type = 'gnosis_hint'
 function! gnosis#hint#on() abort
   if !exists('s:on')
     let l:d = gnosis#home#read_json(gnosis#home#path('hint.json'), {})
-    " 保存した設定 > g:gnosis_hint > 環境変数 GNOSIS_HINT（試験は 0 にして画面を変えない）> オン
-    let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    " CUI は毎回起動時にヒントを表示（旧 hint.json の OFF は持ち越さない）。
+    " 明示的な g:gnosis_hint=0 / GNOSIS_HINT=0 は尊重する。
+    " GUI は既存の保存設定を維持。
+    if empty($GNOSIS_GUI_PORT)
+      let s:on = get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    else
+      let s:on = type(get(l:d, 'on', '')) == v:t_number ? !!l:d.on : get(g:, 'gnosis_hint', $GNOSIS_HINT ==# '0' ? 0 : 1)
+    endif
   endif
   return s:on
 endfunction
@@ -200,11 +206,24 @@ function! gnosis#hint#cmdline_schedule() abort
   let s:cmdline_timer = timer_start(45, function('gnosis#hint#cmdline_show'))
 endfunction
 
+" SafeState で初期表示を保証。既存タイマーの開始を繰り返さない。
+function! gnosis#hint#cmdline_initial() abort
+  if s:cmdline_timer >= 0 || !empty(s:cmdline_shown) | return | endif
+  if &filetype ==# 'gnosis-mandala' && mode(1) =~# '^n' && empty(getcmdtype())
+    call gnosis#hint#cmdline_schedule()
+  endif
+endfunction
+
 function! gnosis#hint#cmdline_install() abort
   if !empty($GNOSIS_GUI_PORT) || exists('s:cmdline_installed') | return | endif
   let s:cmdline_installed = 1
   augroup gnosis_cui_command_hints
     autocmd!
+    " 起動直後の最後の再描画後にも表示する。
+    autocmd VimEnter * call gnosis#hint#cmdline_schedule()
+    if exists('##SafeState')
+      autocmd SafeState * call gnosis#hint#cmdline_initial()
+    endif
     autocmd BufEnter,WinEnter,CursorMoved,VimResized * call gnosis#hint#cmdline_schedule()
     autocmd WinLeave * call gnosis#hint#cmdline_hide()
     autocmd CmdlineEnter * call gnosis#hint#cmdline_hide()
