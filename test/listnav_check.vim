@@ -97,7 +97,7 @@ call s:ok('元のカーソル位置も復元する', s:cur[1] == s:ov.lnum && s:
 call gnosis#listnav#query('search', '')
 call gnosis#listnav#query('highlight', '')
 call gnosis#listnav#option('mode', 'similar')
-call s:ok('類似は予測関連の候補を表示', !empty(gnosis#listnav#state().rows) && empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind !=# "pred"')), s:paths())
+call s:ok('本文に共通の話題がない場合は、機械的なリンクだけで類似候補を作らない', empty(gnosis#listnav#state().rows), s:paths())
 let s:handoff = gnosis#mview#handoff()
 call gnosis#mview#switch_view('mandala')
 call gnosis#mview#restore_handoff(s:handoff)
