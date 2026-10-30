@@ -102,48 +102,39 @@ class T(unittest.TestCase):
         self.assertEqual(row[0], "1a1b2c3d4e5")
         self.assertTrue(row[4].startswith("~") and len(row[4]) <= 8)
 
-    def test_upper_chain_and_related(self):
+    def test_upper_chain_and_content_related_groups(self):
+        # 祖先のグループ表示だけは Folgezettel 階層を維持する。
         u = fz.upper(self.r, "n1a1a.md")
-        # 祖先の番号の Group: 1 と 1a にだけ（1a1 は欠番で飛ばす）。1a1a 自身は Group が無い
         self.assertEqual([c["id"] for c in u["chain"]], ["1", "1a"])
         self.assertEqual([c["path"] for c in u["chain"]], ["g1.md", "g1a.md"])
-        rel = [r["path"] for r in u["related"]]
-        # 自分が属し、周辺のノート（1a・1a1b…）も載っている言語G が出る。chain の Group は重複しない
-        self.assertIn("gl.md", rel)
-        self.assertNotIn("g1.md", rel)
-        self.assertNotIn("g1a.md", rel)
-        # 番号が近いだけで周辺のノートが載っていない・遠い…グループは混入しない
-        self.assertNotIn("g9.md", rel)
+        # 意味のある本文を追加。番号の離れたノートでも内容が近ければ
+        # それを含むグループが関連グループに現れる。
+        with (self.r / "n1a1a.md").open("a") as w:
+            w.write("\\n意味生成 言語文法 言語構造 理解の過程\\n".replace("\\\\n", "\\n"))
+        (self.r / "distant.md").write_text(
+            mk("言語文法と意味生成", "900", grp=[("研究グループ", "semantic.md")])
+            + "言語構造から意味生成を考える\\n")
+        (self.r / "semantic.md").write_text(
+            mk("研究グループ", group=True, links=[("研究内容", "distant.md")]))
+        mc.refresh(self.r, force=True)
+        groups = [d["path"] for d in fz.upper(self.r, "n1a1a.md")["related"]]
+        self.assertIn("semantic.md", groups)
+        self.assertNotIn("g1.md", groups)
+        self.assertNotIn("g1a.md", groups)
+        self.assertNotIn("g9.md", groups)
 
-    def test_related_requires_neighbor_membership(self):
-        # 2 の周辺（1aa・1z・3a・9）のどれも載っていない孤立G は、番号が近い 1a1c を含んでいても出ない
-        u = fz.upper(self.r, "n2.md")
-        rel = [r["path"] for r in u["related"]]
-        self.assertNotIn("gx.md", rel)
-        self.assertNotIn("g1a.md", rel)
-        self.assertIn("g9.md", rel)          # 9 は 2 の 2 つ後ろの周辺ノート → その BranchGroup は出る
-        # 1b の周辺には 1a1c（2 つ前）があるので、孤立G は出る
-        self.assertIn("gx.md", [r["path"] for r in fz.upper(self.r, "n1b.md")["related"]])
+    def test_related_ignores_number_and_link_without_content(self):
+        # 機械的な番号・リンクだけでは関連グループにしない。
+        for name in ["n2.md", "n1b.md", "n1a1b.md"]:
+            groups = fz.upper(self.r, name)["related"]
+            self.assertEqual(groups, [], (name, groups))
 
-    def test_related_direct_link_and_deterministic(self):
+    def test_related_deterministic(self):
         u1 = fz.upper(self.r, "n1a1b.md")
         u2 = fz.upper(self.r, "n1a1b.md")
         self.assertEqual(u1, u2)
-        # 1a1b は 1a2 に直接リンク → 1a2 の記憶G… ではなく、1a2 が属すグループが出る（1a2 の BranchGroup）
-        self.assertIn("g1a2.md", [r["path"] for r in u1["related"]])
         scores = [r["score"] for r in u1["related"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
-
-    def test_related_general_group_discount(self):
-        # 大きなグループは割り引かれる
-        big = [(f"m{i}", f"m{i}.md") for i in range(60)]
-        for t, f in big:
-            (self.r / f).write_text(mk(t))
-        (self.r / "gbig.md").write_text(mk("巨大", group=True, links=big + [("言語", "n1a1a.md"), ("意味", "n1a1b.md")]))
-        mc.refresh(self.r, force=True)
-        u = fz.upper(self.r, "n1a1a.md")
-        order = [r["path"] for r in u["related"]]
-        self.assertLess(order.index("gl.md"), order.index("gbig.md"))
 
     def test_no_fz_note_and_missing(self):
         u = fz.upper(self.r, "n_free.md")

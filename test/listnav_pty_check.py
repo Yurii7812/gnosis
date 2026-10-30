@@ -21,8 +21,8 @@ class ListView(unittest.TestCase):
         for p in (self.vault, self.home, self.gh):
             p.mkdir()
         self.note('index', 'Index', '', '[Alpha](a.md)', True)
-        self.note('a', 'Alpha', '1', 'Group:\n[Group](g.md)\n\nChildBranch:\n[Beta](b.md)\n\nOriginal body\nOriginal end')
-        self.note('b', 'Beta', '1a', 'ParentBranch:\n[Alpha](a.md)\n\nNeedle body')
+        self.note('a', 'Alpha', '1', 'Group:\n[Group](g.md)\n\nChildBranch:\n[Beta](b.md)\n\nOriginal body\nOriginal end\nShared concept lavender soil ecology garden')
+        self.note('b', 'Beta', '1a', 'ParentBranch:\n[Alpha](a.md)\n\nNeedle body\nShared concept lavender soil ecology study')
         self.note('g', 'Group', '2', '[Unique alias](a.md)', True)
         self.out = self.root / 'state.json'
         self.rc = self.root / 'vimrc'

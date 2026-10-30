@@ -283,7 +283,13 @@ execute 'edit ' . fnameescape(s:v . '/zo.md')
 let g:gnosis_test_keys = ['o']
 call gnosis#v2_new_plain()
 let s:zo_ts = expand('%:t:r')
-call s:ok('zn → o: \n と同じ体裁のノートが開く（見出しの下に空行 3 行）', getline(1, '$')[1:] ==# gnosis#note_template(s:zo_ts)[1:] && getline(1, '$')[0] ==# '---', string(getline(1, '$')))
+" 生成後の処理が秒をまたいでも、再度作ったテンプレートの現在時刻とは比較しない。
+let s:zo_lines = getline(1, '$')
+call s:ok('zn → o: \n と同じ体裁のノートが開く（見出しの下に空行 3 行）',
+      \ len(s:zo_lines) == 8 && s:zo_lines[0] ==# '---' &&
+      \ s:zo_lines[1] =~# '^time: \d\{4}-\d\{2}-\d\{2} \d\{2}:\d\{2}:\d\{2}$' &&
+      \ s:zo_lines[2:4] ==# ['---', '', '# ' . s:zo_ts] &&
+      \ s:zo_lines[5:] ==# ['', '', ''], string(s:zo_lines))
 call s:ok('zn → o: カーソルは見出しの下の真ん中の空行（\n と同じ）', line('.') == search('^#\s', 'nw') + 2 && col('.') == 1, string(getpos('.')[1:2]))
 call s:ok('zn → o: 元のノートは変わらない', s:file('zo.md')[-1] ==# 'ZO の本文。')
 silent! stopinsert

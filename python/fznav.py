@@ -163,10 +163,9 @@ def _members(db, gid: int) -> int:
 def upper(root: str | Path, rel: str, numw: int = NUMW, limit: int = 30) -> dict:
     """rel の上位表示。
     chain   … 番号の祖先（自分を含む）それぞれにある Group（実在するものだけ。無い番号は飛ばす。rel 自身は含めない）
-    related … 周辺のノートが所属するグループを、関連度の高い順に（chain に出したものは除く）。
-              周辺 = 番号の直前・直後・親・子・きょうだい（同じ親から分かれたもの）と、直接のリンク（親子・Context・Related・リンク・BackLink）。
-              関連度 = 周辺ノートの重みの合計 ÷ log2(2 + グループの大きさ)（大きな一般的なグループほど割り引く）。
-              番号が近いだけで、周辺のノートが 1 つも載っていないグループは出さない。"""
+    related … 本文の内容が似ているノートが入っているグループを、類似度順に（chain に出したものは除く）。
+              Folgezettel番号・リンク・所属そのものは関連度に加点しない。
+              Index・日記など機械的な管理グループは候補から外す。"""
     db = mc.connect(root)
     if db is None:
         return {"ok": False}
@@ -191,83 +190,41 @@ def upper(root: str | Path, rel: str, numw: int = NUMW, limit: int = 30) -> dict
                 if r[0] in want and r[3] == "g" and r[1] != cpath:
                     out["chain"].append({"id": r[0], "num": r[4], "path": r[1], "title": r[2]})
         shown = {c["path"] for c in out["chain"]} | {cpath}
-        # 周辺のノート {ファイル id: 重み}
-        nb: dict[int, float] = {}
-
-        def add(fid: int, w: float) -> None:
-            if fid != cid and fid in files and not files[fid][2]:
-                nb[fid] = nb.get(fid, 0.0) + w
+        # 関連グループ: 番号の近さやリンク・所属の加点は使わない。
+        # 本文が近いノートを先に選び、それらが実際に含まれるグループを集計する。
+        import content_rank as cr
+        hits = mc.related(root, rel, limit=250)
         by_path = {v[0]: k for k, v in files.items()}
-        if cur_row >= 0 and cfz:
-            notes = [k for k, r in enumerate(base) if r[3] == "n"]
-            pos = next((p for p, k in enumerate(notes) if base[k][1] == cpath), -1)
-            if pos < 0:                               # 現在がグループのとき: 同じ番号のノートの位置
-                pos = next((p for p, k in enumerate(notes) if base[notes[p]][0] == cfz), -1)
-            if pos >= 0:
-                for d, w in ((-1, W_NEAR[0]), (1, W_NEAR[0]), (-2, W_NEAR[1]), (2, W_NEAR[1])):
-                    if 0 <= pos + d < len(notes):
-                        add(by_path[base[notes[pos + d]][1]], w)
-            r0 = idx[cur_row]
-            blk0 = cur_row                            # 自分のブロックの先頭の行
-            while blk0 > 0 and base[blk0 - 1][0] == r0[0]:
-                blk0 -= 1
-            up = r0[5]
-            if up >= 0:
-                for k in range(up, idx[up][6] + 1):   # 親（実在する直近の祖先）のノート
-                    if base[k][3] == "n":
-                        add(by_path[base[k][1]], W_PARENT)
-                sibs = []                             # 同じ親から分かれたノート
-                k = idx[up][6] + 1
-                while k < idx[up][7]:
-                    if idx[k][5] == up and idx[k][0] != r0[0]:
-                        sibs.extend(j for j in range(k, idx[k][6] + 1) if base[j][3] == "n")
-                    k = idx[k][6] + 1
-                sibs.sort(key=lambda j: abs(j - cur_row))
-                for j in sibs[:SIB_MAX]:
-                    add(by_path[base[j][1]], W_SIB)
-            kids = []                                 # 子（自分の直下の番号）のノート
-            k = r0[6] + 1
-            while k < r0[7]:
-                if idx[k][5] == blk0:
-                    kids.extend(j for j in range(k, idx[k][6] + 1) if base[j][3] == "n")
-                k = idx[k][6] + 1
-            for j in kids[:SIB_MAX]:
-                add(by_path[base[j][1]], W_CHILD)
-        # 直接のリンク
-        for dst, k in db.execute("SELECT dst,kind FROM edges WHERE src=?", (cid,)):
-            kind = mc.KINDS[k]
-            if kind in W_LINK:
-                add(dst, W_LINK[kind])
-        for src, k in db.execute("SELECT src,kind FROM edges WHERE dst=? LIMIT 3000", (cid,)):
-            kind = mc.KINDS[k]
-            if kind in W_LINK:
-                add(src, W_LINK[kind])
-        # 自分自身の所属グループ
-        mine = mc._groups_of(db, [cid]).get(cid, set())
-        gm = mc._groups_of(db, list(nb)) if nb else {}
-        score: dict[int, float] = {}
-        count: dict[int, int] = {}
-        for fid, w in nb.items():
-            for g in gm.get(fid, ()):
-                score[g] = score.get(g, 0.0) + w
-                count[g] = count.get(g, 0) + 1
-        for g in mine:
-            score[g] = score.get(g, 0.0) + W_SELF
-            count[g] = count.get(g, 0) + 1
+        similarities = {by_path[h["id"]]: h["score"] / 100.0
+                        for h in hits if h["id"] in by_path}
+        membership = mc._groups_of(db, list(similarities)) if similarities else {}
+        evidence: dict[int, list[float]] = {}
+        for fid, groups in membership.items():
+            for gid in groups:
+                evidence.setdefault(gid, []).append(similarities[fid])
         cand = []
-        for g, s in score.items():
-            gp = files.get(g)
-            if not gp or gp[0] in shown or g == cid:
+        for gid, weights in evidence.items():
+            gp = files.get(gid)
+            if not gp or gid == cid or gp[0] in shown:
                 continue
-            size = _members(db, g)
-            cand.append((-(s / math.log2(2 + size)), natural_key(gp[3]) if valid(gp[3]) else (), gp[1], gp[0], g, s, size, count[g]))
+            # Indexや日記の階層は管理上の入れ物であって関連する話題ではない。
+            if cr.organizational(gp[0], gp[1]):
+                continue
+            size = _members(db, gid)
+            pts = sum(sorted(weights, reverse=True)[:8]) / math.log2(2 + size)
+            if pts <= 0:
+                continue
+            cand.append((-pts, natural_key(gp[3]) if valid(gp[3]) else (),
+                         gp[1], gp[0], gid, size, len(weights)))
         cand.sort()
         out["total"] = len(cand)
-        for neg, _k, title, path, g, s, size, c in cand[:limit]:
-            fz = files[g][3]
-            out["related"].append({"id": fz if valid(fz) else "", "num": abbreviate(fz, numw) if valid(fz) else "",
-                                   "path": path, "title": title, "score": round(-neg, 3), "near": c, "size": size,
-                                   "own": 1 if g in mine else 0})
+        for neg, _key, title, path, gid, size, count in cand[:limit]:
+            fzid = files[gid][3]
+            out["related"].append({
+                "id": fzid if valid(fzid) else "",
+                "num": abbreviate(fzid, numw) if valid(fzid) else "",
+                "path": path, "title": title, "score": round(-neg, 3),
+                "near": count, "size": size, "own": 0})
         return out
     finally:
         db.close()

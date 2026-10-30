@@ -95,21 +95,23 @@ class T(unittest.TestCase):
         self.assertIn("kana.md", mv.search(r, ["かなの"]) + mv.search(r, ["かのと"]))
         self.assertEqual(mv.search(r, ["zzzqqq"]), [])
 
-    def test_related_any_kind(self):
+    def test_related_is_content_not_index_or_folgezettel(self):
         r = Path(self.tmp.name)
-        (r / "herb.md").write_text(note("ハーブ", False, [("植物", "plant.md")], ["[栽培](grow.md)"], "1a"))
-        (r / "kid.md").write_text(note("ハーブの子", False, [], [], "1a1"))
-        (r / "grow.md").write_text(note("栽培", False, [("植物", "plant.md")], ["ハーブを育てる話。水やりと土のこと"]))
-        (r / "unrelated.md").write_text(note("全然別の話", False, [], ["天気とスポーツ"], "7"))
+        (r / "herb.md").write_text(note("ハーブ栽培", False, [("植物", "plant.md")],
+                                         ["ハーブの土壌と水やりについて詳しく研究する"], "1a"))
+        (r / "match.md").write_text(note("ハーブ栽培の方法", False, [],
+                                          ["土壌を整えハーブに水やりをする"], "87"))
+        (r / "kid.md").write_text(note("全く異なるテーマ", False, [],
+                                        ["暗号技術とデータ保護について"], "1a1"))
+        (r / "diary.md").write_text(note("2026-10-30", False, [], ["ハーブの土壌と水やり"], "1a2"))
         got = mv.related(r, "herb.md")
-        ids = [d["id"] for d in got]
-        self.assertIn("grow.md", ids)   # 本文でリンクしている
-        self.assertIn("kid.md", ids)    # 番号の子
-        self.assertIn("plant.md", ids)  # 所属の索引も出る（索引もノートも）
-        self.assertNotIn("herb.md", ids)
-        self.assertLess(ids.index("grow.md"), ids.index("unrelated.md") if "unrelated.md" in ids else 99)
-        why = next(d for d in got if d["id"] == "kid.md")["why"]
-        self.assertIn("枝の子", why)
+        ids = [x["id"] for x in got]
+        self.assertIn("match.md", ids)
+        self.assertNotIn("kid.md", ids)
+        self.assertNotIn("diary.md", ids)
+        self.assertNotIn("index.md", ids)
+        self.assertNotIn("plant.md", ids)
+        self.assertEqual(got[0]["why"], ["本文・題が近い"])
 
     def test_double_index_path(self):
         """Index → 最初のノート → BranchGroup のトピック索引 → ノート。進む先と戻る道が周りに出る。"""
