@@ -208,7 +208,7 @@ endfunction
 
 " SafeState で初期表示を保証。既存タイマーの開始を繰り返さない。
 function! gnosis#hint#cmdline_initial() abort
-  if s:cmdline_timer >= 0 || !empty(s:cmdline_shown) | return | endif
+  if s:cmdline_timer >= 0 || !empty(s:cmdline_shown) || !gnosis#hint#on() || !empty(popup_list()) | return | endif
   if &filetype ==# 'gnosis-mandala' && mode(1) =~# '^n' && empty(getcmdtype())
     call gnosis#hint#cmdline_schedule()
   endif
