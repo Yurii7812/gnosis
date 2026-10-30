@@ -56,6 +56,21 @@ class ListView(unittest.TestCase):
         s.send('l', .5)
         self.assertIn('[L', s.text().splitlines()[0])
 
+    def test_initial_bottom_hints_without_any_toggle(self):
+        # CUI 起動時は古い hint.json の OFF 設定を引きずらず、初回から表示。
+        self.rc.write_text(self.rc.read_text().replace(
+            "let g:gnosis_hint=0\\n", ""))
+        (self.home / "hint.json").write_text('{"on": 0}')
+        with self.session() as s:
+            s.send(' ', 1.0)  # マンダラを開く。K は押さない。
+            self.assertIn('Z:設定', s.text().splitlines()[-1], s.text())
+            s.send(' ', .4)  # 本文へ移動したらヒントを消す。
+            self.assertNotIn('Z:設定', s.text().splitlines()[-1])
+            s.send(' ', .6)  # ビューへ戻れば再表示。
+            self.assertIn('Z:設定', s.text().splitlines()[-1], s.text())
+            s.send(NEXT, .7)
+            self.assertIn('Tab:切替', s.text().splitlines()[-1], s.text())
+
     def test_hint_line_toggle_and_mode_menu(self):
         with self.session() as s:
             self.open_list(s)
