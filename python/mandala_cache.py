@@ -29,7 +29,7 @@ from pathlib import Path
 KINDS = ("group", "branch_group", "parent_branch", "child_branch", "context", "related", "backlink", "link")
 _KID = {k: i for i, k in enumerate(KINDS)}
 INCOMING = ("parent_branch", "child_branch", "context", "related")   # node の "i"（向かってくる辺）に入れる種類
-SCHEMA = 4
+SCHEMA = 5
 _LINK_TEXT = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 FULL_FLOOR = 0     # 秒。直近の全体の走査から、走査にかかった時間の 20 倍（最低この秒数）が経つまでは、開くときの全体の走査を省く
 
@@ -67,6 +67,9 @@ def connect(root: str | Path, create: bool = False) -> sqlite3.Connection | None
         CREATE TABLE IF NOT EXISTS ttok(tok TEXT, id INTEGER);
         CREATE INDEX IF NOT EXISTS ttok_tok ON ttok(tok);
         CREATE INDEX IF NOT EXISTS ttok_id ON ttok(id);
+        CREATE TABLE IF NOT EXISTS ctok(tok TEXT, id INTEGER, tf INTEGER);
+        CREATE INDEX IF NOT EXISTS ctok_tok ON ctok(tok);
+        CREATE INDEX IF NOT EXISTS ctok_id ON ctok(id);
         CREATE INDEX IF NOT EXISTS files_name ON files(name);
         CREATE INDEX IF NOT EXISTS files_stem ON files(stem);
         CREATE TABLE IF NOT EXISTS edges(src INTEGER, kind INTEGER, dst INTEGER);
@@ -156,7 +159,9 @@ def _parse_one(rel: str):
                 if dst is not None and dst != rel and (dst, name) not in ents:
                     ents.append((dst, name))
     import folgezettel as fzm
-    return rel, d["title"], int(is_group), edges, ents, fzm.value(text), sorted(_tokens(d["title"]))[:16]
+    import content_rank as cr
+    terms = cr.profile(text, d["title"], rel, is_group)
+    return rel, d["title"], int(is_group), edges, ents, fzm.value(text), sorted(_tokens(d["title"]))[:16], terms
 
 
 def _walk(root: Path) -> dict[str, tuple[int, int]]:
@@ -206,7 +211,7 @@ def _write(db: sqlite3.Connection, root: Path, rels: list[str], stats: dict, res
     for rel, row in zip(rels, rows):
         if row is None:
             continue
-        _rel, title, g, _e, _n, fzv, _tk = row
+        _rel, title, g, _e, _n, fzv, _tk, _ct = row
         st = stats[rel]
         db.execute("INSERT INTO files(path,name,stem,mtime,size,title,g,fz) VALUES(?,?,?,?,?,?,?,?) "
                    "ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,title=excluded.title,g=excluded.g,fz=excluded.fz",
@@ -217,13 +222,14 @@ def _write(db: sqlite3.Connection, root: Path, rels: list[str], stats: dict, res
             need.update(d for _k, d in r[3])
             need.update(d for d, _n in r[4])
     ids = dict(db.execute("SELECT path, id FROM files")) if len(need) > 5000 else _ids(db, need)
-    e_rows, n_rows, t_rows = [], [], []
+    e_rows, n_rows, t_rows, c_rows = [], [], [], []
     for row in rows:
         if row is None:
             continue
-        rel, _t, _g, edges, ents, _fz, toks = row
+        rel, _t, _g, edges, ents, _fz, toks, content_terms = row
         src = ids[rel]
         t_rows.extend((tk, src) for tk in toks)
+        c_rows.extend((tk, src, tf) for tk, tf in content_terms.items())
         for kind, dst in edges:
             if dst in ids:
                 e_rows.append((src, _KID[kind], ids[dst]))
@@ -233,6 +239,7 @@ def _write(db: sqlite3.Connection, root: Path, rels: list[str], stats: dict, res
     db.executemany("INSERT INTO edges VALUES(?,?,?)", e_rows)
     db.executemany("INSERT INTO ents VALUES(?,?,?)", n_rows)
     db.executemany("INSERT INTO ttok VALUES(?,?)", t_rows)
+    db.executemany("INSERT INTO ctok VALUES(?,?,?)", c_rows)
 
 
 def _forget(db: sqlite3.Connection, ids: list[int], drop_in: bool) -> None:
@@ -241,6 +248,7 @@ def _forget(db: sqlite3.Connection, ids: list[int], drop_in: bool) -> None:
         db.execute(f"DELETE FROM edges WHERE src IN ({q})", chunk)
         db.execute(f"DELETE FROM ents WHERE grp IN ({q})", chunk)
         db.execute(f"DELETE FROM ttok WHERE id IN ({q})", chunk)
+        db.execute(f"DELETE FROM ctok WHERE id IN ({q})", chunk)
         if drop_in:   # ファイルが消えた: 向かってくる辺・索引の項目も消す
             db.execute(f"DELETE FROM edges WHERE dst IN ({q})", chunk)
             db.execute(f"DELETE FROM ents WHERE dst IN ({q})", chunk)
@@ -690,107 +698,54 @@ def _local_walk(db: sqlite3.Connection, fid: int, restart: float = 0.25, iters: 
 
 
 def related(root: str | Path, rel: str, limit: int = 80, body: bool = True) -> list[dict]:
-    """予測関連（r）。小さな vault と同じ手がかり: つながり・同じ索引・Folgezettel の枝・題の言葉・歩いた近さ・本文の内容。
-    全体を読まず、キャッシュと狭い候補（近所・同じ索引・番号が近い・題が重なる）だけで求める。"""
+    """Predict topical notes solely from incremental prose/title term index.
+
+    The direct graph, diary chronology and Folgezettel remain accessible in
+    their own views. This function is shared by predicted r and ranked w.
+    """
     import math
+    import content_rank as cr
     db = connect(root)
     if db is None:
         return []
     try:
-        row = db.execute("SELECT id,title,fz FROM files WHERE path=?", (rel,)).fetchone()
-        if row is None:
+        row = db.execute("SELECT id FROM files WHERE path=?", (rel,)).fetchone()
+        if not row:
             return []
-        fid, title, ident = row
-        n_all = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
-        nb = _neighbors(db, fid)
-        score: dict[int, dict[str, float]] = {}
-
-        def add(x: int, why: str, pts: float) -> None:
-            if x != fid:
-                d = score.setdefault(x, {})
-                d[why] = max(d.get(why, 0.0), pts)
-        groups = set()
-        for d, ks in nb.items():
-            for k in ks:
-                kk = k[3:] if k.startswith("in:") else k
-                if kk in _REL_OUT:
-                    add(d, *_REL_OUT[kk])
-            if "group" in ks or "branch_group" in ks:
-                groups.add(d)
-            if "in:link" in ks:
-                r2 = db.execute("SELECT g FROM files WHERE id=?", (d,)).fetchone()
-                if r2 and r2[0]:
-                    groups.add(d)
-        # 同じ索引に載っているノート
-        for g in list(groups)[:20]:
-            gname = db.execute("SELECT title FROM files WHERE id=?", (g,)).fetchone()
-            label = "同じ索引: " + (gname[0] if gname else "")
-            for m, in db.execute("SELECT dst FROM edges WHERE src=? AND kind=? LIMIT 300", (g, _KID["link"])):
-                add(m, label, 2.0)
-            for m, in db.execute("SELECT src FROM edges WHERE dst=? AND kind IN (?,?) LIMIT 300", (g, _KID["group"], _KID["branch_group"])):
-                add(m, label, 2.0)
-        # Folgezettel の枝
-        for m, (lab, pts) in _fz_relatives(db, fid, ident).items():
-            add(m, lab, pts)
-        # 題の言葉（珍しい語ほど重い）
-        for t in _my_tokens(db, fid):
-            df = db.execute("SELECT COUNT(*) FROM ttok WHERE tok=?", (t,)).fetchone()[0]
-            if df < 2 or df > 3000:
+        fid = row[0]
+        source = dict(db.execute("SELECT tok,tf FROM ctok WHERE id=?", (fid,)))
+        if len(source) < 2:
+            return []
+        total = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+        counts: dict[int, float] = {}
+        terms = []
+        for token, tf in source.items():
+            df = db.execute("SELECT COUNT(*) FROM ctok WHERE tok=?", (token,)).fetchone()[0]
+            if df > max(3, total * .6):
                 continue
-            pts = 1.5 * math.log(1 + n_all / df) / 3
-            for i, in db.execute("SELECT id FROM ttok WHERE tok=? LIMIT 2000", (t,)):
-                if i != fid:
-                    d = score.setdefault(i, {})
-                    d["題が近い"] = min(d.get("題が近い", 0.0) + pts, 4.0)
-        # 歩いた近さ（3 歩までの狭いグラフ）
-        walk = _local_walk(db, fid)
-        if walk:
-            top_w = max(walk.values())
-            for i, w in walk.items():
-                if w / top_w >= 0.05:
-                    add(i, "つながりが近い", 5.0 * (w / top_w) ** 0.5)
-        # 本文の内容（候補の上位だけ読む。語の重さは候補の中で測る）
-        cand = [x for x, _w in sorted(score.items(), key=lambda kv: -sum(kv[1].values()))[:150]]
-        if cand and body:
-            pm = _paths(db, cand + [fid])
-            root_p = Path(root)
-            docs: dict[int, dict[str, int]] = {}
-            for x in cand + [fid]:
-                if x not in pm:
-                    continue
-                try:
-                    text = (root_p / pm[x][0]).read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError):
-                    text = ""
-                toks: dict[str, int] = {}
-                for tk in list(_tokens(pm[x][1])) * 3 + list(_all_tokens(text)):
-                    toks[tk] = toks.get(tk, 0) + 1
-                docs[x] = toks
-            df: dict[str, int] = {}
-            for toks in docs.values():
-                for tk in toks:
-                    df[tk] = df.get(tk, 0) + 1
-            nd = max(1, len(docs))
-            idf = {tk: math.log(1 + nd / c) for tk, c in df.items()}
-
-            def vec(toks):
-                v = {tk: (1 + math.log(c)) * idf[tk] for tk, c in toks.items() if df[tk] < max(3, nd * 0.5)}
-                nrm = math.sqrt(sum(x * x for x in v.values())) or 1.0
-                return {tk: x / nrm for tk, x in v.items()}
-            mv = vec(docs.get(fid, {}))
-            if mv:
-                for x in cand:
-                    if x not in docs:
-                        continue
-                    v = vec(docs[x])
-                    small, big = (mv, v) if len(mv) < len(v) else (v, mv)
-                    cos = sum(a * big.get(tk, 0.0) for tk, a in small.items())
-                    if cos >= 0.12:
-                        add(x, "内容が近い", min(10.0 * cos, 6.0))
-        top = sorted(((x, sum(w.values()), w) for x, w in score.items()), key=lambda r: -r[1])[:limit]
-        pm = _paths(db, [x for x, _s, _w in top])
-        return [{"id": pm[x][0], "score": round(sc, 2), "why": [k for k, _v in sorted(w.items(), key=lambda kv: -kv[1])]}
-                for x, sc, w in top if x in pm]
+            terms.append((token, tf, df))
+        terms.sort(key=lambda row: (row[2], -row[1], row[0]))
+        # Candidates are sourced from prose, even without graph connections.
+        for token, tf, df in terms[:100]:
+            importance = math.log(1 + (total + 1) / (df + 1))
+            for dst, freq in db.execute("SELECT id,tf FROM ctok WHERE tok=? LIMIT 3500", (token,)):
+                if dst != fid:
+                    counts[dst] = counts.get(dst, 0.) + min(tf, freq) * importance
+        cand = [dst for dst, val in sorted(counts.items(), key=lambda r: -r[1])[:400]]
+        if not cand:
+            return []
+        ids = cand + [fid]
+        profiles: dict[int, dict[str, int]] = {n: {} for n in ids}
+        for offset in range(0, len(ids), 450):
+            chunk = ids[offset:offset + 450]
+            q = ",".join("?" for _ in chunk)
+            for dst, token, tf in db.execute(f"SELECT id,tok,tf FROM ctok WHERE id IN ({q})", chunk):
+                profiles[dst][token] = tf
+        matches = cr.similarities(profiles, fid, limit)
+        paths = _paths(db, [dst for dst, _score in matches])
+        return [{"id": paths[dst][0], "score": round(100 * sim, 2),
+                 "why": ["本文・題が近い"]}
+                for dst, sim in matches if dst in paths]
     finally:
         db.close()
 
@@ -838,7 +793,7 @@ def main(argv: list[str]) -> int:
         out = nodes(argv[2], argv[3:])
     elif len(argv) >= 4 and argv[1] == "rank":
         # 近さ順（w）用: {ノート: 点}。basis のノートに近いものほど点が高い
-        out = {d["id"]: d["score"] for d in related(argv[2], argv[3], limit=5000, body=False)}
+        out = {d["id"]: d["score"] for d in related(argv[2], argv[3], limit=5000)}
     elif len(argv) >= 4 and argv[1] == "near":
         out = near(argv[2], argv[3])
     elif len(argv) >= 4 and argv[1] == "related":
