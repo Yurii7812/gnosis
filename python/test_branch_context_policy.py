@@ -81,7 +81,7 @@ class BranchContextRules(unittest.TestCase):
         self.assertIn("[自分のホームページを作った#相談とか軽作業とかはhaiku]"
                       "(web.md#相談とか軽作業とかはhaiku)", text)
         self.assertIn("前に[見て](web.md#相談とか軽作業とかはhaiku)ね", text)
-        self.assertEqual(self.sync(), 0)
+        self.assertEqual(nf.simple_sync(self.root), 0)
 
     def test_zo_fragment_with_english_slug_and_duplicate_heading(self):
         self.write("web.md", note("Website", body="## Writing a blog\nNotes\n## Memo\nA\n## Memo\nB"))
