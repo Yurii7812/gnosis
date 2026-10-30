@@ -266,9 +266,9 @@ call s:ok('\l c: 今のノートの Context に選んだノートを入れる',
       \ index(gnosis#context#links(s:file('cx_source.md')), '[対象](cx_target.md)') >= 0, string(s:file('cx_source.md')))
 call s:ok('\l c: リンク先の Context は書き換えない',
       \ empty(gnosis#context#links(s:file('cx_target.md'))), string(s:file('cx_target.md')))
-call s:ok('c/a 入替の案内も正しい',
-      \ gnosis#insert_prompt_text(1, 0) =~# 'c=自分Ctx a=相手Ctx' ||
-      \ gnosis#insert_prompt_text(1, 0) =~# 'c=Context(今のノートにリンク先)', gnosis#insert_prompt_text(1, 0))
+call s:ok('c の案内だけを表示し a を除去',
+      \ gnosis#insert_prompt_text(1, 0) =~# 'c=自分Ctx' &&
+      \ gnosis#insert_prompt_text(1, 0) !~# 'a=相手Ctx', gnosis#insert_prompt_text(1, 0))
 
 " a is no longer an existing-link menu action. No Context or body mutation.
 call s:mk('removed_a.md', 'a 無効試験', ['本文。'])
