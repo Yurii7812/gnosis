@@ -109,6 +109,14 @@ Homebrew で足りないものを入れ、`~/Applications/Gnosis.app` を作り�
 
 ### Windows 10 / 11
 
+**EXE ひとつで導入する方法（Windows 11 推奨）**
+
+[GitHub Releases](https://github.com/Yurii7812/gnosis/releases) の配布ファイル `Gnosis-Setup.exe` をダウンロードして実行します。Git・Vim・Pythonを事前インストールする必要はありません。EXEはWindows標準のPowerShellを起動し、Gnosisの既存インストーラーに処理を引き継ぎます。必要なWSL2・Ubuntu・WezTerm等は自動取得・設定します。インストール完了後はデスクトップの「Gnosis」アイコンから起動します。
+
+これは**オンラインの一括インストーラー**で、依存ツール全体をEXE内に含むオフライン版ではありません。インターネット接続と管理者承認が必要で、WSL有効化に伴うWindowsの再起動、Ubuntu初回のユーザー名・パスワード入力が必要な場合があります。Windowsに`winget`が存在しない場合など、対応条件を満たさないときは完了できません。配布用EXEは `.github/workflows/gnosis-windows-exe.yml` で作成し、タグ付きリリースのAssetsに掲載します。
+
+**EXEを使わない場合**は、Windows標準のPowerShellに次の1行を貼り付けます。
+
 **PowerShell（Windows PowerShell 5.1 で可）に次の1行を貼り付けて実行します。** Git・Python・Vim・Ubuntu・WezTermを事前に用意する必要はありません。
 
 ```powershell
