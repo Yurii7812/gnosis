@@ -69,6 +69,12 @@ class T(unittest.TestCase):
         self.assertIn("title.md", ids)
         self.assertIn("題が近い", next(d for d in got if d["id"] == "title.md")["why"])
 
+    def test_short_title_related_even_without_body(self):
+        r = Path(self.tmp.name)
+        (r / "short.md").write_text(note("言語"))
+        (r / "grammar.md").write_text(note("言語文法"))
+        self.assertIn("grammar.md", [x["id"] for x in mv.related(r, "short.md")])
+
     def test_search_title_first(self):
         r = Path(self.tmp.name)
         self.assertEqual(mv.search(r, ["ハーブ"])[0], "herb.md")
