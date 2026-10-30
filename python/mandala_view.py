@@ -386,78 +386,29 @@ def _gcache(g) -> dict:
 
 
 def _related(g, note: str, limit: int = 80) -> list[dict]:
+    """Predict topical neighbors from actual prose and title, never filing metadata.
+
+    Explicit links and index memberships remain available in the ordinary
+    Mandala/Links views; they do not automatically imply content similarity.
+    """
     if note not in g.nodes:
         return []
+    import content_rank as cr
     gc = _gcache(g)
-    me = g.nodes[note]
-    score: dict[str, dict[str, float]] = {}
-
-    def add(x: str, why: str, pts: float):
-        if x == note or x not in g.nodes:
-            return
-        d = score.setdefault(x, {})
-        d[why] = max(d.get(why, 0.0), pts)
-
-    my_groups = set()
-    for e in gc["out"].get(note, ()):
-        if e.dst in g.nodes and e.kind in _OUT:
-            add(e.dst, *_OUT[e.kind])
-            if e.kind in GROUP_KINDS:
-                my_groups.add(e.dst)
-    for e in gc["in"].get(note, ()):
-        # 元の実装は「自分から出る辺」を先に見て、そうでなければ入る辺を見る（自己ループは前者だけ）
-        if e.src == note:
-            continue
-        if e.src in g.nodes and e.kind in _IN:
-            add(e.src, *_IN[e.kind])
-            if e.kind == "link" and g.nodes[e.src].is_group:
-                my_groups.add(e.src)
-    # 同じ索引に載っているノート
-    for gid in my_groups:
-        for m in _members(g, gid):
-            add(m, "同じ索引: " + g.nodes[gid].title, 2.0)
-    # Folgezettel の枝
-    for nid, n in gc["fz"]:
-        rel = _fz_relation(me.fz, n.fz) if nid != note else None
-        if rel:
-            add(nid, rel[0], rel[1])
-    # 題の言葉（珍しい語ほど重い）
-    my_tok = _tokens(me.title)
-    if my_tok:
-        df = gc["df"]
-        toks_of = gc["toks_of"]
-        import math
-        for nid, tk in toks_of.items():
-            common = my_tok & tk
-            if nid != note and common:
-                pts = sum(1.5 * math.log(1 + len(g.nodes) / df[t]) / 3 for t in common)
-                add(nid, "題が近い", min(pts, 4.0))
-    # 本文の内容
-    if "vec" not in gc:   # 全ノートの本文の語の重みは、グラフ 1 つにつき 1 回だけ求める
-        gc["vec"] = _body_vectors(g)
-    vec, _idf = gc["vec"]
-    mv = vec.get(note, {})
-    if mv:
-        for nid, v in vec.items():
-            if nid == note:
+    if "content_profiles" not in gc:
+        docs = {}
+        for nid, n in g.nodes.items():
+            if cr.organizational(nid, n.title, n.is_group):
                 continue
-            small, big = (mv, v) if len(mv) < len(v) else (v, mv)
-            cos = sum(x * big.get(t, 0.0) for t, x in small.items())
-            if cos >= 0.12:
-                add(nid, "内容が近い", min(10.0 * cos, 6.0))
-    # つながりをたどった近さ
-    walk = _walk_scores(g, note)
-    if walk:
-        top = max(walk.values())
-        for nid, w in walk.items():
-            if w / top >= 0.05:
-                add(nid, "つながりが近い", 5.0 * (w / top) ** 0.5)
-    out = []
-    for nid, why in score.items():
-        total = sum(why.values())
-        out.append({"id": nid, "score": round(total, 2), "why": [k for k, _v in sorted(why.items(), key=lambda kv: -kv[1])]})
-    out.sort(key=lambda d: (-d["score"], g.nodes[d["id"]].title))
-    return out[:limit]
+            try:
+                raw = (g.root / nid).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                raw = ""
+            docs[nid] = cr.profile(raw, n.title, nid)
+        gc["content_profiles"] = docs
+    matches = cr.similarities(gc["content_profiles"], note, limit)
+    return [{"id": nid, "score": round(100 * sim, 2),
+             "why": ["本文・題が近い"]} for nid, sim in matches]
 
 
 def search(root: str | Path, words: list[str], limit: int = 200) -> list[str]:
