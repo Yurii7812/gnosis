@@ -121,12 +121,19 @@ function! s:line(mark, num, title, tail) abort
 endfunction
 
 function! s:head_text() abort
-  let l:head = s:F.mode ==# 'upper' ? 'FOLGEZETTEL / ' . gnosis#i18n#tr('上位表示') : 'FOLGEZETTEL'
+  let l:head = gnosis#hint#tabs('fz', winwidth(0))
+  if s:F.mode ==# 'upper' && strdisplaywidth(l:head . ' 上位') <= winwidth(0)
+    let l:head .= ' 上位'
+  endif
   for l:k in ['search', 'filter', 'highlight']
-    if !empty(get(s:F, l:k, '')) | let l:head .= ' / ' . {'search': 's', 'filter': 'x', 'highlight': 'm'}[l:k] . ': ' . s:F[l:k] | endif
+    if !empty(get(s:F, l:k, ''))
+      let l:tag = ' / ' . {'search': 's', 'filter': 'x', 'highlight': 'm'}[l:k] . ': ' . s:F[l:k]
+      if strdisplaywidth(l:head . l:tag) <= winwidth(0) | let l:head .= l:tag | endif
+    endif
   endfor
   let l:pick = gnosis#mview#pick_label()
-  return empty(l:pick) ? l:head : l:head . '  ' . l:pick
+  return empty(l:pick) || strdisplaywidth(l:head . '  ' . l:pick) > winwidth(0)
+        \ ? l:head : l:head . '  ' . l:pick
 endfunction
 
 function! s:add(lines, cells, items, line, cell, item) abort
@@ -324,6 +331,7 @@ function! gnosis#fznav#render() abort
     let l:i += 1
   endwhile
   call gnosis#hint#put(s:hint_text())
+  call gnosis#hint#cmdline_schedule()
   call gnosis#listnav#paint(get(s:F, 'highlight', ''), map(copy(l:items), 'get(v:val, "path", "")'), get(s:F, 'highlight_paths', {}))
   setlocal nomodifiable nomodified
   " カーソルと表示位置
@@ -759,6 +767,7 @@ endfunction
 function! gnosis#fznav#setup() abort
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=3 sidescrolloff=0
+  call gnosis#hint#cmdline_install()
   nnoremap <buffer><nowait><silent> j <Cmd>call <SID>move(v:count1)<CR>
   nnoremap <buffer><nowait><silent> <Down> <Cmd>call <SID>move(v:count1)<CR>
   nnoremap <buffer><nowait><silent> k <Cmd>call <SID>move(-v:count1)<CR>
@@ -783,6 +792,8 @@ function! gnosis#fznav#setup() abort
   nnoremap <buffer><nowait><silent> s <Cmd>call gnosis#listnav#enter_mode('search')<CR>
   nnoremap <buffer><nowait><silent> l <Cmd>call gnosis#listnav#enter_mode('links')<CR>
   nnoremap <buffer><nowait><silent> r <Cmd>call gnosis#listnav#enter_mode('similar')<CR>
+  nnoremap <buffer><nowait><silent> <Tab> <Cmd>call gnosis#listnav#cycle_mode(1)<CR>
+  nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call gnosis#listnav#cycle_mode(-1)<CR>
   nnoremap <buffer><nowait><silent> m <Cmd>call <SID>menu()<CR>
   nnoremap <buffer><nowait><silent> K <Cmd>call <SID>toggle_hint()<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#mview#toggle_origin()<CR>
