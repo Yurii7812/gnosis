@@ -146,10 +146,10 @@ call s:ok('通常へ戻すと重ねる設定もそのまま', get(s:st(), 'near_
 call s:keys('CRfD')
 call s:ok('3x3 から D でも外向き・配下だけになる', s:st().size == 9 && s:st().out_on && s:st().out_dir ==# 'down' && s:st().depth == 2)
 let s:basis = get(s:st(), 'dbasis', 'center')
-let s:direction_row = match(split(gnosis#mview#panel_text(), "\n"), '外向きに辿る方向 D') - 2
+let s:direction_row = match(split(gnosis#mview#panel_text(), "\n"), 'D 辿る方向') - 2
 call gnosis#mview#panel_act(s:direction_row)
 call s:ok('Z の D も同じ切り替え', s:st().out_dir ==# 'all' && get(s:st(), 'dbasis', 'center') ==# s:basis)
-call s:ok('設定に D の方向・b の近さ基準がある', gnosis#mview#panel_text() =~# '外向きに辿る方向 D' && gnosis#mview#panel_text() =~# '近さ順の基準 rank（center ⇔ block。通常9×9の外側） b')
+call s:ok('設定に D の方向・b の近さ基準がある', gnosis#mview#panel_text() =~# 'D 辿る方向' && gnosis#mview#panel_text() =~# 'b 順位の基準')
 call s:keys('D')
 call gnosis#mview#preset_save('配下')
 call s:keys('D')

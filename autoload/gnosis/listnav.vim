@@ -60,6 +60,7 @@ function! gnosis#listnav#setup() abort
   endif
   setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted nowrap nolist nonumber norelativenumber
   setlocal nocursorline nospell nofoldenable colorcolumn= signcolumn=no filetype=gnosis-mandala scrolloff=3
+  call gnosis#hint#cmdline_install()
   for [l:key, l:cmd] in items({'j': "call gnosis#listnav#move(1)", 'k': "call gnosis#listnav#move(-1)",
         \ '<Down>': "call gnosis#listnav#move(1)", '<Up>': "call gnosis#listnav#move(-1)",
         \ 'gg': "call gnosis#listnav#edge(0)", 'G': "call gnosis#listnav#edge(1)",
@@ -76,6 +77,7 @@ function! gnosis#listnav#setup() abort
         \ '=': "call gnosis#mview#win_op('equalize')", '.': "call gnosis#mview#win_op('reload')",
         \ '<C-Right>': "call gnosis#mview#switch_view()", '<C-Left>': "call gnosis#mview#switch_view('previous')",
         \ 'gv': "call gnosis#mview#switch_view()", '?': "call gnosis#listnav#help()",
+        \ '<Tab>': "call gnosis#listnav#cycle_mode(1)", '<S-Tab>': "call gnosis#listnav#cycle_mode(-1)",
         \ 'e': "call gnosis#listnav#decide(0)", 'I': "call gnosis#listnav#decide(1)"})
     execute 'nnoremap <buffer><nowait><silent> ' . l:key . ' <Cmd>' . l:cmd . '<CR>'
   endfor
@@ -206,7 +208,8 @@ function! gnosis#listnav#render() abort
   let l:oldrow = get(s:L.rows, line('.') - 3, {})
   let s:L.rows = s:rows()
   let l:title = gnosis#i18n#tr({'search': '検索', 'similar': '類似', 'links': 'リンク'}[s:L.mode])
-  let s:L.title = 'FOLGEZETTEL / ' . l:title
+  let s:L.title = empty($GNOSIS_GUI_PORT)
+        \ ? gnosis#hint#tabs(s:L.mode, winwidth(0)) : 'FOLGEZETTEL / ' . l:title
   let l:pick = gnosis#mview#pick_label()
   if !empty(l:pick) | let s:L.title .= '  ' . l:pick | endif
   let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr({'all': '全部', 'index': '索引とグループ', 'no-index': '索引以外'}[s:L.scope])
@@ -249,6 +252,7 @@ function! gnosis#listnav#render() abort
   call gnosis#listnav#paint(s:L.highlight, ['', ''] + map(copy(s:L.rows), 'v:val.path'), s:L.hits)
   call gnosis#listnav#mark()
   call gnosis#mview#sync_leader()
+  call gnosis#hint#cmdline_schedule()
 endfunction
 
 function! gnosis#listnav#paint(query, ...) abort
@@ -370,6 +374,24 @@ function! gnosis#listnav#enter_mode(mode) abort
   if a:mode ==# 'search' | call gnosis#listnav#prompt('search') | endif
 endfunction
 
+" Tab / Shift-Tab: 番号・リンク・検索・類似を循環。検索欄は自動で開かない。
+function! gnosis#listnav#cycle_mode(dir) abort
+  let l:order = ['fz', 'links', 'search', 'similar']
+  let l:view = gnosis#mview#view()
+  let l:current = l:view ==# 'fz' ? 'fz' : get(s:L, 'mode', 'links')
+  let l:i = index(l:order, l:current)
+  let l:next = l:order[(l:i + a:dir + len(l:order)) % len(l:order)]
+  if l:next ==# 'fz'
+    call gnosis#mview#switch_view('fz')
+  elseif l:view ==# 'fz'
+    let s:want_mode = l:next
+    call gnosis#mview#switch_view('list')
+  else
+    call gnosis#listnav#option('mode', l:next)
+  endif
+  call gnosis#hint#cmdline_schedule()
+endfunction
+
 function! gnosis#listnav#mode(mode) abort
   call gnosis#listnav#enter_mode(a:mode)
 endfunction
@@ -403,6 +425,7 @@ endfunction
 function! gnosis#listnav#input(label, initial, Callback) abort
   let l:text = a:initial
   let l:was_input = get(b:, 'gnosis_nav_input', 0)
+  call gnosis#hint#cmdline_hide()
   let b:gnosis_nav_input = 1
   try
   while 1
@@ -433,6 +456,7 @@ function! gnosis#listnav#input(label, initial, Callback) abort
   endwhile
   finally
     let b:gnosis_nav_input = l:was_input
+    call gnosis#hint#cmdline_schedule()
   endtry
 endfunction
 
