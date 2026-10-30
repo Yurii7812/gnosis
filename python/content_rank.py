@@ -48,7 +48,7 @@ def _tokens(text: str):
             continue
         yield word
         # Suffix variation across Russian inflections otherwise loses all overlap.
-        if len(word) > 4:
+        if len(word) >= 4:
             for i in range(len(word) - 2):
                 yield word[i:i + 3]
     for run in _CJK.findall(text):
