@@ -8,8 +8,12 @@ on:
       - ".github/workflows/gnosis-windows-exe.yml"
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - "install/gnosis-setup.iss"
+      - "install/bootstrap.ps1"
+      - ".github/workflows/gnosis-windows-exe.yml"
 
 jobs:
   windows-exe:
@@ -55,24 +59,40 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  github-release:
-    if: startsWith(github.ref, 'refs/tags/v')
+  # No GitHub Release or GitHub account needed for end users.
+  # Store the small compiled EXE directly in the public repository on main,
+  # where raw.githubusercontent.com can serve it indefinitely.
+  repository-download:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: windows-exe
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
       - uses: actions/download-artifact@v4
         with:
           name: Gnosis-Setup-Windows
-          path: dist
-      - name: Publish direct .exe download to GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: build
+      - name: Publish direct-download EXE and SHA-256 to downloads/
+        shell: bash
         run: |
-          set -eu
-          tag="$GITHUB_REF_NAME"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --verify-tag --title "Gnosis $tag" --notes "Windows: download Gnosis-Setup.exe, run it and follow the setup prompts. Internet, WSL2, and administrator approval may be required."
+          set -euo pipefail
+          test -s build/Gnosis-Setup.exe
+          test "$(head -c 2 build/Gnosis-Setup.exe)" = "MZ"
+          mkdir -p downloads
+          cp build/Gnosis-Setup.exe downloads/Gnosis-Setup.exe
+          (cd downloads && sha256sum Gnosis-Setup.exe > Gnosis-Setup.exe.sha256)
+          git add downloads/Gnosis-Setup.exe downloads/Gnosis-Setup.exe.sha256
+          if git diff --cached --quiet; then
+            echo "The published EXE already matches the latest Windows build."
+            exit 0
           fi
-          gh release upload "$tag" dist/Gnosis-Setup.exe --clobber
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "build(windows): publish Gnosis-Setup.exe for direct download [skip ci]"
+          git push origin HEAD:main
+          echo "Direct download: https://raw.githubusercontent.com/Yurii7812/gnosis/main/downloads/Gnosis-Setup.exe"
