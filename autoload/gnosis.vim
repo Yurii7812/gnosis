@@ -9912,7 +9912,7 @@ function! gnosis#note_template(title, ...) abort
   call add(l:header, '---')
   if s:pkm_format() ==# 'v2'
     " 普通のノート（zn）は本文の余白を 3 行（最初のカーソルは真ん中）、
-    " グループノート（zk）は 1 行だけ空ける（グループは容器で本文を持たないため）。
+    " グループノート（zn → g）は 1 行だけ空ける（グループは容器で本文を持たないため）。
     let l:gap = l:is_cat ? [''] : ['', '', '']
     return l:header + ['', '# ' . a:title] + l:gap
   endif
@@ -10934,12 +10934,25 @@ function! gnosis#v2_new_plain() abort
   call s:v2_new_interactive('')
 endfunction
 
-" zk: グループノート作成（attribute: グループ）。位置は zn と同じ h/Enter/o/p。
+" 旧公開関数名は互換のため残す。実際のキーは zn → g。
 function! gnosis#v2_new_group() abort
   call s:v2_new_interactive('group')
 endfunction
 
-" zk（ビジュアル）… 選択範囲を中身にしたグループノートを作る。
+" ビジュアル zn → g: 選択範囲からグループを作成する（他のキーはキャンセル）。
+function! gnosis#v2_new_visual_prompt() abort range
+  echo s:fit_prompt(gnosis#i18n#tr('g=選択範囲からグループを作る（Esc/q キャンセル）'),
+        \ gnosis#i18n#tr('g=グループ作成 (Esc)'))
+  let l:ch = s:getkey()
+  redraw
+  if l:ch ==# 'g'
+    call gnosis#v2_new_group_visual()
+  else
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（何も変更しません）')
+  endif
+endfunction
+
+" zn → g（ビジュアル）… 選択範囲を中身にしたグループノートを作る。
 "   選択範囲は新しいグループへのリンクで**置き換える**（リンクをグループへ移す）。
 "   グループの ### Context は今のノート。作成後グループを開いて本文末にカーソル。
 function! gnosis#v2_new_group_visual() abort range
@@ -10950,10 +10963,10 @@ function! gnosis#v2_new_group_visual() abort range
   if empty(l:cur)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 名前付きバッファで実行して') | echohl NONE | return
   endif
-  " グループの上では zk を使わない（ビジュアルでも同じ。トピックIndex は起点のノートで zk → n）
+  " グループ上での BranchGroup 作成は禁止（ビジュアルでも同じ）。
   if s:buf_is_group()
     echohl WarningMsg
-    echo 'Gnosis: ' . gnosis#i18n#tr('グループの上では zk は使えません（トピックIndex は起点のノートで zk → n）')
+    echo 'Gnosis: ' . gnosis#i18n#tr('グループ上では使えません（起点の通常ノートで zn → g）')
     echohl NONE
     return
   endif
@@ -11531,7 +11544,7 @@ function! gnosis#add_to_parent() abort
   echo gnosis#i18n#tr('Gnosis: Context に追加 → ') . fnamemodify(l:tgt, ':t')
 endfunction
 
-" zk n は開いているノートの BranchGroup: へ追加。
+" zn → g は開いているノートの BranchGroup: へ追加。
 function! s:append_link_to_branch_group(link) abort
   let l:lines = getline(1, '$')
   let l:flags = s:fence_flags(l:lines)
@@ -11654,8 +11667,17 @@ function! s:v2_new_interactive(attr) abort
   endif
   let l:grp_src = s:buf_is_group()
   if !empty(a:attr)
-    " zk: トピックIndex（グループ）は、起点になる通常のノートから n で作る。グループの上では使えない。
+    " 従来ヘルパーも直接作成。旧来の追加 n 入力は不要。
     if l:grp_src
+      echohl WarningMsg
+      echo 'Gnosis: ' . gnosis#i18n#tr('グループ上ではBranchGroupを作れません（起点の通常ノートで zn → g）')
+      echohl NONE
+      return
+    endif
+    call s:v2_new_run('group', 'n', 0)
+    return
+  endif
+  if l:grp_src
       echohl WarningMsg
       echo 'Gnosis: ' . gnosis#i18n#tr('グループの上では zk は使えません（トピックIndex は起点のノートで zk → n）')
       echohl NONE
@@ -11697,13 +11719,17 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name, 'group_only': l:gch ==# 'g'})
     return
   endif
-  " zn: 位置を決めてから関係性を決める。b/p/r は本文リンクなしの短縮操作。
-  echo s:fit_prompt(gnosis#i18n#tr('位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  b=子だけ / p=親だけ / r=Relatedだけ  (Esc/q 中止)'),
-        \ gnosis#i18n#tr('位置: Enter=末 h=下 i=位置 t=節 o=なし / b=子 p=親 r=Related (Esc)'))
+  " zn: 位置→関係性。g は位置選択を飛ばし、BranchGroup を直接作成。
+  echo s:fit_prompt(gnosis#i18n#tr('位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  g=BranchGroup / b=子だけ / p=親だけ / r=Relatedだけ  (Esc/q 中止)'),
+        \ gnosis#i18n#tr('位置: Enter=末 h=下 i=位置 t=節 o=なし / g=グループ b=子 p=親 r=Related (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
+  endif
+  if l:ch ==# 'g'
+    call s:v2_new_run('group', 'n', 0)
+    return
   endif
   if index(['b', 'p', 'r'], l:ch) >= 0
     if l:ch ==# 'b' && !gnosis#branch#can_parent_here()
@@ -11720,7 +11746,7 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if index(['h', 'i', 'o'], l:ch) < 0 && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / h / i / t / o / b / p / r のどれか）')
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / h / i / t / o / g / b / p / r のどれか）')
     return
   endif
   call s:v2_new_relation(a:attr, l:ch, 0)
@@ -11906,14 +11932,14 @@ function! s:outline_pick_done(lnum) abort
   endif
 endfunction
 
-" zn / zk の続き。a:ch は位置キー、a:head_lnum は t のときの見出し行。
+" zn の続き。a:ch は位置キー、a:head_lnum は t のときの見出し行。
 " a:1（任意）: {'ts': 新ノートのファイル名, 'name': グループに登録する表示名, 'place': c の置き場所（s:c_ask_place の答え）}
 "   通常のノート: Enter / t / h は今のノートにリンクを置き、b / p は Branch だけ、o は孤立、c は新ノートの Context に
 "   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
 "   r は Related だけを相互に追加し、本文リンクや自動 Branch は付けない。
 "   zn の h / t / i / Enter は位置のみ。関係を選んだときだけ Branch / Context / Related を記録する。
 "   グループの上: Enter は登録＋BranchGroup の起点が親、g は登録だけ（group_only）、o は孤立。
-"   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
+"   zn → g: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
 function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   let l:ch = a:ch
   let l:opt = a:0 ? a:1 : {}
@@ -11945,8 +11971,8 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     return
   endif
 
-  let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
-  if (l:relation ==# 'b' || l:zk_branch_group) && !gnosis#branch#can_parent_here()
+  let l:creating_branch_group = !empty(a:attr) && l:ch ==# 'n'
+  if (l:relation ==# 'b' || l:creating_branch_group) && !gnosis#branch#can_parent_here()
     return
   endif
   if l:relation ==# 'p' && !gnosis#branch#can_child_here()
@@ -11982,7 +12008,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
 
   " 親子関係は明示指定だけ。グループ起点の既存の関係登録は維持する。
   let l:branch_ok = 0
-  if l:relation ==# 'b' || l:relation ==# 'p' || l:zk_branch_group || !empty(l:origin)
+  if l:relation ==# 'b' || l:relation ==# 'p' || l:creating_branch_group || !empty(l:origin)
     let l:parent = empty(l:origin) ? l:cur : l:origin
     let l:br = l:relation ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:parent, [l:file])
     if !get(l:br, 'ok', 0)
@@ -15816,7 +15842,7 @@ function! s:review_readings(group, members) abort
   return map(l:out, '[str2nr(matchstr(v:val, "^\\d")), matchstr(v:val, "\\t\\zs.*")]')
 endfunction
 
-" zn / zk でグループに新しいノートを作ったとき: 入れた表示名のよみを 1 行で聞く（既定は推測）。
+" zn でグループに新しいノートを作ったとき: 入れた表示名のよみを 1 行で聞く（既定は推測）。
 function! s:ask_new_member_yomi(group, note, name) abort
   " 確認画面を省く回帰テストでは、この入力も省く（EOF で Vim が終了するのを防ぐ）。
   if get(g:, 'gnosis_test_review_skip', 0)
