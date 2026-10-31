@@ -1,19 +1,19 @@
 " =============================================================================
 " autoload/gnosis/panel.vim — 右側のパネル（アウトライン・タブのボード・ハブ。1 つに統合）と、窓の行き来
 "
-"   \s        … 右のパネルを出す（前に使った中身。最初はアウトライン）。\o \q \h は、その中身で出す近道。
-"              パネルは右に 1 つだけ。同じキーをもう一度押すと、ノートの窓 ⇔ パネル を行き来する。パネルの中の q で閉じる。
-"              （\q のボードの中の D で、全部のタブを消す）
+"   \s        … 右のパネルを出す（初回は Tab）。再度 \s でノート ⇔ パネル。
+"   \q / \h  … どの窓からでも本文のノートを Tab / Hub に登録（\Q / \H は廃止）。
+"              パネルは右に 1 つだけ。パネル内の q で閉じる。Tab の D で全登録を消す。
 "   パネルの中のキー（3 つの中身どれでも同じ）
-"     Tab / Shift+Tab（または Ctrl+→ / Ctrl+←）  アウトライン → タブ → ハブ と切り替える（o t h で直接その中身へ）
+"     Tab / Shift+Tab（または Ctrl+→ / Ctrl+←）  タブ → ハブ → アウトライン と切り替える（t h o で直接その中身へ）
 "     s 検索  n N 次・前のヒット   x 絞り込み（合わない行を畳む）   H ハイライト   m メニュー   K ヒント行のオン・オフ   Esc 全部やめる
 "       書き方は gs・曼荼羅の s / x / m と同じ（空白 AND・語の前の - で NOT・| で OR・"…" で句）
 "     e   \l で入れるノートを選んでいる最中に、カーソルの行のノートに決める（決めずに動き回ってもよい）
 "   Shift+← Shift+→ （または gh gl）… 窓を 1 つ左・右へ。左のビュー（曼荼羅 / Folgezettel）・ノート・右のパネルの順で、端では止まる。
 " =============================================================================
 
-let s:P = {'kind': '', 'win': -1, 'src': -1, 'last': 'outline'}
-let s:KINDS = ['outline', 'tabs', 'hub']
+let s:P = {'kind': '', 'win': -1, 'src': -1, 'last': 'tabs'}
+let s:KINDS = ['tabs', 'hub', 'outline']
 
 function! s:width() abort
   return get(g:, 'gnosis_panel_width', get(g:, 'gnosis_outline_width', 30))
@@ -52,7 +52,7 @@ function! s:note_win() abort
   return -1
 endfunction
 
-" \o \h \q: kind は 'outline' / 'hub' / 'tabs'
+" 右パネルを直接切り替える（\o、:GnosisTabs などで利用）。
 function! gnosis#panel#key(kind) abort
   let l:cur = gnosis#panel#kind()
   if l:cur ==# a:kind
@@ -71,6 +71,61 @@ function! gnosis#panel#key(kind) abort
     call s:close_quiet()
   endif
   call s:open(a:kind)
+endfunction
+
+" 左ビュー・Tab・Hub・Outline のどこからでも、本文に表示しているノートを登録する。
+function! gnosis#panel#add_current(board) abort
+  let l:nw = s:note_win()
+  if l:nw < 0 || empty(getwininfo(l:nw))
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノート上で実行して') | echohl NONE
+    return
+  endif
+  let l:board = a:board ==# 'tabs' ? 'tabs' : ''
+  " win_execute で本文ウィンドウのバッファを使う。パネルの .md を登録しない。
+  let l:output = win_execute(l:nw, 'call gnosis#hub_set(' . string(l:board) . ')')
+  if !empty(trim(l:output))
+    echomsg trim(l:output)
+  endif
+  " 登録先のボードを表示中なら、未編集時だけディスクから再読込する。
+  let l:pw = s:panel_win()
+  if l:pw > 0 && !getbufvar(winbufnr(l:pw), '&modified')
+        \ && ((l:board ==# 'tabs' && gnosis#panel#kind() ==# 'tabs')
+        \ || (empty(l:board) && gnosis#panel#kind() ==# 'hub'))
+    call win_execute(l:pw, 'silent! checktime')
+  endif
+endfunction
+
+" Tab / Hub パネルの Enter は、本文ウィンドウへリンク先を開く。
+" パネル上の Vim の edit で開かない（ボードそのものを置き換えない）。
+function! gnosis#panel#open_selected() abort
+  if index(['tabs', 'hub'], gnosis#panel#focused_kind()) < 0
+    return
+  endif
+  let l:raw = matchstr(getline('.'), '\](\zs[^)]*\ze)')
+  if empty(l:raw)
+    echo gnosis#i18n#tr('この行にはノートのリンクがありません')
+    return
+  endif
+  let l:dest = fnamemodify(gnosis#resolve_link(l:raw), ':p')
+  if !filereadable(l:dest)
+    echohl WarningMsg | echo gnosis#i18n#tr('見つかりません: ') . l:dest | echohl NONE
+    return
+  endif
+  let l:nw = s:note_win()
+  if l:nw < 0 || empty(getwininfo(l:nw))
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: ノート上で実行して') | echohl NONE
+    return
+  endif
+  call win_execute(l:nw, 'call gnosis#panel#open_path_in_note(' . string(l:dest) . ')')
+endfunction
+
+" 本文ウィンドウ内でのみ実行する。リンク履歴と未保存バッファを維持する。
+function! gnosis#panel#open_path_in_note(path) abort
+  if fnamemodify(expand('%:p'), ':p') ==# a:path
+    return
+  endif
+  call gnosis#push_history()
+  execute 'hide edit ' . fnameescape(a:path)
 endfunction
 
 function! s:close_quiet() abort
@@ -99,8 +154,9 @@ function! s:open(kind) abort
   let s:P.win = win_getid()
   let s:P.kind = a:kind
   silent! execute 'edit ' . fnameescape(l:file)
-  setlocal bufhidden=hide noundofile nowrap winfixwidth
+  setlocal bufhidden=hide noundofile nowrap winfixwidth autoread
   nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#panel#close()<CR>
+  nnoremap <buffer><nowait><silent> <CR> <Cmd>call gnosis#panel#open_selected()<CR>
   " < > は境目を動かす向き（右のパネルでは < で境目が左へ＝広がる、> で右へ＝狭まる）
   nnoremap <buffer><nowait><silent> <lt> <Cmd>call gnosis#panel#width(4)<CR>
   nnoremap <buffer><nowait><silent> > <Cmd>call gnosis#panel#width(-4)<CR>
@@ -115,7 +171,7 @@ function! s:open(kind) abort
   augroup END
 endfunction
 
-" \s: 右のパネルを出す（前に使った中身。無ければアウトライン）。出ていれば ノートの窓 ⇔ パネル
+" \s: 右のパネルを出す（前に使った中身。初回は Tab）。同じキーでノート ⇔ パネル
 function! gnosis#panel#open_last() abort
   call gnosis#panel#key(empty(gnosis#panel#kind()) ? s:P.last : gnosis#panel#kind())
 endfunction
@@ -131,7 +187,7 @@ function! gnosis#panel#switch(kind) abort
   call s:open(a:kind)
 endfunction
 
-" Tab（1）/ Shift+Tab（-1）: アウトライン → タブ → ハブ → アウトライン
+" Tab（1）/ Shift+Tab（-1）: タブ → ハブ → アウトライン → タブ
 function! gnosis#panel#cycle(d) abort
   let l:i = index(s:KINDS, gnosis#panel#kind())
   if l:i < 0
@@ -153,7 +209,7 @@ endfunction
 function! gnosis#panel#attach() abort
   nnoremap <buffer><nowait><silent> <Tab>   <Cmd>call gnosis#panel#cycle(1)<CR>
   nnoremap <buffer><nowait><silent> <S-Tab> <Cmd>call gnosis#panel#cycle(-1)<CR>
-  " Ctrl+→ / Ctrl+←: 左のビューの切り替えと同じ向きで、アウトライン → タブ → ハブ（端末が Ctrl+矢印を送らないときは Tab）
+  " Ctrl+→ / Ctrl+←: 左のビューと同じ向きで、タブ → ハブ → アウトライン
   nnoremap <buffer><nowait><silent> <C-Right> <Cmd>call gnosis#panel#cycle(1)<CR>
   nnoremap <buffer><nowait><silent> <C-Left>  <Cmd>call gnosis#panel#cycle(-1)<CR>
   nnoremap <buffer><nowait><silent> o <Cmd>call gnosis#panel#switch('outline')<CR>
@@ -178,20 +234,37 @@ function! gnosis#panel#attach() abort
   augroup END
 endfunction
 
-" 窓の一番上のヒント行: 今の中身（[ ]）と、最低限のキー
+" 上のヒントは画面名（常に全表示）と現在の画面固有の操作だけを示す。
+" 通常の j/k や単なる画面切り替えのキーは案内しない。
 function! s:hint_text() abort
-  let l:k = win_getid() == s:P.win ? s:P.kind : (gnosis#outline#is_open() && win_getid() == gnosis#outline#win() ? 'outline' : s:P.kind)
-  let l:cur = get({'outline': 'o', 'tabs': 't', 'hub': 'h'}, l:k, '')
-  return gnosis#hint#line([['o', 'アウトライン'], ['t', 'タブ'], ['h', 'ハブ']], l:cur,
-        \ 'm:' . gnosis#i18n#tr('メニュー') . ' ?:' . gnosis#i18n#tr('説明'))
+  let l:k = gnosis#panel#focused_kind()
+  let l:names = []
+  for l:item in s:KINDS
+    let l:name = get({'tabs': 'Tab', 'hub': 'Hub', 'outline': 'Outline'}, l:item, l:item)
+    call add(l:names, l:item ==# l:k ? '[' . l:name . ']' : l:name)
+  endfor
+  let l:action = l:k ==# 'tabs' ? 'D:全閉'
+        \ : l:k ==# 'hub' ? '\h:追加' : 'S:左右'
+  return ' ' . join(l:names, ' ') . '  ' . l:action
+endfunction
+
+" コマンドバー用。パネルがフォーカス中のときだけ種類を返す。
+function! gnosis#panel#focused_kind() abort
+  if win_getid() == s:P.win && s:P.win > 0
+    return s:P.kind
+  endif
+  if gnosis#outline#is_open() && win_getid() == gnosis#outline#win()
+    return 'outline'
+  endif
+  return ''
 endfunction
 
 function! gnosis#panel#hint() abort
-  call gnosis#hint#ensure(s:hint_text())
+  call gnosis#hint#ensure(s:hint_text(), 1)
 endfunction
 
 function! gnosis#panel#toggle_hint() abort
-  call gnosis#hint#toggle({-> gnosis#hint#put(s:hint_text())})
+  call gnosis#hint#toggle({-> gnosis#hint#put(s:hint_text(), 1)})
 endfunction
 
 " m: やることを番号で選ぶメニュー
@@ -219,7 +292,7 @@ function! gnosis#panel#help_lines() abort
   return [
         \ gnosis#i18n#tr('右のパネル（アウトライン・タブ・ハブを 1 つに統合）'),
         \ '',
-        \ 'Tab / Ctrl+→   ' . gnosis#i18n#tr('アウトライン → タブ → ハブ と切り替える（逆回りは Shift+Tab / Ctrl+←）'),
+        \ 'Tab / Ctrl+→   ' . gnosis#i18n#tr('タブ → ハブ → アウトライン と切り替える（逆回りは Shift+Tab / Ctrl+←）'),
         \ 'o  t  h          ' . gnosis#i18n#tr('アウトライン・タブ・ハブへ直接'),
         \ 's  n  N          ' . gnosis#i18n#tr('検索・次のヒット・前のヒット（書き方は gs と同じ）'),
         \ 'x                ' . gnosis#i18n#tr('絞り込み（合わない行を畳む。中身は変えない）'),
@@ -233,7 +306,8 @@ function! gnosis#panel#help_lines() abort
         \ '< >              ' . gnosis#i18n#tr('パネルの幅（< で広く、> で狭く）'),
         \ 'S                ' . gnosis#i18n#tr('アウトラインで、左右を入れ替える'),
         \ 'Shift+← Shift+→  ' . gnosis#i18n#tr('窓を左・右へ。端なら、無い方（左のビュー・右のパネル）を開く'),
-        \ '\s \o \q \h      ' . gnosis#i18n#tr('パネルを出す・中身を切り替える（同じキーでノート ⇔ パネル）'),
+        \ '\s               ' . gnosis#i18n#tr('パネルを開き、再度押すとノートと往復'),
+        \ '\q \h            ' . gnosis#i18n#tr('どの窓からでも本文のノートをタブ・ハブに登録'),
         \ '\W               ' . gnosis#i18n#tr('ノートだけを表示する'),
         \ 'q                ' . gnosis#i18n#tr('パネルを閉じる'),
         \ '?                ' . gnosis#i18n#tr('この説明')]
@@ -251,11 +325,11 @@ function! gnosis#panel#help() abort
   call popup_dialog(gnosis#panel#help_lines(), {'title': ' ? ', 'padding': [0, 1, 0, 1], 'border': [], 'close': 'click', 'filter': function('s:help_filter')})
 endfunction
 
-" 状態行: 3 つの中身（今のものを [ ] で囲む）と、検索・絞り込み・ハイライトの語
+" 状態行: Tab / Hub / Outline と検索・絞り込み・ハイライトを表示
 function! gnosis#panel#status() abort
   let l:w = g:statusline_winid
   let l:k = l:w == s:P.win ? s:P.kind : (gnosis#outline#is_open() && l:w == gnosis#outline#win() ? 'outline' : s:P.kind)
-  let l:names = {'outline': gnosis#i18n#tr('アウトライン'), 'tabs': gnosis#i18n#tr('タブ'), 'hub': gnosis#i18n#tr('ハブ')}
+  let l:names = {'tabs': 'Tab', 'hub': 'Hub', 'outline': 'Outline'}
   let l:s = ' '
   for l:x in s:KINDS
     let l:s .= (l:x ==# l:k ? '[' . l:names[l:x] . ']' : ' ' . l:names[l:x] . ' ') . ' '
