@@ -5425,7 +5425,7 @@ endfunction
 
 " ハブ（'1'..'9' -> path）は Index（PKM ルート）ごとに保存する。
 "   hubs.json の形: { <root>: { "1": path, ... }, ... }
-"   - Index を切り替えたら別のハブ表になる（\H / \1..\9 / \0 が Index ごと）。
+"   - Index を切り替えたら別のハブ表になる（\h による追加も Index ごと）。
 "   - 旧形式（フラットな { "1": path }）は、初回に現在のルート配下へ移行する。
 function! s:hub_root_key() abort
   let l:root = s:get_pkm_root()
@@ -5476,15 +5476,15 @@ function! s:hub_key(v) abort
 endfunction
 
 " ハブは「リンクを並べた編集可能な Markdown ファイル」で持つ（root ごと）。
-"   \H       … 今のノートをリンク 1 行として末尾に足す
-"   \h / \0  … ハブ画面を開く（普通のリンクなので 1-9/0 でそのまま移動できる）
+"   \h       … 本文のノートをリンク 1 行として末尾に足す
+"   \s       … 右パネルの Hub を表示（切替はパネル内）
 "   \1..\9   … ファイルの N 番目のリンクへ直行
 " 旧 hubs.json があれば初回にこのファイルへ移行する（json はそのまま残す）。
 function! s:hub_dir() abort
   return s:state_dir() . s:sep() . 'hubs'
 endfunction
 
-" board が空ならハブ（\h / \H）、'tabs' ならタブのボード（\q / \Q）。同じ仕組みで別のファイル。
+" board が空ならハブ（\h で登録）、'tabs' ならタブのボード（\q で登録）。同じ仕組みで別ファイル。
 function! s:hub_file(...) abort
   let l:dir = s:hub_dir()
   if !isdirectory(l:dir)
@@ -5529,8 +5529,8 @@ function! s:hub_link_paths() abort
   return l:out
 endfunction
 
-" \h / \0 … ハブ画面（編集可能な Markdown）を開く。
-" 起動直後の最初の \h が表示されない不具合のため、:edit は open_index と同じ
+" Hub パネルは編集可能な Markdown。
+" 起動直後の編集可能なハブを確実に表示するため、:edit は open_index と同じ
 " timer 経路で行う（map 内の silent! edit + redraw では再描画が保留される）。
 " 右のパネル（autoload/gnosis/panel.vim）に出すハブ・タブのボードのファイル。無ければ作る
 function! gnosis#hub_panel_file(...) abort
@@ -9377,7 +9377,7 @@ function! gnosis#hub_jump(n) abort
   let l:idx = s:hub_key(a:n) - 1
   let l:p = get(l:paths, l:idx, '')
   if empty(l:p) || !filereadable(l:p)
-    echo printf(gnosis#i18n#tr('Gnosis: ハブ %s は未登録（\H で登録）'), a:n)
+    echo printf(gnosis#i18n#tr('Gnosis: ハブ %s は未登録（\h で登録）'), a:n)
     return
   endif
   if fnamemodify(expand('%:p'), ':p') ==# fnamemodify(l:p, ':p') | return | endif
@@ -9385,7 +9385,7 @@ function! gnosis#hub_jump(n) abort
   silent! execute 'hide edit ' . fnameescape(l:p)
 endfunction
 
-" \0 … \h と同じ（ハブ画面を開く）。名前は互換のため残す。
+" 旧ハブ一覧用関数（キー割り当ては廃止。内部互換用に残す）。
 function! gnosis#hub_list() abort
   call gnosis#hub_open()
 endfunction
