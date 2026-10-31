@@ -830,23 +830,14 @@ nnoremap <nowait> <silent> \j  <Cmd>call gnosis#jump_down_top()<CR>
 nnoremap <nowait> <silent> \m  <Cmd>call gnosis#jump_last_section()<CR>
 nnoremap <nowait> <silent> \J  <Cmd>call gnosis#jump_down_bottom()<CR>
 
-" ノート作成（リレーションは書かず、位置だけを選ぶ）
-"   zn … ノート作成。作成後に位置キー1つで、素のリンク 1 行を現ノート側に置く:
-"        h=カーソル直下（本文 → 相手には バックリンク:）/ Enter=Child末尾 /
-"        t=見出しの下（今のノートの見出しを選ぶと、その本文の最後に空行を挟んでリンクを置く。
-"        検索は見出し優先で、見出しの下の本文にもヒット）/
-"        o=リンク無し(孤立) / p=Parent末尾。関係（ノート: 等）はあとから手で書く。
-"   zk … グループノート作成（attribute: グループ）。位置キーは zn と同じ。
-"   zh … カーソル直下にリンク（zn の h と同じ。本文リンク扱い）
-" 頭文字は n ではなく z を使う（z は素のVimでも単独では何も起きない接頭辞
-" なので、検索リピートの n/N とバッティングしない）。<nowait> は付けない
-" — 付けると zk/zn 等より z が即座に確定してしまい、それらに繋がらなくなる。
-" timeoutlen 経過後だけ発火する。
+" ノート作成
+"   zn: 位置 → 関係性（既存の二段階操作）/ g=BranchGroup 作成（位置を問わない）。
+"   b/p/r は本文に置かず直接作成。グループ内での zn → g は既存の「登録だけ」。
+"   ビジュアルで zn → g: 選択範囲をグループの本文へ移し、元をリンクへ置換する。
+"   zk は廃止。標準Vimの zk（折りたたみ系の操作）は奪わない。
 nnoremap <nowait> <silent> zh  <Cmd>call gnosis#v2_new_here()<CR>
 nnoremap <nowait> <silent> zn  <Cmd>call gnosis#v2_new_plain()<CR>
-nnoremap <nowait> <silent> zk  <Cmd>call gnosis#v2_new_group()<CR>
-" zk（ビジュアル）… 選択範囲を中身にしたグループノートを作る（選択はグループへのリンクに置換）。
-xnoremap <nowait> <silent> zk  :<C-u>call gnosis#v2_new_group_visual()<CR>
+xnoremap <nowait> <silent> zn  :<C-u>call gnosis#v2_new_visual_prompt()<CR>
 "" za: クリップボード／ヤンクしたリンクを、位置キーで今のノートに入れる（\l と同じ位置キー）
 nnoremap <nowait> <silent> za  <Cmd>call gnosis#add_clipboard_before_up_note()<CR>
 " （旧操作 ca / cu / \ca / tt / ta / \at / \bc / zp / zap のキー割り当ては廃止。関数と :CA などのコマンドは互換のため残す）
