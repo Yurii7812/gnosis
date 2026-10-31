@@ -2527,9 +2527,9 @@ function! s:edit_start() abort
   if empty(get(s:S, 'lk', {})) || get(s:S, 'pick', '') !=# 'link'
     return
   endif
-  let s:S.edit = {'buf': bufnr('%'), 'saved': maparg('\\l', 'n', 0, 1)}
+  let s:S.edit = {'buf': bufnr('%'), 'saved': maparg('\l', 'n', 0, 1)}
   nnoremap <buffer><nowait><silent> \l <Cmd>call gnosis#mview#edit_resume()<CR>
-  echo 'Gnosis: ' . gnosis#i18n#tr('右のノートを自由に編集。Esc でノーマルモードに戻り、\\l で置き場所の選択へ')
+  echo 'Gnosis: ' . gnosis#i18n#tr('右のノートを自由に編集。Esc でノーマルモードに戻り、\l で置き場所の選択へ')
 endfunction
 
 function! s:edit_maps_off() abort
