@@ -81,16 +81,20 @@ function! gnosis#panel#add_current(board) abort
     return
   endif
   let l:board = a:board ==# 'tabs' ? 'tabs' : ''
+  let l:pw = s:panel_win()
+  let l:shown = l:pw > 0 && ((l:board ==# 'tabs' && gnosis#panel#kind() ==# 'tabs')
+        \ || (empty(l:board) && gnosis#panel#kind() ==# 'hub'))
+  " 表示中のボードに未保存編集があれば、追記と競合しないよう先に保存する。
+  if l:shown && getbufvar(winbufnr(l:pw), '&modified')
+    call win_execute(l:pw, 'update')
+  endif
   " win_execute で本文ウィンドウのバッファを使う。パネルの .md を登録しない。
   let l:output = win_execute(l:nw, 'call gnosis#hub_set(' . string(l:board) . ')')
   if !empty(trim(l:output))
     echomsg trim(l:output)
   endif
-  " 登録先のボードを表示中なら、未編集時だけディスクから再読込する。
-  let l:pw = s:panel_win()
-  if l:pw > 0 && !getbufvar(winbufnr(l:pw), '&modified')
-        \ && ((l:board ==# 'tabs' && gnosis#panel#kind() ==# 'tabs')
-        \ || (empty(l:board) && gnosis#panel#kind() ==# 'hub'))
+  " 登録したボードが表示中なら、既存の編集を保持したまま再読込する。
+  if l:shown && !getbufvar(winbufnr(l:pw), '&modified')
     call win_execute(l:pw, 'silent! checktime')
   endif
 endfunction
