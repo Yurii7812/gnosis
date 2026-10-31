@@ -1314,12 +1314,50 @@ function! s:cancel_hint() abort
   return empty(l:n) ? '' : gnosis#i18n#tr('q で%sをやめる', gnosis#i18n#tr(s:layer_label[l:n]))
 endfunction
 
-function! s:end_pick() abort
+" \l の間に保存した右ノートは、モード終了まで通常の同期・空行整理を保留する。
+" 関係づけの g（グループ選択）中も同じ \l セッションなので継続する。
+function! gnosis#mview#defer_autosync(path) abort
+  let l:pick = get(s:S, 'pick', '')
+  if l:pick !=# 'link' && !(l:pick ==# 'group' && !empty(get(s:S, 'lk', {})))
+    return 0
+  endif
+  let l:root = get(s:S, 'root', '')
+  let l:fp = fnamemodify(a:path, ':p')
+  if empty(l:root) || stridx(l:fp, l:root . '/') != 0
+    return 0
+  endif
+  if !has_key(s:S, 'deferred_paths')
+    let s:S.deferred_paths = []
+  endif
+  if index(s:S.deferred_paths, l:fp) < 0
+    call add(s:S.deferred_paths, l:fp)
+  endif
+  return 1
+endfunction
+
+function! s:end_pick(...) abort
+  let l:continue_link = a:0 && a:1
+  call s:edit_maps_off()
+  if !l:continue_link
+    " 右側で編集中の文字と空白を、同期せずにいったん保存する。
+    let l:nw = s:note_win()
+    if l:nw > 0
+      call win_execute(l:nw, 'if &modified && &buftype ==# "" | silent! update | endif')
+    endif
+  endif
+  let l:paths = copy(get(s:S, 'deferred_paths', []))
   let s:S.pick = ''
   let s:S.origin_view = 0
   if has_key(s:S, 'lk') | call remove(s:S, 'lk') | endif
   if has_key(s:S, 'saved_mode')
     let [s:S.mode, s:S.near_on] = remove(s:S, 'saved_mode')
+  endif
+  if !l:continue_link
+    if has_key(s:S, 'deferred_paths') | call remove(s:S, 'deferred_paths') | endif
+    if !empty(l:paths)
+      " ここで初めて通常の同期を実行し、ノート末尾の余白整理を許可する。
+      call gnosis#autosync_link_finish(l:paths)
+    endif
   endif
 endfunction
 
@@ -1346,7 +1384,7 @@ function! s:quit() abort
     if s:S.pick ==# 'group' && !empty(get(s:S, 'lk', {}))
       " \l の g（入れるグループ選び）だけをやめる: \l は続けて、置き場所の選択に戻る
       let l:lk = s:S.lk
-      call s:end_pick()
+      call s:end_pick(1)
       let s:S.lk = l:lk
       let s:S.pick = 'link'
       call s:tick('pick')
@@ -2448,6 +2486,10 @@ function! s:link_place() abort
   if l:r == -4
     return
   endif
+  if l:r == -5
+    call s:edit_start()
+    return
+  endif
   if l:r == -2
     let l:lk.tries += 1
     if l:lk.tries < 100
@@ -2476,6 +2518,52 @@ function! s:link_finish() abort
   let l:lk = get(s:S, 'lk', {})
   call s:end_pick()
   call s:back_to_mandala(filter([empty(l:lk) ? '' : s:rel_of(l:lk.origin.path), get(l:lk, 'rel', '')], '!empty(v:val)'), empty(l:lk) ? '' : l:lk.origin.path)
+endfunction
+
+" ---- 右のノートを先に自由編集し、置き場所選択に戻る（曼荼羅・リストの \l） -------------------------
+" h / i / v は Vim 本来の移動・挿入・選択にも使うので、編集中はキーを奪わない。
+" 右で編集 → Esc でノーマルモード → \l で元の置き場所メニューに戻る。
+function! s:edit_start() abort
+  if empty(get(s:S, 'lk', {})) || get(s:S, 'pick', '') !=# 'link'
+    return
+  endif
+  let s:S.edit = {'buf': bufnr('%'), 'saved': maparg('\l', 'n', 0, 1)}
+  nnoremap <buffer><nowait><silent> \l <Cmd>call gnosis#mview#edit_resume()<CR>
+  echo 'Gnosis: ' . gnosis#i18n#tr('右のノートを自由に編集。Esc でノーマルモードに戻り、\l で置き場所の選択へ')
+endfunction
+
+function! s:edit_maps_off() abort
+  let l:e = get(s:S, 'edit', {})
+  if empty(l:e)
+    return
+  endif
+  let l:w = bufwinid(l:e.buf)
+  if l:w > 0
+    let l:from = win_getid()
+    if win_gotoid(l:w)
+      silent! nunmap <buffer> \l
+      if !empty(get(l:e, 'saved', {})) && get(l:e.saved, 'buffer', 0)
+        call mapset('n', 0, l:e.saved)
+      endif
+      if win_getid() != l:from
+        call win_gotoid(l:from)
+      endif
+    endif
+  endif
+  call remove(s:S, 'edit')
+endfunction
+
+function! gnosis#mview#edit_resume() abort
+  let l:e = get(s:S, 'edit', {})
+  if empty(l:e) || bufnr('%') != l:e.buf || empty(get(s:S, 'lk', {}))
+    return
+  endif
+  " 編集後のカーソル位置を使用する。\l を開いた瞬間の古い位置に戻さない。
+  let l:pos = getpos('.')
+  call s:edit_maps_off()
+  let s:S.lk.origin.pos = l:pos
+  let s:S.origin.pos = l:pos
+  call s:link_place()
 endfunction
 
 " ---- 右のノートで置く場所を選ぶ（\l の h / i / 見出し） ------------------------------------------------
@@ -3675,6 +3763,7 @@ function! s:link_pick_start(vis) abort
     return
   endif
   let s:S.origin = l:origin
+  let s:S.deferred_paths = []
   let s:S.pick = 'link'
   call s:tick('pick')
   call s:set_center(s:has(l:rel) ? l:rel : s:S.center, 0)
@@ -3714,6 +3803,10 @@ function! gnosis#mview#group_pick(links) abort
 endfunction
 
 function! gnosis#mview#close() abort
+  " Q で画面そのものを閉じた場合も、\l の保留中の編集を保存して同期を再開する。
+  if get(s:S, 'pick', '') ==# 'link' || !empty(get(s:S, 'lk', {}))
+    call s:end_pick()
+  endif
   let s:S.open_pref = 0
   call s:save_state()
   if has_key(s:S, 'saved_mode')

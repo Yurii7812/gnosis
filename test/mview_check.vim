@@ -352,6 +352,41 @@ call s:ok('載せたあとも曼荼羅は閉じず、選ぶモードだけ終わ
 call s:ok('終わったあとも右の窓は元のノート（\\l を押したノート）のまま', index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'misc.md') >= 0 && index(map(range(1, winnr('$')), 'fnamemodify(bufname(winbufnr(v:val)), ":t")'), 'empty.md') < 0)
 call s:keys('Q')
 
+" \l → e → e: 右ノートを編集してから \l で置き場所メニューに戻り、h を確定する。
+call s:mk('prep_link.md', 'リンク前編集', 0, [], ['本文'])
+execute 'edit ' . s:v . '/prep_link.md'
+call gnosis#mview#link_pick()
+let s:st = gnosis#mview#state()
+let s:st.center = 'herb.md'
+call s:keys("\<C-l>")
+let g:gnosis_test_keys = ['e']
+call s:keys('e')
+call s:ok('\l → e → e で、右ノートが通常の編集状態になる',
+      \ &filetype !=# 'gnosis-mandala' && get(get(s:st, 'edit', {}), 'buf', -1) == bufnr('%'),
+      \ string(get(s:st, 'edit', {})))
+call cursor(line('$'), 1)
+call s:keys("A 修正済み\<Esc>")
+call append(line('$'), ['', '', ''])
+let g:gnosis_autosync = 1
+silent write
+let g:gnosis_autosync = 0
+call s:ok('\l 編集中の保存は同期を遅延し、末尾の空行を保持する',
+      \ getline(line('$')) ==# '' && len(readfile(s:v . '/prep_link.md')) >= 11 &&
+      \ index(get(s:st, 'deferred_paths', []), fnamemodify(s:v . '/prep_link.md', ':p')) >= 0)
+let g:gnosis_test_keys = ['h']
+call s:keys("\\l")
+call s:ok('編集中から \l で戻ると、配置の h 選択が有効になる',
+      \ get(get(s:st, 'place', {}), 'kind', '') ==# 'h')
+call s:keys("\<CR>")
+let s:content = join(readfile(s:v . '/prep_link.md'), "\n")
+call s:ok('編集後に h → Enter でリンクを置き、編集した本文も残す',
+      \ s:content =~# '本文 修正済み' && s:content =~# '\[ハーブ\](herb.md)',
+      \ s:content)
+call s:ok('リンクを確定すると編集状態とリンク選択が終了する',
+      \ get(s:st, 'pick', '') ==# '' && empty(get(s:st, 'edit', {})))
+let g:gnosis_test_keys = []
+call s:keys('Q')
+
 " キー待ち（ポップアップの選択肢）は、typeahead に積まれた <Cmd>…<CR>（nohlsearch）を読み捨てる。
 " 読み捨てないと、\l → e の置き場所の画面が出る前に閉じて、残りが通常キーになり E486 などが出た（2026-10-24）
 call feedkeys("\<Cmd>nohlsearch\<CR>y", 'nt')

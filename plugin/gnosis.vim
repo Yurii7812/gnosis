@@ -1341,6 +1341,11 @@ function! s:on_write_post() abort
     call gnosis#autosync_log('on_write_post: autosync is off')
     return
   endif
+  " 曼荼羅・リストの \l 中は右ノートの余白を同期で整形しない。
+  " 保存したファイルを控え、\l を終えた時点でまとめて同期する。
+  if exists('*gnosis#mview#defer_autosync') && gnosis#mview#defer_autosync(expand('%:p'))
+    return
+  endif
   try
     call gnosis#autosync_on_save()
   catch

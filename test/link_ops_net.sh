@@ -11,6 +11,20 @@ REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/vault" "$WORK/home"
+# 独立した Vault で zn の二段階操作を確認。
+mkdir -p "$WORK/zn/vault" "$WORK/zn/home"
+ZN_WORK="$WORK/zn" GNOSIS_HOME="$WORK/zn/home" WAYLAND_DISPLAY= DISPLAY= \
+  timeout 110 vim -u "$REPO/vimrc_gnosis" -N -es -S "$REPO/test/zn_position_relation_check.vim" </dev/null >"$WORK/zn/out.txt" 2>"$WORK/zn/err.txt" || true
+if [ ! -f "$WORK/zn/result.txt" ] || ! grep -q '^FINISHED$' "$WORK/zn/result.txt"; then
+  echo "NG: zn 二段階テスト未完了" >&2
+  cat "$WORK/zn/result.txt" "$WORK/zn/out.txt" "$WORK/zn/err.txt" 2>/dev/null >&2 || true
+  exit 1
+fi
+if grep -q '^NG' "$WORK/zn/result.txt"; then
+  grep '^NG' "$WORK/zn/result.txt" >&2
+  exit 1
+fi
+echo "zn_position_relation OK ($(grep -c '^OK' "$WORK/zn/result.txt") 項目)"
 # クリップボードは読まない（本物のクリップボードの内容で結果が変わらないように）
 LINKOPS_WORK="$WORK" GNOSIS_HOME="$WORK/home" WAYLAND_DISPLAY= DISPLAY= \
   timeout 120 vim -u "$REPO/vimrc_gnosis" -N -es -V1"$WORK/vim.log" -S "$REPO/test/link_ops_check.vim" </dev/null >"$WORK/out.txt" 2>"$WORK/err.txt" || true

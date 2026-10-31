@@ -257,11 +257,13 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 
 | キー | 動作 |
 | --- | --- |
-| `zn` | ノート作成（`h` カーソル直下 / `Enter` 本文の最後 / `t` 見出しの下 / `c` Context 末尾 / **`b` ChildBranch（直接の子）/ `p` ParentBranch（直接の親）** / `o` 孤立） |
-| `zk` | グループ作成（位置キーは `zn` と同じ） |
+| `zn` | ノート作成。位置（`Enter` / `h` / `i` / `t` / `o`）→ 関係性（`Enter` なし / `b` 子 / `p` 親 / `c` Context / `r` Related）。最初に `b` / `p` / `r` を押せばリンク配置なしの短縮操作。 |
+| `zk` | グループ（BranchGroup）作成（`n`。`zn` の二段階操作とは独立） |
 | `zk`（ビジュアル） | 選択範囲を中身にしたグループ |
 | `za` / `zA` / `zp` | クリップボード・ヤンクのリンクを追加（`zA` は表示名つき） |
 | `\l` | 全文検索 → リンクを追加（**`n` = 表示名を入力して本文の最後へ** / **`g` = 選んだグループに今のノートを入れる（表示名も聞く）**） |
+\l の曼荼羅ビュー／リストビューでは、リンク先を選んで `e` を押した後の「何をする？」メニューで、さらに **`e` を押すと右ノートを先に編集**できます。通常の `i` / `a` / `o` / `v` などで編集し、`Esc` でノーマルモードへ戻ってから **`\l` で配置メニューに復帰**します。そこで `h`（カーソル行の下）、`i`（文字の直後）、`v`（選択した文字をリンク化）を選び、右ノートで位置・範囲を決めて `Enter` で確定します。編集中に保存しても同期による本文末尾の余白整理は保留し、`\l` の選択操作が終わってから実行します。キャンセルしても編集した本文は残ります。
+
 | `\L` | ファイル名のリンク化 / 選択範囲から新ノート |
 | `\S` | リンク行をよみ順に並べる（**グループでは本文の最後のブロックだけ**） |
 | `\d` | 今日の日記 |
@@ -269,7 +271,9 @@ vimrc を書き換えずに、vault ごとに設定します（`<vault>/.gnosis/
 
 **`b` / `p`（Branch。`zn` / `zk` / `za` / `\l`）**: Folgezettel のような「直接のブランチ」を**明示**します（識別子から親子は推測しません）。`b` は今のノート A が親・B が子、`p` は B が親・A が子（どちらも同じ処理）。親のノートの `ChildBranch:` と子のノートの `ParentBranch:` の両方に書きます。**親は 1 ノートに最大 1 つ**（子は何本でも）。B に既に親があれば、現在の親のタイトルを示して**拒否**し、どちらのノートも変更しません（親の付け替えはしません）。自分自身・循環・`index.md` も拒否。保存や同期のあとも維持され、`### Context` には変換されません。`:GnosisBranchCheck` で整合性（親が複数・片側だけ・循環）を検査できます。
 
-**`c` のあと（`zn` / `zk` / `za` / `\l`）**: 今のノート A の Context にリンク先 B を入れたあと、B に A へのリンクをどう入れるかを選びます。
+**`zn` の関係性 `c`**: 先に指定した位置に新ノート B への本文リンクを置き、B の `Context:` に現在のノート A を登録します。`o → c` なら本文リンクは置きません。`zn` の単独 `Enter/h/i/t` には自動Branchを付けず、明示した `b/p/c/r` のみ意味的関係を登録します。
+
+**`za` / `\l` の `c`**: 既存ノートどうしをContextに登録する操作です。こちらは従来の位置選択手順を維持します。
 
 | キー | B 側 |
 | --- | --- |
@@ -359,7 +363,7 @@ ESC O B（application cursor Down）のような端末制御コードはGnosis�
 5. 配色は Gnosis 組み込みのものを使います（外部の配色プラグイン kalisi は要りません。旧 vimrc の `Plug 'freeo/vim-kalisi'` は消して構いません）
 6. 旧 vimrc（`~/.vimrc-simple-yurii-note`）で起動しても動きます（その場合だけ、従来どおり root.txt も更新します）
 
-キーの変更点: 短いキー（`zn`・`zk`・`\l` など）は変わりません。追加は `\l` → `n` / `g`（表示名・グループ所属）・`c` のあとの `Enter` / `t` / `o`。`\S` はグループでは最後のブロックだけを並べます。
+キーの変更点: `zn` は「位置 → 関係性」の二段階に変更しました（直接 `b/p/r` は従来どおり）。`zk` のグループ作成と `\l` / `za` の関係操作は独立です。`\l` の `e` で右ノートを先に編集する機能も追加しました。`\S` はグループでは最後のブロックだけを並べます。
 
 ---
 
@@ -409,6 +413,6 @@ Gnosis (formerly simple-yurii-note) is a Markdown note system (PKM) built on rea
 - **Settings per vault** (`.gnosis/settings.json`): language (Japanese / English), maximize on start, window size, light / dark,
   themes (standard, custom colors, or `Plug 'author/repo'` themes from GitHub, safely parsed).
 - **New keys**: `\l` → `g` (or `za` → `g`) adds the current note to the group you chose, with a display name; `\l` → `n` adds a link with a typed display name;
-  after `c` in `zn` / `zk` / `za` / `\l`, choose how the target links back: `Enter` end of body, `t` end of a chosen section, `o` none.
+  `zn` now selects placement (`Enter/h/i/t/o`) before relation (`Enter/b/p/c/r`), with direct `b/p/r` shortcuts. Existing `\l` and `za` Context flows are unchanged.
   `\S` in a group sorts only the last blank-line-separated block.
 - **Migration**: the old vault is imported automatically on first start; old `g:simple_yurii_note_*` settings and `:Yurii*` commands keep working.

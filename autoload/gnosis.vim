@@ -10929,7 +10929,7 @@ function! gnosis#v2_new_here() abort
   execute 'edit ' . fnameescape(l:file)
 endfunction
 
-" zn: 新規ノートは明示的な孤立(o)・親(p)以外、派生元への Branch を自動記録する。
+" zn: 位置 (Enter/h/i/t/o) → 関係性 (Enter/b/p/c/r)。b/p/r は直接指定可能。
 function! gnosis#v2_new_plain() abort
   call s:v2_new_interactive('')
 endfunction
@@ -11697,50 +11697,33 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run('', "\<CR>", 0, {'ts': l:ts, 'name': l:r.name, 'group_only': l:gch ==# 'g'})
     return
   endif
-  echo s:fit_prompt(gnosis#i18n#tr('Enter=本文の最後 / o=孤立 / b=Branch(子) / p=Parent(親) / t=見出しの下 / h=カーソル直下 / i=カーソルの位置 / c=Context(新ノートに今のノート) / r=Related(相互)  (Esc/q キャンセル)'),
-        \ gnosis#i18n#tr('Enter=末 o=孤立 b=子 p=親 t=節 h=下 i=位置 c=Context r=Related (Esc)'))
+  " zn: 位置を決めてから関係性を決める。b/p/r は本文リンクなしの短縮操作。
+  echo s:fit_prompt(gnosis#i18n#tr('位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  b=子だけ / p=親だけ / r=Relatedだけ  (Esc/q 中止)'),
+        \ gnosis#i18n#tr('位置: Enter=末 h=下 i=位置 t=節 o=なし / b=子 p=親 r=Related (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
     echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル') | return
   endif
+  if index(['b', 'p', 'r'], l:ch) >= 0
+    if l:ch ==# 'b' && !gnosis#branch#can_parent_here()
+      return
+    endif
+    if l:ch ==# 'p' && !gnosis#branch#can_child_here()
+      return
+    endif
+    call s:v2_new_run(a:attr, l:ch, 0)
+    return
+  endif
   if l:ch ==# 't'
-    " 見出しを選んでから作る（選択をキャンセルしたら何も作らない）。選択は非同期なので
-    " 続きは s:v2_new_run をコールバックで呼ぶ。
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
     return
   endif
-  if l:ch ==# 'c'
-    " c は Context のみ。新ノート B の ParentBranch は作らない。
-    " A の本文へのリンク位置は作成前に選択する。
-    call s:c_ask_place(function('s:v2_new_run_c', [a:attr]))
+  if index(['h', 'i', 'o'], l:ch) < 0 && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / h / i / t / o / b / p / r のどれか）')
     return
   endif
-  if l:ch ==# 'b'
-    " b: 新ノートを今のノートの ChildBranch として作る。作る前に、今のノートが親になれるか確かめる
-    if !gnosis#branch#can_parent_here()
-      return
-    endif
-    call s:v2_new_run(a:attr, 'b', 0)
-    return
-  endif
-  if l:ch ==# 'p'
-    " p: 新ノートを今のノートの親（ParentBranch）として作る。今のノートが子になれるか先に確かめる
-    if !gnosis#branch#can_child_here()
-      return
-    endif
-    call s:v2_new_run(a:attr, 'p', 0)
-    return
-  endif
-  if l:ch !=# 'r' && l:ch !=# 'h' && l:ch !=# 'i' && l:ch !=# 'o' && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / t / h / i / c / b / p / o / r のどれか）') | return
-  endif
-  if l:ch ==# 'o' && empty(a:attr)
-    " o（孤立）は \n と同じ作り方（同じ体裁・カーソル）。置き場所は今のノートと同じフォルダ
-    call s:quick_note_in(expand('%:p:h'))
-    return
-  endif
-  call s:v2_new_run(a:attr, l:ch, 0)
+  call s:v2_new_relation(a:attr, l:ch, 0)
 endfunction
 
 " カーソル下の Markdown リンク（画像・コードの中は除く）の {lnum, start, end, text}（0 始まりのバイト位置）
@@ -11767,7 +11750,38 @@ function! s:v2_new_run_c(attr, place) abort
 endfunction
 
 function! s:v2_new_run_t(attr, head_lnum) abort
-  call s:v2_new_run(a:attr, 't', a:head_lnum)
+  call s:v2_new_relation(a:attr, 't', a:head_lnum)
+endfunction
+
+" zn の2段階目。Enter=本文リンクのみ。b/p/c/r は関係性を明示的に追加。
+function! s:v2_new_relation(attr, place, head_lnum) abort
+  echo s:fit_prompt(gnosis#i18n#tr('関係: Enter=関係なし / b=ChildBranch / p=ParentBranch / c=Context / r=Related  (Esc/q 中止)'),
+        \ gnosis#i18n#tr('関係: Enter=なし b=子 p=親 c=Context r=Related (Esc)'))
+  let l:ch = s:getkey()
+  redraw
+  if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（何も作成しません）')
+    return
+  endif
+  if l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
+    let l:rel = ''
+  elseif index(['b', 'p', 'c', 'r'], l:ch) >= 0
+    let l:rel = l:ch
+  else
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / b / p / c / r のどれか）')
+    return
+  endif
+  if l:rel ==# 'b' && !gnosis#branch#can_parent_here()
+    return
+  endif
+  if l:rel ==# 'p' && !gnosis#branch#can_child_here()
+    return
+  endif
+  if a:place ==# 'o' && empty(l:rel)
+    call s:quick_note_in(expand('%:p:h'))
+    return
+  endif
+  call s:v2_new_run(a:attr, a:place, a:head_lnum, {'relation': l:rel})
 endfunction
 
 " 見出し行 a:hl の本文の最後に、空行を挟んでリンクを置く。
@@ -11897,7 +11911,7 @@ endfunction
 "   通常のノート: Enter / t / h は今のノートにリンクを置き、b / p は Branch だけ、o は孤立、c は新ノートの Context に
 "   今のノートを入れて、今のノートのどこにリンクを置くかを選んだとおりに置く。Context を足すのは c だけ。
 "   r は Related だけを相互に追加し、本文リンクや自動 Branch は付けない。
-"   h / t / i / Enter は Branch を自動記録。c は Context のみで Branch を作らない（index.md・グループからは記録しない）。
+"   zn の h / t / i / Enter は位置のみ。関係を選んだときだけ Branch / Context / Related を記録する。
 "   グループの上: Enter は登録＋BranchGroup の起点が親、g は登録だけ（group_only）、o は孤立。
 "   zk → n: 今のノートの BranchGroup: と ChildBranch: に新しいグループ、新しいグループの ParentBranch: に今のノート。
 function! s:v2_new_run(attr, ch, head_lnum, ...) abort
@@ -11919,6 +11933,10 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
   let l:file = s:join_path(l:dir, l:ts . '.md')
   let l:place = get(l:opt, 'place', {})
+  let l:relation = get(l:opt, 'relation', '')
+  if index(['b', 'p', 'c', 'r'], l:ch) >= 0 && empty(l:relation)
+    let l:relation = l:ch
+  endif
   let l:is_enter = l:ch ==# "\<CR>" || l:ch ==# "\<NL>"
   let l:cursor_pos = getpos('.')
   let l:origin = l:grp_src && l:is_enter && !get(l:opt, 'group_only', 0) ? s:branch_group_origin() : ''
@@ -11927,10 +11945,11 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     return
   endif
 
-  let l:auto_branch = empty(a:attr) && !l:grp_src && fnamemodify(l:cur, ':t') !=# 'index.md'
-        \ && (index(['h', 'i', 't'], l:ch) >= 0 || l:is_enter)
   let l:zk_branch_group = !empty(a:attr) && l:ch ==# 'n'
-  if (l:auto_branch || l:zk_branch_group) && !gnosis#branch#can_parent_here()
+  if (l:relation ==# 'b' || l:zk_branch_group) && !gnosis#branch#can_parent_here()
+    return
+  endif
+  if l:relation ==# 'p' && !gnosis#branch#can_child_here()
     return
   endif
 
@@ -11938,7 +11957,8 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   " t は見出しの下に直接リンクを置くので、元のノートが日記なら「今日のノート」には重ねない
   let s:diary_skip_from = (l:ch ==# 't' || get(l:place, 'mode', '') ==# 'head') ? l:cur : ''
   try
-    if l:ch ==# 'r'
+    if l:relation ==# 'r'
+      " Related を選ぶと、本文リンクの有無にかかわらず相互関係を作る。
       " 日記への通常登録は相互リンクの保存に成功したあとで行う。
       if filereadable(l:file) || isdirectory(l:file) | return | endif
       try
@@ -11960,13 +11980,11 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
     let s:diary_skip_from = ''
   endtry
 
-  " b・p は明示的な Branch。zn の h/i/t/Enter は自動 Branch。c は Context だけ。
-  " 失敗したら、作成した新ノートを削除し、元ノートの系譜を変えない。
+  " 親子関係は明示指定だけ。グループ起点の既存の関係登録は維持する。
   let l:branch_ok = 0
-  if l:ch ==# 'b' || l:ch ==# 'p' || l:auto_branch || l:zk_branch_group || !empty(l:origin)
-    " p のみ逆向き。b と zn の自動関係は今のノートが親。
+  if l:relation ==# 'b' || l:relation ==# 'p' || l:zk_branch_group || !empty(l:origin)
     let l:parent = empty(l:origin) ? l:cur : l:origin
-    let l:br = l:ch ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:parent, [l:file])
+    let l:br = l:relation ==# 'p' ? gnosis#branch#add_paths(l:file, [l:cur]) : gnosis#branch#add_paths(l:parent, [l:file])
     if !get(l:br, 'ok', 0)
       call delete(l:file)
       redraw
@@ -12014,7 +12032,7 @@ function! s:v2_new_run(attr, ch, head_lnum, ...) abort
   endif
   let &autoindent = l:save_ai | let &smartindent = l:save_si
   silent noautocmd write
-  if l:ch ==# 'c'
+  if l:relation ==# 'c'
     " B の Context: に A を入れる（A の Context に B を入れるのではない）
     call s:simple_add_parent(l:file, l:cur, l:cur_title)
   elseif l:is_enter && l:grp_src
@@ -13223,6 +13241,24 @@ function! s:run_update_one_for(target_fp) abort
     call gnosis#sh#system(l:cmd)
     checktime
   endif
+endfunction
+
+" \l の選択操作中に保存されたノートを、モード終了後にだけ通常同期する。
+" 未保存の変更が残っているノートは上書きしないため、同期対象から外す。
+function! gnosis#autosync_link_finish(paths) abort
+  if !get(g:, 'gnosis_autosync', 1)
+    return
+  endif
+  for l:fp in uniq(sort(copy(a:paths)))
+    if !filereadable(l:fp)
+      continue
+    endif
+    let l:bn = bufnr(l:fp)
+    if l:bn > 0 && getbufvar(l:bn, '&modified')
+      continue
+    endif
+    call s:run_update_one_for(l:fp)
+  endfor
 endfunction
 
 function! s:run_update_one_for_sync(target_fp, ...) abort
@@ -14717,6 +14753,7 @@ endfunction
 " 曼荼羅の \l（gnosis#insert_links_choose）から呼ばれたときだけ、次の戻り値も返す（s:want_raw）:
 "   -2 サブの選択を取り消した（置き場所の選択に戻る） ／ -3 置き場所の選択そのものを閉じた（\l は続ける）
 "   -4 右のノートで場所を選ぶモードに入った（h / i / 見出し。決定は曼荼羅のほうで受ける）
+"   -5 右のノートを自由に編集してから、改めて位置を選ぶ（曼荼羅・リストの \l 限定）。
 " ふつうの呼び出し（za / zn など）では、-2 -3 は 0（何もしない）、-4 は -1 になる。
 function! s:insert_links_core(links, ...) abort
   let l:r = call('s:insert_links_core_raw', [a:links] + a:000)
@@ -14773,6 +14810,11 @@ function! s:insert_links_core_raw(links, ...) abort
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
     return s:want_raw ? -3 : 0
+  endif
+  if l:ch ==# 'e' && !l:swap && s:place_hook isnot 0
+    " 曼荼羅／リストの \l: ノートを編集してから置き場所を選び直す。
+    " 編集開始はビュー側に返す（-5）。Vim の通常の i / v / h を奪わない。
+    return -5
   endif
   if l:ch ==# 'v' && l:single && !l:swap && s:place_hook isnot 0
     " 曼荼羅の \l: 右の元のノートで v → 範囲を選んで Enter。その文字が、選んだノートへのリンクになる
@@ -15269,6 +15311,9 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   endif
   if a:single && !a:swap && s:place_hook isnot 0
     call add(l:out, '   v      ' . gnosis#i18n#tr('このノートで範囲を選んで、その文字をリンクにする'))
+  endif
+  if !a:swap && s:place_hook isnot 0
+    call add(l:out, '   e      ' . gnosis#i18n#tr('右のノートを編集してから選ぶ（\\l でこのメニューに戻る）'))
   endif
   call add(l:out, '')
   call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
