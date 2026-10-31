@@ -31,9 +31,9 @@ function! s:ensure_type() abort
 endfunction
 
 " 現在の窓のバッファの先頭に、ヒント行を付け直す（オフなら外すだけ）。text が空でも外す。
-function! gnosis#hint#put(text) abort
-  " CUI はメッセージ行だけを使い、上の仮想ヒント行は作らない。
-  if empty($GNOSIS_GUI_PORT)
+function! gnosis#hint#put(text, ...) abort
+  " 通常の CUI はメッセージ行だけ。右パネルは明示的に仮想ヒント行を許可する。
+  if empty($GNOSIS_GUI_PORT) && !(a:0 && a:1)
     if !empty(prop_type_get(s:type))
       silent! call prop_remove({'type': s:type, 'all': 1}, 1, line('$'))
     endif
@@ -47,11 +47,11 @@ function! gnosis#hint#put(text) abort
 endfunction
 
 " 内容が違っていたら付け直す（アウトラインのように、中身ごと書き換えられるバッファ用）
-function! gnosis#hint#ensure(text) abort
+function! gnosis#hint#ensure(text, ...) abort
   call s:ensure_type()
   let l:now = prop_list(1, {'types': [s:type]})
   if gnosis#hint#on() ? (!empty(l:now) && l:now[0].text ==# a:text) : empty(l:now) | return | endif
-  call gnosis#hint#put(a:text)
+  call gnosis#hint#put(a:text, a:0 ? a:1 : 0)
 endfunction
 
 " 「キー:名前」を並べ、今のものを [ ] で囲む。items = [[キー, 名前], …]
@@ -139,7 +139,7 @@ function! s:cmdline_active() abort
   if !empty($GNOSIS_GUI_PORT) || !gnosis#hint#on()
     return 0
   endif
-  if &filetype !=# 'gnosis-mandala' || mode(1) !~# '^n'
+  if (&filetype !=# 'gnosis-mandala' && empty(gnosis#panel#focused_kind())) || mode(1) !~# '^n'
     return 0
   endif
   if get(b:, 'gnosis_nav_input', 0) || !empty(getcmdtype()) || !empty(popup_list())
@@ -149,6 +149,18 @@ function! s:cmdline_active() abort
 endfunction
 
 function! s:cmdline_items() abort
+  " 下端のコマンド欄は画面固有のキーを優先する（上下移動等は列挙しない）。
+  let l:panel = gnosis#panel#focused_kind()
+  if l:panel ==# 'tabs'
+    return ['D:全タブ閉じる', '\q:ノート登録', 'Enter:本文で開く',
+          \ 's:検索', 'x:絞込', 'H:強調', 'm:メニュー', '?:説明', 'q:パネル閉', 'Tab:画面切替']
+  elseif l:panel ==# 'hub'
+    return ['\h:ノート追加', 'Enter:本文で開く',
+          \ 's:検索', 'x:絞込', 'H:強調', 'm:メニュー', '?:説明', 'q:パネル閉', 'Tab:画面切替']
+  elseif l:panel ==# 'outline'
+    return ['za:折畳', 'S:左右入替', 'Enter:見出しへ',
+          \ 's:検索', 'x:絞込', 'H:強調', 'm:メニュー', '?:説明', 'q:パネル閉', 'Tab:画面切替']
+  endif
   let l:view = gnosis#mview#view()
   if l:view ==# 'mandala'
     return ['w:順位', 'r/R:関連', 'v:外向き', 'u/U:見出し', 'f:9×9',
@@ -209,7 +221,7 @@ endfunction
 " SafeState で初期表示を保証。既存タイマーの開始を繰り返さない。
 function! gnosis#hint#cmdline_initial() abort
   if s:cmdline_timer >= 0 || !empty(s:cmdline_shown) || !gnosis#hint#on() || !empty(popup_list()) | return | endif
-  if &filetype ==# 'gnosis-mandala' && mode(1) =~# '^n' && empty(getcmdtype())
+  if (&filetype ==# 'gnosis-mandala' || !empty(gnosis#panel#focused_kind())) && mode(1) =~# '^n' && empty(getcmdtype())
     call gnosis#hint#cmdline_schedule()
   endif
 endfunction
