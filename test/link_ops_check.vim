@@ -1,6 +1,6 @@
 " リンク操作の回帰網（test/link_ops_net.sh から呼ぶ）。
-"   zn / zk / za / \l の c → Enter / t / o、グループへの表示名、Esc の取り消し、
-"   \l → n（表示名を入力）、zk → g（現ノートを新グループに登録）・zk → n（BranchGroup と ChildBranch に登録）、グループの \S。
+"   zn / za / \l の c → Enter / t / o、グループへの表示名、Esc の取り消し、
+"   \l → n（表示名を入力）、zn → g（BranchGroup）、グループ内 zn → g（登録だけ）、グループの \S。
 " 結果は $LINKOPS_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
 set nomore
 call gnosis#i18n#set_lang('ja')
@@ -187,23 +187,16 @@ call s:ok('グループの zn o: 孤立のノートを作る（グループは�
 call s:ok('グループの zn o: 新ノートに Group: も Context も Branch も無い', !empty(s:ng) && index(s:file(s:ng), 'Group:') < 0
       \ && empty(gnosis#context#find_block(s:file(s:ng))) && index(s:file(s:ng), 'ParentBranch:') < 0, string(s:ng is '' ? [] : s:file(s:ng)))
 
-" ------------------------------------------------------------------ zk: 通常のノートは n だけ・グループの上では使えない
-for s:k in ["\r", 'c', 'h', 'o', 'b', 'p', 't']
-  execute 'edit ' . fnameescape(s:v . '/a.md')
-  let s:before = s:files()
-  let g:gnosis_test_keys = [s:k]
-  call gnosis#v2_new_group()
-  call s:ok('zk ' . (s:k ==# "\r" ? 'Enter' : s:k) . ': 何も作らない（n だけ）', s:files() ==# s:before)
-endfor
+" ------------------------------------------------------------------ zk は Normal / Visual どちらにも割り当てない（Vim 本来のキーを返す）
+call s:ok('zk キーの Gnosis マッピングは廃止', empty(maparg('zk', 'n', 0, 1)) && empty(maparg('zk', 'x', 0, 1)))
+" グループノートの zn → g は、既存の「グループに登録だけ」を維持する。
 execute 'edit ' . fnameescape(s:v . '/gz.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['n']
-call gnosis#v2_new_group()
-call s:ok('グループの上の zk: 使えない（何も作らない）', s:files() ==# s:before)
-let g:gnosis_test_keys = []
-execute "normal! ggVj\<Esc>"
-call gnosis#v2_new_group_visual()
-call s:ok('グループの上のビジュアル zk: 使えない（何も作らない・グループは変わらない）', s:files() ==# s:before && s:file('gz.md') ==# getline(1, '$'))
+let s:gz_snapshot = s:file('gz.md')
+let g:gnosis_test_keys = ['g']
+let g:gnosis_test_display_name = ["\x1b"]
+call gnosis#v2_new_plain()
+call s:ok('グループ上の zn g は表示名で取消せる登録操作（BranchGroupは作らない）', s:files() ==# s:before && s:file('gz.md') ==# s:gz_snapshot)
 
 " ------------------------------------------------------------------ za → x,c → t / Enter（B の Context に A、A に B）
 call s:mk('d.md', 'ノートD', ['D の本文。'])
@@ -352,7 +345,7 @@ let &columns = 240
 call s:ok('広い画面では詳しい案内のまま', gnosis#insert_prompt_text(1, 1) =~# 'g=グループに入れる' && gnosis#insert_prompt_text(1, 1) =~# 'カーソル直下')
 let &columns = s:cols_save
 
-" ------------------------------------------------------------------ zk → g は出ない（グループ作成の位置キーに g は無い → 何も作らない）
+" ------------------------------------------------------------------ zn → g は起点のノートから BranchGroup を直接作成
 call s:mk('j.md', 'ノートJ', ['前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ'])
 execute 'edit ' . fnameescape(s:v . '/j.md')
 call cursor(8, 1)
@@ -360,48 +353,36 @@ let s:before = s:files()
 let s:j_before = getline(1, '$')
 let g:gnosis_test_keys = ['g']
 sleep 1100m
-call gnosis#v2_new_group()
-stopinsert
-call s:ok('zk g: 位置キーに無いので何も作らない', s:files() ==# s:before)
-call s:ok('zk g: 元ノート J は変わらない', getline(1, '$') ==# s:j_before)
-
-" ------------------------------------------------------------------ zk → n（現在のノートの BranchGroup: に登録）
-execute 'edit ' . fnameescape(s:v . '/j.md')
-call cursor(8, 1)
-let s:before = s:files()
-let g:gnosis_test_keys = ['n']
-sleep 1100m
-call gnosis#v2_new_group()
+call gnosis#v2_new_plain()
 stopinsert
 let s:grp2 = s:newest_except(s:before)
-call s:ok('zk n: グループができる', !empty(s:grp2) && s:has(s:grp2, '^attribute: group$'))
-call s:ok('zk n: 元ノートの BranchGroup: に登録', index(s:file('j.md'), 'BranchGroup:') >= 0 && s:has('j.md', '(' . s:grp2 . ')'))
-call s:ok('zk n: 新しいグループの ParentBranch に J', !empty(s:grp2)
+call s:ok('zn g: グループができる', !empty(s:grp2) && s:has(s:grp2, '^attribute: group$'))
+call s:ok('zn g: 元ノートの BranchGroup に登録', index(s:file('j.md'), 'BranchGroup:') >= 0 && s:has('j.md', '(' . s:grp2 . ')'))
+call s:ok('zn g: 新グループの ParentBranch に J', !empty(s:grp2)
       \ && index(s:file(s:grp2), 'ParentBranch:') >= 0
       \ && s:has(s:grp2, '^\[ノートJ\](j\.md)$'))
-call s:ok('zk n: 元ノート J の ChildBranch にグループ', index(s:file('j.md'), 'ChildBranch:') >= 0
+call s:ok('zn g: 元ノート J の ChildBranch にグループ', index(s:file('j.md'), 'ChildBranch:') >= 0
       \ && s:has('j.md', '(' . s:grp2 . ')'))
-call s:ok('zk n: Context への余分な逆リンクを作らない',
+call s:ok('zn g: Context への余分な逆リンクを作らない',
       \ index(s:file(s:grp2), 'Context:') < 0 && index(s:file(s:grp2), '### Context') < 0)
-" BranchGroup と ChildBranch の 2 か所だけ（同じグループを重ねて入れない）
-call s:ok('zk n: グループへのリンクが重複しない（BranchGroup と ChildBranch の 2 か所）',
+call s:ok('zn g: グループへのリンクは BranchGroup / ChildBranch の 2 か所だけ',
       \ len(filter(copy(s:file('j.md')), 'v:val =~# "(" . escape(s:grp2, ".") . ")"')) == 2)
-call s:ok('zk n: 元の本文は変更しない', index(s:file('j.md'), '前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ') >= 0)
+call s:ok('zn g: 元の本文は変更しない', index(s:file('j.md'), '前の文 [ノートB](b.md) と [ノートC](c.md) の後ろ') >= 0)
 let s:blocks = s:file('j.md')
-call s:ok('ノートの見出し順: BranchGroup → Context',
+call s:ok('見出し順: BranchGroup → Context',
       \ index(s:blocks, 'BranchGroup:') >= 0
       \ && (index(s:blocks, 'Context:') < 0 || index(s:blocks, 'BranchGroup:') < index(s:blocks, 'Context:')))
 
-" ------------------------------------------------------------------ 旧 ThisNoteGroup から zk n
+" ------------------------------------------------------------------ 旧 ThisNoteGroup から zn g
 call s:mk('legacy.md', '旧ノート', ['ThisNoteGroup:', '[グループG](g.md)', ''])
 execute 'edit ' . fnameescape(s:v . '/legacy.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['n']
+let g:gnosis_test_keys = ['g']
 sleep 1100m
-call gnosis#v2_new_group()
+call gnosis#v2_new_plain()
 stopinsert
 let s:legacy_group = s:newest_except(s:before)
-call s:ok('旧 ThisNoteGroup: zk n で BranchGroup に移行する',
+call s:ok('旧 ThisNoteGroup: zn g で BranchGroup に移行する',
       \ index(s:file('legacy.md'), 'ThisNoteGroup:') < 0
       \ && index(s:file('legacy.md'), 'BranchGroup:') >= 0
       \ && s:has('legacy.md', '(g\.md)')
@@ -474,7 +455,7 @@ let g:gnosis_test_keys = ['c', "\x1b"]
 call gnosis#add_clipboard_before_up_note()
 call s:ok('za c Esc: A も K も変わらない', s:file('a.md') ==# s:a_before && s:file('k.md') ==# s:k_before && getline(1, '$') ==# s:a_before)
 
-" ------------------------------------------------------------------ zk（ビジュアル）は従来どおり
+" ------------------------------------------------------------------ ビジュアル zn → g は選択範囲をグループへ移動
 call s:mk('vz.md', 'ビジュアル', ['一行目', '[ノートB](b.md)', '三行目'])
 execute 'edit ' . fnameescape(s:v . '/vz.md')
 let s:before = s:files()
@@ -482,11 +463,12 @@ call setpos("'<", [0, 9, 1, 0])
 call setpos("'>", [0, 9, 1, 0])
 call visualmode(1)
 execute "normal! 9GV\<Esc>"
+let g:gnosis_test_keys = ['g']
 sleep 1100m
-call gnosis#v2_new_group_visual()
+call gnosis#v2_new_visual_prompt()
 stopinsert
 let s:vg = s:newest_except(s:before)
-call s:ok('zk ビジュアル: 選択行がグループの中身になり、元はグループへのリンク', !empty(s:vg) && s:has(s:vg, '^\[ノートB\](b\.md)$') && s:has('vz.md', '^\[' . fnamemodify(s:vg, ':r') . '\](' . s:vg . ')$'))
+call s:ok('zn g ビジュアル: 選択行がグループの中身になり、元はグループへのリンク', !empty(s:vg) && s:has(s:vg, '^\[ノートB\](b\.md)$') && s:has('vz.md', '^\[' . fnamemodify(s:vg, ':r') . '\](' . s:vg . ')$'))
 
 " ------------------------------------------------------------------ index.md から zn → Enter（親がグループなら最初から Group:）
 execute 'edit ' . fnameescape(s:v . '/index.md')
