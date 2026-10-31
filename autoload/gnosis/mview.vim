@@ -3803,6 +3803,10 @@ function! gnosis#mview#group_pick(links) abort
 endfunction
 
 function! gnosis#mview#close() abort
+  " Q で画面そのものを閉じた場合も、\l の保留中の編集を保存して同期を再開する。
+  if get(s:S, 'pick', '') ==# 'link' || !empty(get(s:S, 'lk', {}))
+    call s:end_pick()
+  endif
   let s:S.open_pref = 0
   call s:save_state()
   if has_key(s:S, 'saved_mode')
