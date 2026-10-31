@@ -1,5 +1,5 @@
 " Branch（b モード）の回帰網（test/branch_net.sh から呼ぶ）。
-"   zn / zk / za / \l の位置キー b: 親の ChildBranch ＋ 子の ParentBranch を両方に書く。
+"   zn / za / \l の関係キー b: 親の ChildBranch ＋ 子の ParentBranch を両方に書く。
 "   2 つ目の親・自己参照・循環・index.md は拒否し、どのノートも（バッファも）変更しない。
 " 結果は $BRANCH_WORK/result.txt に「OK 名前」「NG 名前: 詳細」で書く。
 set nomore
@@ -160,27 +160,26 @@ let g:gnosis_test_keys = ['b']
 call gnosis#insert_links_pick(['[ノートF](f.md)'], getpos('.'))
 call s:ok('\l b: E の ChildBranch に F・F の ParentBranch に E', s:count('e.md', '^\[ノートF\](f\.md)$') == 1 && s:count('f.md', '^\[ノートE\](e\.md)$') == 1)
 
-" ---------------------------------------------------------------- zk → n（BranchGroup・双方向の Branch。Context は付けない）
+" ---------------------------------------------------------------- zn → g（BranchGroup・双方向Branch。Contextなし）
 execute 'edit ' . fnameescape(s:v . '/f.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['n']
+let g:gnosis_test_keys = ['g']
 sleep 1100m
-call gnosis#v2_new_group()
+call gnosis#v2_new_plain()
 stopinsert
 let s:g = s:newest_except(s:before)
-call s:ok('zk n: グループができ、F の BranchGroup: と ChildBranch: に G、G の ParentBranch: に F', !empty(s:g) && s:count(s:g, '^attribute: group$') == 1
+call s:ok('zn g: グループができ、F の BranchGroup / ChildBranch に G、G の ParentBranch に F', !empty(s:g) && s:count(s:g, '^attribute: group$') == 1
       \ && index(s:file('f.md'), 'BranchGroup:') >= 0 && s:count('f.md', '(' . s:g . ')') == 2 && s:count('f.md', '^ChildBranch:$') == 1
       \ && s:count(s:g, '^ParentBranch:$') == 1 && s:count(s:g, '^\[ノートF\](f\.md)$') == 1, string(s:file('f.md')))
-call s:ok('zk n: Context は付けない（F にも G にも）', empty(gnosis#context#find_block(s:file('f.md'))) && empty(gnosis#context#find_block(s:file(s:g))))
-" zk の旧キー（b / p / h / Enter / t / c / o）は受け付けない
-for s:k in ['b', 'p', 'h', "\r", 't', 'c', 'o']
-  execute 'edit ' . fnameescape(s:v . '/f.md')
-  let s:before = s:files()
-  let s:f_before = s:file('f.md')
-  let g:gnosis_test_keys = [s:k]
-  call gnosis#v2_new_group()
-  call s:ok('zk ' . (s:k ==# "\r" ? 'Enter' : s:k) . ': 受け付けない（何も作らない・F は変わらない）', s:files() ==# s:before && s:file('f.md') ==# s:f_before)
-endfor
+call s:ok('zn g: Context は付けない（F にも G にも）', empty(gnosis#context#find_block(s:file('f.md'))) && empty(gnosis#context#find_block(s:file(s:g))))
+call s:ok('zk はノーマル・ビジュアル両モードで割り当てない', empty(maparg('zk', 'n', 0, 1)) && empty(maparg('zk', 'x', 0, 1)))
+" zn の g 以外の位置・関係操作は引き続き有効。無効なキーだけ拒否。
+execute 'edit ' . fnameescape(s:v . '/f.md')
+let s:before = s:files()
+let s:f_before = s:file('f.md')
+let g:gnosis_test_keys = ['x']
+call gnosis#v2_new_plain()
+call s:ok('zn x: 未定義なので新ノートやBranch関係を作らない', s:files() ==# s:before && s:file('f.md') ==# s:f_before)
 
 " ---------------------------------------------------------------- zn c は B の Context に A（ParentBranch は作らない）
 execute 'edit ' . fnameescape(s:v . '/d.md')
@@ -362,7 +361,7 @@ let g:gnosis_test_keys = ["\r"]
 call gnosis#add_clipboard_before_up_note()
 call s:ok('za Enter は従来どおり（本文の最後に本文リンク・Branch は作らない）', s:count('t1.md', '^\[ノートQ1\](q1\.md)$') == 1 && s:count('q1.md', 'ChildBranch') == 0, string(s:file('t1.md')))
 
-" 保存済みなのに「編集中」の印だけが残っていても、Branch を足せる（zk などで「未保存の編集」と断られない）
+" 保存済みなのに「編集中」の印だけが残っていても、Branch を足せる（zn などで「未保存の編集」と断られない）
 let $GNOSIS_SYNC_GUARD_DIR = s:work . '/guard'
 call mkdir($GNOSIS_SYNC_GUARD_DIR, 'p')
 call s:mk('gd1.md', 'ノートGD1', ['GD1 の本文。'])
