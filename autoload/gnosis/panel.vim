@@ -93,9 +93,9 @@ function! gnosis#panel#add_current(board) abort
   if !empty(trim(l:output))
     echomsg trim(l:output)
   endif
-  " 登録したボードが表示中なら、既存の編集を保持したまま再読込する。
+  " 保存済みのボードを強制再読込する。同一秒の追記でも即時反映する。
   if l:shown && !getbufvar(winbufnr(l:pw), '&modified')
-    call win_execute(l:pw, 'silent! checktime')
+    call win_execute(l:pw, 'silent! edit!')
   endif
 endfunction
 
