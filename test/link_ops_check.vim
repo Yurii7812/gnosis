@@ -143,10 +143,7 @@ call gnosis#v2_new_plain()
 unlet g:gnosis_test_heading
 call s:ok('zn c t で見出しを選ばない: 新ノートを作らない・A は変わらない', s:files() ==# s:before && s:file('b.md') ==# s:b_before)
 
-" ------------------------------------------------------------------ 二段階 zn: 位置 → 関係（明示）
-call s:mk('pos_i.md', '位置I', ['ABCDE'])
-execute 'edit ' . fnameescape(s:v . '/pos_i.md')
-call cursor(search('^ABCDE
+" ------------------------------------------------------------------ グループの上の zn: Enter（表示名を付けて登録）/ o（登録しない）
 call s:mk('gz.md', 'グループZ', ['[ゼータ](zeta.md)', '[アルファ](alpha.md)'], 1)
 call s:mk('zeta.md', 'ゼータ', ['本文。'])
 call s:mk('alpha.md', 'アルファ', ['本文。'])
