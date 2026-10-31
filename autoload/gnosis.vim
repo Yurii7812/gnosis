@@ -11678,23 +11678,6 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   if l:grp_src
-      echohl WarningMsg
-      echo 'Gnosis: ' . gnosis#i18n#tr('グループの上では zk は使えません（トピックIndex は起点のノートで zk → n）')
-      echohl NONE
-      return
-    endif
-    echo s:fit_prompt(gnosis#i18n#tr('n=このノートから分岐するグループ（BranchGroup）を作る  (Esc/q キャンセル)'),
-          \ gnosis#i18n#tr('n=BranchGroup (Esc)'))
-    let l:ch = s:getkey()
-    redraw
-    if l:ch ==# 'n'
-      call s:v2_new_run(a:attr, 'n', 0)
-    else
-      echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（n だけ）')
-    endif
-    return
-  endif
-  if l:grp_src
     " Enter=登録＋BranchGroup の起点を親にする / g=登録だけ / o=孤立。
     " 孤立はどのノートの上でも使えるようにする（Index で思いつきを書いて、あとで \N で整理する）。
     " 表示名はリンクの文字だけ。新しいノートのタイトル・ファイル名は変えない（空 Enter = 新しいノートのタイトル）
