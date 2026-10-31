@@ -13225,6 +13225,24 @@ function! s:run_update_one_for(target_fp) abort
   endif
 endfunction
 
+" \l の選択操作中に保存されたノートを、モード終了後にだけ通常同期する。
+" 未保存の変更が残っているノートは上書きしないため、同期対象から外す。
+function! gnosis#autosync_link_finish(paths) abort
+  if !get(g:, 'gnosis_autosync', 1)
+    return
+  endif
+  for l:fp in uniq(sort(copy(a:paths)))
+    if !filereadable(l:fp)
+      continue
+    endif
+    let l:bn = bufnr(l:fp)
+    if l:bn > 0 && getbufvar(l:bn, '&modified')
+      continue
+    endif
+    call s:run_update_one_for(l:fp)
+  endfor
+endfunction
+
 function! s:run_update_one_for_sync(target_fp, ...) abort
   let l:force = a:0 > 0 ? a:1 : 0
   let l:cmd = s:update_one_command(a:target_fp, l:force)
@@ -14717,6 +14735,7 @@ endfunction
 " 曼荼羅の \l（gnosis#insert_links_choose）から呼ばれたときだけ、次の戻り値も返す（s:want_raw）:
 "   -2 サブの選択を取り消した（置き場所の選択に戻る） ／ -3 置き場所の選択そのものを閉じた（\l は続ける）
 "   -4 右のノートで場所を選ぶモードに入った（h / i / 見出し。決定は曼荼羅のほうで受ける）
+"   -5 右のノートを自由に編集してから、改めて位置を選ぶ（曼荼羅・リストの \l 限定）。
 " ふつうの呼び出し（za / zn など）では、-2 -3 は 0（何もしない）、-4 は -1 になる。
 function! s:insert_links_core(links, ...) abort
   let l:r = call('s:insert_links_core_raw', [a:links] + a:000)
@@ -14773,6 +14792,11 @@ function! s:insert_links_core_raw(links, ...) abort
   if l:ch ==? 'q' || l:num == 27 || l:num == 3
     echo gnosis#i18n#tr('Gnosis: 何も追加しない')
     return s:want_raw ? -3 : 0
+  endif
+  if l:ch ==# 'e' && !l:swap && s:place_hook isnot 0
+    " 曼荼羅／リストの \l: ノートを編集してから置き場所を選び直す。
+    " 編集開始はビュー側に返す（-5）。Vim の通常の i / v / h を奪わない。
+    return -5
   endif
   if l:ch ==# 'v' && l:single && !l:swap && s:place_hook isnot 0
     " 曼荼羅の \l: 右の元のノートで v → 範囲を選んで Enter。その文字が、選んだノートへのリンクになる
@@ -15269,6 +15293,9 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   endif
   if a:single && !a:swap && s:place_hook isnot 0
     call add(l:out, '   v      ' . gnosis#i18n#tr('このノートで範囲を選んで、その文字をリンクにする'))
+  endif
+  if !a:swap && s:place_hook isnot 0
+    call add(l:out, '   e      ' . gnosis#i18n#tr('右のノートを編集してから選ぶ（\\l でこのメニューに戻る）'))
   endif
   call add(l:out, '')
   call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
