@@ -4586,7 +4586,7 @@ endfunction
 " 数えなくても押すキーが分かる（g:gnosis_link_hints=0 で無効化）。
 " g/z は単発では完結しない生キー（次の1打を待つ）なので、数字を後ろに続けても
 " 新たな干渉や体感速度の悪化は発生しない。2文字目が数字なので既存の
-" z-コマンド（zn/zk/zp 等）・g-コマンド（gs/gc 等）との重複もない。
+" z-コマンド（zn/zp 等）・g-コマンド（gs/gc 等）との重複もない。
 " ---------------------------------------------------------------------------
 
 let s:hint_prop_type = 'gnosisLinkHint'
@@ -10649,7 +10649,7 @@ function! gnosis#v2_new_parent(...) abort
   call s:v2_new_interactive('')
 endfunction
 
-" zw は廃止して zk（グループノート）に置き換え。互換のため名前だけ残す。
+" 旧 attribute 作成の公開関数名。新しい操作は zn → g。互換のため名前だけ残す。
 function! gnosis#v2_new_attr() abort
   call s:v2_new_interactive('group')
 endfunction
@@ -11038,9 +11038,9 @@ function! gnosis#v2_new_group_visual() abort range
   startinsert
 endfunction
 
-" zn / zk の共通本体。
+" zn ノート作成の共通ヘルパー。
 "   a:attr が空なら普通のノート、'グループ' なら容器ノート（attribute: グループ）。
-"   通常の zn は新ノートとの Branch 関係も記録する。zk は明示的な b/p 以外 Branch を付けない。
+"   通常の zn は位置と意味的関係を独立に選ぶ。zn → g のみBranchGroupを直接登録する。
 "   あとから手で グループ / きっかけ: などを書く。`:` / `;` は sync がそのまま扱う。
 "   位置キー: h=カーソル直下 / Enter=Child末尾 / o=リンク無し(孤立) / p=Parent末尾。
 " 本文冒頭のブロック（Group: / Context: / BranchGroup: と、続くリンク行）の、最後のリンク行の index（0 始まり）。
@@ -11108,7 +11108,7 @@ function! s:simple_body_append(link) abort
   " 本文の終わり = 最初の関係の節の見出し（Context / Group / Related / BackLink のうち最初のもの）
   let l:up = s:first_section_line()
   if l:up == 0
-    " 末尾の空行（zk で作ったグループの書き出しの余白など）は詰めてから置く。
+    " 末尾の空行（グループノートの書き出しの余白など）は詰めてから置く。
     " 上のブロック（ParentBranch: など）のすぐ下なら空行を 1 つだけ挟む（挟まないとブロックの一部になる）。
     " 本文の最後がリンク行なら続けて、文章なら空行を 1 つ挟む
     let l:last = line('$')
@@ -11133,7 +11133,7 @@ function! s:simple_body_append(link) abort
 endfunction
 
 " simple: file の本文末尾（### Context の直前）へ link を 1 行置く。
-"   a:is_group が真（zk のグループノート）なら、リンクと ### Context は隣り合う。
+"   a:is_group が真（zn → g のグループノート）なら、リンクと ### Context は隣り合う。
 "   偽（zn）なら上下に空行 1 つずつ。テンプレートが持つ本文の空行は
 "   この並びに置き換わる（空行が累積しない）。
 function! s:simple_body_append_to_file(file, link, is_group) abort
@@ -12178,7 +12178,7 @@ endfunction
 
 " ---------------------------------------------------------------------------
 " c（今のノート A の Context にリンク先 B を入れる）のあとに、B 側へ A へのリンクを
-" どう入れるかを選ぶ（zn / zk / za / \l 共通）。
+" どう入れるかを選ぶ（zn / za / \l 共通）。
 "   Enter … B の本文の最後（関係の節の手前）
 "   t     … B の見出しを選び、その節の最後（次の同じか上の階層の見出しの手前）
 "   o     … B には入れない（A の Context への追加はそのまま行う。操作の取り消しではない）
@@ -15182,7 +15182,7 @@ function! s:join_groups(groups) abort
   for l:p in l:plan
     let l:gdir = fnamemodify(l:p.gfp, ':h')
     call s:simple_body_append_to_file(l:p.gfp, s:make_link_from_dir(l:cur, s:md_link_text(l:p.name), l:gdir), 1)
-    " 今のノートの Group: にすぐ出す（同期を待たない）。BranchGroup: にあるグループ（zk で分岐したもの）は
+    " 今のノートの Group: にすぐ出す（同期を待たない）。BranchGroup: にあるグループ（zn → g で分岐したもの）は
     " Group: に重ねて出さない（同期も出さないので、出すと消えてちらつく）
     if !s:branch_group_has(getline(1, '$'), l:p.gfp)
       let l:title = s:group_label(l:p.gfp) . ':' . join(s:group_member_names(l:p.gfp, l:cur), ',')
@@ -22792,7 +22792,7 @@ endfunction
 " 新ノートの冒頭のブロック（Group: / Context: など。リンク行が続く）の下を整える。
 " 本文がまだ無いときだけ、ブロックの最後のリンクの下を「空行 / カーソル行 / 空行」にする。
 " 戻り値はカーソルを置く行（1 始まり）。ブロックが無い・本文があるときは 0（何もしない）。
-" a:1 が真（zk のグループ）なら、ブロックの下は空行 1 つとカーソル行だけ（ブロックとリンクのあいだは 1 行空けるだけ）
+" a:1 が真（zn → g のグループ）なら、ブロックの下は空行 1 つとカーソル行だけ（ブロックとリンクのあいだは 1 行空けるだけ）
 function! s:new_note_gap(file, ...) abort
   let l:compact = a:0 && a:1
   let l:lines = readfile(a:file)
