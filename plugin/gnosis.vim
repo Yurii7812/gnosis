@@ -560,10 +560,9 @@ nnoremap <silent> <S-BS>   <Cmd>call gnosis#go_forward()<CR>
 nnoremap <silent> \.       <Cmd>call gnosis#go_forward()<CR>
 " 直前ノートとの1キー往復（A⇄B）。読むもの・選ぶものゼロの最速移動。
 nnoremap <silent> _        <Cmd>call gnosis#toggle_alternate()<CR>
-" \h は永続的な保管リスト。\H で現在のノートを追加する。
-" 旧 \1..\9 / \0 は不要なので廃止。通常の数字入力を妨げない。
-nnoremap <silent> \h       <Cmd>call gnosis#panel#key('hub')<CR>
-nnoremap <silent> \H       <Cmd>call gnosis#hub_set()<CR>
+" \h は本文に表示中のノートを Hub へ登録（カーソルの窓に依存しない）。
+" \H は廃止。旧 \1..\9 / \0 も使わない。
+nnoremap <silent> \h       <Cmd>call gnosis#panel#add_current('hub')<CR>
 " \a … 未所属（Folgezettel ID の無い）ノートの一覧（全体を見て整理する）。\N も同じ（押しにくいので \a を足した）
 nnoremap <silent> \a       <Cmd>call gnosis#orphans_open()<CR>
 nnoremap <silent> \N       <Cmd>call gnosis#orphans_open()<CR>
@@ -724,9 +723,8 @@ command! -range=0 GnosisWordLink if <count> | call gnosis#wordlink#run(<line1>, 
 command! GnosisMergeUndo call gnosis#merge#undo()
 command! GnosisYomiReview call gnosis#yomi_review()
 command! GnosisReview call gnosis#review_reopen()
-" \q は「タブ」のボード（\h のハブと同じ仕組みで別のファイル）。\Q で今のノートを足す。
-nnoremap <silent> \q       <Cmd>call gnosis#panel#key('tabs')<CR>
-nnoremap <silent> \Q       <Cmd>call gnosis#hub_set('tabs')<CR>
+" \q は本文に表示中のノートを Tab へ登録。\Q は廃止。
+nnoremap <silent> \q       <Cmd>call gnosis#panel#add_current('tabs')<CR>
 " ゴミ箱（ソフト削除）: \tr=一覧（⏎=開く / ^r=復元 / ^e=空） / \tD=今のノートをゴミ箱へ / \tE=空にする
 "   （\td は \tdr/\tdc（表の行・列削除）と待ちが被るので \tD にする）
 nnoremap <silent> \tr       <Cmd>call gnosis#trash_list()<CR>
@@ -906,7 +904,7 @@ xnoremap <nowait> <silent> \P :<C-u>call gnosis#add_current_as_parent_range(line
 nnoremap <silent> \O        <Cmd>OutlineEdit<CR>
 " \o … アウトライン窓（今のノートの見出し。曼荼羅・Folgezettel ビューと同時に出せる）の表示 ⇔ 非表示
 nnoremap <silent> \o        <Cmd>call gnosis#panel#key('outline')<CR>
-" \s … 右のパネル（アウトライン・タブ・ハブを 1 つに統合。前に使った中身で開く）
+" \s … 右のパネル（初回は Tab、再度 \s で既存のノート⇔パネル往復）
 nnoremap <silent> \s        <Cmd>call gnosis#panel#open_last()<CR>
 command! GnosisPanel call gnosis#panel#open_last()
 command! GnosisOutline call gnosis#panel#key('outline')
