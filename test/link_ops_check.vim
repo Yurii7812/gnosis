@@ -52,27 +52,27 @@ call s:mk('c.md', 'ノートC', ['C の本文。'])
 " ------------------------------------------------------------------ zn（通常のノート）→ Enter: Context を足さない
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ["\r"]
+let g:gnosis_test_keys = ["\r", "\r"]
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
 let s:new = s:newest_except(s:before)
 call s:ok('zn Enter: 新ノートができ、A の本文の最後にリンク', !empty(s:new) && s:has('a.md', '^\[' . fnamemodify(s:new, ':r') . '\](' . s:new . ')$'))
-call s:ok('zn Enter: 新ノートに Context を足さない（ParentBranch だけ）', empty(gnosis#context#find_block(s:file(s:new))) && index(s:file(s:new), 'ParentBranch:') >= 0, string(s:file(s:new)))
+call s:ok('zn Enter Enter: 本文リンクだけ。Context / ParentBranch は付けない', empty(gnosis#context#find_block(s:file(s:new))) && index(s:file(s:new), 'ParentBranch:') < 0, string(s:file(s:new)))
 
 " ------------------------------------------------------------------ zn → h / t / b / p / o: Context を足さない
 for [s:k, s:hd] in [['h', ''], ['t', '節1'], ['b', ''], ['p', ''], ['o', '']]
   execute 'edit ' . fnameescape(s:v . (s:k ==# 'p' ? '/c.md' : '/b.md'))
   call cursor(search('^B の本文。$', 'nw') > 0 ? search('^B の本文。$', 'nw') : 1, 1)
   let s:before = s:files()
-  let g:gnosis_test_keys = [s:k]
+  let g:gnosis_test_keys = index(['h', 't', 'o'], s:k) >= 0 ? [s:k, "\r"] : [s:k]
   if !empty(s:hd) | let g:gnosis_test_heading = s:hd | endif
   sleep 1100m
   call gnosis#v2_new_plain()
   stopinsert
   silent! unlet g:gnosis_test_heading
   let s:nk = s:newest_except(s:before)
-  call s:ok('zn ' . s:k . ': 新ノートができ、Context は足さない', !empty(s:nk) && empty(gnosis#context#find_block(s:file(s:nk))) && index(s:file(s:nk), '### Context') < 0, string(s:file(s:nk)))
+  call s:ok('zn ' . s:k . ': Context 無し。位置のみなら ParentBranch も無し', !empty(s:nk) && empty(gnosis#context#find_block(s:file(s:nk))) && index(s:file(s:nk), '### Context') < 0 && (index(['h','t','o'],s:k)<0 || index(s:file(s:nk),'ParentBranch:')<0), string(s:file(s:nk)))
 endfor
 
 " ------------------------------------------------------------------ zn（通常のノート）: 決められたキー以外では何も作らない
@@ -90,7 +90,7 @@ endfor
 " ------------------------------------------------------------------ zn → c → Enter / t / h（B の Context に A、A に B へのリンク）
 execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['c', "\r"]
+let g:gnosis_test_keys = ["\r", 'c']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
@@ -103,7 +103,7 @@ call s:ok('zn c Enter: B の本文に A を置かない', count(s:file(s:new), '
 call s:ok('zn c Enter: B を開く', fnamemodify(expand('%:p'), ':t') ==# s:new)
 execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_keys = ['t', 'c']
 let g:gnosis_test_heading = '節1'
 sleep 1100m
 call gnosis#v2_new_plain()
@@ -117,7 +117,7 @@ call s:ok('zn c t: B の Context に A', gnosis#context#links(s:file(s:new)) ==#
 execute 'edit ' . fnameescape(s:v . '/b.md')
 call cursor(search('^節2の文。$', 'nw'), 1)
 let s:before = s:files()
-let g:gnosis_test_keys = ['c', 'h']
+let g:gnosis_test_keys = ['h', 'c']
 sleep 1100m
 call gnosis#v2_new_plain()
 stopinsert
@@ -130,14 +130,14 @@ call s:ok('zn c h: B の Context に A', gnosis#context#links(s:file(s:new)) ==#
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:before = s:files()
 let s:a_before = s:file('a.md')
-let g:gnosis_test_keys = ['c', "\x1b"]
+let g:gnosis_test_keys = ['h', "\x1b"]
 sleep 1100m
 call gnosis#v2_new_plain()
 call s:ok('zn c Esc: 新ノートを作らない・A は変わらない', s:files() ==# s:before && s:file('a.md') ==# s:a_before)
 execute 'edit ' . fnameescape(s:v . '/b.md')
 let s:before = s:files()
 let s:b_before = s:file('b.md')
-let g:gnosis_test_keys = ['c', 't']
+let g:gnosis_test_keys = ['t']
 let g:gnosis_test_heading = 'そんな見出しは無い'
 call gnosis#v2_new_plain()
 unlet g:gnosis_test_heading
@@ -314,10 +314,10 @@ let s:ret = gnosis#insert_links_pick(['[グループG](g.md)'], getpos('.'))
 call s:ok('\l g: 選んだグループ G に今のノートが表示名で入り、もう一度グループを選ぶ画面にならない', index(s:file('g.md'), '[ジー四](jg4.md)') >= 0 && get(gnosis#mview#state(), 'pick', '') !=# 'group', string(s:file('g.md')))
 silent! call gnosis#mview#close()
 
-" ------------------------------------------------------------------ zn → o は \n と同じ作り方（同じ体裁・カーソル）
+" ------------------------------------------------------------------ zn → o → Enter は \n と同じ作り方（同じ体裁・カーソル）
 call s:mk('zo.md', 'ノートZO', ['ZO の本文。'])
 execute 'edit ' . fnameescape(s:v . '/zo.md')
-let g:gnosis_test_keys = ['o']
+let g:gnosis_test_keys = ['o', "\r"]
 call gnosis#v2_new_plain()
 let s:zo_ts = expand('%:t:r')
 " 生成後の処理が秒をまたいでも、再度作ったテンプレートの現在時刻とは比較しない。
