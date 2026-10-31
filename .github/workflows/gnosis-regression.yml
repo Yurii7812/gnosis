@@ -100,8 +100,10 @@ jobs:
         run: sh test/vim_version_detection_net.sh
       - name: Test GNOME Terminal's isolated font profile
         run: sh test/gnome_font_profile_net.sh
-      - name: Test saved tab boards
-        run: sh test/tabs_board_net.sh
+      - name: Test saved tab boards and unified right panel
+        run: |
+          sh test/tabs_board_net.sh
+          sh test/side_panel_net.sh
       - name: Test mandala direction, GUI and CUI state handoff and close keys
         env:
           TMPDIR: ${{ runner.temp }}
