@@ -22074,6 +22074,18 @@ function! gnosis#record_open(kind) abort
   return gnosis#record_create(a:kind, s:diary_day_of_time(''))
 endfunction
 
+" 時系列記録のノート（記録の一覧）を開く（gc）。無ければ作る（\R の「時系列記録を開く」と同じ）
+function! gnosis#record_group_open() abort
+  let l:root = gnosis#ensure_root_and_index()
+  if empty(l:root) | return | endif
+  let l:notes = s:diary_scan(l:root)
+  call s:diary_ensure_top(l:root, l:notes)
+  let l:top = s:record_top(l:root, l:notes)
+  call gnosis#save_current_note()
+  call gnosis#push_history()
+  execute 'edit ' . fnameescape(fnamemodify(l:root, ':p') . l:top)
+endfunction
+
 " 記録 a:kind の a:date（YYYY-MM-DD）のノートを作る・開く。\R（今日）も \D（日付指定）も、GUI の画面も、これを使う。
 " 新しく作るときは、同じ系列の、その日より前の直近のノートから上位（parent_record）を引き継ぎ、
 " その日の DailyNotes:（上位の記録・日記のリンク）を整える。同じ日のノートがすでにあれば、それを開く。

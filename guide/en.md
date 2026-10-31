@@ -170,6 +170,7 @@ When the shape of the tree changes (you change a parent, delete a note and so on
 - `\d` … open today's diary (created if missing; `:GnosisToday`). Notes you create are added to the diary's "today's notes" automatically (`:GnosisDiaryUpdate` updates all diaries; `:GnosisDiaryAdopt` registers the current note as the diary of its date)
 - `zw` … start writing at the bottom of the body of the open note (any note, not only a diary): the cursor goes on the line after one blank line below the last sentence (with one more blank line below it)
 - `\I` … change the size of image markup (visual: the selection)
+- `gc` opens the time-series records note (the list of records).
 - `\R` is the selection screen for time-series records. **Switch modes with `Ctrl-←` / `Ctrl-→` (`Tab` / `S-Tab` and `h` `l` work too)**: open (today's note) / pick a date / new / rename / merge. Choose a record with `j` `k`, confirm with `Enter`, cancel with `Esc`. For merge, choose the one to merge away first, then the one that stays.
 
 ### Expanding, images and more
@@ -364,7 +365,7 @@ A list with minimal explanation. See Parts 1 and 2 for details. Keys that start 
 
 ### Diary, records, paper and phone
 
-- `\d` today's diary ・ `\D` diary for a given date ・ `\R` time-series records (`Ctrl-←` `Ctrl-→` switch mode: open/date/new/rename/merge) ・ `\E` set the upper record ・ `\T` time mode ・ `<C-t>` insert the time ・ `\a` `\N` unassigned notes ・ `\n` new note ・ `\ua` sync everything
+- `\d` today's diary ・ `\D` diary for a given date ・ `gc` time-series records note ・ `\R` time-series records (`Ctrl-←` `Ctrl-→` switch mode: open/date/new/rename/merge) ・ `\E` set the upper record ・ `\T` time mode ・ `<C-t>` insert the time ・ `\a` `\N` unassigned notes ・ `\n` new note ・ `\ua` sync everything
 - `\f` paper PKM Index ・ `\F` number paper scans (`p` on the first screen changes the `PA-` prefix) ・ `\M` import phone memos
 
 ### Screens and windows

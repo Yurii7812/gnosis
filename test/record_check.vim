@@ -133,5 +133,8 @@ call s:rpkey("\<C-Left>")
 call s:ok('Ctrl-← で戻る（「名前を変える」）・選び直しになる', s:rptext() =~# '\V[' . s:T('名前を変える') . ']' && stridx(s:rptext(), printf(s:T('「%s」を、どれにまとめる？（まとめる先＝残る方を選ぶ）'), '夢')) < 0, s:rptext())
 call s:rpkey("\<Esc>")
 call s:ok('Esc でやめる', empty(popup_list()))
+" gc: 時系列記録のノート（記録の一覧）を開く
+normal gc
+call s:ok('gc で時系列記録のノートを開く', stridx(join(getline(1, '$'), "\n"), s:T('時系列記録')) >= 0, expand('%:p'))
 call writefile(s:out, $RECORD_RESULT)
 qall!
