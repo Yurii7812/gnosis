@@ -2069,6 +2069,10 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         f"# {ns_title('fi')}", "", *[ln for _, ln in desired],
         CONTEXT_HEAD,
         markdown_link(index_display, index_path, folge_index.parent)]))
+    # 旧構造では番号Indexのハブに、紙PKMのグループ自体が誤って
+    # ChildBranch として残る場合がある。ハブの子は番号別と All のみ。
+    _remove_relation_to(folge_index, ("ChildBranch:", "### ChildBranch"), index_path)
+    _remove_relation_to(index_path, ("ParentBranch:", "### ParentBranch"), folge_index)
 
     # --- トピック別Index（`1-Index` グループは作らない。ID ノート `1` の BranchGroup: に `1-仏教` を入れる） ---
     # トピックの親子（front matter の topic_parent）は表示順のためだけ: 親を子より先に並べる。インデントは付けない。
