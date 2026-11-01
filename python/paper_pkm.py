@@ -2139,7 +2139,6 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         }
         fm = _update_yomi(fm, mapping)
         write_note(note_path, fm, merge_note_body(old_body, inner))
-        _write_folgezettel_nav(note_path, fid, root)
         if fid in branch_lines:
             _write_branch_group(note_path, branch_lines[fid])
 
@@ -2157,6 +2156,10 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
             # トピックは BranchGroup に固定するグループであり、Branch の子ではない。
             _remove_relation_to(tpath, ("ParentBranch:", "### ParentBranch"), folge[fid])
             _remove_relation_to(folge[fid], ("ChildBranch:", "### ChildBranch"), tpath)
+    # すべての ParentBranch / BranchGroup を設定した最後にナビゲーションを配置する。
+    # 初回生成から FolgezettelIndex が ParentBranch の前に来るようにする。
+    for fid, note_path in folge.items():
+        _write_folgezettel_nav(note_path, fid, root)
 
 
 def has_paper_pkm(root: Path) -> bool:
