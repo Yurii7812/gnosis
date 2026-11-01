@@ -1268,7 +1268,7 @@ def create_topic_note(
     """
     path = unique_note_path(folder)
     display = topic_display(fid, topic)
-    fm = [_time_line(when), f"title: {display}", SCAN_SOURCE_LINE]
+    fm = [_time_line(when), f"title: {display}", "attribute: group", SCAN_SOURCE_LINE]
     if parent_topic and parent_topic != display and any(
             disp == parent_topic for disp, _p, _tp in scan_topic_notes(root or folder).get(fid, [])):
         fm.append(f"{TOPIC_PARENT_KEY}: {parent_topic}")
@@ -1470,7 +1470,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
                             id_index_paths: dict[str, Path], topics: Optional[dict] = None) -> None:
     """Write per-root number indexes and a combined all-number index.
 
-    Number-specific indexes are groups, while the Folgezettel-Index hub is an ordinary note. Topic image
+    All Folgezettel indexes are ordinary notes, while topic-index notes are groups. Topic image
     previews are placed immediately before the corresponding numbered note,
     only inside the generated Folgezettel index views.
     """
@@ -1482,9 +1482,9 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
         path = folge_index_path(root, fid)
         display = folge_index_display(fid)
         if not path.is_file():
-            write_note(path, [_time_line(), f"title: {display}", "attribute: group"], [])
+            write_note(path, [_time_line(), f"title: {display}"], [])
         fm_fi, old_fi_body = read_note(path)
-        fm_fi = _fm_title_attr(fm_fi, display, group=True)
+        fm_fi = _fm_title_attr(fm_fi, display, group=False)
         inner = [f"# {display}", ""]
         for member in members:
             inner.append("## " + markdown_link(member, folge[member], path.parent))
@@ -1684,6 +1684,38 @@ def _root_id(fid: str) -> str:
     while parent_id(fid) is not None:
         fid = parent_id(fid)
     return fid
+
+
+def _write_folgezettel_nav(note_path: Path, fid: str, root: Path) -> None:
+    """紙ノート上部に番号別・全番号の2リンクを固定する。関係は生成しない。"""
+    fm, body = read_note(note_path)
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        if body[i].strip() == "FolgezettelIndex:":
+            i += 1
+            while i < len(body) and _IS_LINK_LINE.match(body[i]):
+                i += 1
+            continue
+        out.append(body[i])
+        i += 1
+    h1 = next((i for i, ln in enumerate(out) if re.match(r"^#\\s", ln)), None)
+    if h1 is None:
+        return
+    at = h1 + 1
+    if at < len(out) and not out[at].strip():
+        at += 1
+    else:
+        out.insert(at, "")
+        at += 1
+    index = folge_index_path(root, _root_id(fid))
+    all_index = folge_index_path(root, "all-number")
+    block = ["FolgezettelIndex:",
+             markdown_link(fid, index, note_path.parent, frag=fid),
+             markdown_link("All", all_index, note_path.parent)]
+    out[at:at] = block
+    if out != body:
+        write_note(note_path, fm, out)
 
 
 def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) -> list[str]:
@@ -2051,6 +2083,10 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         disp_path = {disp: path for disp, path, _tp in tlist}
         for _disp, tpath, tp in tlist:
             _ensure_fm_line(tpath, "source", SCAN_SOURCE_LINE)
+            fm_t, body_t = read_note(tpath)
+            fm_new = _fm_title_attr(fm_t, title_of(fm_t, body_t, tpath.stem), group=True)
+            if fm_t != fm_new:
+                write_note(tpath, fm_new, body_t)
             if tp:  # 旧い形（Context のリンク）で分かった親も、front matter に残す
                 _ensure_fm_line(tpath, TOPIC_PARENT_KEY, f"{TOPIC_PARENT_KEY}: {tp}")
         owner = folge.get(fid)
@@ -2069,29 +2105,22 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
             # 旧 `1-Index` を指していたリンクは ID ノートへ向け直し、旧グループはごみ箱へ（内容は BranchGroup に移した）
             _rewrite_links_to(root, legacy, owner)
             _trash_note(root, legacy)
-        for disp, tpath, tp in tlist:
-            # トピックノートの Context に folgezettel-Index-N を足す（無いときだけ。本文・ほかの関係は消さない）
-            fm_t, body_t = read_note(tpath)
-            folge_link = markdown_link(folge_index_display(fid),
-                                       folge_index_path(root, fid), tpath.parent)
-            new_body = merge_note_body(body_t, [CONTEXT_HEAD, folge_link])
-            if new_body != body_t:
-                write_note(tpath, fm_t, new_body)
+        for _disp, tpath, _tp in tlist:
+            # 旧版で自動追加していた番号Indexへの Context / Group だけを掃除する。
+            # グループ本文の手書き索引リンクは触らない。
+            _remove_relation_to(tpath, (CONTEXT_HEAD, "Context:", "### Parent", "Group:"),
+                                folge_index_path(root, _root_id(fid)))
 
-    # --- 番号別グループと全番号一覧。Folgezettel-Index は全グループの親。---
+    # --- 番号別/全番号Index は通常ノート。旧版が生成した Branch は解除する。---
     write_folge_index_notes(root, folge, id_index_paths, topics)
     for child_id in ["all-number", *top_level_ids(folge)]:
         child_path = folge_index_path(root, child_id)
-        # 旧版で生成した Context と誤った ParentBranch は削除し、明示的な親子関係に置き換える。
-        _remove_relation_to(child_path, ("Context:", "### Context", "### Parent"), folge_index)
+        _remove_relation_to(child_path, ("Context:", "### Context", "### Parent",
+                                         "ParentBranch:", "### ParentBranch"), folge_index)
+        _remove_relation_to(folge_index, ("ChildBranch:", "### ChildBranch"), child_path)
         if child_id != "all-number" and child_id in folge:
             _remove_relation_to(child_path, ("ParentBranch:", "### ParentBranch"), folge[child_id])
-            # Remove the reciprocal legacy edge from the scanned root note,
-            # otherwise it continues to show an index as its child.
             _remove_relation_to(folge[child_id], ("ChildBranch:", "### ChildBranch"), child_path)
-        msg = _ensure_branch(root, folge_index, child_path)
-        if msg:
-            added_report.append(msg)
 
     # --- スキャンノートの本文と Context -------------------------------------
     for fid, note_path in folge.items():
@@ -2110,6 +2139,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         }
         fm = _update_yomi(fm, mapping)
         write_note(note_path, fm, merge_note_body(old_body, inner))
+        _write_folgezettel_nav(note_path, fid, root)
         if fid in branch_lines:
             _write_branch_group(note_path, branch_lines[fid])
 
