@@ -950,8 +950,11 @@ def test_scan_self_context_and_child_cleanup() -> None:
         number_index = pp.folge_index_path(root, "3")
         # 旧版の誤った親子（スキャンの 3 → 番号Index）も再現する。
         fm_index, body_index = pp.read_note(number_index)
-        p_at = next(i for i, line in enumerate(body_index) if line.strip() == "ParentBranch:")
-        body_index[p_at + 1] = f"[PA-3]({n3.name})"
+        p_at = next((i for i, line in enumerate(body_index) if line.strip() == "ParentBranch:"), None)
+        if p_at is None:
+            body_index[2:2] = ["ParentBranch:", f"[PA-3]({n3.name})"]
+        else:
+            body_index.insert(p_at + 1, f"[PA-3]({n3.name})")
         pp.write_note(number_index, fm_index, body_index)
         fm3, body3 = pp.read_note(n3)
         old_index_link = f"[folgezettel-Index-3]({number_index.name})"
