@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """\\l → （曼荼羅で選ぶ）→ e を、実 Vim を擬似端末で動かして確かめる（2026-10-24 の不具合の回帰）。
   前回の検索（@/）が残っていて、typeahead に <Cmd>nohlsearch<CR> が積まれていても、
-  e のあとに「のリンクを書く」の選択肢が出て、E486 が出ず、ノートの中身も変わらない。
+  e のあとに「リンク: A→B」「関係: A→B」が出て、E486 が出ず、ノートの中身も変わらない。
 一時 vault だけを使う。"""
 import fcntl, os, pty, re, select, shutil, struct, sys, tempfile, termios, time
 from pathlib import Path
@@ -29,7 +29,7 @@ try:
     mk("plant.md", "植物", "あいうえお。AI の話。\n\n末尾の行。")
     mk("herb.md", "ハーブ", "ハーブの話。[植物](plant.md)")
     before = (v / "plant.md").read_text(encoding="utf-8")
-    env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
+    env = dict(os.environ, TERM="xterm-256color", GNOSIS_LANG="ja", GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
     pid, fd = pty.fork()
     if pid == 0:
         os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "--cmd",
@@ -76,13 +76,17 @@ try:
     os.write(fd, b"e")
     pump(2.0)
     after_e = text(out[mark:])
-    ok("e のあとに置き場所の選択肢が出る（のリンクを書く）", "のリンクを書く" in after_e)
+    ok("e のあとにリンクと関係の方向が A→B で表示される", "リンク: A→B" in after_e and "関係: A→B" in after_e)
     ok("E486 が出ない", "E486" not in after_e)
     ok("ここまでノートの中身は変わっていない", (v / "plant.md").read_text(encoding="utf-8") == before)
     # x: 向きを入れ替える → h: 選んだノート（ハーブ）の中で場所を選び、Enter で、ハーブに「植物」へのリンクが入る
     herb_before = (v / "herb.md").read_text(encoding="utf-8")
+    mark = len(out)
     os.write(fd, b"x")
     pump(0.8)
+    after_x = text(out[mark:])
+    ok("x でリンクと関係の方向が B→A に切り替わる", "リンク: B→A" in after_x and "関係: B→A" in after_x)
+    ok("x の案内は次の方向 A→B を示す", "A→B" in after_x)
     os.write(fd, b"h")
     pump(1.5)
     os.write(fd, b"gg")
