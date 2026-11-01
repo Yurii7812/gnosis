@@ -2109,7 +2109,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
             # A single declared child is written exactly once, regardless of
             # duplicate ChildBranch lines or its appearances in the body.
             for t in targets:
-                if t not in listed and t not in (stale or set()) and t not in branch_group_children:
+                if t != base and t not in listed and t not in (stale or set()) and t not in branch_group_children:
                     entries.append((ln, t))
                     listed.add(t)
         elif ln.strip() and not _links_from([ln]):
@@ -2121,7 +2121,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
     for ln in moved or []:
         include(ln)
     for child in pb_kids or set():
-        if base is None or child in listed or child in (stale or set()) or child in branch_group_children:
+        if base is None or child == base or child in listed or child in (stale or set()) or child in branch_group_children:
             continue
         title = (titles or {}).get(child) or child.stem
         link = f"[{title}]({os.path.relpath(str(child), str(base.parent))})"
@@ -2318,7 +2318,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
                 q = (cp.parent / cand).resolve()
-                if q in notes:
+                if q in notes and q != cp:
                     notes[q].setdefault("_ctx_kids", set()).add(cp)
                     break
         # 子の側の ParentBranch:（親の ChildBranch: に無くても、子として扱う）
@@ -2326,7 +2326,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
                 q = (cp.parent / cand).resolve()
-                if q in notes:
+                if q in notes and q != cp:
                     notes[q].setdefault("_pb_kids", set()).add(cp)
                     cn.setdefault("_pb_parents", set()).add(q)
                     break
@@ -2469,6 +2469,12 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         for key in ("pbranch", "cbranch"):
             n[key] = _preserve_parent(n[key], p, res, titles, heading_labels)
             n[key] = _prune_dangling(n[key], p, res)
+            # A ParentBranch/ChildBranch to the same note cannot represent a
+            # valid tree edge. Discard imported artifacts instead of mirroring
+            # or reconstructing them on every sync.
+            n[key] = [line for line in n[key]
+                      if not (_SIMPLE_LINK_LINE_RE.match(line)
+                              and res(_link_target(line), dirs[p]) == p)]
     related_t: dict[Path, set[Path]] = {}
     for p, n in notes.items():
         ts: set[Path] = set()
