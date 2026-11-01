@@ -221,10 +221,10 @@ def test_create_and_regen() -> None:
         check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
         check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
-        nav1 = f"FolgezettelIndex:\n[1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
+        nav1 = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
         check(nav1 in note1, "紙ノートに番号別と All の FolgezettelIndex を表示する")
         note1a = notes["1a"].read_text(encoding="utf-8")
-        nav1a = f"FolgezettelIndex:\n[1a]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
+        nav1a = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
         check(nav1a in note1a, "子番号もその番号の見出しへリンクする")
         check(not any("FolgezettelIndex:" in t and t.count("FolgezettelIndex:") != 1 for t in (note1, note1a)),
               "FolgezettelIndex が重複しない")
