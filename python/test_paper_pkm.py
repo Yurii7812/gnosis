@@ -219,12 +219,12 @@ def test_create_and_regen() -> None:
 
         note1 = notes["1"].read_text(encoding="utf-8")
         check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
-        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
+        check(f"Context:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
-        nav1 = f"FolgezettelIndex:\n[1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
+        nav1 = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
         check(nav1 in note1, "紙ノートに番号別と All の FolgezettelIndex を表示する")
         note1a = notes["1a"].read_text(encoding="utf-8")
-        nav1a = f"FolgezettelIndex:\n[1a]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
+        nav1a = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
         check(nav1a in note1a, "子番号もその番号の見出しへリンクする")
         check(not any("FolgezettelIndex:" in t and t.count("FolgezettelIndex:") != 1 for t in (note1, note1a)),
               "FolgezettelIndex が重複しない")
@@ -264,7 +264,7 @@ def test_topic_index() -> None:
         n1 = notes["1"].read_text(encoding="utf-8")
         check("BranchGroup:\n[PA-1-仏教](" in n1, "ID ノートの BranchGroup: にトピックグループ")
         check("attribute: group" in notes["1-仏教"].read_text(encoding="utf-8"), "トピックインデックスはグループ")
-        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in n1,
+        check(f"Context:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in n1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
         d_text = pp.folge_index_path(root, "1").read_text(encoding="utf-8")
         check("[1-Index]" not in d_text, "専用ノートに 1-Index へのリンクは無い")
