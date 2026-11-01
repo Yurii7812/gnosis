@@ -630,6 +630,7 @@ def test_index_has_no_blank_lines_between_links() -> None:
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
                       and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})"
                       and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
+                      and not (i >= 2 and lines[i - 2] == "ParentBranch:")  # ParentBranch の末尾と本文の間の区切りは必要
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
         text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n\n[日記](")
