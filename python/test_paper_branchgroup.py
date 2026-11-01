@@ -165,9 +165,10 @@ with tempfile.TemporaryDirectory() as d:
     ctx_1a = block(n1a, "### Context") + block(n1a, "Context:")
     check(not any(f"]({n1.name})" in ln for ln in ctx_1a), f"1a の親子を Context で代用しない: {ctx_1a}")
     for t in ("PA-1-仏教", "PA-1-四念処", "PA-1-阿含"):
-        check(any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
-              and any(f"]({notes[t].name})" in ln for ln in block(n1, "ChildBranch:") + block(n1, "BranchGroup:")),
-              f"トピック {t} の ParentBranch: に 1・1 の ChildBranch: か BranchGroup: に {t}")
+        check("attribute: group" in notes[t].read_text(encoding="utf-8")
+              and not any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
+              and any(f"]({notes[t].name})" in ln for ln in block(n1, "BranchGroup:")),
+              f"トピック {t} はグループで、1 の BranchGroup: に固定し、ParentBranch を作らない")
     check("topic_parent: PA-1-仏教" in fm_of(notes["PA-1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["PA-1-仏教"])),
           f"親トピックは front matter の topic_parent に残る: {fm_of(notes['PA-1-四念処'])}")
     check(all("source: scan" in fm_of(p) for p in notes.values()), "スキャン由来のノートに source: scan")
