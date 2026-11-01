@@ -195,7 +195,7 @@ def test_create_and_regen() -> None:
         all_number = pp.folge_index_path(root, "all-number")
         check(f"[all-number]({all_number.name})" in folge_text and all_number.is_file(), "全番号インデックスの入口")
         check("## [1](" in all_number.read_text(encoding="utf-8") and "## [1a](" in all_number.read_text(encoding="utf-8"), "全番号インデックスに親子の番号を表示")
-        check("attribute: group" in all_number.read_text(encoding="utf-8") and "ParentBranch:\n[Folgezettel-Index](" in all_number.read_text(encoding="utf-8"), "all-number も Folgezettel-Index の子グループ")
+        check("attribute: group" not in all_number.read_text(encoding="utf-8") and "ParentBranch:\n[Folgezettel-Index](" not in all_number.read_text(encoding="utf-8"), "all-number は通常ノート・ParentBranch を作らない")
         check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
         dedicated = pp.folge_index_path(root, "1")
@@ -204,10 +204,10 @@ def test_create_and_regen() -> None:
             d_text = dedicated.read_text(encoding="utf-8")
             check("## [1](" in d_text and "## [1a](" in d_text, "専用ノートに ID 見出し（リンク）")
             check("folgezettel_index" not in d_text and "# folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
-            check("attribute: group" in d_text.split("---", 2)[1], "番号別インデックスはグループ")
+            check("attribute: group" not in d_text.split("---", 2)[1], "番号別インデックスは通常ノート")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
-            check("ParentBranch:\n[Folgezettel-Index](" in d_text, "Folgezettel-Index が番号別Indexの ParentBranch")
+            check("ParentBranch:\n[Folgezettel-Index](" not in d_text, "番号別Index に Folgezettel-Index の ParentBranch を作らない")
         iw_text = T(root, "Index-write").read_text(encoding="utf-8")
         check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
@@ -221,6 +221,13 @@ def test_create_and_regen() -> None:
         check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
         check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
+        nav1 = f"FolgezettelIndex:\n[1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
+        check(nav1 in note1, "紙ノートに番号別と All の FolgezettelIndex を表示する")
+        note1a = notes["1a"].read_text(encoding="utf-8")
+        nav1a = f"FolgezettelIndex:\n[1a]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
+        check(nav1a in note1a, "子番号もその番号の見出しへリンクする")
+        check(not any("FolgezettelIndex:" in t and t.count("FolgezettelIndex:") != 1 for t in (note1, note1a)),
+              "FolgezettelIndex が重複しない")
         note1a = notes["1a"].read_text(encoding="utf-8")
         check(f"[PA-1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
 
@@ -255,7 +262,8 @@ def test_topic_index() -> None:
         pp.regen(root)
         check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
         n1 = notes["1"].read_text(encoding="utf-8")
-        check("BranchGroup:\n[PA-1-仏教](" in n1, "ID ノートの BranchGroup: にトピック")
+        check("BranchGroup:\n[PA-1-仏教](" in n1, "ID ノートの BranchGroup: にトピックグループ")
+        check("attribute: group" in notes["1-仏教"].read_text(encoding="utf-8"), "トピックインデックスはグループ")
         check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in n1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
         d_text = pp.folge_index_path(root, "1").read_text(encoding="utf-8")
@@ -263,8 +271,13 @@ def test_topic_index() -> None:
         topic_image = next((ln for ln in d_text.splitlines() if ln.startswith("![](") and "仏教" in ln), None)
         check(topic_image is not None and d_text.index(topic_image) < d_text.index("## [1]("), "1 のトピック画像を 1 のノートの前へ表示")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        check("folgezettel-Index-1" in topic_text and "1-Index" not in topic_text,
-              "トピックノートに番号別Indexのリンクを保持する")
+        check("Context:\n[folgezettel-Index-1]" not in topic_text and "1-Index" not in topic_text,
+              "トピックグループに番号別Indexの Context を自動生成しない")
+        tp_fm, tp_body = pp.read_note(notes["1-仏教"])
+        manual_link = f"[手動で追加した索引]({pp.folge_index_path(root, '1').name})"
+        pp.write_note(notes["1-仏教"], tp_fm, tp_body + ["", manual_link])
+        pp.regen(root)
+        check(manual_link in notes["1-仏教"].read_text(encoding="utf-8"), "トピックグループ本文への手動索引リンクを保持する")
         folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check("[PA-1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
@@ -980,8 +993,8 @@ def test_scan_self_context_and_child_cleanup() -> None:
         idx3_text = number_index.read_text(encoding="utf-8")
         check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
               "旧スキャンの番号IndexへのChildBranchを消す")
-        check("ParentBranch:\n[Folgezettel-Index](" in idx3_text,
-              "番号Indexの親はFolgezettel-Indexへ統一される: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
+        check("ParentBranch:\n[Folgezettel-Index](" not in idx3_text,
+              "番号Indexは通常ノートでFolgezettel-Indexとの ParentBranch を持たない: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
         snap = (t0, t1)
         pp.regen(root)
         nf.simple_sync(root)
