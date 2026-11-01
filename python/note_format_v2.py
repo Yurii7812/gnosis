@@ -2021,6 +2021,26 @@ def _ends_in_label_block(lines: list[str]) -> bool:
     return i >= 0 and bool(re.match(r"^[^\s\[\]()]+:\s*$", lines[i]))
 
 
+def _take_folgezettel_navigation(body: list[str]) -> tuple[list[str], list[str]]:
+    """番号別インデックスへのナビゲーションを関係ブロックから独立して保持する。"""
+    out: list[str] = []
+    nav: list[str] = []
+    i = 0
+    while i < len(body):
+        if body[i].strip() == "FolgezettelIndex:":
+            i += 1
+            links: list[str] = []
+            while i < len(body) and _SIMPLE_LINK_LINE_RE.match(body[i]):
+                links.append(body[i])
+                i += 1
+            if links:
+                nav = ["FolgezettelIndex:", *links]
+            continue
+        out.append(body[i])
+        i += 1
+    return nav, out
+
+
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
     """本文冒頭のブロックを BranchGroup: → Group: → ParentBranch: → Context: の順で出力する（2026-10-20 に変更）。
@@ -2028,14 +2048,14 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     BranchGroup は直接のブランチで派生したグループ（旧 ThisNoteGroup）。
     Group は所属（手動＋自動）、Context は文脈。
     """
-    body = list(n["body"])
+    nav, body = _take_folgezettel_navigation(list(n["body"]))
     links = [ln for ln in links if ln.strip()]
     groups = [ln for ln in (group_lines or []) if ln.strip()]
 
     # BranchGroup と旧 ThisNoteGroup を回収して先頭へ正規化する。
     branch_links, body, found_branch_group = _take_branch_group_block(body)
 
-    blocks: list[str] = []
+    blocks: list[str] = list(nav)
     pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
