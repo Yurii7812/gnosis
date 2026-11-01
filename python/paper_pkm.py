@@ -1430,7 +1430,7 @@ def find_diary_group(root: Path, index_path: Optional[Path], notes: Optional[lis
                     return cand
         return None
 
-    found = _target(index_path) or _target(find_titled(root, ns_title('fi'), True) or Path(root) / FOLGE_INDEX)
+    found = _target(index_path) or _target(find_titled(root, ns_title('fi')) or Path(root) / FOLGE_INDEX)
     if found is not None:
         return found
     tops = paper_diary_groups(notes)["tops"]
@@ -1496,7 +1496,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
             inner.append("")
         id_index = id_index_paths.get(fid) or find_id_index(root, fid)
         inner += [CONTEXT_HEAD,
-                  markdown_link(ns_title('fi'), named_path(root, ns_title('fi'), True), path.parent)]
+                  markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), path.parent)]
         body = merge_note_body(old_fi_body, inner)
         body = _place_topic_lines(body, path.parent, members, folge, topics, id_index)
         if body != old_fi_body:
@@ -1633,6 +1633,46 @@ def _root_id(fid: str) -> str:
     while parent_id(fid) is not None:
         fid = parent_id(fid)
     return fid
+
+
+def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) -> list[str]:
+    """Remove obsolete auto-generated scan Context and bogus index ChildBranch.
+
+    Other Context entries and real scan children are left untouched.
+    """
+    own = os.path.normpath(str(note))
+    index = os.path.normpath(str(number_index))
+    out: list[str] = []
+    mode: Optional[str] = None
+    header_at: Optional[int] = None
+    for ln in body:
+        label = ln.strip()
+        if label in (CONTEXT_HEAD, "Context:", "### Parent"):
+            mode, header_at = "context", len(out)
+            out.append(ln)
+            continue
+        if label in ("ChildBranch:", "### ChildBranch"):
+            mode, header_at = "child", len(out)
+            out.append(ln)
+            continue
+        if label in SECTION_HEADS or label in ("Group:", "ParentBranch:", "BranchGroup:", "BackLink:"):
+            mode, header_at = None, None
+        if mode in ("context", "child") and _IS_LINK_LINE.match(ln):
+            target = _link_norm(note.parent, ln)
+            if target == index or (mode == "context" and target == own):
+                continue
+        out.append(ln)
+    # Drop a now-empty Context header; leave non-generated sections intact.
+    cleaned: list[str] = []
+    for i, ln in enumerate(out):
+        if ln.strip() in (CONTEXT_HEAD, "Context:", "### Parent"):
+            j = i + 1
+            while j < len(out) and not out[j].strip():
+                j += 1
+            if j >= len(out) or out[j].strip() in SECTION_HEADS + ("Group:", "ParentBranch:", "ChildBranch:", "BackLink:"):
+                continue
+        cleaned.append(ln)
+    return cleaned
 
 
 def _sync_link_block(body: list[str], base: Path, strip_targets: set[str],
@@ -1773,7 +1813,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     if index_write.is_file():
         iw_fm, body = read_note(index_write)
         # Index-write も、索引（キーワード行）を書くグループ（attribute: group）。同名のノートを別に持たない
-        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')))
+        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')), group=False)
         iw_fm_changed = iw_fm_new != iw_fm
         iw_fm = iw_fm_new
         for i, line in enumerate(body):
@@ -1872,7 +1912,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     fm, old_index_body = read_note(index_path)
     fm = _fm_title_attr(fm, title_of(fm, old_index_body, DEFAULT_INDEX_TITLE))
     fixed_links = [markdown_link(ns_title('iw'), named_path(root, ns_title('iw')), index_path.parent),
-                   markdown_link(ns_title('fi'), named_path(root, ns_title('fi'), True), index_path.parent)]
+                   markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), index_path.parent)]
     body = [f"# {index_display}", "", *fixed_links, *inner]
     merged = merge_note_body(old_index_body, body)
     # Index-write・Folgezettel-Index の固定リンクは連続させ、その次のキーワード一覧との間に空行を 1 行置く
@@ -1882,19 +1922,20 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     write_note(index_path, fm, merged)
 
     # --- Folgezettel-Index（日記 → 最上位IDを自然順。各リンクは専用ノート folgezettel-Index-N#N） ---
-    folge_index = named_path(root, ns_title('fi'), True)
+    folge_index = named_path(root, ns_title('fi'))
     id_links = [
         (folge_index_path(root, fid), markdown_link(fid, folge_index_path(root, fid), folge_index.parent, frag=fid))
         for fid in top_level_ids(folge)
     ]
-    desired = list(id_links)
+    all_numbers = folge_index_path(root, "all-number")
+    desired = [(all_numbers, markdown_link("all-number", all_numbers, folge_index.parent)), *id_links]
     # 紙の日記があれば、一番上に「日記」を並べる（Paper-Zettelkasten-Index と同じ日記グループ）:
     #   Folgezettel-Index → 日記 → 月 → その月のノート（年をまたいだら 日記 → 年 → 月グループ → その月のノート）
     diary_top = group_paths.get(DIARY_KEYWORD) if diaries else None
     if diary_top is not None:
         desired.insert(0, (diary_top, markdown_link(DIARY_KEYWORD, diary_top, folge_index.parent)))
     if not folge_index.is_file():
-        write_note(folge_index, [_time_line(), f"title: {ns_title('fi')}", "attribute: group"],
+        write_note(folge_index, [_time_line(), f"title: {ns_title('fi')}"],
                    [f"# {ns_title('fi')}", ""], keep_trailing_blank=True)
     fm, old_folge_body = read_note(folge_index)
     # 旧い `[diary](…)` の行（英語表記）は、日記グループへの `[日記](…)` に置き換える（位置も一番上へ）
@@ -1904,7 +1945,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     if diary_top is not None:
         structure.add(os.path.normpath(str(diary_top)))
     old_folge_body = _sync_link_block(old_folge_body, folge_index.parent, structure, desired)
-    fm = _fm_title_attr(fm, ns_title('fi'))
+    fm = _fm_title_attr(fm, ns_title('fi'), group=False)
     write_note(folge_index, fm, merge_note_body(old_folge_body, [
         f"# {ns_title('fi')}", "", *[ln for _, ln in desired],
         CONTEXT_HEAD,
@@ -1951,7 +1992,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
             if new_body != body_t:
                 write_note(tpath, fm_t, new_body)
 
-    # --- 番号専用ノート folgezettel-Index-N ----------------------------------
+    # --- 番号専用ノートと全番号一覧 ----------------------------------------
     write_folge_index_notes(root, folge, id_index_paths, topics)
 
     # --- スキャンノートの本文と Context -------------------------------------
@@ -1959,11 +2000,11 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         _ensure_fm_line(note_path, "source", SCAN_SOURCE_LINE)
         fm, old_body = read_note(note_path)
         images = [ln for ln in old_body if re.match(r"^!\[\]\(", ln.strip())]
-        inner = [f"# {with_prefix(prefix, fid)}", "", *images, CONTEXT_HEAD]
-        # 専用ノート folgezettel-Index-N の自ID節（#ID）を Context に入れる（親子は Branch で表す）
-        root_fid = _root_id(fid)
-        inner.append(markdown_link(folge_index_display(root_fid), folge_index_path(root, root_fid),
-                                   note_path.parent, frag=fid))
+        # Do not generate an index-as-Context for scans: the number index is
+        # navigation, not a semantic parent. Remove only historical generated
+        # index/self references; keep other user-entered Context relationships.
+        old_body = _strip_scan_auto_relations(old_body, note_path, folge_index_path(root, _root_id(fid)))
+        inner = [f"# {with_prefix(prefix, fid)}", "", *images]
         mapping = {
             e["display"]: readings[e["display"]]
             for e in entries
@@ -2016,7 +2057,7 @@ def reconcile_names(root: Path, namespaces: list[str], notes: list) -> int:
             scans.append((creation_stamp(n), k[0]))
     if multi:
         owner = min(scans)[1] if scans else namespaces[0]
-        mapping = [(DEFAULT_INDEX_TITLE, True), (INDEX_WRITE[:-3], None), (FOLGE_INDEX[:-3], True)]
+        mapping = [(DEFAULT_INDEX_TITLE, True), (INDEX_WRITE[:-3], None), (FOLGE_INDEX[:-3], None)]
         for base, grp in mapping:
             for n in notes:
                 if n.title == base and (grp is None or n.group == grp):
@@ -2055,11 +2096,11 @@ def ensure_ns_structure(root: Path) -> Path:
     """今の名前空間（ns_set 済み）のグループ・Index-write・Folgezettel-Index が無ければ作る。グループのパスを返す。"""
     index_write = named_path(root, ns_title('iw'))
     if not index_write.is_file():
-        write_note(index_write, [_time_line(), f"title: {ns_title('iw')}", "attribute: group"], [f"# {ns_title('iw')}", ""])
+        write_note(index_write, [_time_line(), f"title: {ns_title('iw')}"], [f"# {ns_title('iw')}", ""])
     index_path = find_paper_index(root)
     if index_path is None:
         index_path = named_path(root, ns_title('index'), True)
-        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi'), True))
+        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi')))
     return index_path
 
 
@@ -2205,11 +2246,11 @@ def create_paper_index(root: Path) -> Path:
             else:
                 write_note(
                     index_write,
-                    [_time_line(), f"title: {ns_title('iw')}", "attribute: group"],
+                    [_time_line(), f"title: {ns_title('iw')}"],
                     [f"# {ns_title('iw')}", ""],
                 )
         index_path = named_path(root, ns_title('index'), True)
-        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi'), True))
+        _write_new_paper_index(index_path, index_write, named_path(root, ns_title('fi')))
         # vault 親Index（index.md）に Paper-Zettelkasten-Index へのリンクを足す
         parent_index = root / "index.md"
         if parent_index.is_file():
