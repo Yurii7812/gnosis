@@ -2555,11 +2555,13 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             n["_leftover"] = []
         parent_lines = _preserve_parent(parent_src, p, res, titles, heading_labels)
         parent_lines = _prune_dangling(parent_lines, p, res)
-        # A note cannot be its own Context. Reject legacy auto-generated self
-        # links while preserving all genuine relationships to other notes.
-        parent_lines = [ln for ln in parent_lines
-                        if not (_SIMPLE_LINK_LINE_RE.match(ln)
-                                and res(_link_target(ln), dirs[p]) == p)]
+        # Scan imports sometimes left an auto-generated link to the very
+        # same scan note. Remove only this paper-scanning artifact; other
+        # notes may deliberately contain self-links and must be preserved.
+        if any(re.match(r"^\s*source\s*:\s*scan\s*$", x) for x in n["fm"]):
+            parent_lines = [ln for ln in parent_lines
+                            if not (_SIMPLE_LINK_LINE_RE.match(ln)
+                                    and res(_link_target(ln), dirs[p]) == p)]
         branch_links, _, _ = _take_branch_group_block(n["body"])
         branch_targets = {rp for _display, tg in _links_from(branch_links)
                           for rp in [res(tg, dirs[p])] if rp is not None}
