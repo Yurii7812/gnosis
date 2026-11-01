@@ -2581,7 +2581,7 @@ endfunction
 
 function! s:place_hint() abort
   let l:k = get(get(s:S, 'place', {}), 'kind', '')
-  if l:k ==# 'vis'
+  if l:k ==# 'vis' || l:k ==# 'vis-swap'
     echo 'Gnosis: ' . gnosis#i18n#tr('v を押して、リンクにする文字をカーソルで選び、Enter で決定 / q でやめる(置き場所の選択に戻る)')
   elseif l:k ==# 'h'
     echo 'Gnosis: ' . gnosis#i18n#tr('置く行(この行の下に入る)にカーソルを動かして Enter で決定 / q でやめる(置き場所の選択に戻る)')
@@ -2608,11 +2608,11 @@ function! s:place_maps(on) abort
     nnoremap <buffer><nowait><silent> <CR> <Cmd>call gnosis#mview#place_decide()<CR>
     nnoremap <buffer><nowait><silent> q <Cmd>call gnosis#mview#place_cancel()<CR>
     nnoremap <buffer><nowait><silent> <Esc> <Cmd>call gnosis#mview#place_cancel()<CR>
-    if l:p.kind ==# 'vis'
+    if l:p.kind ==# 'vis' || l:p.kind ==# 'vis-swap'
       xnoremap <buffer><nowait><silent> <CR> <Esc><Cmd>call gnosis#mview#place_range()<CR>
     endif
   else
-    if l:p.kind ==# 'vis'
+    if l:p.kind ==# 'vis' || l:p.kind ==# 'vis-swap'
       if bufnr('%') == l:b
         silent! xunmap <buffer> <CR>
       else
@@ -2645,7 +2645,7 @@ function! gnosis#mview#place_decide() abort
   if empty(l:p)
     return
   endif
-  if l:p.kind ==# 'vis'
+  if l:p.kind ==# 'vis' || l:p.kind ==# 'vis-swap'
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('v でリンクにする文字を選んでから Enter（q でやめる）') | echohl NONE
     return
   endif
@@ -2672,7 +2672,7 @@ endfunction
 " 右の元のノートで v → 範囲を選んで Enter: その文字を、選んだノートへのリンクにする（ビジュアルの \l と同じ。向きは x で切り替わる）
 function! gnosis#mview#place_range() abort
   let l:p = get(s:S, 'place', {})
-  if empty(l:p) || l:p.kind !=# 'vis'
+  if empty(l:p) || index(['vis', 'vis-swap'], l:p.kind) < 0
     return
   endif
   let l:vis = gnosis_search#visual_info()
@@ -2682,6 +2682,25 @@ function! gnosis#mview#place_range() abort
   if empty(l:vis)
     echohl WarningMsg | echo 'Gnosis: ' . gnosis#i18n#tr('選択範囲がありません') | echohl NONE
     call s:link_place()
+    return
+  endif
+  if l:p.kind ==# 'vis-swap'
+    " B→A: 現在開いている B の選択文字を、A へのリンクにする。
+    " A→B の経路は従来どおり元ノート A に戻してリンク化する。
+    try
+      let l:result = l:p.Cont(l:vis)
+    catch
+      echohl ErrorMsg | echo 'Gnosis: ' . v:exception . '  @ ' . v:throwpoint | echohl NONE
+      let l:result = -2
+    endtry
+    if l:result == -2 || l:result == -3
+      " 取り消し時は選択モードを維持して曼荼羅へ戻る。
+      call win_gotoid(s:mwin())
+      call s:render()
+      call s:show_note(s:S.center)
+      return
+    endif
+    call s:link_finish()
     return
   endif
   let s:S.lk.origin.vis = l:vis
