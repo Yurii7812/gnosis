@@ -1468,39 +1468,80 @@ def _update_yomi(fm: list[str], mapping: dict[str, str]) -> list[str]:
 
 def write_folge_index_notes(root: Path, folge: dict[str, Path],
                             id_index_paths: dict[str, Path], topics: Optional[dict] = None) -> None:
-    """各最上位IDの専用ノート folgezettel-Index-N を作る/作り直す。
+    """Write per-root number indexes and a combined all-number index.
 
-    中身: 配下IDの `## <ID>` 見出し + 画像をフォルゲゼッテル自然順で並べ、
-    トピックIndex（1-Index）があればそのリンクも入れる。Parent は Folgezettel-Index。
-    トピック（例: 1-仏教）は、その起点IDの `## <ID>` の節の最後に、親が子より先になる順で並べる（インデントなし）。
+    All index pages are ordinary notes (not attribute: group). Topic image
+    previews are placed immediately before the corresponding numbered note,
+    only inside the generated Folgezettel index views.
     """
     topics = topics if topics is not None else scan_topic_notes(root)
-    for fid in top_level_ids(folge):
+    groups = [(fid, sorted((f for f in folge if _root_id(f) == fid), key=natural_key))
+              for fid in top_level_ids(folge)]
+    groups.append(("all-number", sorted(folge, key=natural_key)))
+    for fid, members in groups:
         path = folge_index_path(root, fid)
         display = folge_index_display(fid)
         if not path.is_file():
             write_note(path, [_time_line(), f"title: {display}"], [])
         fm_fi, old_fi_body = read_note(path)
+        fm_fi = _fm_title_attr(fm_fi, display, group=False)
         inner = [f"# {display}", ""]
-        members = sorted((f for f in folge if _root_id(f) == fid), key=natural_key)
         for member in members:
             inner.append("## " + markdown_link(member, folge[member], path.parent))
             inner.append("")
             _fm_n, body_n = read_note(folge[member])
             base_dir = folge[member].parent
             for ln in body_n:
-                m = re.match(r"^!\[\]\((.+)\)$", ln.strip())
+                m = _IMAGE_ONLY_RE.match(ln.strip())
                 if m:
                     img = (base_dir / m.group(1)).resolve()
                     inner.append(f"![]({_rel(path.parent, img)})")
             inner.append("")
-        id_index = id_index_paths.get(fid) or find_id_index(root, fid)
+        id_index = (id_index_paths.get(fid) or find_id_index(root, fid)) if fid != "all-number" else None
         inner += [CONTEXT_HEAD,
                   markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), path.parent)]
         body = merge_note_body(old_fi_body, inner)
         body = _place_topic_lines(body, path.parent, members, folge, topics, id_index)
-        if body != old_fi_body:
+        body = _place_topic_images(body, path.parent, members, folge, topics)
+        if body != old_fi_body or fm_fi != read_note(path)[0]:
             write_note(path, fm_fi, body)
+
+
+def _place_topic_images(body: list[str], base: Path, members: list[str],
+                        folge: dict[str, Path], topics: dict) -> list[str]:
+    """Show scanned topic-index pages before their own ID, without modifying scans.
+
+    Existing topic links at the top of the number index are retained. Previously
+    inserted previews are repositioned rather than duplicated on each regen.
+    """
+    images_by_member: dict[str, list[str]] = {}
+    for member in members:
+        images: list[str] = []
+        for _display, topic_note, _parent in topic_order(topics.get(member) or []):
+            if not topic_note.is_file():
+                continue
+            _fm, lines = read_note(topic_note)
+            for ln in lines:
+                m = _IMAGE_ONLY_RE.match(ln.strip())
+                if m:
+                    image_path = (topic_note.parent / m.group(1)).resolve()
+                    line = f"![]({_rel(base, image_path)})"
+                    if line not in images:
+                        images.append(line)
+        if images:
+            images_by_member[member] = images
+
+    generated = {line for lines in images_by_member.values() for line in lines}
+    out = [ln for ln in body if ln not in generated]
+    for member in members:
+        previews = images_by_member.get(member, [])
+        if not previews:
+            continue
+        header = "## " + markdown_link(member, folge[member], base)
+        index = next((i for i, ln in enumerate(out) if ln == header), None)
+        if index is not None:
+            out[index:index] = [*previews, ""]
+    return out
 
 
 def _place_topic_lines(body: list[str], base: Path, members: list[str], folge: dict[str, Path],
@@ -2066,7 +2107,7 @@ def reconcile_names(root: Path, namespaces: list[str], notes: list) -> int:
                     _retitle(n.path, f"{base}-{owner}")
                     done += 1
         for n in notes:
-            m = re.match(r"^folgezettel-Index-(\d.*)$", n.title)
+            m = re.match(r"^folgezettel-Index-(\d.*|all-number)$", n.title)
             if m:
                 _retitle(n.path, f"folgezettel-Index-{owner}-{m.group(1)}")
                 done += 1
@@ -2078,7 +2119,7 @@ def reconcile_names(root: Path, namespaces: list[str], notes: list) -> int:
                     _retitle(n.path, base)
                     done += 1
         for n in notes:
-            m = re.match(rf"^folgezettel-Index-{re.escape(p)}-(\d.*)$", n.title)
+            m = re.match(rf"^folgezettel-Index-{re.escape(p)}-(\d.*|all-number)$", n.title)
             if m:
                 _retitle(n.path, f"folgezettel-Index-{m.group(1)}")
                 done += 1
