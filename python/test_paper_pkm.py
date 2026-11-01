@@ -195,7 +195,8 @@ def test_create_and_regen() -> None:
         all_number = pp.folge_index_path(root, "all-number")
         check(f"[all-number]({all_number.name})" in folge_text and all_number.is_file(), "全番号インデックスの入口")
         check("## [1](" in all_number.read_text(encoding="utf-8") and "## [1a](" in all_number.read_text(encoding="utf-8"), "全番号インデックスに親子の番号を表示")
-        check("attribute: group" not in all_number.read_text(encoding="utf-8") and "ParentBranch:\n[Folgezettel-Index](" not in all_number.read_text(encoding="utf-8"), "all-number は通常ノート・ParentBranch を作らない")
+        check("attribute: group" not in all_number.read_text(encoding="utf-8") and f"ParentBranch:\n[Folgezettel-Index]({T(root, 'Folgezettel-Index').name})" in all_number.read_text(encoding="utf-8"),
+              "all-number は通常ノートで Folgezettel-Index を親に持つ")
         check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
         dedicated = pp.folge_index_path(root, "1")
@@ -207,7 +208,8 @@ def test_create_and_regen() -> None:
             check("attribute: group" not in d_text.split("---", 2)[1], "番号別インデックスは通常ノート")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
-            check("ParentBranch:\n[Folgezettel-Index](" not in d_text, "番号別Index に Folgezettel-Index の ParentBranch を作らない")
+            check(f"ParentBranch:\n[Folgezettel-Index]({T(root, 'Folgezettel-Index').name})" in d_text,
+                  "番号別Index の ParentBranch は Folgezettel-Index")
         iw_text = T(root, "Index-write").read_text(encoding="utf-8")
         check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
@@ -221,13 +223,20 @@ def test_create_and_regen() -> None:
         check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
         check(f"Context:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
-        nav1 = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
+        nav1 = f"FolgezettelIndex:\n[folgezettel-Index-1#1]({N(root, 'folgezettel-Index-1')}#1)\n[All#1]({all_number.name}#1)"
         check(nav1 in note1, "紙ノートに番号別と All の FolgezettelIndex を表示する")
         note1a = notes["1a"].read_text(encoding="utf-8")
-        nav1a = f"FolgezettelIndex:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
+        nav1a = f"FolgezettelIndex:\n[folgezettel-Index-1#1a]({N(root, 'folgezettel-Index-1')}#1a)\n[All#1a]({all_number.name}#1a)"
         check(nav1a in note1a, "子番号もその番号の見出しへリンクする")
         check(not any("FolgezettelIndex:" in t and t.count("FolgezettelIndex:") != 1 for t in (note1, note1a)),
               "FolgezettelIndex が重複しない")
+        index_hub = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
+        hub_children = _section_links(index_hub, "ChildBranch:")
+        check(all_number.name in hub_children and dedicated.name in hub_children,
+              "Folgezettel-Index に番号別と all-number の ChildBranch がある")
+        pp.regen(root)
+        check(nav1 in notes["1"].read_text(encoding="utf-8") and nav1a in notes["1a"].read_text(encoding="utf-8"),
+              "regen 後も2つの # アンカーと表示名を保つ")
         note1a = notes["1a"].read_text(encoding="utf-8")
         check(f"[PA-1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
 
@@ -1001,8 +1010,9 @@ def test_scan_self_context_and_child_cleanup() -> None:
         idx3_text = number_index.read_text(encoding="utf-8")
         check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
               "旧スキャンの番号IndexへのChildBranchを消す")
-        check("ParentBranch:\n[Folgezettel-Index](" not in idx3_text,
-              "番号Indexは通常ノートでFolgezettel-Indexとの ParentBranch を持たない: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
+        hub_path = T(root, "Folgezettel-Index")
+        check(f"ParentBranch:\n[Folgezettel-Index]({hub_path.name})" in idx3_text,
+              "番号Indexは通常ノートのまま Folgezettel-Index を親に持つ: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
         snap = (t0, t1)
         pp.regen(root)
         nf.simple_sync(root)
