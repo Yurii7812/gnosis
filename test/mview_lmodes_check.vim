@@ -145,6 +145,24 @@ call feedkeys("v$h\<CR>", 'x')
 call s:ok('v: 選んだ文字が、選んだノートへのリンクになる', s:file('src.md') =~# '\[節Aの本文[^\]]*\](tgt.md)', s:file('src.md'))
 call s:ok('v: 決めたら \l は終わる', &filetype ==# 'gnosis-mandala' && s:st().pick ==# '' && !has_key(s:st(), 'place'), string([&filetype, s:st().pick]))
 
+" ---- e → x → v: 方向を B→A に変えた場合も B の文字を選んで A へリンク化する
+call s:start('^節Aの本文')
+let g:gnosis_test_keys = ['x', 'v', "\<CR>"]
+call s:keys('e')
+call s:ok('e → x → v: 逆方向 B→A でも文字選択を開始できる',
+      \ has_key(s:st(), 'place') && s:st().place.kind ==# 'vis-swap'
+      \ && fnamemodify(bufname('%'), ':t') ==# 'tgt.md',
+      \ string([get(s:st(), 'place', {}), bufname('%')]))
+call s:ok('B→A の v でも視覚モード Enter が有効', maparg('<CR>', 'x') =~# 'place_range')
+call s:ok('B→A の v を選んだだけではまだ書き込まない', s:file('tgt.md') !~# '\[相手の本文')
+call cursor(search('^相手の本文', 'nw'), 1)
+call feedkeys("v$h\<CR>", 'x')
+call s:ok('B→A の v: B の選択範囲は A へのリンクになる',
+      \ s:file('tgt.md') =~# '\[相手の本文[^]]*\](src.md)',
+      \ s:file('tgt.md'))
+call s:ok('B→A の v: A の本文は変更しない', s:file('src.md') !~# '\[相手\](tgt.md)', s:file('src.md'))
+call s:ok('B→A の v: 完了したら選択モードを終了', &filetype ==# 'gnosis-mandala' && s:st().pick ==# '' && !has_key(s:st(), 'place'))
+
 call s:reset()
 call writefile(s:res, s:work . '/result.txt')
 qa!
