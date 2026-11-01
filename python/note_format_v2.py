@@ -1814,18 +1814,9 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
             return f"[{label}]({tg})"
         return m.group(0)
     out: list[str] = []
-    in_folgezettel_nav = False
     for ln, fz in zip(body, _fenced(body)):
-        if not fz and ln.strip() == "FolgezettelIndex:":
-            in_folgezettel_nav = True
-            out.append(ln)
-            continue
-        if in_folgezettel_nav and not fz and _SIMPLE_LINK_LINE_RE.match(ln):
-            # This is navigation, not a heading-title label. Keep the index
-            # title without appending #3a or another anchor to the display.
-            out.append(ln)
-            continue
-        in_folgezettel_nav = False
+        # FolgezettelIndex links follow the same #heading title convention
+        # as any other Markdown link in Gnosis.
         out.append(ln if fz else _link_sub(_SIMPLE_INLINE_LINK, repl, _flatten_nested_link_labels(ln)))
     return out
 
