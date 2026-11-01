@@ -1786,6 +1786,11 @@ def _remove_relation_to(path: Path, headers: tuple[str, ...], target: Path) -> N
             continue
         if stripped in SECTION_HEADS or stripped in ("Group:", "ParentBranch:", "Context:", "BranchGroup:", "Related:", "BackLink:"):
             section = False
+        # A relation block ends when its contiguous link lines end. In
+        # particular, a blank line after ParentBranch: separates ordinary
+        # body links; never delete those as if they were old parent links.
+        if section and not _IS_LINK_LINE.match(line):
+            section = False
         if section and _IS_LINK_LINE.match(line) and _link_norm(path.parent, line) == dest:
             changed = True
             continue
