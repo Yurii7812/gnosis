@@ -736,18 +736,18 @@ def _retitle(path: Path, new_title: str) -> None:
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
-    old = None
+    # sync removes YAML title: and treats the H1 as authoritative.
+    # Renaming paper namespaces must work with or without a title: key;
+    # otherwise PA/PB -> PA creates duplicate generated notes.
+    old = title_of(*read_note(path), path.stem)
     for i in range(1, end):
-        m = re.match(r"^\s*title\s*:\s*(.*)$", lines[i])
-        if m:
-            old = m.group(1).strip()
+        if re.match(r"^\s*title\s*:", lines[i]):
             lines[i] = f"title: {new_title}"
             break
-    if old is not None:
-        for i in range(end + 1, len(lines)):
-            if lines[i].strip() == f"# {old}":
-                lines[i] = f"# {new_title}"
-                break
+    for i in range(end + 1, len(lines)):
+        if lines[i].strip() == f"# {old}":
+            lines[i] = f"# {new_title}"
+            break
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
