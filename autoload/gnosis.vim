@@ -14796,6 +14796,10 @@ function! s:insert_links_core_raw(links, ...) abort
     call s:place_popup_close(l:pw)
     if l:ch ==# 'x' && l:single
       let l:swap = !l:swap
+      " Popup contents are different after swapping A/B. A normal redraw
+      " may emit only a partial terminal diff, leaving stale direction text
+      " visible on some terminals; force a complete refresh.
+      redraw!
       continue
     endif
     break
