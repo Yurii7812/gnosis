@@ -275,7 +275,12 @@ def test_topic_index() -> None:
               "トピックグループに番号別Indexの Context を自動生成しない")
         tp_fm, tp_body = pp.read_note(notes["1-仏教"])
         manual_link = f"[手動で追加した索引]({pp.folge_index_path(root, '1').name})"
-        pp.write_note(notes["1-仏教"], tp_fm, tp_body + ["", manual_link])
+        # 生成管理される BackLink/Context の末尾ではなく、ユーザー編集可能な本文へ挿入。
+        section = pp._first_section(tp_body)
+        if section is None:
+            section = len(tp_body)
+        tp_body[section:section] = [manual_link, ""]
+        pp.write_note(notes["1-仏教"], tp_fm, tp_body)
         pp.regen(root)
         check(manual_link in notes["1-仏教"].read_text(encoding="utf-8"), "トピックグループ本文への手動索引リンクを保持する")
         folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
