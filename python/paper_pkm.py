@@ -1530,7 +1530,19 @@ def _place_topic_images(body: list[str], base: Path, members: list[str],
             images_by_member[member] = images
 
     generated = {line for lines in images_by_member.values() for line in lines}
-    out = [ln for ln in body if ln not in generated]
+    # Remove the preview image together with its automatically inserted empty
+    # line. Otherwise each regeneration leaves one more blank before the note.
+    out: list[str] = []
+    skip_blank = False
+    for ln in body:
+        if ln in generated:
+            skip_blank = True
+            continue
+        if skip_blank and not ln.strip():
+            skip_blank = False
+            continue
+        skip_blank = False
+        out.append(ln)
     for member in members:
         previews = images_by_member.get(member, [])
         if not previews:
