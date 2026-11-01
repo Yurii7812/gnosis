@@ -107,7 +107,7 @@ def test_second_prefix_renames() -> None:
                     n.path.unlink()
         pp.regen(root, do_sync=False)
         t = titles(root)
-        check("Index-write" in t and "Folgezettel-Index" in t and "Paper-Zettelkasten-Index" in t and "Index-write-PA" not in t, "1 つに戻ったら元の名前に戻る")
+        check("Index-write" in t and "Folgezettel-Index" in t and "Paper-Zettelkasten-Index" in t and "Index-write-PA" not in t, "1 つに戻ったら元の名前に戻る: " + repr(sorted(t)))
 
 
 def test_keywords_per_prefix() -> None:
