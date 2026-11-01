@@ -933,6 +933,21 @@ def test_scan_self_context_and_child_cleanup() -> None:
         pp.regen(root)
         n3b = scans["PA-3b"]
         n3b1 = scans["PA-3b1"]
+        n3 = scans["PA-3"]
+        number_index = pp.folge_index_path(root, "3")
+        # 旧版の誤った親子（スキャンの 3 → 番号Index）も再現する。
+        fm_index, body_index = pp.read_note(number_index)
+        p_at = next(i for i, line in enumerate(body_index) if line.strip() == "ParentBranch:")
+        body_index[p_at + 1] = f"[PA-3]({n3.name})"
+        pp.write_note(number_index, fm_index, body_index)
+        fm3, body3 = pp.read_note(n3)
+        old_index_link = f"[folgezettel-Index-3]({number_index.name})"
+        child_at = next((i + 1 for i, line in enumerate(body3) if line.strip() == "ChildBranch:"), None)
+        if child_at is None:
+            body3 += ["ChildBranch:", old_index_link]
+        else:
+            body3.insert(child_at, old_index_link)
+        pp.write_note(n3, fm3, body3)
         # 旧版が書いた無効な自己関係を再現する。普通の Context は残す。
         other = root / "other.md"
         _write(other, "# 参考ノート\n")
@@ -960,6 +975,12 @@ def test_scan_self_context_and_child_cleanup() -> None:
         check(f"[PA-3b1]({n3b1.name})" in t0 and f"[PA-3b]({n3b.name})" in t1,
               "本来の ParentBranch と ChildBranch は保持する")
         check(f"[参考ノート]({other.name})" in t1, "手書きの別ノートへの Context は保持する")
+        root3_text = n3.read_text(encoding="utf-8")
+        idx3_text = number_index.read_text(encoding="utf-8")
+        check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
+              "旧スキャンの番号IndexへのChildBranchを消す")
+        check("ParentBranch:\n[Folgezettel-Index](" in idx3_text,
+              "番号Indexの親はFolgezettel-Indexへ統一される")
         snap = (t0, t1)
         pp.regen(root)
         nf.simple_sync(root)
