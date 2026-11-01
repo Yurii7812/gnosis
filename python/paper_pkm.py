@@ -1711,7 +1711,7 @@ def _write_folgezettel_nav(note_path: Path, fid: str, root: Path) -> None:
     index = folge_index_path(root, _root_id(fid))
     all_index = folge_index_path(root, "all-number")
     block = ["FolgezettelIndex:",
-             markdown_link(fid, index, note_path.parent, frag=fid),
+             markdown_link(folge_index_display(_root_id(fid)), index, note_path.parent, frag=fid),
              markdown_link("All", all_index, note_path.parent)]
     out[at:at] = block
     if out != body:
