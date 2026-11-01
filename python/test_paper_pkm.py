@@ -921,6 +921,52 @@ def test_simple_sync_keeps_format_and_trash_images() -> None:
               "スキャンノートを消すと、title と同名の画像が .trash へ退避される")
 
 
+def test_scan_self_context_and_child_cleanup() -> None:
+    print("スキャンノートの自己Context・自己ChildBranchは削除し、正当な親子関係は保持する")
+    import note_format_v2 as nf
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        pp.create_paper_index(root)
+        moved, errors = pp.move_images(root, root, _add_images(root, ["3", "3b", "3b1"]))
+        check(len(moved) == 3 and not errors, "3 / 3b / 3b1 を作る")
+        scans = dict(moved)
+        pp.regen(root)
+        n3b = scans["PA-3b"]
+        n3b1 = scans["PA-3b1"]
+        # 旧版が書いた無効な自己関係を再現する。普通の Context は残す。
+        other = root / "other.md"
+        _write(other, "# 参考ノート\n")
+        fm, body = pp.read_note(n3b1)
+        body += ["### Context", f"[PA-3b1]({n3b1.name})",
+                 f"[PA-3b1]({n3b1.name})", f"[参考ノート]({other.name})"]
+        pp.write_note(n3b1, fm, body)
+        fm, body = pp.read_note(n3b)
+        # ChildBranch に子が既にあれば、その節へ自己リンクを足す。
+        at = next((i + 1 for i, ln in enumerate(body) if ln.strip() in ("ChildBranch:", "### ChildBranch")), None)
+        if at is None:
+            body += ["ChildBranch:", f"[PA-3b]({n3b.name})"]
+        else:
+            body.insert(at, f"[PA-3b]({n3b.name})")
+        pp.write_note(n3b, fm, body)
+        pp.regen(root)
+        nf.simple_sync(root)
+        t1 = n3b1.read_text(encoding="utf-8")
+        t0 = n3b.read_text(encoding="utf-8")
+        check(f"### Context\n[PA-3b1]({n3b1.name})" not in t1
+              and f"Context:\n[PA-3b1]({n3b1.name})" not in t1,
+              "自分自身を指す Context は生成・保持しない")
+        check(f"[PA-3b]({n3b.name})" not in t0.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
+              "自分自身を子とする ChildBranch は生成・保持しない")
+        check(f"[PA-3b1]({n3b1.name})" in t0 and f"[PA-3b]({n3b.name})" in t1,
+              "本来の ParentBranch と ChildBranch は保持する")
+        check(f"[参考ノート]({other.name})" in t1, "手書きの別ノートへの Context は保持する")
+        snap = (t0, t1)
+        pp.regen(root)
+        nf.simple_sync(root)
+        check(snap == (n3b.read_text(encoding="utf-8"), n3b1.read_text(encoding="utf-8")),
+              "再同期・再生成で自己関係が再発しない")
+
+
 def test_regen_without_index() -> None:
     print("regen: Paper-Zettelkasten-Index が無ければ False")
     with tempfile.TemporaryDirectory() as d:
