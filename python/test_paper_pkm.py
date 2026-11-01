@@ -251,6 +251,57 @@ def test_create_and_regen() -> None:
         check("バナナ" not in note2, "外した ID のグループ Parent 行が消える")
 
 
+def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
+    print("紙PKMの自動生成Indexは PA-0、all-number は先頭、グループの ParentBranch は頂点")
+    import folgezettel as fz
+    import note_format_v2 as nf
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        pp.create_paper_index(root)
+        pp.move_images(root, root, _add_images(root, ["1", "1a", "2"]))
+        pp.regen(root)
+
+        paper_group = pp.find_paper_index(root)
+        top = pp.find_paper_top(root)
+        index_write = T(root, "Index-write")
+        hub = T(root, "Folgezettel-Index")
+        all_number = pp.folge_index_path(root, "all-number")
+        number1 = pp.folge_index_path(root, "1")
+        number2 = pp.folge_index_path(root, "2")
+        for path in (paper_group, index_write, hub, all_number, number1, number2):
+            check(fz.value(path.read_text(encoding="utf-8")) == "PA-0",
+                  f"{pp.title_of(*pp.read_note(path))} の Folgezettel ID は PA-0")
+
+        group_text = paper_group.read_text(encoding="utf-8")
+        top_link = f"[Paper-Zettelkasten-Index]({top.name})"
+        check("attribute: group" in group_text
+              and f"ParentBranch:\n{top_link}" in group_text,
+              "紙PKMグループの ParentBranch は頂点の普通ノート")
+        check(top_link not in group_text.split("BackLink:", 1)[-1] if "BackLink:" in group_text else True,
+              "紙PKMグループの頂点への参照を BackLink として重複させない")
+        check(_section_links(top.read_text(encoding="utf-8"), "BranchGroup:") == [paper_group.name]
+              and not _section_links(top.read_text(encoding="utf-8"), "ChildBranch:"),
+              "頂点の BranchGroup にグループを1つだけ置き、ChildBranch には重複させない")
+
+        order = _section_links(hub.read_text(encoding="utf-8"), "ChildBranch:")
+        check(order == [all_number.name, number1.name, number2.name],
+              f"Folgezettel-Index の ChildBranch は all-number が先頭: {order}")
+
+        # 過去の誤ったID状態でも、次の同期で PA-0 へ修復する。
+        paper_group.write_text(fz.set_value(group_text, "45"), encoding="utf-8")
+        index_write.write_text(fz.remove_value(index_write.read_text(encoding="utf-8")), encoding="utf-8")
+        nf.simple_sync(root)
+        check(fz.value(paper_group.read_text(encoding="utf-8")) == "PA-0"
+              and fz.value(index_write.read_text(encoding="utf-8")) == "PA-0",
+              "旧 45 や欠落したIDを同期で PA-0 へ戻す")
+        pp.regen(root)
+        paths = (paper_group, index_write, hub, all_number, number1, number2)
+        snapshot = {p.name: p.read_text(encoding="utf-8") for p in paths}
+        pp.regen(root)
+        check(snapshot == {p.name: p.read_text(encoding="utf-8") for p in paths},
+              "再生成を繰り返してもID、ParentBranch、all-number先頭順が変わらない")
+
+
 def test_topic_index() -> None:
     print("トピック別Index: 1-Index グループは作らず、ID ノート 1 の BranchGroup: に 1-仏教 を入れる")
     with tempfile.TemporaryDirectory() as d:
@@ -465,11 +516,13 @@ def test_diary_register_and_keyword() -> None:
         fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ: {fi}")
         body = fi.split("---\n", 2)[2].strip("\n").split("\n")
-        g_at = body.index("Group:")
-        rest = body[g_at + 1:]
+        g_at = body.index("Group:") if "Group:" in body else None
+        check(g_at is not None, "Folgezettel-Index の Group が保持される: hub=" + fi
+              + " paper-group=" + idx.read_text(encoding="utf-8"))
+        rest = body[g_at + 1:] if g_at is not None else body
         while rest and rest[0].startswith("["):
             rest = rest[1:]
-        first_link = next(ln for ln in rest if ln.startswith("["))
+        first_link = next((ln for ln in rest if ln.startswith("[")), "")
         check(first_link.startswith("[日記]("), f"日記は Folgezettel-Index の一番上: {first_link}")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         check(f"({top.name})" in index_text, "Index の「日記」は紙の日記の一番上を指す")
@@ -579,6 +632,7 @@ def test_index_has_no_blank_lines_between_links() -> None:
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
                       and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})"
                       and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
+                      and not (i >= 2 and lines[i - 2] == "ParentBranch:")  # ParentBranch の末尾と本文の間の区切りは必要
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
         text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n\n[日記](")

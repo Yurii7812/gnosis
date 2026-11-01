@@ -76,6 +76,27 @@ def test_second_prefix_renames() -> None:
         check(len(links) == 2 and "Paper-Zettelkasten-Index-PA" in links[0] and "Paper-Zettelkasten-Index-PB" in links[1], f"頂点の BranchGroup: は PA・PB のグループ: {links}")
         pa_group = titles(root)["Paper-Zettelkasten-Index-PA"][0].path.read_text(encoding="utf-8")
         check("[Index-write-PA](" in pa_group and "[Folgezettel-Index-PA](" in pa_group, "PA のグループの中に Index-write-PA・Folgezettel-Index-PA")
+        import folgezettel as fz
+        import note_format_v2 as nf
+        # このケースは regen(..., do_sync=False) で構造だけ作ったため、
+        # 番号割当ては明示的に同期してから検証する。
+        nf.simple_sync(root)
+        top_path = tops[0].path
+        for pfx in ("PA", "PB"):
+            for nm, is_group in ((f"Paper-Zettelkasten-Index-{pfx}", True),
+                                 (f"Index-write-{pfx}", False),
+                                 (f"Folgezettel-Index-{pfx}", False)):
+                path = pp.find_titled(root, nm, is_group)
+                check(path is not None and fz.value(path.read_text(encoding="utf-8")) == f"{pfx}-0",
+                      f"{nm} は {pfx}-0 を持つ")
+                if is_group and path is not None:
+                    check(f"ParentBranch:\n[Paper-Zettelkasten-Index]({top_path.name})" in path.read_text(encoding="utf-8"),
+                          f"{nm} は頂点を ParentBranch に持つ")
+            hub_path = pp.find_titled(root, f"Folgezettel-Index-{pfx}", False)
+            if hub_path is not None:
+                lines = block_links(hub_path, "ChildBranch:")
+                check(bool(lines) and lines[0].startswith(f"[folgezettel-Index-{pfx}-all-number]("),
+                      f"{pfx} の all-number が ChildBranch の最初: {lines}")
         # PB のノートが無くなったら、1 つに戻る
         for n in titles(root)["PB-1"]:
             n.path.unlink()
@@ -86,7 +107,7 @@ def test_second_prefix_renames() -> None:
                     n.path.unlink()
         pp.regen(root, do_sync=False)
         t = titles(root)
-        check("Index-write" in t and "Folgezettel-Index" in t and "Paper-Zettelkasten-Index" in t and "Index-write-PA" not in t, "1 つに戻ったら元の名前に戻る")
+        check("Index-write" in t and "Folgezettel-Index" in t and "Paper-Zettelkasten-Index" in t and "Index-write-PA" not in t, "1 つに戻ったら元の名前に戻る: " + repr(sorted(t)))
 
 
 def test_keywords_per_prefix() -> None:

@@ -199,7 +199,14 @@ def is_paper_infra(note: dict) -> bool:
     title = note['title']
     if title in ('Paper-Zettelkasten-Index', 'Folgezettel-Index') or _PAPER_INFRA_RE.match(title) or _INFRA_SUFFIX_RE.match(title):
         return True
-    return (title == 'Index-write' or title.startswith('Index-write-')) and any('Paper-Zettelkasten-Index' in ln for ln in note['body'])
+    # Gnosis parses the generated Group:/Context: links out of 'body'.
+    # Index-write must still count as paper infrastructure after sync, not only
+    # while its Paper-Zettelkasten-Index link happens to be in the body.
+    return (title == 'Index-write' or title.startswith('Index-write-')) and any(
+        'Paper-Zettelkasten-Index' in ln
+        for section in ('body', 'group', 'ctx', 'parent', 'pbranch')
+        for ln in (note.get(section) or [])
+    )
 
 
 def is_paper(note: dict) -> bool:
@@ -407,6 +414,17 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 plan.pop(g, None)
             else:
                 plan[g] = ids[p]
+    # Paper infrastructure has a fixed, namespaced ID (PA-0, PB-0, ...).
+    # The generic BranchGroup shared-ID pass above must not replace the
+    # paper index GROUP's ID with the ordinary top note's numerical ID.
+    # Nor may normal root/child allocation replace Index-write's PA-0.
+    for p, n in notes.items():
+        if is_paper_infra(n) and p not in unsaved:
+            want = (infra_prefix(n) or base_prefix) + '0'
+            if stored[p] == want:
+                plan.pop(p, None)
+            else:
+                plan[p] = want
     return plan
 
 

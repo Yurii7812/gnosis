@@ -736,18 +736,18 @@ def _retitle(path: Path, new_title: str) -> None:
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
-    old = None
+    # sync removes YAML title: and treats the H1 as authoritative.
+    # Renaming paper namespaces must work with or without a title: key;
+    # otherwise PA/PB -> PA creates duplicate generated notes.
+    old = title_of(*read_note(path), path.stem)
     for i in range(1, end):
-        m = re.match(r"^\s*title\s*:\s*(.*)$", lines[i])
-        if m:
-            old = m.group(1).strip()
+        if re.match(r"^\s*title\s*:", lines[i]):
             lines[i] = f"title: {new_title}"
             break
-    if old is not None:
-        for i in range(end + 1, len(lines)):
-            if lines[i].strip() == f"# {old}":
-                lines[i] = f"# {new_title}"
-                break
+    for i in range(end + 1, len(lines)):
+        if lines[i].strip() == f"# {old}":
+            lines[i] = f"# {new_title}"
+            break
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -1786,6 +1786,11 @@ def _remove_relation_to(path: Path, headers: tuple[str, ...], target: Path) -> N
             continue
         if stripped in SECTION_HEADS or stripped in ("Group:", "ParentBranch:", "Context:", "BranchGroup:", "Related:", "BackLink:"):
             section = False
+        # A relation block ends when its contiguous link lines end. In
+        # particular, a blank line after ParentBranch: separates ordinary
+        # body links; never delete those as if they were old parent links.
+        if section and not _IS_LINK_LINE.match(line):
+            section = False
         if section and _IS_LINK_LINE.match(line) and _link_norm(path.parent, line) == dest:
             changed = True
             continue
@@ -2069,6 +2074,10 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         f"# {ns_title('fi')}", "", *[ln for _, ln in desired],
         CONTEXT_HEAD,
         markdown_link(index_display, index_path, folge_index.parent)]))
+    # 旧構造では番号Indexのハブに、紙PKMのグループ自体が誤って
+    # ChildBranch として残る場合がある。ハブの子は番号別と All のみ。
+    _remove_relation_to(folge_index, ("ChildBranch:", "### ChildBranch"), index_path)
+    _remove_relation_to(index_path, ("ParentBranch:", "### ParentBranch"), folge_index)
 
     # --- トピック別Index（`1-Index` グループは作らない。ID ノート `1` の BranchGroup: に `1-仏教` を入れる） ---
     # トピックの親子（front matter の topic_parent）は表示順のためだけ: 親を子より先に並べる。インデントは付けない。
@@ -2278,7 +2287,14 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         reset_name_cache()
     ns_set(namespaces[0], multi)
     # --- 頂点の普通のノート（題 Paper-Zettelkasten-Index）。BranchGroup: にグループ（印ごとに 1 つ）------------
-    ensure_paper_top(root, groups)
+    paper_top = ensure_paper_top(root, groups)
+    # BranchGroup は頂点でグループを固定表示するが、グループ側にも
+    # ParentBranch を明示し、旧来の BackLink に代えて正式な親子関係にする。
+    # BranchGroup に既にあるリンクは ChildBranch に重複追加されない。
+    for group_path in groups:
+        msg = _ensure_branch(root, paper_top, group_path)
+        if msg:
+            added_report.append(msg)
 
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
@@ -2306,7 +2322,8 @@ def ensure_paper_top(root: Path, groups: list[Path]) -> Path:
 
         Paper-Zettelkasten-Index（普通のノート。ChildBranch: は空）
           BranchGroup: 紙の番号の印ごとのグループ（印が 1 つなら Paper-Zettelkasten-Index、複数なら Paper-Zettelkasten-Index-PA など）
-            └ グループの中に Index-write（グループ。索引を書く）・Folgezettel-Index（グループ）・キーワード
+            └ グループ側の ParentBranch: はこの頂点ノート
+               グループ本文に Index-write・Folgezettel-Index・キーワード
 
     vault の index.md からは、グループではなくこの頂点のノートへリンクする（グループへのリンクは頂点へ張り替える）。"""
     top = find_paper_top(root)

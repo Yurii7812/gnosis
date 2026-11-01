@@ -2089,7 +2089,8 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
 def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None = None,
                         ctx_kids: set | None = None, pb_kids: set | None = None,
                         titles: dict | None = None, timeline: bool = False, stale: set | None = None,
-                        moved: list[str] | None = None, numbers: dict | None = None) -> list[str]:
+                        moved: list[str] | None = None, numbers: dict | None = None,
+                        all_number_first: bool = False) -> list[str]:
     """All explicitly declared children, including links repeated in the body.
 
     Every child's ParentBranch pointing to this parent is authoritative, apart
@@ -2152,10 +2153,14 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
 
     def order(item):
         ln, target = item
+        title = (titles or {}).get(target, "") if target is not None else ""
+        # Folgezettel-Index hub navigation starts with its All view, even
+        # though all paper indexes share the same fixed PA-0 ID.
+        if all_number_first and re.fullmatch(r"folgezettel-Index-(?:[A-Z]{1,4}-)?all-number", title):
+            return (-1, (), str(target))
         ident = (numbers or {}).get(target, "") if target is not None else ""
         if ident and fz.ID_RE.fullmatch(ident):
             return (0, fz.natural_key(ident), str(target))
-        title = (titles or {}).get(target, "") if target is not None else ""
         return (1, (title or ln).casefold(), str(target or ""))
 
     entries.sort(key=order)
@@ -2223,7 +2228,9 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     cbranch = _split_child_branch(n.get("cbranch") or [], n.get("body") or [], path, n.get("_ctx_kids"),
                                   n.get("_pb_kids"), titles, stale=n.get("_stale_kids"),
                                   timeline=is_timeline, moved=moved_kids,
-                                  numbers=n.get("_child_numbers"))
+                                  numbers=n.get("_child_numbers"),
+                                  all_number_first=bool(re.fullmatch(
+                                      r"Folgezettel-Index(?:-[A-Z]{1,4})?", n.get("title", ""))))
     if _has(cbranch):
         sections.append((CHILD_BRANCH_MARK, cbranch))
     # `### Related` は zr で足したときだけ存在する（sync が勝手に作らない）。
