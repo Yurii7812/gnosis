@@ -1687,9 +1687,9 @@ def _root_id(fid: str) -> str:
 
 
 def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) -> list[str]:
-    """Remove obsolete auto-generated scan Context and bogus index ChildBranch.
+    """Remove spurious self/index links created by older scan imports.
 
-    Other Context entries and real scan children are left untouched.
+    Preserve real parent/child relations and Context references to other notes.
     """
     own = os.path.normpath(str(note))
     index = os.path.normpath(str(number_index))
@@ -1714,7 +1714,9 @@ def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) 
                         r"[\1\2](\3)", ln)
         if mode in ("context", "child") and _IS_LINK_LINE.match(ln):
             target = _link_norm(note.parent, ln)
-            if target == index or (mode == "context" and target == own):
+            if target == index or target == own:
+                # A note cannot be its own Context or child. Old scan
+                # imports also incorrectly inserted the navigation index.
                 continue
         out.append(ln)
     # Drop a now-empty Context header; leave non-generated sections intact.
