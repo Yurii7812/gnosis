@@ -172,6 +172,7 @@ def test_create_and_regen() -> None:
         all_number = pp.folge_index_path(root, "all-number")
         check(f"[all-number]({all_number.name})" in folge_text and all_number.is_file(), "全番号インデックスの入口")
         check("## [1](" in all_number.read_text(encoding="utf-8") and "## [1a](" in all_number.read_text(encoding="utf-8"), "全番号インデックスに親子の番号を表示")
+        check("attribute: group" in all_number.read_text(encoding="utf-8") and "ParentBranch:\n[Folgezettel-Index](" in all_number.read_text(encoding="utf-8"), "all-number も Folgezettel-Index の子グループ")
         check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
         dedicated = pp.folge_index_path(root, "1")
@@ -180,11 +181,10 @@ def test_create_and_regen() -> None:
             d_text = dedicated.read_text(encoding="utf-8")
             check("## [1](" in d_text and "## [1a](" in d_text, "専用ノートに ID 見出し（リンク）")
             check("folgezettel_index" not in d_text and "# folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
-        check("attribute: group" not in d_text.split("---", 2)[1], "番号別インデックスは通常ノート")
+            check("attribute: group" in d_text.split("---", 2)[1], "番号別インデックスはグループ")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
-            check("[Paper-Zettelkasten-Index:" in d_text
-                  or "[Folgezettel-Index:" in d_text, "専用ノートの Parent")
+            check("ParentBranch:\n[Folgezettel-Index](" in d_text, "Folgezettel-Index が番号別Indexの ParentBranch")
         iw_text = T(root, "Index-write").read_text(encoding="utf-8")
         check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
