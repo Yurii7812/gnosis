@@ -59,6 +59,9 @@ jobs:
           python3 python/test_mandala_view.py
           python3 python/test_mandala_cache.py
           python3 python/test_fznav.py
+          python3 python/test_paper_pkm.py
+          python3 python/test_paper_branchgroup.py
+          python3 python/test_paper_prefix.py
       - name: Test zk n/g and guide relationships
         run: |
           python3 -m venv "$RUNNER_TEMP/gnosis-test-venv"
@@ -112,6 +115,7 @@ jobs:
           sh test/mview_net.sh
           sh test/mview_depth_net.sh
           sh test/mview_handoff_net.sh
+          sh test/mview_lmodes_net.sh
           python3 test/close_keys_pty_check.py
           python3 test/link_pick_pty_check.py
           python3 test/link_swap_pty_check.py
