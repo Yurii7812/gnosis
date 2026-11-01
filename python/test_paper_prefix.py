@@ -77,6 +77,10 @@ def test_second_prefix_renames() -> None:
         pa_group = titles(root)["Paper-Zettelkasten-Index-PA"][0].path.read_text(encoding="utf-8")
         check("[Index-write-PA](" in pa_group and "[Folgezettel-Index-PA](" in pa_group, "PA のグループの中に Index-write-PA・Folgezettel-Index-PA")
         import folgezettel as fz
+        import note_format_v2 as nf
+        # このケースは regen(..., do_sync=False) で構造だけ作ったため、
+        # 番号割当ては明示的に同期してから検証する。
+        nf.simple_sync(root)
         top_path = tops[0].path
         for pfx in ("PA", "PB"):
             for nm, is_group in ((f"Paper-Zettelkasten-Index-{pfx}", True),
