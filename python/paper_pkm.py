@@ -1711,8 +1711,9 @@ def _write_folgezettel_nav(note_path: Path, fid: str, root: Path) -> None:
     index = folge_index_path(root, _root_id(fid))
     all_index = folge_index_path(root, "all-number")
     block = ["FolgezettelIndex:",
-             markdown_link(folge_index_display(_root_id(fid)), index, note_path.parent, frag=fid),
-             markdown_link("All", all_index, note_path.parent)]
+             markdown_link(f"{folge_index_display(_root_id(fid))}#{fid}", index,
+                           note_path.parent, frag=fid),
+             markdown_link(f"All#{fid}", all_index, note_path.parent, frag=fid)]
     out[at:at] = block
     if out != body:
         write_note(note_path, fm, out)
@@ -2111,16 +2112,19 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
             _remove_relation_to(tpath, (CONTEXT_HEAD, "Context:", "### Parent", "Group:"),
                                 folge_index_path(root, _root_id(fid)))
 
-    # --- 番号別/全番号Index は通常ノート。旧版が生成した Branch は解除する。---
+    # --- 番号別/全番号Index は通常ノート。Folgezettel-Index がその ParentBranch。---
     write_folge_index_notes(root, folge, id_index_paths, topics)
     for child_id in ["all-number", *top_level_ids(folge)]:
         child_path = folge_index_path(root, child_id)
-        _remove_relation_to(child_path, ("Context:", "### Context", "### Parent",
-                                         "ParentBranch:", "### ParentBranch"), folge_index)
-        _remove_relation_to(folge_index, ("ChildBranch:", "### ChildBranch"), child_path)
+        # 旧版で誤ってスキャンノートを親にした場合は双方のリンクを外す。
         if child_id != "all-number" and child_id in folge:
             _remove_relation_to(child_path, ("ParentBranch:", "### ParentBranch"), folge[child_id])
             _remove_relation_to(folge[child_id], ("ChildBranch:", "### ChildBranch"), child_path)
+        # Context は親子関係ではない。残った古い自動生成リンクを除去する。
+        _remove_relation_to(child_path, ("Context:", "### Context", "### Parent"), folge_index)
+        msg = _ensure_branch(root, folge_index, child_path)
+        if msg:
+            added_report.append(msg)
 
     # --- スキャンノートの本文と Context -------------------------------------
     for fid, note_path in folge.items():
