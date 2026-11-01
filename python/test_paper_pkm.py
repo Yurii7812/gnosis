@@ -78,15 +78,38 @@ def test_parse_keyword_line() -> None:
                 "ids": ["1", "1a10b", "3"]}, "カンマ区切り")
     e = pp.parse_keyword_line("キーワード: 1 2a")
     check(e is not None and e["ids"] == ["1", "2a"], "空白区切り")
-    check(pp.parse_keyword_line("オザーク(ドラマ): 2") is None,
-          "括弧付きの行は廃止（紛らわしいため扱わない）")
+    check(pp.parse_keyword_line("オザーク(ドラマ): 2") == {"key": "オザーク(ドラマ)", "display": "オザーク(ドラマ)", "ids": ["2"]},
+          "括弧付きのキーワードも解析する")
     check(pp.parse_keyword_line("キーワード: フォルゲゼッテル") is None,
           "ID でない値は行として扱わない")
     check(pp.parse_keyword_line("ただの文章") is None, "普通の文は None")
     check(pp.parse_keyword_line("time: 2026-01-01 00:00:00") is None,
           "front matter の time 行は None（誤マッチ回帰）")
     check(pp.parse_keyword_line("title: Index-write") is None, "title 行は None")
+    check(pp.parse_keyword_line("空(仏教): 1") == {"key": "空(仏教)", "display": "空(仏教)", "ids": ["1"]},
+          "キーワード名に括弧があっても読み取る")
     check(pp.parse_keyword_line("バナナ: 1A10B") is not None, "大文字は正規化して受ける")
+
+
+def test_parenthesized_keyword_in_paper_index() -> None:
+    print("Index-write のキーワードを括弧つきも含めてすべて Paper-Zettelkasten-Index に掲載する")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        main_index = pp.create_paper_index(root)
+        pp.move_images(root, root, _add_images(root, ["1", "2", "3", "4"]))
+        index_write = T(root, "Index-write")
+        fm, body = pp.read_note(index_write)
+        lines = [
+            "単発: 4", "空(仏教): 1", "中論: 1", "超瞑想法: 2", "PKM: 3",
+        ]
+        pp.write_note(index_write, fm, ["# Index-write", "", *lines])
+        pp.regen(root)
+        index_body = main_index.read_text(encoding="utf-8")
+        for keyword in ("単発", "空(仏教)", "中論", "超瞑想法", "PKM"):
+            check(f"[{keyword}](" in index_body, f"キーワード {keyword!r} がすべて索引に載る")
+        before = main_index.read_text(encoding="utf-8")
+        pp.regen(root)
+        check(main_index.read_text(encoding="utf-8") == before, "キーワードリンクは再生成しても重複しない")
 
 
 def test_keyword_reading() -> None:
@@ -125,7 +148,7 @@ def test_create_and_regen() -> None:
         index_path = pp.create_paper_index(root)
         check(index_path.is_file(), "Paper-Zettelkasten-Index ができる")
         check(T(root, "Index-write").is_file(), "Index-write.md ができる")
-        check(T(root, "Folgezettel-Index", True).is_file(), "Folgezettel-Index.md ができる")
+        check(T(root, "Folgezettel-Index").is_file(), "Folgezettel-Index.md ができる")
         check(pp.find_paper_index(root) == index_path, "固定ファイル名で見つかる")
         check(pp.create_paper_index(root) == index_path, "2回目は同じ Index を再利用")
 
@@ -165,10 +188,14 @@ def test_create_and_regen() -> None:
         check(f"[オザーク]({notes['2'].name})" in index_text,
               "単一IDは Index から直接リンク")
 
-        folge_text = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
+        folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check(folge_text.index(f"[1]({N(root, 'folgezettel-Index-1')}#1)")
               < folge_text.index(f"[2]({N(root, 'folgezettel-Index-2')}#2)"), "Folgezettel-Index は自然順")
         check("[1a](" not in folge_text, "Folgezettel-Index は最上位IDだけ（1a 等は出ない）")
+        all_number = pp.folge_index_path(root, "all-number")
+        check(f"[all-number]({all_number.name})" in folge_text and all_number.is_file(), "全番号インデックスの入口")
+        check("## [1](" in all_number.read_text(encoding="utf-8") and "## [1a](" in all_number.read_text(encoding="utf-8"), "全番号インデックスに親子の番号を表示")
+        check("attribute: group" not in all_number.read_text(encoding="utf-8") and "ParentBranch:\n[Folgezettel-Index](" not in all_number.read_text(encoding="utf-8"), "all-number は通常ノート・ParentBranch を作らない")
         check("Group:\n[Paper-Zettelkasten-Index" in folge_text,
               "Folgezettel-Index の Group は Paper-Zettelkasten-Index")
         dedicated = pp.folge_index_path(root, "1")
@@ -177,10 +204,10 @@ def test_create_and_regen() -> None:
             d_text = dedicated.read_text(encoding="utf-8")
             check("## [1](" in d_text and "## [1a](" in d_text, "専用ノートに ID 見出し（リンク）")
             check("folgezettel_index" not in d_text and "# folgezettel-Index-1" in d_text, "専用ノートに fm マーカーは無い（ファイル名と title で判る）")
+            check("attribute: group" not in d_text.split("---", 2)[1], "番号別インデックスは通常ノート")
             check(d_text.index("## [1](") < d_text.index("## [1a]("), "専用ノートは folge 順")
             check("![](" in d_text, "専用ノートに画像")
-            check("[Paper-Zettelkasten-Index:" in d_text
-                  or "[Folgezettel-Index:" in d_text, "専用ノートの Parent")
+            check("ParentBranch:\n[Folgezettel-Index](" not in d_text, "番号別Index に Folgezettel-Index の ParentBranch を作らない")
         iw_text = T(root, "Index-write").read_text(encoding="utf-8")
         check("Group:\n[Paper-Zettelkasten-Index" in iw_text,
               "Index-write の Group は Paper-Zettelkasten-Index")
@@ -192,8 +219,15 @@ def test_create_and_regen() -> None:
 
         note1 = notes["1"].read_text(encoding="utf-8")
         check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
-        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" in note1,
-              "根のノートの Parent は folgezettel-Index-1#1")
+        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
+              "紙スキャンノートにインデックスの自動 Context を作らない")
+        nav1 = f"FolgezettelIndex:\n[1]({N(root, 'folgezettel-Index-1')}#1)\n[All]({all_number.name})"
+        check(nav1 in note1, "紙ノートに番号別と All の FolgezettelIndex を表示する")
+        note1a = notes["1a"].read_text(encoding="utf-8")
+        nav1a = f"FolgezettelIndex:\n[1a]({N(root, 'folgezettel-Index-1')}#1a)\n[All]({all_number.name})"
+        check(nav1a in note1a, "子番号もその番号の見出しへリンクする")
+        check(not any("FolgezettelIndex:" in t and t.count("FolgezettelIndex:") != 1 for t in (note1, note1a)),
+              "FolgezettelIndex が重複しない")
         note1a = notes["1a"].read_text(encoding="utf-8")
         check(f"[PA-1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
 
@@ -228,15 +262,28 @@ def test_topic_index() -> None:
         pp.regen(root)
         check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
         n1 = notes["1"].read_text(encoding="utf-8")
-        check("BranchGroup:\n[PA-1-仏教](" in n1, "ID ノートの BranchGroup: にトピック")
-        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" in n1,
-              "ID ノートの Parent は folgezettel-Index-1#1")
+        check("BranchGroup:\n[PA-1-仏教](" in n1, "ID ノートの BranchGroup: にトピックグループ")
+        check("attribute: group" in notes["1-仏教"].read_text(encoding="utf-8"), "トピックインデックスはグループ")
+        check(f"[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in n1,
+              "紙スキャンノートにインデックスの自動 Context を作らない")
         d_text = pp.folge_index_path(root, "1").read_text(encoding="utf-8")
         check("[1-Index]" not in d_text, "専用ノートに 1-Index へのリンクは無い")
+        topic_image = next((ln for ln in d_text.splitlines() if ln.startswith("![](") and "仏教" in ln), None)
+        check(topic_image is not None and d_text.index(topic_image) < d_text.index("## [1]("), "1 のトピック画像を 1 のノートの前へ表示")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        check("[folgezettel-Index-1]" in topic_text and "1-Index" not in topic_text,
-              "トピックノートの Context は folgezettel-Index-1 だけ")
-        folge_text = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
+        check("Context:\n[folgezettel-Index-1]" not in topic_text and "1-Index" not in topic_text,
+              "トピックグループに番号別Indexの Context を自動生成しない")
+        tp_fm, tp_body = pp.read_note(notes["1-仏教"])
+        manual_link = f"[手動で追加した索引]({pp.folge_index_path(root, '1').name})"
+        # 生成管理される BackLink/Context の末尾ではなく、ユーザー編集可能な本文へ挿入。
+        section = pp._first_section(tp_body)
+        if section is None:
+            section = len(tp_body)
+        tp_body[section:section] = [manual_link, ""]
+        pp.write_note(notes["1-仏教"], tp_fm, tp_body)
+        pp.regen(root)
+        check(manual_link in notes["1-仏教"].read_text(encoding="utf-8"), "トピックグループ本文への手動索引リンクを保持する")
+        folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check("[PA-1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
         # 階層トピック: 仏教/四念処 → 1-四念処（親: 1-仏教）は、BranchGroup の並びで 仏教 の下に 2 スペース下げる
@@ -278,7 +325,7 @@ def test_index_is_an_ordinary_note() -> None:
         path = pp.create_paper_index(root)
         import re as _re
         check(_re.fullmatch(r"\d{12}\.md", path.name) is not None and path.is_file(), f"タイムスタンプ名で作られる: {path.name}")
-        for title, grp in (("Index-write", None), ("Folgezettel-Index", True)):
+        for title, grp in (("Index-write", None), ("Folgezettel-Index", False)):
             f = pp.find_titled(root, title, grp)
             check(f is not None and _re.fullmatch(r"\d{12}\.md", f.name) is not None, f"{title} もタイムスタンプ名: {f.name if f else None}")
         check(not any((root / n).exists() for n in ("Paper-Zettelkasten-Index.md", "Paper-Zettelkasten.md", "Index-write.md", "Folgezettel-Index.md")),
@@ -298,13 +345,13 @@ def test_index_is_an_ordinary_note() -> None:
         check("attribute: group" not in ttext and "BranchGroup:" in ttext and f"[Paper-Zettelkasten-Index]({N(root, 'Paper-Zettelkasten-Index', True)})" in ttext
               and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: はグループ 1 つ、ChildBranch は空: {ttext}")
         # Index-write・Folgezettel-Index は頂点の直下ではなく、グループ Paper-Zettelkasten-Index の中のグループ
-        check(f"[Index-write]({N(root, 'Index-write')})" not in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" not in ttext,
+        check(f"[Index-write]({N(root, 'Index-write')})" not in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})" not in ttext,
               "Index-write・Folgezettel-Index は頂点の BranchGroup: に並べない")
         gtext = path.read_text(encoding="utf-8")
-        check(f"[Index-write]({N(root, 'Index-write')})" in gtext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})" in gtext,
+        check(f"[Index-write]({N(root, 'Index-write')})" in gtext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})" in gtext,
               "グループ Paper-Zettelkasten-Index の中に Index-write・Folgezettel-Index がある")
-        for nm, cap in (("Index-write", None), ("Folgezettel-Index", True)):
-            check("attribute: group" in (root / N(root, nm, cap)).read_text(encoding="utf-8"), f"{nm} はグループ（attribute: group）")
+        for nm, cap in (("Index-write", None), ("Folgezettel-Index", False)):
+            check("attribute: group" not in (root / N(root, nm, cap)).read_text(encoding="utf-8"), f"{nm} は通常ノート（attribute: group を持たない）")
         parent = (root / "index.md").read_text(encoding="utf-8")
         check(f"({top.name})" in parent and f"({path.name})" not in parent, "index.md からは頂点の普通のノートへリンクする")
     with tempfile.TemporaryDirectory() as d:
@@ -406,7 +453,7 @@ def test_diary_register_and_keyword() -> None:
         check(_section_links(notes["2026-10-07"].read_text(encoding="utf-8"), "ParentBranch:") == [m10.name], "日の ParentBranch は月")
         check("[2026-10-07-WE](" not in mtext.split("ChildBranch:")[0], "日へのリンクは本文ではなく ChildBranch: にだけある")
         check(_year(root, "2026") is None, "同じ年だけなら年のノートは作られない")
-        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
+        fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ: {fi}")
         body = fi.split("---\n", 2)[2].strip("\n").split("\n")
         g_at = body.index("Group:")
@@ -448,7 +495,7 @@ def test_diary_register_and_keyword() -> None:
         check(_section_links(y26.read_text(encoding="utf-8"), "ParentBranch:") == [top.name], "年の ParentBranch は一番上")
         check(_section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [y25.name, y26.name], "一番上の ChildBranch は年（古い順・重複なし）")
         check(idx.read_text(encoding="utf-8").count("[日記](") == 1, "Index の「日記」は 1 つのまま")
-        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8")
+        fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1, "年をまたいだあとも Folgezettel-Index の 日記 は 1 つ")
 
 
@@ -484,7 +531,7 @@ def test_diary_errors_and_scan_unchanged() -> None:
         moved, errors = pp.move_images(root, root, _add_images(root, ["1", "2"]))
         pp.regen(root)
         check("[日記](" not in idx.read_text(encoding="utf-8"), "日記を登録していなければ「日記」は出ない")
-        check("[diary](" not in T(root, "Folgezettel-Index", True).read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
+        check("[diary](" not in T(root, "Folgezettel-Index").read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
         check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-2"}, "通常の ID 登録は今までどおり（題は PA- 付き）")
 
 
@@ -516,21 +563,21 @@ def test_index_has_no_blank_lines_between_links() -> None:
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
+        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
         check(lines[at + 1] == "" and lines[at + 2].startswith("[日記]("),
               f"Folgezettel-Index とキーワード一覧のあいだは空行 1 行: {lines[at:at+4]}")
         check(lines[at - 1] == f"[Index-write]({N(root, 'Index-write')})", "Index-write と Folgezettel-Index は連続")
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
-                      and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})"
+                      and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})"
                       and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
-        text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})\n\n\n[日記](")
+        text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n\n[日記](")
         idx.write_text(text, encoding="utf-8")
         pp.regen(root)
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
+        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
         check(lines[at + 1:at + 4] == ["", "", lines[at + 3]] and lines[at + 3].startswith("[日記]("),
               f"自分で入れた空行（2 つ）は regen しても消えない・増えない: {lines[at:at+5]}")
 
@@ -581,7 +628,7 @@ def test_diary_group_has_no_keyword_marker_and_is_found_again() -> None:
         # Index のリンクが無くなっても（題 + timeline: true で）同じノートを見つける
         itext = idx.read_text(encoding="utf-8")
         idx.write_text("\n".join(ln for ln in itext.split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
-        fi = T(root, "Folgezettel-Index", True)
+        fi = T(root, "Folgezettel-Index")
         fi.write_text("\n".join(ln for ln in fi.read_text(encoding="utf-8").split("\n") if not ln.startswith("[日記](")), encoding="utf-8")
         pp.regen(root)
         tops3 = [n for n in root.glob("*.md") if "# 紙の日記\n" in n.read_text(encoding="utf-8")]
@@ -612,7 +659,7 @@ def test_old_group_diary_is_migrated_in_place() -> None:
         old_form(m12, "2025-12", days12)
         old_form(y26, "2026", [m10])
         old_form(y25, "2025", [m12])
-        old_form(top, "日記", [y25, y26], f"Group:\n[Folgezettel-Index:日記]({N(root, 'Folgezettel-Index', True)})\n[Paper-Zettelkasten-Index:日記]({N(root, 'Paper-Zettelkasten-Index', True)})\n\n")
+        old_form(top, "日記", [y25, y26], f"Group:\n[Folgezettel-Index:日記]({N(root, 'Folgezettel-Index')})\n[Paper-Zettelkasten-Index:日記]({N(root, 'Paper-Zettelkasten-Index', True)})\n\n")
         pp.regen(root)
         check(pp.find_diary_group(root, idx) == top and _month(root, "2026-10") == m10 and _year(root, "2026") == y26,
               "同じファイルのまま（増えない）")
@@ -789,7 +836,7 @@ def test_group_notes_format() -> None:
               and "attribute: group" in it[1:header_end]
               and it[header_end + 1:header_end + 3] == ["", "# Paper-Zettelkasten-Index"],
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
-        k = it.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index', True)})")
+        k = it.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
         check(it[k - 1] == f"[Index-write]({N(root, 'Index-write')})" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")
         kw = it[k + 2:]
         kw = kw[:kw.index("BackLink:")] if "BackLink:" in kw else kw   # 頂点のノートの BranchGroup: から BackLink: が付く
@@ -797,19 +844,19 @@ def test_group_notes_format() -> None:
             kw.pop()
         check("" not in kw, f"キーワード一覧に空行なし: {it[k:]}")
         check(sum(1 for ln in it if ln.startswith("[日記](")) == 1, "「日記」は通常のキーワードとして 1 つ")
-        fi = T(root, "Folgezettel-Index", True).read_text(encoding="utf-8").split("\n")
-        check("attribute: group" in fi[:6], "Folgezettel-Index も attribute: group")
+        fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8").split("\n")
+        check("attribute: group" not in fi[:6], "Folgezettel-Index は通常ノート")
         body = fi[fi.index("# Folgezettel-Index"):]
         # Group: は先頭の関係ブロック（表示名つき）。続けて空行 1 つ、その後にキーワードのリンク
         links = [ln for ln in body[5:] if ln.startswith("[")]
         check(body[1] == "" and body[2] == "Group:" and body[3].startswith("[Paper-Zettelkasten-Index") and body[4] == ""
-              and [l.split("]")[0] for l in links[:4]] == ["[日記", "[1", "[2", "[10"], f"Folgezettel-Index は Group: の後に 日記, 1, 2, 10 の順（自然順）: {body}")
+              and [l.split("]")[0] for l in links[:4]] == ["[日記", "[all-number", "[1", "[2"], f"Folgezettel-Index は Group: の後に 日記, 1, 2, 10 の順（自然順）: {body}")
         check(not any("[diary](" in ln for ln in fi), "[diary] 表記は無い")
         top = pp.find_diary_group(root, idx)
         tt = top.read_text(encoding="utf-8").split("\n")
         check("# 紙の日記" in tt and "timeline: true" in tt and "attribute: group" not in tt, "紙の日記の一番上は普通のノート（題 紙の日記・timeline: true・グループの印なし）")
         gi = tt.index("Group:")
-        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]) and any("Folgezettel-Index" in ln for ln in tt[gi:gi + 4]), "一番上の Group: に Paper-Zettelkasten-Index と Folgezettel-Index（グループのメンバー）")
+        check(any("Paper-Zettelkasten-Index" in ln for ln in tt[gi:gi + 4]), "紙の日記は Paper-Zettelkasten-Index のグループに所属")
         check("ChildBranch:" in tt and tt[tt.index("ChildBranch:") + 1].startswith("[2026-10-紙]("), "一番上の ChildBranch: に月")
         month = _month(root, "2026-10").read_text(encoding="utf-8").split("\n")
         check("# 2026-10-紙" in month and "timeline: true" in month and "attribute: group" not in month
@@ -890,6 +937,77 @@ def test_simple_sync_keeps_format_and_trash_images() -> None:
         tr = list((root / ".trash").iterdir()) if (root / ".trash").is_dir() else []
         check(not (root / "PA-1a.jpg").exists() and any(p.name.endswith("_PA-1a.jpg") for p in tr), 
               "スキャンノートを消すと、title と同名の画像が .trash へ退避される")
+
+
+def test_scan_self_context_and_child_cleanup() -> None:
+    print("スキャンノートの自己Context・自己ChildBranchは削除し、正当な親子関係は保持する")
+    import note_format_v2 as nf
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        pp.create_paper_index(root)
+        moved, errors = pp.move_images(root, root, _add_images(root, ["3", "3b", "3b1"]))
+        check(len(moved) == 3 and not errors, "3 / 3b / 3b1 を作る")
+        scans = dict(moved)
+        pp.regen(root)
+        n3b = scans["PA-3b"]
+        n3b1 = scans["PA-3b1"]
+        n3 = scans["PA-3"]
+        number_index = pp.folge_index_path(root, "3")
+        # 旧版の誤った親子（スキャンの 3 → 番号Index）も再現する。
+        fm_index, body_index = pp.read_note(number_index)
+        p_at = next((i for i, line in enumerate(body_index) if line.strip() == "ParentBranch:"), None)
+        if p_at is None:
+            body_index[2:2] = ["ParentBranch:", f"[PA-3]({n3.name})"]
+        else:
+            body_index.insert(p_at + 1, f"[PA-3]({n3.name})")
+        pp.write_note(number_index, fm_index, body_index)
+        fm3, body3 = pp.read_note(n3)
+        old_index_link = f"[folgezettel-Index-3]({number_index.name})"
+        child_at = next((i + 1 for i, line in enumerate(body3) if line.strip() == "ChildBranch:"), None)
+        if child_at is None:
+            body3 += ["ChildBranch:", old_index_link]
+        else:
+            body3.insert(child_at, old_index_link)
+        pp.write_note(n3, fm3, body3)
+        # 旧版が書いた無効な自己関係を再現する。普通の Context は残す。
+        other = root / "other.md"
+        _write(other, "# 参考ノート\n")
+        fm, body = pp.read_note(n3b1)
+        body += ["### Context", f"[PA-3b1]({n3b1.name})",
+                 f"[PA-3b1]({n3b1.name})", f"[参考ノート]({other.name})"]
+        pp.write_note(n3b1, fm, body)
+        fm, body = pp.read_note(n3b)
+        # ChildBranch に子が既にあれば、その節へ自己リンクを足す。
+        at = next((i + 1 for i, ln in enumerate(body) if ln.strip() in ("ChildBranch:", "### ChildBranch")), None)
+        if at is None:
+            body += ["ChildBranch:", f"[PA-3b]({n3b.name})"]
+        else:
+            body.insert(at, f"[PA-3b]({n3b.name})")
+        pp.write_note(n3b, fm, body)
+        pp.regen(root, do_sync=False)
+        index_before_sync = number_index.read_text(encoding="utf-8")
+        nf.simple_sync(root)
+        t1 = n3b1.read_text(encoding="utf-8")
+        t0 = n3b.read_text(encoding="utf-8")
+        check(f"### Context\n[PA-3b1]({n3b1.name})" not in t1
+              and f"Context:\n[PA-3b1]({n3b1.name})" not in t1,
+              "自分自身を指す Context は生成・保持しない")
+        check(f"[PA-3b]({n3b.name})" not in t0.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
+              "自分自身を子とする ChildBranch は生成・保持しない")
+        check(f"[PA-3b1]({n3b1.name})" in t0 and f"[PA-3b]({n3b.name})" in t1,
+              "本来の ParentBranch と ChildBranch は保持する")
+        check(f"[参考ノート]({other.name})" in t1, "手書きの別ノートへの Context は保持する")
+        root3_text = n3.read_text(encoding="utf-8")
+        idx3_text = number_index.read_text(encoding="utf-8")
+        check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
+              "旧スキャンの番号IndexへのChildBranchを消す")
+        check("ParentBranch:\n[Folgezettel-Index](" not in idx3_text,
+              "番号Indexは通常ノートでFolgezettel-Indexとの ParentBranch を持たない: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
+        snap = (t0, t1)
+        pp.regen(root)
+        nf.simple_sync(root)
+        check(snap == (n3b.read_text(encoding="utf-8"), n3b1.read_text(encoding="utf-8")),
+              "再同期・再生成で自己関係が再発しない")
 
 
 def test_regen_without_index() -> None:

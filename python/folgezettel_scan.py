@@ -1175,7 +1175,11 @@ class ScanApp:
         return "break"
 
     def hide_input(self):
+        """Close the Space/Topic/Diary entry form after successful Enter."""
         self.input_frame.pack_forget()
+        self.topic_frame.pack_forget()
+        self.diary_frame.pack_forget()
+        self.diary_list_row.pack_forget()
         self.input_holder.pack_forget()
         self.input_active = False
         self.root.focus_set()

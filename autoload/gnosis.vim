@@ -14796,6 +14796,10 @@ function! s:insert_links_core_raw(links, ...) abort
     call s:place_popup_close(l:pw)
     if l:ch ==# 'x' && l:single
       let l:swap = !l:swap
+      " Popup contents are different after swapping A/B. A normal redraw
+      " may emit only a partial terminal diff, leaving stale direction text
+      " visible on some terminals; force a complete refresh.
+      redraw!
       continue
     endif
     break
@@ -14810,7 +14814,7 @@ function! s:insert_links_core_raw(links, ...) abort
   redraw
   if l:swap
     " 向きを入れ替えた: 選んだノート側に今のノートのリンクを書く（Enter i h t）／関係の向きを逆にする
-    if l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch ==# 'i' || l:ch ==# 'h' || (l:ch ==# 't' && a:0 > 0)
+    if l:ch ==# "\<CR>" || l:ch ==# "\<NL>" || l:ch ==# 'i' || l:ch ==# 'h' || (l:ch ==# 't' && a:0 > 0) || (l:ch ==# 'v' && s:place_hook isnot 0)
       return s:swapped_write(l:ch, l:links)
     endif
     let l:ch = get({'p': 'b', 'b': 'p', 'c': 'a', 'a': 'c', 'g': ''}, l:ch, l:ch)
@@ -14826,7 +14830,7 @@ function! s:insert_links_core_raw(links, ...) abort
     return -5
   endif
   if l:ch ==# 'v' && l:single && !l:swap && s:place_hook isnot 0
-    " 曼荼羅の \l: 右の元のノートで v → 範囲を選んで Enter。その文字が、選んだノートへのリンクになる
+    " A→B: 右の元ノート A の文字を選び、B へのリンクにする
     return call(s:place_hook, ['vis', function('s:main_place_cont', [l:links, 'h'])])
   endif
   if l:ch ==# 't' && a:0 > 0
@@ -15320,8 +15324,10 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   if a:has_t
     call add(l:out, '   t      ' . gnosis#i18n#tr('見出しを選んで、その下に'))
   endif
-  if a:single && !a:swap && s:place_hook isnot 0
-    call add(l:out, '   v      ' . gnosis#i18n#tr('このノートで範囲を選んで、その文字をリンクにする'))
+  if a:single && s:place_hook isnot 0
+    call add(l:out, '   v      ' . gnosis#i18n#tr(a:swap
+          \ ? 'B の文字を選んで A へのリンクにする'
+          \ : 'A の文字を選んで B へのリンクにする'))
   endif
   if !a:swap && s:place_hook isnot 0
     call add(l:out, '   e      ' . gnosis#i18n#tr('右のノートを編集してから選ぶ（\\l でこのメニューに戻る）'))
@@ -15373,7 +15379,7 @@ function! s:swapped_write(ch, links) abort
   if &modified && &buftype ==# ''
     silent! update
   endif
-  let l:kind = a:ch ==# 'i' ? 'i' : (a:ch ==# 'h' ? 'h' : (a:ch ==# 't' ? 'head' : 'end'))
+  let l:kind = a:ch ==# 'i' ? 'i' : (a:ch ==# 'h' ? 'h' : (a:ch ==# 't' ? 'head' : (a:ch ==# 'v' ? 'vis-swap' : 'end')))
   silent! execute 'hide edit ' . fnameescape(l:bpath)
   let l:link = s:make_link_from_dir(l:a.path, l:a.title, expand('%:p:h'))
   if l:kind ==# 'end'
@@ -15383,13 +15389,21 @@ function! s:swapped_write(ch, links) abort
     return 1
   endif
   let l:from_mandala = s:place_hook isnot 0
-  let l:Cont = function('s:swapped_place_cont', [l:link, l:a, l:from_mandala])
+  let l:Cont = l:kind ==# 'vis-swap'
+        \ ? function('s:swapped_visual_cont', [l:link])
+        \ : function('s:swapped_place_cont', [l:link, l:a, l:from_mandala])
   if l:from_mandala
     " 曼荼羅の \l: 右の窓に B が出ている。場所を選んで Enter（決定は曼荼羅のほうで受け、終わったら元のノートに戻る）
     return call(s:place_hook, [l:kind, l:Cont])
   endif
   call s:other_pick(l:kind, l:Cont, l:a)
   return -1
+endfunction
+
+" B→A の v: B の選択範囲を A へのリンクにする。既存の視覚リンク操作と
+" 同じ確認メニュー・取り消し処理を使う（追加の関係も B→A 向きになる）。
+function! s:swapped_visual_cont(link, vis) abort
+  return gnosis#insert_links_visual([a:link], a:vis)
 endfunction
 
 function! s:swapped_place_cont(link, a, from_mandala, kind, pos, lnum) abort

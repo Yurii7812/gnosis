@@ -195,7 +195,7 @@ class FolgezettelTest(unittest.TestCase):
         self.note('a')
         top = self.note('top', body='BranchGroup:\n[Paper-Zettelkasten-Index](pidx.md)\n[Index-write](iw.md)\n[Folgezettel-Index](fidx.md)')
         top.write_text(top.read_text().replace('title: top', 'title: Paper-Zettelkasten-Index').replace('# top', '# Paper-Zettelkasten-Index'))
-        for name, title, grp in (('pidx', 'Paper-Zettelkasten-Index', True), ('iw', 'Index-write', False), ('fidx', 'Folgezettel-Index', True)):
+        for name, title, grp in (('pidx', 'Paper-Zettelkasten-Index', True), ('iw', 'Index-write', False), ('fidx', 'Folgezettel-Index', False)):
             p = self.note(name)
             p.write_text(p.read_text().replace(f'title: {name}', f'title: {title}' + ('\nattribute: group' if grp else '')).replace(f'# {name}', f'# {title}'))
         nf.simple_sync(self.root)

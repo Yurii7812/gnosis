@@ -133,7 +133,11 @@ def test_legacy_titles_are_adopted() -> None:
         check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a"}, "旧い画像名でも紙のノートと分かる")
         before = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
         pp.regen(root, do_sync=False)
-        check(before == {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}, "もう一度 regen しても変わらない")
+        after = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
+        import difflib
+        delta = "".join("".join(difflib.unified_diff(before[n].splitlines(True), after[n].splitlines(True), n, n))
+                        for n in before if before[n] != after.get(n))
+        check(before == after, "もう一度 regen しても変わらない" + ("\n" + delta if delta else ""))
 
 
 def test_default_prefix_setting() -> None:

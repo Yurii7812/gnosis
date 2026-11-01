@@ -66,9 +66,11 @@ with tempfile.TemporaryDirectory() as d:
     check(len(b) == 1 and "[PA-1-仏教](" in b[0] and not b[0].startswith(" "), f"ID ノート 1 の BranchGroup: にトピック PA-1-仏教: {b}")
     check("BranchGroup:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には BranchGroup: を作らない")
     ls = lines_of(n1)
-    check(ls.index("BranchGroup:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "BranchGroup: は H1 の直後（空行 1 つ挟む）")
+    check(ls.index("FolgezettelIndex:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "FolgezettelIndex: は H1 の直後（空行 1 つ挟む）")
+    check(ls[ls.index("BranchGroup:") - 1].startswith("[All]("), "FolgezettelIndex の All と BranchGroup の間には空行が無い")
     topic = notes["PA-1-仏教"].read_text(encoding="utf-8")
-    check("1-Index" not in topic and "folgezettel-Index-1" in topic, "トピックノートの Context は folgezettel-Index-1 だけ")
+    check("attribute: group" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
+          "トピックノートはグループ、索引Contextの自動追加は無い")
 
     # 階層: 四念処 は 仏教 の下
     moved2, errors2 = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "PA-1-仏教"),
@@ -163,9 +165,10 @@ with tempfile.TemporaryDirectory() as d:
     ctx_1a = block(n1a, "### Context") + block(n1a, "Context:")
     check(not any(f"]({n1.name})" in ln for ln in ctx_1a), f"1a の親子を Context で代用しない: {ctx_1a}")
     for t in ("PA-1-仏教", "PA-1-四念処", "PA-1-阿含"):
-        check(any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
-              and any(f"]({notes[t].name})" in ln for ln in block(n1, "ChildBranch:") + block(n1, "BranchGroup:")),
-              f"トピック {t} の ParentBranch: に 1・1 の ChildBranch: か BranchGroup: に {t}")
+        check("attribute: group" in notes[t].read_text(encoding="utf-8")
+              and not any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
+              and any(f"]({notes[t].name})" in ln for ln in block(n1, "BranchGroup:")),
+              f"トピック {t} はグループで、1 の BranchGroup: に固定し、ParentBranch を作らない")
     check("topic_parent: PA-1-仏教" in fm_of(notes["PA-1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["PA-1-仏教"])),
           f"親トピックは front matter の topic_parent に残る: {fm_of(notes['PA-1-四念処'])}")
     check(all("source: scan" in fm_of(p) for p in notes.values()), "スキャン由来のノートに source: scan")

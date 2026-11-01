@@ -1435,6 +1435,18 @@ _SIMPLE_INLINE_LINK = re.compile(r"\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
 _SIMPLE_LINK_LINE_RE = re.compile(r"^\s*(\[(?:\\.|[^\]\\])*\]\([^)]+\))\s*(?:—\s*\S+)?\s*$")
 
 
+def _flatten_nested_link_labels(line: str) -> str:
+    """Unwrap Markdown accidentally inserted inside a fragment's link label.
+
+    [folgezettel-Index-3#[3](scan.md)](index.md#3) must become
+    [folgezettel-Index-3#3](index.md#3). The outer destination is authoritative.
+    """
+    return re.sub(
+        r"\[([^\[\]\n]*#)\[([^\[\]\n]+)\]\([^)\n]+\)\]\(([^)\n]+)\)",
+        r"[\1\2](\3)", line,
+    )
+
+
 def _link_target(link_line: str) -> str:
     """リンク行からターゲットを取り出す。"""
     m = _SIMPLE_INLINE_LINK.search(link_line)
@@ -1803,7 +1815,7 @@ def _update_body_link_names(body: list[str], path: Path, resolver, titles: dict,
         return m.group(0)
     out: list[str] = []
     for ln, fz in zip(body, _fenced(body)):
-        out.append(ln if fz else _link_sub(_SIMPLE_INLINE_LINK, repl, ln))
+        out.append(ln if fz else _link_sub(_SIMPLE_INLINE_LINK, repl, _flatten_nested_link_labels(ln)))
     return out
 
 
@@ -1818,10 +1830,13 @@ def _heading_labels(body: list[str]) -> dict[str, str]:
         if not match:
             continue
         heading = match.group(1).strip()
+        # A Markdown-linked heading (e.g. ## [3a1](note.md)) has the visible
+        # text '3a1', not the raw '[3a1](note.md)' markup.
+        visible_heading = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", heading)
         # GitHub-compatible basic slug rules, matching zo's heading picker:
         # lowercase, keep Unicode letters and numbers, remove punctuation,
         # replace whitespace with hyphens, and suffix duplicate headings.
-        plain = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", heading).lower()
+        plain = visible_heading.lower()
         slug = re.sub(r"[^\w\s-]", "", plain)
         slug = re.sub(r"\s", "-", slug)
         next_num = seen.get(slug, 0)
@@ -1830,7 +1845,7 @@ def _heading_labels(body: list[str]) -> dict[str, str]:
             next_num += 1
             unique = f"{slug}-{next_num}"
         seen[slug] = next_num + 1
-        out[unique] = heading
+        out[unique] = visible_heading
     return out
 
 
@@ -1845,6 +1860,7 @@ def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict,
     out: list[str] = []
     base_dir = path.parent
     for ln in existing:
+        ln = _flatten_nested_link_labels(ln)
         m = _SIMPLE_INLINE_LINK.search(ln)
         if m:
             target = m.group(2)
@@ -2005,6 +2021,26 @@ def _ends_in_label_block(lines: list[str]) -> bool:
     return i >= 0 and bool(re.match(r"^[^\s\[\]()]+:\s*$", lines[i]))
 
 
+def _take_folgezettel_navigation(body: list[str]) -> tuple[list[str], list[str]]:
+    """番号別インデックスへのナビゲーションを関係ブロックから独立して保持する。"""
+    out: list[str] = []
+    nav: list[str] = []
+    i = 0
+    while i < len(body):
+        if body[i].strip() == "FolgezettelIndex:":
+            i += 1
+            links: list[str] = []
+            while i < len(body) and _SIMPLE_LINK_LINE_RE.match(body[i]):
+                links.append(body[i])
+                i += 1
+            if links:
+                nav = ["FolgezettelIndex:", *links]
+            continue
+        out.append(body[i])
+        i += 1
+    return nav, out
+
+
 def _body_with_context(n: dict, links: list[str], enabled: bool,
                        group_lines: list[str] | None = None) -> list[str]:
     """本文冒頭のブロックを BranchGroup: → Group: → ParentBranch: → Context: の順で出力する（2026-10-20 に変更）。
@@ -2012,14 +2048,14 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     BranchGroup は直接のブランチで派生したグループ（旧 ThisNoteGroup）。
     Group は所属（手動＋自動）、Context は文脈。
     """
-    body = list(n["body"])
+    nav, body = _take_folgezettel_navigation(list(n["body"]))
     links = [ln for ln in links if ln.strip()]
     groups = [ln for ln in (group_lines or []) if ln.strip()]
 
     # BranchGroup と旧 ThisNoteGroup を回収して先頭へ正規化する。
     branch_links, body, found_branch_group = _take_branch_group_block(body)
 
-    blocks: list[str] = []
+    blocks: list[str] = list(nav)
     pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
@@ -2093,7 +2129,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
             # A single declared child is written exactly once, regardless of
             # duplicate ChildBranch lines or its appearances in the body.
             for t in targets:
-                if t not in listed and t not in (stale or set()) and t not in branch_group_children:
+                if t != base and t not in listed and t not in (stale or set()) and t not in branch_group_children:
                     entries.append((ln, t))
                     listed.add(t)
         elif ln.strip() and not _links_from([ln]):
@@ -2105,7 +2141,7 @@ def _split_child_branch(cbranch: list[str], body: list[str], base: Path | None =
     for ln in moved or []:
         include(ln)
     for child in pb_kids or set():
-        if base is None or child in listed or child in (stale or set()) or child in branch_group_children:
+        if base is None or child == base or child in listed or child in (stale or set()) or child in branch_group_children:
             continue
         title = (titles or {}).get(child) or child.stem
         link = f"[{title}]({os.path.relpath(str(child), str(base.parent))})"
@@ -2302,7 +2338,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
                 q = (cp.parent / cand).resolve()
-                if q in notes:
+                if q in notes and q != cp:
                     notes[q].setdefault("_ctx_kids", set()).add(cp)
                     break
         # 子の側の ParentBranch:（親の ChildBranch: に無くても、子として扱う）
@@ -2310,7 +2346,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
                 q = (cp.parent / cand).resolve()
-                if q in notes:
+                if q in notes and q != cp:
                     notes[q].setdefault("_pb_kids", set()).add(cp)
                     cn.setdefault("_pb_parents", set()).add(q)
                     break
@@ -2453,6 +2489,12 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         for key in ("pbranch", "cbranch"):
             n[key] = _preserve_parent(n[key], p, res, titles, heading_labels)
             n[key] = _prune_dangling(n[key], p, res)
+            # A ParentBranch/ChildBranch to the same note cannot represent a
+            # valid tree edge. Discard imported artifacts instead of mirroring
+            # or reconstructing them on every sync.
+            n[key] = [line for line in n[key]
+                      if not (_SIMPLE_LINK_LINE_RE.match(line)
+                              and res(_link_target(line), dirs[p]) == p)]
     related_t: dict[Path, set[Path]] = {}
     for p, n in notes.items():
         ts: set[Path] = set()
@@ -2539,6 +2581,13 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             n["_leftover"] = []
         parent_lines = _preserve_parent(parent_src, p, res, titles, heading_labels)
         parent_lines = _prune_dangling(parent_lines, p, res)
+        # Scan imports sometimes left an auto-generated link to the very
+        # same scan note. Remove only this paper-scanning artifact; other
+        # notes may deliberately contain self-links and must be preserved.
+        if any(re.match(r"^\s*source\s*:\s*scan\s*$", x) for x in n["fm"]):
+            parent_lines = [ln for ln in parent_lines
+                            if not (_SIMPLE_LINK_LINE_RE.match(ln)
+                                    and res(_link_target(ln), dirs[p]) == p)]
         branch_links, _, _ = _take_branch_group_block(n["body"])
         branch_targets = {rp for _display, tg in _links_from(branch_links)
                           for rp in [res(tg, dirs[p])] if rp is not None}
