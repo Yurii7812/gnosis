@@ -1698,6 +1698,10 @@ def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) 
             continue
         if label in SECTION_HEADS or label in ("Group:", "ParentBranch:", "BranchGroup:", "BackLink:"):
             mode, header_at = None, None
+        if mode in ("context", "child"):
+            # Repair the old nested-heading form before resolving its outer link.
+            ln = re.sub(r"\[([^\[\]\n]*#)\[([^\[\]\n]+)\]\([^)\n]+\)\]\(([^)\n]+)\)",
+                        r"[\1\2](\3)", ln)
         if mode in ("context", "child") and _IS_LINK_LINE.match(ln):
             target = _link_norm(note.parent, ln)
             if target == index or (mode == "context" and target == own):
