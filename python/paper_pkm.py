@@ -75,10 +75,10 @@ DEFAULT_INDEX_TITLE = "Paper-Zettelkasten-Index"
 
 ID_PATTERN = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*$")
 FULL_ID_PATTERN = re.compile(r"^(?:[A-Z]{1,4}-)?\d+(?:[a-z]+\d+)*[a-z]*$")  # 印つきの番号も受ける
-# キーと ID 部に `:` を許さない（`time: 2026-01-01 00:00:00` のような front matter を
-# 後方一致でキーワード行と誤認しないため。`[^:]+?` の後退を防ぐ）。
+# コロンはキーワードと番号列の区切りにのみ使用する。括弧はキーワード本文
+# （例「空(仏教): 1」）にも使えるので除外しない。番号列は後段で厳密に検証する。
 KEYWORD_LINE_RE = re.compile(
-    r"^(?P<key>[^:()]+?)\s*:\s*(?P<ids>[^:]+)$"
+    r"^(?P<key>[^:]+?)\s*:\s*(?P<ids>[^:]+)$"
 )
 
 # 旧い front matter のキー（廃止）。新規には書かない。読むのは移行（migrate_legacy_metadata）だけ。
