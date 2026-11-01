@@ -86,6 +86,8 @@ def test_parse_keyword_line() -> None:
     check(pp.parse_keyword_line("time: 2026-01-01 00:00:00") is None,
           "front matter の time 行は None（誤マッチ回帰）")
     check(pp.parse_keyword_line("title: Index-write") is None, "title 行は None")
+    check(pp.parse_keyword_line("空(仏教): 1") == {"key": "空(仏教)", "display": "空(仏教)", "ids": ["1"]},
+          "キーワード名に括弧があっても読み取る")
     check(pp.parse_keyword_line("バナナ: 1A10B") is not None, "大文字は正規化して受ける")
 
 
