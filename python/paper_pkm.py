@@ -2278,7 +2278,14 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         reset_name_cache()
     ns_set(namespaces[0], multi)
     # --- 頂点の普通のノート（題 Paper-Zettelkasten-Index）。BranchGroup: にグループ（印ごとに 1 つ）------------
-    ensure_paper_top(root, groups)
+    paper_top = ensure_paper_top(root, groups)
+    # BranchGroup は頂点でグループを固定表示するが、グループ側にも
+    # ParentBranch を明示し、旧来の BackLink に代えて正式な親子関係にする。
+    # BranchGroup に既にあるリンクは ChildBranch に重複追加されない。
+    for group_path in groups:
+        msg = _ensure_branch(root, paper_top, group_path)
+        if msg:
+            added_report.append(msg)
 
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
@@ -2306,7 +2313,8 @@ def ensure_paper_top(root: Path, groups: list[Path]) -> Path:
 
         Paper-Zettelkasten-Index（普通のノート。ChildBranch: は空）
           BranchGroup: 紙の番号の印ごとのグループ（印が 1 つなら Paper-Zettelkasten-Index、複数なら Paper-Zettelkasten-Index-PA など）
-            └ グループの中に Index-write（グループ。索引を書く）・Folgezettel-Index（グループ）・キーワード
+            └ グループ側の ParentBranch: はこの頂点ノート
+               グループ本文に Index-write・Folgezettel-Index・キーワード
 
     vault の index.md からは、グループではなくこの頂点のノートへリンクする（グループへのリンクは頂点へ張り替える）。"""
     top = find_paper_top(root)
