@@ -1699,7 +1699,7 @@ def _write_folgezettel_nav(note_path: Path, fid: str, root: Path) -> None:
             continue
         out.append(body[i])
         i += 1
-    h1 = next((i for i, ln in enumerate(out) if re.match(r"^#\\s", ln)), None)
+    h1 = next((i for i, ln in enumerate(out) if re.match(r"^#\s", ln)), None)
     if h1 is None:
         return
     at = h1 + 1
@@ -2154,9 +2154,9 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         if fid not in folge:
             continue
         for _disp, tpath, _tp in topic_order(topics[fid]):
-            msg = _ensure_branch(root, folge[fid], tpath)
-            if msg:
-                added_report.append(msg)
+            # トピックは BranchGroup に固定するグループであり、Branch の子ではない。
+            _remove_relation_to(tpath, ("ParentBranch:", "### ParentBranch"), folge[fid])
+            _remove_relation_to(folge[fid], ("ChildBranch:", "### ChildBranch"), tpath)
 
 
 def has_paper_pkm(root: Path) -> bool:
