@@ -1695,19 +1695,19 @@ def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) 
     index = os.path.normpath(str(number_index))
     out: list[str] = []
     mode: Optional[str] = None
-    header_at: Optional[int] = None
+    seen: dict[str, set[str]] = {"context": set(), "child": set()}
     for ln in body:
         label = ln.strip()
         if label in (CONTEXT_HEAD, "Context:", "### Parent"):
-            mode, header_at = "context", len(out)
+            mode = "context"
             out.append(ln)
             continue
         if label in ("ChildBranch:", "### ChildBranch"):
-            mode, header_at = "child", len(out)
+            mode = "child"
             out.append(ln)
             continue
         if label in SECTION_HEADS or label in ("Group:", "ParentBranch:", "BranchGroup:", "BackLink:"):
-            mode, header_at = None, None
+            mode = None
         if mode in ("context", "child"):
             # Repair the old nested-heading form before resolving its outer link.
             ln = re.sub(r"\[([^\[\]\n]*#)\[([^\[\]\n]+)\]\([^)\n]+\)\]\(([^)\n]+)\)",
@@ -1718,11 +1718,17 @@ def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) 
                 # A note cannot be its own Context or child. Old scan
                 # imports also incorrectly inserted the navigation index.
                 continue
+            # Deduplicate the same generated link, preserving distinct anchors.
+            match = re.search(r"\]\(([^)]+)\)", ln)
+            key = (match.group(1) if match else ln).strip()
+            if key in seen[mode]:
+                continue
+            seen[mode].add(key)
         out.append(ln)
-    # Drop a now-empty Context header; leave non-generated sections intact.
+    # Drop empty Context and ChildBranch headers without touching unrelated text.
     cleaned: list[str] = []
     for i, ln in enumerate(out):
-        if ln.strip() in (CONTEXT_HEAD, "Context:", "### Parent"):
+        if ln.strip() in (CONTEXT_HEAD, "Context:", "### Parent", "ChildBranch:", "### ChildBranch"):
             j = i + 1
             while j < len(out) and not out[j].strip():
                 j += 1
