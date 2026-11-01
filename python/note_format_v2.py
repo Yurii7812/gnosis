@@ -2296,6 +2296,46 @@ def _editor_has_unsaved_changes(path: Path) -> bool:
     return False
 
 
+def _restore_paper_index_parentbranch(notes: dict[Path, dict]) -> None:
+    """Repair the generated paper group's missing parent during an ordinary UpdateMD sync.
+
+    paper_pkm.regen() creates this explicit branch, but UpdateMD runs simple_sync()
+    alone.  A legacy group then keeps showing the paper top under BackLink:
+    forever.  Only repair a group actually listed in the top note's BranchGroup;
+    never infer parentage from a shared title or overwrite a declared parent.
+    """
+    tops = [
+        p for p, n in notes.items()
+        if n["title"] == "Paper-Zettelkasten-Index"
+        and p.name != "index.md"
+        and not _GROUP_ATTR_RE.search("\n".join(n["fm"]))
+    ]
+    if len(tops) != 1:
+        return
+    top = tops[0]
+    branch_links, _, has_branch_group = _take_branch_group_block(notes[top]["body"])
+    if not has_branch_group:
+        return
+    for _label, target in _links_from(branch_links):
+        raw = target.split("#", 1)[0]
+        if not raw.lower().endswith(".md") or "://" in raw:
+            continue
+        for candidate in (raw, unquote(raw)):
+            try:
+                child_path = (top.parent / candidate).resolve()
+            except (OSError, ValueError):
+                continue
+            child = notes.get(child_path)
+            if child is None:
+                continue
+            if (re.fullmatch(r"Paper-Zettelkasten-Index(?:-[A-Z]{1,4})?", child["title"])
+                    and _GROUP_ATTR_RE.search("\n".join(child["fm"]))
+                    and not any(ln.strip() for ln in child.get("pbranch", []))
+                    and not _editor_has_unsaved_changes(child_path)):
+                child["pbranch"] = [f"[{notes[top]['title']}]({_rel(child_path.parent, top)})"]
+            break
+
+
 # =============================================================================
 # 【現役エンジン】 simple_sync 〜
 #   CLI の update / update_one / new / retitle_links が呼ぶのはこちら。
@@ -2341,6 +2381,8 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     # 削除（ゴミ箱移動を含む）されたフォルゲゼッテル/トピックノートの画像も退避（2026-10-09）
     _trash_zk_note_images(root, cache, set(keys.values()),
                           [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
+    # UpdateMD must repair legacy paper parent branches even without paper_pkm.regen().
+    _restore_paper_index_parentbranch(notes)
     # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
     for cp, cn in notes.items():
         for _d, tg in _links_from(cn.get("ctx") or []):
