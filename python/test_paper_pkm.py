@@ -963,7 +963,8 @@ def test_scan_self_context_and_child_cleanup() -> None:
         else:
             body.insert(at, f"[PA-3b]({n3b.name})")
         pp.write_note(n3b, fm, body)
-        pp.regen(root)
+        pp.regen(root, do_sync=False)
+        index_before_sync = number_index.read_text(encoding="utf-8")
         nf.simple_sync(root)
         t1 = n3b1.read_text(encoding="utf-8")
         t0 = n3b.read_text(encoding="utf-8")
@@ -980,7 +981,7 @@ def test_scan_self_context_and_child_cleanup() -> None:
         check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
               "旧スキャンの番号IndexへのChildBranchを消す")
         check("ParentBranch:\n[Folgezettel-Index](" in idx3_text,
-              "番号Indexの親はFolgezettel-Indexへ統一される: " + repr(idx3_text))
+              "番号Indexの親はFolgezettel-Indexへ統一される: before_sync=" + repr(index_before_sync) + " after_sync=" + repr(idx3_text))
         snap = (t0, t1)
         pp.regen(root)
         nf.simple_sync(root)
