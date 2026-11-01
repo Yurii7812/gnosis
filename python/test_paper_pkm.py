@@ -516,11 +516,13 @@ def test_diary_register_and_keyword() -> None:
         fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check(fi.count(f"[日記]({top.name})") == 1 and "[diary](" not in fi, f"Folgezettel-Index に 日記 が 1 つ並ぶ: {fi}")
         body = fi.split("---\n", 2)[2].strip("\n").split("\n")
-        g_at = body.index("Group:")
-        rest = body[g_at + 1:]
+        g_at = body.index("Group:") if "Group:" in body else None
+        check(g_at is not None, "Folgezettel-Index の Group が保持される: hub=" + fi
+              + " paper-group=" + idx.read_text(encoding="utf-8"))
+        rest = body[g_at + 1:] if g_at is not None else body
         while rest and rest[0].startswith("["):
             rest = rest[1:]
-        first_link = next(ln for ln in rest if ln.startswith("["))
+        first_link = next((ln for ln in rest if ln.startswith("[")), "")
         check(first_link.startswith("[日記]("), f"日記は Folgezettel-Index の一番上: {first_link}")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         check(f"({top.name})" in index_text, "Index の「日記」は紙の日記の一番上を指す")
