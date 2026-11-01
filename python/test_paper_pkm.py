@@ -78,8 +78,8 @@ def test_parse_keyword_line() -> None:
                 "ids": ["1", "1a10b", "3"]}, "カンマ区切り")
     e = pp.parse_keyword_line("キーワード: 1 2a")
     check(e is not None and e["ids"] == ["1", "2a"], "空白区切り")
-    check(pp.parse_keyword_line("オザーク(ドラマ): 2") is None,
-          "括弧付きの行は廃止（紛らわしいため扱わない）")
+    check(pp.parse_keyword_line("オザーク(ドラマ): 2") == {"key": "オザーク(ドラマ)", "display": "オザーク(ドラマ)", "ids": ["2"]},
+          "括弧付きのキーワードも解析する")
     check(pp.parse_keyword_line("キーワード: フォルゲゼッテル") is None,
           "ID でない値は行として扱わない")
     check(pp.parse_keyword_line("ただの文章") is None, "普通の文は None")
@@ -89,6 +89,27 @@ def test_parse_keyword_line() -> None:
     check(pp.parse_keyword_line("空(仏教): 1") == {"key": "空(仏教)", "display": "空(仏教)", "ids": ["1"]},
           "キーワード名に括弧があっても読み取る")
     check(pp.parse_keyword_line("バナナ: 1A10B") is not None, "大文字は正規化して受ける")
+
+
+def test_parenthesized_keyword_in_paper_index() -> None:
+    print("Index-write のキーワードを括弧つきも含めてすべて Paper-Zettelkasten-Index に掲載する")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        main_index = pp.create_paper_index(root)
+        pp.move_images(root, root, _add_images(root, ["1", "2", "3", "4"]))
+        index_write = T(root, "Index-write")
+        fm, body = pp.read_note(index_write)
+        lines = [
+            "単発: 4", "空(仏教): 1", "中論: 1", "超瞑想法: 2", "PKM: 3",
+        ]
+        pp.write_note(index_write, fm, ["# Index-write", "", *lines])
+        pp.regen(root)
+        index_body = main_index.read_text(encoding="utf-8")
+        for keyword in ("単発", "空(仏教)", "中論", "超瞑想法", "PKM"):
+            check(f"[{keyword}](" in index_body, f"キーワード {keyword!r} がすべて索引に載る")
+        before = main_index.read_text(encoding="utf-8")
+        pp.regen(root)
+        check(main_index.read_text(encoding="utf-8") == before, "キーワードリンクは再生成しても重複しない")
 
 
 def test_keyword_reading() -> None:
