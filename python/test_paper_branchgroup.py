@@ -66,9 +66,11 @@ with tempfile.TemporaryDirectory() as d:
     check(len(b) == 1 and "[PA-1-仏教](" in b[0] and not b[0].startswith(" "), f"ID ノート 1 の BranchGroup: にトピック PA-1-仏教: {b}")
     check("BranchGroup:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には BranchGroup: を作らない")
     ls = lines_of(n1)
-    check(ls.index("BranchGroup:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "BranchGroup: は H1 の直後（空行 1 つ挟む）")
+    check(ls.index("FolgezettelIndex:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "FolgezettelIndex: は H1 の直後（空行 1 つ挟む）")
+    check(ls[ls.index("BranchGroup:") - 1].startswith("[All]("), "FolgezettelIndex の All と BranchGroup の間には空行が無い")
     topic = notes["PA-1-仏教"].read_text(encoding="utf-8")
-    check("1-Index" not in topic and "folgezettel-Index-1" in topic, "トピックノートの Context は folgezettel-Index-1 だけ")
+    check("attribute: group" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
+          "トピックノートはグループ、索引Contextの自動追加は無い")
 
     # 階層: 四念処 は 仏教 の下
     moved2, errors2 = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "PA-1-仏教"),
