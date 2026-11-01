@@ -113,14 +113,14 @@ call s:keys('e')
 call s:ok('e → c → q: 置き場所の選択に戻り（そこで Esc）、\l は続く。何も書き換わらない', s:st().pick ==# 'link' && &filetype ==# 'gnosis-mandala' && s:file('src.md') !~# 'tgt.md' && s:file('tgt.md') !~# 'src.md', string([s:st().pick, &filetype]))
 call s:keys('q')
 
-" ---- e → c → h: c の置き場所も右のノートで選ぶ
+" ---- e → x → c → h: 方向を B→A に切り替えると、B の Context に A を入れて A にリンクを書く
 call s:start('^節Aの本文')
-let g:gnosis_test_keys = ['c', 'h']
+let g:gnosis_test_keys = ['x', 'c', 'h']
 call s:keys('e')
-call s:ok('e → c → h: 右の元のノートで場所を選ぶモード', has_key(s:st(), 'place'), string(get(s:st(), 'place', {})))
+call s:ok('e → x → c → h: 右の元のノートで場所を選ぶモード', has_key(s:st(), 'place'), string(get(s:st(), 'place', {})))
 call cursor(search('^最初の行', 'nw'), 1)
 call gnosis#mview#place_decide()
-call s:ok('c → h: Enter で、元のノートにリンクが入り、相手の Context に元のノートが入る', s:file('src.md') =~# '\[相手\](tgt.md)' && s:file('tgt.md') =~# 'src.md', s:file('src.md') . ' // ' . s:file('tgt.md'))
+call s:ok('x → c → h: Enter で、元のノートにリンクが入り、相手の Context に元のノートが入る', s:file('src.md') =~# '\[相手\](tgt.md)' && s:file('tgt.md') =~# 'src.md', s:file('src.md') . ' // ' . s:file('tgt.md'))
 
 " ---- 選ぶモードで s / x / m をかけて q: かけたものだけやめる（選ぶモードは残る）
 call s:start('^節Aの本文')
