@@ -15275,7 +15275,7 @@ function! gnosis#insert_prompt_lines(has_t, has_g, ...) abort
 endfunction
 
 " ---- \l の「何をする？」画面（2026-10-26）---------------------------------------------------
-" 開いているノート A と、選んだノート B の題を見せ、A / B の記号で説明する。x で向きを入れ替える（B に A のリンクを書く）。
+" \l を実行したノートが A、選んだノートが B。x は書き込み方向のみ切り替える。
 function! s:trunc(str, width) abort
   if strdisplaywidth(a:str) <= a:width
     return a:str
@@ -15310,8 +15310,10 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   let [l:R, l:I] = a:swap ? ['B', 'A'] : ['A', 'B']
   let l:t = {'A': l:ta, 'B': l:tb}
   let l:w = max([20, a:width - 12])
-  let l:head = s:tr2('%s に %s のリンクを書く', l:R, l:I)
-  let l:out = [' A = ' . s:trunc(l:ta, l:w), ' B = ' . s:trunc(l:tb, l:w), '', ' ' . l:head,
+  " 幅が環境によって異なる矢印の前後に桁合わせの空白を置かない。
+  " Vim の popup は strdisplaywidth() に基づいて表示幅を計算する。
+  let l:direction = l:R . '→' . l:I
+  let l:out = [' A = ' . s:trunc(l:ta, l:w), ' B = ' . s:trunc(l:tb, l:w), '', ' ' . gnosis#i18n#tr('リンク') . ': ' . l:direction,
         \ '   Enter  ' . gnosis#i18n#tr('本文の最後に'),
         \ '   i      ' . gnosis#i18n#tr('カーソルの文字のすぐ後ろに'),
         \ '   h      ' . gnosis#i18n#tr('カーソルのある行の下に')]
@@ -15325,7 +15327,7 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
     call add(l:out, '   e      ' . gnosis#i18n#tr('右のノートを編集してから選ぶ（\\l でこのメニューに戻る）'))
   endif
   call add(l:out, '')
-  call add(l:out, ' ' . l:head . ' (' . gnosis#i18n#tr('関係') . ')')
+  call add(l:out, ' ' . gnosis#i18n#tr('関係') . ': ' . l:direction)
   call add(l:out, '   p      ' . gnosis#i18n#tr('%s を %s の親にする', l:I, l:R))
   call add(l:out, '   b      ' . gnosis#i18n#tr('%s を %s の子にする', l:I, l:R))
   call add(l:out, '   c      ' . s:tr2('%s の Context に %s を入れる', l:R, l:I))
@@ -15339,7 +15341,7 @@ function! s:menu_lines(links, has_t, can_g, can_m, single, swap, width) abort
   endif
   call add(l:out, '')
   if a:single
-    call add(l:out, '   x      ' . s:tr2('切り替える（%s に %s のリンクを書く）', l:I, l:R))
+    call add(l:out, '   x      ' . (gnosis#i18n#lang() ==# 'en' ? 'Switch' : '切り替える') . ' (' . l:I . '→' . l:R . ')')
   endif
   call add(l:out, '   q      ' . gnosis#i18n#tr('やめる'))
   return l:out
@@ -15352,9 +15354,8 @@ function! s:place_menu(links, has_t, can_g, can_m, single, swap) abort
     echo join(map(copy(l:lines), 'trim(v:val)'), ' / ')
     return 0
   endif
-  let [l:ta, l:tb] = s:menu_titles(a:links)
-  let [l:R, l:I] = a:swap ? [l:tb, l:ta] : [l:ta, l:tb]
-  let l:title = ' ' . s:trunc(s:tr2('%s に %s のリンクを書く', '[' . l:R . ']', '[' . l:I . ']'), l:width - 6) . ' '
+  " タイトルにも A/B の方向だけを表示する。ノート名は本文で別に表示済み。
+  let l:title = ' ' . gnosis#i18n#tr('リンク') . ': ' . (a:swap ? 'B→A' : 'A→B') . ' '
   let l:id = popup_create(l:lines, {'title': l:title, 'pos': 'center', 'border': [], 'padding': [1, 3, 1, 2],
         \ 'minwidth': min([l:width, 72]), 'maxwidth': l:width, 'zindex': 200})
   redraw
