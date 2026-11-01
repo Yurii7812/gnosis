@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as d:
     check("BranchGroup:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には BranchGroup: を作らない")
     ls = lines_of(n1)
     check(ls.index("FolgezettelIndex:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "FolgezettelIndex: は H1 の直後（空行 1 つ挟む）")
-    check(ls[ls.index("BranchGroup:") - 1].startswith("[All]("), "FolgezettelIndex の All と BranchGroup の間には空行が無い")
+    check(ls[ls.index("BranchGroup:") - 1].startswith("[All#1]("), "FolgezettelIndex の All#番号 と BranchGroup の間には空行が無い")
     topic = notes["PA-1-仏教"].read_text(encoding="utf-8")
     check("attribute: group" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
           "トピックノートはグループ、索引Contextの自動追加は無い")
