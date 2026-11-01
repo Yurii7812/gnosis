@@ -302,6 +302,47 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
               "再生成を繰り返してもID、ParentBranch、all-number先頭順が変わらない")
 
 
+def test_update_md_restores_legacy_paper_parentbranch_without_regen() -> None:
+    print("UpdateMD だけで紙PKMグループの古い BackLink を ParentBranch に修復する")
+    import note_format_v2 as nf
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        pp.create_paper_index(root)
+        group = pp.find_paper_index(root)
+        top = pp.find_paper_top(root)
+        top_link = f"[Paper-Zettelkasten-Index]({top.name})"
+        initial = group.read_text(encoding="utf-8")
+        check(f"ParentBranch:\n{top_link}" in initial, "既存の正しい親子関係を用意")
+        # The exact legacy shape: parent missing, top note appears under BackLink.
+        broken = initial.replace(f"ParentBranch:\n{top_link}\n", "")
+        broken = broken.rstrip("\n") + f"\n\nBackLink:\n{top_link}\n"
+        group.write_text(broken, encoding="utf-8")
+        nf.simple_sync(root)  # \ua / UpdateMD, NOT paper_pkm.regen()
+        actual = group.read_text(encoding="utf-8")
+        check(f"ParentBranch:\n{top_link}" in actual,
+              "通常の UpdateMD が欠落した ParentBranch を復元する")
+        check("BackLink:\n" + top_link not in actual,
+              "同じ親を BackLink として重複表示しない")
+        check(_section_links(top.read_text(encoding="utf-8"), "BranchGroup:") == [group.name]
+              and not _section_links(top.read_text(encoding="utf-8"), "ChildBranch:"),
+              "頂点の BranchGroup は保ち、ChildBranch に重複させない")
+        nf.simple_sync(root)
+        check(actual == group.read_text(encoding="utf-8"),
+              "2 回目の UpdateMD でも親子関係と表示が安定する")
+
+        # Never override a manually declared different parent.
+        other = root / "unrelated_parent.md"
+        other.write_text("---\ntime: 2026-10-01 10:00:00\n---\n\n# Other Parent\n",
+                         encoding="utf-8")
+        text = group.read_text(encoding="utf-8")
+        text = text.replace(f"ParentBranch:\n{top_link}",
+                            f"ParentBranch:\n[Other Parent]({other.name})")
+        group.write_text(text, encoding="utf-8")
+        nf.simple_sync(root)
+        check(f"ParentBranch:\n[Other Parent]({other.name})" in group.read_text(encoding="utf-8"),
+              "明示的な別の親は自動修正で上書きしない")
+
+
 def test_topic_index() -> None:
     print("トピック別Index: 1-Index グループは作らず、ID ノート 1 の BranchGroup: に 1-仏教 を入れる")
     with tempfile.TemporaryDirectory() as d:
