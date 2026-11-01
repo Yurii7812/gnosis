@@ -2086,6 +2086,9 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         _remove_relation_to(child_path, ("Context:", "### Context", "### Parent"), folge_index)
         if child_id != "all-number" and child_id in folge:
             _remove_relation_to(child_path, ("ParentBranch:", "### ParentBranch"), folge[child_id])
+            # Remove the reciprocal legacy edge from the scanned root note,
+            # otherwise it continues to show an index as its child.
+            _remove_relation_to(folge[child_id], ("ChildBranch:", "### ChildBranch"), child_path)
         msg = _ensure_branch(root, folge_index, child_path)
         if msg:
             added_report.append(msg)
