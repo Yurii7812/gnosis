@@ -1470,7 +1470,7 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
                             id_index_paths: dict[str, Path], topics: Optional[dict] = None) -> None:
     """Write per-root number indexes and a combined all-number index.
 
-    All index pages are ordinary notes (not attribute: group). Topic image
+    Number-specific indexes are groups, while the Folgezettel-Index hub is an ordinary note. Topic image
     previews are placed immediately before the corresponding numbered note,
     only inside the generated Folgezettel index views.
     """
@@ -1482,9 +1482,9 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
         path = folge_index_path(root, fid)
         display = folge_index_display(fid)
         if not path.is_file():
-            write_note(path, [_time_line(), f"title: {display}"], [])
+            write_note(path, [_time_line(), f"title: {display}", "attribute: group"], [])
         fm_fi, old_fi_body = read_note(path)
-        fm_fi = _fm_title_attr(fm_fi, display, group=False)
+        fm_fi = _fm_title_attr(fm_fi, display, group=True)
         inner = [f"# {display}", ""]
         for member in members:
             inner.append("## " + markdown_link(member, folge[member], path.parent))
@@ -1498,8 +1498,6 @@ def write_folge_index_notes(root: Path, folge: dict[str, Path],
                     inner.append(f"![]({_rel(path.parent, img)})")
             inner.append("")
         id_index = (id_index_paths.get(fid) or find_id_index(root, fid)) if fid != "all-number" else None
-        inner += [CONTEXT_HEAD,
-                  markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), path.parent)]
         body = merge_note_body(old_fi_body, inner)
         body = _place_topic_lines(body, path.parent, members, folge, topics, id_index)
         body = _place_topic_images(body, path.parent, members, folge, topics)
@@ -1718,6 +1716,29 @@ def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) 
                 continue
         cleaned.append(ln)
     return cleaned
+
+
+def _remove_relation_to(path: Path, headers: tuple[str, ...], target: Path) -> None:
+    """指定された関係ブロックにある過去のリンクだけを除く。他のリンクは保持する。"""
+    fm, body = read_note(path)
+    dest = os.path.normpath(str(target))
+    out: list[str] = []
+    section = False
+    changed = False
+    for line in body:
+        stripped = line.strip()
+        if stripped in headers:
+            section = True
+            out.append(line)
+            continue
+        if stripped in SECTION_HEADS or stripped in ("Group:", "ParentBranch:", "Context:", "BranchGroup:", "Related:", "BackLink:"):
+            section = False
+        if section and _IS_LINK_LINE.match(line) and _link_norm(path.parent, line) == dest:
+            changed = True
+            continue
+        out.append(line)
+    if changed:
+        write_note(path, fm, out)
 
 
 def _sync_link_block(body: list[str], base: Path, strip_targets: set[str],
@@ -2037,8 +2058,17 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
             if new_body != body_t:
                 write_note(tpath, fm_t, new_body)
 
-    # --- 番号専用ノートと全番号一覧 ----------------------------------------
+    # --- 番号別グループと全番号一覧。Folgezettel-Index は全グループの親。---
     write_folge_index_notes(root, folge, id_index_paths, topics)
+    for child_id in ["all-number", *top_level_ids(folge)]:
+        child_path = folge_index_path(root, child_id)
+        # 旧版で生成した Context と誤った ParentBranch は削除し、明示的な親子関係に置き換える。
+        _remove_relation_to(child_path, ("Context:", "### Context", "### Parent"), folge_index)
+        if child_id != "all-number" and child_id in folge:
+            _remove_relation_to(child_path, ("ParentBranch:", "### ParentBranch"), folge[child_id])
+        msg = _ensure_branch(root, folge_index, child_path)
+        if msg:
+            added_report.append(msg)
 
     # --- スキャンノートの本文と Context -------------------------------------
     for fid, note_path in folge.items():
