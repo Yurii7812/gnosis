@@ -980,7 +980,7 @@ def test_scan_self_context_and_child_cleanup() -> None:
         check(old_index_link not in root3_text.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
               "旧スキャンの番号IndexへのChildBranchを消す")
         check("ParentBranch:\n[Folgezettel-Index](" in idx3_text,
-              "番号Indexの親はFolgezettel-Indexへ統一される")
+              "番号Indexの親はFolgezettel-Indexへ統一される: " + repr(idx3_text))
         snap = (t0, t1)
         pp.regen(root)
         nf.simple_sync(root)
