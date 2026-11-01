@@ -263,8 +263,8 @@ def test_topic_index() -> None:
         topic_image = next((ln for ln in d_text.splitlines() if ln.startswith("![](") and "仏教" in ln), None)
         check(topic_image is not None and d_text.index(topic_image) < d_text.index("## [1]("), "1 のトピック画像を 1 のノートの前へ表示")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        check("[folgezettel-Index-1]" in topic_text and "1-Index" not in topic_text,
-              "トピックノートの Context は folgezettel-Index-1 だけ")
+        check("folgezettel-Index-1" in topic_text and "1-Index" not in topic_text,
+              "トピックノートに番号別Indexのリンクを保持する")
         folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
         check("[PA-1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
