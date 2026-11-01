@@ -191,8 +191,10 @@ def insert_link(text: str, mark: str, link_line: str) -> str:
     secs = _section_starts(lines)
     # 旧形式の見出し（### ChildBranch など）の節があれば、それに足す（同じ節を新旧 2 つに分けない）
     mine = [i for i, m in secs if nf.LEGACY_TO_NEW_MARK.get(m, m) == mark]
-    if mark == PB and not mine:
-        # ParentBranch: は本文の上の先頭のブロック（H1 の直後。BranchGroup: / Group: より下、Context: より上）
+    if mark == PB and (not mine or any(m == PB for _i, m in secs)):
+        # ParentBranch: は先頭ブロックであり、空の見出しがあっても
+        # リンクを本文末尾へ送らず、必ず見出しの直下へ挿入する。
+        # 旧 ### ParentBranch しかない場合は従来どおり旧節に追加する。
         return _insert_top_block_link(lines, PB, link_line) + "\n"
     if mine:
         start = mine[0]
