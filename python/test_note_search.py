@@ -102,14 +102,14 @@ class UnifiedSearch(unittest.TestCase):
         self.assertNotIn('unregistered', {name for _, name, _ in entries})
         self.assertIn('registered alias', {name for _, name, _ in entries})
 
-    def test_cli_labels_no_switch_modes(self):
+    def test_cli_square_markers_no_visible_labels(self):
         def run(*args):
             return subprocess.check_output(
                 [sys.executable, ns.__file__, '--lang', 'ja', *args], text=True)
-        self.assertIn('\t' + ns.colored_kind('root-index', 'ja'), run(str(self.root), 'ハーブ'))
-        self.assertIn('\t' + ns.colored_kind('index', 'ja'), run(str(self.root), '別の呼び名'))
-        self.assertIn('\t' + ns.colored_kind('group', 'ja'), run(str(self.root), 'Index'))
-        self.assertIn('\t' + ns.colored_kind('note', 'ja'), run(str(self.root), 'Needle'))
+        self.assertIn('\troot-index\t' + ns.colored_marker('root-index'), run(str(self.root), 'ハーブ'))
+        self.assertIn('\tindex\t' + ns.colored_marker('index'), run(str(self.root), '別の呼び名'))
+        self.assertIn('\tgroup\t' + ns.colored_marker('group'), run(str(self.root), 'Index'))
+        self.assertIn('\tnote\t' + ns.colored_marker('note'), run(str(self.root), 'Needle'))
         self.assertEqual(run(str(self.root), 'absent-query'), '')
         self.assertIn('index.md', run(str(self.root)))
 
@@ -125,23 +125,24 @@ class UnifiedSearch(unittest.TestCase):
                              '[' + ns.KIND_LABELS['ja'][kind] + ']')
         out = subprocess.check_output(
             [sys.executable, ns.__file__, '--lang', 'ja', str(self.root), 'ハーブ'], text=True)
-        self.assertIn('\t' + ns.colored_kind('root-index', 'ja'), out)
-        self.assertIn('\t' + ns.colored_kind('note', 'ja'), out)
+        self.assertIn('\troot-index\t' + ns.colored_marker('root-index'), out)
+        self.assertIn('\tnote\t' + ns.colored_marker('note'), out)
 
-    def test_only_link_alias_and_title_or_body(self):
     def test_colored_marker_is_leftmost_display_field(self):
         import re
         for kind in ('root-index', 'index', 'group', 'note'):
             marker = ns.colored_marker(kind)
             self.assertTrue(marker.startswith(ns.KIND_ANSI[kind]))
-            self.assertEqual(re.sub(r'\x1b\[[0-9;]*m', '', marker), '●')
+            self.assertEqual(re.sub(r'\x1b\[[0-9;]*m', '', marker), '■')
         result = subprocess.check_output(
             [sys.executable, ns.__file__, '--lang', 'ja', str(self.root), 'ハーブ'], text=True)
         rows = result.splitlines()
         self.assertTrue(all(len(row.split('\t')) == 5 for row in rows))
         self.assertTrue(any(row.split('\t')[-1] == ns.colored_marker('root-index') for row in rows))
+        self.assertTrue(all('[' + ns.KIND_LABELS['ja'][kind] + ']' not in row
+                            for row in rows for kind in ns.KIND_ANSI))
 
-
+    def test_only_link_alias_and_title_or_body(self):
         only = {str((self.root / 'b.md').resolve()): 'Local name'}
         rows = ns.search_rows(str(self.root), 'Local name', only=only)
         self.assertEqual(len(rows), 1)
