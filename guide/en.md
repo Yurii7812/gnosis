@@ -143,7 +143,7 @@ When the shape of the tree changes (you change a parent, delete a note and so on
 - `zr` / `zR` … change the title (from empty / editing the current one)
 - `zl` / `zL` … change a link's display name (from empty / editing the current one)
 - `zo` … choose a heading (outline) of the .md link under the cursor and add `#slug` to the link (the first item "(no heading)" removes it; the title and Context/Group/Related/BackLink are not listed)
-- `zy` / `zY` … change the **reading (yomi)** of the **current note** (`zy`=from empty / `zY`=keep the current one; with `zY`, delete everything and press Enter to remove it; Esc cancels). If `yomi:` has several display names, choose one by number
+- `zy` / `zY` … edit the yomi of a note title or an **index entry's display name**. On an Index/group, entries in that index are available; on an ordinary note, every registered index alias pointing to that note is available, including names without a saved reading. Multiple names appear in an arrow-key/Enter popup (Esc cancels). Index-write's handwritten keywords are also editable, and their readings determine paper-index ordering. An index alias reading is saved on its destination note, while an Index-write keyword reading belongs to Index-write. `zy` starts blank; `zY` preloads the saved reading or its guess. Clearing `zY` and pressing Enter deletes it.
 - `zd` … update the display names of child links to the targets' titles
 - `mp` … change the YAML `filetype` ・ `yn` … yank the current file name ・ `\y` … copy only the title and body (`# title` and the body; YAML and the relation blocks — `ParentBranch:` etc. and `ChildBranch:` / `BackLink:` etc. — are left out, and links to notes become their display names; URL links stay as they are)
 
