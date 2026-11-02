@@ -296,6 +296,21 @@ def test_cli_keyword_lines() -> None:
     ), "CLI がキーワード行だけをよみ順に（front matter は不変）")
 
 
+def test_cli_keyword_shorthand_and_merging() -> None:
+    print("sort_yomi CLI: コロンなし・全角スペース・重複行を正規化")
+    data = "# Index-write\n\nあ　1\nあ 2,3\nあ: 3\n"
+    buf = io.StringIO()
+    old_stdin = sys.stdin
+    sys.stdin = io.StringIO(data)
+    try:
+        with contextlib.redirect_stdout(buf):
+            rc = sort_yomi.main(["sort", "--base", ".", "--keyword-lines", "--dry-run"])
+    finally:
+        sys.stdin = old_stdin
+    result = buf.getvalue()
+    check(rc == 0 and result.count("あ 1,2,3") == 1, "重複を1行にまとめ、全角スペースを半角にする")
+    check("あ　" not in result and "あ: 3" not in result, "変換前の重複行は残らない")
+
 def test_used_and_prune() -> None:
     print("sync 掃除: 使われていない表示名の yomi を落とす")
     notes = {
