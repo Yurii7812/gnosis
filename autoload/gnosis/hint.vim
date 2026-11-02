@@ -173,7 +173,7 @@ function! s:cmdline_items() abort
   endif
   let l:mode = get(gnosis#listnav#state(), 'mode', 'links')
   if l:mode ==# 'search'
-    return ['Tab:切替', 's:検索語', 'S:範囲', 'x:絞込', 'H:強調', 'n/N:次前',
+    return ['Tab:切替', 's:検索語', 'x:絞込', 'H:強調', 'n/N:次前',
           \ 'm:メニュー', '?:ヘルプ', 'w:順位', 'f:番号']
   elseif l:mode ==# 'similar'
     return ['Tab:切替', 'r:類似', 'x:絞込', 'w:順位', 'H:強調',
