@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as _dt
+import functools
 import hashlib
 import json
 import os
@@ -535,8 +536,31 @@ def above_context_end(lines: list[str], start: int = 0) -> int | None:
     return end
 
 
+# 解析のうち、入力（行の並び）だけで結果が決まるものは、同じ入力をもう一度解かないように覚える。
+# 出力は変えない（呼び出し側は結果を書き換えない／コピーを受け取る）。同期の開始で捨てる。
+_MEMO_LIMIT = 200_000
+_FENCED_MEMO: dict = {}
+_LINKS_MEMO: dict = {}
+
+
+def _memo_clear() -> None:
+    _FENCED_MEMO.clear()
+    _LINKS_MEMO.clear()
+
+
 def _fenced(lines: list[str]) -> list[bool]:
     """各行が ``` / ~~~ で囲んだコードブロック（囲みの行を含む）の中か。"""
+    key = tuple(lines)
+    hit = _FENCED_MEMO.get(key)
+    if hit is None:
+        hit = _fenced_uncached(lines)
+        if len(_FENCED_MEMO) >= _MEMO_LIMIT:
+            _FENCED_MEMO.clear()
+        _FENCED_MEMO[key] = hit
+    return list(hit)
+
+
+def _fenced_uncached(lines: list[str]) -> tuple:
     out: list[bool] = []
     mark = None
     for ln in lines:
@@ -551,12 +575,13 @@ def _fenced(lines: list[str]) -> list[bool]:
             out.append(True)
             if m and m.group(1)[0] == mark[0] and ln.strip().strip(mark[0]) == "":
                 mark = None
-    return out
+    return tuple(out)
 
 
-def _code_spans(ln: str) -> list[tuple[int, int]]:
+@functools.lru_cache(maxsize=_MEMO_LIMIT)
+def _code_spans(ln: str) -> tuple[tuple[int, int], ...]:
     """行の中の `インラインコード` の範囲。"""
-    return [m.span() for m in _INLINE_CODE_RE.finditer(ln)]
+    return tuple(m.span() for m in _INLINE_CODE_RE.finditer(ln))
 
 
 def _link_iter(rx, ln: str):
@@ -1454,6 +1479,17 @@ def _link_target(link_line: str) -> str:
 
 
 def _links_from(lines: list[str]) -> list[tuple[str, str]]:
+    key = tuple(lines)
+    hit = _LINKS_MEMO.get(key)
+    if hit is None:
+        hit = tuple(_links_from_uncached(lines))
+        if len(_LINKS_MEMO) >= _MEMO_LIMIT:
+            _LINKS_MEMO.clear()
+        _LINKS_MEMO[key] = hit
+    return list(hit)
+
+
+def _links_from_uncached(lines: list[str]) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for ln, fz in zip(lines, _fenced(lines)):
         if fz:
@@ -1935,6 +1971,16 @@ def _tidy_blanks(lines: list[str]) -> list[str]:
     return out
 
 
+def _near(notes_norm: dict, note_path: Path, cand: str) -> Path:
+    """`(note_path.parent / cand).resolve()` と同じ結果を、正規化した文字列で先に引く。
+    notes_norm = {正規化したパス文字列: ノートのパス}（vault 内に symlink は無い前提で、res と同じ考え方）。
+    見つからなければ従来どおり resolve() する（symlink・存在しない先の扱いは変えない）。"""
+    hit = notes_norm.get(os.path.normpath(os.path.join(os.path.dirname(str(note_path)), cand)))
+    if hit is not None:
+        return hit
+    return (note_path.parent / cand).resolve()
+
+
 def _prune_dangling(lines: list[str], path: Path, resolver) -> list[str]:
     """存在しない .md へのリンクを掃除する（消えたファイルの残骸を消す）。
 
@@ -2346,6 +2392,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     （Vim）が渡す。表示名がこの旧タイトルと同じリンクだけ新タイトルへ追従させる
     （状態ファイルは持たない）。"""
     root = Path(root).resolve()
+    _memo_clear()
     # 内容が前回と同じファイルは、読み込んだテキストのハッシュ照合でパースを省く。
     # 読み込み自体は全ファイル分行う（mtime は信用しない。上記コメント参照）。
     cache = _load_parse_cache(root)
@@ -2383,12 +2430,13 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                           [(p.parent, n["title"], n["body"]) for p, n in notes.items()])
     # UpdateMD must repair legacy paper parent branches even without paper_pkm.regen().
     _restore_paper_index_parentbranch(notes)
+    notes_norm = {os.path.normpath(str(k)): k for k in notes}
     # このノートを Context にしているノート（ChildBranch: の並びで上に出す）
     for cp, cn in notes.items():
         for _d, tg in _links_from(cn.get("ctx") or []):
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
-                q = (cp.parent / cand).resolve()
+                q = _near(notes_norm, cp, cand)
                 if q in notes and q != cp:
                     notes[q].setdefault("_ctx_kids", set()).add(cp)
                     break
@@ -2396,7 +2444,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         for _d, tg in _links_from(cn.get("pbranch") or []):
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
-                q = (cp.parent / cand).resolve()
+                q = _near(notes_norm, cp, cand)
                 if q in notes and q != cp:
                     notes[q].setdefault("_pb_kids", set()).add(cp)
                     cn.setdefault("_pb_parents", set()).add(q)
@@ -2409,7 +2457,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         for _d, tg in _links_from(pn.get("cbranch") or []):
             raw = tg.split("#", 1)[0]
             for cand in (raw, unquote(raw)):
-                q = (pp.parent / cand).resolve()
+                q = _near(notes_norm, pp, cand)
                 if q in notes:
                     if pp in notes[q].get("_pb_parents", ()):
                         branch_pairs_now.add(_nid(pp, root) + "\t" + _nid(q, root))
@@ -2427,7 +2475,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
                 tgs = []
                 for _d, tg in _links_from([ln]):
                     raw = tg.split("#", 1)[0]
-                    tgs.append(next((q for q in ((pp.parent / c).resolve() for c in (raw, unquote(raw))) if q in notes), None))
+                    tgs.append(next((q for q in (_near(notes_norm, pp, c) for c in (raw, unquote(raw))) if q in notes), None))
                 if tgs and all(t is not None and t in pn["_stale_kids"] for t in tgs):
                     continue
                 keep.append(ln)
