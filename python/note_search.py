@@ -228,7 +228,10 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
         body = parsed[path]["body"]
         if nf.BRANCH_GROUP_HEAD in body:
             body = body[:body.index(nf.BRANCH_GROUP_HEAD)]
-        content = "\n".join(body)
+        # The Folgezettel ID lives in the front matter; make it searchable too.
+        fz_lines = [ln for ln in nf._split_front_matter(text.splitlines())[0]
+                    if re.match(r"\s*folgezettel\s*:", ln)]
+        content = "\n".join(fz_lines + body)
         # For --only, preserve a referring page's chosen link display name.
         candidates.append((path, label or title, title, title_line, content,
                            "group" if group else "note", ""))

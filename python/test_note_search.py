@@ -32,6 +32,16 @@ class UnifiedSearch(unittest.TestCase):
     def rows(self, query):
         return ns.search_rows(str(self.root), query)
 
+    def test_folgezettel_id_in_front_matter_is_searchable(self):
+        (self.root / 'fz1.md').write_text(
+            '---\ntime: 2026-10-20 14:11:56\nfolgezettel: "37a2l1a1a4b"\n---\n\n'
+            '# Plain one\n\nnothing here\n', encoding='utf-8')
+        (self.root / 'fz2.md').write_text(
+            '---\nfolgezettel: "37a2"\n---\n\n# Plain two\n\nnothing\n', encoding='utf-8')
+        titles = {r[4] for r in self.rows('folgezettel 37')}
+        self.assertIn('Plain one', titles)
+        self.assertIn('Plain two', titles)
+
     def test_index_entries_have_registered_membership(self):
         entries = list(ns.index_entries(dict(ns.load_notes(str(self.root)))))
         self.assertEqual({name for _, name, _ in entries},
