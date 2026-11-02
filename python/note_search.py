@@ -3,17 +3,15 @@
 
     <絶対パス> \t <タイトル（ANSI強調）> \t <最初のヒット行、表示名のみのヒットは0> \t <候補種別>
 
-- 検索は「全クエリ語がタイトルか本文にある」AND。**タイトルに当たった語数が多い順**
-  （=タイトル優先）に並べる。同じならタイトル名順。
+- 順位: 完全一致 → Index の索引（表示名だけ）→ その他の索引（表示名だけ）→ グループ（タイトルだけ）→ ノートのタイトル → ノートの本文。
+- ノート本文の一致では、索引の別名ではなくノートのタイトルを表示する。
 - クエリが空なら全ノートをタイトル順に出す。
 - 左（一覧）はタイトルだけ。右（プレビュー）は preview_highlight.py が
   クエリ語を強調し、3列目のヒット行へスクロールする。
 - fzf 側は --disabled で検索しない（検索・並び・強調はこのスクリプトが行う）。
 
-使い方: note_search.py [--mode all|index|no-index] [--mode-file FILE] [--only <paths-file>] <root> [query...]
-  --cycle next|previous … mode-file のモードを切り替えて画面の見出しを出す。
-  all は全ノートと索引の表示名、no-index は全ノート（グループを含む）だけ。
-  index はグループと、リンク先の Group: に登録元があるグループ本文のリンク表示名。宛先＋表示名で重複を除く。
+使い方: note_search.py [--only <paths-file>] [--lang ja|en] <root> [query...]
+  索引は、リンク先の Group: に登録元があるグループ本文のリンク表示名。
   --only <paths-file> … そのファイルに列挙した絶対パスだけを検索対象にする
                         （<Space>=今のノートのリンク先に絞る用）。各行は
                         `絶対パス` か `絶対パス<TAB>リンクの表示名`。表示名があれば、
@@ -115,7 +113,6 @@ def first_hit_line(lines: list[str], tokens: list[str]) -> int:
 # Reuse the note-format parser for group attributes and body/relationship boundaries.
 # Only registered group body links define index entries; a normal note's incidental links do not.
 INDEX_LINK_RE = re.compile(r"(?<!!)\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)")
-MODES = ("all", "index", "no-index")
 
 
 def is_group(path: str, text: str) -> bool:
@@ -161,99 +158,121 @@ def index_entries(notes: dict[str, str]):
                     yield known[resolved], label, source
 
 
-def search_rows(root: str, query: str, mode: str = "all", only: dict[str, str] | None = None):
-    """Shared candidate collection/search for gs and both forms of \\l.
-
-    Rows keep the existing path/title/hit-line protocol. Zero means there is no
-    hit in the destination (a name supplied by an index is not a body hit).
-    """
-    tokens = split_tokens(query)
-    groups = sq.parse(query)
-    notes = dict(load_notes(root))
-    candidates = []
-    for path, text in notes.items():
-        if only is not None and os.path.realpath(path) not in only:
-            continue
-        group = is_group(path, text)
-        if mode == "index" and not group:
-            continue
-        name = only.get(os.path.realpath(path), "") if only is not None else ""
-        candidates.append((path, name, ""))
-    if mode in ("all", "index") and only is None:
-        candidates.extend(index_entries(notes))
-    rows = []
-    seen = set()
-    for path, name, source in candidates:
-        key = (os.path.realpath(path), name or title_of(notes[path], path)[0])
-        if key in seen:
-            continue
-        seen.add(key)
-        text = notes[path]
-        title, _tline = title_of(text, path)
-        shown = name or title
-        hay = sq.normalize(name + "\n" + text)
-        nname, ntitle = sq.normalize(name), sq.normalize(title)
-        # OR で分けた組のうち、合うものの中で、名前・題に当たる語がいちばん多いものを使う（除外の語がどこかにあれば、その組は外れる）
-        best = None
-        for g in groups:
-            if any(sq.normalize(w) in hay for w in g.neg):
-                continue
-            if not all(sq.normalize(w) in hay for w in g.pos):
-                continue
-            nh = sum(sq.normalize(w) in nname for w in g.pos)
-            th = sum(sq.normalize(w) in ntitle for w in g.pos)
-            if best is None or (nh, th) > (best[0], best[1]):
-                best = (nh, th, g.pos)
-        if groups and best is None:
-            continue
-        name_hits, title_hits, gpos = best if best else (0, 0, [])
-        body_hit = any(sq.normalize(t) in sq.normalize(text) for t in gpos)
-        line = first_hit_line(text.split("\n"), gpos) if body_hit else (0 if groups else 1)
-        rows.append((-name_hits, -title_hits, shown.casefold(), path, shown, line, source))
-    rows.sort()
-    return rows
-
-
-MODE_LABELS = {
-    "ja": ("全部", "索引とグループ", "索引以外"),
-    "en": ("All", "Index names + groups", "Without index names"),
+# This is the one search policy for gs and \l. The first category is an
+# alias registered directly in the vault's index.md; the second is an alias
+# registered in another group. Aliases match *only their displayed names*.
+# Groups match only their titles. Ordinary notes match title, then actual body.
+# Exact display/title matches outrank partial matches in every category.
+KIND_LABELS = {
+    "ja": {"root-index": "Indexの索引", "index": "索引", "group": "グループ", "note": "ノート"},
+    "en": {"root-index": "Index entry", "index": "Index entry", "group": "Group", "note": "Note"},
 }
 
 
-def read_mode(path: str | None, fallback: str = "all") -> str:
-    if path:
-        try:
-            value = Path(path).read_text(encoding="utf-8").strip()
-            if value in MODES:
-                return value
-        except OSError:
-            pass
-    return fallback
+def _match_quality(display: str, words: list[str]) -> int:
+    """Smaller is better: exact > starts with > word boundary > substring."""
+    if not words:
+        return 3
+    value = sq.normalize(display).strip()
+    joined = " ".join(sq.normalize(word) for word in words)
+    if value == joined:
+        return 0
+    if value.startswith(joined):
+        return 1
+    if all(re.search(r"(?<!\w)" + re.escape(sq.normalize(w)), value) for w in words):
+        return 2
+    return 3
 
 
-def mode_header(mode: str, lang: str) -> str:
-    hint = "Ctrl+→/↓ 次・Ctrl+←/↑ 前" if lang == "ja" else "Ctrl+Right/Down next; Ctrl+Left/Up previous"
-    return MODE_LABELS[lang][MODES.index(mode)] + " | " + hint
+def search_rows(root: str, query: str, only: dict[str, str] | None = None):
+    """Return (sort-exact, sort-tier, sort-quality, path, shown, hit-line, source, kind).
+
+    Index entries never inherit a match from their destination note; an alias
+    is included only when its *own displayed name* matches. One note-body
+    hit produces one note row, displayed with the destination's title.
+    """
+    groups = sq.parse(query)
+    notes = dict(load_notes(root))
+    parsed = {path: nf._simple_parse_text(Path(path), text) for path, text in notes.items()}
+    candidates = []
+    for path, text in notes.items():
+        realpath = os.path.realpath(path)
+        if only is not None and realpath not in only:
+            continue
+        title, title_line = title_of(text, path)
+        group = is_group(path, text)
+        label = only.get(realpath, "") if only is not None else ""
+        body = parsed[path]["body"]
+        if nf.BRANCH_GROUP_HEAD in body:
+            body = body[:body.index(nf.BRANCH_GROUP_HEAD)]
+        content = "\n".join(body)
+        # For --only, preserve a referring page's chosen link display name.
+        candidates.append((path, label or title, title, title_line, content,
+                           "group" if group else "note", ""))
+    if only is None:
+        for path, label, source in index_entries(notes):
+            candidates.append((path, label, "", 0, "", "root-index"
+                               if Path(source).name.lower() == "index.md" else "index", source))
+
+    results = []
+    seen = set()
+    for path, shown, title, title_line, body, kind, source in candidates:
+        key = (os.path.realpath(path), shown, kind)
+        if key in seen:
+            continue
+        seen.add(key)
+        display = sq.normalize(shown)
+        body_hay = sq.normalize(body)
+        # The --only link-label counts as the searchable title for that picker.
+        primary = sq.normalize(shown if only is not None else title)
+        full = primary + "\n" + body_hay
+        best = None
+        best_words = []
+        for g in groups or [sq.Group()]:
+            # Negative terms always apply to the permitted search fields.
+            hay = display if kind in ("root-index", "index", "group") else full
+            if any(sq.normalize(w) in hay for w in g.neg):
+                continue
+            terms = [sq.normalize(w) for w in g.pos]
+            if not all(word in hay for word in terms):
+                continue
+            if kind == "root-index":
+                tier = 0
+            elif kind == "index":
+                tier = 1
+            elif kind == "group":
+                tier = 2
+            elif all(word in primary for word in terms):
+                tier = 3   # Every positive word can be found in the note title.
+            else:
+                tier = 4   # Content match (potentially with title terms as AND).
+            quality = _match_quality(shown, g.pos) if tier < 4 else 4
+            # The exact-match flag precedes category: "Index" must beat
+            # "Folgezettel-Index" even if the latter is an index alias.
+            candidate = (0 if quality == 0 and g.pos else 1, tier, quality)
+            if best is None or candidate < best:
+                best, best_words = candidate, g.pos
+        if best is None:
+            continue
+        if kind in ("root-index", "index"):
+            line = 0
+        elif best[1] < 4:
+            line = title_line
+        else:
+            # Preview the destination's matching content, not an index alias.
+            line = first_hit_line(notes[path].split("\n"), best_words)
+        results.append((*best, path, shown, line, source, kind))
+    results.sort(key=lambda r: (r[0], r[1], r[2], sq.normalize(r[4]), r[3]))
+    return results
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--only")
-    parser.add_argument("--mode", choices=MODES, default="all")
-    parser.add_argument("--mode-file")
-    parser.add_argument("--cycle", choices=("next", "previous"))
-    parser.add_argument("--lang", choices=MODE_LABELS, default="en")
+    parser.add_argument("--lang", choices=KIND_LABELS, default="en")
     parser.add_argument("root", nargs="?", default=".")
     parser.add_argument("query", nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    mode = read_mode(args.mode_file, args.mode)
-    if args.cycle:
-        if not args.mode_file:
-            parser.error("--cycle requires --mode-file")
-        mode = MODES[(MODES.index(mode) + (1 if args.cycle == "next" else -1)) % len(MODES)]
-        Path(args.mode_file).write_text(mode, encoding="utf-8")
-        print(mode_header(mode, args.lang))
-        return 0
     only: dict[str, str] | None = None
     if args.only:
         only = {}
@@ -263,11 +282,11 @@ def main() -> int:
                 if path_part.strip():
                     only[os.path.realpath(path_part.strip())] = name.strip()
     query = " ".join(args.query)
-    rows = search_rows(args.root, query, mode, only)
+    rows = search_rows(args.root, query, only)
     out = []
     tokens = split_tokens(query)
-    for _nh, _th, _t, path, title, line, _source in rows:
-        kind = ("索引名" if args.lang == "ja" else "index name") if _source else ""
+    for _exact, _tier, _quality, path, title, line, _source, category in rows:
+        kind = KIND_LABELS[args.lang][category]
         out.append(f"{path}\t{highlight(title.replace(chr(9), ' '), tokens)}\t{line}\t{kind}")
     sys.stdout.write("\n".join(out))
     return 0
