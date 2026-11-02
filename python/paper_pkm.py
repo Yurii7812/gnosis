@@ -224,7 +224,7 @@ def parse_keyword_line(line: str) -> Optional[dict]:
     return None
 
 
-def merge_keyword_lines(body: list[str]) -> tuple[list[str], list[dict]]:
+def merge_keyword_lines(body: list[str], yomi_note: str | Path | None = None) -> tuple[list[str], list[dict]]:
     """Merge duplicate Index-write names and ID lists, keeping other lines.
 
     For each name, preserve the first display spelling and separator style.
@@ -253,6 +253,9 @@ def merge_keyword_lines(body: list[str]) -> tuple[list[str], list[dict]]:
         separators[identity] = ": " if KEYWORD_LINE_RE.fullmatch(
             line.strip().replace("\u3000", " ")) else " "
 
+    if yomi_note is not None:
+        for entry in entries_by_name.values():
+            entry["reading"] = jy.get_yomi(yomi_note, entry["key"])
     merged_entries = sorted(entries_by_name.values(), key=keyword_sort_key)
     result = [line for i, line in enumerate(body) if i not in discarded]
     for original_position, entry in zip(positions, merged_entries, strict=False):
@@ -271,7 +274,7 @@ def keyword_reading(line: str) -> Optional[str]:
 
 
 def keyword_sort_key(entry: dict):
-    return jy.reading_key(reading_for_display(entry["key"]))
+    return jy.reading_key(entry.get("reading") or reading_for_display(entry["key"]))
 
 
 # ---------------------------------------------------------------------------
@@ -1510,7 +1513,7 @@ def _new_group_note(root: Path, display: str, reading: str, title: Optional[str]
 
 def _entry_readings(entries: list[dict]) -> dict[str, str]:
     return {
-        e["display"]: reading_for_display(e["key"]) for e in entries
+        e["display"]: (e.get("reading") or reading_for_display(e["key"])) for e in entries
     }
 
 
@@ -1996,7 +1999,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')), group=False)
         iw_fm_changed = iw_fm_new != iw_fm
         iw_fm = iw_fm_new
-        merged_body, entries = merge_keyword_lines(body)
+        merged_body, entries = merge_keyword_lines(body, yomi_note=index_write)
         if not any(_is_section_head(ln) for ln in merged_body):
             merged_body += [CONTEXT_HEAD,
                             markdown_link(index_display, index_path, root)]
