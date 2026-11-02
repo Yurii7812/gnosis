@@ -89,7 +89,42 @@ def test_parse_keyword_line() -> None:
     check(pp.parse_keyword_line("空(仏教): 1") == {"key": "空(仏教)", "display": "空(仏教)", "ids": ["1"]},
           "キーワード名に括弧があっても読み取る")
     check(pp.parse_keyword_line("バナナ: 1A10B") is not None, "大文字は正規化して受ける")
+    check(pp.parse_keyword_line("あ 2") == {"key": "あ", "display": "あ", "ids": ["2"]}, "コロンなし半角空白")
+    check(pp.parse_keyword_line("あ　2") == {"key": "あ", "display": "あ", "ids": ["2"]}, "コロンなし全角空白")
+    check(pp.parse_keyword_line("あ\t2") == {"key": "あ", "display": "あ", "ids": ["2"]}, "タブ区切り")
+    check(pp.parse_keyword_line("あ 1,2,3")["ids"] == ["1", "2", "3"], "複数番号の半角入力")
+    check(pp.parse_keyword_line("あ　１，２，３")["ids"] == ["1", "2", "3"], "全角空白・数字・カンマを正規化")
+    check(pp.parse_keyword_line("空(仏教) 1")["key"] == "空(仏教)", "括弧付きでも省略記法")
+    check(pp.parse_keyword_line("My long title 1")["key"] == "My long title", "半角空白を含む表示名")
+    check(pp.parse_keyword_line("あ　不正") is None, "番号以外なら対象外")
 
+
+def test_index_write_colon_free_merge_and_regen() -> None:
+    print("Index-write: 半角/全角空白の省略記法、重複キーワードのIDを統合")
+    sample = ["# Index-write", "", "あ　1", "別: 2", "あ 2,3", "あ: 2", "空(仏教)　3"]
+    merged, entries = pp.merge_keyword_lines(sample)
+    check("あ 1,2,3" in merged, "同名の番号を重複なく1行にマージする")
+    check(merged.count("あ 1,2,3") == 1 and not any("あ　" in x for x in merged),
+          "重複行を消し、全角スペースを半角にする")
+    check({e["key"] for e in entries} == {"あ", "別", "空(仏教)"}, "別キーワードは維持")
+    check(pp.merge_keyword_lines(merged)[0] == merged, "再変換しても変化しない")
+    with tempfile.TemporaryDirectory() as d:
+        root = _make_vault(Path(d))
+        main_index = pp.create_paper_index(root)
+        pp.move_images(root, root, _add_images(root, ["1", "2", "3"]))
+        index_write = T(root, "Index-write")
+        fm, _ = pp.read_note(index_write)
+        pp.write_note(index_write, fm, sample)
+        pp.regen(root)
+        fm_after, body_after = pp.read_note(index_write)
+        check("あ 1,2,3" in body_after and not any("あ　" in s for s in body_after),
+              "regen時に全角空白を半角へ変換し重複キーワードを統合")
+        check(len([s for s in body_after if (e := pp.parse_keyword_line(s)) and e["key"] == "あ"]) == 1,
+              "保存後もキーワードは1行だけ")
+        check("[あ](" in main_index.read_text(encoding="utf-8"), "統合したキーワードが紙Indexに載る")
+        first = index_write.read_text(encoding="utf-8")
+        pp.regen(root)
+        check(index_write.read_text(encoding="utf-8") == first, "2回目のregenでも再重複しない")
 
 def test_parenthesized_keyword_in_paper_index() -> None:
     print("Index-write のキーワードを括弧つきも含めてすべて Paper-Zettelkasten-Index に掲載する")
