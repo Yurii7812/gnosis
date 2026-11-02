@@ -609,13 +609,17 @@ def _has_image_named(n: NoteInfo, stem: str) -> bool:
 def scan_key_of(n: NoteInfo) -> Optional[tuple[str, str]]:
     """スキャンノートなら (印, 番号)。題は `PA-1a2`（印つき。画像は同じ名前か、印を除いた番号）か `1a2`（旧い形。印は ''）。
     普通のノートや判定できないものは None。"""
-    m = PREFIXED_ID_RE.match(n.title)
+    # The ID belongs in folgezettel:, not in YAML title:. A prior H1-only
+    # scan is still recognized so regeneration can assign its ID in place.
+    explicit = (fm_value(n.fm, "folgezettel") or "").strip().strip('"\x27')
+    label = explicit or n.title
+    m = PREFIXED_ID_RE.match(label)
     if m:
-        return (m.group(1), m.group(2)) if (_has_image_named(n, n.title) or _has_image_named(n, m.group(2))) else None
-    fid = normalize_id(n.title)
-    if n.title != fid or not ID_PATTERN.fullmatch(fid):
+        return (m.group(1), m.group(2)) if (_has_image_named(n, label) or _has_image_named(n, m.group(2))) else None
+    fid = normalize_id(label)
+    if label != fid or not ID_PATTERN.fullmatch(fid):
         return None
-    return ("", fid) if _has_image_named(n, n.title) else None
+    return ("", fid) if _has_image_named(n, label) else None
 
 
 def scan_id_of(n: NoteInfo) -> Optional[str]:
@@ -665,7 +669,7 @@ def scan_folgezettel_notes(root: Path, notes: Optional[list] = None, prefix: Opt
         if not k:
             continue
         if prefix is None:
-            found.setdefault(n.title, n.path)
+            found.setdefault(with_prefix(k[0], k[1]), n.path)
         elif k[0] == prefix:
             found.setdefault(k[1], n.path)
     return found
@@ -1082,7 +1086,7 @@ def register_diary_pages(
             continue
         if note_path is None:
             note_path = unique_note_path(dest, when)
-            fm = [_time_line(when), f"title: {diary_title(date)}", SCAN_SOURCE_LINE]
+            fm = [_time_line(when)]
             body = [f"# {diary_title(date)}"]
         # 画像行を、最初の関係の節の手前（無ければ末尾）に、空行を挟んで足す
         fs = _first_section(body)
@@ -1293,6 +1297,76 @@ def _write_branch_group(note_path: Path, lines: list[str]) -> None:
             pre = [""] if at else []
         body[at:at] = pre + block + [""]
     write_note(note_path, fm, body)
+
+
+TOPIC_INDEX_HEAD = "TopicIndex:"
+
+
+def _find_topic_index(body: list[str]) -> Optional[tuple[int, int]]:
+    flags = _fence_flags(body)
+    for i, ln in enumerate(body):
+        if not flags[i] and ln.strip() == TOPIC_INDEX_HEAD:
+            j = i + 1
+            while j < len(body) and _IS_LINK_LINE.match(body[j]):
+                j += 1
+            return i, j
+    return None
+
+
+def _existing_topic_index(path: Path) -> list[str]:
+    _fm, body = read_note(path)
+    span = _find_topic_index(body)
+    return body[span[0] + 1:span[1]] if span else []
+
+
+def _remove_topic_links_from_branch_group(path: Path, topic_paths: set[str]) -> None:
+    fm, body = read_note(path)
+    span = _find_branch_group(body)
+    if span is None:
+        return
+    old = body[span[0] + 1:span[1]]
+    keep = [ln for ln in old if _link_norm(path.parent, ln) not in topic_paths]
+    if len(keep) == len(old):
+        return
+    if keep:
+        body[span[0] + 1:span[1]] = keep
+    else:
+        end = span[1]
+        if end < len(body) and not body[end].strip():
+            end += 1
+        del body[span[0]:end]
+    write_note(path, fm, body)
+
+
+def _write_topic_index(path: Path, links: list[str]) -> None:
+    """Update only the dedicated TopicIndex block; never remove prose or other relations."""
+    fm, body = read_note(path)
+    span = _find_topic_index(body)
+    if span is not None:
+        end = span[1]
+        if end < len(body) and not body[end].strip():
+            end += 1
+        del body[span[0]:end]
+    if links:
+        h1 = next((i for i, ln in enumerate(body) if re.match(r"^#\s", ln)), None)
+        if h1 is None:
+            return
+        at = h1 + 1
+        # The number index navigation stays first, followed by TopicIndex.
+        if at < len(body) and not body[at].strip():
+            at += 1
+        if at < len(body) and body[at].strip() == "FolgezettelIndex:":
+            at += 1
+            while at < len(body) and _IS_LINK_LINE.match(body[at]):
+                at += 1
+        block = [TOPIC_INDEX_HEAD, *links, ""]
+        if at < len(body) and not body[at].strip():
+            at += 1
+        else:
+            block = ["", *block]
+        body[at:at] = block
+    if body != read_note(path)[1]:
+        write_note(path, fm, body)
 
 
 def topic_display(fid: str, topic: str) -> str:
@@ -2118,14 +2192,14 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     _remove_relation_to(folge_index, ("ChildBranch:", "### ChildBranch"), index_path)
     _remove_relation_to(index_path, ("ParentBranch:", "### ParentBranch"), folge_index)
 
-    # --- トピック別Index（`1-Index` グループは作らない。ID ノート `1` の BranchGroup: に `1-仏教` を入れる） ---
+    # --- TopicIndex: は紙の同番号ノート専用。BranchGroup: とは分離する。 ---
     # トピックの親子（front matter の topic_parent）は表示順のためだけ: 親を子より先に並べる。インデントは付けない。
     # 紙ノート 1 がトピックの ParentBranch（1 の ChildBranch にトピック）。Context では代用しない。
     added_report: list[str] = []
     notes = load_notes(root)
     topics = scan_topic_notes(root, notes, prefix)
     id_index_paths: dict[str, Path] = {}
-    branch_lines: dict[str, list[str]] = {}
+    topic_lines: dict[str, list[str]] = {}
 
     for fid in sorted(topics, key=natural_key):
         tlist = topics[fid]
@@ -2144,14 +2218,18 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         if owner is None:
             continue  # ID ノートが無いときは BranchGroup の置き場が無い（スキャンしたら入る）
         topic_norm = {os.path.normpath(str(path)): (disp, tp) for disp, path, tp in tlist}
-        lines = _existing_branch_group(owner)
-        # 旧形式の `1-Index` グループ（グループ本文のインデントが階層）があれば、その並びを引き継ぐ（インデントは外す）
+        lines = _existing_topic_index(owner)
+        # 以前の BranchGroup にあった TopicIndex リンクを、元の順序で引き継ぐ。
+        for ln in _existing_branch_group(owner):
+            if _link_norm(owner.parent, ln) in topic_norm:
+                lines = _branch_add_line(lines, ln, owner.parent)
+        # 旧形式の `1-Index` グループからも並びを引き継ぐ。
         legacy = find_id_index(root, fid, notes)
         if legacy is not None:
             for ln in _legacy_topic_lines(legacy, topic_norm, owner.parent):
                 lines = _branch_add_line(lines, ln, owner.parent)
         lines = _branch_add_topics(lines, owner.parent, tlist, disp_path)
-        branch_lines[fid] = lines
+        topic_lines[fid] = lines
         if legacy is not None:
             # 旧 `1-Index` を指していたリンクは ID ノートへ向け直し、旧グループはごみ箱へ（内容は BranchGroup に移した）
             _rewrite_links_to(root, legacy, owner)
@@ -2197,8 +2275,11 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         }
         fm = _update_yomi(fm, mapping)
         write_note(note_path, fm, merge_note_body(old_body, inner))
-        if fid in branch_lines:
-            _write_branch_group(note_path, branch_lines[fid])
+        # 旧 BranchGroup のトピックリンクだけを外し、通常のグループは残す。
+        _remove_topic_links_from_branch_group(
+            note_path, {os.path.normpath(str(p)) for _entries in topics.values()
+                        for _display, p, _parent in _entries})
+        _write_topic_index(note_path, topic_lines.get(fid, []))
 
     # --- Branch: 紙ID 1a の ParentBranch に 1（1 の ChildBranch に 1a）、トピックの ParentBranch に紙ノート 1 ---
     for fid in sorted(folge, key=natural_key):
@@ -2211,7 +2292,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         if fid not in folge:
             continue
         for _disp, tpath, _tp in topic_order(topics[fid]):
-            # トピックは BranchGroup に固定するグループであり、Branch の子ではない。
+            # TopicIndex は通常の Branch とも独立した、番号ノート上部の索引。
             _remove_relation_to(tpath, ("ParentBranch:", "### ParentBranch"), folge[fid])
             _remove_relation_to(folge[fid], ("ChildBranch:", "### ChildBranch"), tpath)
     # すべての ParentBranch / BranchGroup を設定した最後にナビゲーションを配置する。
