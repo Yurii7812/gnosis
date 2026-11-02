@@ -2272,6 +2272,13 @@ def _simple_render(name: str, n: dict, path: Path, parent_lines: list[str], back
     """関係の節（### Context / Group / Related / BackLink）は、中身があるものだけ書く。
     中身が空の節は見出しごと出さない（新しいノートは本文だけ）。"""
     n = _drop_yaml_title(n)
+    # Unquote simple Folgezettel IDs on write, including existing digital IDs.
+    # Quoted legacy values remain readable, but newly rendered YAML is uniform.
+    fm_unquoted = [re.sub(r"""^(\s*folgezettel\s*:\s*)['"]([A-Za-z0-9-]+)['"]\s*$""",
+                          r"\1\2", ln) for ln in n["fm"]]
+    if fm_unquoted != n["fm"]:
+        n = dict(n)
+        n["fm"] = fm_unquoted
     is_timeline = any(re.match(r"^\s*timeline\s*:\s*true\s*$", ln, re.I) for ln in n["fm"])
     moved_kids: list[str] = []
     if is_timeline:
