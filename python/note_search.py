@@ -213,7 +213,7 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
     if only is None:
         for path, label, source in index_entries(notes, parsed):
             candidates.append((path, label, "", 0, "", "root-index"
-                               if Path(source).name.lower() == "index.md" else "index", source))
+                               if Path(source).resolve() == (Path(root) / "index.md").resolve() else "index", source))
 
     results = []
     seen = set()
