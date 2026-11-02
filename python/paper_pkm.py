@@ -189,7 +189,7 @@ def reading_for_display(key: str) -> str:
 
 def _keyword_tokens(raw_ids: str) -> Optional[list[str]]:
     """ASCII/full-width digits, comma, whitespace and mixed paper IDs."""
-    tokens = [normalize_id(part) for part in re.split(r"[,，\\s]+", raw_ids) if part.strip()]
+    tokens = [normalize_id(part) for part in re.split(r"[,，\s]+", raw_ids) if part.strip()]
     if not tokens or not all(ID_PATTERN.fullmatch(token) for token in tokens):
         return None
     return tokens
@@ -197,12 +197,12 @@ def _keyword_tokens(raw_ids: str) -> Optional[list[str]]:
 
 def _keyword_name(raw: str) -> str:
     """Normalize full-width spaces (and repeated whitespace) to ASCII spaces."""
-    return re.sub(r"\\s+", " ", raw.replace("\\u3000", " ")).strip()
+    return re.sub(r"\s+", " ", raw.replace("\u3000", " ")).strip()
 
 
 def parse_keyword_line(line: str) -> Optional[dict]:
     """Accept 'あ 1,2,3', 'あ　1,2,3' and legacy 'あ: 1,2,3'."""
-    text = line.strip().replace("\\u3000", " ")
+    text = line.strip().replace("\u3000", " ")
     m = KEYWORD_LINE_RE.fullmatch(text)
     if m is not None:
         key = _keyword_name(m.group("key"))
@@ -214,7 +214,7 @@ def parse_keyword_line(line: str) -> Optional[dict]:
     # Without ':', try every whitespace boundary. This allows multiword
     # keywords (including names ending in Latin letters), while requiring
     # the *whole* trailing value to consist of real Folgezettel IDs.
-    for separator in re.finditer(r"[ \\t]+", text):
+    for separator in re.finditer(r"[ \t]+", text):
         key = _keyword_name(text[:separator.start()])
         if not key:
             continue
@@ -251,7 +251,7 @@ def merge_keyword_lines(body: list[str]) -> tuple[list[str], list[dict]]:
         entries_by_name[identity] = entry
         positions.append(i)
         separators[identity] = ": " if KEYWORD_LINE_RE.fullmatch(
-            line.strip().replace("\\u3000", " ")) else " "
+            line.strip().replace("\u3000", " ")) else " "
 
     merged_entries = sorted(entries_by_name.values(), key=keyword_sort_key)
     result = [line for i, line in enumerate(body) if i not in discarded]
