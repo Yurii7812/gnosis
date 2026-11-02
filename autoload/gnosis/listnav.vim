@@ -2,7 +2,7 @@
 let s:here = expand('<sfile>:p:h:h:h')
 let s:L = {}
 let s:timer = -1
-let s:kinds = {'index': '索引', 'group': 'グループ', 'parent': '親', 'child': '子',
+let s:kinds = {'root-index': 'Indexの索引', 'index': '索引', 'group': 'グループ', 'parent': '親', 'child': '子',
       \ 'context': '文脈', 'related': '関連', 'cite': '引用', 'back': 'BackLink', 'pred': '予測関連', 'note': 'ノート'}
 
 function! gnosis#listnav#search_rows(root, query, scope) abort
@@ -68,7 +68,6 @@ function! gnosis#listnav#setup() abort
         \ 's': "call gnosis#listnav#mode('search')", 'x': "call gnosis#listnav#prompt('filter')",
         \ 'l': "call gnosis#listnav#mode('links')", 'r': "call gnosis#listnav#mode('similar')", 'm': "call gnosis#listnav#menu()", 'K': "call gnosis#listnav#toggle_hint()",
         \ 'H': "call gnosis#listnav#prompt('highlight')", 'n': "call gnosis#listnav#next_hit(1)", 'N': "call gnosis#listnav#next_hit(-1)",
-        \ 'S': "call gnosis#listnav#scope()",
         \ 'w': "call gnosis#listnav#option('rank', !gnosis#listnav#state().rank)",
         \ '+': "call gnosis#listnav#depth()", 'o': "call gnosis#listnav#origin()", 'O': "call gnosis#listnav#goto_origin()", '<BS>': "call gnosis#listnav#back()",
         \ 'q': "call gnosis#listnav#quit()", 'Q': "call gnosis#mview#win_op('quit')",
@@ -212,7 +211,7 @@ function! gnosis#listnav#render() abort
         \ ? gnosis#hint#tabs(s:L.mode, winwidth(0)) : 'FOLGEZETTEL / ' . l:title
   let l:pick = gnosis#mview#pick_label()
   if !empty(l:pick) | let s:L.title .= '  ' . l:pick | endif
-  let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr({'all': '全部', 'index': '索引とグループ', 'no-index': '索引以外'}[s:L.scope])
+  let l:flags = s:L.mode ==# 'search' ? gnosis#i18n#tr('統一検索')
         \ : s:L.mode ==# 'similar' ? gnosis#i18n#tr('類似')
         \ : gnosis#i18n#tr('深さ') . ' ' . s:L.depth . (s:L.rank ? ' / w' : '')
   if !empty(s:L.relation) && s:L.mode ==# 'links' | let l:flags .= ' / ' . gnosis#i18n#tr(s:kinds[s:L.relation]) | endif
@@ -549,14 +548,11 @@ function! gnosis#listnav#menu() abort
   let l:rels = [['すべて', ''], ['子', 'child'], ['親', 'parent'], ['グループ', 'group'], ['文脈', 'context'],
         \ ['関連', 'related'], ['引用された', 'cite'], ['BackLink', 'back'], ['索引', 'index']]
   let l:rel_entries = map(copy(l:rels), '[gnosis#hint#mark(s:L.relation ==# v:val[1], v:val[0]), function("s:set", ["relation", v:val[1]])]')
-  let l:scopes = [['全部', 'all'], ['索引とグループ', 'index'], ['索引以外', 'no-index']]
-  let l:scope_entries = map(copy(l:scopes), '[gnosis#hint#mark(s:L.scope ==# v:val[1], v:val[0]), function("s:set", ["scope", v:val[1]])]')
   let l:entries = [
         \ [gnosis#hint#mark(l:m ==# 'links', 'リンク（つながっているノート）'), function('gnosis#listnav#mode', ['links'])],
         \ [gnosis#hint#mark(l:m ==# 'search', '検索'), function('gnosis#listnav#mode', ['search'])],
         \ [gnosis#hint#mark(l:m ==# 'similar', '類似（似ているノート）'), function('gnosis#listnav#mode', ['similar'])],
         \ ['  ' . gnosis#i18n#tr('リンクの種類で絞る') . ' …', {'title': gnosis#i18n#tr('リンクの種類'), 'sub': l:rel_entries}],
-        \ ['  ' . gnosis#i18n#tr('検索の範囲') . ' …', {'title': gnosis#i18n#tr('検索の範囲'), 'sub': l:scope_entries}],
         \ ['  ' . gnosis#i18n#tr('深さ') . ' (' . s:L.depth . ') …', function('gnosis#listnav#depth')],
         \ [gnosis#hint#mark(s:L.rank, '近さ順に並べる'), {-> gnosis#listnav#option('rank', !s:L.rank)}],
         \ ['  ' . gnosis#i18n#tr('絞り込み') . ' …', {-> gnosis#listnav#prompt('filter')}],
@@ -567,7 +563,7 @@ endfunction
 
 function! gnosis#listnav#help() abort
   echo 'FOLGEZETTEL: m ' . gnosis#i18n#tr('メニュー') . '  s ' . gnosis#i18n#tr('検索') . '  l ' . gnosis#i18n#tr('リンク') . '  r/m ' . gnosis#i18n#tr('類似') . '  f Folgezettel'
-        \ . ' | x H  n/N  S  +  w  b/p/g/c/R/a  o  Backspace  Enter  Ctrl+←/→'
+        \ . ' | x H  n/N  +  w  b/p/g/c/R/a  o  Backspace  Enter  Ctrl+←/→'
 endfunction
 
 function! gnosis#listnav#gui_state() abort
