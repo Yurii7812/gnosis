@@ -315,51 +315,29 @@ function! s:link_pick_deferred(links, buf, pos, timer) abort
   call gnosis#insert_links_pick(a:links, getpos('.'))
 endfunction
 
-" fzf 終了時（キャンセルを含む）に検索セッションのモードだけを破棄する。
-function! s:search_mode_exit(file, code) abort
-  call delete(a:file)
-endfunction
-
-" 検索・並び・強調は note_search.py。fzf は --disabled で表示とモード切替を受け持つ。
+" gs と \l は共通の検索を常に使う。検索モード切替はない。
+" 左は各候補の表示名・タイトルと種類を表示し、右に実ノートのプレビューを出す。
 function! s:note_search_run(prompt, with_nth, Sink, ...) abort
-  " <Space> の --only は従来どおり。gs / 通常・ビジュアル \l は共通の三モード。
+  " --only は今のノートのリンク先だけに絞るためのオプション。
   let l:extra = a:0 > 0 ? a:1 : ''
-  let l:modefile = ''
-  if a:0 == 0
-    let l:modefile = tempname()
-    call writefile(['all'], l:modefile)
-    let l:extra = '--mode-file ' . shellescape(l:modefile) . ' --lang ' . shellescape(gnosis#i18n#lang())
-  endif
   let l:cmd = s:note_search_cmd(l:extra)
-  if empty(l:cmd)
-    if !empty(l:modefile) | call delete(l:modefile) | endif
-    return 0
-  endif
+  if empty(l:cmd) | return 0 | endif
   let l:preview = s:preview_script()
+  let l:header = gnosis#i18n#lang() ==# 'ja'
+        \ ? '完全一致 → Indexの索引 → 索引 → グループ → ノート（タイトル→本文）'
+        \ : 'Exact match → Index entries → Other index entries → Groups → Notes (title then body)'
   let l:options = [
         \ '--ansi', '--multi', '--disabled',
-        \ '--delimiter=\t', '--with-nth=' . (empty(l:modefile) ? a:with_nth : '2,4'),
-        \ '--prompt=' . a:prompt,
+        \ '--delimiter=\t', '--with-nth=2,4',
+        \ '--prompt=' . a:prompt, '--header=' . shellescape(l:header),
         \ '--bind', 'change:reload:' . l:cmd . ' {q}',
         \ '--wrap-sign', '',
         \ ]
-  if !empty(l:modefile)
-    let l:labels = gnosis#i18n#lang() ==# 'ja'
-          \ ? ['全部', 'Ctrl+→/↓ 次・Ctrl+←/↑ 前']
-          \ : ['All', 'Ctrl+Right/Down next; Ctrl+Left/Up previous']
-    call extend(l:options, ['--header', join(l:labels, ' | ')])
-    for [l:key, l:direction] in [['ctrl-right', 'next'], ['ctrl-down', 'next'], ['ctrl-left', 'previous'], ['ctrl-up', 'previous']]
-      let l:switch = s:note_search_cmd(l:extra . ' --cycle ' . l:direction)
-      " transform-header は同期実行。モード保存後に同じクエリで再検索する。
-      call extend(l:options, ['--bind', l:key . ':clear-selection+transform-header(' . l:switch . ')+reload(' . l:cmd . ' {q})'])
-    endfor
-  endif
-  " \l の画面だけ: Shift+← / Shift+→ で画面を閉じて、\l のまま曼荼羅・リスト / 右のパネルで選び続ける（s:link_sink_key）
+  " \l で Shift+← / Shift+→ は従来のビュー切替を維持。
   if get(s:, 'expect_shift', 0)
     call extend(l:options, ['--expect=shift-left,shift-right'])
   endif
   if !empty(l:preview)
-    " wrap の折り返しを考慮し、preview_highlight.py がヒット行の少し上から出す。
     call extend(l:options, [
           \ '--preview', gnosis#python_cmd() . ' ' . shellescape(l:preview) . ' {1} {q} --line {3}',
           \ '--preview-window', 'right:50%:wrap',
@@ -371,15 +349,7 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
         \ 'options': l:options,
         \ 'dir': s:root(),
         \ }
-  if !empty(l:modefile)
-    let l:spec.exit = function('s:search_mode_exit', [l:modefile])
-  endif
-  try
-    call fzf#run(fzf#wrap(l:spec))
-  catch
-    if !empty(l:modefile) | call delete(l:modefile) | endif
-    throw 'gnosis_search: ' . v:exception
-  endtry
+  call fzf#run(fzf#wrap(l:spec))
   return 1
 endfunction
 
