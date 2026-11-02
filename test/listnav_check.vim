@@ -75,7 +75,7 @@ call s:ok('検索語なしでは一覧を出さない', empty(gnosis#listnav#sta
 call gnosis#listnav#query('search', 'Unique alias')
 call s:ok('gsと同じ索引名から検索', index(s:paths(), 'a.md') >= 0, s:paths())
 call gnosis#listnav#option('scope', 'no-index')
-call s:ok('索引以外には索引の表示名候補がない', empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind ==# "index"')))
+call s:ok('旧検索スコープ指定でも単一検索になり索引が残る', !empty(filter(copy(gnosis#listnav#state().rows), 'v:val.kind ==# "index"')))
 call gnosis#listnav#query('search', 'garden | Needle -absent')
 call s:ok('ORと除外も共用', index(s:paths(), 'd.md') >= 0)
 call gnosis#listnav#query('highlight', 'garden')
