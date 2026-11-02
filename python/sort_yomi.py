@@ -131,6 +131,10 @@ def main(argv: list[str]) -> int:
         if args.report_file:
             Path(args.report_file).write_text(f"{added}\n", encoding="utf-8")
         out = jy.sort_lines(lines, args.base, extra_key_fn=extra_key_fn)
+        if args.keyword_lines:
+            # The manual sort command must normalize spaces and merge
+            # duplicate Index-write names just like regen/on-save.
+            out, _entries = pp.merge_keyword_lines(out)
         if out:
             sys.stdout.write("\n".join(out) + "\n")
         return 0
