@@ -1515,6 +1515,17 @@ def _used_display_names(notes: dict, incoming: dict | None = None) -> set[str]:
             for disp, _tg in _links_from(n.get(kind, [])):
                 if disp:
                     used.add(disp)
+    # Index-write keyword entries are not Markdown links, but their manual
+    # readings are still in use and must survive regular yomi store pruning.
+    # Import lazily to avoid a module dependency during ordinary note parsing.
+    for n in notes.values():
+        title = n.get("title", "")
+        if title == "Index-write" or title.startswith("Index-write-"):
+            import paper_pkm as _paper
+            for line in n.get("body", []):
+                entry = _paper.parse_keyword_line(line)
+                if entry is not None:
+                    used.add(entry["key"])
     return used
 
 
