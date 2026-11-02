@@ -106,12 +106,27 @@ class UnifiedSearch(unittest.TestCase):
         def run(*args):
             return subprocess.check_output(
                 [sys.executable, ns.__file__, '--lang', 'ja', *args], text=True)
-        self.assertIn('\tIndexの索引', run(str(self.root), 'ハーブ'))
-        self.assertIn('\t索引', run(str(self.root), '別の呼び名'))
-        self.assertIn('\tグループ', run(str(self.root), 'Index'))
-        self.assertIn('\tノート', run(str(self.root), 'Needle'))
+        self.assertIn('\t' + ns.colored_kind('root-index', 'ja'), run(str(self.root), 'ハーブ'))
+        self.assertIn('\t' + ns.colored_kind('index', 'ja'), run(str(self.root), '別の呼び名'))
+        self.assertIn('\t' + ns.colored_kind('group', 'ja'), run(str(self.root), 'Index'))
+        self.assertIn('\t' + ns.colored_kind('note', 'ja'), run(str(self.root), 'Needle'))
         self.assertEqual(run(str(self.root), 'absent-query'), '')
         self.assertIn('index.md', run(str(self.root)))
+
+    def test_search_kind_colors_are_distinct_and_match_text_unchanged(self):
+        import re
+        colors = [ns.KIND_ANSI[k] for k in ('root-index', 'index', 'group', 'note')]
+        self.assertEqual(len(set(colors)), 4)
+        for kind in ('root-index', 'index', 'group', 'note'):
+            styled = ns.colored_kind(kind, 'ja')
+            self.assertTrue(styled.startswith(ns.KIND_ANSI[kind]))
+            self.assertTrue(styled.endswith(ns.RESET))
+            self.assertEqual(re.sub(r'\\x1b\\[[0-9;]*m', '', styled),
+                             '[' + ns.KIND_LABELS['ja'][kind] + ']')
+        out = subprocess.check_output(
+            [sys.executable, ns.__file__, '--lang', 'ja', str(self.root), 'ハーブ'], text=True)
+        self.assertIn('\t' + ns.colored_kind('root-index', 'ja'), out)
+        self.assertIn('\t' + ns.colored_kind('note', 'ja'), out)
 
     def test_only_link_alias_and_title_or_body(self):
         only = {str((self.root / 'b.md').resolve()): 'Local name'}
