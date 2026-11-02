@@ -14869,20 +14869,27 @@ function! s:insert_links_core_raw(links, ...) abort
   if empty(l:links)
     return 0
   endif
-  " グループ（Index を含む）では置き場所や関係を聞かない。1 本ずつ表示名とよみを聞いて本文の最後に足し、
-  " よみの順に並べ替える（2026-10-20〜。確認画面は出さない）。選べるのは通常のノートだけ。
+  " za と \l の共通処理: グループ内では普通のノートを索引本文に追加する。
+  " グループ同士のリンクだけは、本文に書かず双方の Related: に追加する。
   if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
-    " 索引（グループ）の本文には、グループを足さない（ノートだけ）。グループのリンクは外して、残りを足す
     let l:notes = []
+    let l:related = []
     for l:one in l:links
-      if !gnosis#group_pair_refused(expand('%:p'), s:link_target_path(l:one, expand('%:p:h')), 'body')
+      let l:target = s:link_target_path(l:one, expand('%:p:h'))
+      if !empty(l:target) && s:path_is_group(l:target)
+        call add(l:related, l:one)
+      else
         call add(l:notes, l:one)
       endif
     endfor
-    if empty(l:notes)
-      return 0
+    let l:added = 0
+    if !empty(l:related)
+      let l:added += s:related_links(l:related)
     endif
-    return s:group_add_links_named(l:notes) > 0 ? 1 : 0
+    if !empty(l:notes)
+      let l:added += s:group_add_links_named(l:notes) > 0 ? 1 : 0
+    endif
+    return l:added > 0 ? 1 : 0
   endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
   " 今のノートがグループかどうかでは決めない。置き場所は聞かず、表示名とよみを聞いて終わる。
