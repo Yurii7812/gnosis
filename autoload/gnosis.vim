@@ -11735,8 +11735,8 @@ function! s:v2_new_interactive(attr) abort
     return
   endif
   " zn: 位置→関係性。g は位置選択を飛ばし、BranchGroup を直接作成。
-  echo s:fit_prompt(gnosis#i18n#tr('位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  g=BranchGroup / b=子だけ / p=親だけ / r=Relatedだけ  (Esc/q 中止)'),
-        \ gnosis#i18n#tr('位置: Enter=末 h=下 i=位置 t=節 o=なし / g=グループ b=子 p=親 r=Related (Esc)'))
+  echo s:fit_prompt(gnosis#i18n#tr('位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  g=BranchGroup / b=子だけ / p=親だけ / r=Relatedだけ / c=Contextだけ  (Esc/q 中止)'),
+        \ gnosis#i18n#tr('位置: Enter=末 h=下 i=位置 t=節 o=なし / g=グループ b=子 p=親 r=Related c=Context (Esc)'))
   let l:ch = s:getkey()
   redraw
   if l:ch ==? 'q' || char2nr(l:ch) == 27 || char2nr(l:ch) == 3
@@ -11756,12 +11756,17 @@ function! s:v2_new_interactive(attr) abort
     call s:v2_new_run(a:attr, l:ch, 0)
     return
   endif
+  " c: 本文にはリンクを置かず、新しいノートの Context: に今のノートだけを入れる（親にはしない）
+  if l:ch ==# 'c'
+    call s:v2_new_run(a:attr, 'o', 0, {'relation': 'c'})
+    return
+  endif
   if l:ch ==# 't'
     call s:outline_pick_here(function('s:v2_new_run_t', [a:attr]))
     return
   endif
   if index(['h', 'i', 'o'], l:ch) < 0 && l:ch !=# "\<CR>" && l:ch !=# "\<NL>"
-    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / h / i / t / o / g / b / p / r のどれか）')
+    echo 'Gnosis: ' . gnosis#i18n#tr('キャンセル（Enter / h / i / t / o / g / b / p / r / c のどれか）')
     return
   endif
   call s:v2_new_relation(a:attr, l:ch, 0)

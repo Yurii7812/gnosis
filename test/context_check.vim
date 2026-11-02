@@ -202,6 +202,18 @@ call s:ok('zn → c: 新ノート（B）を開いている', fnamemodify(expand(
 let s:fl = s:file('f.md')
 let s:fcb = index(s:fl, 'ChildBranch:')
 call s:ok('zn → c: 位置 Enter で A の本文の最後に B へのリンク（1 本。ChildBranch には重ねない）', count(s:fl, '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')') == 1 && index(s:fl, '[' . fnamemodify(s:nw, ':r') . '](' . s:nw . ')') < s:fcb, string(s:fl))
+" zn → c（位置の段階で c）: 新ノートの Context に今のノートだけ。親にしない・今のノートの本文にリンクを置かない
+execute 'edit ' . fnameescape(s:v . '/f.md')
+let s:before = s:files()
+let g:gnosis_test_keys = ['c']
+sleep 1100m
+call gnosis#v2_new_plain()
+stopinsert
+let s:nc = s:newest_except(s:before)
+let s:ncl = s:file(s:nc)
+call s:ok('zn → c（位置）: 新ノートの Context に今のノート（F）だけ', gnosis#context#links(s:ncl) ==# ['[ノートF](f.md)'], string(s:ncl))
+call s:ok('zn → c（位置）: 新ノートに ParentBranch: を作らない（親にならない）', index(s:ncl, 'ParentBranch:') < 0, string(s:ncl))
+call s:ok('zn → c（位置）: 今のノート（F）の本文にリンクを置かない', count(s:file('f.md'), '[' . fnamemodify(s:nc, ':r') . '](' . s:nc . ')') == 0)
 
 " ============================================================ 未保存データ
 execute 'edit ' . fnameescape(s:v . '/m1.md')

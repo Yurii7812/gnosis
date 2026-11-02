@@ -84,6 +84,23 @@ class TestNewNoteCursor(unittest.TestCase):
         i = lines.index(f"[{new[0].stem}]({new[0].name})")
         self.assertNotEqual(lines[i + 1], "", lines)               # リンクの下に空行を足さない
 
+    def test_zn_then_c_at_position_makes_context_only(self) -> None:
+        # zn の位置の段階で c: 新しいノートの Context に今のノートだけ（親にしない・今のノートの本文に置かない）
+        with Session(self.rc, str(self.home), str(self.home), args=[str(self.v / "a.md")]) as s:
+            s.send("zn", 0.6)
+            s.send("c", 1.5)          # 位置キー c（Context だけ）
+            s.send("ここに書く", 0.6)
+            s.send(ESC, 0.9)
+            s.send(":wa\r", 0.6)
+            s.send(":qa!\r", 0.4)
+        new = sorted(p for p in self.v.glob("2*.md"))
+        self.assertEqual(len(new), 1, [p.name for p in self.v.iterdir()])
+        lines = new[0].read_text(encoding="utf-8").split("\n")
+        self.assertNotIn("ParentBranch:", lines, lines)
+        i = lines.index("Context:")
+        self.assertEqual(lines[i + 1], "[ノートA](a.md)", lines)
+        self.assertNotIn(new[0].name, (self.v / "a.md").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
