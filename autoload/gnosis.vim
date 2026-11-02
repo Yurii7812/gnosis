@@ -20941,7 +20941,13 @@ function! s:diary_head(lines) abort
     elseif l:ln =~# '^paper_diary\w*:'
       " 旧い目印（移行前のノート。paper_pkm.py の regen が外す）
       let l:r.paper = 1
+    elseif l:ln =~# '^folgezettel:\s*["'']\=[A-Z]\{1,4}-'
+      " 紙の番号自体で判定。source: scan は不要。
+      let l:r.scan = 1
+    elseif l:ln =~# '^attribute:\s*topicindex\s*$'
+      let l:r.scan = 1
     elseif l:ln =~# '^source:\s*scan\s*$'
+      " 旧ノートとの互換。
       let l:r.scan = 1
     elseif l:ln =~# '^timeline:\s*true\s*$'
       let l:r.tree = 1
