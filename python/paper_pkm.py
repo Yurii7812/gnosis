@@ -612,7 +612,9 @@ def scan_key_of(n: NoteInfo) -> Optional[tuple[str, str]]:
     # The ID belongs in folgezettel:, not in YAML title:. A prior H1-only
     # scan is still recognized so regeneration can assign its ID in place.
     explicit = (fm_value(n.fm, "folgezettel") or "").strip().strip('"\x27')
-    label = explicit or n.title
+    # Legacy records sometimes retain folgezettel: 1 after their H1 was
+    # upgraded to PA-1. The prefixed H1 wins over that old unprefixed value.
+    label = n.title if PREFIXED_ID_RE.fullmatch(n.title) and not PREFIXED_ID_RE.fullmatch(explicit) else (explicit or n.title)
     m = PREFIXED_ID_RE.match(label)
     if m:
         return (m.group(1), m.group(2)) if (_has_image_named(n, label) or _has_image_named(n, m.group(2))) else None
@@ -2258,10 +2260,14 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     for fid, note_path in folge.items():
         fm, old_body = read_note(note_path)
         fm = [ln for ln in fm if not _fm_key_re("source").match(ln) and not _fm_key_re("title").match(ln)]
-        if not any(_fm_key_re("folgezettel").match(ln) for ln in fm):
-            fm.append(f"folgezettel: {with_prefix(prefix, fid)}")
-        else:
-            fm = [re.sub(r'^(\s*folgezettel\s*:\s*)["\x27]([^"\x27]+)["\x27]\s*$', r"\1\2", ln) for ln in fm]
+        expected_id = with_prefix(prefix, fid)
+        stored_id = (fm_value(fm, "folgezettel") or "").strip().strip('"\x27')
+        if not stored_id:
+            fm.append(f"folgezettel: {expected_id}")
+        elif stored_id == fid or stored_id == expected_id:
+            # Normalize quote style and upgrade only the legacy unprefixed ID.
+            fm = [(f"folgezettel: {expected_id}" if _fm_key_re("folgezettel").match(ln) else ln)
+                  for ln in fm]
         images = [ln for ln in old_body if re.match(r"^!\[\]\(", ln.strip())]
         # Do not generate an index-as-Context for scans: the number index is
         # navigation, not a semantic parent. Remove only historical generated
