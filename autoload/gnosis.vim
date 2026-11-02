@@ -17716,7 +17716,11 @@ endfunction
 
 " よみの入力と保存（表示名は確定済み）。既定値を消して Enter なら削除。
 function! s:yomi_input(note, name, default) abort
-  let l:reading = inputdialog(gnosis#i18n#tr('よみ(') . a:name . '): ', a:default, "\x01")
+  if exists('g:gnosis_test_yomi_edit') && !empty(g:gnosis_test_yomi_edit)
+    let l:reading = remove(g:gnosis_test_yomi_edit, 0)
+  else
+    let l:reading = inputdialog(gnosis#i18n#tr('よみ(') . a:name . '): ', a:default, "\x01")
+  endif
   if l:reading ==# "\x01"
     echo gnosis#i18n#tr('Gnosis: 中止')
     return
