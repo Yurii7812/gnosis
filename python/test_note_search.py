@@ -129,6 +129,19 @@ class UnifiedSearch(unittest.TestCase):
         self.assertIn('\t' + ns.colored_kind('note', 'ja'), out)
 
     def test_only_link_alias_and_title_or_body(self):
+    def test_colored_marker_is_leftmost_display_field(self):
+        import re
+        for kind in ('root-index', 'index', 'group', 'note'):
+            marker = ns.colored_marker(kind)
+            self.assertTrue(marker.startswith(ns.KIND_ANSI[kind]))
+            self.assertEqual(re.sub(r'\x1b\[[0-9;]*m', '', marker), '●')
+        result = subprocess.check_output(
+            [sys.executable, ns.__file__, '--lang', 'ja', str(self.root), 'ハーブ'], text=True)
+        rows = result.splitlines()
+        self.assertTrue(all(len(row.split('\t')) == 5 for row in rows))
+        self.assertTrue(any(row.split('\t')[-1] == ns.colored_marker('root-index') for row in rows))
+
+
         only = {str((self.root / 'b.md').resolve()): 'Local name'}
         rows = ns.search_rows(str(self.root), 'Local name', only=only)
         self.assertEqual(len(rows), 1)
