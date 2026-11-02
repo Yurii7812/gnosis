@@ -325,13 +325,13 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
   let l:preview = s:preview_script()
   let l:e = nr2char(27)
   let l:reset = l:e . '[0m'
-  let l:header = l:e . '[1;35m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' Indexの索引  ' : ' From Index  ')
-        \ . l:e . '[1;34m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' 索引  ' : ' Index entry  ')
-        \ . l:e . '[1;32m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' グループ  ' : ' Group  ')
-        \ . l:e . '[90m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' ノート' : ' Note')
+  let l:header = l:e . '[1;35m■' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' Indexの索引  ' : ' From Index  ')
+        \ . l:e . '[1;34m■' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' 索引  ' : ' Index entry  ')
+        \ . l:e . '[1;32m■' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' グループ  ' : ' Group  ')
+        \ . l:e . '[90m■' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' ノート' : ' Note')
   let l:options = [
         \ '--ansi', '--multi', '--disabled',
-        \ '--delimiter=\t', '--with-nth=5,2,4',
+        \ '--delimiter=\t', '--with-nth=5,2',
         \ '--prompt=' . a:prompt, '--header', l:header,
         \ '--bind', 'change:reload:' . l:cmd . ' {q}',
         \ '--wrap-sign', '',
