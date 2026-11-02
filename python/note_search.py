@@ -189,7 +189,7 @@ def colored_kind(kind: str, lang: str) -> str:
 
 def colored_marker(kind: str) -> str:
     """Colored symbol at the left of each fzf candidate; not part of its title."""
-    return KIND_ANSI[kind] + "●" + RESET
+    return KIND_ANSI[kind] + "■" + RESET
 
 
 def _match_quality(display: str, words: list[str]) -> int:
@@ -313,8 +313,7 @@ def main() -> int:
     out = []
     tokens = split_tokens(query)
     for _exact, _tier, _quality, path, title, line, _source, category in rows:
-        kind = colored_kind(category, args.lang)
-        out.append(f"{path}\t{highlight(title.replace(chr(9), ' '), tokens)}\t{line}\t{kind}\t{colored_marker(category)}")
+        out.append(f"{path}\t{highlight(title.replace(chr(9), ' '), tokens)}\t{line}\t{category}\t{colored_marker(category)}")
     sys.stdout.write("\n".join(out))
     return 0
 
