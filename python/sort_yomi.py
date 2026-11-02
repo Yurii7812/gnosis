@@ -22,12 +22,56 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gnosis_i18n import tr  # noqa: E402
 import japanese_yomi as jy  # noqa: E402
+
+
+def yomi_candidates(note_path: str, base: str | None = None) -> list[dict]:
+    """Editable display names, including unregistered aliases from real indices.
+
+    On a group/Index, also offer its indexed member display names. A chosen
+    alias is stored on the target note, never the group containing the link.
+    """
+    import note_search as ns
+
+    note = Path(note_path).resolve()
+    if not note.is_file():
+        return []
+    root = Path(base).resolve() if base else note.parent
+    if not note.is_relative_to(root):
+        root = note.parent
+    notes = dict(ns.load_notes(str(root)))
+    if str(note) not in {str(Path(p).resolve()) for p in notes}:
+        return []
+    current_title = ns.title_of(notes[str(note)], str(note))[0]
+    result: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(path: str, name: str, kind: str) -> None:
+        path = str(Path(path).resolve())
+        name = name.strip()
+        if not name or (path, name) in seen or path not in notes:
+            return
+        seen.add((path, name))
+        title = ns.title_of(notes[path], path)[0]
+        result.append({"note": path, "name": name, "kind": kind, "title": title})
+
+    add(str(note), current_title, "title")
+    for path, name, source in ns.index_entries(notes):
+        if Path(path).resolve() == note:
+            add(path, name, "index")
+        if Path(source).resolve() == note:
+            add(path, name, "index")
+    # Keep manually registered readings editable even when the display
+    # name is not currently present in an index.
+    for name in jy.list_yomi_names(note):
+        add(str(note), name, "registered")
+    return result
 
 
 def _warn_if_missing() -> None:
@@ -66,6 +110,10 @@ def main(argv: list[str]) -> int:
 
     p_list = sub.add_parser("list", help="ノートの yomi の表示名を一覧")
     p_list.add_argument("--note", required=True)
+    p_candidates = sub.add_parser("candidates", help="zy: ノート名と索引の表示名を取得")
+    p_candidates.add_argument("--note", required=True)
+    p_candidates.add_argument("--base", default=None)
+
 
     p_set = sub.add_parser("set", help="ノートに yomi を登録/削除")
     p_set.add_argument("--note", required=True)
@@ -152,6 +200,10 @@ def main(argv: list[str]) -> int:
         for name in jy.list_yomi_names(args.note):
             print(name)
         return 0
+    if args.mode == "candidates":
+        print(json.dumps(yomi_candidates(args.note, args.base), ensure_ascii=False))
+        return 0
+
 
     if args.mode == "set":
         reading = args.reading
