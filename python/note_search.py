@@ -169,6 +169,23 @@ KIND_LABELS = {
     "en": {"root-index": "From Index", "index": "Index entry", "group": "Group", "note": "Note"},
 }
 
+# Adapted to terminal palettes, so these remain distinguishable in most
+# light and dark themes. Only the category tag is colored: match highlighting
+# in the title remains red and is not overridden.
+KIND_ANSI = {
+    "root-index": "\033[1;35m",  # magenta: global Index entries
+    "index": "\033[1;34m",       # blue: other index entries
+    "group": "\033[1;32m",       # green: groups
+    "note": "\033[90m",          # grey: ordinary notes
+}
+
+
+def colored_kind(kind: str, lang: str) -> str:
+    """fzf --ansi category tag; never insert ANSI sequences into a note path."""
+    label = KIND_LABELS[lang][kind]
+    return KIND_ANSI[kind] + "[" + label + "]" + RESET
+
+
 
 def _match_quality(display: str, words: list[str]) -> int:
     """Smaller is better: exact > starts with > word boundary > substring."""
@@ -291,7 +308,7 @@ def main() -> int:
     out = []
     tokens = split_tokens(query)
     for _exact, _tier, _quality, path, title, line, _source, category in rows:
-        kind = KIND_LABELS[args.lang][category]
+        kind = colored_kind(category, args.lang)
         out.append(f"{path}\t{highlight(title.replace(chr(9), ' '), tokens)}\t{line}\t{kind}")
     sys.stdout.write("\n".join(out))
     return 0
