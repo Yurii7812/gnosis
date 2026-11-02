@@ -311,6 +311,56 @@ def test_cli_keyword_shorthand_and_merging() -> None:
     check(rc == 0 and result.count("あ 1,2,3") == 1, "重複を1行にまとめ、全角スペースを半角にする")
     check("あ　" not in result and "あ: 3" not in result, "変換前の重複行は残らない")
 
+def test_zy_candidates_for_group_and_note_aliases() -> None:
+    print("zy: 未登録の索引表示名を候補に含め、選択先ノートへよみを登録")
+    import json
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "index.md").write_text("---\ntitle: Index\nattribute: group\n---\n\n# Index\n\n[世界](a.md)\n", encoding="utf-8")
+        (root / "g.md").write_text("---\ntitle: 類語の索引\nattribute: group\n---\n\n# 類語の索引\n\n[知識](a.md)\n[学習](a.md)\n", encoding="utf-8")
+        (root / "a.md").write_text(
+            "---\ntitle: 本来のノート名\n---\n\n# 本来のノート名\n\nGroup:\n[Index](index.md)\n[類語の索引](g.md)\n", encoding="utf-8")
+        a = root / "a.md"
+        names = sort_yomi.yomi_candidates(str(a), str(root))
+        check({r["name"] for r in names} == {"本来のノート名", "世界", "知識", "学習"},
+              "ノートから自分のタイトルと索引の全表示名を選択できる")
+        check(all(r["note"] == str(a) for r in names), "索引のよみ保存先はリンク先ノート")
+        group_names = sort_yomi.yomi_candidates(str(root / "g.md"), str(root))
+        check({r["name"] for r in group_names} >= {"類語の索引", "知識", "学習"},
+              "索引の上からもメンバーの表示名を候補に出す")
+        choice = next(row for row in group_names if row["name"] == "知識")
+        jy.set_yomi(choice["note"], choice["name"], "ちしき")
+        check(jy.get_yomi(a, "知識") == "ちしき" and jy.get_yomi(root / "g.md", "知識") == "",
+              "選んだ表示名のよみだけリンク先ノートに保存")
+        names = sort_yomi.yomi_candidates(str(a), str(root))
+        check(next(row["reading"] for row in names if row["name"] == "知識") == "ちしき",
+              "再表示時に登録済みのよみを候補に出す")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            rc = sort_yomi.main(["candidates", "--note", str(a), "--base", str(root)])
+        check(rc == 0 and len(json.loads(output.getvalue())) == len(names),
+              "Vimポップアップ向け候補JSONを返す")
+
+
+def test_zy_index_write_keyword_readings() -> None:
+    print("zy: Index-writeのキーワードも選べ、手動よみがソートに反映")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "index.md").write_text("# Index\n", encoding="utf-8")
+        iw = root / "261101111111.md"
+        iw.write_text("---\ntitle: Index-write\n---\n\n# Index-write\n\nあ 1\nえ 2\n", encoding="utf-8")
+        entries = sort_yomi.yomi_candidates(str(iw), str(root))
+        check({r["name"] for r in entries} >= {"Index-write", "あ", "え"},
+              "Index-writeキーワードはよみ未登録でも候補に出る")
+        check(all(r["note"] == str(iw) for r in entries), "キーワードのよみの保存先はIndex-write")
+        jy.set_yomi(iw, "あ", "ん")
+        check(jy.get_yomi(iw, "あ") == "ん", "よみを手動で更新できる")
+        merged, parsed = pp.merge_keyword_lines(["あ　1", "え 2"], yomi_note=iw)
+        check(merged == ["え 2", "あ 1"], "手動よみがIndex-writeの並び順に反映")
+        check(next(e["reading"] for e in parsed if e["key"] == "あ") == "ん",
+              "生成データにも指定したよみを維持する")
+
+
 def test_used_and_prune() -> None:
     print("sync 掃除: 使われていない表示名の yomi を落とす")
     notes = {
