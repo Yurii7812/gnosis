@@ -169,13 +169,26 @@ def scan_number(note: dict) -> str:
     """紙のスキャンノート（題が番号だけで、スキャンの印か、同じ名前の画像の参照がある）なら、その番号。そうでなければ ''。
     題は `PA-1a2`（印つき。新しい形）か `1a2`（印なし。旧い形）。印つきの題はそのまま返す（ノートごとに自分の印を持つ）。"""
     title = note['title']
-    if not PAPER_NUMBER_RE.fullmatch(title) or is_group(note):
+    stored = value("\n".join(note['fm']))
+    # Scan identity is the Folgezettel number, even if the user renames H1.
+    # Fall back to the H1 for scans made before this field was introduced.
+    number = stored if PAPER_NUMBER_RE.fullmatch(stored) else title
+    if not PAPER_NUMBER_RE.fullmatch(number) or is_group(note):
         return ''
     if any(ln.strip() == 'source: scan' for ln in note['fm']):
-        return title
-    stems = {re.escape(title), re.escape(split_prefix(title)[1])}   # 画像の名前は、題と同じか、印を除いた番号
+        return number
+    stems = {re.escape(number), re.escape(split_prefix(number)[1])}
     pat = re.compile(r'!\[[^\]]*\]\(<?(?:[^)>]*/)?(?:' + '|'.join(sorted(stems)) + r')\.[A-Za-z0-9]+>?\)')
-    return title if any(pat.search(ln) for ln in note['body']) else ''
+    if any(pat.search(ln) for ln in note['body']):
+        return number
+    # A legacy unprefixed folgezettel: 1 can coexist with the upgraded
+    # title PA-1 and the original image 1.jpg.
+    if PAPER_NUMBER_RE.fullmatch(title) and title != number:
+        stems = {re.escape(title), re.escape(split_prefix(title)[1])}
+        pat = re.compile(r'!\[[^\]]*\]\(<?(?:[^)>]*/)?(?:' + '|'.join(sorted(stems)) + r')\.[A-Za-z0-9]+>?\)')
+        if any(pat.search(ln) for ln in note['body']):
+            return title
+    return ''
 
 
 _PAPER_INFRA_RE = re.compile(r'^folgezettel-Index-\S+$')
