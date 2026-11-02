@@ -17668,29 +17668,43 @@ function! s:yomi_names(script, note) abort
   return filter(split(l:out, "\n"), {_, v -> !empty(v)})
 endfunction
 
-" `yomi:` の表示名が複数あるときは番号で選ばせる（1つ以下ならそのまま）。
-" 今の表示名が未登録なら候補の末尾に足す。戻り値は選ばれた表示名（中止なら ''）。
-function! s:yomi_choose_name(script, note, name) abort
-  let l:names = s:yomi_names(a:script, a:note)
-  if len(l:names) < 2
-    return a:name
+" zy / zY: 現在のノートのタイトルだけでなく、索引に登録された表示名も選ぶ。
+" Index・グループ上なら各メンバーの表示名を列挙し、よみはリンク先ノートに保存。
+" 2件以上なら上下キーで選べる中央ポップアップを表示する。
+function! s:yomi_choose_target(script, note, name) abort
+  let l:root = get(g:, 'gnosis_root', '')
+  if empty(l:root) | let l:root = fnamemodify(a:note, ':h') | endif
+  let l:out = s:yomi_py(a:script, 'candidates',
+        \ '--note ' . shellescape(a:note) . ' --base ' . shellescape(expand(l:root)))
+  try
+    let l:choices = json_decode(l:out)
+  catch
+    let l:choices = []
+  endtry
+  if type(l:choices) != v:t_list || empty(l:choices)
+    let l:choices = [{'name': a:name, 'note': a:note, 'kind': 'title',
+          \ 'title': a:name, 'reading': ''}]
   endif
-  if !empty(a:name) && index(l:names, a:name) < 0
-    call add(l:names, a:name)
+  if len(l:choices) == 1
+    return [l:choices[0].name, l:choices[0].note]
   endif
-  let l:menu = join(map(copy(l:names), {i, v -> (i + 1) . '=' . v}), '  ')
-  let l:choice = inputdialog(gnosis#i18n#tr('表示名を選択 (') . l:menu . '): ',
-        \ string(index(l:names, a:name) + 1), "\x01")
-  if l:choice ==# "\x01" || empty(trim(l:choice))
+  let l:items = [gnosis#i18n#tr('編集する表示名・よみを選択（↑↓ / Enter、Esc で中止）')]
+  for l:item in l:choices
+    let l:tag = get(l:item, 'kind', '') ==# 'index'
+          \ ? gnosis#i18n#tr('索引') : gnosis#i18n#tr('ノート')
+    let l:reading = get(l:item, 'reading', '')
+    let l:detail = l:reading ==# ''
+          \ ? gnosis#i18n#tr('未登録') : l:reading
+    call add(l:items, '[' . l:tag . '] ' . l:item.name
+          \ . '  → ' . get(l:item, 'title', '') . '  (' . l:detail . ')')
+  endfor
+  let l:choice = gnosis#ui#inputlist(l:items)
+  if l:choice <= 0 || l:choice > len(l:choices)
     echo gnosis#i18n#tr('Gnosis: 中止')
-    return ''
+    return ['', '']
   endif
-  let l:num = str2nr(trim(l:choice))
-  if l:num < 1 || l:num > len(l:names)
-    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 番号が範囲外です') | echohl NONE
-    return ''
-  endif
-  return l:names[l:num - 1]
+  let l:selected = l:choices[l:choice - 1]
+  return [l:selected.name, l:selected.note]
 endfunction
 
 " よみの入力と保存（表示名は確定済み）。既定値を消して Enter なら削除。
@@ -17745,7 +17759,7 @@ function! gnosis#rename_yomi_with_default(default) abort
   if empty(l:name)
     return
   endif
-  let l:name = s:yomi_choose_name(s:sort_yomi_script(), l:note, l:name)
+  let [l:name, l:note] = s:yomi_choose_target(s:sort_yomi_script(), l:note, l:name)
   if empty(l:name)
     return
   endif
@@ -17759,7 +17773,7 @@ function! gnosis#rename_yomi(args) abort
   if empty(l:name)
     return
   endif
-  let l:name = s:yomi_choose_name(s:sort_yomi_script(), l:note, l:name)
+  let [l:name, l:note] = s:yomi_choose_target(s:sort_yomi_script(), l:note, l:name)
   if empty(l:name)
     return
   endif
