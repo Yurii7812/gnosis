@@ -319,7 +319,7 @@ endfunction
 " 左は各候補の表示名・タイトルと種類を表示し、右に実ノートのプレビューを出す。
 function! s:note_search_run(prompt, with_nth, Sink, ...) abort
   " --only は今のノートのリンク先だけに絞るためのオプション。
-  let l:extra = a:0 > 0 ? a:1 : ''
+  let l:extra = '--lang ' . shellescape(gnosis#i18n#lang()) . (a:0 > 0 ? ' ' . a:1 : '')
   let l:cmd = s:note_search_cmd(l:extra)
   if empty(l:cmd) | return 0 | endif
   let l:preview = s:preview_script()
