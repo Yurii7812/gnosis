@@ -70,6 +70,14 @@ def yomi_candidates(note_path: str, base: str | None = None) -> list[dict]:
             add(path, name, "index")
     # Keep manually registered readings editable even when the display
     # name is not currently present in an index.
+    # Paper Index-write keywords are written as "keyword 1,2". They are
+    # also editable readings, stored on Index-write itself.
+    if current_title == "Index-write" or current_title.startswith("Index-write-"):
+        import paper_pkm as pp
+        for ln in note.read_text(encoding="utf-8").splitlines():
+            entry = pp.parse_keyword_line(ln)
+            if entry is not None:
+                add(str(note), entry["key"], "keyword")
     for name in jy.list_yomi_names(note):
         add(str(note), name, "registered")
     return result
@@ -93,6 +101,7 @@ def main(argv: list[str]) -> int:
     p_sort.add_argument(
         "--dry-run", action="store_true", help="未登録のよみを yomi: に書き込まない"
     )
+    p_sort.add_argument("--note", default=None, help="Index-write file for manually registered keyword readings")
     p_sort.add_argument(
         "--keyword-lines",
         action="store_true",
@@ -171,7 +180,11 @@ def main(argv: list[str]) -> int:
             import paper_pkm as pp  # 同ディレクトリ。キーワード行のよみ規則を共有
 
             def extra_key_fn(line: str):
-                reading = pp.keyword_reading(line)
+                entry = pp.parse_keyword_line(line)
+                if entry is None:
+                    return None
+                manual = jy.get_yomi(args.note, entry["key"]) if args.note else ""
+                reading = manual or pp.keyword_reading(line)
                 return jy.reading_key(reading) if reading else None
 
         added = 0
@@ -183,7 +196,7 @@ def main(argv: list[str]) -> int:
         if args.keyword_lines:
             # The manual sort command must normalize spaces and merge
             # duplicate Index-write names just like regen/on-save.
-            out, _entries = pp.merge_keyword_lines(out)
+            out, _entries = pp.merge_keyword_lines(out, yomi_note=args.note)
         if out:
             sys.stdout.write("\n".join(out) + "\n")
         return 0
