@@ -584,5 +584,23 @@ let s:zyread = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:sortpy
 call s:ok('zY: ノート側でも複数索引名を選び、対応名のよみだけを編集', trim(s:zyread) ==# 'はな', s:zyread)
 unlet g:gnosis_ui_keys g:gnosis_test_yomi_edit
 
+" ------------------------------------------------------------------ za / \l: グループ同士は Related: に相互登録（索引本文には入れない）
+call s:mk('group_pair_a.md', '索引A', ['[ノートA](a.md)'], 1)
+call s:mk('group_pair_b.md', '索引B', [''], 1)
+call s:mk('group_pair_c.md', '索引C', [''], 1)
+execute 'edit ' . fnameescape(s:v . '/group_pair_a.md')
+call setreg('"', '[索引B](group_pair_b.md)')
+call gnosis#add_clipboard_before_up_note()
+call s:ok('za: グループ同士を索引本文ではなく Related: に追加',
+      \ s:has('group_pair_a.md', '^Related:$') && s:has('group_pair_b.md', '^Related:$')
+      \ && s:has('group_pair_a.md', '^\[索引B\](group_pair_b.md)$')
+      \ && s:has('group_pair_b.md', '^\[索引A\](group_pair_a.md)$')
+      \ && index(s:file('group_pair_a.md'), '[ノートA](a.md)') >= 0)
+call gnosis#insert_links_pick(['[索引C](group_pair_c.md)'], getpos('.'))
+call s:ok('\\l: 同じ共通処理でグループ同士を双方向 Related: に登録',
+      \ s:has('group_pair_a.md', '^\[索引C\](group_pair_c.md)$')
+      \ && s:has('group_pair_c.md', '^\[索引A\](group_pair_a.md)$')
+      \ && s:has('group_pair_c.md', '^Related:$'))
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
