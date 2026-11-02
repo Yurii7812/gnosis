@@ -120,7 +120,7 @@ def is_group(path: str, text: str) -> bool:
     return Path(path).name == "index.md" or nf._fm_attr(fm) == nf.CATEGORY_ATTR
 
 
-def index_entries(notes: dict[str, str]):
+def index_entries(notes: dict[str, str], parsed: dict | None = None):
     """Yield (target path, display name, source group) from group body links."""
     by_name: dict[str, list[Path]] = {}
     known = {Path(p).resolve(): p for p in notes}
@@ -129,7 +129,8 @@ def index_entries(notes: dict[str, str]):
         by_name.setdefault(path.stem, []).append(path)
     # Require the destination's explicit Group relation as well as the group's
     # body entry. Incidental links inside a group are not registered entries.
-    parsed = {p: nf._simple_parse_text(Path(p), text) for p, text in notes.items()}
+    if parsed is None:
+        parsed = {p: nf._simple_parse_text(Path(p), text) for p, text in notes.items()}
     memberships = {}
     for path, note in parsed.items():
         memberships[Path(path).resolve()] = {
@@ -210,7 +211,7 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
         candidates.append((path, label or title, title, title_line, content,
                            "group" if group else "note", ""))
     if only is None:
-        for path, label, source in index_entries(notes):
+        for path, label, source in index_entries(notes, parsed):
             candidates.append((path, label, "", 0, "", "root-index"
                                if Path(source).name.lower() == "index.md" else "index", source))
 
@@ -256,6 +257,8 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
             continue
         if kind in ("root-index", "index"):
             line = 0
+        elif only is not None and only.get(os.path.realpath(path), "") and best[1] == 3:
+            line = 0  # Local link display name may not occur in the destination.
         elif best[1] < 4:
             line = title_line
         else:
