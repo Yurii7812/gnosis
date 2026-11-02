@@ -200,7 +200,7 @@ class FolgezettelTest(unittest.TestCase):
             p.write_text(p.read_text().replace(f'title: {name}', f'title: {title}' + ('\nattribute: group' if grp else '')).replace(f'# {name}', f'# {title}'))
         nf.simple_sync(self.root)
         got = [self.ident(self.root / f'{n}.md') for n in ('top', 'pidx', 'iw', 'fidx')]
-        self.assertEqual(got, ['2', '2', '2', '2'])
+        self.assertEqual(got, ['PA-0', 'PA-0', 'PA-0', 'PA-0'])   # 紙の索引は PA-0。頂点の BranchGroup の子も同じ番号
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())

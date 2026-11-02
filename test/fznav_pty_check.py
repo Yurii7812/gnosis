@@ -80,7 +80,7 @@ try:
             s.send(left, 1.2)
             ok(f"[{label}] Ctrl-← の逆順で Folgezettel ビュー（巡回は曼荼羅 ⇔ Folgezettel の 2 つ）", "項目30" in s.text() and "┃" not in s.text())
             s.send("l", 1.0)
-            ok(f"[{label}] l でリンクのリスト（Folgezettel のモード）", "FOLGEZETTEL / " in s.text())
+            ok(f"[{label}] l でリンクのリスト（Folgezettel のモード）", "[L:リンク]" in s.text() or "[Lリンク]" in s.text(), s.text()[:200])
             s.send("f", 1.0)
             ok(f"[{label}] f で Folgezettel に戻る", "項目30" in s.text() and "FOLGEZETTEL / " not in s.text())
             # 右の窓（ノート）へ移って戻っても崩れない

@@ -61,7 +61,8 @@ call writefile(['---', 'title: 深いノート', '---', '', '# 深いノート',
 " zn の Enter は Context を足さない（c だけが Context を足す）。自動 Branch は残る。
 execute 'edit ' . fnameescape(s:v . '/a.md')
 let s:before = s:files()
-let g:gnosis_test_keys = ["\r"]
+" 2 段階: 位置（Enter=末）→ 関係（b=子: 新しいノートが A の子）→ Back link（o=なし）
+let g:gnosis_test_keys = ["\r", "b", "o"]
 sleep 1100m
 call gnosis#v2_new_plain()
 let s:cur_line = line('.')

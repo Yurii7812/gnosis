@@ -83,7 +83,8 @@ with tempfile.TemporaryDirectory() as d:
     check("[M2](m2.md)" in r.split("\nGroup:")[1], "本文のリンクは本文に残る")
 
 
-# ChildBranch: は、本文にリンクがある子を書かない（BranchGroup: の子も書かない）
+# ChildBranch: は、宣言された子を全部書く（本文にリンクがあっても書く・2026-10-31 PR #45）。
+# ただし BranchGroup: の子は書かない（そちらが正）。並びは Folgezettel 番号 → 題。
 with tempfile.TemporaryDirectory() as d:
     root = Path(d)
     note(root, "index.md", "Index", ["[P](p.md)"], group=True)
@@ -97,9 +98,9 @@ with tempfile.TemporaryDirectory() as d:
     p_ = read(root, "p.md")
     i = p_.index("ChildBranch:")
     cb = p_[i + 1:p_.index("BackLink:") if "BackLink:" in p_ else len(p_)]
-    # 本文にリンクがある子（B）も BranchGroup: の G も ChildBranch: に書かない
-    check(cb[:2] == ["[A](a.md)", "[C](c.md)"] and "[B](b.md)" not in cb and "[G](g.md)" not in cb,
-          f"ChildBranch: 本文にある子は書かない（ほかは元の並びのまま）: {cb}")
+    # 本文にリンクがある子（B）も全部書く。BranchGroup: の G は書かない
+    check(cb[:3] == ["[A](a.md)", "[B](b.md)", "[C](c.md)"] and "[G](g.md)" not in cb,
+          f"ChildBranch: 宣言された子を全部書く（BranchGroup: の子は除く）: {cb}")
     # 本文からリンクを消すと、子の ParentBranch: をもとに ChildBranch: に戻る
     note(root, "b.md", "B", ["ParentBranch:", "[P](p.md)", "", "x"])
     txt = (root / "p.md").read_text(encoding="utf-8").replace("本文 [B](b.md)", "本文")
@@ -108,12 +109,12 @@ with tempfile.TemporaryDirectory() as d:
     p_ = read(root, "p.md")
     cb = p_[p_.index("ChildBranch:") + 1:]
     check("[B](b.md)" in cb, f"本文から消した子は ChildBranch: に戻る: {cb}")
-    # このノートを Context にしている子は上、空行、ただの子は下
+    # このノートを Context にしている子も、特別な位置に上げない（並びは番号 → 題）
     note(root, "c.md", "C", ["ParentBranch:", "[P](p.md)", "Context:", "[P](p.md)", "", "x"])
     sync(root)
     p_ = read(root, "p.md")
     cb = p_[p_.index("ChildBranch:") + 1:]
-    check(cb[0] == "[C](c.md)" and cb[1] == "" and "[A](a.md)" in cb[2:], f"Context にしている子が上: {cb}")
+    check(cb[:3] == ["[A](a.md)", "[B](b.md)", "[C](c.md)"], f"Context にしている子も特別扱いしない: {cb}")
 
 # 同じグループに別名で複数掲載。削除・名前変更・再同期に追従する。
 with tempfile.TemporaryDirectory() as d:

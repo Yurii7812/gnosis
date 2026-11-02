@@ -80,8 +80,8 @@ try:
     ok("Shift+← のあと: 右のパネルは開いていない", len(st) > 3 and st[1] == "")
     shown, st = run([(b"\x1b[1;2C", 3.0)])
     ok("Shift+→ のあと: \\l の選ぶモードが続いている", len(st) > 3 and st[0] == "1")
-    ok("Shift+→ のあと: 右のパネルが開く（最初はアウトライン）", len(st) > 3 and st[1] == "outline")
-    ok("Shift+→ のあと: カーソルはパネルにある", len(st) > 4 and st[3] == "gnosis-outline")
+    ok("Shift+→ のあと: 右のパネルが開く（前に使った中身が無ければタブのボード）", len(st) > 3 and st[1] == "tabs")
+    ok("Shift+→ のあと: カーソルはパネルにある", len(st) > 4 and "tabs" in st[4])
     print("\n".join(res))
     sys.exit(1 if any(r.startswith("NG") for r in res) else 0)
 finally:

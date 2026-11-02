@@ -404,6 +404,11 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         p = work.pop()
         if ID_RE.fullmatch(ids[p]):
             assign(p, ids[p])
+    # 紙の索引の番号（PA-0）は、上で通常の番号に上書きされていても、共有の番号の判定の前に直す。
+    # さもないと、頂点のノートの BranchGroup の子（Index-write など）に古い通常の番号が渡る。
+    for p, n in notes.items():
+        if is_paper_infra(n) and p not in unsaved:
+            ids[p] = (infra_prefix(n) or base_prefix) + '0'
     for p, n in notes.items():
         if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
             continue
