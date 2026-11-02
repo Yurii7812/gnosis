@@ -166,7 +166,7 @@ def index_entries(notes: dict[str, str], parsed: dict | None = None):
 # Exact display/title matches outrank partial matches in every category.
 KIND_LABELS = {
     "ja": {"root-index": "Indexの索引", "index": "索引", "group": "グループ", "note": "ノート"},
-    "en": {"root-index": "Index entry", "index": "Index entry", "group": "Group", "note": "Note"},
+    "en": {"root-index": "From Index", "index": "Index entry", "group": "Group", "note": "Note"},
 }
 
 
@@ -226,7 +226,8 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
         body_hay = sq.normalize(body)
         # The --only link-label counts as the searchable title for that picker.
         primary = sq.normalize(shown if only is not None else title)
-        full = primary + "\n" + body_hay
+        actual_title = sq.normalize(title)
+        full = primary + "\n" + actual_title + "\n" + body_hay
         best = None
         best_words = []
         for g in groups or [sq.Group()]:
@@ -243,7 +244,7 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
                 tier = 1
             elif kind == "group":
                 tier = 2
-            elif all(word in primary for word in terms):
+            elif all(word in primary for word in terms) or (only is not None and all(word in actual_title for word in terms)):
                 tier = 3   # Every positive word can be found in the note title.
             else:
                 tier = 4   # Content match (potentially with title terms as AND).
@@ -257,7 +258,8 @@ def search_rows(root: str, query: str, only: dict[str, str] | None = None):
             continue
         if kind in ("root-index", "index"):
             line = 0
-        elif only is not None and only.get(os.path.realpath(path), "") and best[1] == 3:
+        elif (only is not None and only.get(os.path.realpath(path), "")
+              and best[1] == 3 and all(sq.normalize(w) in sq.normalize(shown) for w in best_words)):
             line = 0  # Local link display name may not occur in the destination.
         elif best[1] < 4:
             line = title_line
