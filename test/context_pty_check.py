@@ -45,7 +45,8 @@ class TestNewNoteCursor(unittest.TestCase):
     def test_zn_enter_types_into_the_middle_blank_line(self) -> None:
         with Session(self.rc, str(self.home), str(self.home), args=[str(self.v / "a.md")]) as s:
             s.send("zn", 0.6)
-            s.send("\r", 1.5)       # 位置キー Enter（本文の最後・ParentBranch が付く）
+            s.send("\r", 1.5)       # 位置キー Enter（本文の最後）
+            s.send("b", 0.8)         # 関係: b = 子（新しいノートの ParentBranch に A が付く）
             s.send("ここに書く", 0.6)  # 挿入モードのまま、すぐ書ける
             s.send(ESC, 0.9)
             s.send(":wa\r", 0.6)
@@ -73,6 +74,7 @@ class TestNewNoteCursor(unittest.TestCase):
         with Session(self.rc, str(self.home), str(self.home), args=[str(self.v / "a.md")]) as s:
             s.send("zn", 0.6)
             s.send("\r", 1.5)
+            s.send("b", 0.8)
             s.send(ESC, 0.9)
             s.send(":wa\r", 0.6)
             s.send(":qa!\r", 0.4)

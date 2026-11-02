@@ -30,7 +30,7 @@ try:
     mk("kid1.md", "子1", "")
     mk("kid2.md", "子2", "ParentBranch:\n[上位](top.md)")
     mk("linkonly.md", "リンク先", "")
-    env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
+    env = dict(os.environ, TERM="xterm-256color", GNOSIS_HOME=str(work / "home"), GNOSIS_LANG="ja", WAYLAND_DISPLAY="", DISPLAY="", TMPDIR=str(work))
     pid, fd = pty.fork()
     if pid == 0:
         os.execvpe("vim", ["vim", "-u", str(REPO / "vimrc_gnosis"), "-N", "--cmd",
@@ -66,7 +66,7 @@ try:
     os.write(fd, b"Z")
     pump(1.2)
     seg = out[mark:]
-    ok("Z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "プリセットの画面".encode() in seg)
+    ok("Z で設定の画面が出る", "曼荼羅の設定".encode() in seg and "P:プリセット".encode() in seg)
     i = seg.rfind("曼荼羅の設定".encode())
     m = list(re.finditer(rb"\x1b\[(\d+);(\d+)H", seg[:i]))
     col = int(m[-1].group(2)) if m else 0
