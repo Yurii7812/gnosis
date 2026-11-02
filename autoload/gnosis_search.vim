@@ -323,12 +323,15 @@ function! s:note_search_run(prompt, with_nth, Sink, ...) abort
   let l:cmd = s:note_search_cmd(l:extra)
   if empty(l:cmd) | return 0 | endif
   let l:preview = s:preview_script()
-  let l:header = gnosis#i18n#lang() ==# 'ja'
-        \ ? '完全一致 → Indexの索引 → 索引 → グループ → ノート（タイトル→本文）'
-        \ : 'Exact match → Index entries → Other index entries → Groups → Notes (title then body)'
+  let l:e = nr2char(27)
+  let l:reset = l:e . '[0m'
+  let l:header = l:e . '[1;35m●' . l:reset . ' Index  '
+        \ . l:e . '[1;34m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' 索引  ' : ' Index entry  ')
+        \ . l:e . '[1;32m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' グループ  ' : ' Group  ')
+        \ . l:e . '[90m●' . l:reset . (gnosis#i18n#lang() ==# 'ja' ? ' ノート' : ' Note')
   let l:options = [
         \ '--ansi', '--multi', '--disabled',
-        \ '--delimiter=\t', '--with-nth=2,4',
+        \ '--delimiter=\t', '--with-nth=5,2,4',
         \ '--prompt=' . a:prompt, '--header=' . shellescape(l:header),
         \ '--bind', 'change:reload:' . l:cmd . ' {q}',
         \ '--wrap-sign', '',
