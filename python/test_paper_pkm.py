@@ -400,6 +400,12 @@ def test_topic_index() -> None:
         n1 = notes["1"].read_text(encoding="utf-8")
         check("TopicIndex:\n[PA-1-仏教](" in n1 and
               "BranchGroup:\n[PA-1-仏教](" not in n1, "TopicIndex: にリンク、BranchGroup: には置かない")
+        # Legacy BranchGroup references are migrated, not duplicated on sync.
+        notes["1"].write_text(n1.replace("TopicIndex:", "BranchGroup:"), encoding="utf-8")
+        pp.regen(root)
+        n1 = notes["1"].read_text(encoding="utf-8")
+        check("TopicIndex:\n[PA-1-仏教](" in n1 and "BranchGroup:\n[PA-1-仏教](" not in n1,
+              "旧 BranchGroup: のトピックリンクは再生成で TopicIndex: へ移動")
         check("attribute: topicindex" in notes["1-仏教"].read_text(encoding="utf-8")
               and "attribute: group" not in notes["1-仏教"].read_text(encoding="utf-8"),
               "TopicIndex は独立属性")
@@ -1038,7 +1044,7 @@ def test_digital_diary_not_confused() -> None:
 
 
 def test_topic_parent_by_link() -> None:
-    print("トピックの親子: front matter の topic_parent に残し、BranchGroup では親を子より先に（インデントなし）")
+    print("トピックの親子: topic_parent に残し、TopicIndex では親を子より先に")
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         moved, _ = pp.move_images(root, root, _add_images(root, ["1"]))
@@ -1053,7 +1059,9 @@ def test_topic_parent_by_link() -> None:
         check("topic_parent: PA-1-仏教" in tb and f"[PA-1-仏教]({pa.name})" not in tb, "子トピックは front matter の topic_parent で親を持つ（Context では代用しない）")
         pp.regen(root, do_sync=False)
         t1 = n1.read_text(encoding="utf-8")
-        check(f"BranchGroup:\n[PA-1-仏教]({pa.name})\n[PA-1-禅]({pb.name})" in t1, f"ID ノートの BranchGroup: で親が先・インデントなし: {t1}")
+        check(f"TopicIndex:\n[PA-1-仏教]({pa.name})\n[PA-1-禅]({pb.name})" in t1
+              and "BranchGroup:\n[PA-1-仏教]" not in t1,
+              f"ID ノートの TopicIndex: で親が先・インデントなし: {t1}")
         pp.regen(root, do_sync=False)
         check(t1 == n1.read_text(encoding="utf-8"), "冪等")
         check(pb.read_text(encoding="utf-8").count("topic_parent") == 1 and "topic_parent" not in pa.read_text(encoding="utf-8"),
