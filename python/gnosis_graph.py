@@ -152,6 +152,19 @@ class Graph:
                 (groups if n.is_group else notes).setdefault(n.fz, []).append(n.id)
         return notes, groups
 
+    def group_link_violations(self) -> list[dict]:
+        """決まり: 索引（グループ）はノートだけを指す。グループ同士の辺は Related: のときだけ。
+        グループ→グループの本文リンク・ChildBranch:・ParentBranch:・BranchGroup:・Group: などは違反。
+        派生の辺（backlink）と Folgezettel の番号の親子は、書かれたリンクではないので数えない。"""
+        out = []
+        for e in self.edges:
+            if e.derived or e.kind in ("related", "folgezettel"):
+                continue
+            s, d = self.nodes.get(e.src), self.nodes.get(e.dst)
+            if s and d and s.is_group and d.is_group:
+                out.append({"src": e.src, "dst": e.dst, "kind": e.kind})
+        return out
+
     def fz_problems(self) -> dict:
         notes, groups = self.fz_index()
         every = set(notes) | set(groups)
@@ -305,6 +318,7 @@ def to_json(g: Graph) -> dict:
 
 def check(g: Graph) -> dict:
     return {"broken_links": g.broken, "folgezettel": g.fz_problems(), "orphans": g.orphans(),
+            "group_link_violations": g.group_link_violations(),
             "counts": {"notes": len(g.nodes), "edges": len(g.edges), "broken": len(g.broken)}}
 
 

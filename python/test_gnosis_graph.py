@@ -129,5 +129,73 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(list(self.root.glob(".*")), [])      # キャッシュ等を作らない
 
 
+class GroupLinkRuleTest(unittest.TestCase):
+    """決まり（2026-11-03）: 索引（グループ）はノートだけを指す。グループ同士は Related: のときだけ。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=str(Path.home() / "gnosis-work" / "test"))
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def build(self, files):
+        for name, (title, body, extra) in files.items():
+            note(self.root, name, title, body, extra_fm=extra)
+        return gg.build(self.root)
+
+    def viol(self, g):
+        return sorted((v["src"], v["dst"], v["kind"]) for v in g.group_link_violations())
+
+    def test_index_to_note_is_ok(self):
+        g = self.build({
+            "idx.md": ("索引", "[A](a.md)\n[B](b.md)\n", "attribute: group\n"),
+            "a.md": ("A", "", ""),
+            "b.md": ("B", "", ""),
+        })
+        self.assertEqual(self.viol(g), [])
+
+    def test_index_body_link_to_group_is_violation(self):
+        g = self.build({
+            "idx.md": ("索引", "[別のグループ](grp.md)\n", "attribute: group\n"),
+            "grp.md": ("グループ", "", "attribute: group\n"),
+        })
+        self.assertEqual(self.viol(g), [("idx.md", "grp.md", "link")])
+
+    def test_group_related_to_group_is_ok(self):
+        g = self.build({
+            "g1.md": ("G1", "Related:\n[G2](g2.md)\n", "attribute: group\n"),
+            "g2.md": ("G2", "", "attribute: group\n"),
+        })
+        self.assertEqual(self.viol(g), [])
+
+    def test_group_child_branch_to_group_is_violation(self):
+        g = self.build({
+            "g1.md": ("G1", "ChildBranch:\n[G2](g2.md)\n", "attribute: group\n"),
+            "g2.md": ("G2", "", "attribute: group\n"),
+        })
+        self.assertEqual(self.viol(g), [("g1.md", "g2.md", "child_branch")])
+
+    def test_note_to_group_is_ok(self):
+        g = self.build({
+            "n.md": ("N", "BranchGroup:\n[G](g.md)\n\nContext:\n[G](g.md)\n", ""),
+            "g.md": ("G", "", "attribute: group\n"),
+        })
+        self.assertEqual(self.viol(g), [])
+
+    def test_group_to_note_is_ok(self):
+        g = self.build({
+            "g.md": ("G", "ChildBranch:\n[N](n.md)\n", "attribute: group\n"),
+            "n.md": ("N", "", ""),
+        })
+        self.assertEqual(self.viol(g), [])
+
+    def test_backlink_is_not_counted(self):
+        # 逆向きの BackLink（派生）は二重に数えない。元のリンク（本文）だけ数える。
+        g = self.build({
+            "idx.md": ("索引", "[別](grp.md)\n", "attribute: group\n"),
+            "grp.md": ("グループ", "", "attribute: group\n"),
+        })
+        self.assertEqual(len(self.viol(g)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

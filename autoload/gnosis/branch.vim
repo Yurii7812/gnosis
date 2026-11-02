@@ -59,7 +59,9 @@ endfunction
 " 結果を利用者に見せる文言
 function! gnosis#branch#message(r) abort
   let l:c = get(a:r, 'code', 'error')
-  if l:c ==# 'added'
+  if l:c ==# 'group_rule'
+    return gnosis#i18n#tr('Gnosis: 索引（グループ）にはグループを書けません。関連なら Related: を使ってください')
+  elseif l:c ==# 'added'
     return gnosis#i18n#t('branch.added')
   elseif l:c ==# 'already'
     return gnosis#i18n#t('branch.already')
@@ -112,6 +114,12 @@ function! gnosis#branch#add_paths(parent, paths, ...) abort
   if empty(a:parent) || empty(l:root) || stridx(a:parent, l:root . '/') != 0
     return {'ok': 0, 'code': 'not_in_vault'}
   endif
+  " 決まり（2026-11-03）: 索引（グループ）とグループは親子にしない（関連は Related: のみ）
+  for l:p in a:paths
+    if gnosis#group_pair_refused(a:parent, l:p, 'child_branch')
+      return {'ok': 0, 'code': 'group_rule'}
+    endif
+  endfor
   " ディスク上の内容で検証・追記するので、今のノートの未保存の変更を先に保存する（保存できなければ中止）
   " 関わるノートのうち、開いていて未保存のものを先に保存する（今のノートは保存する。別のバッファは保存できないので中止）
   for l:f in [a:parent] + a:paths

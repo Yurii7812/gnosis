@@ -2226,6 +2226,10 @@ function! s:append_link_to_context(link) abort
 endfunction
 
 function! s:append_link_to_buffer_section(name, link) abort
+  " 索引（グループ）→ グループは書かない（Related: 以外）
+  if gnosis#group_pair_refused(expand('%:p'), s:link_target_path(a:link, expand('%:p:h')), a:name)
+    return 0
+  endif
   " Context は本文の冒頭の `Context:` ブロック（旧 `### Context` 節ではない）
   if a:name ==# 'up'
     return s:append_link_to_context(a:link)
@@ -10936,6 +10940,11 @@ endfunction
 
 " 旧公開関数名は互換のため残す。実際のキーは zn → g。
 function! gnosis#v2_new_group() abort
+  " 決まり（2026-11-03）: 索引（グループ）の中には、グループを作らない（ノートだけ）
+  if s:buf_is_group()
+    echom gnosis#i18n#tr('Gnosis: 索引（グループ）の中にはグループを作れません（ノートだけ）')
+    return
+  endif
   call s:v2_new_interactive('group')
 endfunction
 
@@ -10956,6 +10965,10 @@ endfunction
 "   選択範囲は新しいグループへのリンクで**置き換える**（リンクをグループへ移す）。
 "   グループの ### Context は今のノート。作成後グループを開いて本文末にカーソル。
 function! gnosis#v2_new_group_visual() abort range
+  if s:buf_is_group()
+    echom gnosis#i18n#tr('Gnosis: 索引（グループ）の中にはグループを作れません（ノートだけ）')
+    return
+  endif
   if s:pkm_format() !=# 'v2'
     echo gnosis#i18n#tr('Gnosis: v2 専用') | return
   endif
@@ -11167,6 +11180,9 @@ endfunction
 
 " simple: file の Context（本文冒頭の `Context:` ブロック）に parent_path へのリンクを 1 本足す
 function! s:simple_add_parent(file, parent_path, parent_title) abort
+  if gnosis#group_pair_refused(fnamemodify(a:file, ':p'), fnamemodify(a:parent_path, ':p'), 'context')
+    return 0
+  endif
   let l:lines = readfile(a:file)
   let l:link = s:make_link_from_dir(a:parent_path, a:parent_title, fnamemodify(a:file, ':h'))
   " Branch と Context は独立の関係。同じ親へのリンクが ParentBranch にあっても Context に登録できる
@@ -11246,6 +11262,9 @@ endfunction
 
 " simple: file の本文冒頭の Group: ブロックに group_path へのリンクを 1 本足す（無ければ H1 の直後に作る）。
 function! s:simple_add_group(file, group_path, group_title) abort
+  if gnosis#group_pair_refused(fnamemodify(a:file, ':p'), fnamemodify(a:group_path, ':p'), 'group')
+    return
+  endif
   let l:old = readfile(a:file)
   let l:link = s:make_link_from_dir(a:group_path, a:group_title, fnamemodify(a:file, ':h'))
   let l:new = s:lines_add_group_link(l:old, l:link)
@@ -11546,6 +11565,10 @@ endfunction
 
 " zn → g は開いているノートの BranchGroup: へ追加。
 function! s:append_link_to_branch_group(link) abort
+  " 索引（グループ）の BranchGroup: に、グループを入れない
+  if gnosis#group_pair_refused(expand('%:p'), s:link_target_path(a:link, expand('%:p:h')), 'branch_group')
+    return 0
+  endif
   let l:lines = getline(1, '$')
   let l:flags = s:fence_flags(l:lines)
   let l:head = -1
@@ -14780,11 +14803,22 @@ function! s:insert_links_core_raw(links, ...) abort
   " グループ（Index を含む）では置き場所や関係を聞かない。1 本ずつ表示名とよみを聞いて本文の最後に足し、
   " よみの順に並べ替える（2026-10-20〜。確認画面は出さない）。選べるのは通常のノートだけ。
   if &buftype ==# '' && s:group_path_reviewable(expand('%:p'))
-    return s:group_add_links_named(l:links) > 0 ? 1 : 0
+    " 索引（グループ）の本文には、グループを足さない（ノートだけ）。グループのリンクは外して、残りを足す
+    let l:notes = []
+    for l:one in l:links
+      if !gnosis#group_pair_refused(expand('%:p'), s:link_target_path(l:one, expand('%:p:h')), 'body')
+        call add(l:notes, l:one)
+      endif
+    endfor
+    if empty(l:notes)
+      return 0
+    endif
+    return s:group_add_links_named(l:notes) > 0 ? 1 : 0
   endif
   " g（選んだグループに今のノートを入れる）は、選んだノート（選択先）が全部グループのときだけ使える。
   " 今のノートがグループかどうかでは決めない。置き場所は聞かず、表示名とよみを聞いて終わる。
-  let l:can_g = empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
+  " 索引（グループ）の中では、グループに入れる（g）もできない（グループ同士は Related: だけ）
+  let l:can_g = !s:buf_is_group() && empty(filter(copy(l:links), '!s:link_is_group(v:val)'))
   " m（マージ）は \l で 1 つだけ選んだとき
   let l:can_m = !empty(s:inline_pos) && len(l:links) == 1
   " x（向きの入れ替え）は 1 つだけ選んだとき。入れ替えると、選んだノート側にリンクを書く／関係の向きが逆になる
@@ -16442,6 +16476,35 @@ function! s:buf_is_group() abort
     return 1
   endif
   return s:v2_buf_attr() ==# 'group'
+endfunction
+
+" 決まり（2026-11-03）: 索引（グループ）はノートだけを指す。グループ同士の繋がりは Related: のときだけ。
+" src も dst もグループ（attribute: group / index.md）で、書く節が related 以外なら 1（書かない・理由を出す）。
+" src・dst は絶対パス。python 側の gnosis_graph.group_link_violations と同じ決まり。
+function! gnosis#group_pair_refused(src, dst, section) abort
+  if a:section ==# 'related' || empty(a:src) || empty(a:dst)
+    return 0
+  endif
+  if !s:path_is_group(a:src) || !s:path_is_group(a:dst)
+    return 0
+  endif
+  echohl WarningMsg
+  echom gnosis#i18n#tr('Gnosis: 索引（グループ）にはグループを書けません。関連なら Related: を使ってください')
+  echohl NONE
+  return 1
+endfunction
+
+function! s:path_is_group(path) abort
+  return fnamemodify(a:path, ':t') ==# 'index.md' || s:v2_path_attr(a:path) ==# 'group'
+endfunction
+
+" リンク行の宛先の絶対パス（無ければ ''）。base_dir はリンクを解決する基準の場所。
+function! s:link_target_path(link, base_dir) abort
+  let l:tg = substitute(s:extract_target(a:link), '#.*$', '', '')
+  if empty(l:tg)
+    return ''
+  endif
+  return fnamemodify(gnosis#resolve_link(l:tg, a:base_dir), ':p')
 endfunction
 
 " 追加するリンクを 1 行で取り出す。優先は「カーソル下のリンク」、
