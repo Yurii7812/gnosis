@@ -13183,6 +13183,12 @@ function! gnosis#autosync_on_save() abort
     endif
   endif
 
+  " 内容が前回の同期の後と同じで、タイトルも同じなら、同期を起動しない（同じ内容を何度保存しても重くしない）
+  let l:sha = exists('*sha256') ? sha256(join(getline(1, '$'), "\n")) : ''
+  if !empty(l:sha) && get(b:, 'syn_last_sha', '') ==# l:sha && get(b:, 'syn_last_title', '') ==# s:fm_title()
+    call gnosis#autosync_log('  skip: unchanged since the last sync')
+    return
+  endif
   let l:py   = s:python_cmd()
   let l:args = [l:py, g:gnosis_python, 'update_one', l:file, l:root]
   " タイトルを変えた保存なら、変更前のタイトルを渡す（表示名が旧タイトルと同じ
@@ -13198,14 +13204,8 @@ function! gnosis#autosync_on_save() abort
 
   call gnosis#conflict#mark_own_sync()
   if has('job') && has('channel')
-    " 非同期実行
-    let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
-    call gnosis#autosync_log('  start job: ' . l:cmd)
-    call job_start(gnosis#shell_job(l:cmd), {
-          \ 'exit_cb': function('s:autosync_done', [l:file]),
-          \ 'out_io':  'null',
-          \ 'err_cb': {ch, msg -> s:sync_problem('stderr: ' . msg)},
-          \ })
+    " 非同期実行（同時に 1 本だけ。実行中の保存は、終わってから 1 回にまとめる）
+    call s:sync_request(l:args, l:file, l:sha, l:new_title)
   else
     " 同期フォールバック
     let l:cmd = join(map(copy(l:args), 'shellescape(v:val)'), ' ')
@@ -13213,6 +13213,61 @@ function! gnosis#autosync_on_save() abort
     if !gnosis#sh#error()
       checktime
     endif
+  endif
+endfunction
+
+" 同期の job は同時に 1 本だけ。走っている間に来た要求は 1 つにまとめ、終わったあとに 1 回だけ走らせる。
+" 保存のたびに python を積むと、互いの vault ロックを待って全体が重くなり、読み直しも何度も起きていた。
+let s:sync_job = v:null
+let s:sync_next = {}
+let g:gnosis_test_sync_starts = 0
+
+" 同期が止まっている（走っていない・待ちもない）なら 1。試験が終わりを待つのに使う。
+function! gnosis#autosync_idle() abort
+  return (s:sync_job is v:null || job_status(s:sync_job) !=# 'run') && empty(s:sync_next)
+endfunction
+
+function! s:sync_request(args, file, sha, title) abort
+  if s:sync_job isnot v:null && job_status(s:sync_job) ==# 'run'
+    " 待ちの要求は 1 つ。古い方の旧タイトル（表示名の追従）は、新しい要求が持っていなければ残す
+    let l:old = get(s:sync_next, 'args', [])
+    let l:args = copy(a:args)
+    if len(l:args) < 6 && len(l:old) >= 6
+      let l:args = l:args + [l:old[5]]
+    endif
+    let s:sync_next = {'args': l:args, 'file': a:file, 'sha': a:sha, 'title': a:title}
+    return
+  endif
+  call s:sync_start(a:args, a:file, a:sha, a:title)
+endfunction
+
+function! s:sync_start(args, file, sha, title) abort
+  let l:cmd = join(map(copy(a:args), 'shellescape(v:val)'), ' ')
+  call gnosis#autosync_log('  start job: ' . l:cmd)
+  let g:gnosis_test_sync_starts += 1
+  let s:sync_job = job_start(gnosis#shell_job(l:cmd), {
+        \ 'exit_cb': function('s:sync_exit', [a:file, a:sha, a:title]),
+        \ 'out_io':  'null',
+        \ 'err_cb': {ch, msg -> s:sync_problem('stderr: ' . msg)},
+        \ })
+endfunction
+
+function! s:sync_exit(file, sha, title, job, status) abort
+  let s:sync_job = v:null
+  call s:autosync_done(a:file, a:job, a:status)
+  " 成功したら、今の内容（ディスク上）を「同期済み」として覚える
+  if a:status == 0 && !empty(a:sha) && filereadable(a:file)
+    let l:nr = bufnr(a:file)
+    let l:now = exists('*sha256') ? sha256(join(readfile(a:file), "\n")) : ''
+    if l:nr > 0 && !empty(l:now)
+      call setbufvar(l:nr, 'syn_last_sha', l:now)
+      call setbufvar(l:nr, 'syn_last_title', a:title)
+    endif
+  endif
+  if !empty(s:sync_next)
+    let l:n = s:sync_next
+    let s:sync_next = {}
+    call s:sync_start(l:n.args, l:n.file, l:n.sha, l:n.title)
   endif
 endfunction
 
