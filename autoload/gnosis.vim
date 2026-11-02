@@ -2905,16 +2905,16 @@ endfunction
 " 複数行に連続することがある。日本語の後の '_' や孤立した '`' で
 " 本文全体が意図せず別色になるのを防ぐ。
 function! s:gnosis_safe_markdown_inline() abort
-  silent! syntax clear markdownItalic
-  silent! syntax clear markdownBold
-  silent! syntax clear markdownCode
+  call s:syn_clear('markdownItalic')
+  call s:syn_clear('markdownBold')
+  call s:syn_clear('markdownCode')
   " 閉じ記号が同じ行に存在する時だけ有効にする（未閉じは通常の本文色）。
   " 'oneline' が標準 markdown.vim の多行連結を防ぐ。
   " * が 2 つ並んだところ（**太字**）は斜体として読まない。日本語の「。**全部**する」で
   " 開きの ** が斜体に取られ、閉じの ** から段落の終わりまで太字になっていた。
   " 英数字に挟まれた * （2*3*4 などの式）は斜体にしない。記号（* ** ***）はどれも隠さず、控えめな色で見せる
   " （***太字斜体*** だけ Vim 標準の構文で記号が隠れていて、ほかと揃っていなかった）。
-  silent! syntax clear markdownBoldItalic
+  call s:syn_clear('markdownBoldItalic')
   syntax region markdownItalic matchgroup=markdownItalicDelimiter
         \ start=/[*[:alnum:]]\@<!\*\ze[^*[:space:]][^*\n]*\*\@<!\*\%([*[:alnum:]]\)\@!/ end=/\S\@<=\*\@<!\*\%([*[:alnum:]]\)\@!/ oneline keepend
   syntax region markdownBoldItalic matchgroup=markdownBoldItalicDelimiter
@@ -2932,15 +2932,24 @@ function! s:gnosis_safe_markdown_inline() abort
         \ start=/`\ze[^`\n]\+`/ end=/`/ oneline keepend
 endfunction
 
+" 構文グループを消す。まだ無いグループ（初回の .md など）を消そうとしても、エラーを出さない。
+" 出てしまうと、ノートを開くたびに E28 が並び、構文の設定の途中で止まっていた。
+function! s:syn_clear(group) abort
+  try
+    execute 'syntax clear ' . a:group
+  catch
+  endtry
+endfunction
+
 function! gnosis#link_syntax() abort
   " 再実行時の重複定義を防ぐ
-  silent! syntax clear gnosisLinkRegion
-  silent! syntax clear gnosisLinkText
-  silent! syntax clear gnosisConcealOpen
-  silent! syntax clear gnosisConcealClose
-  silent! syntax clear gnosisEmptyBracket
-  silent! syntax clear gnosisCheckboxBracket
-  silent! syntax clear gnosisCheckedBracket
+  call s:syn_clear('gnosisLinkRegion')
+  call s:syn_clear('gnosisLinkText')
+  call s:syn_clear('gnosisConcealOpen')
+  call s:syn_clear('gnosisConcealClose')
+  call s:syn_clear('gnosisEmptyBracket')
+  call s:syn_clear('gnosisCheckboxBracket')
+  call s:syn_clear('gnosisCheckedBracket')
   call s:gnosis_safe_markdown_inline()
 
   " リンク全体は region で保持し、見える本文だけを水色にする。
@@ -2951,8 +2960,8 @@ function! gnosis#link_syntax() abort
   " リンクは斜体/太字の中でもリンクとして見せる（この環境の日本語名は
   " `_00001` を含むため実質必須）。
   " コード（``` のブロックと `インライン`）の中はリンクにしない
-  silent! syntax clear gnosisCodeFence
-  silent! syntax clear gnosisCodeInline
+  call s:syn_clear('gnosisCodeFence')
+  call s:syn_clear('gnosisCodeInline')
   syntax region gnosisCodeFence start=/^\s\{0,3}\z(`\{3,}\)/ end=/^\s\{0,3}\z1`*\s*$/ keepend contains=NONE
   syntax match gnosisCodeInline /\(`\+\)\%(\%(\1\)\@!.\)\{-1,}\1/ contains=NONE
   highlight default link gnosisCodeFence markdownCodeBlock
