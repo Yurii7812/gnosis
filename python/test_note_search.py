@@ -121,7 +121,7 @@ class UnifiedSearch(unittest.TestCase):
             styled = ns.colored_kind(kind, 'ja')
             self.assertTrue(styled.startswith(ns.KIND_ANSI[kind]))
             self.assertTrue(styled.endswith(ns.RESET))
-            self.assertEqual(re.sub(r'\\x1b\\[[0-9;]*m', '', styled),
+            self.assertEqual(re.sub(r'\x1b\[[0-9;]*m', '', styled),
                              '[' + ns.KIND_LABELS['ja'][kind] + ']')
         out = subprocess.check_output(
             [sys.executable, ns.__file__, '--lang', 'ja', str(self.root), 'ハーブ'], text=True)
