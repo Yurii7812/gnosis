@@ -84,7 +84,7 @@ KEYWORD_LINE_RE = re.compile(
 # 旧い front matter のキー（廃止）。新規には書かない。読むのは移行（migrate_legacy_metadata）だけ。
 # ノートの種類は title・画像の参照・リンク階層で判定する（下の「ノートの種類の判定」）。
 LEGACY_FM_KEYS = (
-    "folgezettel", "paper_index", "paper_diary", "paper_diary_month", "paper_diary_year",
+    "paper_index", "paper_diary", "paper_diary_month", "paper_diary_year",
     "paper_keyword", "paper_topic", "paper_topic_index", "folgezettel_index",
 )
 DIARY_KEYWORD = "日記"                   # Paper-Zettelkasten-Index のキーワード表示名
@@ -762,10 +762,10 @@ def _rewrite_links_to(root: Path, old_path: Path, new_path: Path) -> int:
 
 
 def _fm_title_attr(fm: list[str], title: str, group: bool = True) -> list[str]:
-    """front matter を 時刻・title・attribute・（yomi など）の順にそろえる。title / attribute 以外は触らない。"""
+    """YAML の title: を除外し、group 指定のみ付与する。題は H1 が正。"""
     rest = [ln for ln in fm if not re.match(r"^\s*(title|attribute)\s*:", ln)]
     at = next((i for i, ln in enumerate(rest) if ln.startswith("time:")), -1)
-    add = [f"title: {title}"] + (["attribute: group"] if group else [])
+    add = ["attribute: group"] if group else []
     rest[at + 1:at + 1] = add
     return rest
 
@@ -833,7 +833,7 @@ def _legacy_values(n: NoteInfo, key: str) -> list[str]:
 
 
 def migrate_legacy_metadata(root: Path) -> list[str]:
-    """旧い front matter の目印（`folgezettel:` など）を、新しい判定（title・画像の参照・リンク階層）で
+    """旧い front matter の目印（紙固有の廃止済みキー）を、新しい判定（H1・画像の参照・リンク階層）で
     同じノートだと確かめられたものから取り除く。確かめられない・値が矛盾するものは**消さずに**警告を返す。
 
     - 取り除くのは目印の行だけ。本文・画像・リンク・ほかの front matter は変えない。
@@ -856,17 +856,7 @@ def migrate_legacy_metadata(root: Path) -> list[str]:
         for key in sorted(keys):
             vals = _legacy_values(n, key)
             v = vals[0] if vals else ""
-            if key == "folgezettel":
-                if re.fullmatch(r"[A-Z]{1,4}-" + re.escape(fm_title), v or ""):
-                    continue  # 紙のノートの番号（PA- + 題）。同期が付けるもの。外さない
-                if normalize_id(v) != fm_title:
-                    msgs.append(f"{n.path.name}: folgezettel: {v!r} と title: {fm_title!r} が一致しません（消していません）")
-                elif scan_id_of(n) is None:
-                    msgs.append(f"{n.path.name}: title: {fm_title} と同じ名前の画像を参照していないため、スキャンノートと確認できません"
-                                "（folgezettel: は消していません）")
-                else:
-                    drop.add(key)
-            elif key == "paper_diary":
+            if key == "paper_diary":
                 try:
                     date = normalize_diary_date(v)
                 except ValueError:
@@ -1180,7 +1170,7 @@ def create_scan_note(
 ) -> Path:
     """スキャン1枚をタイムスタンプ名ノートにする（title = 正式なフォルゲゼッテルID。本文は regen が作り直す）。"""
     path = unique_note_path(folder)
-    fm = [_time_line(when), f"title: {fid}", SCAN_SOURCE_LINE]
+    fm = [_time_line(when), f"folgezettel: {fid}"]
     body = [f"# {fid}", "", f"![]({image_name})"]
     write_note(path, fm, body)
     return path
@@ -1327,7 +1317,7 @@ def create_topic_note(
     """
     path = unique_note_path(folder)
     display = topic_display(fid, topic)
-    fm = [_time_line(when), f"title: {display}", "attribute: group", SCAN_SOURCE_LINE]
+    fm = [_time_line(when), "attribute: topicindex"]
     if parent_topic and parent_topic != display and any(
             disp == parent_topic for disp, _p, _tp in scan_topic_notes(root or folder).get(fid, [])):
         fm.append(f"{TOPIC_PARENT_KEY}: {parent_topic}")
@@ -2141,9 +2131,11 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         tlist = topics[fid]
         disp_path = {disp: path for disp, path, _tp in tlist}
         for _disp, tpath, tp in tlist:
-            _ensure_fm_line(tpath, "source", SCAN_SOURCE_LINE)
             fm_t, body_t = read_note(tpath)
-            fm_new = _fm_title_attr(fm_t, title_of(fm_t, body_t, tpath.stem), group=True)
+            fm_new = [ln for ln in fm_t if not _fm_key_re("source").match(ln)]
+            fm_new = _fm_title_attr(fm_new, title_of(fm_t, body_t, tpath.stem), group=False)
+            fm_new = [ln for ln in fm_new if not _fm_key_re("attribute").match(ln)]
+            fm_new.append("attribute: topicindex")
             if fm_t != fm_new:
                 write_note(tpath, fm_new, body_t)
             if tp:  # 旧い形（Context のリンク）で分かった親も、front matter に残す
@@ -2186,8 +2178,12 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
 
     # --- スキャンノートの本文と Context -------------------------------------
     for fid, note_path in folge.items():
-        _ensure_fm_line(note_path, "source", SCAN_SOURCE_LINE)
         fm, old_body = read_note(note_path)
+        fm = [ln for ln in fm if not _fm_key_re("source").match(ln) and not _fm_key_re("title").match(ln)]
+        if not any(_fm_key_re("folgezettel").match(ln) for ln in fm):
+            fm.append(f"folgezettel: {with_prefix(prefix, fid)}")
+        else:
+            fm = [re.sub(r'^(\s*folgezettel\s*:\s*)["\x27]([^"\x27]+)["\x27]\s*$', r"\1\2", ln) for ln in fm]
         images = [ln for ln in old_body if re.match(r"^!\[\]\(", ln.strip())]
         # Do not generate an index-as-Context for scans: the number index is
         # navigation, not a semantic parent. Remove only historical generated
@@ -2347,7 +2343,10 @@ def regen(root: Path, do_sync: bool = True) -> bool:
 
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
-        _ensure_fm_line(dpath, "source", SCAN_SOURCE_LINE)
+        fm_d, body_d = read_note(dpath)
+        cleaned = [ln for ln in fm_d if not _fm_key_re("source").match(ln) and not _fm_key_re("title").match(ln)]
+        if cleaned != fm_d:
+            write_note(dpath, cleaned, body_d)
     added_report += link_paper_diaries(root, diaries)
     for msg in added_report:
         print(f"paper_pkm: {msg}", file=sys.stderr)
