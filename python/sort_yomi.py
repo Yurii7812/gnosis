@@ -59,7 +59,8 @@ def yomi_candidates(note_path: str, base: str | None = None) -> list[dict]:
             return
         seen.add((path, name))
         title = ns.title_of(notes[path], path)[0]
-        result.append({"note": path, "name": name, "kind": kind, "title": title})
+        result.append({"note": path, "name": name, "kind": kind, "title": title,
+                       "reading": jy.get_yomi(path, name)})
 
     add(str(note), current_title, "title")
     for path, name, source in ns.index_entries(notes):
