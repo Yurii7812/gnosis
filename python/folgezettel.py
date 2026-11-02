@@ -224,7 +224,7 @@ def is_paper_infra(note: dict) -> bool:
 
 def is_paper(note: dict) -> bool:
     """紙の PKM のノート（題が番号）。日付の題（2026-10-19-MO-… / 2026-10 / 2026）は紙の番号ではない。"""
-    return bool(PAPER_TITLE_RE.match(note['title'])) and not DATED_TITLE_RE.match(note['title'])
+    return bool(scan_number(note)) or (bool(PAPER_TITLE_RE.match(note['title'])) and not DATED_TITLE_RE.match(note['title']))
 
 
 def sibling_key(path: Path, note: dict) -> tuple:
