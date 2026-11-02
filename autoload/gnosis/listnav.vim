@@ -225,11 +225,8 @@ function! s:paint_search_kinds() abort
     let l:ptype = 'gnosis_nav_kind_' . substitute(l:kind, '-', '_', 'g')
     let l:lnum = l:i + 3
     let l:text = getline(l:lnum)
-    let l:at = stridx(l:text, '●')
-    if l:at >= 0 | call prop_add(l:lnum, l:at + 1, {'type': l:ptype, 'length': strlen('●')}) | endif
-    let l:label = '[' . gnosis#i18n#tr(get(s:kinds, l:kind, 'ノート')) . ']'
-    let l:at = stridx(l:text, l:label)
-    if l:at >= 0 | call prop_add(l:lnum, l:at + 1, {'type': l:ptype, 'length': strlen(l:label)}) | endif
+    let l:at = stridx(l:text, '■')
+    if l:at >= 0 | call prop_add(l:lnum, l:at + 1, {'type': l:ptype, 'length': strlen('■')}) | endif
   endfor
 endfunction
 function! gnosis#listnav#render() abort
@@ -257,7 +254,7 @@ function! gnosis#listnav#render() abort
     let l:tag = gnosis#i18n#tr(get(s:kinds, !empty(s:L.relation) && s:L.mode ==# 'links' ? s:L.relation : l:row.kind, 'ノート'))
     let l:tail = get(l:row, 'depth', 0) > 1 ? '  ← ' . get(l:row, 'viaTitle', l:row.via) : ''
     if !empty(get(l:row, 'why', '')) | let l:tail .= '  ' . l:row.why | endif
-    call add(l:lines, '  ' . (s:L.mode ==# 'search' ? '● ' : '') . (l:row.depth > 0 ? l:row.depth . ' ' : '') . '[' . l:tag . '] ' . l:row.title . l:tail)
+    call add(l:lines, '  ' . (s:L.mode ==# 'search' ? '■ ' : '') . (l:row.depth > 0 ? l:row.depth . ' ' : '') . (s:L.mode ==# 'search' ? '' : '[' . l:tag . '] ') . l:row.title . l:tail)
     if get(l:oldrow, 'path', '') ==# l:row.path && get(l:oldrow, 'title', '') ==# l:row.title | let l:want = l:i + 3 | endif
     let l:i += 1
   endfor
