@@ -1,5 +1,8 @@
 {
   "ja": {
+    "編集する表示名・よみを選択（↑↓ / Enter、Esc で中止）": "Choose the display name or reading to edit (↑↓ / Enter, Esc cancels)",
+    "未登録": "Not registered",
+    "統一検索": "Unified search",
     "位置: Enter=本文末尾 / h=直下 / i=カーソル位置 / t=見出し下 / o=置かない  |  g=BranchGroup / b=子だけ / p=親だけ / r=Relatedだけ / c=Contextだけ  (Esc/q 中止)": "Place: Enter=end of body / h=below / i=cursor / t=below heading / o=none  |  g=BranchGroup / b=child only / p=parent only / r=Related only / c=Context only  (Esc/q cancel)",
     "位置: Enter=末 h=下 i=位置 t=節 o=なし / g=グループ b=子 p=親 r=Related c=Context (Esc)": "Place: Enter=end h=below i=cursor t=section o=none / g=group b=child p=parent r=Related c=Context (Esc)",
     "キャンセル（Enter / h / i / t / o / g / b / p / r / c のどれか）": "Cancelled (one of Enter / h / i / t / o / g / b / p / r / c)",

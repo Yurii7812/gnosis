@@ -17646,7 +17646,7 @@ endfunction
 "      `yomi:` に表示名が複数あるときは番号で表示名を選んでから編集する。
 "      引数に文字列を渡すと input() を出さずそのよみを使う（テスト・自動化用）。
 " よみ操作の対象（表示名, ノートパス）を決める。常に今開いているノート。
-" 表示名が複数ある場合の選択は s:yomi_choose_name() が行う。
+" 表示名が複数ある場合の選択は s:yomi_choose_target() が行う。
 function! s:yomi_target() abort
   let l:note = expand('%:p')
   let l:name = gnosis#current_title()
