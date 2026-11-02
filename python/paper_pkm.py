@@ -75,10 +75,10 @@ DEFAULT_INDEX_TITLE = "Paper-Zettelkasten-Index"
 
 ID_PATTERN = re.compile(r"^\d+(?:[a-z]+\d+)*[a-z]*$")
 FULL_ID_PATTERN = re.compile(r"^(?:[A-Z]{1,4}-)?\d+(?:[a-z]+\d+)*[a-z]*$")  # 印つきの番号も受ける
-# コロンはキーワードと番号列の区切りにのみ使用する。括弧はキーワード本文
-# （例「空(仏教): 1」）にも使えるので除外しない。番号列は後段で厳密に検証する。
+# コロンは省略可能。半角/全角空白で区切る「キーワード 1,2,3」も受ける。
+# 括弧はキーワードの一部（例「空(仏教) 1」）。番号は解析後に厳密に検証。
 KEYWORD_LINE_RE = re.compile(
-    r"^(?P<key>[^:]+?)\s*:\s*(?P<ids>[^:]+)$"
+    r"^(?P<key>[^:：]+?)\s*[:：]\s*(?P<ids>[^:：]+)$"
 )
 
 # 旧い front matter のキー（廃止）。新規には書かない。読むのは移行（migrate_legacy_metadata）だけ。
@@ -187,23 +187,79 @@ def reading_for_display(key: str) -> str:
     return jy.kata2hira(jy.reading_for(key))
 
 
+def _keyword_tokens(raw_ids: str) -> Optional[list[str]]:
+    """ASCII/full-width digits, comma, whitespace and mixed paper IDs."""
+    tokens = [normalize_id(part) for part in re.split(r"[,，\\s]+", raw_ids) if part.strip()]
+    if not tokens or not all(ID_PATTERN.fullmatch(token) for token in tokens):
+        return None
+    return tokens
+
+
+def _keyword_name(raw: str) -> str:
+    """Normalize full-width spaces (and repeated whitespace) to ASCII spaces."""
+    return re.sub(r"\\s+", " ", raw.replace("\\u3000", " ")).strip()
+
+
 def parse_keyword_line(line: str) -> Optional[dict]:
-    """`キーワード(よみ): 1,1a10b,3` を解析する。無効な行は None。"""
-    m = KEYWORD_LINE_RE.match(line.strip())
-    if not m:
-        return None
-    key = m.group("key").strip()
-    raw_ids = m.group("ids").strip()
-    if not key:
-        return None
-    ids = [normalize_id(x) for x in re.split(r"[,\s]+", raw_ids) if x.strip()]
-    if not ids or not all(ID_PATTERN.fullmatch(i) for i in ids):
-        return None
-    return {
-        "key": key,
-        "display": key,
-        "ids": ids,
-    }
+    """Accept 'あ 1,2,3', 'あ　1,2,3' and legacy 'あ: 1,2,3'."""
+    text = line.strip().replace("\\u3000", " ")
+    m = KEYWORD_LINE_RE.fullmatch(text)
+    if m is not None:
+        key = _keyword_name(m.group("key"))
+        ids = _keyword_tokens(m.group("ids"))
+        if not key or ids is None:
+            return None
+        return {"key": key, "display": key, "ids": ids}
+
+    # Without ':', try every whitespace boundary. This allows multiword
+    # keywords (including names ending in Latin letters), while requiring
+    # the *whole* trailing value to consist of real Folgezettel IDs.
+    for separator in re.finditer(r"[ \\t]+", text):
+        key = _keyword_name(text[:separator.start()])
+        if not key:
+            continue
+        ids = _keyword_tokens(text[separator.end():])
+        if ids is not None:
+            return {"key": key, "display": key, "ids": ids}
+    return None
+
+
+def merge_keyword_lines(body: list[str]) -> tuple[list[str], list[dict]]:
+    """Merge duplicate Index-write names and ID lists, keeping other lines.
+
+    For each name, preserve the first display spelling and separator style.
+    Full-width whitespace becomes ASCII on save; duplicates are removed.
+    """
+    entries_by_name: dict[str, dict] = {}
+    separators: dict[str, str] = {}
+    positions: list[int] = []
+    discarded: set[int] = set()
+
+    for i, line in enumerate(body):
+        entry = parse_keyword_line(line)
+        if entry is None:
+            continue
+        identity = unicodedata.normalize("NFKC", _keyword_name(entry["key"])).casefold()
+        if identity in entries_by_name:
+            current = entries_by_name[identity]["ids"]
+            for fid in entry["ids"]:
+                if fid not in current:
+                    current.append(fid)
+            discarded.add(i)
+            continue
+        entry["ids"] = list(dict.fromkeys(entry["ids"]))
+        entries_by_name[identity] = entry
+        positions.append(i)
+        separators[identity] = ": " if KEYWORD_LINE_RE.fullmatch(
+            line.strip().replace("\\u3000", " ")) else " "
+
+    merged_entries = sorted(entries_by_name.values(), key=keyword_sort_key)
+    result = [line for i, line in enumerate(body) if i not in discarded]
+    for original_position, entry in zip(positions, merged_entries, strict=False):
+        shifted = original_position - sum(removed < original_position for removed in discarded)
+        identity = unicodedata.normalize("NFKC", _keyword_name(entry["key"])).casefold()
+        result[shifted] = entry["key"] + separators[identity] + ",".join(entry["ids"])
+    return result, merged_entries
 
 
 def keyword_reading(line: str) -> Optional[str]:
@@ -1933,29 +1989,19 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
 
     entries: list[dict] = []
     index_write = named_path(root, ns_title('iw'))
-    keyword_line_order: list[tuple[int, dict]] = []
     if index_write.is_file():
         iw_fm, body = read_note(index_write)
-        # Index-write も、索引（キーワード行）を書くグループ（attribute: group）。同名のノートを別に持たない
+        # Index-write のキーワードは空白区切り/コロン区切りの両方を受け、
+        # 同じ名前の行は番号を和集合にして1行にまとめる。
         iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')), group=False)
         iw_fm_changed = iw_fm_new != iw_fm
         iw_fm = iw_fm_new
-        for i, line in enumerate(body):
-            entry = parse_keyword_line(line)
-            if entry is not None:
-                keyword_line_order.append((i, entry))
-                entries.append(entry)
-        entries.sort(key=keyword_sort_key)
-        if keyword_line_order:
-            slots = [i for i, _ in keyword_line_order]
-            for slot, entry in zip(slots, entries, strict=False):
-                body[slot] = entry["key"] + ": " + ", ".join(entry["ids"])
-        if not any(_is_section_head(ln) for ln in body):
-            body += [CONTEXT_HEAD,
-                     markdown_link(index_display, index_path, root)]
-            write_note(index_write, iw_fm, body)
-        elif keyword_line_order or iw_fm_changed:
-            write_note(index_write, iw_fm, body)
+        merged_body, entries = merge_keyword_lines(body)
+        if not any(_is_section_head(ln) for ln in merged_body):
+            merged_body += [CONTEXT_HEAD,
+                            markdown_link(index_display, index_path, root)]
+        if merged_body != body or iw_fm_changed:
+            write_note(index_write, iw_fm, merged_body)
     entries.sort(key=keyword_sort_key)
 
     # 紙の日記があれば、キーワード「日記」を 1 つだけ入れる（Index-write に同名のキーワードが
