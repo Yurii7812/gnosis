@@ -105,6 +105,7 @@ DOWN_MARK = "### BackLink"   # 旧 v2 の見張り（読み込みの判定用）
 CONTEXT_MARK = "### Context"
 GROUP_MARK = "Group:"
 BRANCH_GROUP_HEAD = "BranchGroup:"
+TOPIC_INDEX_HEAD = "TopicIndex:"
 LEGACY_THIS_NOTE_GROUP_HEAD = "ThisNoteGroup:"  # 読み込み互換
 LEGACY_GROUP_MARK = "### Group"  # 読み込みのみ。出力は Group: に統一する。
 # Branch（Folgezettel 的な直接のブランチ）。`b` で明示したときだけ書かれる関係。
@@ -1631,6 +1632,23 @@ def _take_branch_group_block(lines: list[str]) -> tuple[list[str], list[str], bo
     return [], lines, False
 
 
+def _take_topic_index_block(lines: list[str]) -> tuple[list[str], list[str], bool]:
+    """Extract the dedicated top-of-note TopicIndex block, preserving link order."""
+    flags = _fenced(lines)
+    for i, ln in enumerate(lines):
+        if flags[i] or ln.strip() != TOPIC_INDEX_HEAD:
+            continue
+        j = i + 1
+        links: list[str] = []
+        while j < len(lines) and _SIMPLE_LINK_LINE_RE.match(lines[j]):
+            links.append(lines[j].lstrip(" "))
+            j += 1
+        if j < len(lines) and not lines[j].strip():
+            j += 1
+        return links, lines[:i] + lines[j:], True
+    return [], lines, False
+
+
 def _take_parent_branch_block(lines: list[str]) -> tuple[list[str], list[str]]:
     """`ParentBranch:`（本文の上の先頭のブロック）を読む。範囲は見出しの直後に続くリンク行だけ。
     旧形式の `### ParentBranch`（本文の下の節）はここでは読まない（節として読む）。"""
@@ -1690,15 +1708,20 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # 上のブロックに吸い込まれる（並びは BranchGroup → Group → ParentBranch だが、古い並びのノートも読む）。
     def _first_at(heads):
         return next((i for i, ln in enumerate(rest) if ln.strip() in heads), len(rest) + 1)
-    order = sorted([(_first_at((PARENT_BRANCH_MARK,)), "pb"),
+    order = sorted([(_first_at((TOPIC_INDEX_HEAD,)), "ti"),
+                    (_first_at((PARENT_BRANCH_MARK,)), "pb"),
                     (_first_at((BRANCH_GROUP_HEAD, LEGACY_THIS_NOTE_GROUP_HEAD)), "bg"),
                     (_first_at((GROUP_MARK, LEGACY_GROUP_MARK)), "gp")])
     pb_block: list[str] = []
     group_block: list[str] = []
     branch_links: list[str] = []
+    topic_links: list[str] = []
+    has_topic_index = False
     has_branch_group = False
     for _at, kind in order:
-        if kind == "pb":
+        if kind == "ti":
+            topic_links, rest, has_topic_index = _take_topic_index_block(rest)
+        elif kind == "pb":
             pb_block, rest = _take_parent_branch_block(rest)
         elif kind == "bg":
             branch_links, rest, has_branch_group = _take_branch_group_block(rest)
@@ -1735,6 +1758,8 @@ def _simple_parse_text(path: Path, text: str) -> dict:
     # 書き戻し時に必ず H1 の直後へ移す。
     if has_branch_group:
         sec["body"] += [BRANCH_GROUP_HEAD] + branch_links
+    if has_topic_index:
+        sec["body"] += [TOPIC_INDEX_HEAD] + topic_links
     # 関係の節がまったく無いノートは、末尾の空行（新しいノートの書き出し用の余白）を残す
     tail_blanks = 0 if cur != "body" else max(0, len(text) - len(text.rstrip("\n")) - 1)
     return {"fm": fm, "title": title, "body": sec["body"], "parent": sec["parent"],
@@ -2111,10 +2136,13 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     links = [ln for ln in links if ln.strip()]
     groups = [ln for ln in (group_lines or []) if ln.strip()]
 
-    # BranchGroup と旧 ThisNoteGroup を回収して先頭へ正規化する。
+    # Normalize TopicIndex and BranchGroup as distinct top-level blocks.
+    topic_links, body, found_topic_index = _take_topic_index_block(body)
     branch_links, body, found_branch_group = _take_branch_group_block(body)
 
     blocks: list[str] = list(nav)
+    if found_topic_index and topic_links:
+        blocks += [TOPIC_INDEX_HEAD] + topic_links
     pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
