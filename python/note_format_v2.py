@@ -2694,7 +2694,10 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
         # Scan imports sometimes left an auto-generated link to the very
         # same scan note. Remove only this paper-scanning artifact; other
         # notes may deliberately contain self-links and must be preserved.
-        if any(re.match(r"^\s*source\s*:\s*scan\s*$", x) for x in n["fm"]):
+        if (any(re.match(r"^\s*source\s*:\s*scan\s*$", x) or
+                re.match(r"^\s*folgezettel\s*:\s*['\"]?[A-Z]{1,4}-", x)
+                for x in n["fm"]) or
+                any("paper-diary-" in line and "![" in line for line in n["body"])):
             parent_lines = [ln for ln in parent_lines
                             if not (_SIMPLE_LINK_LINE_RE.match(ln)
                                     and res(_link_target(ln), dirs[p]) == p)]
