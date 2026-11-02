@@ -54,7 +54,7 @@ def value(text: str) -> str:
 def set_value(text: str, ident: str) -> str:
     lines = text.split('\n')
     fm, _ = nf._split_front_matter(lines)
-    entry = f'folgezettel: "{ident}"'
+    entry = f'folgezettel: {ident}'
     if not fm:
         if lines[0].strip() == '---':
             raise ValueError('Unclosed YAML front matter')
