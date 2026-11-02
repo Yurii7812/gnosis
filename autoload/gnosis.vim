@@ -17499,8 +17499,11 @@ function! s:sort_lines_by_yomi(first, last) abort
     return
   endif
   let l:report = tempname()
+  " Paper Index-write の実ファイル名はタイムスタンプの場合もあるので、題で判定する。
+  let l:is_iw = gnosis#current_title() =~# '^Index-write\%(-[A-Z]\{1,4}\)\?$'
+        \ || expand('%:t') ==# 'Index-write.md'
   let l:cmd = s:python_cmd() . ' ' . shellescape(l:script) . ' sort --dry-run --base ' . shellescape(expand('%:p:h'))
-        \ . (expand('%:t') ==# 'Index-write.md' ? ' --keyword-lines' : '')
+        \ . (l:is_iw ? ' --keyword-lines --note ' . shellescape(expand('%:p')) : '')
         \ . ' --report-file ' . shellescape(l:report)
   " 1 万行の Index では数秒かかる。無反応に見えないよう先に表示する。
   echo printf(gnosis#i18n#tr('Gnosis: %d 行をよみ順に並べ替え中…'), len(l:lines))
@@ -17520,12 +17523,16 @@ function! s:sort_lines_by_yomi(first, last) abort
   if !empty(l:new) && l:new[-1] ==# ''
     call remove(l:new, -1)
   endif
-  if len(l:new) != len(l:lines)
+  if len(l:new) > len(l:lines) || (len(l:new) != len(l:lines) && !l:is_iw)
     echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: よみソートの行数が一致しません') | echohl NONE
     return
   endif
   let l:view = winsaveview()
-  call setline(a:first, l:new)
+  if !empty(l:new) | call setline(a:first, l:new) | endif
+  " Index-write は重複キーワードの統合で行数が減る。余った行を削除する。
+  if l:is_iw && len(l:new) < len(l:lines)
+    execute (a:first + len(l:new)) . ',' . a:last . 'delete _'
+  endif
   call winrestview(l:view)
   if l:added
     silent! checktime
