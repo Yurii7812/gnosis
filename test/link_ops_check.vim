@@ -564,5 +564,25 @@ call s:ok('制御文字列: ESC が消えて残った断片', getline(6) ==# '�
 call s:ok('制御文字列: ふつうの文章（[[wiki]]・[0]・[OK]）は変えない', getline(7) ==# 'ふつう [[wiki]] と [ノート](a.md) と 配列[0] と [?] と [OK] と a[i] と OO', getline(7))
 bwipeout!
 
+" ------------------------------------------------------------------ zy / zY: 索引の表示名（よみ未登録も）をポップで選べる
+call s:mk('zy-group.md', '索引テスト', ['[春](zy-note.md)', '[花](zy-note.md)'], 1)
+call s:mk('zy-note.md', '春のノート', ['Group:', '[索引テスト](zy-group.md)', '', '本文'])
+let s:sortpy = fnamemodify(g:gnosis_python, ':h') . '/sort_yomi.py'
+execute 'edit ' . fnameescape(s:v . '/zy-group.md')
+let g:gnosis_ui_keys = ['2']
+let g:gnosis_test_yomi_edit = ['はる']
+call gnosis#rename_yomi_with_default('')
+let s:zyread = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:sortpy) . ' get --note ' . shellescape(s:v . '/zy-note.md') . ' --name ' . shellescape('春'))
+call s:ok('zy: 索引側の候補ポップで表示名を選び、リンク先によみを保存', trim(s:zyread) ==# 'はる', s:zyread)
+let s:zywrong = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:sortpy) . ' get --note ' . shellescape(s:v . '/zy-group.md') . ' --name ' . shellescape('春'))
+call s:ok('zy: 索引ノート自身にはメンバーのよみを誤保存しない', empty(trim(s:zywrong)), s:zywrong)
+execute 'edit ' . fnameescape(s:v . '/zy-note.md')
+let g:gnosis_ui_keys = ['3']
+let g:gnosis_test_yomi_edit = ['はな']
+call gnosis#rename_yomi('')
+let s:zyread = gnosis#sh#system(gnosis#python_cmd() . ' ' . shellescape(s:sortpy) . ' get --note ' . shellescape(s:v . '/zy-note.md') . ' --name ' . shellescape('花'))
+call s:ok('zY: ノート側でも複数索引名を選び、対応名のよみだけを編集', trim(s:zyread) ==# 'はな', s:zyread)
+unlet g:gnosis_ui_keys g:gnosis_test_yomi_edit
+
 call writefile(s:res, s:work . '/result.txt')
 qa!
