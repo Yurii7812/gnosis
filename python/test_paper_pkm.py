@@ -616,7 +616,8 @@ def test_diary_register_and_keyword() -> None:
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
         check(f"({top.name})" in index_text, "Index の「日記」は紙の日記の一番上を指す")
 
-        # 再生成しても消えず、重複せず、同じ結果
+        # 再生成しても消えず、重複せず、同じ結果（最初の regen で、空行の決まり（画像のあとに 1 つ）を揃える）
+        pp.regen(root)
         snap = {p.name: p.read_bytes() for p in root.glob("*.md")}
         pp.regen(root)
         pp.regen(root)

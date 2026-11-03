@@ -1340,35 +1340,80 @@ def _remove_topic_links_from_branch_group(path: Path, topic_paths: set[str]) -> 
     write_note(path, fm, body)
 
 
-def _write_topic_index(path: Path, links: list[str]) -> None:
-    """Update only the dedicated TopicIndex block; never remove prose or other relations."""
+FOLGEZETTEL_INDEX_HEAD = "FolgezettelIndex:"
+
+
+def _top_block(body: list[str], head: str) -> Optional[tuple[int, int]]:
+    """本文の節（TopicIndex: / FolgezettelIndex:）の範囲 [i, j)。コードの中の行は数えない。"""
+    flags = _fence_flags(body)
+    for i, ln in enumerate(body):
+        if not flags[i] and ln.strip() == head:
+            j = i + 1
+            while j < len(body) and _IS_LINK_LINE.match(body[j]):
+                j += 1
+            return i, j
+    return None
+
+
+def _top_links(path: Path, head: str) -> list[str]:
+    _fm, body = read_note(path)
+    span = _top_block(body, head)
+    return body[span[0] + 1:span[1]] if span else []
+
+
+_TOP_SECTION_HEADS = ("Group:", "ParentBranch:", "ChildBranch:", "Context:", "BranchGroup:", "ThisNoteGroup:")
+
+
+def _place_top_blocks(path: Path, topic_links: list[str], fz_links: list[str]) -> None:
+    """紙ノートの上部を、次の順に書く（BranchGroup: は紙に出さない）:
+        # 見出し
+        (空行)
+        TopicIndex:
+        （トピックのリンク）
+        (空行)
+        FolgezettelIndex:
+        （番号のリンク）
+        (空行)
+        本文
+    どちらの節も、ここでだけ書く。何度書いても同じ結果になる（空行が増えない）。"""
     fm, body = read_note(path)
-    span = _find_topic_index(body)
-    if span is not None:
-        end = span[1]
-        if end < len(body) and not body[end].strip():
-            end += 1
-        del body[span[0]:end]
-    if links:
-        h1 = next((i for i, ln in enumerate(body) if re.match(r"^#\s", ln)), None)
-        if h1 is None:
-            return
-        at = h1 + 1
-        # The number index navigation stays first, followed by TopicIndex.
-        if at < len(body) and not body[at].strip():
-            at += 1
-        if at < len(body) and body[at].strip() == "FolgezettelIndex:":
-            at += 1
-            while at < len(body) and _IS_LINK_LINE.match(body[at]):
-                at += 1
-        block = [TOPIC_INDEX_HEAD, *links, ""]
-        if at < len(body) and not body[at].strip():
-            at += 1
-        else:
-            block = ["", *block]
-        body[at:at] = block
-    if body != read_note(path)[1]:
-        write_note(path, fm, body)
+    original = list(body)
+    for head in (TOPIC_INDEX_HEAD, FOLGEZETTEL_INDEX_HEAD):
+        span = _top_block(body, head)
+        if span is not None:
+            end = span[1]
+            if end < len(body) and not body[end].strip():
+                end += 1
+            del body[span[0]:end]
+    h1 = next((i for i, ln in enumerate(body) if re.match(r"^#\s", ln)), None)
+    if h1 is None:
+        return
+    # 節どうしは空行なし（同期の書式と同じ）。空行は、節のまとまりの後ろに 1 つ
+    blocks: list[str] = []
+    if topic_links:
+        blocks += [TOPIC_INDEX_HEAD, *topic_links]
+    if fz_links:
+        blocks += [FOLGEZETTEL_INDEX_HEAD, *fz_links]
+    if blocks:
+        blocks.append("")
+    at = h1 + 1
+    if at < len(body) and not body[at].strip():
+        at += 1                      # H1 の直後の空行は、そのまま残す
+    elif blocks:
+        blocks = [""] + blocks       # H1 と節のあいだに空行を 1 つ
+    # 次が節の見出し（Group: など）なら、節の直後に空行を置かない（同期は、そこの空行を外すので、
+    # 置くと regen と同期のたびに空行が増える）
+    if blocks and at < len(body) and body[at].strip() in _TOP_SECTION_HEADS:
+        blocks = blocks[:-1]
+    body[at:at] = blocks
+    if body != original:
+        # 末尾の空行（画像のあとの空行など）は残す。外すと、regen（画像のあとに空行を足す）と行き来する
+        write_note(path, fm, body, keep_trailing_blank=True)
+
+
+def _write_topic_index(path: Path, links: list[str]) -> None:
+    """TopicIndex: の節だけを書き直す。FolgezettelIndex: はそのまま残す（上部の順は _place_top_blocks）。"""
+    _place_top_blocks(path, links, _top_links(path, FOLGEZETTEL_INDEX_HEAD))
 
 
 def topic_display(fid: str, topic: str) -> str:
@@ -1812,36 +1857,13 @@ def _root_id(fid: str) -> str:
 
 
 def _write_folgezettel_nav(note_path: Path, fid: str, root: Path) -> None:
-    """紙ノート上部に番号別・全番号の2リンクを固定する。関係は生成しない。"""
-    fm, body = read_note(note_path)
-    out: list[str] = []
-    i = 0
-    while i < len(body):
-        if body[i].strip() == "FolgezettelIndex:":
-            i += 1
-            while i < len(body) and _IS_LINK_LINE.match(body[i]):
-                i += 1
-            continue
-        out.append(body[i])
-        i += 1
-    h1 = next((i for i, ln in enumerate(out) if re.match(r"^#\s", ln)), None)
-    if h1 is None:
-        return
-    at = h1 + 1
-    if at < len(out) and not out[at].strip():
-        at += 1
-    else:
-        out.insert(at, "")
-        at += 1
+    """紙ノート上部に番号別・全番号の2リンクを固定する（TopicIndex: の下）。関係は生成しない。"""
     index = folge_index_path(root, _root_id(fid))
     all_index = folge_index_path(root, "all-number")
-    block = ["FolgezettelIndex:",
-             markdown_link(f"{folge_index_display(_root_id(fid))}#{fid}", index,
-                           note_path.parent, frag=fid),
-             markdown_link(f"All#{fid}", all_index, note_path.parent, frag=fid)]
-    out[at:at] = block
-    if out != body:
-        write_note(note_path, fm, out)
+    fz_links = [markdown_link(f"{folge_index_display(_root_id(fid))}#{fid}", index,
+                              note_path.parent, frag=fid),
+                markdown_link(f"All#{fid}", all_index, note_path.parent, frag=fid)]
+    _place_top_blocks(note_path, _top_links(note_path, TOPIC_INDEX_HEAD), fz_links)
 
 
 def _strip_scan_auto_relations(body: list[str], note: Path, number_index: Path) -> list[str]:
@@ -2433,7 +2455,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         fm_d, body_d = read_note(dpath)
         cleaned = [ln for ln in fm_d if not _fm_key_re("source").match(ln) and not _fm_key_re("title").match(ln)]
         if cleaned != fm_d:
-            write_note(dpath, cleaned, body_d)
+            write_note(dpath, cleaned, body_d, keep_trailing_blank=True)
     added_report += link_paper_diaries(root, diaries)
     for msg in added_report:
         print(f"paper_pkm: {msg}", file=sys.stderr)

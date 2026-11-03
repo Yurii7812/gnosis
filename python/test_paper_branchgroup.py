@@ -38,8 +38,9 @@ def lines_of(path: Path):
 
 
 def branch_block(path: Path):
+    """紙ノートの TopicIndex: の中のリンク（トピック）。紙では BranchGroup: は出さない。"""
     ls = lines_of(path)
-    i = ls.index("BranchGroup:")
+    i = ls.index("TopicIndex:")
     j = i + 1
     while j < len(ls) and ls[j].strip().startswith("["):
         j += 1
@@ -64,12 +65,17 @@ with tempfile.TemporaryDirectory() as d:
     n1 = notes["1"]
     b = branch_block(n1)
     check(len(b) == 1 and "[PA-1-仏教](" in b[0] and not b[0].startswith(" "), f"ID ノート 1 の BranchGroup: にトピック PA-1-仏教: {b}")
-    check("BranchGroup:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には BranchGroup: を作らない")
+    check("TopicIndex:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には TopicIndex: を作らない")
+    check("BranchGroup:" not in n1.read_text(encoding="utf-8"), "紙のノートには BranchGroup: を出さない")
     ls = lines_of(n1)
-    check(ls.index("FolgezettelIndex:") == ls.index("# PA-1") + 2 and ls[ls.index("# PA-1") + 1] == "", "FolgezettelIndex: は H1 の直後（空行 1 つ挟む）")
-    check(ls[ls.index("BranchGroup:") - 1].startswith("[All#1]("), "FolgezettelIndex の All#番号 と BranchGroup の間には空行が無い")
+    h1 = ls.index("# PA-1")
+    ti = ls.index("TopicIndex:")
+    fz = ls.index("FolgezettelIndex:")
+    check(ti == h1 + 2 and ls[h1 + 1] == "", "TopicIndex: は H1 の直後（空行 1 つ挟む）")
+    check(fz == ti + len(b) + 1, "FolgezettelIndex: は TopicIndex: の真下（節のあいだに空行は入れない）")
+    check(any(ln.startswith("[All#1](") for ln in ls[fz:fz + 4]), "FolgezettelIndex: に All#番号 のリンク")
     topic = notes["PA-1-仏教"].read_text(encoding="utf-8")
-    check("attribute: group" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
+    check("attribute: topicindex" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
           "トピックノートはグループ、索引Contextの自動追加は無い")
 
     # 階層: 四念処 は 仏教 の下
@@ -83,7 +89,7 @@ with tempfile.TemporaryDirectory() as d:
     check(not any(ln.startswith(" ") for ln in b), f"自動ではインデントしない: {b}")
     # 並びとインデントは利用者が直せる。regen は手で直した並びを変えない
     ls = lines_of(n1)
-    i = ls.index("BranchGroup:")
+    i = ls.index("TopicIndex:")
     ls[i + 1], ls[i + 2], ls[i + 3] = ls[i + 3], ls[i + 1], ls[i + 2].strip()
     n1.write_text("\n".join(ls), encoding="utf-8")
     manual = branch_block(n1)
@@ -110,7 +116,7 @@ with tempfile.TemporaryDirectory() as d:
     # 旧い形に戻す: BranchGroup を外し、旧 1-Index グループ（インデントが階層）を作る
     n1 = notes["1"]
     ls = lines_of(n1)
-    i = ls.index("BranchGroup:")
+    i = ls.index("TopicIndex:")
     j = i + 1
     while j < len(ls) and ls[j].strip().startswith("["):
         j += 1
@@ -165,13 +171,13 @@ with tempfile.TemporaryDirectory() as d:
     ctx_1a = block(n1a, "### Context") + block(n1a, "Context:")
     check(not any(f"]({n1.name})" in ln for ln in ctx_1a), f"1a の親子を Context で代用しない: {ctx_1a}")
     for t in ("PA-1-仏教", "PA-1-四念処", "PA-1-阿含"):
-        check("attribute: group" in notes[t].read_text(encoding="utf-8")
+        check("attribute: topicindex" in notes[t].read_text(encoding="utf-8")
               and not any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
-              and any(f"]({notes[t].name})" in ln for ln in block(n1, "BranchGroup:")),
-              f"トピック {t} はグループで、1 の BranchGroup: に固定し、ParentBranch を作らない")
+              and any(f"]({notes[t].name})" in ln for ln in block(n1, "TopicIndex:")),
+              f"トピック {t} はグループで、1 の TopicIndex: に入り、ParentBranch を作らない")
     check("topic_parent: PA-1-仏教" in fm_of(notes["PA-1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["PA-1-仏教"])),
           f"親トピックは front matter の topic_parent に残る: {fm_of(notes['PA-1-四念処'])}")
-    check(all("source: scan" in fm_of(p) for p in notes.values()), "スキャン由来のノートに source: scan")
+    check(any(ln.startswith("folgezettel:") for ln in fm_of(notes["1"])), "スキャンノートの番号は folgezettel: に書く")
     fi = pp.find_titled(root, "folgezettel-Index-1")
     names = [ln.split("]")[0].lstrip("[") for ln in lines_of(fi) if ln.startswith("[PA-1-")]
     check(names == ["PA-1-仏教", "PA-1-四念処", "PA-1-阿含"], f"folgezettel-Index-1 にトピックを、親を子より先に（インデントなし）: {names}")
@@ -214,7 +220,7 @@ with tempfile.TemporaryDirectory() as d:
     i = dl.index(link)
     check(dl[i - 1] == "" and dl[i + 1] == "" and dl[i + 2] == "朝の日記。" and dl.index("Group:") < i,
           f"タイトル（と上のブロック）の下・空行 1 行・本文より上: {dl}")
-    check("source: scan" in fm_of(pd["2026-10-14"]) and "source: scan" in fm_of(pd["2026-10-13"]), "紙の日記に source: scan")
+    check("![](paper-diary-20261014-1.jpg)" in pd["2026-10-14"].read_text(encoding="utf-8") and "![](paper-diary-20261013-1.jpg)" in pd["2026-10-13"].read_text(encoding="utf-8"), "紙の日記は paper-diary- の画像で識別する")
     check(not any(p.read_text(encoding="utf-8").count(pd["2026-10-13"].name) for p in root.glob("*.md")
                   if p != pd["2026-10-13"] and "title: 2026-10-13-MO" in p.read_text(encoding="utf-8") and "source: scan" not in p.read_text(encoding="utf-8")),
           "デジタル日記が無い日は作らない")

@@ -2140,9 +2140,11 @@ def _body_with_context(n: dict, links: list[str], enabled: bool,
     topic_links, body, found_topic_index = _take_topic_index_block(body)
     branch_links, body, found_branch_group = _take_branch_group_block(body)
 
-    blocks: list[str] = list(nav)
+    # 紙のノートの上部: TopicIndex: を先に、その下に FolgezettelIndex:（2026-11-03 の決め）
+    blocks: list[str] = []
     if found_topic_index and topic_links:
         blocks += [TOPIC_INDEX_HEAD] + topic_links
+    blocks += list(nav)
     pbranch = [ln for ln in (n.get("pbranch") or []) if ln.strip()]
     if found_branch_group:
         blocks += [BRANCH_GROUP_HEAD] + branch_links
