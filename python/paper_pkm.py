@@ -134,6 +134,12 @@ def split_paper_title(title: str) -> tuple[str, str]:
     return (m.group(1), m.group(2)) if m else ("", title or "")
 
 
+def plain_id(fid: str) -> str:
+    """YAML の folgezettel: に書く番号（印を除く）。題と画像の名前は印つきのまま。"""
+    m = PREFIXED_ID_RE.match(fid)
+    return m.group(2) if m else fid
+
+
 def with_prefix(prefix: str, fid: str) -> str:
     """印の無い番号に印を付ける（もう付いていればそのまま）。"""
     return fid if PREFIXED_ID_RE.match(fid) or not prefix else f"{prefix}-{fid}"
@@ -1176,7 +1182,7 @@ def create_scan_note(
 ) -> Path:
     """スキャン1枚をタイムスタンプ名ノートにする（title = 正式なフォルゲゼッテルID。本文は regen が作り直す）。"""
     path = unique_note_path(folder)
-    fm = [_time_line(when), f"folgezettel: {fid}"]
+    fm = [_time_line(when), f"folgezettel: {plain_id(fid)}"]
     body = [f"# {fid}", "", f"![]({image_name})"]
     write_note(path, fm, body)
     return path
@@ -2285,10 +2291,10 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         expected_id = with_prefix(prefix, fid)
         stored_id = (fm_value(fm, "folgezettel") or "").strip().strip('"\x27')
         if not stored_id:
-            fm.append(f"folgezettel: {expected_id}")
-        elif stored_id == fid or stored_id == expected_id:
-            # Normalize quote style and upgrade only the legacy unprefixed ID.
-            fm = [(f"folgezettel: {expected_id}" if _fm_key_re("folgezettel").match(ln) else ln)
+            fm.append(f"folgezettel: {plain_id(expected_id)}")
+        elif stored_id in (fid, expected_id, plain_id(fid)):
+            # 普通の番号（印なし）に書きそろえる。題と画像は印つきのまま。
+            fm = [(f"folgezettel: {plain_id(expected_id)}" if _fm_key_re("folgezettel").match(ln) else ln)
                   for ln in fm]
         images = [ln for ln in old_body if re.match(r"^!\[\]\(", ln.strip())]
         # Do not generate an index-as-Context for scans: the number index is

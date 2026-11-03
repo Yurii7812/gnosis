@@ -20,6 +20,9 @@ class FolgezettelTest(unittest.TestCase):
         p.write_text(fz.set_value(text, ident) if ident else text)
         return p
 
+    def title(self, p):
+        return next((ln[2:] for ln in p.read_text(encoding='utf-8').split('\n') if ln.startswith('# ')), '')
+
     def ident(self, p):
         return fz.value(p.read_text())
 
@@ -216,7 +219,8 @@ class FolgezettelTest(unittest.TestCase):
         scan1.write_text(scan1.read_text().replace('title: scan1', 'title: 1\nsource: scan').replace('# scan1', '# 1'))
         nf.simple_sync(self.root)
         self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PA-1', 'PA-1a2'])
+        # YAML の folgezettel: は印なし（普通の番号）。題と画像の名前は印つき
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['1', '1a2'])
         self.assertEqual(fz.parent_id('PA-1a2'), 'PA-1a')
         self.assertEqual(fz.parent_id('PA-1'), '')
         self.assertTrue(fz.ID_RE.fullmatch('PA-1a2'))
@@ -228,7 +232,7 @@ class FolgezettelTest(unittest.TestCase):
         (self.root / '.gnosis').mkdir()
         (self.root / '.gnosis' / 'settings.json').write_text('{"paperIdPrefix": "PB"}')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['PA-1', 'PA-1a2'])
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ['1', '1a2'])
         self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
 
     def test_branch_assignment_and_navigation(self):

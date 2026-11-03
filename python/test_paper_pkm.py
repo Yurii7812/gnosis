@@ -409,7 +409,7 @@ def test_topic_index() -> None:
         check("attribute: topicindex" in notes["1-仏教"].read_text(encoding="utf-8")
               and "attribute: group" not in notes["1-仏教"].read_text(encoding="utf-8"),
               "TopicIndex は独立属性")
-        check("folgezettel: PA-1" in n1 and "title:" not in n1 and "source: scan" not in n1,
+        check("folgezettel: 1\n" in n1 and "title:" not in n1 and "source: scan" not in n1,
               "紙ノートの YAML は引用符なしの folgezettel: に統一")
         check("source: scan" not in notes["1-仏教"].read_text(encoding="utf-8"),
               "TopicIndex に source: scan を作らない")
@@ -884,7 +884,7 @@ def test_title_is_the_id() -> None:
         moved, errors = pp.move_images(root, root, _add_images(root, ["1", "1a", "2"]))
         notes = {pp.split_paper_title(fid)[1]: p for fid, p in moved}
         t1 = notes["1"].read_text(encoding="utf-8")
-        check("folgezettel: PA-1\n" in t1 and "title:" not in t1
+        check("folgezettel: 1\n" in t1 and "title:" not in t1
               and "source: scan" not in t1 and "![](PA-1.jpg)" in t1,
               "紙スキャンの YAML には folgezettel: だけを付与")
         # ID検索は title だけ
@@ -946,7 +946,7 @@ def test_legacy_migration() -> None:
             (root / n).write_bytes(b"x")
         pp.regen(root)
         snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
-        check('folgezettel: PA-1\n' in snap["261001000001.md"], "紙のスキャンノートは引用符なしの folgezettel:")
+        check('folgezettel: 1\n' in snap["261001000001.md"], "紙のスキャンノートは引用符なしの folgezettel:")
         check(_no_legacy(root) == [], f"旧メタデータが外れた: {_no_legacy(root)}")
         check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる（旧い題は PA- 付きに直る）")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")

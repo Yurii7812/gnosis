@@ -294,7 +294,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     for p, n in notes.items():
         num = scan_number(n)
         if num and p not in unsaved:
-            ids[p] = num if split_prefix(num)[0] else base_prefix + num
+            ids[p] = split_prefix(num)[1]   # YAML の folgezettel: は印なしの番号（題と画像は印つき）
             if ids[p] != stored[p]:
                 plan[p] = ids[p]
     # 紙の自動作成の索引は、YAML の folgezettel を `PA-0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
@@ -363,7 +363,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             ids[p] = ''
             plan[p] = ''
     # 残した番号は、そのまま使われているものとして避ける
-    fixed = {ids[p] for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])}
+    # 紙のノートの番号（YAML は印なし）はデジタルの番号と別の空間。デジタルの番号の並びには入れない
+    fixed = {ids[p] for p in notes if p not in managed_set and not is_paper(notes[p]) and ID_RE.fullmatch(ids[p])}
 
     def sibling_order(p, c):
         m = DATED_TITLE_RE.match(notes[c]['title'])

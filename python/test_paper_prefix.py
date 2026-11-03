@@ -192,7 +192,7 @@ def test_numbers_follow_each_notes_prefix() -> None:
         pp.regen(root, do_sync=False)
         nf.simple_sync(root)
         vals = {n.title: fz.value(n.path.read_text(encoding="utf-8")) for n in pp.load_notes(root)}
-        check(vals.get("PA-1") == "PA-1" and vals.get("PB-1") == "PB-1", f"番号は題と同じ印: {vals.get('PA-1')} {vals.get('PB-1')}")
+        check(vals.get("PA-1") == "1" and vals.get("PB-1") == "1", f"YAML の番号は印なし（題の印は PA-1 / PB-1）: {vals.get('PA-1')} {vals.get('PB-1')}")
         check(vals.get("Index-write-PA") == "PA-0" and vals.get("Index-write-PB") == "PB-0", f"自動の索引は印ごとの 0: {vals.get('Index-write-PA')} {vals.get('Index-write-PB')}")
         check(vals.get("folgezettel-Index-PB-1") == "PB-0", f"番号専用ノートも: {vals.get('folgezettel-Index-PB-1')}")
 
