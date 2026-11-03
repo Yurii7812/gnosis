@@ -617,10 +617,8 @@ def scan_key_of(n: NoteInfo) -> Optional[tuple[str, str]]:
     普通のノートや判定できないものは None。"""
     # The ID belongs in folgezettel:, not in YAML title:. A prior H1-only
     # scan is still recognized so regeneration can assign its ID in place.
-    explicit = (fm_value(n.fm, "folgezettel") or "").strip().strip('"\x27')
-    # Legacy records sometimes retain folgezettel: 1 after their H1 was
-    # upgraded to PA-1. The prefixed H1 wins over that old unprefixed value.
-    label = n.title if PREFIXED_ID_RE.fullmatch(n.title) and not PREFIXED_ID_RE.fullmatch(explicit) else (explicit or n.title)
+    # 2026-11-04: 紙の番号は題（1、1a …）。YAML の folgezettel: は索引の位置で決まる番号なので、識別には使わない
+    label = n.title
     m = PREFIXED_ID_RE.match(label)
     if m:
         return (m.group(1), m.group(2)) if (_has_image_named(n, label) or _has_image_named(n, m.group(2))) else None
@@ -705,6 +703,36 @@ def scan_namespaces(root: Path, notes: Optional[list] = None) -> list[str]:
         if t and t[0]:
             found.add(t[0])
     return sorted(found)
+
+
+_PA_NUM_RE = re.compile(r"\bPA-(?=\d)")                 # PA-1、PA-1a2、PA-1-仏教 の印
+_PA_SUFFIX_RE = re.compile(r"-(?:PA|PB|PC|PD)(?=$|\.md$)")  # Index-write-PA など（印が複数だった旧い名）
+
+
+def strip_legacy_prefix(root: Path) -> int:
+    """紙の印（PA-）を外す移行（2026-11-04 の決め）。題・画像・本文の参照の `PA-1` を `1` にする。
+    `Paper-Zettelkasten-Index-PA` のような旧い改名も元の名に戻す。直したファイル数を返す。
+    画像は、同じ名前の別ファイルがあれば触らない（取られない場合だけ改名）。"""
+    done = 0
+    for img in sorted(Path(root).glob("*")):
+        if img.suffix.lower() not in IMAGE_EXTENSIONS or not _PA_NUM_RE.match(img.stem):
+            continue
+        target = img.with_name(_PA_NUM_RE.sub("", img.stem, count=1) + img.suffix)
+        if target.exists():
+            continue
+        img.rename(target)
+        done += 1
+    for note in sorted(Path(root).glob("*.md")):
+        text = note.read_text(encoding="utf-8")
+        new = _PA_NUM_RE.sub("", text)
+        new = re.sub(r"^(#\s+.*?)-(?:PA|PB|PC|PD)(\s*)$", r"\1\2", new, flags=re.M)
+        new = re.sub(r"^(title:\s*.*?)-(?:PA|PB|PC|PD)(\s*)$", r"\1\2", new, flags=re.M)
+        if new != text:
+            note.write_text(new, encoding="utf-8")
+            done += 1
+    if done:
+        reset_name_cache()
+    return done
 
 
 def adopt_legacy_prefix(root: Path, default: str, notes: Optional[list] = None) -> int:
@@ -2422,7 +2450,7 @@ def regen(root: Path, do_sync: bool = True) -> bool:
     report = migrate_legacy_metadata(root)
     default = default_prefix(root)
     # 印の無い題（旧い形）の紙のノートは、今の印（既定 PA）のものにする。以後は、ノートごとに自分の印を題に持つ
-    adopt_legacy_prefix(root, default)
+    strip_legacy_prefix(root)
     notes = load_notes(root)
     namespaces = scan_namespaces(root, notes) or [default]
     reconcile_names(root, namespaces, notes)

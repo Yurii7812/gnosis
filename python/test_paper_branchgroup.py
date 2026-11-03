@@ -57,35 +57,35 @@ with tempfile.TemporaryDirectory() as d:
     pp.create_paper_index(root)
     moved, errors = pp.move_images(root, root, [(img(root, "s1.jpg"), "1"), (img(root, "s2.jpg"), "2"),
                                                  (img(root, "t1.jpg"), "1", "仏教")])
-    check(len(moved) == 3 and not errors, "ID 1・2 とトピック PA-1-仏教 を取り込む")
+    check(len(moved) == 3 and not errors, "ID 1・2 とトピック 1-仏教 を取り込む")
     notes = {**{fid: p for fid, p in moved}, **{fid[3:]: p for fid, p in moved if fid.startswith("PA-") and "-" not in fid[3:]}}
     pp.regen(root)
     check(pp.find_id_index(root, "1") is None and not any(p.name.endswith("Index.md") and "1-Index" in p.read_text(encoding="utf-8")
                                                           for p in root.glob("*.md")), "1-Index グループは作られない")
     n1 = notes["1"]
     b = branch_block(n1)
-    check(len(b) == 1 and "[PA-1-仏教](" in b[0] and not b[0].startswith(" "), f"ID ノート 1 の BranchGroup: にトピック PA-1-仏教: {b}")
+    check(len(b) == 1 and "[1-仏教](" in b[0] and not b[0].startswith(" "), f"ID ノート 1 の BranchGroup: にトピック 1-仏教: {b}")
     check("TopicIndex:" not in notes["2"].read_text(encoding="utf-8"), "トピックが無い ID ノート 2 には TopicIndex: を作らない")
     check("BranchGroup:" not in n1.read_text(encoding="utf-8"), "紙のノートには BranchGroup: を出さない")
     ls = lines_of(n1)
-    h1 = ls.index("# PA-1")
+    h1 = ls.index("# 1")
     ti = ls.index("TopicIndex:")
     fz = ls.index("FolgezettelIndex:")
     check(ti == h1 + 2 and ls[h1 + 1] == "", "TopicIndex: は H1 の直後（空行 1 つ挟む）")
     check(fz == ti + len(b) + 1, "FolgezettelIndex: は TopicIndex: の真下（節のあいだに空行は入れない）")
     check(any(ln.startswith("[All#1](") for ln in ls[fz:fz + 4]), "FolgezettelIndex: に All#番号 のリンク")
-    topic = notes["PA-1-仏教"].read_text(encoding="utf-8")
+    topic = notes["1-仏教"].read_text(encoding="utf-8")
     check("attribute: topicindex" in topic and "Context:\n[folgezettel-Index-1]" not in topic,
           "トピックノートはグループ、索引Contextの自動追加は無い")
 
     # 階層: 四念処 は 仏教 の下
-    moved2, errors2 = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "PA-1-仏教"),
+    moved2, errors2 = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "1-仏教"),
                                                    (img(root, "t3.jpg"), "1", "禅")])
     check(len(moved2) == 2 and not errors2, "階層トピックの取り込み")
     pp.regen(root)
     b = branch_block(n1)
     names = [ln.strip().split("]")[0].lstrip("[") for ln in b]
-    check(names == ["PA-1-仏教", "PA-1-四念処", "PA-1-禅"], f"並び: 仏教 → 四念処 → 禅: {names}")
+    check(names == ["1-仏教", "1-四念処", "1-禅"], f"並び: 仏教 → 四念処 → 禅: {names}")
     check(not any(ln.startswith(" ") for ln in b), f"自動ではインデントしない: {b}")
     # 並びとインデントは利用者が直せる。regen は手で直した並びを変えない
     ls = lines_of(n1)
@@ -110,7 +110,7 @@ with tempfile.TemporaryDirectory() as d:
     root = make_vault(Path(d))
     pp.create_paper_index(root)
     moved, errors = pp.move_images(root, root, [(img(root, "s1.jpg"), "1"), (img(root, "t1.jpg"), "1", "仏教"),
-                                                 (img(root, "t2.jpg"), "1", "四念処", "PA-1-仏教")])
+                                                 (img(root, "t2.jpg"), "1", "四念処", "1-仏教")])
     notes = {**{fid: p for fid, p in moved}, **{fid[3:]: p for fid, p in moved if fid.startswith("PA-") and "-" not in fid[3:]}}
     pp.regen(root)
     # 旧い形に戻す: BranchGroup を外し、旧 1-Index グループ（インデントが階層）を作る
@@ -124,10 +124,10 @@ with tempfile.TemporaryDirectory() as d:
     n1.write_text("\n".join(ls), encoding="utf-8")
     legacy = root / "261001000000.md"
     legacy.write_text("---\ntime: 2026-10-01 00:00:00\ntitle: 1-Index\nattribute: group\n---\n\n# 1-Index\n"
-                      f"[1]({n1.name})\n[PA-1-仏教]({notes['PA-1-仏教'].name})\n  [PA-1-四念処]({notes['PA-1-四念処'].name})\n", encoding="utf-8")
+                      f"[1]({n1.name})\n[1-仏教]({notes['1-仏教'].name})\n  [1-四念処]({notes['1-四念処'].name})\n", encoding="utf-8")
     pp.regen(root)
     b = branch_block(n1)
-    check([ln.strip().split("]")[0].lstrip("[") for ln in b] == ["PA-1-仏教", "PA-1-四念処"] and not any(ln.startswith(" ") for ln in b),
+    check([ln.strip().split("]")[0].lstrip("[") for ln in b] == ["1-仏教", "1-四念処"] and not any(ln.startswith(" ") for ln in b),
           f"旧 1-Index の並びを BranchGroup に引き継ぐ（インデントは外す）: {b}")
     check(not legacy.exists() and any(p.name.endswith("261001000000.md") for p in (root / ".trash").glob("*")),
           "旧 1-Index グループはごみ箱へ")
@@ -160,7 +160,7 @@ with tempfile.TemporaryDirectory() as d:
     pp.create_paper_index(root)
     moved, errors = pp.move_images(root, root, [(img(root, "s1.jpg"), "1"), (img(root, "s1a.jpg"), "1a"),
                                                  (img(root, "t1.jpg"), "1", "仏教")])
-    moved2, _e = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "PA-1-仏教")])
+    moved2, _e = pp.move_images(root, root, [(img(root, "t2.jpg"), "1", "四念処", "1-仏教")])
     moved3, _e = pp.move_images(root, root, [(img(root, "t3.jpg"), "1", "阿含")])
     notes = {fid: p for fid, p in moved + moved2 + moved3}
     notes.update({fid[3:]: p for fid, p in list(notes.items()) if fid.startswith("PA-") and "-" not in fid[3:]})
@@ -170,29 +170,29 @@ with tempfile.TemporaryDirectory() as d:
     check(any(f"]({n1a.name})" in ln for ln in block(n1, "ChildBranch:")), f"1 の ChildBranch: に 1a: {block(n1, 'ChildBranch:')}")
     ctx_1a = block(n1a, "### Context") + block(n1a, "Context:")
     check(not any(f"]({n1.name})" in ln for ln in ctx_1a), f"1a の親子を Context で代用しない: {ctx_1a}")
-    for t in ("PA-1-仏教", "PA-1-四念処", "PA-1-阿含"):
+    for t in ("1-仏教", "1-四念処", "1-阿含"):
         check("attribute: topicindex" in notes[t].read_text(encoding="utf-8")
               and not any(f"]({n1.name})" in ln for ln in block(notes[t], "ParentBranch:"))
               and any(f"]({notes[t].name})" in ln for ln in block(n1, "TopicIndex:")),
               f"トピック {t} はグループで、1 の TopicIndex: に入り、ParentBranch を作らない")
-    check("topic_parent: PA-1-仏教" in fm_of(notes["PA-1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["PA-1-仏教"])),
-          f"親トピックは front matter の topic_parent に残る: {fm_of(notes['PA-1-四念処'])}")
+    check("topic_parent: 1-仏教" in fm_of(notes["1-四念処"]) and not any(l.startswith("topic_parent") for l in fm_of(notes["1-仏教"])),
+          f"親トピックは front matter の topic_parent に残る: {fm_of(notes['1-四念処'])}")
     check(any(ln.startswith("folgezettel:") for ln in fm_of(notes["1"])), "スキャンノートの番号は folgezettel: に書く")
     fi = pp.find_titled(root, "folgezettel-Index-1")
-    names = [ln.split("]")[0].lstrip("[") for ln in lines_of(fi) if ln.startswith("[PA-1-")]
-    check(names == ["PA-1-仏教", "PA-1-四念処", "PA-1-阿含"], f"folgezettel-Index-1 にトピックを、親を子より先に（インデントなし）: {names}")
+    names = [ln.split("]")[0].lstrip("[") for ln in lines_of(fi) if ln.startswith("[1-")]
+    check(names == ["1-仏教", "1-四念処", "1-阿含"], f"folgezettel-Index-1 にトピックを、親を子より先に（インデントなし）: {names}")
     fl = lines_of(fi)
-    check(fl.index(next(l for l in fl if l.startswith("[PA-1-仏教]"))) < fl.index(next(l for l in fl if l.startswith("## [1]"))),
+    check(fl.index(next(l for l in fl if l.startswith("[1-仏教]"))) < fl.index(next(l for l in fl if l.startswith("## [1]"))),
           "トピックの Index が先、その後にノート（## 1 の節より前）")
     # トピック本文の Context より下を切り捨てない
-    tp = notes["PA-1-仏教"]
+    tp = notes["1-仏教"]
     tp.write_text(tp.read_text(encoding="utf-8").rstrip("\n") + "\n\nRelated:\n[1a](" + n1a.name + ")\n\n手書きの続き\n", encoding="utf-8")
     pp.regen(root)
     check("手書きの続き" in tp.read_text(encoding="utf-8") and "Related:" in tp.read_text(encoding="utf-8"),
           "トピックノートの Context より下を切り捨てない")
     # 親が特定できないときは推測しない（topic_parent の相手が無い）
     moved4, _e = pp.move_images(root, root, [(img(root, "t4.jpg"), "1", "禅", "PA-1-存在しない")])
-    t4 = dict(moved4)["PA-1-禅"]
+    t4 = dict(moved4)["1-禅"]
     pp.regen(root)
     check(not any(l.startswith("topic_parent") for l in fm_of(t4)), "親トピックが見つからなければ topic_parent を書かない")
     sync(root)

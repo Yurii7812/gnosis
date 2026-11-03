@@ -27,7 +27,15 @@ def split_prefix(ident: str) -> tuple[str, str]:
     return (m.group(1), m.group(2)) if m else ('', ident or '')
 
 
+PAPER_TOP_TITLE = 'Paper-Zettelkasten-Index'
+
+
 def paper_prefix(root: Path) -> str:
+    """紙の題・画像に付ける印は無い（2026-11-04 の決め）。番号は索引の頂点の子として付く。"""
+    return ''
+
+
+def _old_paper_prefix(root: Path) -> str:
     """紙の番号の印（`PA-` の形。末尾の _ まで）。設定 paperIdPrefix（vault の .gnosis/settings.json。root は vault かその note/）。"""
     value = PAPER_PREFIX_DEFAULT
     for base in (Path(root), Path(root).parent):
@@ -282,7 +290,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # 例外（2026-10-20）: ブランチで作られたグループ（親ノートの BranchGroup: にあるグループ）は、親ノートと同じ ID を持つ（最後に振る）。
     # 紙の PKM の番号（題が番号）は別物なので触らない
     for p, n in notes.items():
-        if ids[p] and (is_group(n) or n['title'] in SHARED_ID_TITLES) and not is_paper(n) and p not in unsaved:
+        if ids[p] and (is_group(n) or n['title'] in SHARED_ID_TITLES) and p not in unsaved:
             plan[p] = ''
             ids[p] = ''
     # 紙のスキャンノートの番号は、題の番号の前に印（PA-）を付けた形にそろえる（デジタルの番号とぶつからない別の空間）。
@@ -302,7 +310,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             topset.add(p)
 
     def managed(p) -> bool:
-        return p.name != 'index.md' and not is_group(notes[p]) and p not in unsaved
+        # 紙の Index-write・folgezettel-Index は、親のグループの番号を受けるだけ（木の中では番号を振らない）
+        return p.name != 'index.md' and not is_group(notes[p]) and p not in unsaved and not (is_paper_infra(notes[p]) and notes[p]['title'] != PAPER_TOP_TITLE)
 
     def primary(c):
         """親が複数あるノートの、番号の親にするもの: 今の番号の親 → ParentBranch: の最初 → 先頭。"""
@@ -318,6 +327,14 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 return q
         return ps[0]
 
+    # 紙のスキャンの木は、索引の頂点（Paper-Zettelkasten-Index）の子になる（番号は 32a、32a1 …）。
+    # 題（1、1a…）は木の形と並びを表すだけで、番号そのものにはならない
+    paper_top = next((p for p, n in notes.items() if n['title'] == PAPER_TOP_TITLE and not is_group(n)), None)
+    if paper_top is not None:
+        for p, n in notes.items():
+            if p != paper_top and scan_number(n) and not parents[p] and managed(p):
+                parents[p].append(paper_top)
+                children[paper_top].append(p)
     primaries = {c: primary(c) for c in notes}
     kids = {}
     for c, q in primaries.items():
@@ -325,7 +342,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             kids.setdefault(q, []).append(c)
     old = dict(ids)
     roots = [p for p in top if managed(p) and not parents[p]]
-    # 紙のスキャンノートも、親の無いものは普通のノートと同じく最上位の番号を受ける（索引の木の外でも）
+    # 頂点の無い紙のスキャンは、親の無いものとして最上位の番号を受ける
     roots += [p for p in notes if p not in roots and managed(p) and not parents[p] and scan_number(notes[p])]
     root_set = set(roots)
     # 番号を残すノート: 紙のノート・未保存の編集中のもの（これらの番号はそのまま。下に続くデジタルの子は、その番号の下に振る）
@@ -352,7 +369,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             plan[p] = ''
     # 残した番号は、そのまま使われているものとして避ける
     # 紙のノートの番号（YAML は印なし）はデジタルの番号と別の空間。デジタルの番号の並びには入れない
-    fixed = {ids[p] for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])}
+    # 紙の索引（頂点のグループなど）は、頂点の番号を受けるだけなので、使用中の番号として避けない
+    fixed = {ids[p] for p in notes if p not in managed_set and not is_paper_infra(notes[p]) and ID_RE.fullmatch(ids[p])}
 
     def sibling_order(p, c):
         m = DATED_TITLE_RE.match(notes[c]['title'])
@@ -410,12 +428,39 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
             continue
         for g in targets(nf._take_branch_group_block(n['body'])[0], p.parent):
-            if not (is_group(notes[g]) or notes[g]['title'] in SHARED_ID_TITLES) or is_paper(notes[g]) or g in unsaved:
+            if not (is_group(notes[g]) or notes[g]['title'] in SHARED_ID_TITLES) or g in unsaved:
                 continue
             if stored[g] == ids[p]:
                 plan.pop(g, None)
             else:
                 plan[g] = ids[p]
+    # 紙のグループ（Index-write・folgezettel-Index など）は、その親のグループ（Paper-Zettelkasten-Index）と同じ番号を持つ
+    # （グループは番号を持たない決まりの例外。頂点の番号がそのまま使われる）
+    for _pass in range(2):
+        for p, n in notes.items():
+            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
+                # 紙の Index-write・folgezettel-Index（グループでないもの）だけ、親のグループの番号を受ける。
+                # 頂点（番号の元）と、キーワードのグループなど普通のグループは対象外
+                continue
+            shared = None
+            # 所属（Group:）がまだ書かれていなくても、紙のグループ（題が頂点の名前のグループ）から番号を受ける
+            cands = list(targets(n['group'], p.parent))
+            cands += [q for q, m in notes.items() if is_group(m) and m['title'] == PAPER_TOP_TITLE and q not in cands]
+            for g in cands:
+                if g == p or not is_group(notes[g]) or not is_paper_infra(notes[g]) or g in unsaved:
+                    continue
+                want = plan[g] if g in plan else stored[g]
+                if ID_RE.fullmatch(want):
+                    shared = want
+                    break
+            if shared is not None:
+                if stored[p] == shared:
+                    plan.pop(p, None)
+                else:
+                    plan[p] = shared
+            elif is_paper_infra(n) and not is_group(n) and _pass == 1:
+                # 親のグループから番号を受けない紙の索引（folgezettel-Index-N など）は番号を持たない
+                plan[p] = ''
     return plan
 
 

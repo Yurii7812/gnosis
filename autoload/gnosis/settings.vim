@@ -15,7 +15,6 @@
 "                               "link": …, "heading": …, "selection": …, "cursorline": …}},
 "     "appTheme": {"kind": "builtin"} | {"kind": "custom", "name": "名前"},   ← \c のアプリ（Electron）の配色
 "     "appCustomThemes": {"名前": {… customThemes と同じ形 …}},
-"     "paperIdPrefix": "PA",   ← これから取り込む紙のノートの印（PA → 題と画像が PA-1a2）。\F の最初の画面の p で変える（英大文字 1〜4 字。今までのノートの印は変わらない）
 "     "mandalaOnStart": true,  ← 起動したとき、曼荼羅ビューを左半分に出す（既定オン）
 "     "hide": {"yaml": false, "top": false, "bottom": false, "image": false}   ← ノートで隠すもの（\zz の窓で切り替える。
 "                              yaml=先頭の YAML / top=上の「名前:」系 / bottom=下の「名前:」系 / image=ノートの中の画像（![](…) だけの行の画像。隠す＝表示しない）。オンにするまで保たれる。\c のアプリも同じ）
@@ -54,7 +53,6 @@ function! gnosis#settings#defaults() abort
         \ 'mandalaOnStart': v:true,
         \ 'hide': {'yaml': v:false, 'top': v:false, 'bottom': v:false, 'image': v:false},
         \ 'imageViewer': 'auto',
-        \ 'paperIdPrefix': 'PA',
         \ 'mandalaLegend': v:true,
         \ 'linkEditInsert': v:false,
         \ }
@@ -101,7 +99,6 @@ function! gnosis#settings#validate(s) abort
   let l:w.height = max([360, min([10000, type(l:w.height) == v:t_number ? l:w.height : float2nr(l:w.height)])])
   let l:w.maximized = l:w.maximized ? v:true : v:false
   let l:s.mandalaOnStart = get(l:s, 'mandalaOnStart', v:true) ? v:true : v:false
-  let l:s.paperIdPrefix = type(get(l:s, 'paperIdPrefix', 0)) == v:t_string && l:s.paperIdPrefix =~# '^[A-Z]\{1,4\}$' ? l:s.paperIdPrefix : 'PA'
   if type(get(l:s, 'hide', 0)) != v:t_dict
     let l:s.hide = {}
   endif

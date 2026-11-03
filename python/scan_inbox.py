@@ -13,7 +13,6 @@
     scan_inbox.py undo ROOT                    # 直前の番号付けを取り消す（画像を受け皿へ戻し、作ったノートは .trash へ。矢印の左・h）
     scan_inbox.py diary ROOT NAME DATE         # 紙の日記として登録
     scan_inbox.py finish ROOT                  # Index・Folgezettel-Index などを作り直す
-    scan_inbox.py prefix ROOT [印]             # 紙の番号の印（既定 PA → PA-1a2）を見る / 変える（これから取り込むものの印。今までのノートは変えない）
 
 どれも標準出力に JSON を 1 つ出す（失敗は {"ok": false, "error": …}）。
 """
@@ -62,8 +61,7 @@ def list_scans(root: Path) -> dict:
     names = [p.name for p in files]
     # 並べ替え（画面の s）に使う、更新日時（秒）と大きさ
     info = {p.name: {"mtime": int(p.stat().st_mtime), "size": p.stat().st_size} for p in files}
-    return {"ok": True, "scans": names, "info": info, "last": load_state(root).get("last", ""),
-            "prefix": fz.paper_prefix(root)[:-1]}
+    return {"ok": True, "scans": names, "info": info, "last": load_state(root).get("last", "")}
 
 
 def _next_name(d: Path, when: datetime, suffix: str) -> str:
@@ -157,7 +155,7 @@ def assign(root: Path, name: str, raw_id: str, topic: str = "") -> dict:
     fid = pp.normalize_id(raw_id)
     if not pp.FULL_ID_PATTERN.fullmatch(fid):
         return {"ok": False, "error": "番号の形が違います: " + raw_id}
-    fid = pp.with_prefix(pp.default_prefix(root), fid)     # 印の無い番号には今の印（既定 PA）を付ける（PA-1a2）
+    fid = pp.with_prefix(pp.default_prefix(root), fid)     # 紙の題は印なし（1、1a）。番号の印は付かない
     display = pp.topic_display(fid, topic) if topic else fid
     replaced = _same_name_exists(root, display)
     _keep_old(root, root, display)
@@ -237,37 +235,6 @@ def diary(root: Path, name: str, date: str) -> dict:
     return {"ok": True, "date": norm}
 
 
-def set_prefix(root: Path, value: str = "") -> dict:
-    """紙の番号の印（PA → `PA-1a2`）。設定は vault の .gnosis/settings.json の paperIdPrefix。
-    value が空なら今の印を返すだけ。変えるのは、これから取り込む紙のノートの印（題と画像の名前が `PB-1a2` になる）。
-    今までのノートは自分の印のまま（印が 2 つ以上になると、グループ・Index-write などが印ごとに分かれ、`-PA` `-PB` が付く）。
-    変える前に regen して、印の無い旧い題のノートを、今の印（変える前のもの）に直しておく。"""
-    root = Path(root).resolve()
-    value = value.strip().upper()
-    if not value:
-        return {"ok": True, "prefix": fz.paper_prefix(root)[:-1]}
-    if not fz.PREFIX_RE.fullmatch(value):
-        return {"ok": False, "error": "印は英大文字 1〜4 字です（例: PA）"}
-    base = next((b for b in (root, root.parent) if (b / ".gnosis" / "settings.json").is_file()), None)
-    if base is None:
-        base = root.parent if root.name == "note" and (root.parent / ".gnosis").is_dir() else root
-    f = base / ".gnosis" / "settings.json"
-    try:
-        data = json.loads(f.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            data = {}
-    except (OSError, ValueError):
-        data = {}
-    try:
-        pp.regen(root)   # 旧い題のノートを、変える前の印に直す（変えたあとだと新しい印になってしまう）
-    except Exception:  # noqa: BLE001  紙の PKM が無い vault でも、印は変えられる
-        pass
-    data["paperIdPrefix"] = value
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"ok": True, "prefix": value}
-
-
 def finish(root: Path) -> dict:
     return {"ok": bool(pp.regen(Path(root).resolve()))}
 
@@ -291,8 +258,6 @@ def main(argv: list[str]) -> int:
             out = diary(Path(a[0]), a[1], a[2])
         elif cmd == "finish":
             out = finish(Path(a[0]))
-        elif cmd == "prefix":
-            out = set_prefix(Path(a[0]), a[1] if len(a) > 1 else "")
         else:
             out = {"ok": False, "error": "使い方: " + __doc__.splitlines()[0]}
     except Exception as exc:  # noqa: BLE001

@@ -1,30 +1,18 @@
 package net.gnosis.capture
 
 /**
- * 紙のノートの番号（PC の python/paper_pkm.py と同じ規則）。`PA-1a2` の形: 先頭が印（大文字 1〜4 字。PA・PB…）、あとが番号。
- * 印の無い番号（`1a2`）は、印を付けて使う。画面は、矢印（またはボタン）で「前の番号の子」「次の連番」を付ける。
+ * 紙のノートの番号（PC の python/paper_pkm.py と同じ規則）。`1a2` の形（数字と小文字）。
+ * 題と画像の名前も、この番号そのもの（印は付けない。2026-11-04 の決め）。
+ * 画面は、矢印（またはボタン）で「前の番号の子」「次の連番」を付ける。
  */
 object PaperId {
     private val BODY = Regex("^[0-9]+([a-z]+[0-9]+)*[a-z]*$")
-    private val PREFIXED = Regex("^([A-Z]{1,4})-(.+)$")
-    val PREFIX = Regex("^[A-Z]{1,4}$")
 
-    /** `pa-1A2` → `PA-1a2`、`1A2` → `1a2`。 */
-    fun normalize(raw: String): String {
-        val t = raw.trim()
-        val m = Regex("^([A-Za-z]{1,4})-(.+)$").find(t)
-        if (m != null && BODY.matches(m.groupValues[2].lowercase())) return m.groupValues[1].uppercase() + "-" + m.groupValues[2].lowercase()
-        return t.lowercase()
-    }
+    /** 前後の空白を除き、小文字にする（`1A2` → `1a2`）。 */
+    fun normalize(raw: String): String = raw.trim().lowercase()
 
-    /** 番号として正しいか（印つきでも、印なしでも）。 */
-    fun isValid(id: String): Boolean {
-        val m = PREFIXED.find(id)
-        return BODY.matches(if (m != null) m.groupValues[2] else id)
-    }
-
-    /** 印の無い番号に印を付ける（もう付いていればそのまま）。 */
-    fun withPrefix(prefix: String, id: String): String = if (id.isEmpty() || PREFIXED.matches(id) || prefix.isEmpty()) id else "$prefix-$id"
+    /** 番号として正しいか。 */
+    fun isValid(id: String): Boolean = BODY.matches(id)
 
     /** 前の番号の子（`1a2` → `1a2a`、`1a` → `1a1`）。 */
     fun child(id: String): String = id + (if (id.last().isDigit()) "a" else "1")

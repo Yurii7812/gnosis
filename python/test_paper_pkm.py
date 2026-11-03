@@ -256,7 +256,7 @@ def test_create_and_regen() -> None:
               "vault の index.md にリンクが足される")
 
         note1 = notes["1"].read_text(encoding="utf-8")
-        check(f"[PA-1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
+        check(f"[1a]({notes['1a'].name})" in note1, "親ノートの本文に子リンク")
         check(f"Context:\n[folgezettel-Index-1]({N(root, 'folgezettel-Index-1')}#1)" not in note1,
               "紙スキャンノートにインデックスの自動 Context を作らない")
         nav1 = f"FolgezettelIndex:\n[folgezettel-Index-1#1]({N(root, 'folgezettel-Index-1')}#1)\n[All#1]({all_number.name}#1)"
@@ -274,7 +274,7 @@ def test_create_and_regen() -> None:
         check(nav1 in notes["1"].read_text(encoding="utf-8") and nav1a in notes["1a"].read_text(encoding="utf-8"),
               "regen 後も2つの # アンカーと表示名を保つ")
         note1a = notes["1a"].read_text(encoding="utf-8")
-        check(f"[PA-1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
+        check(f"[1]({notes['1'].name})" in note1a, "子ノートの Parent は親ID")
 
         # キーワードから外した ID のグループ Parent 行は掃除される
         T(root, "Index-write").write_text(
@@ -288,7 +288,7 @@ def test_create_and_regen() -> None:
 
 
 def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
-    print("紙PKMの自動生成Indexは PA-0、all-number は先頭、グループの ParentBranch は頂点")
+    print("紙PKMの自動生成Indexは 0、all-number は先頭、グループの ParentBranch は頂点")
     import folgezettel as fz
     import note_format_v2 as nf
     with tempfile.TemporaryDirectory() as d:
@@ -324,7 +324,7 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
         check(order == [all_number.name, number1.name, number2.name],
               f"Folgezettel-Index の ChildBranch は all-number が先頭: {order}")
 
-        # 過去の誤ったID状態でも、次の同期で PA-0 へ修復する。
+        # 過去の誤ったID状態でも、次の同期で 0 へ修復する。
         paper_group.write_text(fz.set_value(group_text, "45"), encoding="utf-8")
         index_write.write_text(fz.remove_value(index_write.read_text(encoding="utf-8")), encoding="utf-8")
         nf.simple_sync(root)
@@ -391,22 +391,22 @@ def test_topic_index() -> None:
             root, root, _add_images(root, ["1"]) + [(src_topic, "1", "仏教")]
         )
         check(len(moved) == 2 and not errors, "ID と トピック を移動してノート作成")
-        notes = {(fid[3:] if fid.startswith("PA-") else fid): p for fid, p in moved}
+        notes = {fid: p for fid, p in moved}
         check(notes.get("1") is not None and notes.get("1-仏教") is not None,
               "通常IDとトピック表示名のノート")
         topic_text = notes["1-仏教"].read_text(encoding="utf-8")
-        check("paper_topic" not in topic_text and "topic_parent" not in topic_text and "# PA-1-仏教" in topic_text,
+        check("paper_topic" not in topic_text and "topic_parent" not in topic_text and "# 1-仏教" in topic_text,
               "トピックノートの fm は title だけ（paper_topic / topic_parent を持たない）")
         pp.regen(root)
         check(pp.find_id_index(root, "1") is None, "1-Index グループは作られない")
         n1 = notes["1"].read_text(encoding="utf-8")
-        check("TopicIndex:\n[PA-1-仏教](" in n1 and
-              "BranchGroup:\n[PA-1-仏教](" not in n1, "TopicIndex: にリンク、BranchGroup: には置かない")
+        check("TopicIndex:\n[1-仏教](" in n1 and
+              "BranchGroup:\n[1-仏教](" not in n1, "TopicIndex: にリンク、BranchGroup: には置かない")
         # Legacy BranchGroup references are migrated, not duplicated on sync.
         notes["1"].write_text(n1.replace("TopicIndex:", "BranchGroup:"), encoding="utf-8")
         pp.regen(root)
         n1 = notes["1"].read_text(encoding="utf-8")
-        check("TopicIndex:\n[PA-1-仏教](" in n1 and "BranchGroup:\n[PA-1-仏教](" not in n1,
+        check("TopicIndex:\n[1-仏教](" in n1 and "BranchGroup:\n[1-仏教](" not in n1,
               "旧 BranchGroup: のトピックリンクは再生成で TopicIndex: へ移動")
         check("attribute: topicindex" in notes["1-仏教"].read_text(encoding="utf-8")
               and "attribute: group" not in notes["1-仏教"].read_text(encoding="utf-8"),
@@ -435,18 +435,18 @@ def test_topic_index() -> None:
         pp.regen(root)
         check(manual_link in notes["1-仏教"].read_text(encoding="utf-8"), "トピックグループ本文への手動索引リンクを保持する")
         folge_text = T(root, "Folgezettel-Index").read_text(encoding="utf-8")
-        check("[PA-1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
+        check("[1-仏教]" not in folge_text, "Folgezettel-Index にトピック名は出ない")
 
         # 階層トピック: 仏教/四念処 → 1-四念処（親: 1-仏教）は、BranchGroup の並びで 仏教 の下に 2 スペース下げる
         src_n = root / "scan_1c.jpg"
         src_n.write_bytes(b"x")
-        moved2, errors2 = pp.move_images(root, root, [(src_n, "1", "四念処", "PA-1-仏教")])
+        moved2, errors2 = pp.move_images(root, root, [(src_n, "1", "四念処", "1-仏教")])
         check(len(moved2) == 1 and not errors2, "階層トピックの作成")
         pp.regen(root)
         n1 = notes["1"].read_text(encoding="utf-8")
-        i_buk = n1.find("[PA-1-仏教]")
-        i_sinen = n1.find("\n[PA-1-四念処]")
-        check(i_buk != -1 and i_sinen > i_buk and "  [PA-1-" not in n1, "四念処は仏教より後（インデントはしない）")
+        i_buk = n1.find("[1-仏教]")
+        i_sinen = n1.find("\n[1-四念処]")
+        check(i_buk != -1 and i_sinen > i_buk and "  [1-" not in n1, "四念処は仏教より後（インデントはしない）")
 
 
     print("move_images: ID 重複の検出")
@@ -686,7 +686,7 @@ def test_diary_errors_and_scan_unchanged() -> None:
         pp.regen(root)
         check("[日記](" not in idx.read_text(encoding="utf-8"), "日記を登録していなければ「日記」は出ない")
         check("[diary](" not in T(root, "Folgezettel-Index").read_text(encoding="utf-8"), "日記を登録していなければ Folgezettel-Index に diary は出ない")
-        check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-2"}, "通常の ID 登録は今までどおり（題は PA- 付き）")
+        check(len(moved) == 2 and not errors and pp.scan_folgezettel_notes(root).keys() == {"1", "2"}, "通常の ID 登録（題は印なし）")
 
 
 def test_diary_weekday_is_computed() -> None:
@@ -887,14 +887,14 @@ def test_title_is_the_id() -> None:
         notes = {pp.split_paper_title(fid)[1]: p for fid, p in moved}
         t1 = notes["1"].read_text(encoding="utf-8")
         check("folgezettel: 1\n" in t1 and "title:" not in t1
-              and "source: scan" not in t1 and "![](PA-1.jpg)" in t1,
+              and "source: scan" not in t1 and "![](1.jpg)" in t1,
               "紙スキャンの YAML には folgezettel: だけを付与")
         # ID検索は title だけ
-        check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a", "PA-2"}, "title だけでIDを取れる")
+        check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "title だけでIDを取れる")
         # 普通のノート（IDらしい title だが画像を参照しない）は誤認しない
         _write(root / "plain.md", "---\ntime: 2026-10-01 00:00:00\n---\n\n# 5\n\n普通のメモ\n")
         _write(root / "plain2.md", "---\ntime: 2026-10-01 00:00:00\ntitle: 6\n---\n\n# 6\n\n![](other.jpg)\n")
-        check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a", "PA-2"}, "IDらしい title の普通のノート／別の画像を参照するノートはスキャンノートではない")
+        check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "IDらしい title の普通のノート／別の画像を参照するノートはスキャンノートではない")
         before = (root / "plain.md").read_bytes()
         T(root, "Index-write").write_text("---\ntime: 2026-01-01 00:00:00\ntitle: Index-write\n---\n\n# Index-write\n\nバナナ: 1,1a\n", encoding="utf-8")
         pp.regen(root)
@@ -905,7 +905,7 @@ def test_title_is_the_id() -> None:
         gt = g.read_text(encoding="utf-8").replace(f"[1]({notes['1'].name})", f"[あああ]({notes['1'].name})")
         g.write_text(gt, encoding="utf-8")
         pp.regen(root)
-        check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a", "PA-2"}, "リンクの表示名を変えてもIDは変わらない")
+        check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a", "2"}, "リンクの表示名を変えてもIDは変わらない")
         check(_no_legacy(root) == [], f"旧メタデータが残っていない: {_no_legacy(root)}")
 
 
@@ -914,10 +914,10 @@ def test_duplicate_ids_are_reported() -> None:
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         moved, _ = pp.move_images(root, root, _add_images(root, ["1"]))
-        a = dict(moved)["PA-1"]
+        a = dict(moved)["1"]
         b = root / "261001000099.md"
         _write(b, "---\ntime: 2026-10-01 00:00:00\ntitle: 1\n---\n\n# 1\n\n![](1.jpg)\n")
-        check(list(pp.find_scan_conflicts(root)) == ["PA-1"], "重複した番号を検出（印の無い旧い題は PA- のものとして数える）")
+        check(list(pp.find_scan_conflicts(root)) == ["1"], "重複した番号を検出（印の無い旧い題は  のものとして数える）")
         pp.regen(root, do_sync=False)
         check(any("重複" in m for m in pp.LAST_REPORT) and a.exists() and b.exists(), "regen が重複を報告し、どちらも消さない")
     with tempfile.TemporaryDirectory() as d:
@@ -948,11 +948,11 @@ def test_legacy_migration() -> None:
             (root / n).write_bytes(b"x")
         pp.regen(root)
         snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
-        check('folgezettel: 1\n' in snap["261001000001.md"], "紙のスキャンノートは引用符なしの folgezettel:")
+        check(re.search(r"^folgezettel: [0-9][0-9a-z]*$", snap["261001000001.md"], re.M) is not None, "紙のスキャンノートは引用符なしの folgezettel:")
         check(_no_legacy(root) == [], f"旧メタデータが外れた: {_no_legacy(root)}")
-        check(pp.scan_folgezettel_notes(root).keys() == {"PA-1", "PA-1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる（旧い題は PA- 付きに直る）")
+        check(pp.scan_folgezettel_notes(root).keys() == {"1", "1a"} and "2026-10-13" in pp.scan_diary_notes(root), "移行後も ID と日記を識別できる（旧い題は  付きに直る）")
         check(all((root / n).is_file() for n in ("1.jpg", "1a.jpg", "1-仏教.jpg", "paper-diary-20261013-1.jpg")), "画像は失われない")
-        check("![](1.jpg)" in snap["261001000001.md"] and "[PA-1a](261001000002.md)" in snap["261001000001.md"], "本文の画像とリンクは残る")
+        check("![](1.jpg)" in snap["261001000001.md"] and "[1a](261001000002.md)" in snap["261001000001.md"], "本文の画像とリンクは残る")
         check("# 紙の日記\n" in snap["261001000005.md"] and "timeline: true" in snap["261001000005.md"] and "attribute: group" not in snap["261001000005.md"]
               and "paper_keyword" not in snap["261001000005.md"], "旧いグループ「紙の日記」は、同じノートのまま普通のノート（timeline: true）に直る")
         pp.regen(root)
@@ -1041,8 +1041,10 @@ def test_digital_diary_not_confused() -> None:
         top = pp.find_diary_group(root, idx)
         check(top is not None and top.name != "dig_top.md", "紙の日記グループはデジタル日記のグループと別")
         check(_month(root, "2026-10").name != "dig_month.md", "紙の月グループもデジタル日記の月グループと別")
+        # 紙の頂点も普通のノートとして番号を受けるので、デジタルの番号は後ろにずれうる（規則どおり）。内容は変わらない
+        strip = lambda b: re.sub(rb"^folgezettel:.*\n", b"", b, flags=re.M)
         t = {n: (root / n).read_bytes() for n in snap}
-        check(t["dig_month.md"] == snap["dig_month.md"] and t["dig_day.md"] == snap["dig_day.md"], "デジタル日記のノートは変わらない")
+        check(strip(t["dig_month.md"]) == strip(snap["dig_month.md"]) and strip(t["dig_day.md"]) == strip(snap["dig_day.md"]), "デジタル日記のノートは変わらない（番号を除く）")
         check(t["dig_top.md"] == snap["dig_top.md"], "デジタル日記のグループは変わらない")
 
 
@@ -1051,19 +1053,19 @@ def test_topic_parent_by_link() -> None:
     with tempfile.TemporaryDirectory() as d:
         root, idx = _diary_vault(Path(d))
         moved, _ = pp.move_images(root, root, _add_images(root, ["1"]))
-        n1 = dict(moved)["PA-1"]
-        for n in ("PA-1-仏教", "PA-1-禅"):
+        n1 = dict(moved)["1"]
+        for n in ("1-仏教", "1-禅"):
             (root / f"{n}.jpg").write_bytes(b"x")
-        pa = pp.create_topic_note(root, "PA-1", "仏教", "PA-1-仏教.jpg")
+        pa = pp.create_topic_note(root, "1", "仏教", "1-仏教.jpg")
         pp.regen(root, do_sync=False)
-        pb = pp.create_topic_note(root, "PA-1", "禅", "PA-1-禅.jpg", parent_topic="PA-1-仏教", root=root)
-        (root / "PA-1-禅.jpg").write_bytes(b"x")
+        pb = pp.create_topic_note(root, "1", "禅", "1-禅.jpg", parent_topic="1-仏教", root=root)
+        (root / "1-禅.jpg").write_bytes(b"x")
         tb = pb.read_text(encoding="utf-8")
-        check("topic_parent: PA-1-仏教" in tb and f"[PA-1-仏教]({pa.name})" not in tb, "子トピックは front matter の topic_parent で親を持つ（Context では代用しない）")
+        check("topic_parent: 1-仏教" in tb and f"[1-仏教]({pa.name})" not in tb, "子トピックは front matter の topic_parent で親を持つ（Context では代用しない）")
         pp.regen(root, do_sync=False)
         t1 = n1.read_text(encoding="utf-8")
-        check(f"TopicIndex:\n[PA-1-仏教]({pa.name})\n[PA-1-禅]({pb.name})" in t1
-              and "BranchGroup:\n[PA-1-仏教]" not in t1,
+        check(f"TopicIndex:\n[1-仏教]({pa.name})\n[1-禅]({pb.name})" in t1
+              and "BranchGroup:\n[1-仏教]" not in t1,
               f"ID ノートの TopicIndex: で親が先・インデントなし: {t1}")
         pp.regen(root, do_sync=False)
         check(t1 == n1.read_text(encoding="utf-8"), "冪等")
@@ -1090,11 +1092,11 @@ def test_simple_sync_keeps_format_and_trash_images() -> None:
         nf.simple_sync(root)
         (root / "plain.md").unlink()
         nf.simple_sync(root)
-        check((root / "PA-1.jpg").is_file(), "ID らしい題の普通のノートを消しても、他のノートの画像は動かさない")
-        notes["PA-1a"].unlink()
+        check((root / "1.jpg").is_file(), "ID らしい題の普通のノートを消しても、他のノートの画像は動かさない")
+        notes["1a"].unlink()
         nf.simple_sync(root)
         tr = list((root / ".trash").iterdir()) if (root / ".trash").is_dir() else []
-        check(not (root / "PA-1a.jpg").exists() and any(p.name.endswith("_PA-1a.jpg") for p in tr), 
+        check(not (root / "1a.jpg").exists() and any(p.name.endswith("_1a.jpg") for p in tr), 
               "スキャンノートを消すと、title と同名の画像が .trash へ退避される")
 
 
@@ -1108,17 +1110,17 @@ def test_scan_self_context_and_child_cleanup() -> None:
         check(len(moved) == 3 and not errors, "3 / 3b / 3b1 を作る")
         scans = dict(moved)
         pp.regen(root)
-        n3b = scans["PA-3b"]
-        n3b1 = scans["PA-3b1"]
-        n3 = scans["PA-3"]
+        n3b = scans["3b"]
+        n3b1 = scans["3b1"]
+        n3 = scans["3"]
         number_index = pp.folge_index_path(root, "3")
         # 旧版の誤った親子（スキャンの 3 → 番号Index）も再現する。
         fm_index, body_index = pp.read_note(number_index)
         p_at = next((i for i, line in enumerate(body_index) if line.strip() == "ParentBranch:"), None)
         if p_at is None:
-            body_index[2:2] = ["ParentBranch:", f"[PA-3]({n3.name})"]
+            body_index[2:2] = ["ParentBranch:", f"[3]({n3.name})"]
         else:
-            body_index.insert(p_at + 1, f"[PA-3]({n3.name})")
+            body_index.insert(p_at + 1, f"[3]({n3.name})")
         pp.write_note(number_index, fm_index, body_index)
         fm3, body3 = pp.read_note(n3)
         old_index_link = f"[folgezettel-Index-3]({number_index.name})"
@@ -1132,28 +1134,28 @@ def test_scan_self_context_and_child_cleanup() -> None:
         other = root / "other.md"
         _write(other, "# 参考ノート\n")
         fm, body = pp.read_note(n3b1)
-        body += ["### Context", f"[PA-3b1]({n3b1.name})",
-                 f"[PA-3b1]({n3b1.name})", f"[参考ノート]({other.name})"]
+        body += ["### Context", f"[3b1]({n3b1.name})",
+                 f"[3b1]({n3b1.name})", f"[参考ノート]({other.name})"]
         pp.write_note(n3b1, fm, body)
         fm, body = pp.read_note(n3b)
         # ChildBranch に子が既にあれば、その節へ自己リンクを足す。
         at = next((i + 1 for i, ln in enumerate(body) if ln.strip() in ("ChildBranch:", "### ChildBranch")), None)
         if at is None:
-            body += ["ChildBranch:", f"[PA-3b]({n3b.name})"]
+            body += ["ChildBranch:", f"[3b]({n3b.name})"]
         else:
-            body.insert(at, f"[PA-3b]({n3b.name})")
+            body.insert(at, f"[3b]({n3b.name})")
         pp.write_note(n3b, fm, body)
         pp.regen(root, do_sync=False)
         index_before_sync = number_index.read_text(encoding="utf-8")
         nf.simple_sync(root)
         t1 = n3b1.read_text(encoding="utf-8")
         t0 = n3b.read_text(encoding="utf-8")
-        check(f"### Context\n[PA-3b1]({n3b1.name})" not in t1
-              and f"Context:\n[PA-3b1]({n3b1.name})" not in t1,
+        check(f"### Context\n[3b1]({n3b1.name})" not in t1
+              and f"Context:\n[3b1]({n3b1.name})" not in t1,
               "自分自身を指す Context は生成・保持しない")
-        check(f"[PA-3b]({n3b.name})" not in t0.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
+        check(f"[3b]({n3b.name})" not in t0.split("ChildBranch:", 1)[-1].split("BackLink:", 1)[0],
               "自分自身を子とする ChildBranch は生成・保持しない")
-        check(f"[PA-3b1]({n3b1.name})" in t0 and f"[PA-3b]({n3b.name})" in t1,
+        check(f"[3b1]({n3b1.name})" in t0 and f"[3b]({n3b.name})" in t1,
               "本来の ParentBranch と ChildBranch は保持する")
         check(f"[参考ノート]({other.name})" in t1, "手書きの別ノートへの Context は保持する")
         root3_text = n3.read_text(encoding="utf-8")

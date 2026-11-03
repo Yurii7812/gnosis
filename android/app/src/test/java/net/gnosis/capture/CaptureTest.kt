@@ -7,22 +7,19 @@ import java.util.TimeZone
 
 class CaptureTest {
     @Test fun paperIdSteps() {
-        assertEquals("PA-1a2", PaperId.normalize("pa-1A2"))
+        assertEquals("pa-1a2", PaperId.normalize("pa-1A2"))
         assertEquals("1a2", PaperId.normalize(" 1A2 "))
-        assertEquals("PA-1a2", PaperId.withPrefix("PA", "1a2"))
-        assertEquals("PB-3", PaperId.withPrefix("PA", "PB-3"))
-        assertEquals("", PaperId.withPrefix("PA", ""))
-        assertTrue(PaperId.isValid("PA-1a2") && PaperId.isValid("12ab3") && !PaperId.isValid("PA-") && !PaperId.isValid("a1") && !PaperId.isValid("1-"))
+        assertTrue(PaperId.isValid("1a2") && PaperId.isValid("12ab3") && !PaperId.isValid("") && !PaperId.isValid("a1") && !PaperId.isValid("1-"))
         // ↓（子）と → （次の連番）
-        assertEquals("PA-1a2a", PaperId.child("PA-1a2"))
-        assertEquals("PA-1a1", PaperId.child("PA-1a"))
-        assertEquals("PA-1a3", PaperId.nextSibling("PA-1a2"))
-        assertEquals("PA-1b", PaperId.nextSibling("PA-1a"))
-        assertEquals("PA-2", PaperId.nextSibling("PA-1"))
-        assertEquals("PA-1aa", PaperId.nextSibling("PA-1z"))
-        assertEquals("PA-1ba", PaperId.nextSibling("PA-1az"))
+        assertEquals("1a2a", PaperId.child("1a2"))
+        assertEquals("1a1", PaperId.child("1a"))
+        assertEquals("1a3", PaperId.nextSibling("1a2"))
         assertEquals("1b", PaperId.nextSibling("1a"))
-        assertEquals("PA-10", PaperId.nextSibling("PA-9"))
+        assertEquals("2", PaperId.nextSibling("1"))
+        assertEquals("1aa", PaperId.nextSibling("1z"))
+        assertEquals("1ba", PaperId.nextSibling("1az"))
+        assertEquals("1b", PaperId.nextSibling("1a"))
+        assertEquals("10", PaperId.nextSibling("9"))
     }
 
     private val entries = listOf(

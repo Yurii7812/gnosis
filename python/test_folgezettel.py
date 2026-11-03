@@ -226,12 +226,6 @@ class FolgezettelTest(unittest.TestCase):
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
-        # 印を PB に変えても、もうある紙のスキャンはノートごとの印（PA-）を保つ（仕様）
-        (self.root / '.gnosis').mkdir()
-        (self.root / '.gnosis' / 'settings.json').write_text('{"paperIdPrefix": "PB"}')
-        nf.simple_sync(self.root)
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ids)
-
     def test_branch_assignment_and_navigation(self):
         parent = self.note('parent', '1a')
         a, b, leaf = [self.note(n) for n in ('a', 'b', 'leaf')]
