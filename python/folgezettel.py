@@ -438,16 +438,15 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # （グループは番号を持たない決まりの例外。頂点の番号がそのまま使われる）
     for _pass in range(2):
         for p, n in notes.items():
-            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE \
-                    or not (n['title'] in ('Index-write', 'Folgezettel-Index') or n['title'].startswith('Index-write-')):
-                # 紙の Index-write・folgezettel-Index（グループでないもの）だけ、親のグループの番号を受ける。
-                # 頂点（番号の元）と、キーワードのグループなど普通のグループは対象外
+            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
+                # 頂点（番号の元）・普通のグループ・紙以外は対象外
                 continue
             shared = None
+            sharing = n['title'] in ('Index-write', 'Folgezettel-Index') or n['title'].startswith('Index-write-')
             # 所属（Group:）がまだ書かれていなくても、紙のグループ（題が頂点の名前のグループ）から番号を受ける
             cands = list(targets(n['group'], p.parent))
             cands += [q for q, m in notes.items() if is_group(m) and m['title'] == PAPER_TOP_TITLE and q not in cands]
-            for g in cands:
+            for g in (cands if sharing else []):
                 if g == p or not is_group(notes[g]) or not is_paper_infra(notes[g]) or g in unsaved:
                     continue
                 want = plan[g] if g in plan else stored[g]
