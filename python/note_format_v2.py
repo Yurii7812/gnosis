@@ -1950,7 +1950,8 @@ def _preserve_parent(existing: list[str], path: Path, resolver, titles: dict,
                         # written fragment when the heading doesn't exist.
                         # Preserve any human-readable heading already shown.
                         label = m.group(1).partition("#")[2]
-                    if label:
+                    if label and not titles[rp].startswith("folgezettel-Index-"):
+                        # 紙の番号の索引（folgezettel-Index-N）は、ノートの名前をそのまま表示する（#見出し は付けない）
                         display += "#" + label
                 out.append(f"[{display}]({target})")
             else:
