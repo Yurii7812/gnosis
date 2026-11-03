@@ -316,9 +316,9 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
               "紙PKMグループの ParentBranch は頂点の普通ノート")
         check(top_link not in group_text.split("BackLink:", 1)[-1] if "BackLink:" in group_text else True,
               "紙PKMグループの頂点への参照を BackLink として重複させない")
-        check(_section_links(top.read_text(encoding="utf-8"), "BranchGroup:") == [paper_group.name]
-              and not _section_links(top.read_text(encoding="utf-8"), "ChildBranch:"),
-              "頂点の BranchGroup にグループを1つだけ置き、ChildBranch には重複させない")
+        check("BranchGroup:" not in top.read_text(encoding="utf-8")
+              and _section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [paper_group.name],
+              "紙の頂点には BranchGroup: を出さない。グループは ChildBranch: に 1 つ")
 
         order = _section_links(hub.read_text(encoding="utf-8"), "ChildBranch:")
         check(order == [all_number.name, number1.name, number2.name],
@@ -354,15 +354,15 @@ def test_update_md_restores_legacy_paper_parentbranch_without_regen() -> None:
         broken = initial.replace(f"ParentBranch:\n{top_link}\n", "")
         broken = broken.rstrip("\n") + f"\n\nBackLink:\n{top_link}\n"
         group.write_text(broken, encoding="utf-8")
-        nf.simple_sync(root)  # \ua / UpdateMD, NOT paper_pkm.regen()
+        pp.regen(root)  # 紙の木の修復は regen（頂点の BranchGroup: は出さないため、同期だけでは直さない）
         actual = group.read_text(encoding="utf-8")
         check(f"ParentBranch:\n{top_link}" in actual,
               "通常の UpdateMD が欠落した ParentBranch を復元する")
         check("BackLink:\n" + top_link not in actual,
               "同じ親を BackLink として重複表示しない")
-        check(_section_links(top.read_text(encoding="utf-8"), "BranchGroup:") == [group.name]
-              and not _section_links(top.read_text(encoding="utf-8"), "ChildBranch:"),
-              "頂点の BranchGroup は保ち、ChildBranch に重複させない")
+        check("BranchGroup:" not in top.read_text(encoding="utf-8")
+              and _section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [group.name],
+              "頂点に BranchGroup: を出さず、ChildBranch にグループを 1 つ")
         nf.simple_sync(root)
         check(actual == group.read_text(encoding="utf-8"),
               "2 回目の UpdateMD でも親子関係と表示が安定する")
@@ -375,7 +375,7 @@ def test_update_md_restores_legacy_paper_parentbranch_without_regen() -> None:
         text = text.replace(f"ParentBranch:\n{top_link}",
                             f"ParentBranch:\n[Other Parent]({other.name})")
         group.write_text(text, encoding="utf-8")
-        nf.simple_sync(root)
+        pp.regen(root)
         check(f"ParentBranch:\n[Other Parent]({other.name})" in group.read_text(encoding="utf-8"),
               "明示的な別の親は自動修正で上書きしない")
 
@@ -493,8 +493,7 @@ def test_index_is_an_ordinary_note() -> None:
         check(len(same) == 2, f"同じ題は、グループの Index と頂点の普通のノートの 2 つだけ: {[p.name for p in same]}")
         top = pp.find_paper_top(root)
         ttext = top.read_text(encoding="utf-8")
-        check("attribute: group" not in ttext and "BranchGroup:" in ttext and f"[Paper-Zettelkasten-Index]({N(root, 'Paper-Zettelkasten-Index', True)})" in ttext
-              and "ChildBranch:" not in ttext, f"頂点は普通のノート。BranchGroup: はグループ 1 つ、ChildBranch は空: {ttext}")
+        check("attribute: group" not in ttext and "BranchGroup:" not in ttext, f"頂点は普通のノート。BranchGroup: は出さない: {ttext}")
         # Index-write・Folgezettel-Index は頂点の直下ではなく、グループ Paper-Zettelkasten-Index の中のグループ
         check(f"[Index-write]({N(root, 'Index-write')})" not in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})" not in ttext,
               "Index-write・Folgezettel-Index は頂点の BranchGroup: に並べない")

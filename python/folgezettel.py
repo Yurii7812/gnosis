@@ -437,6 +437,21 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # 紙のグループ（Index-write・folgezettel-Index など）は、その親のグループ（Paper-Zettelkasten-Index）と同じ番号を持つ
     # （グループは番号を持たない決まりの例外。頂点の番号がそのまま使われる）
     for _pass in range(2):
+        # 紙の木のグループ（Paper-Zettelkasten-Index のグループ）は、ParentBranch: の頂点と同じ番号
+        for g, gn in notes.items():
+            if not (is_group(gn) and gn['title'] == PAPER_TOP_TITLE) or g in unsaved:
+                continue
+            for t_ in parents[g]:
+                tn = notes[t_]
+                if t_ == g or is_group(tn) or tn['title'] != PAPER_TOP_TITLE:
+                    continue
+                want = plan[t_] if t_ in plan else stored[t_]
+                if ID_RE.fullmatch(want):
+                    if stored[g] == want:
+                        plan.pop(g, None)
+                    else:
+                        plan[g] = want
+                    break
         for p, n in notes.items():
             if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
                 # 頂点（番号の元）・普通のグループ・紙以外は対象外

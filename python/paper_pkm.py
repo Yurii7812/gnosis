@@ -1312,6 +1312,19 @@ def _branch_add_topics(lines: list[str], base: Path, tlist: list, disp_path: dic
     return out
 
 
+def _drop_branch_group(note_path: Path) -> None:
+    """紙のノートの BranchGroup: の節を外す（本文のほかの行は変えない）。"""
+    fm, body = read_note(note_path)
+    span = _find_branch_group(body)
+    if span is None:
+        return
+    end = span[1]
+    if end < len(body) and not body[end].strip():
+        end += 1
+    del body[span[0]:end]
+    write_note(note_path, fm, body)
+
+
 def _write_branch_group(note_path: Path, lines: list[str]) -> None:
     """ID ノートの BranchGroup: ブロックを、lines にする（無ければ H1 の直後に作る）。ほかの本文は変えない。"""
     fm, body = read_note(note_path)
@@ -2522,9 +2535,9 @@ def ensure_paper_top(root: Path, groups: list[Path]) -> Path:
         top = named_path(root, DEFAULT_INDEX_TITLE, False)
         write_note(top, [_time_line(), f"title: {DEFAULT_INDEX_TITLE}"], [f"# {DEFAULT_INDEX_TITLE}", ""],
                    keep_trailing_blank=True)
-    # 頂点のノートの BranchGroup: はグループだけ（印ごとに 1 つ）。Index-write と Folgezettel-Index は、そのグループの中のグループ
-    lines = [markdown_link(index_title(g), g, top.parent) for g in groups]
-    _write_branch_group(top, lines)
+    # 紙のノートには BranchGroup: を出さない（2026-11-04 の決め）。グループの所属は ParentBranch: で持つ。
+    # 以前に書かれた BranchGroup: は外す（グループの中身は変えない）
+    _drop_branch_group(top)
     parent_index = Path(root) / "index.md"
     if parent_index.is_file():
         fm, body = read_note(parent_index)
