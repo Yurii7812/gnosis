@@ -453,7 +453,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                         plan[g] = want
                     break
         for p, n in notes.items():
-            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
+            sharing = n['title'] in ('Index-write', 'Folgezettel-Index') or n['title'].startswith('Index-write-')
+            if (is_group(n) and not sharing) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
                 # 頂点（番号の元）・普通のグループ・紙以外は対象外
                 continue
             shared = None
