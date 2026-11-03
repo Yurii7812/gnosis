@@ -291,20 +291,6 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     scan_prefixes = {split_prefix(scan_number(n))[0] for n in notes.values() if scan_number(n) and split_prefix(scan_number(n))[0]}
     # 印なしの旧い題のスキャンノートと、印なしの生成物は、印が 1 つだけならそれ（無ければ設定の印）に属する
     base_prefix = next(iter(scan_prefixes)) if len(scan_prefixes) == 1 else prefix
-    for p, n in notes.items():
-        num = scan_number(n)
-        if num and p not in unsaved:
-            ids[p] = split_prefix(num)[1]   # YAML の folgezettel: は印なしの番号（題と画像は印つき）
-            if ids[p] != stored[p]:
-                plan[p] = ids[p]
-    # 紙の自動作成の索引は、YAML の folgezettel を `PA-0` にそろえる（題は変えない。グループも同じ。印を変えたら付け直す）
-    for p, n in notes.items():
-        if is_paper_infra(n) and p not in unsaved:
-            ids[p] = (infra_prefix(n) or base_prefix) + '0'
-            if ids[p] != stored[p]:
-                plan[p] = ids[p]
-            else:
-                plan.pop(p, None)
     index = root / 'index.md'
     top = targets(notes[index]['body'], root) if index in notes else []
     # 日記（YYYY-MM-DD-曜日）と時系列記録のその日のノート（front matter の record:）も最上位にする。
@@ -316,7 +302,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             topset.add(p)
 
     def managed(p) -> bool:
-        return p.name != 'index.md' and not is_group(notes[p]) and not is_paper(notes[p]) and p not in unsaved
+        return p.name != 'index.md' and not is_group(notes[p]) and p not in unsaved
 
     def primary(c):
         """親が複数あるノートの、番号の親にするもの: 今の番号の親 → ParentBranch: の最初 → 先頭。"""
@@ -339,10 +325,12 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             kids.setdefault(q, []).append(c)
     old = dict(ids)
     roots = [p for p in top if managed(p) and not parents[p]]
+    # 紙のスキャンノートも、親の無いものは普通のノートと同じく最上位の番号を受ける（索引の木の外でも）
+    roots += [p for p in notes if p not in roots and managed(p) and not parents[p] and scan_number(notes[p])]
     root_set = set(roots)
     # 番号を残すノート: 紙のノート・未保存の編集中のもの（これらの番号はそのまま。下に続くデジタルの子は、その番号の下に振る）
     def kept(p) -> bool:
-        return p.name != 'index.md' and not is_group(notes[p]) and (is_paper(notes[p]) or p in unsaved)
+        return p.name != 'index.md' and not is_group(notes[p]) and p in unsaved
     # 管理するノート（番号を決め直すもの）を、根から木をたどって集める
     managed_set = set(roots)
     stack = list(roots) + [p for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p]) and kept(p)]
@@ -364,7 +352,7 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             plan[p] = ''
     # 残した番号は、そのまま使われているものとして避ける
     # 紙のノートの番号（YAML は印なし）はデジタルの番号と別の空間。デジタルの番号の並びには入れない
-    fixed = {ids[p] for p in notes if p not in managed_set and not is_paper(notes[p]) and ID_RE.fullmatch(ids[p])}
+    fixed = {ids[p] for p in notes if p not in managed_set and ID_RE.fullmatch(ids[p])}
 
     def sibling_order(p, c):
         m = DATED_TITLE_RE.match(notes[c]['title'])
@@ -418,11 +406,6 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
         p = work.pop()
         if ID_RE.fullmatch(ids[p]):
             assign(p, ids[p])
-    # 紙の索引の番号（PA-0）は、上で通常の番号に上書きされていても、共有の番号の判定の前に直す。
-    # さもないと、頂点のノートの BranchGroup の子（Index-write など）に古い通常の番号が渡る。
-    for p, n in notes.items():
-        if is_paper_infra(n) and p not in unsaved:
-            ids[p] = (infra_prefix(n) or base_prefix) + '0'
     for p, n in notes.items():
         if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
             continue
@@ -433,17 +416,6 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
                 plan.pop(g, None)
             else:
                 plan[g] = ids[p]
-    # Paper infrastructure has a fixed, namespaced ID (PA-0, PB-0, ...).
-    # The generic BranchGroup shared-ID pass above must not replace the
-    # paper index GROUP's ID with the ordinary top note's numerical ID.
-    # Nor may normal root/child allocation replace Index-write's PA-0.
-    for p, n in notes.items():
-        if is_paper_infra(n) and p not in unsaved:
-            want = (infra_prefix(n) or base_prefix) + '0'
-            if stored[p] == want:
-                plan.pop(p, None)
-            else:
-                plan[p] = want
     return plan
 
 

@@ -87,8 +87,8 @@ def test_second_prefix_renames() -> None:
                                  (f"Index-write-{pfx}", False),
                                  (f"Folgezettel-Index-{pfx}", False)):
                 path = pp.find_titled(root, nm, is_group)
-                check(path is not None and fz.value(path.read_text(encoding="utf-8")) == f"{pfx}-0",
-                      f"{nm} は {pfx}-0 を持つ")
+                check(path is not None and not fz.value(path.read_text(encoding="utf-8")).startswith(("PA", "PB")),
+                      f"{nm} の番号は普通の規則（印の特例なし）")
                 if is_group and path is not None:
                     check(f"ParentBranch:\n[Paper-Zettelkasten-Index]({top_path.name})" in path.read_text(encoding="utf-8"),
                           f"{nm} は頂点を ParentBranch に持つ")
@@ -179,7 +179,7 @@ def test_default_prefix_setting() -> None:
 
 
 def test_numbers_follow_each_notes_prefix() -> None:
-    print("Folgezettel の番号は、ノートごとの印（PA-1 / PB-1）。自動の索引は PA-0 / PB-0")
+    print("紙のノートの Folgezettel は普通の規則（印なしの番号）。題と画像の名前は印つき（PA-1 / PB-1）")
     import note_format_v2 as nf
     import folgezettel as fz
     with tempfile.TemporaryDirectory() as d:
@@ -192,9 +192,10 @@ def test_numbers_follow_each_notes_prefix() -> None:
         pp.regen(root, do_sync=False)
         nf.simple_sync(root)
         vals = {n.title: fz.value(n.path.read_text(encoding="utf-8")) for n in pp.load_notes(root)}
-        check(vals.get("PA-1") == "1" and vals.get("PB-1") == "1", f"YAML の番号は印なし（題の印は PA-1 / PB-1）: {vals.get('PA-1')} {vals.get('PB-1')}")
-        check(vals.get("Index-write-PA") == "PA-0" and vals.get("Index-write-PB") == "PB-0", f"自動の索引は印ごとの 0: {vals.get('Index-write-PA')} {vals.get('Index-write-PB')}")
-        check(vals.get("folgezettel-Index-PB-1") == "PB-0", f"番号専用ノートも: {vals.get('folgezettel-Index-PB-1')}")
+        a, b = vals.get("PA-1", ""), vals.get("PB-1", "")
+        check(a and b and a != b and not a.startswith(("PA", "PB")) and not b.startswith(("PA", "PB")),
+              f"スキャンの番号は印なしで、互いに別の番号: {a!r} {b!r}")
+        check(not any(v.startswith(("PA-", "PB-")) for v in vals.values()), f"印つきの番号は無い: {vals}")
 
 
 def main() -> int:

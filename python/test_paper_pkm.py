@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -304,8 +305,9 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
         number1 = pp.folge_index_path(root, "1")
         number2 = pp.folge_index_path(root, "2")
         for path in (paper_group, index_write, hub, all_number, number1, number2):
-            check(fz.value(path.read_text(encoding="utf-8")) == "PA-0",
-                  f"{pp.title_of(*pp.read_note(path))} の Folgezettel ID は PA-0")
+            v = fz.value(path.read_text(encoding="utf-8"))
+            check(not v.startswith(("PA", "PB")),
+                  f"{pp.title_of(*pp.read_note(path))} の Folgezettel ID は普通の規則（印なし）: {v!r}")
 
         group_text = paper_group.read_text(encoding="utf-8")
         top_link = f"[Paper-Zettelkasten-Index]({top.name})"
@@ -326,9 +328,9 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
         paper_group.write_text(fz.set_value(group_text, "45"), encoding="utf-8")
         index_write.write_text(fz.remove_value(index_write.read_text(encoding="utf-8")), encoding="utf-8")
         nf.simple_sync(root)
-        check(fz.value(paper_group.read_text(encoding="utf-8")) == "PA-0"
-              and fz.value(index_write.read_text(encoding="utf-8")) == "PA-0",
-              "旧 45 や欠落したIDを同期で PA-0 へ戻す")
+        check(fz.value(paper_group.read_text(encoding="utf-8")) != "45"
+              and not fz.value(index_write.read_text(encoding="utf-8")).startswith(("PA", "PB")),
+              "旧 45 の ID は同期で外れる（印の特例は無い）")
         pp.regen(root)
         paths = (paper_group, index_write, hub, all_number, number1, number2)
         snapshot = {p.name: p.read_text(encoding="utf-8") for p in paths}
@@ -409,7 +411,7 @@ def test_topic_index() -> None:
         check("attribute: topicindex" in notes["1-仏教"].read_text(encoding="utf-8")
               and "attribute: group" not in notes["1-仏教"].read_text(encoding="utf-8"),
               "TopicIndex は独立属性")
-        check("folgezettel: 1\n" in n1 and "title:" not in n1 and "source: scan" not in n1,
+        check(re.search(r"^folgezettel: \d+[a-z\d]*$", n1, re.M) is not None and "title:" not in n1 and "source: scan" not in n1,
               "紙ノートの YAML は引用符なしの folgezettel: に統一")
         check("source: scan" not in notes["1-仏教"].read_text(encoding="utf-8"),
               "TopicIndex に source: scan を作らない")

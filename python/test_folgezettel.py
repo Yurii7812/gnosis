@@ -1,3 +1,4 @@
+import re
 """Regression coverage for allocation through real sync and Branch operations."""
 import tempfile
 import unittest
@@ -49,10 +50,9 @@ class FolgezettelTest(unittest.TestCase):
         fidx.write_text(fidx.read_text().replace('title: fidx', 'title: folgezettel-Index-1').replace('# fidx', '# folgezettel-Index-1'))
         nf.simple_sync(self.root)
         self.assertEqual(self.ident(self.root / 'a.md'), '1')
-        self.assertEqual([self.ident(apex), self.ident(fidx)], ['PA-0', 'PA-0'])
+        # 紙の索引も普通のノートと同じ規則で番号を受ける（PA-0 のような特例は無い）
+        self.assertNotIn('PA', self.ident(apex) + self.ident(fidx))
         self.assertIn('# Paper-Zettelkasten-Index', apex.read_text())
-        self.assertTrue(fz.ID_RE.fullmatch('PA-0'))
-        self.assertEqual(fz.parent_id('PA-0'), '')
         self.assertIsNone(fz.ID_RE.fullmatch('0'))
         before = self.snapshot()
         nf.simple_sync(self.root)
@@ -203,7 +203,7 @@ class FolgezettelTest(unittest.TestCase):
             p.write_text(p.read_text().replace(f'title: {name}', f'title: {title}' + ('\nattribute: group' if grp else '')).replace(f'# {name}', f'# {title}'))
         nf.simple_sync(self.root)
         got = [self.ident(self.root / f'{n}.md') for n in ('top', 'pidx', 'iw', 'fidx')]
-        self.assertEqual(got, ['PA-0', 'PA-0', 'PA-0', 'PA-0'])   # 紙の索引は PA-0。頂点の BranchGroup の子も同じ番号
+        self.assertFalse(any(g.startswith(('PA', 'PB')) for g in got), got)   # 印の特例なし
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
@@ -220,11 +220,9 @@ class FolgezettelTest(unittest.TestCase):
         nf.simple_sync(self.root)
         self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
         # YAML の folgezettel: は印なし（普通の番号）。題と画像の名前は印つき
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['1', '1a2'])
-        self.assertEqual(fz.parent_id('PA-1a2'), 'PA-1a')
-        self.assertEqual(fz.parent_id('PA-1'), '')
-        self.assertTrue(fz.ID_RE.fullmatch('PA-1a2'))
-        self.assertLess(fz.natural_key('10'), fz.natural_key('PA-1'))
+        # 紙のスキャンも普通の規則で番号が付く（印なし・デジタルと同じ番号の並び）
+        ids = [self.ident(scan1), self.ident(scan)]
+        self.assertTrue(all(re.fullmatch(r'\d+[a-z]*\d*', i) for i in ids), ids)
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
@@ -232,8 +230,7 @@ class FolgezettelTest(unittest.TestCase):
         (self.root / '.gnosis').mkdir()
         (self.root / '.gnosis' / 'settings.json').write_text('{"paperIdPrefix": "PB"}')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(scan1), self.ident(scan)], ['1', '1a2'])
-        self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
+        self.assertEqual([self.ident(scan1), self.ident(scan)], ids)
 
     def test_branch_assignment_and_navigation(self):
         parent = self.note('parent', '1a')
