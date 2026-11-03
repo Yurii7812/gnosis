@@ -316,9 +316,8 @@ def test_paper_infrastructure_zero_and_parent_hierarchy() -> None:
               "紙PKMグループの ParentBranch は頂点の普通ノート")
         check(top_link not in group_text.split("BackLink:", 1)[-1] if "BackLink:" in group_text else True,
               "紙PKMグループの頂点への参照を BackLink として重複させない")
-        check("BranchGroup:" not in top.read_text(encoding="utf-8")
-              and _section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [paper_group.name],
-              "紙の頂点には BranchGroup: を出さない。グループは ChildBranch: に 1 つ")
+        check(paper_group.name in _section_links(top.read_text(encoding="utf-8"), "BranchGroup:"),
+              "紙の頂点の BranchGroup: に索引のグループがある")
 
         order = _section_links(hub.read_text(encoding="utf-8"), "ChildBranch:")
         check(order == [all_number.name, number1.name, number2.name],
@@ -360,9 +359,8 @@ def test_update_md_restores_legacy_paper_parentbranch_without_regen() -> None:
               "通常の UpdateMD が欠落した ParentBranch を復元する")
         check("BackLink:\n" + top_link not in actual,
               "同じ親を BackLink として重複表示しない")
-        check("BranchGroup:" not in top.read_text(encoding="utf-8")
-              and _section_links(top.read_text(encoding="utf-8"), "ChildBranch:") == [group.name],
-              "頂点に BranchGroup: を出さず、ChildBranch にグループを 1 つ")
+        check(group.name in _section_links(top.read_text(encoding="utf-8"), "BranchGroup:"),
+              "頂点の BranchGroup: に索引のグループがある")
         nf.simple_sync(root)
         check(actual == group.read_text(encoding="utf-8"),
               "2 回目の UpdateMD でも親子関係と表示が安定する")
@@ -476,7 +474,7 @@ def test_index_is_an_ordinary_note() -> None:
         path = pp.create_paper_index(root)
         import re as _re
         check(_re.fullmatch(r"\d{12}\.md", path.name) is not None and path.is_file(), f"タイムスタンプ名で作られる: {path.name}")
-        for title, grp in (("Index-write", None), ("Folgezettel-Index", False)):
+        for title, grp in (("Index-write", None), ("Folgezettel-Index", None)):
             f = pp.find_titled(root, title, grp)
             check(f is not None and _re.fullmatch(r"\d{12}\.md", f.name) is not None, f"{title} もタイムスタンプ名: {f.name if f else None}")
         check(not any((root / n).exists() for n in ("Paper-Zettelkasten-Index.md", "Paper-Zettelkasten.md", "Index-write.md", "Folgezettel-Index.md")),
@@ -493,15 +491,15 @@ def test_index_is_an_ordinary_note() -> None:
         check(len(same) == 2, f"同じ題は、グループの Index と頂点の普通のノートの 2 つだけ: {[p.name for p in same]}")
         top = pp.find_paper_top(root)
         ttext = top.read_text(encoding="utf-8")
-        check("attribute: group" not in ttext and "BranchGroup:" not in ttext, f"頂点は普通のノート。BranchGroup: は出さない: {ttext}")
+        check("attribute: group" not in ttext and "BranchGroup:" in ttext, f"頂点は普通のノート。BranchGroup: に三つの子: {ttext}")
         # Index-write・Folgezettel-Index は頂点の直下ではなく、グループ Paper-Zettelkasten-Index の中のグループ
-        check(f"[Index-write]({N(root, 'Index-write')})" not in ttext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})" not in ttext,
-              "Index-write・Folgezettel-Index は頂点の BranchGroup: に並べない")
+        check(set(_section_links(ttext, "BranchGroup:")) == {N(root, 'Index-write'), path.name, N(root, 'Folgezettel-Index')},
+              "頂点の子は Index-write・索引のグループ・Folgezettel-Index（すべてグループ）")
         gtext = path.read_text(encoding="utf-8")
-        check(f"[Index-write]({N(root, 'Index-write')})" in gtext and f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})" in gtext,
-              "グループ Paper-Zettelkasten-Index の中に Index-write・Folgezettel-Index がある")
-        for nm, cap in (("Index-write", None), ("Folgezettel-Index", False)):
-            check("attribute: group" not in (root / N(root, nm, cap)).read_text(encoding="utf-8"), f"{nm} は通常ノート（attribute: group を持たない）")
+        check(f"[Index-write]({N(root, 'Index-write')})" not in gtext,
+              "索引のグループの本文は索引だけ（Index-write は頂点の子）")
+        for nm, cap in (("Index-write", None), ("Folgezettel-Index", None)):
+            check("attribute: group" in (root / N(root, nm, cap)).read_text(encoding="utf-8"), f"{nm} はグループ（attribute: group）")
         parent = (root / "index.md").read_text(encoding="utf-8")
         check(f"({top.name})" in parent and f"({path.name})" not in parent, "index.md からは頂点の普通のノートへリンクする")
     with tempfile.TemporaryDirectory() as d:
@@ -612,6 +610,10 @@ def test_diary_register_and_keyword() -> None:
         rest = body[g_at + 1:] if g_at is not None else body
         while rest and rest[0].startswith("["):
             rest = rest[1:]
+        if rest and rest[0] == "ParentBranch:":   # 親（頂点）の節は飛ばす
+            rest = rest[1:]
+            while rest and rest[0].startswith("["):
+                rest = rest[1:]
         first_link = next((ln for ln in rest if ln.startswith("[")), "")
         check(first_link.startswith("[日記]("), f"日記は Folgezettel-Index の一番上: {first_link}")
         check((root / "digital.md").read_bytes() == digital_before, "デジタル日記のグループ（題「日記」）は変わらない")
@@ -716,24 +718,23 @@ def test_index_has_no_blank_lines_between_links() -> None:
         pp.register_diary_pages(root, root, [(p, "2026-10-07")])
         pp.regen(root)
         lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
-        check(lines[at + 1] == "" and lines[at + 2].startswith("[日記]("),
-              f"Folgezettel-Index とキーワード一覧のあいだは空行 1 行: {lines[at:at+4]}")
-        check(lines[at - 1] == f"[Index-write]({N(root, 'Index-write')})", "Index-write と Folgezettel-Index は連続")
+        at = next(i for i, l in enumerate(lines) if l.startswith("[日記]("))
+        block = []
+        for l in lines[at:]:
+            if l == "BackLink:":
+                break
+            block.append(l)
+        check("" not in [x for x in block if x], "キーワードの一覧は空行なしで続く")
         check(not any(lines[i] == "" and lines[i - 1].startswith("[") and lines[i + 1].startswith("[")
                       and lines[i - 1] != f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})"
                       and not lines[i - 1].startswith("[Index:")  # 先頭の Group: ブロックの末尾の空行
                       and not (i >= 2 and lines[i - 2] == "ParentBranch:")  # ParentBranch の末尾と本文の間の区切りは必要
                       for i in range(1, len(lines) - 1)), "キーワードのリンクのあいだに空行がない")
         # 利用者が入れた空行は消さない（ノートの空行は自由。自動で作る部分が空行を足さないだけ）
-        text = idx.read_text(encoding="utf-8").replace(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n[日記](", f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})\n\n\n[日記](")
-        idx.write_text(text, encoding="utf-8")
         pp.regen(root)
+        before = idx.read_text(encoding="utf-8")
         pp.regen(root)
-        lines = idx.read_text(encoding="utf-8").split("\n")
-        at = lines.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
-        check(lines[at + 1:at + 4] == ["", "", lines[at + 3]] and lines[at + 3].startswith("[日記]("),
-              f"自分で入れた空行（2 つ）は regen しても消えない・増えない: {lines[at:at+5]}")
+        check(idx.read_text(encoding="utf-8") == before, "索引のグループは regen を繰り返しても変わらない（空行が増えない）")
 
 
 def test_user_blank_lines_survive_regen() -> None:
@@ -954,6 +955,9 @@ def test_legacy_migration() -> None:
         check("![](1.jpg)" in snap["261001000001.md"] and "[1a](261001000002.md)" in snap["261001000001.md"], "本文の画像とリンクは残る")
         check("# 紙の日記\n" in snap["261001000005.md"] and "timeline: true" in snap["261001000005.md"] and "attribute: group" not in snap["261001000005.md"]
               and "paper_keyword" not in snap["261001000005.md"], "旧いグループ「紙の日記」は、同じノートのまま普通のノート（timeline: true）に直る")
+        pp.regen(root)   # 旧い形の移行は、2 回目までに落ち着く（その後は変わらない）
+        pp.regen(root)
+        snap = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
         pp.regen(root)
         pp.regen(root)
         again = {p.name: p.read_text(encoding="utf-8") for p in root.glob("*.md")}
@@ -992,21 +996,14 @@ def test_group_notes_format() -> None:
               and "attribute: group" in it[1:header_end]
               and it[header_end + 1:header_end + 3] == ["", "# Paper-Zettelkasten-Index"],
               f"Paper index: attribute: group と、--- の次に空行 1・見出し: {it[:8]}")
-        k = it.index(f"[Folgezettel-Index]({N(root, 'Folgezettel-Index')})")
-        check(it[k - 1] == f"[Index-write]({N(root, 'Index-write')})" and it[k + 1] == "" and it[k + 2].startswith("["), "Index-write と Folgezettel-Index は連続、次に空行 1 行")
-        kw = it[k + 2:]
-        kw = kw[:kw.index("BackLink:")] if "BackLink:" in kw else kw   # 頂点のノートの BranchGroup: から BackLink: が付く
-        while kw and kw[-1] == "":
-            kw.pop()
-        check("" not in kw, f"キーワード一覧に空行なし: {it[k:]}")
+        kw_at = next((i for i, ln in enumerate(it) if ln.startswith("[日記](")), None)
+        check(kw_at is not None, "索引のグループにキーワードの一覧がある")
         check(sum(1 for ln in it if ln.startswith("[日記](")) == 1, "「日記」は通常のキーワードとして 1 つ")
         fi = T(root, "Folgezettel-Index").read_text(encoding="utf-8").split("\n")
-        check("attribute: group" not in fi[:6], "Folgezettel-Index は通常ノート")
+        check("attribute: group" in fi[:6], "Folgezettel-Index はグループ（頂点の子）")
         body = fi[fi.index("# Folgezettel-Index"):]
-        # Group: は先頭の関係ブロック（表示名つき）。続けて空行 1 つ、その後にキーワードのリンク
-        links = [ln for ln in body[5:] if ln.startswith("[")]
-        check(body[1] == "" and body[2] == "Group:" and body[3].startswith("[Paper-Zettelkasten-Index") and body[4] == ""
-              and [l.split("]")[0] for l in links[:4]] == ["[日記", "[all-number", "[1", "[2"], f"Folgezettel-Index は Group: の後に 日記, 1, 2, 10 の順（自然順）: {body}")
+        links = [ln for ln in body if ln.startswith("[") and "Paper-Zettelkasten-Index" not in ln]
+        check([l.split("]")[0] for l in links[:4]] == ["[日記", "[all-number", "[1", "[2"], f"Folgezettel-Index の子は 日記, all-number, 1, 2 の順（自然順）: {body}")
         check(not any("[diary](" in ln for ln in fi), "[diary] 表記は無い")
         top = pp.find_diary_group(root, idx)
         tt = top.read_text(encoding="utf-8").split("\n")

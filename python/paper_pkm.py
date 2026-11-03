@@ -1816,6 +1816,30 @@ def _ensure_fm_line(path: Path, key: str, line: str) -> bool:
     return True
 
 
+def _ensure_parent_branch(child: Path, parent: Path) -> None:
+    """child の本文に、parent への ParentBranch: が無ければ、H1 の直後に足す（子が親を持つ印）。"""
+    fm, body = read_note(child)
+    link = markdown_link(index_title(parent), parent, child.parent)
+    if any(ln.strip() == link for ln in body):
+        return
+    if "ParentBranch:" in body:
+        at = body.index("ParentBranch:") + 1
+        body[at:at] = [link]
+        write_note(child, fm, body)
+        return
+    h1 = next((i for i, ln in enumerate(body) if re.match(r"^#\s", ln)), None)
+    if h1 is None:
+        return
+    at = h1 + 1
+    block = ["ParentBranch:", link]
+    if at < len(body) and not body[at].strip():
+        at += 1
+        body[at:at] = block + [""]
+    else:
+        body[at:at] = [""] + block
+    write_note(child, fm, body)
+
+
 def _ensure_branch(root: Path, parent: Path, child: Path) -> Optional[str]:
     """parent → child の Branch（child の ParentBranch: に parent、parent の ChildBranch: に child）が無ければ足す。
     child に別の親が既にある・編集中などで足せないときは何も変えず、お知らせを返す。"""
@@ -2131,7 +2155,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
         iw_fm, body = read_note(index_write)
         # Index-write のキーワードは空白区切り/コロン区切りの両方を受け、
         # 同じ名前の行は番号を和集合にして1行にまとめる。
-        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')), group=False)
+        iw_fm_new = _fm_title_attr(iw_fm, title_of(iw_fm, body, ns_title('iw')), group=True)
         iw_fm_changed = iw_fm_new != iw_fm
         iw_fm = iw_fm_new
         merged_body, entries = merge_keyword_lines(body, yomi_note=index_write)
@@ -2221,7 +2245,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     fm = _fm_title_attr(fm, title_of(fm, old_index_body, DEFAULT_INDEX_TITLE))
     fixed_links = [markdown_link(ns_title('iw'), named_path(root, ns_title('iw')), index_path.parent),
                    markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), index_path.parent)]
-    body = [f"# {index_display}", "", *fixed_links, *inner]
+    body = [f"# {index_display}", "", *inner]
     merged = merge_note_body(old_index_body, body)
     # Index-write・Folgezettel-Index の固定リンクは連続させ、その次のキーワード一覧との間に空行を 1 行置く
     fi_at = next((k for k, ln in enumerate(merged) if ln.strip() == fixed_links[1]), None)
@@ -2253,7 +2277,7 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     if diary_top is not None:
         structure.add(os.path.normpath(str(diary_top)))
     old_folge_body = _sync_link_block(old_folge_body, folge_index.parent, structure, desired)
-    fm = _fm_title_attr(fm, ns_title('fi'), group=False)
+    fm = _fm_title_attr(fm, ns_title('fi'), group=True)
     write_note(folge_index, fm, merge_note_body(old_folge_body, [
         f"# {ns_title('fi')}", "", *[ln for _, ln in desired],
         CONTEXT_HEAD,
@@ -2496,6 +2520,10 @@ def regen(root: Path, do_sync: bool = True) -> bool:
         msg = _ensure_branch(root, paper_top, group_path)
         if msg:
             added_report.append(msg)
+    # Index-write・Folgezettel-Index も、頂点のブランチグループ（BranchGroup:）の子。親（頂点）は ParentBranch: で持つ
+    for _child in (named_path(root, ns_title('iw')), named_path(root, ns_title('fi'))):
+        if paper_top is not None and _child.is_file():
+            _ensure_parent_branch(_child, paper_top)
 
     # --- 紙の日記: スキャン由来の印と、その日のデジタル日記からのリンク ------------
     for _date, dpath in diaries.items():
@@ -2537,7 +2565,9 @@ def ensure_paper_top(root: Path, groups: list[Path]) -> Path:
                    keep_trailing_blank=True)
     # 紙のノートには BranchGroup: を出さない（2026-11-04 の決め）。グループの所属は ParentBranch: で持つ。
     # 以前に書かれた BranchGroup: は外す（グループの中身は変えない）
-    _drop_branch_group(top)
+    # 頂点のブランチグループ（BranchGroup:）に、Index-write・Folgezettel-Index・索引のグループの三つを並べる
+    members = [named_path(root, ns_title('iw')), named_path(root, ns_title('fi')), *groups]
+    _write_branch_group(top, [markdown_link(index_title(m), m, top.parent) for m in members if m.is_file()])
     parent_index = Path(root) / "index.md"
     if parent_index.is_file():
         fm, body = read_note(parent_index)
@@ -2569,12 +2599,7 @@ def _write_new_paper_index(index_path: Path, index_write: Path, folge_index: Pat
         f"title: {ns_title('index')}",
         "attribute: group",
     ]
-    body = [
-        f"# {ns_title('index')}",
-        "",
-        markdown_link(ns_title('iw'), index_write, index_path.parent),
-        markdown_link(ns_title('fi'), folge_index, index_path.parent),
-    ]
+    body = [f"# {ns_title('index')}", ""]   # 子（Index-write・Folgezettel-Index）は頂点の子。索引グループの本文は索引だけ
     write_note(index_path, fm, body)
 
 
