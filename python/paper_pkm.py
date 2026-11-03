@@ -2246,11 +2246,9 @@ def _regen_ns(root: Path, prefix: str, index_path: Path, notes: list, diaries: d
     fixed_links = [markdown_link(ns_title('iw'), named_path(root, ns_title('iw')), index_path.parent),
                    markdown_link(ns_title('fi'), named_path(root, ns_title('fi')), index_path.parent)]
     body = [f"# {index_display}", "", *inner]
+    # 索引のグループの本文は索引だけ。Index-write・Folgezettel-Index は頂点の BranchGroup: の子（ここには置かない）
+    old_index_body = [ln for ln in old_index_body if ln.strip() not in [fl.strip() for fl in fixed_links]]
     merged = merge_note_body(old_index_body, body)
-    # Index-write・Folgezettel-Index の固定リンクは連続させ、その次のキーワード一覧との間に空行を 1 行置く
-    fi_at = next((k for k, ln in enumerate(merged) if ln.strip() == fixed_links[1]), None)
-    if fi_at is not None and fi_at + 1 < len(merged) and _IS_LINK_LINE.match(merged[fi_at + 1]):
-        merged.insert(fi_at + 1, "")
     write_note(index_path, fm, merged)
 
     # --- Folgezettel-Index（日記 → 最上位IDを自然順。各リンクは専用ノート folgezettel-Index-N#N） ---
