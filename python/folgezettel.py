@@ -438,7 +438,8 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
     # （グループは番号を持たない決まりの例外。頂点の番号がそのまま使われる）
     for _pass in range(2):
         for p, n in notes.items():
-            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE:
+            if is_group(n) or not is_paper_infra(n) or p in unsaved or p.name == 'index.md' or n['title'] == PAPER_TOP_TITLE \
+                    or not (n['title'] in ('Index-write', 'Folgezettel-Index') or n['title'].startswith('Index-write-')):
                 # 紙の Index-write・folgezettel-Index（グループでないもの）だけ、親のグループの番号を受ける。
                 # 頂点（番号の元）と、キーワードのグループなど普通のグループは対象外
                 continue
