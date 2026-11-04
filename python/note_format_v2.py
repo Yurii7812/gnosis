@@ -2606,6 +2606,14 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
     for src, ts in body_t.items():
         for t in dict.fromkeys(ts):
             incoming[t].append(src)
+    # Context で指している相手（src の Context が t）も、t の BackLink に出す。
+    # 相手の本文・Context には何も書かれていなくてよい（c → o の場合）。ChildBranch には出さない。
+    ctx_in: dict[Path, list[Path]] = {p: [] for p in notes}
+    for src, n in notes.items():
+        for _d, tg in _links_from(n.get("ctx") or []):
+            rp = res(tg, dirs[src])
+            if rp is not None and rp != src and src not in ctx_in[rp]:
+                ctx_in[rp].append(src)
 
     # index.md は見張り（### Parent / ### BackLink）を持たない。Index 本文の
     # リンクは「そのノートの親に Index が載る」構造を意味するので、
@@ -2814,7 +2822,7 @@ def _simple_sync_unlocked(root, old_titles: dict | None = None) -> int:
             rp = res(tg, dirs[p])
             if rp is not None and rp != p:
                 pb_set.add(rp)
-        for s in incoming.get(p, []):
+        for s in incoming.get(p, []) + ctx_in.get(p, []):
             if s == p or s in dseen or s in out_set:
                 continue
             dseen.add(s)
