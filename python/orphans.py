@@ -30,7 +30,8 @@ except ImportError:
 
 _SKIP_NAMES = {"index.md", "gnosis-guide.md", "simple-yurii-note-guide.md"}
 # 紙の PKM のノート: スキャン（題が ID）・トピック（ID-題）・番号の一覧・紙の日記
-_PAPER_RE = re.compile(r"^(?:\d+[a-z0-9]*(?:-.*)?|[Ff]olgezettel-Index(?:-.*)?|Paper-Zettelkasten-Index|\d{4}-\d{2}-\d{2}\(.*)$")
+# 12 桁の時刻 ID（YYMMDDhhmmss。デジタルのノートの題になりうる）は紙ではない（未所属に出す）
+_PAPER_RE = re.compile(r"^(?:(?!\d{12}$)\d+[a-z0-9]*(?:-.*)?|[Ff]olgezettel-Index(?:-.*)?|Paper-Zettelkasten-Index|\d{4}-\d{2}-\d{2}\(.*)$")
 
 
 def find_orphans(root) -> list[tuple[Path, str, str]]:
