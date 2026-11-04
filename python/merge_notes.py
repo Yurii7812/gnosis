@@ -311,6 +311,8 @@ def merge(root, src, dst) -> dict:
         if changed:
             state_new = json.dumps(st, ensure_ascii=False, indent=1)
 
+    # 同期（下）が、書き換えたファイル以外（BackLink など）も変えることがあるので、書く前に vault 全体の中身を覚えておく
+    pre_all = {p: p.read_text(encoding="utf-8") for p in nf._iter_md(root) if p.is_file()}
     # 控えを取ってから書く
     stamp = time.strftime("%Y%m%d-%H%M%S")
     bdir = root / UNDO_DIR / stamp
@@ -332,8 +334,19 @@ def merge(root, src, dst) -> dict:
     src.unlink()
     # 同期してから「マージ直後の中身」を控える（取り消すときに、あとで変わったノートを見分けるため）
     nf.simple_sync(root)
+    # 同期だけで変わったノート（書いた以外）も、取り消しの控えに入れる（書く前の中身を控える）
+    saved_set = set(saved)
+    for p, old in pre_all.items():
+        if p in saved_set or not p.is_file():
+            continue
+        if p.read_text(encoding="utf-8") != old:
+            rel = p.relative_to(root)
+            (bdir / "files" / rel).parent.mkdir(parents=True, exist_ok=True)
+            (bdir / "files" / rel).write_text(old, encoding="utf-8")
+            saved.append(p)
     after = {str(p.relative_to(root)): nf._content_hash(p.read_text(encoding="utf-8"))
-             for p in list(new_texts) + ([state_path] if state_new is not None else [])}
+             for p in list(new_texts) + ([state_path] if state_new is not None else []) + [q for q in saved if q not in saved_set]
+             if p.is_file()}
     manifest = {"version": 1, "src": str(src.relative_to(root)), "dst": str(dst.relative_to(root)),
                 "src_title": src_title, "dst_title": dst_title, "files": [str(p.relative_to(root)) for p in saved],
                 "after": after, "time": stamp}
