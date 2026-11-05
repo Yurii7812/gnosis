@@ -3928,9 +3928,9 @@ function! gnosis#mview#shown_paths() abort
   if !exists('s:S') || type(s:S) != v:t_dict || empty(get(s:S, 'center', ''))
     return []
   endif
-  if s:S.view ==# 'fz'
+  if get(s:S, 'view', 'mandala') ==# 'fz'
     let l:raw = gnosis#fznav#shown_paths()
-  elseif s:S.view ==# 'list'
+  elseif get(s:S, 'view', 'mandala') ==# 'list'
     let l:raw = gnosis#listnav#shown_paths()
   else
     let l:raw = [s:S.center] + map(copy(s:items(s:S.center)), 'v:val[0]')
