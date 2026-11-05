@@ -516,6 +516,64 @@ def _run(root: Path, start_file: Path, order_fn, holder: dict | None = None) -> 
     return out_path
 
 
+def collect_simple_multi(start_ids: list[str], dir_of, depth: int) -> Collected:
+    """複数の起点（表示中の全ノート）から、親/子/文中/関連を共有の深さ N まで辿る。
+    順番は、起点を与えた順、そのあとは発見順。起点そのものは深さ 0 として必ず出す。"""
+    visited: set[str] = set()
+    order: list[str] = []
+    parent_of: dict = {}
+    for sid in start_ids:
+        if sid not in visited:
+            visited.add(sid)
+            order.append(sid)
+            parent_of[sid] = None
+    frontier = list(order)
+    for _ in range(max(depth, 0)):
+        nxt: list[str] = []
+        for nid in frontier:
+            d = dir_of(nid)
+            for neighbor in sorted(d["parent"] | d["child"] | d["backlink"] | d["related"]):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    order.append(neighbor)
+                    parent_of[neighbor] = nid
+                    nxt.append(neighbor)
+        frontier = nxt
+        if not frontier:
+            break
+    return order, parent_of
+
+
+def _run_files_depth(root: Path, rel_paths: list[str], depth: int) -> Path:
+    """表示中のノート（rel_paths）を起点に、深さ N まで辿って 1 つの md にまとめる。
+    depth 0 は、表示中のノートをそのまま（リンクは辿らない）出すのと同じ。"""
+    by_name, notes, ids, id_to_path = _build_index(root)
+    starts: list[str] = []
+    for rel in rel_paths:
+        nid = ids.get((root / rel).resolve())
+        if nid is not None and nid not in starts:
+            starts.append(nid)
+    if not starts:
+        raise SystemExit("expand_v2: 一覧のノートが vault 内で見つからない")
+
+    dir_cache: dict[str, dict[str, set[str]]] = {}
+
+    def dir_of(nid: str) -> dict[str, set[str]]:
+        if nid not in dir_cache:
+            p = id_to_path[nid]
+            dir_cache[nid] = _directions(p, notes[p], root, by_name, ids)
+        return dir_cache[nid]
+
+    order, parent_of = collect_simple_multi(starts, dir_of, depth)
+    notes_by_id = {i: notes[id_to_path[i]] for i in order}
+    tmp_dir = root / TRASH_DIR
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    text = _render(order, parent_of, notes_by_id, root, by_name, id_to_path, tmp_dir)
+    out_path = tmp_dir / _make_filename()
+    out_path.write_text(text, encoding="utf-8")
+    return out_path
+
+
 def _run_files(root: Path, rel_paths: list[str]) -> Path:
     """画面に出ているノートを、与えた順のまま 1 つの md にまとめる（リンクは辿らない）。"""
     by_name, notes, ids, id_to_path = _build_index(root)
@@ -568,6 +626,15 @@ def main(argv: list[str]) -> int:
         return 0
     if mode == "preset_delete":
         print("deleted" if delete_preset(root, argv[3] if len(argv) > 3 else "") else "notfound")
+        return 0
+
+    if mode == "files_depth":
+        # files_depth ROOT LISTFILE DEPTH（表示中のノートを起点に、深さ N まで辿る）
+        if len(argv) < 5:
+            print("usage: expand_v2.py files_depth ROOT LISTFILE DEPTH", file=sys.stderr)
+            return 2
+        lines = Path(argv[3]).read_text(encoding="utf-8").splitlines()
+        print(str(_run_files_depth(root, [x for x in lines if x.strip()], int(argv[4]))))
         return 0
 
     if mode == "files":

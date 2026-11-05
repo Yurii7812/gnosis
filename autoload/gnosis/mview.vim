@@ -3934,6 +3934,14 @@ function! gnosis#mview#shown_paths() abort
     let l:raw = gnosis#listnav#shown_paths()
   else
     let l:raw = [s:S.center] + map(copy(s:items(s:S.center)), 'v:val[0]')
+    " 9×9 の周りの小曼荼羅（表示中のページの 8 つ）は、それぞれの全ページ分の周りも含める
+    if s:S.size == 9 && !get(s:S, 'out_on', 0)
+      for l:e in s:ring(s:S.center, s:S.page)
+        if !empty(l:e[0])
+          let l:raw += [l:e[0]] + map(copy(s:items(l:e[0])), 'v:val[0]')
+        endif
+      endfor
+    endif
   endif
   let l:out = []
   let l:seen = {}

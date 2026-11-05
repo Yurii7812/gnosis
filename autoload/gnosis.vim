@@ -10738,7 +10738,29 @@ function! s:v2_expand_shown() abort
       return
     endif
   endif
+  if gnosis#mview#view() ==# 'mandala' && !empty(l:paths)
+    " 曼荼羅: 表示中の全ノート（周りの小曼荼羅の全ページを含む）を起点に、深さ N まで辿る。深さ 0 は表示中のものをそのまま
+    let l:n = input(gnosis#i18n#tr('深さ（0 = 表示中のものをそのまま）: '), '0')
+    if l:n !~# '^\d\+$' | echo gnosis#i18n#tr('Gnosis: キャンセル') | return | endif
+    call s:v2_expand_files_depth(l:root, l:py, l:paths, str2nr(l:n))
+    return
+  endif
   call s:v2_expand_files(l:root, l:py, l:paths)
+endfunction
+
+" 表示中のノートを起点に深さ N まで辿って、1 つにまとめる（深さ 0 は files と同じ）
+function! s:v2_expand_files_depth(root, py, paths, depth) abort
+  let l:tmp = tempname()
+  call writefile(a:paths, l:tmp)
+  let l:out = gnosis#sh#systemlist(join(map([s:python_cmd(), a:py, 'files_depth', a:root, l:tmp, string(a:depth)], 'shellescape(v:val)'), ' '))
+  call delete(l:tmp)
+  if gnosis#sh#error() != 0 || empty(l:out) || !filereadable(l:out[-1])
+    echohl WarningMsg | echo gnosis#i18n#tr('Gnosis: 展開に失敗: ') . join(l:out, ' ') | echohl NONE
+    return
+  endif
+  call gnosis#mview#goto_note_win()
+  execute 'edit ' . fnameescape(l:out[-1])
+  echo printf(gnosis#i18n#tr('Gnosis: 表示中の %d 件から深さ %d で 1 つにまとめました'), len(a:paths), a:depth)
 endfunction
 
 " ビジュアルで選んだ行（リストビュー）だけを 1 つにまとめる

@@ -123,6 +123,7 @@
 - グラフ・カード・曼荼羅・カンバン・FTS・XMP・ポモドーロ・Cornell 等は grep でヒットなし（未実装）。
 
 ## 完了（このブランチ）
+- 曼荼羅の `\e`: 表示中のノート（9×9 の周りの小曼荼羅の全ページ分を含む）を起点に、深さを聞いて 1 つにまとめる。深さ 0 は表示中のものをそのまま、N ≥ 1 は親・子・文中・関連を N 段辿る（`expand_v2.py files_depth`、試験 `test/expand_depth_check.py`）。
 - Phase 0 文書一式。
 - **`\M` 差分更新（M01/M02 の一部）**: `python/capture_merge.py`（3-way merge・競合は記録のみ）、`capture_import.py` の `plan` に `merge`、`merge` CLI、`gnosis#capture_import` の分岐、i18n。試験: `test_capture_merge.py` `test_capture_import.py`（旧「別版を作る」を新仕様に変更）`capture_merge_net.sh` `capture_topics_check.vim`（同）。詳細・未実装は `docs/ANDROID_SYNC.md`。
 
