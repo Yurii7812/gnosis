@@ -7,6 +7,7 @@ from pathlib import Path
 import branch_ops as bo
 import diary_tree as dt
 import folgezettel as fz
+import zk_id as zk
 import note_format_v2 as nf
 
 
@@ -52,11 +53,13 @@ class DiaryTreeTest(unittest.TestCase):
         nf.simple_sync(r)
         self.assertTrue(bo.check(r)["ok"])
         ids = {n: fz.value(self.read(n)) for n in ("rec.md", "diary.md", "m.md", "d1.md", "d2.md", "kid.md", "dream.md", "dm.md", "dd.md")}
-        self.assertEqual(ids["diary.md"], ids["rec.md"] + "a")
-        self.assertEqual(ids["m.md"], ids["diary.md"] + "1")
-        self.assertEqual([ids["d1.md"], ids["d2.md"]], [ids["m.md"] + "a", ids["m.md"] + "b"])
-        self.assertEqual(ids["kid.md"], ids["d1.md"] + "1")
-        self.assertEqual(ids["dd.md"], ids["dm.md"] + "a")
+        # 2026-11-17: 子は分岐（最後が文字なら 1、数字なら a）。根は区画の番号（1a）から
+        self.assertEqual(ids["diary.md"], zk.branch(ids["rec.md"], set()))
+        self.assertEqual(ids["m.md"], zk.branch(ids["diary.md"], set()))
+        d1 = zk.branch(ids["m.md"], set())
+        self.assertEqual([ids["d1.md"], ids["d2.md"]], [d1, zk.branch(ids["m.md"], {d1})])
+        self.assertEqual(ids["kid.md"], zk.branch(ids["d1.md"], set()))
+        self.assertEqual(ids["dd.md"], zk.branch(ids["dm.md"], set()))
 
 
 class RecordRenameTest(unittest.TestCase):

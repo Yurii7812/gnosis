@@ -2,6 +2,12 @@
 
 新セッションは `CLAUDE.md` → このファイル → `docs/FEATURES.md` の順に読んで再開する。
 
+## 現在地（2026-11-17）
+- **区画とトピックの番号（1a から）**（2026-11-17、`agent/zk-id`）: 決まりは `docs/DECISIONS.md` の D013。`python/zk_id.py`（形・並び・続き・分岐・z の次は aa・旧→新の変換）。`python/folgezettel.py` の `allocation` は欠番を詰めず、今の番号を残す（合わなければ分岐・新しい区画）。`next_child` は分岐の規則。移行ツール `python/zk_id_migrate.py`（plan / apply。バックアップと対応表を作る）。試験: `python/test_zk_id.py`・`python/test_zk_id_migrate.py`（`test/run.sh` に登録）、`test_folgezettel`・`test_diary_tree` の期待値を新しい規則に直した。
+  - **未実装**: Vim の画面（左の区画リスト・区画ページ・「新しい区画」・「続きを書く」「分岐する」・区画ファイル）。
+  - **未実施**: 実 vault の移行。実 vault は暗号化（`~/files/yurii-note/.crypt/`）で、利用者の開錠が要る。
+  - **未確認**: 実機の見え方、旧番号の vault での全体の同期。
+
 ## 現在地（2026-10-24）
 - **未所属（\a）に 12 桁の時刻 ID の題のノートを出す**（2026-11-05、`agent/orphan-timestamp`）: 題が `261105063410` のようなデジタルのノート（番号も親も無い）が、紙のノートの題の判定（`python/orphans.py` の `_PAPER_RE`）に当たって \a に出ていなかった。12 桁の時刻 ID は紙の題から外した。試験: `python/test_orphans.py`。**未確認**: 実 vault の \a 画面。
 - **Context の相手に BackLink を書く（c → o でも）**（2026-11-05、`agent/context-backlink`）: A の Context に B を入れると、B の `BackLink:` に A が出る（B の本文・Context には何も書かない。`c` → `o` のとき）。同期（`python/note_format_v2.py` の `_simple_sync_unlocked`）の BackLink 候補に、他のノートの Context の辺（`ctx_in`）を足した。ChildBranch には出さない（コミット `0c1b2d5` の方針は残す）。試験: `python/test_branch_context_policy.py` の `test_context_one_way_gives_backlink_on_target_only`。**未確認**: 実 vault での見え方（既存のノートは次に同期されるまで出ない）。

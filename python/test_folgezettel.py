@@ -33,8 +33,8 @@ class FolgezettelTest(unittest.TestCase):
         new = self.note('new')
         orphan = self.note('orphan')
         nf.simple_sync(self.root)
-        # 番号は欠番なしに詰める（5 → 1・新しいものは最後）
-        self.assertEqual([self.ident(self.root / 'five.md'), self.ident(new)], ['1', '2'])
+        # 番号は振り直さない（5 は残る。新しいものは次の区画 6a）
+        self.assertEqual([self.ident(self.root / 'five.md'), self.ident(new)], ['5', '6a'])
         self.assertEqual(self.ident(orphan), '')
         before = {p: p.read_text() for p in self.root.glob('*.md')}
         nf.simple_sync(self.root)
@@ -49,7 +49,7 @@ class FolgezettelTest(unittest.TestCase):
         fidx = self.note('fidx')
         fidx.write_text(fidx.read_text().replace('title: fidx', 'title: folgezettel-Index-1').replace('# fidx', '# folgezettel-Index-1'))
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(self.root / 'a.md'), '1')
+        self.assertEqual(self.ident(self.root / 'a.md'), '1a')
         # 紙の索引も普通のノートと同じ規則で番号を受ける（PA-0 のような特例は無い）
         self.assertNotIn('PA', self.ident(apex) + self.ident(fidx))
         self.assertIn('# Paper-Zettelkasten-Index', apex.read_text())
@@ -82,8 +82,8 @@ class FolgezettelTest(unittest.TestCase):
         other = self.note('other', '7')
         other.write_text(other.read_text().replace('title: other\n', 'title: other\nattribute: group\n'))
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(self.root / 'a.md'), '1')
-        self.assertEqual(self.ident(bg), '1')
+        self.assertEqual(self.ident(self.root / 'a.md'), '1a')
+        self.assertEqual(self.ident(bg), '1a')
         self.assertEqual(self.ident(other), '')
         before = {p: p.read_text() for p in self.root.glob('*.md')}
         nf.simple_sync(self.root)
@@ -132,7 +132,7 @@ class FolgezettelTest(unittest.TestCase):
         late.write_text(late.read_text().replace('title: late', 'title: 2026-10-02-FR').replace('# late', '# 2026-10-02-FR').replace('---\n', '---\ntime: 2026-10-02 10:00:00\n', 1))
         early.write_text(early.read_text().replace('title: early', 'title: 2026-10-01-TH').replace('# early', '# 2026-10-01-TH').replace('---\n', '---\ntime: 2026-10-20 10:00:00\n', 1))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(early), self.ident(late)], ['1a', '1b'])
+        self.assertEqual([self.ident(early), self.ident(late)], ['3a', '3b'])
 
     def test_backfill_uses_creation_time_not_index_order(self):
         index = self.note('index', body='[new](a.md)\n[old](z.md)')
@@ -140,21 +140,21 @@ class FolgezettelTest(unittest.TestCase):
         for p, date in [(newer, '2026-10-15 12:00:00'), (older, '2026-10-14 12:00:00')]:
             p.write_text(p.read_text().replace('---\n', f'---\ntime: {date}\n', 1))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(older), self.ident(newer)], ['1', '2'])
+        self.assertEqual([self.ident(older), self.ident(newer)], ['1a', '2a'])
         index.write_text(index.read_text().replace('[a](a.md)\n[z](z.md)', '[z](z.md)\n[a](a.md)'))
         late = self.note('late')
         late.write_text(late.read_text().replace('---\n', '---\ntime: 2020-01-01\n', 1))
         index.write_text(index.read_text() + '\n[late](late.md)\n')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(older), self.ident(newer), self.ident(late)], ['1', '2', '3'])
+        self.assertEqual([self.ident(older), self.ident(newer), self.ident(late)], ['1a', '2a', '3a'])
         self.assertLess(fz.creation_key(Path('261014120000.md'), {'fm': []}),
                         fz.creation_key(Path('261015120000.md'), {'fm': []}))
 
     def snapshot(self):
         return {p.name: p.read_text() for p in self.root.glob('*.md')}
 
-    def test_gaps_are_closed_and_stale_children_follow_parent(self):
-        # 3 が無い・親が 3a1a なのに子が 2a のまま、といったズレは、同期で Branch の形にそろう
+    def test_gaps_are_kept_and_stale_children_follow_parent(self):
+        # 2026-11-17: 欠番は詰めない（2・3 が空いたままでも 1・4・9 は残る）。親と合わない子（2a は親 4 の子でない）だけ、親の下に新しく振る
         self.note('index', body='[a](a.md)\n[b](b.md)\n[c](c.md)')
         self.note('a', '1')
         self.note('b', '4', body='ChildBranch:\n[x](x.md)\n[y](y.md)')
@@ -164,22 +164,22 @@ class FolgezettelTest(unittest.TestCase):
         self.note('z', '4d1', body='ParentBranch:\n[y](y.md)')
         nf.simple_sync(self.root)
         got = {n: fz.value(self.root.joinpath(n + '.md').read_text()) for n in 'abcxyz'}
-        self.assertEqual(got, {'a': '1', 'b': '2', 'c': '3', 'x': '2a', 'y': '2b', 'z': '2b1'})
+        self.assertEqual(got, {'a': '1', 'b': '4', 'c': '9', 'x': '4a', 'y': '4d', 'z': '4d1'})
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
 
-    def test_deleting_a_note_closes_the_gap(self):
+    def test_deleting_a_note_keeps_the_others_numbers(self):
         self.note('index', body='[a](a.md)\n[b](b.md)\n[c](c.md)')
         for n in 'abc':
             self.note(n)
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'abc'], ['1', '2', '3'])
+        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'abc'], ['1a', '2a', '3a'])
         (self.root / 'b.md').unlink()
         idx = self.root / 'index.md'
         idx.write_text(idx.read_text().replace('[b](b.md)\n', ''))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'ac'], ['1', '2'])
+        self.assertEqual([self.ident(self.root / f'{n}.md') for n in 'ac'], ['1a', '3a'])
 
     def test_note_with_two_parents_follows_one_of_them(self):
         self.note('index', body='[a](a.md)\n[b](b.md)')
@@ -218,7 +218,7 @@ class FolgezettelTest(unittest.TestCase):
         scan1 = self.note('scan1')
         scan1.write_text(scan1.read_text().replace('title: scan1', 'title: 1\nsource: scan').replace('# scan1', '# 1'))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1', '2'])
+        self.assertEqual([self.ident(self.root / 'a.md'), self.ident(self.root / 'b.md')], ['1a', '2a'])
         # YAML の folgezettel: は印なし（普通の番号）。題と画像の名前は印つき
         # 紙のスキャンも普通の規則で番号が付く（印なし・デジタルと同じ番号の並び）
         ids = [self.ident(scan1), self.ident(scan)]
@@ -245,12 +245,12 @@ class FolgezettelTest(unittest.TestCase):
         parent = self.note('parent')
         child = self.note('child', body='ParentBranch:\n[parent](parent.md)\n\n本文')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(parent), self.ident(child)], ['1', '1a'])
+        self.assertEqual([self.ident(parent), self.ident(child)], ['1a', '1a1'])
         plain = self.root / 'plain.md'
         plain.write_text('# Plain\n\nBody\n')
         self.note('index', body='[parent](parent.md)\n[plain](plain.md)')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(plain), '2')
+        self.assertEqual(self.ident(plain), '2a')
         self.assertIn('Body', plain.read_text())
 
     def test_numbers_are_removed_from_notes_that_lost_their_place(self):
@@ -260,7 +260,7 @@ class FolgezettelTest(unittest.TestCase):
         b = self.note('b')
         k = self.note('k', body='ParentBranch:\n[b](b.md)\n\n本文')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(a), self.ident(b), self.ident(k)], ['1', '2', '2a'])
+        self.assertEqual([self.ident(a), self.ident(b), self.ident(k)], ['1a', '2a', '2a1'])
         # k の ParentBranch を消す → 親も Index もない → 番号が外れる
         k.write_text(k.read_text().replace('ParentBranch:\n[b](b.md)\n\n', ''))
         nf.simple_sync(self.root)
@@ -268,15 +268,15 @@ class FolgezettelTest(unittest.TestCase):
         # b を Index から外す → 番号が外れ、その子（a の下に付け替えていない k2）も外れる
         k2 = self.note('k2', body='ParentBranch:\n[b](b.md)\n\n本文')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(k2), '2a')
+        self.assertEqual(self.ident(k2), '2a1')
         idx = self.root / 'index.md'
         idx.write_text(idx.read_text().replace('[b](b.md)\n', ''))
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(a), self.ident(b), self.ident(k2)], ['1', '', ''])
+        self.assertEqual([self.ident(a), self.ident(b), self.ident(k2)], ['1a', '', ''])
         # もう一度 Index に載せると、新しい番号が付く
         idx.write_text(idx.read_text().rstrip('\n') + '\n[b](b.md)\n')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(b), self.ident(k2)], ['2', '2a'])
+        self.assertEqual([self.ident(b), self.ident(k2)], ['2a', '2a1'])
         before = self.snapshot()
         nf.simple_sync(self.root)
         self.assertEqual(before, self.snapshot())
@@ -290,7 +290,7 @@ class FolgezettelTest(unittest.TestCase):
         x = self.note('x')
         y = self.note('y')
         nf.simple_sync(self.root)
-        self.assertEqual(self.ident(x), '1')       # Index の本文にあるので最上位の番号
+        self.assertEqual(self.ident(x), '1a')      # Index の本文にあるので最上位の番号（区画 1 の 1a）
         self.assertEqual(self.ident(y), '')        # Index ではないグループにあるだけ
         self.assertEqual(self.ident(g), '')
 
@@ -301,9 +301,12 @@ class FolgezettelTest(unittest.TestCase):
         self.assertEqual(self.ident(c), '')
         self.note('index', body='[p](p.md)')
         nf.simple_sync(self.root)
-        self.assertEqual([self.ident(n) for n in (p, c, d)], ['1', '1a', '1a1'])
-        self.assertEqual(fz.next_child('1', ['---\nfolgezettel: 1z\n---']), '1aa')
-        self.assertEqual(fz.next_child('1a', ['---\nfolgezettel: 1a10\n---']), '1a11')
+        self.assertEqual([self.ident(n) for n in (p, c, d)], ['1a', '1a1', '1a1a'])
+        # 分岐は使われていない最初の番号。1a…1z が全部使われていたら 1aa（z の次は aa）
+        self.assertEqual(fz.next_child('1', ['---\nfolgezettel: 1a\n---']), '1b')
+        self.assertEqual(fz.next_child('1a', ['---\nfolgezettel: 1a10\n---']), '1a1')
+        taken = [f'---\nfolgezettel: 1{chr(97 + i)}\n---' for i in range(26)]
+        self.assertEqual(fz.next_child('1', taken), '1aa')
         self.assertEqual(fz.parent_id('11'), '')
 
 

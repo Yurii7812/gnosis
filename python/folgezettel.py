@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import note_format_v2 as nf
+import zk_id as zk
 
 # 紙の PKM のノートの番号は、先頭に `PA-` のような印を付けて、デジタルの番号と別の空間にする（2026-10-27）。
 # 印は設定（vault の .gnosis/settings.json の paperIdPrefix。既定 PA）で変えられる。`PA-1a2` の親は `PA-1a`、`PA-1` に親は無い
@@ -109,18 +110,9 @@ def letters(number: int) -> str:
 
 
 def next_child(parent: str, child_texts: list[str]) -> str:
-    ids = [value(t) for t in child_texts]
-    used = []
-    for ident in ids:
-        if ID_RE.fullmatch(ident) and parent_id(ident) == parent:
-            suffix = ident[len(parent):]
-            n = int(suffix) if suffix.isdigit() else 0
-            if not suffix.isdigit():
-                for c in suffix:
-                    n = n * 26 + ord(c) - 96
-            used.append(n)
-    n = max(used, default=0) + 1
-    return parent + (letters(n) if parent[-1].isdigit() else str(n))
+    """親の子の番号（分岐・2026-11-17）。使われていない最初の番号（最後の段が文字なら 1、数字なら a を足す）。"""
+    used = {value(t) for t in child_texts}
+    return zk.branch(parent, used)
 
 
 def assign_child(parent_text: str, child_text: str, sibling_texts: list[str]) -> str:
@@ -251,14 +243,11 @@ def _suffix(parent: str, n: int) -> str:
 
 
 def allocation(root: Path, notes: dict) -> dict[Path, str]:
-    """Plan the IDs so that they match the Branch tree exactly (2026-10-27).
+    """Plan the digital IDs (2026-11-17, D013).
 
-    番号は Branch の木の形そのもの: 親の番号の子になり、きょうだいは 1, 2, 3 / a, b, c と欠番なしに続く。
-    ParentBranch: を変えた・ノートを消した・親を外した、などで形が変わったら、その場で全体を振り直す
-    （飛んだ番号は詰める）。きょうだいの順は、日付の題なら日付順、それ以外は今の番号の順、新しいものは作った順で最後。
-    なので、何も変わっていなければ計画は空（何度回しても同じ）。1 回の走査で、ノートの数 n に対して n log n。
-    振り直さないもの: 紙の PKM の番号（題が番号）・編集中で未保存のノート・Branch から外れていて番号を持つノート（その番号はそのまま、
-    その子は下に続ける）。"""
+    今の番号が今の親の枝として正しければそのまま残す（欠番は詰めない）。親が変わった・番号が無い・使用中のものだけ、
+    新しく振る（子は分岐 zk_id.branch、根は新しい区画 zk_id.new_region）。紙の PKM の番号・グループ・共有の番号・
+    編集中で未保存のノートの扱いは従来どおり。何も変わっていなければ計画は空（何度回しても同じ）。"""
     known = set(notes)
     def targets(lines, base):
         out = []
@@ -381,49 +370,52 @@ def allocation(root: Path, notes: dict) -> dict[Path, str]:
             return (1, '', tuple((0, x, '') if isinstance(x, int) else (1, x[0], x[1]) if isinstance(x, tuple) else (2, 0, x) for x in natural_key(old[c])), creation_key(c, notes[c]))
         return (2, '', (), creation_key(c, notes[c]))
 
-    def assign(p, ident):
-        n = 0
-        ordered = sorted((c for c in kids.get(p, ()) if c in managed_set and c not in done), key=lambda c: sibling_order(p, c))
-        for c in ordered:
-            n += 1
-            while _suffix(ident, n) in fixed:
-                n += 1
-            done.add(c)
-            new = _suffix(ident, n)
-            ids[c] = new
-            if new != stored[c]:
-                plan[c] = new
-            else:
-                plan.pop(c, None)
-            work.append(c)
-
-    # 最上位: 今の最上位の番号の順（新しいものは作った順で最後）に、欠番なしで振る
+    # 2026-11-17 の決め（2026-10-27 の「欠番なしに詰める」を廃止）: 番号は振り直さない。
+    # 今の番号が、今の親（ParentBranch）の枝として正しければそのまま残す。親が変わった・番号が無い・使用中のものだけ、
+    # 新しく振る（子は分岐 zk_id.branch、根は新しい区画 zk_id.new_region）。飛んだ番号は詰めない。
     done = set()
-    work = []
+    used_ids = {i for i in fixed if zk.is_valid(i)}
+
+    def take(c, new):
+        ids[c] = new
+        used_ids.add(new)
+        done.add(c)
+        if new != stored[c]:
+            plan[c] = new
+        else:
+            plan.pop(c, None)
+
     def top_key(p):
         if ID_RE.fullmatch(old[p]) and old[p].isdigit():
             return (0, int(old[p]), creation_key(p, notes[p]))
         return (1, 0, creation_key(p, notes[p]))
-    n = 0
-    for p in sorted(roots, key=top_key):
-        n += 1
-        while str(n) in fixed:
-            n += 1
-        done.add(p)
-        ids[p] = str(n)
-        if ids[p] != stored[p]:
-            plan[p] = ids[p]
-        else:
-            plan.pop(p, None)
-        work.append(p)
-    # 管理しないもの（紙のノート・編集中のもの）の子は、その番号の下に続ける
+
+    queue = []
+    ordered_roots = sorted(roots, key=top_key)
+    # 先に、今の番号を残せる根を全部残す（新しく振る根が、残す根の番号を先に取らないように）
+    for p in ordered_roots:
+        if zk.is_valid(old[p]) and old[p] not in used_ids:
+            take(p, old[p])
+    for p in ordered_roots:
+        if p not in done:
+            take(p, zk.new_region({zk.region_of(i) for i in used_ids}))
+        queue.append(p)
+    # 管理しないもの（紙のノート・編集中のもの）で番号を持つものは、その番号の下に続ける
     for p in notes:
-        if p not in managed_set and p not in done and ID_RE.fullmatch(ids[p]) and kept(p):
-            work.append(p)
-    while work:
-        p = work.pop()
-        if ID_RE.fullmatch(ids[p]):
-            assign(p, ids[p])
+        if p not in managed_set and p not in done and zk.is_valid(ids[p]) and kept(p):
+            used_ids.add(ids[p])
+            queue.append(p)
+    while queue:
+        p = queue.pop(0)
+        if not zk.is_valid(ids[p]):
+            continue
+        for c in sorted((c for c in kids.get(p, ()) if c in managed_set and c not in done), key=lambda c: sibling_order(p, c)):
+            cur = old[c]
+            if zk.is_valid(cur) and cur not in used_ids and zk.parent(cur) == ids[p]:
+                take(c, cur)
+            else:
+                take(c, zk.branch(ids[p], used_ids))
+            queue.append(c)
     for p, n in notes.items():
         if p.name == 'index.md' or is_group(n) or not ID_RE.fullmatch(ids[p]):
             continue
